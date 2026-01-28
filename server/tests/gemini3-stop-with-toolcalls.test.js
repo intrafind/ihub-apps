@@ -53,7 +53,9 @@ assert.deepStrictEqual(
 );
 assert.strictEqual(result.complete, true, 'Response should be complete');
 
-console.log('✓ Test passed: Adapter correctly converts STOP to tool_calls when function calls exist');
+console.log(
+  '✓ Test passed: Adapter correctly converts STOP to tool_calls when function calls exist'
+);
 
 // Test the logic that should be used in ToolExecutor
 // The condition should be: finishReason !== 'tool_calls' && collectedToolCalls.length === 0

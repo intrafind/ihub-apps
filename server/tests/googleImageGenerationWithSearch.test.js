@@ -39,8 +39,7 @@ const imageResponse = {
   ],
   groundingMetadata: {
     searchEntryPoint: {
-      renderedContent:
-        '<chunk>IntraFind Software AG is a company based in Munich...</chunk>'
+      renderedContent: '<chunk>IntraFind Software AG is a company based in Munich...</chunk>'
     },
     groundingSupports: [
       {
@@ -59,10 +58,7 @@ const result1 = convertGoogleResponseToGeneric(JSON.stringify(imageResponse), 'g
 
 // Verify text content is extracted
 assert.ok(result1.content.length > 0, 'Should have text content');
-assert.ok(
-  result1.content[0].includes('IntraFind'),
-  'Text content should be about IntraFind'
-);
+assert.ok(result1.content[0].includes('IntraFind'), 'Text content should be about IntraFind');
 
 // Verify image is extracted
 assert.ok(result1.images, 'Should have images array');
@@ -179,9 +175,15 @@ const chunk1Result = convertGoogleResponseToGeneric(JSON.stringify(streamingImag
 const chunk2Result = convertGoogleResponseToGeneric(JSON.stringify(streamingImageChunk2), 'google');
 
 assert.strictEqual(chunk1Result.content.length, 1, 'First chunk should have text');
-assert.ok(!chunk1Result.images || chunk1Result.images.length === 0, 'First chunk should have no images');
+assert.ok(
+  !chunk1Result.images || chunk1Result.images.length === 0,
+  'First chunk should have no images'
+);
 
-assert.ok(chunk2Result.images && chunk2Result.images.length === 1, 'Second chunk should have 1 image');
+assert.ok(
+  chunk2Result.images && chunk2Result.images.length === 1,
+  'Second chunk should have 1 image'
+);
 assert.strictEqual(chunk2Result.images[0].mimeType, 'image/jpeg', 'Image should be JPEG');
 assert.strictEqual(chunk2Result.complete, true, 'Second chunk should be complete');
 
@@ -194,8 +196,7 @@ const textOnlyWithSearch = {
       content: {
         parts: [
           {
-            text:
-              'Based on my search, IntraFind Software AG is a Munich-based company specializing in enterprise search solutions.'
+            text: 'Based on my search, IntraFind Software AG is a Munich-based company specializing in enterprise search solutions.'
           }
         ],
         role: 'model'
@@ -220,6 +221,4 @@ assert.strictEqual(result4.complete, true, 'Should be complete');
 
 console.log('✓ Test 4: Text-only response with google_search works correctly');
 
-console.log(
-  '\n✅ All tests passed! Image generation with google_search is working correctly.'
-);
+console.log('\n✅ All tests passed! Image generation with google_search is working correctly.');
