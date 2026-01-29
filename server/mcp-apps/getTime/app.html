@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Get Time App</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: #fff;
+      min-height: 100px;
+    }
+
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: rgba(255, 255, 255, 0.1);
+      backdrop-filter: blur(10px);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+    }
+
+    h1 {
+      font-size: 24px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .time-display {
+      background: rgba(255, 255, 255, 0.2);
+      padding: 20px;
+      border-radius: 8px;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    .time-label {
+      font-size: 14px;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+
+    .time-value {
+      font-size: 32px;
+      font-weight: 600;
+      font-family: 'Courier New', monospace;
+      word-break: break-all;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: #fff;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      border-color: rgba(255, 255, 255, 0.5);
+      transform: translateY(-2px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .status {
+      text-align: center;
+      margin-top: 16px;
+      font-size: 14px;
+      opacity: 0.8;
+    }
+
+    .error {
+      background: rgba(255, 59, 48, 0.3);
+      padding: 12px;
+      border-radius: 8px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🕐 Server Time</h1>
+    
+    <div class="time-display">
+      <div class="time-label">Current Time (ISO 8601)</div>
+      <div class="time-value" id="time">Connecting...</div>
+    </div>
+
+    <div class="button-group">
+      <button id="refresh-btn">🔄 Refresh Time</button>
+      <button id="local-btn">🌍 Show Local Time</button>
+    </div>
+
+    <div class="status" id="status">Initializing...</div>
+  </div>
+
+  <script type="module">
+    /**
+     * Simple MCP App Bridge
+     * Handles JSON-RPC communication with the host application
+     */
+    class MCPAppBridge {
+      constructor() {
+        this.pendingRequests = new Map();
+        this.requestId = 0;
+        this.initialized = false;
+        this.capabilities = [];
+
+        // Listen for messages from host
+        window.addEventListener('message', this.handleMessage.bind(this));
+
+        // Signal that we're ready
+        this.sendReady();
+      }
+
+      sendReady() {
+        window.parent.postMessage({
+          type: 'mcp-app-ready'
+        }, '*');
+      }
+
+      async callTool(name, args = {}) {
+        const id = String(++this.requestId);
+        
+        return new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => {
+            this.pendingRequests.delete(id);
+            reject(new Error('Request timeout'));
+          }, 30000); // 30 second timeout
+
+          this.pendingRequests.set(id, { resolve, reject, timeout });
+
+          // Send message to host
+          window.parent.postMessage({
+            jsonrpc: '2.0',
+            id,
+            method: 'tools/call',
+            params: {
+              name,
+              arguments: args
+            }
+          }, '*');
+        });
+      }
+
+      log(level, message, data = null) {
+        // Send log notification (no response expected)
+        window.parent.postMessage({
+          jsonrpc: '2.0',
+          method: 'ui/log',
+          params: { level, message, data }
+        }, '*');
+      }
+
+      handleMessage(event) {
+        const msg = event.data;
+
+        // Handle initialization
+        if (msg.method === 'ui/initialize') {
+          this.initialized = true;
+          this.capabilities = msg.params?.capabilities || [];
+          
+          if (msg.params?.toolResult) {
+            this.onInitialize(msg.params.toolResult);
+          }
+          return;
+        }
+
+        // Handle JSON-RPC responses
+        if (msg.jsonrpc === '2.0' && msg.id) {
+          const pending = this.pendingRequests.get(String(msg.id));
+          if (pending) {
+            clearTimeout(pending.timeout);
+            this.pendingRequests.delete(String(msg.id));
+
+            if (msg.error) {
+              pending.reject(new Error(msg.error.message || 'Unknown error'));
+            } else {
+              pending.resolve(msg.result);
+            }
+          }
+        }
+      }
+
+      onInitialize(toolResult) {
+        // Override this method to handle initial tool result
+      }
+    }
+
+    // Initialize the bridge
+    const bridge = new MCPAppBridge();
+
+    // DOM elements
+    const timeElement = document.getElementById('time');
+    const statusElement = document.getElementById('status');
+    const refreshBtn = document.getElementById('refresh-btn');
+    const localBtn = document.getElementById('local-btn');
+
+    let showingLocalTime = false;
+
+    // Handle initialization
+    bridge.onInitialize = (toolResult) => {
+      try {
+        const timeStr = toolResult.content?.[0]?.text;
+        if (timeStr) {
+          displayTime(timeStr);
+          statusElement.textContent = 'Connected ✓';
+        } else {
+          showError('No time data received');
+        }
+      } catch (error) {
+        showError('Failed to parse initial result: ' + error.message);
+      }
+    };
+
+    // Display time
+    function displayTime(isoString) {
+      if (showingLocalTime) {
+        const date = new Date(isoString);
+        timeElement.textContent = date.toLocaleString();
+      } else {
+        timeElement.textContent = isoString;
+      }
+    }
+
+    // Show error
+    function showError(message) {
+      timeElement.innerHTML = `<div class="error">${message}</div>`;
+      statusElement.textContent = 'Error ✗';
+    }
+
+    // Refresh time button
+    refreshBtn.addEventListener('click', async () => {
+      try {
+        refreshBtn.disabled = true;
+        statusElement.textContent = 'Refreshing...';
+
+        const result = await bridge.callTool('getTime', {});
+        const timeStr = result.content?.[0]?.text;
+        
+        if (timeStr) {
+          displayTime(timeStr);
+          statusElement.textContent = 'Updated ✓';
+        } else {
+          showError('No time data received');
+        }
+      } catch (error) {
+        showError('Failed to refresh: ' + error.message);
+        bridge.log('error', 'Refresh failed', error.message);
+      } finally {
+        refreshBtn.disabled = false;
+      }
+    });
+
+    // Toggle local time display
+    localBtn.addEventListener('click', () => {
+      showingLocalTime = !showingLocalTime;
+      localBtn.textContent = showingLocalTime ? '🌐 Show ISO Time' : '🌍 Show Local Time';
+      
+      // Re-display current time in new format
+      const currentTime = timeElement.textContent;
+      if (currentTime && currentTime !== 'Connecting...') {
+        try {
+          if (showingLocalTime) {
+            const date = new Date(currentTime);
+            timeElement.textContent = date.toLocaleString();
+          } else {
+            // If we were showing local time, we need to fetch again
+            refreshBtn.click();
+          }
+        } catch (error) {
+          // Ignore - we'll just keep the current display
+        }
+      }
+    });
+
+    bridge.log('info', 'MCP App initialized');
+  </script>
+</body>
+</html>

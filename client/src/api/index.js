@@ -5,6 +5,7 @@ export * from './endpoints/config';
 export * from './endpoints/prompts';
 export * from './endpoints/admin';
 export * from './endpoints/misc';
+export * from './endpoints/tools';
 
 // Re-export utility functions
 export { clearApiCache, invalidateCacheByPattern } from './utils/cache';

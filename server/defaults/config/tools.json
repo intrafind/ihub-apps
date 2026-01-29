@@ -806,5 +806,31 @@
         }
       }
     }
+  },
+  {
+    "id": "getTime",
+    "name": {
+      "en": "Get Server Time",
+      "de": "Serverzeit abrufen"
+    },
+    "description": {
+      "en": "Returns the current server time with an interactive display. Example MCP App demonstrating interactive UI capabilities.",
+      "de": "Gibt die aktuelle Serverzeit mit einer interaktiven Anzeige zurück. Beispiel-MCP-App zur Demonstration interaktiver UI-Funktionen."
+    },
+    "script": "getTime.js",
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    },
+    "_meta": {
+      "ui": {
+        "resourceUri": "ui://getTime/app.html",
+        "displayHints": {
+          "width": "normal",
+          "height": "compact",
+          "resizable": false
+        }
+      }
+    }
   }
 ]
