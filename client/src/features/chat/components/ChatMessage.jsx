@@ -44,6 +44,7 @@ const ChatMessage = ({
   );
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0); // 0-5 rating scale
@@ -143,6 +144,47 @@ const ChatMessage = ({
       })
       .catch(err => {
         console.error('Failed to copy content: ', err);
+      });
+  };
+
+  const handleCopyLink = () => {
+    // Get the current page URL (without query params)
+    const currentUrl = new URL(window.location.href);
+    const baseUrl = `${currentUrl.origin}${currentUrl.pathname}`;
+
+    // Get the message content (raw content if available, otherwise regular content)
+    const messageContent =
+      message.meta?.rawContent || (typeof message.content === 'string' ? message.content : '');
+
+    // Create URLSearchParams to build the query string
+    const params = new URLSearchParams();
+
+    // Add prefill parameter with the message content
+    params.set('prefill', messageContent);
+
+    // Add send=true to auto-execute
+    params.set('send', 'true');
+
+    // Add variables if they exist
+    const variables = message.meta?.variables || message.variables;
+    if (variables && Object.keys(variables).length > 0) {
+      Object.entries(variables).forEach(([key, value]) => {
+        params.set(key, value);
+      });
+    }
+
+    // Construct the final URL
+    const shareableLink = `${baseUrl}?${params.toString()}`;
+
+    // Copy to clipboard
+    navigator.clipboard
+      .writeText(shareableLink)
+      .then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy link: ', err);
       });
   };
 
@@ -637,6 +679,14 @@ const ChatMessage = ({
                 title={t('chatMessage.resendMessage', 'Resend message')}
               >
                 <Icon name="refresh" size="sm" />
+              </button>
+
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('chatMessage.copyLink', 'Copy link')}
+              >
+                {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
               </button>
             </>
           )}
