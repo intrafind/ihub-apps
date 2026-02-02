@@ -561,7 +561,10 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       }
 
       const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+      const appsDir = join(rootDir, 'contents', 'apps');
+      const appFilePath = join(appsDir, `${appId}.json`);
+      // Ensure directory exists before writing
+      await fs.mkdir(appsDir, { recursive: true });
       await atomicWriteJSON(appFilePath, updatedApp);
       await configCache.refreshAppsCache();
       res.json({ message: 'App updated successfully', app: updatedApp });
@@ -660,13 +663,16 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       }
 
       const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
+      const appsDir = join(rootDir, 'contents', 'apps');
+      const appFilePath = join(appsDir, `${newApp.id}.json`);
       try {
         readFileSync(appFilePath, 'utf8');
         return res.status(409).json({ error: 'App with this ID already exists' });
       } catch {
         // file does not exist
       }
+      // Ensure directory exists before writing
+      await fs.mkdir(appsDir, { recursive: true });
       await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
       await configCache.refreshAppsCache();
       res.json({ message: 'App created successfully', app: newApp });
@@ -747,7 +753,10 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
         const newEnabledState = !app.enabled;
         app.enabled = newEnabledState;
         const rootDir = getRootDir();
-        const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+        const appsDir = join(rootDir, 'contents', 'apps');
+        const appFilePath = join(appsDir, `${appId}.json`);
+        // Ensure directory exists before writing
+        await fs.mkdir(appsDir, { recursive: true });
         await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
         await configCache.refreshAppsCache();
         res.json({
@@ -850,13 +859,16 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
         const { data: apps } = configCache.getApps(true);
         const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
         const rootDir = getRootDir();
+        const appsDir = join(rootDir, 'contents', 'apps');
+        // Ensure directory exists before writing
+        await fs.mkdir(appsDir, { recursive: true });
 
         for (const id of resolvedIds) {
           const app = apps.find(a => a.id === id);
           if (!app) continue;
           if (app.enabled !== enabled) {
             app.enabled = enabled;
-            const appFilePath = join(rootDir, 'contents', 'apps', `${id}.json`);
+            const appFilePath = join(appsDir, `${id}.json`);
             await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
           }
         }
