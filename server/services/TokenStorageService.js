@@ -76,9 +76,7 @@ class TokenStorageService {
       );
     } catch (error) {
       console.error('❌ Failed to persist encryption key:', error.message);
-      console.warn(
-        '⚠️  Encryption key is not persisted. API keys will be lost on server restart!'
-      );
+      console.warn('⚠️  Encryption key is not persisted. API keys will be lost on server restart!');
     }
   }
 
@@ -88,9 +86,7 @@ class TokenStorageService {
    */
   _ensureKeyInitialized() {
     if (!this.encryptionKey) {
-      throw new Error(
-        'Encryption key not initialized. Call initializeEncryptionKey() first.'
-      );
+      throw new Error('Encryption key not initialized. Call initializeEncryptionKey() first.');
     }
   }
 
