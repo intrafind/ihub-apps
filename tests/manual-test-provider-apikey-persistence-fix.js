@@ -1,16 +1,16 @@
 #!/usr/bin/env node
 /**
  * Integration Test: Provider API Key Persistence
- * 
+ *
  * This test verifies that provider API keys set via the admin panel
  * persist correctly across server restarts and can be decrypted successfully.
- * 
+ *
  * Test Scenario:
  * 1. Initialize encryption key (simulate first server start)
  * 2. Admin sets a provider API key via admin panel
  * 3. Simulate server restart (new TokenStorageService instance)
  * 4. Verify API key can still be decrypted and used
- * 
+ *
  * Run: node tests/manual-test-provider-apikey-persistence-fix.js
  */
 
@@ -39,7 +39,11 @@ class TestTokenService {
     // Priority 1: Try to load persisted key
     try {
       const persistedKey = await fs.readFile(this.keyFilePath, 'utf8');
-      if (persistedKey && persistedKey.length === 64 && /^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
+      if (
+        persistedKey &&
+        persistedKey.length === 64 &&
+        /^[0-9a-f]{64}$/i.test(persistedKey.trim())
+      ) {
         this.encryptionKey = persistedKey.trim();
         console.log('  🔐 Using persisted encryption key from disk');
         return;
@@ -86,7 +90,7 @@ class TestTokenService {
   decryptString(encryptedData) {
     this._ensureKeyInitialized();
     const encContent = encryptedData.slice(4, -1);
-    
+
     const dataMatch = encContent.match(/data:([A-Za-z0-9+/=]+)/);
     const ivMatch = encContent.match(/iv:([A-Za-z0-9+/=]+)/);
     const tagMatch = encContent.match(/tag:([A-Za-z0-9+/=]+)/);
@@ -136,12 +140,15 @@ async function runTest() {
     // ========================================
     console.log('📝 Test 1: First Server Start (Generate & Persist Key)');
     console.log('─────────────────────────────────────────────────────────');
-    
+
     const service1 = new TestTokenService();
     await service1.initializeEncryptionKey();
 
     // Verify key file was created
-    const keyFileExists = await fs.access(KEY_FILE).then(() => true).catch(() => false);
+    const keyFileExists = await fs
+      .access(KEY_FILE)
+      .then(() => true)
+      .catch(() => false);
     if (keyFileExists) {
       console.log('  ✅ Encryption key file created');
       testsPassed++;
@@ -155,12 +162,14 @@ async function runTest() {
       const stats = await fs.stat(KEY_FILE);
       const mode = stats.mode & parseInt('777', 8);
       const expectedMode = parseInt('600', 8);
-      
+
       if (mode === expectedMode) {
         console.log('  ✅ File permissions correct (600)');
         testsPassed++;
       } else {
-        console.log(`  ❌ File permissions incorrect: ${mode.toString(8)} (expected ${expectedMode.toString(8)})`);
+        console.log(
+          `  ❌ File permissions incorrect: ${mode.toString(8)} (expected ${expectedMode.toString(8)})`
+        );
         testsFailed++;
       }
     }
@@ -276,7 +285,6 @@ async function runTest() {
       console.log('  ❌ Failed to decrypt on third restart:', error.message);
       testsFailed++;
     }
-
   } catch (error) {
     console.error('\n❌ Test execution failed:', error);
     testsFailed++;
@@ -296,7 +304,7 @@ async function runTest() {
   console.log('\n╔═══════════════════════════════════════════════════════════╗');
   console.log('║                      Test Results                        ║');
   console.log('╚═══════════════════════════════════════════════════════════╝\n');
-  
+
   console.log(`  ✅ Tests Passed: ${testsPassed}`);
   console.log(`  ❌ Tests Failed: ${testsFailed}`);
   console.log(`  📊 Total Tests:  ${testsPassed + testsFailed}\n`);
