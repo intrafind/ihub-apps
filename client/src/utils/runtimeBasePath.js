@@ -144,8 +144,32 @@ export const getBasePath = () => {
   if (basePath !== null) {
     const currentPath = window.location.pathname;
 
+    // Check if cached base path is actually a known route (invalid - routes are not base paths)
+    const knownRoutes = [
+      '/apps',
+      '/admin',
+      '/auth',
+      '/login',
+      '/chat',
+      '/pages',
+      '/prompts',
+      '/settings',
+      '/teams',
+      '/s'
+    ];
+    const isKnownRoute = knownRoutes.some(route => basePath === route);
+
+    if (isKnownRoute) {
+      // Cached base path is a React route, not a deployment path - invalid!
+      sessionStorage.removeItem(cacheKey);
+      basePath = null;
+    }
     // If base path is not empty, current path should start with it
-    if (basePath !== '' && !currentPath.startsWith(basePath + '/') && currentPath !== basePath) {
+    else if (
+      basePath !== '' &&
+      !currentPath.startsWith(basePath + '/') &&
+      currentPath !== basePath
+    ) {
       // Cached base path doesn't match current URL - clear and re-detect
       sessionStorage.removeItem(cacheKey);
       basePath = null;
