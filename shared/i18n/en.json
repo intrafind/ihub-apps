@@ -770,7 +770,9 @@
     "downloadImage": "Download image",
     "saveImageWarning": "Download this image. Images are not persisted.",
     "imageNotPersisted": "Image not available",
-    "imageNotPersistedDetail": "Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session."
+    "imageNotPersistedDetail": "Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied!"
   },
   "serverErrors": {
     "appNotFound": "Application not found",

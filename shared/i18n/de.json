@@ -297,7 +297,9 @@
     "downloadImage": "Bild herunterladen",
     "saveImageWarning": "Laden Sie dieses Bild herunter, Bilder werden nicht gespeichert.",
     "imageNotPersisted": "Bild nicht verfügbar",
-    "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar."
+    "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar.",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert!"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
