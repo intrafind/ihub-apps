@@ -139,6 +139,29 @@ export const getBasePath = () => {
 
   let basePath = sessionStorage.getItem(cacheKey);
 
+  // Validate cached base path against current URL
+  // This prevents issues when navigating between different deployments
+  if (basePath !== null) {
+    const currentPath = window.location.pathname;
+
+    // If base path is not empty, current path should start with it
+    if (basePath !== '' && !currentPath.startsWith(basePath + '/') && currentPath !== basePath) {
+      // Cached base path doesn't match current URL - clear and re-detect
+      sessionStorage.removeItem(cacheKey);
+      basePath = null;
+    }
+    // If base path is empty (root deployment), make sure we're not actually in a subpath
+    else if (basePath === '') {
+      // Detect fresh to see if we should have a base path
+      const freshDetection = detectBasePath();
+      if (freshDetection !== '') {
+        // We detected a base path but cache says root - cache is stale
+        sessionStorage.removeItem(cacheKey);
+        basePath = null;
+      }
+    }
+  }
+
   if (basePath === null) {
     basePath = detectBasePath();
     sessionStorage.setItem(cacheKey, basePath);
