@@ -36,9 +36,19 @@ npm run dev
 
 ## Concepts
 
-Every new feature, will have a concept in the folder concept folder. Always check the concept regarding information. When implementing new features, make sure that an concept document exists. If none exists, always make sure to create one.
+Every new feature, bug fix, or significant change should have a concept document in the `concepts/` folder. Always check the concept regarding information. When implementing new features, make sure that a concept document exists. If none exists, always make sure to create one.
 If one exists, make sure that you update it with decisions we have taken and where code related to the feature can be found.
-Always store them in the concepts folder `concepts` and format them `{year}-{month}-{day} {title}.md`
+
+**Always store the following in the concepts folder `concepts/` and format them `YYYY-MM-DD {title}.md`:**
+- Feature concepts and design documents
+- Fix summaries and root cause analyses
+- Migration guides for breaking changes or major updates
+- Implementation summaries
+
+**Example naming:**
+- `2026-02-02 Provider API Key Persistence Fix.md`
+- `2026-02-02 Encryption Key Persistence Migration.md`
+- `2026-01-21 Model API Key Storage Fix.md`
 
 ## Development Workflow
 

@@ -152,7 +152,7 @@ Created `tests/manual-test-provider-apikey-persistence-fix.js`:
    - Key rotation procedures
    - Troubleshooting guide
 
-2. **`MIGRATION-ENCRYPTION-KEY.md`**
+2. **`concepts/2026-02-02 Encryption Key Persistence Migration.md`**
    - Migration guide for existing installations
    - Impact analysis for different scenarios
    - Docker and Kubernetes deployment examples
@@ -236,7 +236,7 @@ Session 2: Try to decrypt API key → Success ✅ → API key available for use 
 - `server/services/TokenStorageService.js` - Core fix
 - `server/server.js` - Initialization
 - `docs/encryption-key-management.md` - Documentation (new)
-- `MIGRATION-ENCRYPTION-KEY.md` - Migration guide (new)
+- `concepts/2026-02-02 Encryption Key Persistence Migration.md` - Migration guide (new)
 - `tests/manual-test-provider-apikey-persistence-fix.js` - Tests (new)
 
 ## Resolution
