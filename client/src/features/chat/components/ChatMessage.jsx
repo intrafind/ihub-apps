@@ -567,17 +567,7 @@ const ChatMessage = ({
               className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
               title={t('pages.appChat.copyToClipboard')}
             >
-              {copied ? (
-                <>
-                  <Icon name="check" size="sm" />
-                  {!compact && <span>{t('chatMessage.copied')}</span>}
-                </>
-              ) : (
-                <>
-                  <Icon name="copy" size="sm" />
-                  {!compact && <span>{t('chatMessage.copy')}</span>}
-                </>
-              )}
+              {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
             </button>
             <button
               onClick={() => setShowCopyMenu(!showCopyMenu)}
@@ -618,7 +608,6 @@ const ChatMessage = ({
               title={t('chatMessage.openInCanvas', 'Open in Canvas')}
             >
               <Icon name="document-text" size="sm" />
-              {!compact && <span>{t('chatMessage.openInCanvas', 'Canvas')}</span>}
             </button>
           )}
 
@@ -629,7 +618,6 @@ const ChatMessage = ({
               title={t('canvas.insertIntoDocument', 'Insert into document')}
             >
               <Icon name="arrow-right" size="sm" />
-              {!compact && <span>{t('canvas.insert', 'Insert')}</span>}
             </button>
           )}
 
@@ -641,7 +629,6 @@ const ChatMessage = ({
                 title={t('chatMessage.editMessage', 'Edit message')}
               >
                 <Icon name="edit" size="sm" />
-                {!compact && <span>{t('common.edit')}</span>}
               </button>
 
               <button
@@ -650,7 +637,6 @@ const ChatMessage = ({
                 title={t('chatMessage.resendMessage', 'Resend message')}
               >
                 <Icon name="refresh" size="sm" />
-                {!compact && <span>{t('chatMessage.resend', 'Resend')}</span>}
               </button>
             </>
           )}
@@ -661,7 +647,6 @@ const ChatMessage = ({
             title={t('chatMessage.deleteMessage', 'Delete message')}
           >
             <Icon name="trash" size="sm" />
-            {!compact && <span>{t('common.delete')}</span>}
           </button>
 
           {/* Add star rating for AI responses only */}
@@ -677,14 +662,6 @@ const ChatMessage = ({
                   showTooltip={true}
                   className="flex-shrink-0"
                 />
-                {!compact && (
-                  <span
-                    className="text-sm text-gray-600"
-                    style={{ visibility: activeFeedback > 0 ? 'visible' : 'hidden' }}
-                  >
-                    {t('feedback.rated', 'Rated')}
-                  </span>
-                )}
               </div>
             </>
           )}
