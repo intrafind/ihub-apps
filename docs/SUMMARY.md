@@ -26,6 +26,7 @@
     - [Tool Calling](tool-calling.md)
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)
+    - [Auto-Send Query Parameter](auto-send-feature.md)
     - [iFinder Integration](iFinder-Integration.md)
     - [iFinder Quick Reference](iFinder-Quick-Reference.md)
     - [iFinder JWT Key Generation](ifinder-jwt-key-generation.md)
