@@ -129,7 +129,62 @@ export const detectBasePath = () => {
 export const getBasePath = () => {
   // Cache the detected base path in sessionStorage for performance
   const cacheKey = 'runtime-base-path';
+
+  // Check if we're on a logout page - if so, clear the cache to force fresh detection
+  // This prevents stale cache from causing routing issues after logout redirects
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('logout') === 'true') {
+    sessionStorage.removeItem(cacheKey);
+  }
+
   let basePath = sessionStorage.getItem(cacheKey);
+
+  // Validate cached base path against current URL
+  // This prevents issues when navigating between different deployments
+  if (basePath !== null) {
+    const currentPath = window.location.pathname;
+
+    // Check if cached base path is actually a known route (invalid - routes are not base paths)
+    const knownRoutes = [
+      '/apps',
+      '/admin',
+      '/auth',
+      '/login',
+      '/chat',
+      '/pages',
+      '/prompts',
+      '/settings',
+      '/teams',
+      '/s'
+    ];
+    const isKnownRoute = knownRoutes.some(route => basePath === route);
+
+    if (isKnownRoute) {
+      // Cached base path is a React route, not a deployment path - invalid!
+      sessionStorage.removeItem(cacheKey);
+      basePath = null;
+    }
+    // If base path is not empty, current path should start with it
+    else if (
+      basePath !== '' &&
+      !currentPath.startsWith(basePath + '/') &&
+      currentPath !== basePath
+    ) {
+      // Cached base path doesn't match current URL - clear and re-detect
+      sessionStorage.removeItem(cacheKey);
+      basePath = null;
+    }
+    // If base path is empty (root deployment), make sure we're not actually in a subpath
+    else if (basePath === '') {
+      // Detect fresh to see if we should have a base path
+      const freshDetection = detectBasePath();
+      if (freshDetection !== '') {
+        // We detected a base path but cache says root - cache is stale
+        sessionStorage.removeItem(cacheKey);
+        basePath = null;
+      }
+    }
+  }
 
   if (basePath === null) {
     basePath = detectBasePath();
