@@ -54,7 +54,6 @@ async function findAppFile(appId, appsDir) {
   }
 }
 
-
 /**
  * @swagger
  * components:
