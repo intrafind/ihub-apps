@@ -82,10 +82,7 @@ describe('Automatic Source Addition', () => {
       systemContent.length > 100,
       `System prompt should contain source content at placeholder location. Length: ${systemContent.length}`
     );
-    assert.ok(
-      !systemContent.includes('{{sources}}'),
-      'Placeholder should be replaced'
-    );
+    assert.ok(!systemContent.includes('{{sources}}'), 'Placeholder should be replaced');
 
     console.log('✓ {{sources}} placeholder correctly replaced');
   });
@@ -124,16 +121,10 @@ describe('Automatic Source Addition', () => {
     const contentAfterPlaceholder = systemContent.substring(placeholderIndex);
 
     // Verify placeholder was replaced
-    assert.ok(
-      !systemContent.includes('{{sources}}'),
-      'Placeholder should be replaced'
-    );
+    assert.ok(!systemContent.includes('{{sources}}'), 'Placeholder should be replaced');
 
     // Verify content exists after placeholder location
-    assert.ok(
-      contentAfterPlaceholder.length > 50,
-      'Source content should exist after placeholder'
-    );
+    assert.ok(contentAfterPlaceholder.length > 50, 'Source content should exist after placeholder');
 
     console.log('✓ Sources not duplicated when placeholder exists');
   });
@@ -169,10 +160,7 @@ describe('Automatic Source Addition', () => {
       systemContent.length > 100,
       `System prompt should contain source content. Length: ${systemContent.length}`
     );
-    assert.ok(
-      !systemContent.includes('{{source}}'),
-      'Legacy placeholder should be replaced'
-    );
+    assert.ok(!systemContent.includes('{{source}}'), 'Legacy placeholder should be replaced');
 
     console.log('✓ Legacy {{source}} placeholder correctly handled');
   });
