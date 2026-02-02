@@ -12,16 +12,86 @@ import config from '../config.js';
  */
 class TokenStorageService {
   constructor() {
-    this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
-
-    // Initialize encryption key if not provided
-    if (!this.encryptionKey) {
-      this.encryptionKey = crypto.randomBytes(32).toString('hex');
-      console.warn('⚠️ Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
-    }
-
+    // Initialize encryption key from environment or persistent storage
+    this.encryptionKey = null;
+    this.keyFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.encryption-key');
     this.algorithm = 'aes-256-gcm';
     this.storageBasePath = path.join(getRootDir(), config.CONTENTS_DIR, 'integrations');
+  }
+
+  /**
+   * Initialize the encryption key
+   * This MUST be called before any encryption/decryption operations
+   * Priority:
+   * 1. Use TOKEN_ENCRYPTION_KEY from environment if set
+   * 2. Use persisted key from disk if exists
+   * 3. Generate new key and persist it
+   */
+  async initializeEncryptionKey() {
+    // Priority 1: Environment variable (allows override)
+    if (process.env.TOKEN_ENCRYPTION_KEY) {
+      this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
+      console.log('🔐 Using encryption key from TOKEN_ENCRYPTION_KEY environment variable');
+      return;
+    }
+
+    // Priority 2: Try to load persisted key
+    try {
+      const persistedKey = await fs.readFile(this.keyFilePath, 'utf8');
+      if (persistedKey && persistedKey.length === 64) {
+        // Validate it's a valid hex string
+        if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
+          this.encryptionKey = persistedKey.trim();
+          console.log('🔐 Using persisted encryption key from disk');
+          return;
+        } else {
+          console.warn('⚠️  Persisted encryption key has invalid format, generating new key');
+        }
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        console.error('Error reading encryption key file:', error.message);
+      }
+      // File doesn't exist or error reading, will generate new key
+    }
+
+    // Priority 3: Generate new key and persist it
+    this.encryptionKey = crypto.randomBytes(32).toString('hex');
+    console.warn(
+      '⚠️  Generated new encryption key. This will be persisted to maintain API key compatibility across restarts.'
+    );
+
+    try {
+      // Ensure contents directory exists
+      const contentsDir = path.dirname(this.keyFilePath);
+      await fs.mkdir(contentsDir, { recursive: true });
+
+      // Save the key with restrictive permissions
+      await fs.writeFile(this.keyFilePath, this.encryptionKey, {
+        mode: 0o600 // Read/write for owner only
+      });
+      console.log(`✅ Encryption key persisted to: ${this.keyFilePath}`);
+      console.log(
+        '⚠️  IMPORTANT: Keep this file secure and back it up. Losing it will make encrypted API keys unrecoverable.'
+      );
+    } catch (error) {
+      console.error('❌ Failed to persist encryption key:', error.message);
+      console.warn(
+        '⚠️  Encryption key is not persisted. API keys will be lost on server restart!'
+      );
+    }
+  }
+
+  /**
+   * Ensure encryption key is initialized
+   * @private
+   */
+  _ensureKeyInitialized() {
+    if (!this.encryptionKey) {
+      throw new Error(
+        'Encryption key not initialized. Call initializeEncryptionKey() first.'
+      );
+    }
   }
 
   /**
@@ -37,6 +107,7 @@ class TokenStorageService {
    * Encrypt token data with user and service-specific security
    */
   encryptTokens(tokens, userId, serviceName) {
+    this._ensureKeyInitialized();
     try {
       const key = Buffer.from(this.encryptionKey, 'hex');
       const iv = crypto.randomBytes(16);
@@ -69,6 +140,7 @@ class TokenStorageService {
    * Decrypt token data with user and service verification
    */
   decryptTokens(encryptedData, userId, serviceName) {
+    this._ensureKeyInitialized();
     try {
       // Verify the tokens belong to the requesting user and service
       const expectedContext = this._generateEncryptionContext(userId, serviceName);
@@ -275,6 +347,7 @@ class TokenStorageService {
    * @returns {string} Encrypted data in ENC[...] format with metadata
    */
   encryptString(plaintext) {
+    this._ensureKeyInitialized();
     if (!plaintext || typeof plaintext !== 'string') {
       throw new Error('Invalid plaintext: must be a non-empty string');
     }
@@ -309,6 +382,7 @@ class TokenStorageService {
    * @returns {string} Decrypted plaintext
    */
   decryptString(encryptedData) {
+    this._ensureKeyInitialized();
     if (!encryptedData || typeof encryptedData !== 'string') {
       throw new Error('Invalid encrypted data: must be a non-empty string');
     }
