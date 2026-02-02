@@ -263,7 +263,7 @@ class PromptService {
 
           // If no placeholder was found but we have source content, append it automatically
           if (!hasSourcesPlaceholder && !hasSourcePlaceholder && sourceContent) {
-            systemPrompt += `\n\nSources:\n<sources>{{sources}}</sources>${sourceContent}`;
+            systemPrompt += `\n\nSources:\n<sources>${sourceContent}</sources>`;
           }
         }
       } catch (error) {
