@@ -246,23 +246,27 @@ const AppChat = ({ preloadedApp = null }) => {
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
+
+  // Reset auto-send trigger when appId changes
+  useEffect(() => {
+    autoSendTriggered.current = false;
+  }, [appId]);
+
   useEffect(() => {
     const shouldAutoSend = searchParams.get('send') === 'true';
-    
+
     if (shouldAutoSend && !autoSendTriggered.current && prefillMessage && app && !processing) {
       autoSendTriggered.current = true;
-      
+
       // Clean up the send parameter from URL
       const newSearch = new URLSearchParams(searchParams);
       newSearch.delete('send');
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
-      
+
       // Trigger the form submission after a short delay to ensure everything is initialized
       setTimeout(() => {
         if (formRef.current) {
-          formRef.current.dispatchEvent(
-            new Event('submit', { cancelable: true, bubbles: true })
-          );
+          formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
         }
       }, 100);
     }
