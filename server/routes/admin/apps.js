@@ -40,14 +40,16 @@ async function findAppFile(appId, appsDir) {
         if (app.id === appId) {
           return file;
         }
-      } catch {
+      } catch (err) {
         // Skip files that can't be read or parsed
+        console.debug(`Skipping malformed app file: ${file}`, err.message);
         continue;
       }
     }
 
     return null;
-  } catch {
+  } catch (err) {
+    console.warn(`Failed to read apps directory: ${appsDir}`, err.message);
     return null;
   }
 }
