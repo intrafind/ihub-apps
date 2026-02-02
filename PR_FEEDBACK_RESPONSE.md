@@ -9,6 +9,7 @@ Commit: `54d2821` - "Reorganize auto-send documentation and fix processing varia
 **Action**: Created `concepts/auto-send-feature/` folder with all documentation
 
 **Files Moved**:
+
 - `AUTO_SEND_FEATURE.md` → `concepts/auto-send-feature/AUTO_SEND_FEATURE.md`
 - `AUTO_SEND_QUICK_REFERENCE.md` → `concepts/auto-send-feature/AUTO_SEND_QUICK_REFERENCE.md`
 - `AUTO_SEND_VISUAL_FLOW.md` → `concepts/auto-send-feature/AUTO_SEND_VISUAL_FLOW.md`
@@ -17,11 +18,13 @@ Commit: `54d2821` - "Reorganize auto-send documentation and fix processing varia
 - `concepts/2026-02-02 auto-send-query-parameter.md` → `concepts/auto-send-feature/2026-02-02 auto-send-query-parameter.md`
 
 **New Files Created**:
+
 - `concepts/auto-send-feature/README.md` - Overview and navigation for the folder
 
 ### 2. Updated Documentation in /docs
 
 **New Documentation File**: `docs/auto-send-feature.md`
+
 - Comprehensive user-facing documentation
 - Usage examples and syntax
 - Parameter reference table
@@ -30,6 +33,7 @@ Commit: `54d2821` - "Reorganize auto-send documentation and fix processing varia
 - Links to technical documentation
 
 **Updated**: `docs/SUMMARY.md`
+
 - Added auto-send feature to the documentation index under "Features" section
 - Ensures feature is discoverable in documentation navigation
 
@@ -37,12 +41,14 @@ Commit: `54d2821` - "Reorganize auto-send documentation and fix processing varia
 
 **Issue**: Variable `processing` was used in useEffect (line 258) before it was declared by `useAppChat` hook (line 340)
 
-**Fix**: 
+**Fix**:
+
 - Moved auto-send useEffect hooks to after `useAppChat` hook declaration
 - `processing` now declared at line 312, used at line 337
 - Maintains exact same functionality, only reordered for correctness
 
 **Code Changes in `client/src/features/apps/pages/AppChat.jsx`**:
+
 ```javascript
 // Before: processing used before declaration (incorrect)
 useEffect(() => {
