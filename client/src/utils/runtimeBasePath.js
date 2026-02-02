@@ -129,6 +129,14 @@ export const detectBasePath = () => {
 export const getBasePath = () => {
   // Cache the detected base path in sessionStorage for performance
   const cacheKey = 'runtime-base-path';
+
+  // Check if we're on a logout page - if so, clear the cache to force fresh detection
+  // This prevents stale cache from causing routing issues after logout redirects
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('logout') === 'true') {
+    sessionStorage.removeItem(cacheKey);
+  }
+
   let basePath = sessionStorage.getItem(cacheKey);
 
   if (basePath === null) {
