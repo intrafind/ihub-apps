@@ -49,9 +49,9 @@ function authDebugLog(context, message, data = {}, req = null) {
     ...data
   };
 
-  logger.info(`🔐 AUTH DEBUG [${context}]:`, message);
+  logger.debug(`🔐 AUTH DEBUG [${context}]:`, message);
   if (Object.keys(data).length > 0 || Object.keys(requestInfo).length > 0) {
-    logger.info(`🔐 AUTH DEBUG [${context}] Data:`, JSON.stringify(logEntry, null, 2));
+    logger.debug(`🔐 AUTH DEBUG [${context}] Data:`, JSON.stringify(logEntry, null, 2));
   }
 }
 

@@ -40,10 +40,10 @@ class NonStreamingHandler {
       }
 
       // Debug logging for LLM request
-      logger.info(`[LLM REQUEST DEBUG] Message ID: ${messageId}, Model: ${model.id}`);
-      logger.info(`[LLM REQUEST DEBUG] Method: ${fetchOptions.method}`);
-      logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-      logger.info(
+      logger.debug(`[LLM REQUEST DEBUG] Message ID: ${messageId}, Model: ${model.id}`);
+      logger.debug(`[LLM REQUEST DEBUG] Method: ${fetchOptions.method}`);
+      logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+      logger.debug(
         `[LLM REQUEST DEBUG] Headers:`,
         JSON.stringify(
           {
@@ -55,7 +55,7 @@ class NonStreamingHandler {
         )
       );
       if (request.body) {
-        logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+        logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
       }
 
       const responsePromise = throttledFetch(model.id, request.url, fetchOptions);

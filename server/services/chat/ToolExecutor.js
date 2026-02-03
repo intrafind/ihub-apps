@@ -387,9 +387,9 @@ class ToolExecutor {
 
     try {
       // Debug logging for LLM request (tool execution)
-      logger.info(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (with tools)`);
-      logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-      logger.info(
+      logger.debug(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (with tools)`);
+      logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+      logger.debug(
         `[LLM REQUEST DEBUG] Headers:`,
         JSON.stringify(
           {
@@ -400,7 +400,7 @@ class ToolExecutor {
           2
         )
       );
-      logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+      logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
 
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
@@ -771,11 +771,11 @@ class ToolExecutor {
         }
 
         // Debug logging for LLM request (tool continuation)
-        logger.info(
+        logger.debug(
           `[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (tool continuation, iteration ${iteration})`
         );
-        logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(followRequest.url)}`);
-        logger.info(
+        logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(followRequest.url)}`);
+        logger.debug(
           `[LLM REQUEST DEBUG] Headers:`,
           JSON.stringify(
             {
@@ -787,7 +787,7 @@ class ToolExecutor {
           )
         );
         if (followRequest.body) {
-          logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(followRequest.body, null, 2));
+          logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(followRequest.body, null, 2));
         }
 
         const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);

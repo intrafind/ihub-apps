@@ -243,7 +243,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   if (req.user && req.user.id && req.user.id !== 'anonymous') {
     // Debug logging in development
     if (process.env.NODE_ENV === 'development') {
-      logger.info('[NTLM Debug] Skipping NTLM - user already authenticated:', {
+      logger.debug('[NTLM Debug] Skipping NTLM - user already authenticated:', {
         userId: req.user.id,
         authMode: req.user.authMode,
         url: req.url
@@ -255,7 +255,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   // Debug logging in development
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
-    logger.info('[NTLM Debug] Request:', {
+    logger.debug('[NTLM Debug] Request:', {
       url: req.url,
       hostname: req.hostname,
       origin: req.headers.origin,
@@ -302,7 +302,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   }
 
   if (isDev) {
-    logger.info('[NTLM Debug] Applying NTLM middleware');
+    logger.debug('[NTLM Debug] Applying NTLM middleware');
   }
 
   // Get or create the express-ntlm middleware instance
@@ -317,9 +317,9 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.end = function (...args) {
     responseSent = true;
     if (isDev) {
-      logger.info('[NTLM Debug] Response sent by express-ntlm, status:', res.statusCode);
+      logger.debug('[NTLM Debug] Response sent by express-ntlm, status:', res.statusCode);
       if (res.statusCode === 401) {
-        logger.info('[NTLM Debug] NTLM challenge sent, headers:', res.getHeaders());
+        logger.debug('[NTLM Debug] NTLM challenge sent, headers:', res.getHeaders());
       }
     }
     return originalEnd.apply(this, args);
@@ -328,7 +328,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.send = function (...args) {
     responseSent = true;
     if (isDev) {
-      logger.info('[NTLM Debug] Response sent by express-ntlm (via send), status:', res.statusCode);
+      logger.debug('[NTLM Debug] Response sent by express-ntlm (via send), status:', res.statusCode);
       if (res.statusCode === 500 && args.length > 0) {
         logger.error('[NTLM Debug] 500 Error body:', args[0]);
       }
@@ -357,7 +357,7 @@ export function ntlmAuthMiddleware(req, res, next) {
 
       if (responseSent) {
         if (isDev) {
-          logger.info('[NTLM Debug] express-ntlm sent response directly, not calling next()');
+          logger.debug('[NTLM Debug] express-ntlm sent response directly, not calling next()');
         }
         return; // Don't call next() if response was already sent
       }
@@ -377,14 +377,14 @@ export function ntlmAuthMiddleware(req, res, next) {
       // Now process the NTLM data if available
       try {
         if (isDev) {
-          logger.info('[NTLM Debug] After express-ntlm, req.ntlm:', req.ntlm);
+          logger.debug('[NTLM Debug] After express-ntlm, req.ntlm:', req.ntlm);
         }
 
         // Check if NTLM data is available (should be set by express-ntlm middleware)
         if (!req.ntlm) {
           // This is normal for public endpoints - just continue without authentication
           if (isDev) {
-            logger.info('[NTLM Debug] No NTLM data, continuing without auth');
+            logger.debug('[NTLM Debug] No NTLM data, continuing without auth');
           }
           return next();
         }

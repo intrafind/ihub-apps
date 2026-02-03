@@ -15,7 +15,7 @@ const router = express.Router();
  */
 router.get('/auth', authRequired, async (req, res) => {
   try {
-    logger.info('🔍 JIRA Auth Debug:', {
+    logger.debug('🔍 JIRA Auth Debug:', {
       hasUser: !!req.user,
       userId: req.user?.id,
       userGroups: req.user?.groups,

@@ -128,9 +128,9 @@ class StreamingHandler {
     setupTimeout();
 
     // Debug logging for LLM request
-    logger.info(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
-    logger.info(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-    logger.info(
+    logger.debug(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
+    logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
+    logger.debug(
       `[LLM REQUEST DEBUG] Headers:`,
       JSON.stringify(
         {
@@ -141,7 +141,7 @@ class StreamingHandler {
         2
       )
     );
-    logger.info(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+    logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
 
     let doneEmitted = false;
     let finishReason = null;

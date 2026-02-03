@@ -259,7 +259,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       const parsed = JSON.parse(data);
 
       // Add debugging to see what we're receiving
-      logger.info('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
+      logger.debug('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
 
       // Handle full response object (non-streaming)
       if (parsed.output && Array.isArray(parsed.output)) {

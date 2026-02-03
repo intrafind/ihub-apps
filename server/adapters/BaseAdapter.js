@@ -10,11 +10,11 @@ export class BaseAdapter {
    * @param {string} provider - Provider name
    */
   debugLogMessages(messages, formattedMessages, provider) {
-    logger.info(
+    logger.debug(
       'Original messages:',
       JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
     );
-    logger.info(
+    logger.debug(
       `Processed ${provider} messages:`,
       JSON.stringify(
         formattedMessages.map(m => ({

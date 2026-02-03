@@ -256,7 +256,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)
   if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {
-      logger.info(`[Debug] ${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`);
+      logger.debug(`[Debug] ${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`);
       next();
     });
   }
