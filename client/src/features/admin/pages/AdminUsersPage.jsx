@@ -369,14 +369,23 @@ const AdminUsersPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex space-x-2">
                             <button
+                              onClick={() => navigate(`/admin/users/${user.id}/view`)}
+                              className="text-gray-600 hover:text-gray-900"
+                              title="View user"
+                            >
+                              <Icon name="eye" size="sm" />
+                            </button>
+                            <button
                               onClick={() => navigate(`/admin/users/${user.id}`)}
                               className="text-blue-600 hover:text-blue-900"
+                              title="Edit user"
                             >
                               <Icon name="edit" size="sm" />
                             </button>
                             <button
                               onClick={() => handleDeleteUser(user.id)}
                               className="text-red-600 hover:text-red-900"
+                              title="Delete user"
                             >
                               <Icon name="trash" size="sm" />
                             </button>
