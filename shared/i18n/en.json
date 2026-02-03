@@ -679,6 +679,44 @@
       "scriptSaved": "Script saved successfully",
       "saveScript": "Save Script",
       "scriptEditorInfo": "Edit the JavaScript code for this tool. Changes will be saved to server/tools/"
+    },
+    "users": {
+      "view": {
+        "title": "View User",
+        "description": "View user details and permissions",
+        "edit": "Edit User",
+        "backToList": "Back to Users",
+        "basicInfo": "Basic Information",
+        "username": "Username",
+        "email": "Email",
+        "fullName": "Full Name",
+        "userId": "User ID",
+        "authentication": "Authentication",
+        "authMethods": "Auth Methods",
+        "status": "Status",
+        "active": "Active",
+        "inactive": "Inactive",
+        "oidcProvider": "OIDC Provider",
+        "groups": "Groups & Permissions",
+        "internalGroups": "Internal Groups",
+        "noGroups": "No groups assigned",
+        "activity": "Activity",
+        "createdAt": "Created At",
+        "lastActive": "Last Active",
+        "daysAgo": "days ago",
+        "never": "Never",
+        "lastModified": "Last Modified"
+      },
+      "edit": {
+        "createTitle": "Create New User",
+        "editTitle": "Edit User",
+        "createDesc": "Create a new user account with permissions and settings",
+        "editDesc": "Edit user account, permissions, and settings",
+        "backToList": "Back to Users",
+        "cancel": "Cancel",
+        "save": "Save User",
+        "saving": "Saving..."
+      }
     }
   },
   "components": {

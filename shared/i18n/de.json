@@ -813,6 +813,44 @@
       "scriptSaved": "Skript erfolgreich gespeichert",
       "saveScript": "Skript speichern",
       "scriptEditorInfo": "Bearbeiten Sie den JavaScript-Code für dieses Tool. Änderungen werden in server/tools/ gespeichert"
+    },
+    "users": {
+      "view": {
+        "title": "Benutzer anzeigen",
+        "description": "Benutzerdetails und Berechtigungen anzeigen",
+        "edit": "Benutzer bearbeiten",
+        "backToList": "Zurück zu Benutzern",
+        "basicInfo": "Grundinformationen",
+        "username": "Benutzername",
+        "email": "E-Mail",
+        "fullName": "Vollständiger Name",
+        "userId": "Benutzer-ID",
+        "authentication": "Authentifizierung",
+        "authMethods": "Authentifizierungsmethoden",
+        "status": "Status",
+        "active": "Aktiv",
+        "inactive": "Inaktiv",
+        "oidcProvider": "OIDC-Anbieter",
+        "groups": "Gruppen & Berechtigungen",
+        "internalGroups": "Interne Gruppen",
+        "noGroups": "Keine Gruppen zugewiesen",
+        "activity": "Aktivität",
+        "createdAt": "Erstellt am",
+        "lastActive": "Zuletzt aktiv",
+        "daysAgo": "Tage her",
+        "never": "Nie",
+        "lastModified": "Zuletzt geändert"
+      },
+      "edit": {
+        "createTitle": "Neuen Benutzer erstellen",
+        "editTitle": "Benutzer bearbeiten",
+        "createDesc": "Neues Benutzerkonto mit Berechtigungen und Einstellungen erstellen",
+        "editDesc": "Benutzerkonto, Berechtigungen und Einstellungen bearbeiten",
+        "backToList": "Zurück zu Benutzern",
+        "cancel": "Abbrechen",
+        "save": "Benutzer speichern",
+        "saving": "Speichern..."
+      }
     }
   },
   "components": {
