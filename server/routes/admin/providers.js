@@ -203,13 +203,13 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
    *       - sessionAuth: []
    *     responses:
    *       201:
-        description: Provider created successfully
-      400:
-        description: Invalid request or provider already exists
-      401:
-        description: Admin authentication required
-      500:
-        description: Internal server error
+   *         description: Provider created successfully
+   *       400:
+   *         description: Invalid request or provider already exists
+   *       401:
+   *         description: Admin authentication required
+   *       500:
+   *         description: Internal server error
    */
   app.post(buildServerPath('/api/admin/providers'), adminAuth, async (req, res) => {
     try {
