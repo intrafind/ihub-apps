@@ -1,6 +1,6 @@
 /**
  * Tests for structured logging with component names
- * 
+ *
  * This test verifies that the logger properly processes arguments
  * and creates structured log entries with component fields.
  */
@@ -51,13 +51,15 @@ console.log('✓ Simple message with component processed correctly');
 
 // Test 2: Message with component and metadata
 console.log('\nTest 2: Message with component and metadata');
-const result2 = processLogArgs([{
-  component: 'ChatService',
-  message: 'Chat request received',
-  type: 'CHAT_REQUEST',
-  id: 'msg-123',
-  user: 'testuser'
-}]);
+const result2 = processLogArgs([
+  {
+    component: 'ChatService',
+    message: 'Chat request received',
+    type: 'CHAT_REQUEST',
+    id: 'msg-123',
+    user: 'testuser'
+  }
+]);
 assert.strictEqual(result2.component, 'ChatService');
 assert.strictEqual(result2.message, 'Chat request received');
 assert.strictEqual(result2.type, 'CHAT_REQUEST');
@@ -100,4 +102,3 @@ console.log('\nℹ️  To verify actual logging output, check server startup log
 console.log('   - JSON format with "component" field');
 console.log('   - Text format with [component] tag');
 console.log('   - Structured fields like id, appId, modelId, sessionId, user in CHAT_REQUEST logs');
-
