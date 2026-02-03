@@ -1,6 +1,6 @@
 /**
  * Manual test for client secret preservation
- * 
+ *
  * This test verifies that:
  * 1. Environment variable placeholders like ${MICROSOFT_CLIENT_SECRET} are preserved in GET responses
  * 2. When saving config with ***REDACTED***, the original value is preserved
@@ -35,7 +35,7 @@ async function testClientSecretPreservation() {
   try {
     // Create a test platform config with environment variable placeholders
     const testConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-    
+
     // Read current config or create a new one
     let currentConfig = {};
     try {
@@ -98,31 +98,46 @@ async function testClientSecretPreservation() {
     log('\n2. Verifying environment variables are preserved in file...', 'blue');
     const savedConfigData = await fs.readFile(testConfigPath, 'utf8');
     const savedConfig = JSON.parse(savedConfigData);
-    
+
     if (savedConfig.oidcAuth.providers[0].clientSecret === '${MICROSOFT_CLIENT_SECRET}') {
-      log('   ✓ Environment variable placeholder preserved in file: ${MICROSOFT_CLIENT_SECRET}', 'green');
+      log(
+        '   ✓ Environment variable placeholder preserved in file: ${MICROSOFT_CLIENT_SECRET}',
+        'green'
+      );
     } else {
-      log(`   ✗ Environment variable placeholder NOT preserved! Got: ${savedConfig.oidcAuth.providers[0].clientSecret}`, 'red');
+      log(
+        `   ✗ Environment variable placeholder NOT preserved! Got: ${savedConfig.oidcAuth.providers[0].clientSecret}`,
+        'red'
+      );
       return false;
     }
 
     if (savedConfig.localAuth.jwtSecret === '${JWT_SECRET}') {
       log('   ✓ JWT secret environment variable preserved in file: ${JWT_SECRET}', 'green');
     } else {
-      log(`   ✗ JWT secret environment variable NOT preserved! Got: ${savedConfig.localAuth.jwtSecret}`, 'red');
+      log(
+        `   ✗ JWT secret environment variable NOT preserved! Got: ${savedConfig.localAuth.jwtSecret}`,
+        'red'
+      );
       return false;
     }
 
     // Test 2: Simulate GET endpoint sanitization
-    log('\n3. Testing GET endpoint sanitization (would preserve env vars, redact actual secrets)...', 'blue');
+    log(
+      '\n3. Testing GET endpoint sanitization (would preserve env vars, redact actual secrets)...',
+      'blue'
+    );
     log('   Expected behavior:', 'yellow');
     log('   - ${MICROSOFT_CLIENT_SECRET} should be returned as-is', 'yellow');
     log('   - actual-secret-value should be returned as ***REDACTED***', 'yellow');
     log('   - ${JWT_SECRET} should be returned as-is', 'yellow');
 
     // Test 3: Simulate POST endpoint restoration
-    log('\n4. Testing POST endpoint restoration (would preserve original values when ***REDACTED*** is sent)...', 'blue');
-    
+    log(
+      '\n4. Testing POST endpoint restoration (would preserve original values when ***REDACTED*** is sent)...',
+      'blue'
+    );
+
     // Simulate what the client would send back (with redacted actual secrets)
     const clientConfig = {
       ...testConfig,
@@ -145,8 +160,14 @@ async function testClientSecretPreservation() {
       }
     };
 
-    log('   Simulating client sending back config with ***REDACTED*** for actual secret...', 'yellow');
-    log('   Expected: actual-secret-value should be preserved (not overwritten with ***REDACTED***)', 'yellow');
+    log(
+      '   Simulating client sending back config with ***REDACTED*** for actual secret...',
+      'yellow'
+    );
+    log(
+      '   Expected: actual-secret-value should be preserved (not overwritten with ***REDACTED***)',
+      'yellow'
+    );
 
     // Test 4: Test changing a secret
     log('\n5. Testing updating a secret to a new value...', 'blue');
@@ -179,7 +200,10 @@ async function testClientSecretPreservation() {
     log('3. Verify ${MICROSOFT_CLIENT_SECRET} is shown (not ***REDACTED***)', 'yellow');
     log('4. Disable one provider without touching the Microsoft secret', 'yellow');
     log('5. Save the configuration', 'yellow');
-    log('6. Check contents/config/platform.json - ${MICROSOFT_CLIENT_SECRET} should still be there', 'yellow');
+    log(
+      '6. Check contents/config/platform.json - ${MICROSOFT_CLIENT_SECRET} should still be there',
+      'yellow'
+    );
 
     return true;
   } catch (error) {

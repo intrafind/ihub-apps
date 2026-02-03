@@ -1,6 +1,6 @@
 /**
  * Integration test for client secret preservation fix
- * 
+ *
  * Tests the complete flow:
  * 1. Save config with environment variable placeholders
  * 2. GET config - verify env vars are preserved, actual secrets are redacted
@@ -152,7 +152,9 @@ function runTest() {
       console.log(`  ✓ restoreSecretIfRedacted('${newVal}', '${existingVal}') = '${result}'`);
       passed++;
     } else {
-      console.log(`  ✗ restoreSecretIfRedacted('${newVal}', '${existingVal}') = '${result}', expected '${expected}'`);
+      console.log(
+        `  ✗ restoreSecretIfRedacted('${newVal}', '${existingVal}') = '${result}', expected '${expected}'`
+      );
       failed++;
     }
   });
@@ -185,7 +187,9 @@ function runTest() {
     console.log('  ✓ GET: Microsoft secret preserved (env var)');
     passed++;
   } else {
-    console.log(`  ✗ GET: Microsoft secret not preserved: ${sanitizedConfig.oidcAuth.providers[0].clientSecret}`);
+    console.log(
+      `  ✗ GET: Microsoft secret not preserved: ${sanitizedConfig.oidcAuth.providers[0].clientSecret}`
+    );
     failed++;
   }
 
@@ -193,7 +197,9 @@ function runTest() {
     console.log('  ✓ GET: Google secret redacted (actual secret)');
     passed++;
   } else {
-    console.log(`  ✗ GET: Google secret not redacted: ${sanitizedConfig.oidcAuth.providers[1].clientSecret}`);
+    console.log(
+      `  ✗ GET: Google secret not redacted: ${sanitizedConfig.oidcAuth.providers[1].clientSecret}`
+    );
     failed++;
   }
 
@@ -247,10 +253,7 @@ function runTest() {
     },
     admin: {
       ...clientModifiedConfig.admin,
-      secret: restoreSecretIfRedacted(
-        clientModifiedConfig.admin.secret,
-        testConfig.admin.secret
-      )
+      secret: restoreSecretIfRedacted(clientModifiedConfig.admin.secret, testConfig.admin.secret)
     }
   };
 
@@ -259,7 +262,9 @@ function runTest() {
     console.log('  ✓ POST: Microsoft secret preserved (env var)');
     passed++;
   } else {
-    console.log(`  ✗ POST: Microsoft secret not preserved: ${restoredConfig.oidcAuth.providers[0].clientSecret}`);
+    console.log(
+      `  ✗ POST: Microsoft secret not preserved: ${restoredConfig.oidcAuth.providers[0].clientSecret}`
+    );
     failed++;
   }
 
@@ -267,7 +272,9 @@ function runTest() {
     console.log('  ✓ POST: Google secret restored from original (was ***REDACTED***)');
     passed++;
   } else {
-    console.log(`  ✗ POST: Google secret not restored: ${restoredConfig.oidcAuth.providers[1].clientSecret}`);
+    console.log(
+      `  ✗ POST: Google secret not restored: ${restoredConfig.oidcAuth.providers[1].clientSecret}`
+    );
     failed++;
   }
 
@@ -288,8 +295,10 @@ function runTest() {
   }
 
   // Verify the disabled provider setting was preserved
-  if (restoredConfig.oidcAuth.providers[0].enabled === true && 
-      restoredConfig.oidcAuth.providers[1].enabled === false) {
+  if (
+    restoredConfig.oidcAuth.providers[0].enabled === true &&
+    restoredConfig.oidcAuth.providers[1].enabled === false
+  ) {
     console.log('  ✓ POST: Provider enabled/disabled states preserved');
     passed++;
   } else {

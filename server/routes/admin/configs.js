@@ -309,7 +309,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
 
         // Restore secrets that were redacted in the client
         // This prevents environment variable placeholders from being overwritten with ***REDACTED***
-        
+
         // Restore JWT secrets
         if (newConfig.auth?.jwtSecret) {
           if (!mergedConfig.auth) mergedConfig.auth = {};
@@ -318,7 +318,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
             existingConfig.auth?.jwtSecret
           );
         }
-        
+
         if (newConfig.localAuth?.jwtSecret) {
           if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
           mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(

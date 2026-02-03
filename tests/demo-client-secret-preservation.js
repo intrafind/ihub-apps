@@ -1,6 +1,6 @@
 /**
  * End-to-end demonstration of the client secret preservation fix
- * 
+ *
  * This script:
  * 1. Reads the current platform.json to verify it has ${MICROSOFT_CLIENT_SECRET}
  * 2. Shows what the GET endpoint would return (env vars preserved, actual secrets redacted)
@@ -65,16 +65,19 @@ async function demonstrateFix() {
   }
 
   // Step 2: Simulate GET endpoint (what the admin page sees)
-  console.log('\n\n🔍 Step 2: Simulating GET /admin/configs/platform (what admin page receives)...\n');
-  
+  console.log(
+    '\n\n🔍 Step 2: Simulating GET /admin/configs/platform (what admin page receives)...\n'
+  );
+
   const sanitizedForClient = {
     ...originalConfig,
     oidcAuth: {
       ...originalConfig.oidcAuth,
-      providers: originalConfig.oidcAuth?.providers?.map(provider => ({
-        ...provider,
-        clientSecret: sanitizeSecret(provider.clientSecret)
-      })) || []
+      providers:
+        originalConfig.oidcAuth?.providers?.map(provider => ({
+          ...provider,
+          clientSecret: sanitizeSecret(provider.clientSecret)
+        })) || []
     },
     localAuth: {
       ...originalConfig.localAuth,
@@ -89,19 +92,23 @@ async function demonstrateFix() {
       console.log(`      Client ID:     ${provider.clientId}`);
       console.log(`      Client Secret: ${provider.clientSecret}`);
       const isEnvVar = isEnvVarPlaceholder(originalConfig.oidcAuth.providers[index].clientSecret);
-      console.log(`      Note:          ${isEnvVar ? '✓ Environment variable preserved' : '✓ Actual secret redacted'}`);
+      console.log(
+        `      Note:          ${isEnvVar ? '✓ Environment variable preserved' : '✓ Actual secret redacted'}`
+      );
     });
   }
 
   if (sanitizedForClient.localAuth?.jwtSecret) {
     const isEnvVar = isEnvVarPlaceholder(originalConfig.localAuth.jwtSecret);
     console.log(`\n   Local Auth JWT Secret: ${sanitizedForClient.localAuth.jwtSecret}`);
-    console.log(`   Note:                  ${isEnvVar ? '✓ Environment variable preserved' : '✓ Actual secret redacted'}`);
+    console.log(
+      `   Note:                  ${isEnvVar ? '✓ Environment variable preserved' : '✓ Actual secret redacted'}`
+    );
   }
 
   // Step 3: Simulate client making a change (disabling Google provider)
   console.log('\n\n✏️  Step 3: Simulating user disabling Google provider in admin UI...\n');
-  
+
   const clientModifiedConfig = {
     ...sanitizedForClient,
     oidcAuth: {
@@ -121,7 +128,9 @@ async function demonstrateFix() {
   });
 
   // Step 4: Simulate POST endpoint (server restoring secrets)
-  console.log('\n\n💾 Step 4: Simulating POST /admin/configs/platform (server restoring secrets)...\n');
+  console.log(
+    '\n\n💾 Step 4: Simulating POST /admin/configs/platform (server restoring secrets)...\n'
+  );
 
   const restoredConfig = {
     ...clientModifiedConfig,
@@ -169,9 +178,9 @@ async function demonstrateFix() {
 
   // Verification
   console.log('\n\n✅ Verification:\n');
-  
+
   let allGood = true;
-  
+
   // Check Microsoft secret (env var should be preserved)
   if (restoredConfig.oidcAuth.providers[0].clientSecret === '${MICROSOFT_CLIENT_SECRET}') {
     console.log('   ✓ Microsoft client secret (env var) was preserved correctly');
@@ -197,11 +206,13 @@ async function demonstrateFix() {
   }
 
   // Check that the user's change (disabling Google) was preserved
-  if (restoredConfig.oidcAuth.providers[0].enabled === true &&
-      restoredConfig.oidcAuth.providers[1].enabled === false) {
-    console.log('   ✓ User\'s change (disabling Google provider) was preserved');
+  if (
+    restoredConfig.oidcAuth.providers[0].enabled === true &&
+    restoredConfig.oidcAuth.providers[1].enabled === false
+  ) {
+    console.log("   ✓ User's change (disabling Google provider) was preserved");
   } else {
-    console.log('   ✗ User\'s change was NOT preserved!');
+    console.log("   ✗ User's change was NOT preserved!");
     allGood = false;
   }
 
@@ -218,9 +229,11 @@ async function demonstrateFix() {
 }
 
 // Run the demonstration
-demonstrateFix().then(success => {
-  process.exit(success ? 0 : 1);
-}).catch(error => {
-  console.error('Error:', error);
-  process.exit(1);
-});
+demonstrateFix()
+  .then(success => {
+    process.exit(success ? 0 : 1);
+  })
+  .catch(error => {
+    console.error('Error:', error);
+    process.exit(1);
+  });
