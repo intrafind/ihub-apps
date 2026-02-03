@@ -85,19 +85,6 @@
       },
       "enabled": true,
       "category": "websearch"
-    },
-    {
-      "id": "custom",
-      "name": {
-        "en": "Custom / Generic API Keys",
-        "de": "Benutzerdefinierte / Generische API-Schlüssel"
-      },
-      "description": {
-        "en": "Storage for custom API keys and credentials for third-party services",
-        "de": "Speicher für benutzerdefinierte API-Schlüssel und Anmeldeinformationen für Drittanbieterdienste"
-      },
-      "enabled": true,
-      "category": "custom"
     }
   ]
 }
