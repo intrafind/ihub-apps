@@ -13,6 +13,8 @@ const AppConfigForm = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  imageAspectRatio,
+  imageQuality,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -21,6 +23,8 @@ const AppConfigForm = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onImageAspectRatioChange,
+  onImageQualityChange,
   currentLanguage
 }) => {
   const { t } = useTranslation();
@@ -56,6 +60,28 @@ const AppConfigForm = ({
   // Check if selected model supports thinking
   const selectedModelData = models.find(m => m.id === selectedModel);
   const supportsThinking = selectedModelData?.thinking?.enabled === true;
+  const supportsImageGeneration = selectedModelData?.supportsImageGeneration === true;
+
+  // Available aspect ratios for image generation
+  const aspectRatios = [
+    { id: '1:1', name: '1:1 (Square)' },
+    { id: '2:3', name: '2:3 (Portrait)' },
+    { id: '3:2', name: '3:2 (Landscape)' },
+    { id: '3:4', name: '3:4 (Portrait)' },
+    { id: '4:3', name: '4:3 (Landscape)' },
+    { id: '4:5', name: '4:5 (Portrait)' },
+    { id: '5:4', name: '5:4 (Landscape)' },
+    { id: '9:16', name: '9:16 (Phone Portrait)' },
+    { id: '16:9', name: '16:9 (Widescreen)' },
+    { id: '21:9', name: '21:9 (Ultrawide)' }
+  ];
+
+  // Available quality levels for image generation
+  const qualityLevels = [
+    { id: 'Low', name: t('appConfig.qualityLow', 'Low (1K)') },
+    { id: 'Medium', name: t('appConfig.qualityMedium', 'Medium (2K)') },
+    { id: 'High', name: t('appConfig.qualityHigh', 'High (4K)') }
+  ];
 
   // Available output formats
   const outputFormats = [
@@ -248,6 +274,59 @@ const AppConfigForm = ({
               </div>
             </>
           )}
+        </>
+      )}
+
+      {/* Image Generation Settings - Only show if model supports it */}
+      {app?.settings?.imageGeneration !== false && supportsImageGeneration && (
+        <>
+          <div className="border-t border-gray-200 pt-3 mt-3">
+            <h3 className="text-sm font-medium text-gray-900 mb-2">
+              {t('appConfig.imageGeneration', 'Image Generation Settings')}
+            </h3>
+          </div>
+
+          {/* Aspect Ratio */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('appConfig.imageAspectRatio', 'Aspect Ratio')}
+            </label>
+            <select
+              value={imageAspectRatio || '1:1'}
+              onChange={e => onImageAspectRatioChange?.(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              {aspectRatios.map(ratio => (
+                <option key={ratio.id} value={ratio.id}>
+                  {ratio.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {t('appConfig.imageAspectRatioHelp', 'Select the aspect ratio for generated images')}
+            </p>
+          </div>
+
+          {/* Quality */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('appConfig.imageQuality', 'Quality')}
+            </label>
+            <select
+              value={imageQuality || 'Medium'}
+              onChange={e => onImageQualityChange?.(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+            >
+              {qualityLevels.map(level => (
+                <option key={level.id} value={level.id}>
+                  {level.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {t('appConfig.imageQualityHelp', 'Select the quality level for generated images')}
+            </p>
+          </div>
         </>
       )}
     </div>

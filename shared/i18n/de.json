@@ -280,7 +280,15 @@
     "plainText": "Klartext",
     "json": "JSON",
     "toolsSettings": "Werkzeuge",
-    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung"
+    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung",
+    "imageGeneration": "Bilderzeugungseinstellungen",
+    "imageAspectRatio": "Seitenverhältnis",
+    "imageAspectRatioHelp": "Wählen Sie das Seitenverhältnis für generierte Bilder",
+    "imageQuality": "Qualität",
+    "imageQualityHelp": "Wählen Sie die Qualitätsstufe für generierte Bilder",
+    "qualityLow": "Niedrig (1K)",
+    "qualityMedium": "Mittel (2K)",
+    "qualityHigh": "Hoch (4K)"
   },
   "chatMessage": {
     "user": "Du",

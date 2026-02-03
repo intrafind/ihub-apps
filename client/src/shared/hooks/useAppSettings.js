@@ -20,6 +20,8 @@ const useAppSettings = (appId, app) => {
   const [thinkingBudget, setThinkingBudget] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
+  const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
+  const [imageQuality, setImageQuality] = useState('Medium');
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -77,7 +79,9 @@ const useAppSettings = (appId, app) => {
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingBudget: app.thinking?.budget ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
-      enabledTools: app.tools || []
+      enabledTools: app.tools || [],
+      imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
+      imageQuality: app.imageGeneration?.quality || 'Medium'
     };
 
     // Set initial states
@@ -90,6 +94,8 @@ const useAppSettings = (appId, app) => {
     setThinkingBudget(initialState.thinkingBudget);
     setThinkingThoughts(initialState.thinkingThoughts);
     setEnabledTools(initialState.enabledTools);
+    setImageAspectRatio(initialState.imageAspectRatio);
+    setImageQuality(initialState.imageQuality);
 
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
@@ -109,6 +115,9 @@ const useAppSettings = (appId, app) => {
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
       if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
+      if (savedSettings.imageAspectRatio !== undefined)
+        setImageAspectRatio(savedSettings.imageAspectRatio);
+      if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
     }
   }, [app, appId, setHeaderColor, models, modelsLoading]);
 
@@ -124,7 +133,9 @@ const useAppSettings = (appId, app) => {
         thinkingEnabled,
         thinkingBudget,
         thinkingThoughts,
-        enabledTools
+        enabledTools,
+        imageAspectRatio,
+        imageQuality
       });
     }
   }, [
@@ -138,7 +149,9 @@ const useAppSettings = (appId, app) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
-    enabledTools
+    enabledTools,
+    imageAspectRatio,
+    imageQuality
   ]);
 
   // Settings object for easy passing to components
@@ -151,7 +164,9 @@ const useAppSettings = (appId, app) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
-    enabledTools
+    enabledTools,
+    imageAspectRatio,
+    imageQuality
   };
 
   // Setters object for easy passing to components
@@ -164,7 +179,9 @@ const useAppSettings = (appId, app) => {
     setThinkingEnabled,
     setThinkingBudget,
     setThinkingThoughts,
-    setEnabledTools
+    setEnabledTools,
+    setImageAspectRatio,
+    setImageQuality
   };
 
   return {

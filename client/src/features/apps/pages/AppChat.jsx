@@ -129,6 +129,8 @@ const AppChat = ({ preloadedApp = null }) => {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    imageAspectRatio,
+    imageQuality,
     models,
     styles,
     setSelectedModel,
@@ -140,6 +142,8 @@ const AppChat = ({ preloadedApp = null }) => {
     setThinkingBudget,
     setThinkingThoughts,
     setEnabledTools,
+    setImageAspectRatio,
+    setImageQuality,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -840,7 +844,9 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {})
+      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+      ...(imageAspectRatio ? { imageAspectRatio } : {}),
+      ...(imageQuality ? { imageQuality } : {})
     };
 
     console.log('📤 Sending message with params:', params);
@@ -1086,6 +1092,8 @@ const AppChat = ({ preloadedApp = null }) => {
         thinkingBudget={thinkingBudget}
         thinkingThoughts={thinkingThoughts}
         enabledTools={enabledTools}
+        imageAspectRatio={imageAspectRatio}
+        imageQuality={imageQuality}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
@@ -1095,6 +1103,8 @@ const AppChat = ({ preloadedApp = null }) => {
         onThinkingBudgetChange={setThinkingBudget}
         onThinkingThoughtsChange={setThinkingThoughts}
         onEnabledToolsChange={setEnabledTools}
+        onImageAspectRatioChange={setImageAspectRatio}
+        onImageQualityChange={setImageQuality}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
