@@ -248,7 +248,9 @@ class RequestBuilder {
       if (model.supportsImageGeneration) {
         // Use provided parameters or fall back to model/app defaults
         const aspectRatio =
-          imageAspectRatio || model.imageGeneration?.aspectRatio || app.imageGeneration?.aspectRatio;
+          imageAspectRatio ||
+          model.imageGeneration?.aspectRatio ||
+          app.imageGeneration?.aspectRatio;
         const quality =
           imageQuality || model.imageGeneration?.quality || app.imageGeneration?.quality;
 
