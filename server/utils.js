@@ -380,9 +380,6 @@ export async function logInteraction(interactionType, data) {
       });
     }
 
-    // Write to log file
-    await appendToLogFile(logEntry);
-
     // Return the interaction ID so it can be used to link requests, responses, and feedback
     return interactionId;
   } catch (error) {
@@ -398,36 +395,6 @@ export async function logInteraction(interactionType, data) {
 }
 
 /**
- * Append log entry to the log file
- *
- * @param {Object} logEntry - The log entry to append
- * @returns {Promise<void>}
- */
-async function appendToLogFile(logEntry) {
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-
-    // Create logs directory if it doesn't exist
-    const logsDir = path.join(__dirname, '../logs');
-    try {
-      await fs.mkdir(logsDir, { recursive: true });
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
-    }
-
-    // Create log file path with today's date
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const logFilePath = path.join(logsDir, `interactions-${today}.log`);
-
-    // Append log entry to file
-    await fs.appendFile(logFilePath, JSON.stringify(logEntry) + '\n', 'utf8');
-  } catch (error) {
-    logger.error('Error writing to log file:', error);
-  }
-}
-
-/**
  * Create a session tracker for chat sessions
  *
  * @param {string} chatId - The chat/session ID
@@ -439,25 +406,24 @@ export function trackSession(chatId, info = {}) {
     // Log chat session start, including both chatId and userSessionId if available
     const userSessionId = info.userSessionId || 'unknown';
 
-    logger.info(
-      `[CHAT STARTED] Chat ID: ${chatId} | User Session: ${userSessionId} | App: ${info.appId || 'unknown'}`
-    );
-
-    // Store the chat session info in a log file
-    appendToLogFile({
-      type: 'chat_started',
-      timestamp: new Date().toISOString(),
-      chatId: chatId,
-      userSessionId: userSessionId,
+    logger.info({
+      component: 'ChatService',
+      message: 'Chat session started',
+      type: 'CHAT_STARTED',
+      chatId,
+      userSessionId,
       appId: info.appId || 'unknown',
       userAgent: info.userAgent || 'unknown'
-    }).catch(error => {
-      logger.error('Error logging chat session start:', error);
     });
 
     return chatId;
   } catch (error) {
-    logger.error('Error tracking chat session:', error);
+    logger.error({
+      component: 'ChatService',
+      message: 'Error tracking chat session',
+      error: error.message,
+      stack: error.stack
+    });
     return chatId;
   }
 }
@@ -474,9 +440,10 @@ export async function logNewSession(chatId, appId, metadata = {}) {
   try {
     const timestamp = new Date().toISOString();
 
-    // Build the log entry
-    const logEntry = {
-      type: 'session_start',
+    logger.info({
+      component: 'ChatService',
+      message: 'New session started',
+      type: 'SESSION_START',
       timestamp,
       sessionId: chatId,
       appId: appId || 'unknown',
@@ -484,15 +451,15 @@ export async function logNewSession(chatId, appId, metadata = {}) {
       ipAddress: metadata.ipAddress || 'unknown',
       language: metadata.language || configCache.getPlatform()?.defaultLanguage || 'en',
       referrer: metadata.referrer || 'unknown'
-    };
-
-    logger.info(`[NEW SESSION] ${timestamp} | Session ID: ${chatId} | App: ${appId}`);
-
-    // Write to log file
-    await appendToLogFile(logEntry);
+    });
   } catch (error) {
     // Don't let logging errors affect the main application flow
-    logger.error('Error logging new session:', error);
+    logger.error({
+      component: 'ChatService',
+      message: 'Error logging new session',
+      error: error.message,
+      stack: error.stack
+    });
   }
 }
 
