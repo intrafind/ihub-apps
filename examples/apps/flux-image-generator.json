@@ -1,0 +1,100 @@
+{
+  "id": "flux-image-generator",
+  "name": {
+    "en": "FLUX Image Generator",
+    "de": "FLUX Bildgenerator"
+  },
+  "description": {
+    "en": "Generate stunning images using Black Forest Labs FLUX models. Supports text-to-image, multi-reference images, and advanced features like hex color control and typography.",
+    "de": "Erstellen Sie beeindruckende Bilder mit Black Forest Labs FLUX-Modellen. Unterstützt Text-zu-Bild, Multi-Referenz-Bilder und erweiterte Funktionen wie Hex-Farbkontrolle und Typografie."
+  },
+  "color": "#9333EA",
+  "icon": "PhotoIcon",
+  "system": {
+    "en": "You are an expert AI image generation assistant using FLUX models. Help users create stunning images by:\n\n1. Understanding their vision and requirements\n2. Crafting detailed, effective prompts following FLUX best practices\n3. Using the proper prompt structure: [Subject] + [Action] + [Style] + [Context] + [Lighting] + [Technical]\n4. Leveraging advanced features:\n   - Hex colors for precise color control (#RRGGBB format)\n   - Text rendering using quoted strings for typography\n   - Multi-reference images for consistency\n   - Grounding search for current events (FLUX.2 [max] only)\n\nBest Practices:\n- Be specific and detailed in descriptions\n- Include lighting (golden hour, softbox, rim light, etc.)\n- Specify style and artistic direction\n- Use hex codes for exact brand colors\n- Don't use negative prompts (FLUX doesn't support them)\n- Describe what you want, not what you don't want\n\nWhen the user provides a prompt, enhance it if needed and generate the image.",
+    "de": "Sie sind ein Experte für KI-Bildgenerierung mit FLUX-Modellen. Helfen Sie Benutzern, beeindruckende Bilder zu erstellen, indem Sie:\n\n1. Ihre Vision und Anforderungen verstehen\n2. Detaillierte, effektive Prompts nach FLUX Best Practices erstellen\n3. Die richtige Prompt-Struktur verwenden: [Motiv] + [Aktion] + [Stil] + [Kontext] + [Beleuchtung] + [Technisch]\n4. Erweiterte Funktionen nutzen:\n   - Hex-Farben für präzise Farbkontrolle (#RRGGBB-Format)\n   - Textdarstellung mit zitierten Strings für Typografie\n   - Multi-Referenz-Bilder für Konsistenz\n   - Grounding-Suche für aktuelle Ereignisse (nur FLUX.2 [max])\n\nBest Practices:\n- Seien Sie spezifisch und detailliert in Beschreibungen\n- Geben Sie Beleuchtung an (goldene Stunde, Softbox, Randlicht, etc.)\n- Spezifizieren Sie Stil und künstlerische Richtung\n- Verwenden Sie Hex-Codes für exakte Markenfarben\n- Verwenden Sie keine negativen Prompts (FLUX unterstützt sie nicht)\n- Beschreiben Sie, was Sie wollen, nicht was Sie nicht wollen\n\nWenn der Benutzer einen Prompt bereitstellt, verbessern Sie ihn bei Bedarf und generieren Sie das Bild."
+  },
+  "tokenLimit": 2048,
+  "preferredModel": "flux-2-pro",
+  "preferredOutputFormat": "markdown",
+  "sendChatHistory": true,
+  "messagePlaceholder": {
+    "en": "Describe the image you want to generate...",
+    "de": "Beschreiben Sie das Bild, das Sie generieren möchten..."
+  },
+  "upload": {
+    "enabled": true,
+    "maxFiles": 10,
+    "supportedFormats": ["image/jpeg", "image/png", "image/webp"],
+    "description": {
+      "en": "Upload reference images (up to 10) to use in your generation",
+      "de": "Laden Sie Referenzbilder hoch (bis zu 10), um sie in Ihrer Generierung zu verwenden"
+    }
+  },
+  "greeting": {
+    "title": {
+      "en": "Welcome to FLUX Image Generator",
+      "de": "Willkommen beim FLUX Bildgenerator"
+    },
+    "message": {
+      "en": "Create stunning, photorealistic images with Black Forest Labs FLUX models. I'll help you craft the perfect prompt and generate amazing images.",
+      "de": "Erstellen Sie beeindruckende, fotorealistische Bilder mit Black Forest Labs FLUX-Modellen. Ich helfe Ihnen, den perfekten Prompt zu erstellen und erstaunliche Bilder zu generieren."
+    }
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "🎨 Product Photography",
+        "de": "🎨 Produktfotografie"
+      },
+      "prompt": {
+        "en": "A premium smartphone on a minimalist white surface, professional product photography, soft diffused lighting from above, subtle shadows, clean composition, shot on medium format camera, shallow depth of field",
+        "de": "Ein Premium-Smartphone auf einer minimalistischen weißen Oberfläche, professionelle Produktfotografie, weiches diffuses Licht von oben, subtile Schatten, saubere Komposition, aufgenommen mit Mittelformatkamera, geringe Schärfentiefe"
+      }
+    },
+    {
+      "title": {
+        "en": "🌆 Urban Landscape",
+        "de": "🌆 Stadtlandschaft"
+      },
+      "prompt": {
+        "en": "Modern cityscape at golden hour, skyscrapers reflecting warm sunset light, bustling street with motion blur, dramatic clouds, vibrant colors, shot from elevated viewpoint, cinematic composition",
+        "de": "Moderne Stadtlandschaft zur goldenen Stunde, Wolkenkratzer reflektieren warmes Sonnenuntergangslicht, belebte Straße mit Bewegungsunschärfe, dramatische Wolken, lebendige Farben, aufgenommen von erhöhtem Standpunkt, kinematische Komposition"
+      }
+    },
+    {
+      "title": {
+        "en": "🎭 Character Portrait",
+        "de": "🎭 Charakterporträt"
+      },
+      "prompt": {
+        "en": "Portrait of a wise elderly person with weathered features, storytelling expression, Rembrandt lighting, warm tones, shallow depth of field, detailed wrinkles and textures, shot on 85mm lens, cinematic mood",
+        "de": "Porträt einer weisen älteren Person mit wettergezeichneten Zügen, erzählender Ausdruck, Rembrandt-Beleuchtung, warme Töne, geringe Schärfentiefe, detaillierte Falten und Texturen, aufgenommen mit 85mm-Objektiv, kinematische Stimmung"
+      }
+    },
+    {
+      "title": {
+        "en": "🎨 Brand Colors",
+        "de": "🎨 Markenfarben"
+      },
+      "prompt": {
+        "en": "Luxury eyeshadow palette with 6 pans: top row #B76E79, #E8D5B7, #8B4789; bottom row #CD7F32, #F8F6F0, #800020. Professional product photography, soft lighting, marble surface",
+        "de": "Luxus-Lidschattenpalette mit 6 Pans: obere Reihe #B76E79, #E8D5B7, #8B4789; untere Reihe #CD7F32, #F8F6F0, #800020. Professionelle Produktfotografie, weiches Licht, Marmoroberfläche"
+      }
+    },
+    {
+      "title": {
+        "en": "📝 Typography Example",
+        "de": "📝 Typografie-Beispiel"
+      },
+      "prompt": {
+        "en": "Modern coffee shop storefront with neon sign reading \"COFFEE HOUSE\" in elegant script, warm interior lighting visible through large windows, urban street at dusk, photorealistic",
+        "de": "Moderne Kaffeebar-Storefront mit Neonschild \"COFFEE HOUSE\" in eleganter Schrift, warme Innenbeleuchtung sichtbar durch große Fenster, urbane Straße bei Abenddämmerung, fotorealistisch"
+      }
+    }
+  ],
+  "allowedModels": ["flux-2-pro", "flux-2-max", "flux-2-klein-4b", "flux-kontext-pro"],
+  "category": "creative",
+  "enabled": false,
+  "default": false
+}

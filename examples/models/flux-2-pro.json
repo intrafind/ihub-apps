@@ -1,0 +1,27 @@
+{
+  "id": "flux-2-pro",
+  "modelId": "flux-2-pro",
+  "name": {
+    "en": "FLUX.2 Pro",
+    "de": "FLUX.2 Pro"
+  },
+  "description": {
+    "en": "Production-ready image generation at scale. Fast and high quality with support for up to 10 reference images.",
+    "de": "Produktionsbereite Bildgenerierung im großen Maßstab. Schnell und hochwertig mit Unterstützung für bis zu 10 Referenzbilder."
+  },
+  "url": "https://api.bfl.ai/v1/flux-2-pro",
+  "provider": "bfl",
+  "tokenLimit": 0,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "width": 1024,
+    "height": 1024,
+    "aspectRatio": "1:1",
+    "maxReferenceImages": 10,
+    "supportsGrounding": false,
+    "safetyTolerance": 2
+  },
+  "apiKeyEnvVar": "BFL_API_KEY",
+  "enabled": false,
+  "default": false
+}

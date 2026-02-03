@@ -1,0 +1,27 @@
+{
+  "id": "flux-2-max",
+  "modelId": "flux-2-max",
+  "name": {
+    "en": "FLUX.2 Max",
+    "de": "FLUX.2 Max"
+  },
+  "description": {
+    "en": "Highest quality image generation with real-time grounding search. Perfect for final assets. Searches the web when needed for current events, weather, and locations.",
+    "de": "Höchste Qualität Bildgenerierung mit Echtzeit-Grounding-Suche. Perfekt für finale Assets. Durchsucht das Web bei Bedarf nach aktuellen Ereignissen, Wetter und Standorten."
+  },
+  "url": "https://api.bfl.ai/v1/flux-2-max",
+  "provider": "bfl",
+  "tokenLimit": 0,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "width": 1024,
+    "height": 1024,
+    "aspectRatio": "1:1",
+    "maxReferenceImages": 10,
+    "supportsGrounding": true,
+    "safetyTolerance": 2
+  },
+  "apiKeyEnvVar": "BFL_API_KEY",
+  "enabled": false,
+  "default": false
+}

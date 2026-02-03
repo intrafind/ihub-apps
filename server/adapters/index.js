@@ -6,6 +6,7 @@ import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
 import VLLMAdapter from './vllm.js';
 import IAssistantAdapter from './iassistant.js';
+import BFLAdapter from './bfl.js';
 
 // Adapter registry
 const adapters = {
@@ -15,7 +16,8 @@ const adapters = {
   google: GoogleAdapter,
   mistral: MistralAdapter,
   local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
-  iassistant: IAssistantAdapter
+  iassistant: IAssistantAdapter,
+  bfl: BFLAdapter
 };
 
 /**

@@ -1,0 +1,27 @@
+{
+  "id": "flux-kontext-pro",
+  "modelId": "flux-kontext-pro",
+  "name": {
+    "en": "FLUX.1 Kontext Pro",
+    "de": "FLUX.1 Kontext Pro"
+  },
+  "description": {
+    "en": "Fast production-ready image generation and editing. Unified editing and generation mode with character consistency and text editing capabilities.",
+    "de": "Schnelle produktionsbereite Bildgenerierung und -bearbeitung. Einheitlicher Bearbeitungs- und Generierungsmodus mit Charakterkonsistenz und Textbearbeitungsfunktionen."
+  },
+  "url": "https://api.bfl.ai/v1/flux-kontext-pro",
+  "provider": "bfl",
+  "tokenLimit": 0,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "width": 1024,
+    "height": 1024,
+    "aspectRatio": "1:1",
+    "maxReferenceImages": 10,
+    "supportsGrounding": false,
+    "safetyTolerance": 2
+  },
+  "apiKeyEnvVar": "BFL_API_KEY",
+  "enabled": false,
+  "default": false
+}
