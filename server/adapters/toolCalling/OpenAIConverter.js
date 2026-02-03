@@ -310,7 +310,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
         }
 
         // Log accumulation progress for debugging
-        logger.info(
+        logger.debug(
           `[OpenAI Converter] Accumulated tool calls:`,
           Array.from(state.pendingToolCalls.values())
         );
@@ -323,13 +323,13 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
       result.finishReason = state.finishReason;
 
-      logger.info(
+      logger.debug(
         `[OpenAI Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`
       );
 
       // For OpenAI, finalize tool calls on tool_calls finish reason or if we have pending calls
       if (state.pendingToolCalls.size > 0) {
-        logger.info(
+        logger.debug(
           `[OpenAI Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`
         );
         for (const [index, pending] of state.pendingToolCalls.entries()) {
@@ -344,7 +344,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
               parsedArgs = { __raw_arguments: pending.arguments };
             }
 
-            logger.info(
+            logger.debug(
               `[OpenAI Converter] Adding tool call: ${pending.name} with args:`,
               parsedArgs
             );
