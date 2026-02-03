@@ -67,7 +67,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       res.setHeader('ETag', modelsEtag);
       res.json(maskedModels);
     } catch (error) {
-      logger.error('Error fetching all models:', error);
+      logger.error({
+        component: 'ModelsRoutes',
+        message: 'Error fetching all models',
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Failed to fetch models' });
     }
   });
@@ -102,7 +107,13 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       res.setHeader('ETag', modelsEtag);
       res.json(maskedModel);
     } catch (error) {
-      logger.error('Error fetching model:', error);
+      logger.error({
+        component: 'ModelsRoutes',
+        message: 'Error fetching model',
+        modelId: req.params.modelId,
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Failed to fetch model' });
     }
   });
@@ -191,7 +202,13 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       await configCache.refreshModelsCache();
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
-      logger.error('Error updating model:', error);
+      logger.error({
+        component: 'ModelsRoutes',
+        message: 'Error updating model',
+        modelId: req.params.modelId,
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Failed to update model' });
     }
   });
@@ -255,7 +272,12 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
       await configCache.refreshModelsCache();
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
-      logger.error('Error creating model:', error);
+      logger.error({
+        component: 'ModelsRoutes',
+        message: 'Error creating model',
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Failed to create model' });
     }
   });

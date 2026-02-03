@@ -200,21 +200,37 @@ class RequestBuilder {
       );
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
-      logger.info(
-        `Preparing request for App: ${app.id}, Model: ${model.id}, Max Tokens: ${useMaxTokens ? 'Max' : 'Calculated'}`
-      );
+      logger.info({
+        component: 'RequestBuilder',
+        message: 'Preparing chat request',
+        appId: app.id,
+        modelId: model.id,
+        useMaxTokens
+      });
 
       // Determine model token limit (default to 8192 if not specified)
       const modelTokenLimit = model.tokenLimit || 8192;
-      logger.info(`Model Token Limit: ${modelTokenLimit}`);
+      logger.info({
+        component: 'RequestBuilder',
+        message: 'Model token limit',
+        modelTokenLimit
+      });
 
       // If app specifies tokenLimit, use it; otherwise use model's tokenLimit
       const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
-      logger.info(`App Token Limit: ${appTokenLimit}`);
+      logger.info({
+        component: 'RequestBuilder',
+        message: 'App token limit',
+        appTokenLimit
+      });
 
       // Use max tokens if requested, otherwise use the minimum of app and model limits
       const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
-      logger.info(`Final Token Limit for Request: ${finalTokens}`);
+      logger.info({
+        component: 'RequestBuilder',
+        message: 'Final token limit for request',
+        finalTokens
+      });
 
       const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
       if (!apiKeyResult.success) {
@@ -251,7 +267,12 @@ class RequestBuilder {
         }
       };
     } catch (error) {
-      logger.error('Error in prepareChatRequest:', error);
+      logger.error({
+        component: 'RequestBuilder',
+        message: 'Error in prepareChatRequest',
+        error: error.message,
+        stack: error.stack
+      });
       const chatError = new Error(error.message || 'Internal server error');
       chatError.code = 'INTERNAL_ERROR';
       return { success: false, error: chatError };

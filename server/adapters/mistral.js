@@ -179,7 +179,12 @@ class MistralAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      logger.error('Error parsing Mistral response chunk:', error);
+      logger.error({
+        component: 'MistralAdapter',
+        message: 'Error parsing Mistral response chunk',
+        error: error.message,
+        stack: error.stack
+      });
       result.error = true;
       result.errorMessage = `Error parsing Mistral response: ${error.message}`;
     }
