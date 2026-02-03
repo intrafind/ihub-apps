@@ -34,16 +34,24 @@ class ToolExecutor {
         try {
           args = JSON.parse(finalArgs);
         } catch (e2) {
-          logger.error(
-            'Failed to parse tool arguments even after correction:',
-            toolCall.function.arguments,
-            e2
-          );
+          logger.error({
+            component: 'ToolExecutor',
+            message: 'Failed to parse tool arguments even after correction',
+            toolId,
+            arguments: toolCall.function.arguments,
+            error: e2.message
+          });
           args = {};
         }
       }
     } catch (e) {
-      logger.error('Failed to parse tool arguments:', toolCall.function.arguments, e);
+      logger.error({
+        component: 'ToolExecutor',
+        message: 'Failed to parse tool arguments',
+        toolId,
+        arguments: toolCall.function.arguments,
+        error: e.message
+      });
     }
 
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });

@@ -10,20 +10,20 @@ export class BaseAdapter {
    * @param {string} provider - Provider name
    */
   debugLogMessages(messages, formattedMessages, provider) {
-    logger.debug(
-      'Original messages:',
-      JSON.stringify(messages.map(m => ({ role: m.role, hasImage: !!m.imageData })))
-    );
-    logger.debug(
-      `Processed ${provider} messages:`,
-      JSON.stringify(
-        formattedMessages.map(m => ({
-          role: m.role,
-          contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
-          contentItems: Array.isArray(m.content) ? m.content.map(c => c.type) : null
-        }))
-      )
-    );
+    logger.debug({
+      component: `${provider}Adapter`,
+      message: 'Original messages',
+      messages: messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))
+    });
+    logger.debug({
+      component: `${provider}Adapter`,
+      message: `Processed ${provider} messages`,
+      formattedMessages: formattedMessages.map(m => ({
+        role: m.role,
+        contentType: Array.isArray(m.content) ? 'array' : typeof m.content,
+        contentItems: Array.isArray(m.content) ? m.content.map(c => c.type) : null
+      }))
+    });
   }
 
   /**

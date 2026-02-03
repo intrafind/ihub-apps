@@ -53,13 +53,24 @@ import config from './config.js';
 const workerCount = config.WORKERS;
 
 if (cluster.isPrimary && workerCount > 1) {
-  logger.info(`Primary process ${process.pid} starting ${workerCount} workers`);
+  logger.info({
+    component: 'Server',
+    message: `Primary process ${process.pid} starting ${workerCount} workers`,
+    pid: process.pid,
+    workerCount
+  });
   for (let i = 0; i < workerCount; i++) {
     cluster.fork();
   }
 
   cluster.on('exit', (worker, code, signal) => {
-    logger.warn(`Worker ${worker.process.pid} exited (${code || signal}).`);
+    logger.warn({
+      component: 'Server',
+      message: `Worker ${worker.process.pid} exited (${code || signal})`,
+      workerPid: worker.process.pid,
+      code,
+      signal
+    });
     cluster.fork();
   });
 } else {
@@ -70,22 +81,45 @@ if (cluster.isPrimary && workerCount > 1) {
   // Resolve the application root directory
   const rootDir = getRootDir();
   if (isPackaged) {
-    logger.info(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
+    logger.info({
+      component: 'Server',
+      message: 'Running in packaged binary mode',
+      rootDir
+    });
   } else {
-    logger.info('Running in normal mode');
+    logger.info({
+      component: 'Server',
+      message: 'Running in normal mode'
+    });
   }
-  logger.info(`Root directory: ${rootDir}`);
+  logger.info({
+    component: 'Server',
+    message: 'Root directory configured',
+    rootDir
+  });
 
   // Get the contents directory, either from environment variable or use default 'contents'
   const contentsDir = config.CONTENTS_DIR;
-  logger.info(`Using contents directory: ${contentsDir}`);
+  logger.info({
+    component: 'Server',
+    message: 'Using contents directory',
+    contentsDir
+  });
 
   // Perform initial setup if contents directory is empty
   try {
     await performInitialSetup();
   } catch (err) {
-    logger.error('Failed to perform initial setup:', err);
-    logger.warn('Server will continue, but may not function properly without configuration files');
+    logger.error({
+      component: 'Server',
+      message: 'Failed to perform initial setup',
+      error: err.message,
+      stack: err.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but may not function properly without configuration files'
+    });
   }
 
   // Load platform configuration and initialize telemetry
@@ -97,7 +131,12 @@ if (cluster.isPrimary && workerCount > 1) {
     }
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (err) {
-    logger.error('Failed to initialize telemetry:', err);
+    logger.error({
+      component: 'Server',
+      message: 'Failed to initialize telemetry',
+      error: err.message,
+      stack: err.stack
+    });
   }
 
   // Log application version information
@@ -130,8 +169,16 @@ if (cluster.isPrimary && workerCount > 1) {
     // Reconfigure logger to pick up logging settings from platform config
     logger.reconfigureLogger();
   } catch (err) {
-    logger.error('Failed to initialize configuration cache:', err);
-    logger.warn('Server will continue with file-based configuration loading');
+    logger.error({
+      component: 'Server',
+      message: 'Failed to initialize configuration cache',
+      error: err.message,
+      stack: err.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue with file-based configuration loading'
+    });
   }
 
   // Create Express application
@@ -248,23 +295,49 @@ if (cluster.isPrimary && workerCount > 1) {
 
       // Create HTTPS server
       server = https.createServer(httpsOptions, app);
-      logger.info(`Starting HTTPS server with SSL certificate from ${config.SSL_CERT}`);
+      logger.info({
+        component: 'Server',
+        message: 'Starting HTTPS server',
+        certPath: config.SSL_CERT
+      });
     } catch (error) {
-      logger.error('Error setting up HTTPS server:', error);
-      logger.info('Falling back to HTTP server');
+      logger.error({
+        component: 'Server',
+        message: 'Error setting up HTTPS server',
+        error: error.message,
+        stack: error.stack
+      });
+      logger.info({
+        component: 'Server',
+        message: 'Falling back to HTTP server'
+      });
       server = http.createServer(serverOptions, app);
     }
   } else {
     // Create regular HTTP server with socket reuse options
     server = http.createServer(serverOptions, app);
-    logger.info('Starting HTTP server (no SSL configuration provided)');
+    logger.info({
+      component: 'Server',
+      message: 'Starting HTTP server (no SSL configuration provided)'
+    });
   }
 
   // Start server
   server.listen(PORT, HOST, () => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
-    logger.info(`Server is running on ${protocol}://${HOST}:${PORT}`);
-    logger.info(`Open ${protocol}://${HOST}:${PORT} in your browser to use iHub Apps`);
+    logger.info({
+      component: 'Server',
+      message: 'Server is running',
+      protocol,
+      host: HOST,
+      port: PORT,
+      url: `${protocol}://${HOST}:${PORT}`
+    });
+    logger.info({
+      component: 'Server',
+      message: 'Open in browser to use iHub Apps',
+      url: `${protocol}://${HOST}:${PORT}`
+    });
   });
 
   const handleShutdownSignal = async () => {

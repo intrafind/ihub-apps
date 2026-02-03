@@ -15,8 +15,9 @@ const jsonFormat = winston.format.combine(
 const textFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize(),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    let msg = `${timestamp} [${level}]: ${message}`;
+  winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
+    const componentTag = component ? `[${component}]` : '';
+    let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
     if (Object.keys(meta).length > 0) {
       msg += ` ${JSON.stringify(meta)}`;
     }
@@ -27,8 +28,9 @@ const textFormat = winston.format.combine(
 // File format without colors (text or JSON based on config)
 const fileTextFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.printf(({ timestamp, level, message, ...meta }) => {
-    let msg = `${timestamp} [${level}]: ${message}`;
+  winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
+    const componentTag = component ? `[${component}]` : '';
+    let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
     if (Object.keys(meta).length > 0) {
       msg += ` ${JSON.stringify(meta)}`;
     }
@@ -59,7 +61,7 @@ function getLogLevel() {
       return platformConfig?.logging?.level || DEFAULT_LOG_LEVEL;
     }
     return DEFAULT_LOG_LEVEL;
-  } catch (error) {
+  } catch {
     // If config is not yet loaded, use default
     return DEFAULT_LOG_LEVEL;
   }
@@ -77,7 +79,7 @@ function getLogFormat() {
       return platformConfig?.logging?.format || DEFAULT_LOG_FORMAT;
     }
     return DEFAULT_LOG_FORMAT;
-  } catch (error) {
+  } catch {
     // If config is not yet loaded, use default
     return DEFAULT_LOG_FORMAT;
   }
@@ -117,7 +119,7 @@ function createLogger() {
         );
       }
     }
-  } catch (error) {
+  } catch {
     // Silently ignore errors during logger setup
   }
 
@@ -153,19 +155,85 @@ export function getLogLevelInfo() {
   };
 }
 
+/**
+ * Helper function to extract component and metadata from arguments
+ * Supports two patterns:
+ * 1. logger.info('message', { component: 'MyComponent', ...otherMeta })
+ * 2. logger.info({ component: 'MyComponent', message: 'my message', ...otherMeta })
+ */
+function processLogArgs(args) {
+  // If first arg is an object with a message property, use it directly
+  if (args.length === 1 && typeof args[0] === 'object' && args[0].message) {
+    return args[0];
+  }
+
+  // If first arg is a string and second is an object, combine them
+  if (args.length >= 2 && typeof args[0] === 'string' && typeof args[1] === 'object') {
+    return { message: args[0], ...args[1] };
+  }
+
+  // If first arg is a string only, convert to object
+  if (args.length === 1 && typeof args[0] === 'string') {
+    return { message: args[0] };
+  }
+
+  // For backward compatibility with winston's multiple args
+  // Convert to message with metadata
+  const message = args[0];
+  const meta = args.slice(1).reduce((acc, arg) => {
+    if (typeof arg === 'object') {
+      return { ...acc, ...arg };
+    }
+    return acc;
+  }, {});
+
+  if (typeof message === 'object') {
+    return { ...message, ...meta };
+  }
+
+  return Object.keys(meta).length > 0 ? { message, ...meta } : { message };
+}
+
 // Export logger methods for easy use
 export default {
-  error: (...args) => logger.error(...args),
-  warn: (...args) => logger.warn(...args),
-  info: (...args) => logger.info(...args),
-  http: (...args) => logger.http(...args),
-  verbose: (...args) => logger.verbose(...args),
-  debug: (...args) => logger.debug(...args),
-  silly: (...args) => logger.silly(...args),
+  error: (...args) => {
+    const logData = processLogArgs(args);
+    logger.error(logData);
+  },
+  warn: (...args) => {
+    const logData = processLogArgs(args);
+    logger.warn(logData);
+  },
+  info: (...args) => {
+    const logData = processLogArgs(args);
+    logger.info(logData);
+  },
+  http: (...args) => {
+    const logData = processLogArgs(args);
+    logger.http(logData);
+  },
+  verbose: (...args) => {
+    const logData = processLogArgs(args);
+    logger.verbose(logData);
+  },
+  debug: (...args) => {
+    const logData = processLogArgs(args);
+    logger.debug(logData);
+  },
+  silly: (...args) => {
+    const logData = processLogArgs(args);
+    logger.silly(logData);
+  },
 
   // Alias for compatibility
-  log: (...args) => logger.info(...args),
-  trace: (...args) => logger.debug(...args),
+  log: (...args) => {
+    const logData = processLogArgs(args);
+    logger.info(logData);
+  },
+  trace: (...args) => {
+    const logData = processLogArgs(args);
+    logger.debug(logData);
+  },
 
   // Utility functions
   setLogLevel,

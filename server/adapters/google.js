@@ -170,7 +170,11 @@ class GoogleAdapterClass extends BaseAdapter {
 
     // Debug logs to trace message transformation
     this.debugLogMessages(messages, geminiContents, 'Google');
-    logger.info('System instruction:', systemInstruction);
+    logger.info({
+      component: 'GoogleAdapter',
+      message: 'System instruction set',
+      hasSystemInstruction: !!systemInstruction
+    });
 
     // Return both regular messages and the system instruction
     return {
@@ -260,12 +264,16 @@ class GoogleAdapterClass extends BaseAdapter {
           thinkingBudget: options.thinkingBudget ?? model.thinking.budget,
           includeThoughts: options.thinkingThoughts ?? model.thinking.thoughts
         };
-        logger.info(
-          'Thinking enabled - added thinkingConfig with budget:',
-          requestBody.generationConfig.thinkingConfig.thinkingBudget
-        );
+        logger.info({
+          component: 'GoogleAdapter',
+          message: 'Thinking enabled with thinkingConfig',
+          thinkingBudget: requestBody.generationConfig.thinkingConfig.thinkingBudget
+        });
       } else {
-        logger.info('Thinking disabled - not adding thinkingConfig');
+        logger.info({
+          component: 'GoogleAdapter',
+          message: 'Thinking disabled'
+        });
       }
     }
 
@@ -289,7 +297,9 @@ class GoogleAdapterClass extends BaseAdapter {
         }
       }
 
-      logger.info('Image generation enabled with config:', {
+      logger.info({
+        component: 'GoogleAdapter',
+        message: 'Image generation enabled',
         responseModalities: requestBody.generationConfig.responseModalities,
         imageConfig: requestBody.generationConfig.imageConfig
       });
@@ -468,14 +478,20 @@ class GoogleAdapterClass extends BaseAdapter {
           }
         }
       } catch (jsonError) {
-        logger.error('Failed to parse Google response as JSON:', jsonError.message);
-        logger.error('Raw response data that failed to parse:', data);
+        logger.error({
+          component: 'GoogleAdapter',
+          message: 'Failed to parse Google response as JSON',
+          error: jsonError.message,
+          dataPreview: data.substring(0, 200)
+        });
 
         // Check if this is an error response from Google API
         if (data.includes('callbacks') && data.includes('function')) {
-          logger.error(
-            'Google API returned a callbacks-related error. This suggests an issue with the request format.'
-          );
+          logger.error({
+            component: 'GoogleAdapter',
+            message: 'Google API returned callbacks-related error',
+            errorData: data.substring(0, 500)
+          });
           result.error = true;
           result.errorMessage = data.includes('`callbacks`')
             ? data
@@ -509,9 +525,13 @@ class GoogleAdapterClass extends BaseAdapter {
 
       return result;
     } catch (error) {
-      logger.error('Error processing Gemini response:', error);
-      logger.error('Error stack:', error.stack);
-      logger.error('Raw data that caused the error:', data);
+      logger.error({
+        component: 'GoogleAdapter',
+        message: 'Error processing Gemini response',
+        error: error.message,
+        stack: error.stack,
+        dataPreview: data.substring(0, 200)
+      });
       return {
         content: [],
         complete: true,
