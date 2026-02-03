@@ -9,6 +9,48 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
 /**
+ * Check if a value is an environment variable placeholder
+ * @param {string} value - Value to check
+ * @returns {boolean} - True if the value is an environment variable placeholder
+ */
+function isEnvVarPlaceholder(value) {
+  if (typeof value !== 'string') return false;
+  return /^\$\{[A-Z_][A-Z0-9_]*\}$/i.test(value);
+}
+
+/**
+ * Sanitize a secret value for API responses
+ * - Preserve environment variable placeholders like ${VARIABLE_NAME}
+ * - Replace actual secret values with ***REDACTED***
+ * @param {string} value - Value to sanitize
+ * @returns {string|undefined} - Sanitized value
+ */
+function sanitizeSecret(value) {
+  if (!value) return undefined;
+  // Preserve environment variable placeholders
+  if (isEnvVarPlaceholder(value)) {
+    return value;
+  }
+  // Redact actual secret values
+  return '***REDACTED***';
+}
+
+/**
+ * Restore secret values from existing config when ***REDACTED*** is received
+ * @param {string} newValue - New value from client
+ * @param {string} existingValue - Existing value from config file
+ * @returns {string} - Value to use (existing if newValue is redacted, otherwise newValue)
+ */
+function restoreSecretIfRedacted(newValue, existingValue) {
+  // If the new value is the redacted placeholder, use the existing value
+  if (newValue === '***REDACTED***') {
+    return existingValue;
+  }
+  // Otherwise use the new value (could be a new secret or env var placeholder)
+  return newValue;
+}
+
+/**
  * Reconfigure authentication methods when platform configuration changes
  * @param {Object} oldConfig - Previous configuration
  * @param {Object} newConfig - New configuration
@@ -154,22 +196,22 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
       }
 
       // Sanitize sensitive fields even for admin endpoint
-      // JWT secrets should never be exposed via API
+      // Preserve environment variable placeholders but redact actual secrets
       const sanitizedConfig = { ...platformConfig };
 
-      // Remove JWT secret from auth config
+      // Sanitize JWT secret from auth config
       if (sanitizedConfig.auth?.jwtSecret) {
         sanitizedConfig.auth = {
           ...sanitizedConfig.auth,
-          jwtSecret: sanitizedConfig.auth.jwtSecret ? '${JWT_SECRET}' : undefined
+          jwtSecret: sanitizeSecret(sanitizedConfig.auth.jwtSecret)
         };
       }
 
-      // Remove JWT secret from localAuth config
+      // Sanitize JWT secret from localAuth config
       if (sanitizedConfig.localAuth?.jwtSecret) {
         sanitizedConfig.localAuth = {
           ...sanitizedConfig.localAuth,
-          jwtSecret: sanitizedConfig.localAuth.jwtSecret ? '${JWT_SECRET}' : undefined
+          jwtSecret: sanitizeSecret(sanitizedConfig.localAuth.jwtSecret)
         };
       }
 
@@ -177,7 +219,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
       if (sanitizedConfig.admin?.secret) {
         sanitizedConfig.admin = {
           ...sanitizedConfig.admin,
-          secret: '***REDACTED***'
+          secret: sanitizeSecret(sanitizedConfig.admin.secret)
         };
       }
 
@@ -187,7 +229,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
           ...sanitizedConfig.oidcAuth,
           providers: sanitizedConfig.oidcAuth.providers.map(provider => ({
             ...provider,
-            clientSecret: provider.clientSecret ? '***REDACTED***' : undefined
+            clientSecret: sanitizeSecret(provider.clientSecret)
           }))
         };
       }
@@ -198,7 +240,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
           ...sanitizedConfig.ldapAuth,
           providers: sanitizedConfig.ldapAuth.providers.map(provider => ({
             ...provider,
-            adminPassword: provider.adminPassword ? '***REDACTED***' : undefined
+            adminPassword: sanitizeSecret(provider.adminPassword)
           }))
         };
       }
@@ -264,6 +306,65 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
           authorization: newConfig.authorization || existingConfig.authorization,
           oauth: newConfig.oauth || existingConfig.oauth
         };
+
+        // Restore secrets that were redacted in the client
+        // This prevents environment variable placeholders from being overwritten with ***REDACTED***
+        
+        // Restore JWT secrets
+        if (newConfig.auth?.jwtSecret) {
+          if (!mergedConfig.auth) mergedConfig.auth = {};
+          mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
+            newConfig.auth.jwtSecret,
+            existingConfig.auth?.jwtSecret
+          );
+        }
+        
+        if (newConfig.localAuth?.jwtSecret) {
+          if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
+          mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
+            newConfig.localAuth.jwtSecret,
+            existingConfig.localAuth?.jwtSecret
+          );
+        }
+
+        // Restore admin secret
+        if (newConfig.admin?.secret) {
+          if (!mergedConfig.admin) mergedConfig.admin = {};
+          mergedConfig.admin.secret = restoreSecretIfRedacted(
+            newConfig.admin.secret,
+            existingConfig.admin?.secret
+          );
+        }
+
+        // Restore OIDC provider client secrets
+        if (newConfig.oidcAuth?.providers && existingConfig.oidcAuth?.providers) {
+          if (!mergedConfig.oidcAuth) mergedConfig.oidcAuth = {};
+          mergedConfig.oidcAuth.providers = newConfig.oidcAuth.providers.map((provider, index) => {
+            const existingProvider = existingConfig.oidcAuth?.providers?.[index];
+            return {
+              ...provider,
+              clientSecret: restoreSecretIfRedacted(
+                provider.clientSecret,
+                existingProvider?.clientSecret
+              )
+            };
+          });
+        }
+
+        // Restore LDAP provider admin passwords
+        if (newConfig.ldapAuth?.providers && existingConfig.ldapAuth?.providers) {
+          if (!mergedConfig.ldapAuth) mergedConfig.ldapAuth = {};
+          mergedConfig.ldapAuth.providers = newConfig.ldapAuth.providers.map((provider, index) => {
+            const existingProvider = existingConfig.ldapAuth?.providers?.[index];
+            return {
+              ...provider,
+              adminPassword: restoreSecretIfRedacted(
+                provider.adminPassword,
+                existingProvider?.adminPassword
+              )
+            };
+          });
+        }
 
         // Save to file
         await atomicWriteJSON(platformConfigPath, mergedConfig);
