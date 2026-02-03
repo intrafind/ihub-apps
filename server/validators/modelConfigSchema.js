@@ -50,11 +50,20 @@ export const modelConfigSchema = z
         'URL must be a valid URI format or environment variable reference'
       ),
     provider: z.enum(
-      ['openai', 'openai-responses', 'anthropic', 'google', 'mistral', 'local', 'iassistant'],
+      [
+        'openai',
+        'openai-responses',
+        'anthropic',
+        'google',
+        'mistral',
+        'local',
+        'iassistant',
+        'gpt-image'
+      ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant, gpt-image'
         })
       }
     ),
