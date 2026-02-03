@@ -211,9 +211,12 @@ class StreamingHandler {
       const decoder = new TextDecoder();
       let fullResponse = '';
 
-      // Check if the adapter needs custom SSE processing (only iAssistant for now)
+      // Check if the adapter needs custom SSE processing
+      // - iAssistant: Uses custom SSE format
+      // - azure-image: Returns single JSON response (not SSE format)
       const adapter = getAdapter(model.provider);
-      const hasCustomBufferProcessor = model.provider === 'iassistant';
+      const hasCustomBufferProcessor =
+        model.provider === 'iassistant' || model.provider === 'azure-image';
 
       if (hasCustomBufferProcessor) {
         // For providers like iAssistant with custom SSE format

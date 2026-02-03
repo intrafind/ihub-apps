@@ -1,0 +1,25 @@
+{
+  "id": "gpt-image-azure",
+  "modelId": "gpt-image-1",
+  "name": {
+    "en": "GPT-Image 1.0 (Azure)",
+    "de": "GPT-Image 1.0 (Azure)"
+  },
+  "description": {
+    "en": "Azure OpenAI's GPT-Image model for fast, high-quality image generation with advanced prompt understanding and creative capabilities.",
+    "de": "Azure OpenAIs GPT-Image-Modell für schnelle, hochwertige Bildgenerierung mit erweitertem Prompt-Verständnis und kreativen Fähigkeiten."
+  },
+  "url": "https://${AZURE_OPENAI_ENDPOINT}.openai.azure.com/openai/deployments/${AZURE_GPTIMAGE_DEPLOYMENT}/images/generations?api-version=2024-02-01",
+  "provider": "azure-image",
+  "tokenLimit": 4000,
+  "supportsTools": false,
+  "supportsImages": false,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "imageSize": "1024x1024",
+    "quality": "hd",
+    "style": "vivid"
+  },
+  "enabled": false,
+  "default": false
+}
