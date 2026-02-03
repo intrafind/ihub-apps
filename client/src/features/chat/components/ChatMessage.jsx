@@ -8,6 +8,8 @@ import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
+import MCPAppRenderer from '../../mcpApps/components/MCPAppRenderer';
+import { hasUIMetadata } from '../../mcpApps/utils/mcpAppSecurity';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -336,6 +338,18 @@ const ChatMessage = ({
 
   // Render the message content based on the output format
   const renderContent = () => {
+    // Check if message contains MCP App UI metadata
+    // This can come from tool call results that include _meta.ui
+    if (message.toolResult && hasUIMetadata(message.toolResult)) {
+      return (
+        <MCPAppRenderer
+          toolResult={message.toolResult}
+          chatId={chatId}
+          basePath={window.location.pathname.split('/').slice(0, -1).join('/')}
+        />
+      );
+    }
+
     // Ensure content is always a string for rendering
     const contentToRender =
       typeof message.content === 'string' ? message.content : message.content || '';
