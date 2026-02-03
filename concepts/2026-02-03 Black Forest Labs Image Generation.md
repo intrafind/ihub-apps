@@ -387,6 +387,137 @@ imageGeneration: z.object({
 
 - **Adapter:** `/server/adapters/bfl.js`
 - **Registry:** `/server/adapters/index.js`
+- **Chat Service Integration:** `/server/services/chat/NonStreamingHandler.js`
 - **Model Examples:** `/examples/models/flux-*.json`
-- **Tests:** `/tests/adapters/bfl.test.js`
+- **App Example:** `/examples/apps/flux-image-generator.json`
 - **Documentation:** `/docs/providers/bfl.md`
+- **Concept:** `/concepts/2026-02-03 Black Forest Labs Image Generation.md`
+
+## Implementation Summary
+
+### Completed Features
+
+✅ **BFL Adapter** (`server/adapters/bfl.js`)
+- Async request submission to BFL API
+- Polling mechanism with exponential backoff (0.5s to 5s)
+- Image download from signed URLs
+- Base64 conversion for client consumption
+- Comprehensive error handling
+- Content moderation support
+- Rate limiting handling (429 errors)
+
+✅ **Chat Service Integration**
+- Modified `NonStreamingHandler` to detect BFL models
+- Special `executeBFLGeneration` method for async polling
+- Proper logging and usage tracking
+- Error handling and user-friendly error messages
+- Response formatting to match standard chat API
+
+✅ **Model Configurations** (4 models)
+1. **FLUX.2 Pro** - Production at scale
+2. **FLUX.2 Max** - Highest quality with grounding search
+3. **FLUX.2 Klein 4B** - Ultra-fast sub-second generation
+4. **FLUX.1 Kontext Pro** - Image editing and character consistency
+
+✅ **Example Application**
+- Comprehensive FLUX image generator app
+- Expert system prompts for image generation
+- 5 starter prompts covering different use cases
+- Multi-reference image upload support
+- Best practices guidance built into prompts
+
+✅ **Documentation**
+- Provider setup guide
+- Feature descriptions
+- Best practices and prompt structure
+- Troubleshooting guide
+- Example use cases
+
+### Technical Highlights
+
+**Async Polling Strategy:**
+```javascript
+// Exponential backoff implementation
+let delay = 500ms;           // Initial delay
+let maxDelay = 5000ms;       // Maximum delay
+let maxRetries = 120;        // 2 minutes max
+```
+
+**Image Download Flow:**
+```
+Submit → Poll (exponential backoff) → Download image → Convert to base64 → Return
+```
+
+**Error Handling:**
+- HTTP errors (400, 402, 403, 422, 429, 500, 503)
+- Content moderation (Request/Content Moderated)
+- Task not found
+- Timeout handling
+- Rate limiting with retry logic
+
+### Architecture Decisions
+
+1. **Non-Streaming Only:** BFL uses async polling, incompatible with SSE streaming
+2. **Polling in Adapter:** Keeps complexity isolated in adapter layer
+3. **Base64 Conversion:** Immediate download and conversion prevents URL expiration
+4. **Special Handler:** BFL detection in NonStreamingHandler for clean separation
+
+### Testing Status
+
+| Test Category | Status | Notes |
+|---------------|--------|-------|
+| Server Startup | ✅ Pass | Server starts without errors |
+| Adapter Registration | ✅ Pass | BFL adapter registered correctly |
+| Lint Compliance | ✅ Pass | No linting errors, only minor warnings |
+| Integration Detection | ✅ Pass | NonStreamingHandler detects BFL models |
+| Actual Generation | ⏸️ Pending | Requires BFL API key |
+| Error Scenarios | ⏸️ Pending | Requires API access |
+| Multi-Model Support | ⏸️ Pending | Requires API access |
+
+### Known Limitations
+
+1. **No Streaming Support** - BFL API is async, cannot stream real-time updates
+2. **Generation Time** - 5-30 seconds depending on model (inherent to BFL)
+3. **Image URL Expiration** - Must download immediately (handled automatically)
+4. **Token Tracking** - BFL doesn't use tokens, usage tracked differently
+
+### Future Enhancements
+
+1. **Webhook Support** - Use BFL webhooks instead of polling for production
+2. **Regional Endpoints** - Allow users to select EU/US endpoints via config
+3. **Advanced Features:**
+   - Structured prompting support
+   - Custom aspect ratios in UI
+   - Safety tolerance configuration per request
+4. **Batch Generation** - Support multiple images in single request
+5. **Progress Updates** - Stream status updates during polling
+6. **Caching** - Cache generated images to reduce API calls
+
+## Security Considerations Implemented
+
+✅ **API Key Storage** - Environment variables only, never in code
+✅ **URL Download** - Immediate download, no storage of signed URLs  
+✅ **Content Moderation** - Respect BFL moderation responses  
+✅ **Error Logging** - No API keys or sensitive data in logs  
+✅ **Rate Limiting** - Client-side handling of 429 errors
+
+## Deployment Checklist
+
+- [ ] Add `BFL_API_KEY` to production environment variables
+- [ ] Copy desired model configs from `examples/models/` to deployment
+- [ ] Enable models by setting `"enabled": true`
+- [ ] Optionally enable FLUX image generator app
+- [ ] Test with actual BFL API key
+- [ ] Monitor polling performance and adjust timeouts if needed
+- [ ] Set up webhook endpoint for production (optional optimization)
+
+## Conclusion
+
+The Black Forest Labs FLUX integration is **complete and ready for testing**. The implementation follows iHub Apps architecture patterns, includes comprehensive error handling, and provides a user-friendly experience for image generation.
+
+**Next Steps:**
+1. Obtain BFL API key for testing
+2. Test actual image generation flow
+3. Validate error handling with various scenarios
+4. Monitor performance and optimize polling if needed
+5. Consider webhook implementation for production use
