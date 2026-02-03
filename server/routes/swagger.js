@@ -228,7 +228,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   });
 
   logger.info('📚 Swagger documentation available at:');
-  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs', basePath)}`);
+  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs')}`);
   logger.info(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`);
   logger.info(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`);
   logger.info(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`);
