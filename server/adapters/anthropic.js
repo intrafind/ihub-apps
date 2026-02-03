@@ -6,6 +6,14 @@ import { BaseAdapter } from './BaseAdapter.js';
 
 class AnthropicAdapterClass extends BaseAdapter {
   /**
+   * Get provider name for telemetry
+   * @returns {string} Provider name
+   */
+  getProviderName() {
+    return 'anthropic';
+  }
+
+  /**
    * Format messages for Anthropic API, including handling image data
    */
   formatMessages(messages) {

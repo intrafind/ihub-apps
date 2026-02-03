@@ -6,6 +6,7 @@ import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
 import VLLMAdapter from './vllm.js';
 import IAssistantAdapter from './iassistant.js';
+import { getGenAIInstrumentation } from '../telemetry.js';
 
 // Adapter registry
 const adapters = {
@@ -17,6 +18,29 @@ const adapters = {
   local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
   iassistant: IAssistantAdapter
 };
+
+/**
+ * Initialize instrumentation for all adapters
+ */
+export function initializeAdapterInstrumentation() {
+  const instrumentation = getGenAIInstrumentation();
+  if (instrumentation) {
+    Object.values(adapters).forEach(adapter => {
+      adapter.setInstrumentation(instrumentation);
+    });
+    console.info('Adapter instrumentation initialized');
+  }
+}
+
+/**
+ * Set custom context for adapter telemetry
+ * @param {string} provider - Provider name
+ * @param {Object} context - Custom context
+ */
+export function setAdapterContext(provider, context) {
+  const adapter = getAdapter(provider);
+  adapter.setCustomContext(context);
+}
 
 /**
  * Get the appropriate adapter for a model
