@@ -10,7 +10,7 @@
     "de": "Azure OpenAIs GPT-Image-Modell für schnelle, hochwertige Bildgenerierung mit erweitertem Prompt-Verständnis und kreativen Fähigkeiten."
   },
   "url": "https://${AZURE_OPENAI_ENDPOINT}.openai.azure.com/openai/deployments/${AZURE_GPTIMAGE_DEPLOYMENT}/images/generations?api-version=2024-02-01",
-  "provider": "azure-image",
+  "provider": "gpt-image",
   "tokenLimit": 4000,
   "supportsTools": false,
   "supportsImages": false,

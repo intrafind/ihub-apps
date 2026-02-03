@@ -6,7 +6,7 @@ import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
 import VLLMAdapter from './vllm.js';
 import IAssistantAdapter from './iassistant.js';
-import AzureImageAdapter from './azure-image.js';
+import GptImageAdapter from './gpt-image.js';
 
 // Adapter registry
 const adapters = {
@@ -17,7 +17,7 @@ const adapters = {
   mistral: MistralAdapter,
   local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
   iassistant: IAssistantAdapter,
-  'azure-image': AzureImageAdapter // Azure OpenAI Image Generation (DALL-E, GPT-Image)
+  'gpt-image': GptImageAdapter // DALL-E and GPT-Image models (Azure or OpenAI)
 };
 
 /**

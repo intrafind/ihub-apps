@@ -10,7 +10,7 @@
     "de": "Azure OpenAIs DALL-E 3 für hochwertige Bildgenerierung aus Textbeschreibungen. Generiert detaillierte, kreative Bilder mit verbessertem Prompt-Verständnis."
   },
   "url": "https://${AZURE_OPENAI_ENDPOINT}.openai.azure.com/openai/deployments/${AZURE_DALLE3_DEPLOYMENT}/images/generations?api-version=2024-02-01",
-  "provider": "azure-image",
+  "provider": "gpt-image",
   "tokenLimit": 4000,
   "supportsTools": false,
   "supportsImages": false,

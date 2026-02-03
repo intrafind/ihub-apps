@@ -1,14 +1,15 @@
 /**
- * Azure OpenAI Image Generation adapter for DALL-E and GPT-Image models
- * Handles image generation through Azure OpenAI Service
+ * GPT-Image adapter for DALL-E and GPT-Image models
+ * Supports both Azure OpenAI and standard OpenAI image generation endpoints
  * Reference: https://learn.microsoft.com/en-us/azure/ai-foundry/openai/how-to/dall-e
  */
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 
-class AzureImageAdapterClass extends BaseAdapter {
+class GptImageAdapterClass extends BaseAdapter {
   /**
-   * Override header creation to use api-key for Azure instead of Bearer token
+   * Override header creation to use api-key header (for Azure) or Bearer token (for OpenAI)
+   * Azure uses 'api-key' header, while standard OpenAI uses 'Authorization: Bearer'
    * @param {string} apiKey - API key
    * @returns {Object} Headers object
    */
@@ -21,7 +22,7 @@ class AzureImageAdapterClass extends BaseAdapter {
   }
 
   /**
-   * Format messages for Azure Image Generation API
+   * Format messages for Image Generation API
    * The image generation API accepts a simple prompt, not a messages array
    * @param {Array} messages - Messages to format
    * @returns {string} Prompt string extracted from messages
@@ -42,22 +43,22 @@ class AzureImageAdapterClass extends BaseAdapter {
   }
 
   /**
-   * Create an image generation request for Azure OpenAI
+   * Create an image generation request for DALL-E / GPT-Image models
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
     const prompt = this.formatMessages(messages);
 
-    // Azure OpenAI Image Generation API parameters
+    // Image Generation API parameters
     const body = {
       prompt,
-      n: 1, // Number of images to generate (Azure supports 1-10)
+      n: 1, // Number of images to generate (supports 1-10)
       size: options.imageSize || model.imageGeneration?.imageSize || '1024x1024',
       quality: options.quality || 'standard', // 'standard' or 'hd'
       style: options.style || 'vivid', // 'vivid' or 'natural'
       response_format: 'b64_json' // 'url' or 'b64_json'
     };
 
-    logger.info('Azure Image Generation request:', {
+    logger.info('Image Generation request:', {
       prompt: prompt.substring(0, 100) + (prompt.length > 100 ? '...' : ''),
       size: body.size,
       quality: body.quality,
@@ -73,8 +74,8 @@ class AzureImageAdapterClass extends BaseAdapter {
   }
 
   /**
-   * Process response from Azure Image Generation API
-   * Azure returns images in a different format than chat completions
+   * Process response from Image Generation API
+   * Returns images in a different format than chat completions
    * This processes the complete non-streaming response and formats it
    * for compatibility with the streaming handler
    */
@@ -93,7 +94,7 @@ class AzureImageAdapterClass extends BaseAdapter {
     try {
       const parsed = JSON.parse(data);
 
-      // Azure Image Generation API returns data in the format:
+      // Image Generation API returns data in the format:
       // { created: timestamp, data: [{ b64_json: "...", revised_prompt: "..." }] }
       if (parsed.data && Array.isArray(parsed.data)) {
         for (const image of parsed.data) {
@@ -124,18 +125,18 @@ class AzureImageAdapterClass extends BaseAdapter {
       // Handle error responses
       else if (parsed.error) {
         result.error = true;
-        result.errorMessage = parsed.error.message || 'Unknown error from Azure Image API';
+        result.errorMessage = parsed.error.message || 'Unknown error from Image Generation API';
         result.complete = true;
       }
     } catch (error) {
-      logger.error('Error parsing Azure Image Generation response:', error);
+      logger.error('Error parsing Image Generation response:', error);
       result.error = true;
-      result.errorMessage = `Error parsing Azure Image response: ${error.message}`;
+      result.errorMessage = `Error parsing Image Generation response: ${error.message}`;
     }
 
     return result;
   }
 }
 
-const AzureImageAdapter = new AzureImageAdapterClass();
-export default AzureImageAdapter;
+const GptImageAdapter = new GptImageAdapterClass();
+export default GptImageAdapter;

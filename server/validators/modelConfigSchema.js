@@ -58,12 +58,12 @@ export const modelConfigSchema = z
         'mistral',
         'local',
         'iassistant',
-        'azure-image'
+        'gpt-image'
       ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant, azure-image'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant, gpt-image'
         })
       }
     ),
