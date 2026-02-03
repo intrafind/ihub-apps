@@ -82,6 +82,11 @@ class ToolExecutor {
         content: JSON.stringify(result)
       };
 
+      // Preserve original Google function name for response echoing
+      if (toolCall.metadata?.originalGoogleName) {
+        message.originalGoogleName = toolCall.metadata.originalGoogleName;
+      }
+
       // Check for imageData in the result and extract it to message level
       if (this.extractImageDataFromResult(result, message)) {
         console.log(`🖼️ Tool ${toolId} returned image data for vision analysis`);
@@ -118,14 +123,21 @@ class ToolExecutor {
         })
       );
 
+      const errorMessage = {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        name: toolCall.function.name,
+        content: JSON.stringify(errorResult)
+      };
+
+      // Preserve original Google function name for response echoing
+      if (toolCall.metadata?.originalGoogleName) {
+        errorMessage.originalGoogleName = toolCall.metadata.originalGoogleName;
+      }
+
       return {
         success: false,
-        message: {
-          role: 'tool',
-          tool_call_id: toolCall.id,
-          name: toolCall.function.name,
-          content: JSON.stringify(errorResult)
-        }
+        message: errorMessage
       };
     }
   }

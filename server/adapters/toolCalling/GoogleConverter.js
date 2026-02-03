@@ -15,15 +15,14 @@ import {
 } from './GenericToolCalling.js';
 
 /**
- * Normalize Google function call names
- * Google's API sometimes doubles the tool name for special tools like google_search
- * This function handles the mapping back to the correct tool ID
+ * Map Google's function names to our internal tool IDs
+ * Google's API returns "google_search_google_search" for the google_search grounding tool
+ * This function normalizes it back to our internal tool ID
  * @param {string} googleFunctionName - Function name from Google API
- * @returns {string} Normalized function name
+ * @returns {string} Internal tool ID
  */
-function normalizeGoogleFunctionName(googleFunctionName) {
-  // Handle the doubled google_search name bug
-  // Google returns "google_search_google_search" but we need "googleSearch"
+function mapGoogleFunctionNameToToolId(googleFunctionName) {
+  // Handle the google_search grounding tool name variations
   if (
     googleFunctionName === 'google_search_google_search' ||
     googleFunctionName === 'google_search'
@@ -147,12 +146,18 @@ export function convertGoogleFunctionCallsToGeneric(googleFunctionCalls = []) {
   return googleFunctionCalls
     .map((part, index) => {
       if (part.functionCall) {
+        const originalName = part.functionCall.name;
+        const toolId = mapGoogleFunctionNameToToolId(originalName);
+
         return createGenericToolCall(
           `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
-          normalizeGoogleFunctionName(part.functionCall.name),
+          toolId,
           part.functionCall.args || {},
           index,
-          { originalFormat: 'google' }
+          {
+            originalFormat: 'google',
+            originalGoogleName: originalName // Preserve original name for response
+          }
         );
       }
       return null;
@@ -247,14 +252,20 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name
           // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
-          const metadata = { originalFormat: 'google' };
+          const originalName = part.functionCall.name;
+          const toolId = mapGoogleFunctionNameToToolId(originalName);
+
+          const metadata = {
+            originalFormat: 'google',
+            originalGoogleName: originalName // Preserve for response echoing
+          };
           if (part.thoughtSignature) {
             metadata.thoughtSignature = part.thoughtSignature;
           }
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
-              normalizeGoogleFunctionName(part.functionCall.name),
+              toolId,
               part.functionCall.args || {},
               result.tool_calls.length,
               metadata
@@ -311,14 +322,20 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           // This prevents creating tool calls with empty names during streaming
 
           // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
-          const metadata = { originalFormat: 'google' };
+          const originalName = part.functionCall.name;
+          const toolId = mapGoogleFunctionNameToToolId(originalName);
+
+          const metadata = {
+            originalFormat: 'google',
+            originalGoogleName: originalName // Preserve for response echoing
+          };
           if (part.thoughtSignature) {
             metadata.thoughtSignature = part.thoughtSignature;
           }
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
-              normalizeGoogleFunctionName(part.functionCall.name),
+              toolId,
               part.functionCall.args || {},
               result.tool_calls.length,
               metadata

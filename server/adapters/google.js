@@ -43,9 +43,15 @@ class GoogleAdapterClass extends BaseAdapter {
       if (message.role === 'tool') {
         let responseObj;
         responseObj = this.safeJsonParse(message.content, message.content);
+
+        // Use original Google name if available, otherwise normalize the current name
+        const functionName =
+          message.originalGoogleName ||
+          normalizeToolName(message.name || message.tool_call_id || 'tool');
+
         currentToolResponses.push({
           functionResponse: {
-            name: normalizeToolName(message.name || message.tool_call_id || 'tool'),
+            name: functionName,
             response: { result: responseObj }
           }
         });
