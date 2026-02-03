@@ -262,7 +262,6 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
           ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
           ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
           authorization: newConfig.authorization || existingConfig.authorization,
-          authDebug: newConfig.authDebug || existingConfig.authDebug,
           oauth: newConfig.oauth || existingConfig.oauth
         };
 

@@ -25,23 +25,6 @@ const oidcProviderSchema = z.object({
   autoRedirect: z.boolean().optional()
 });
 
-const authDebugSchema = z.object({
-  enabled: z.boolean().default(false),
-  maskTokens: z.boolean().default(true),
-  redactPasswords: z.boolean().default(true),
-  consoleLogging: z.boolean().default(false),
-  includeRawData: z.boolean().default(false),
-  providers: z
-    .object({
-      oidc: z.object({ enabled: z.boolean().default(true) }).default({}),
-      local: z.object({ enabled: z.boolean().default(true) }).default({}),
-      proxy: z.object({ enabled: z.boolean().default(true) }).default({}),
-      ldap: z.object({ enabled: z.boolean().default(true) }).default({}),
-      ntlm: z.object({ enabled: z.boolean().default(true) }).default({})
-    })
-    .default({})
-});
-
 const rateLimitConfigSchema = z.object({
   windowMs: z
     .number()
@@ -97,7 +80,24 @@ export const platformConfigSchema = z
     auth: z
       .object({
         mode: z.enum(['proxy', 'local', 'oidc', 'ldap', 'ntlm', 'anonymous']).default('proxy'),
-        authenticatedGroup: z.string().default('authenticated')
+        authenticatedGroup: z.string().default('authenticated'),
+        debug: z
+          .object({
+            enabled: z.boolean().default(false),
+            maskTokens: z.boolean().default(true),
+            redactPasswords: z.boolean().default(true),
+            includeRawData: z.boolean().default(false),
+            providers: z
+              .object({
+                oidc: z.object({ enabled: z.boolean().default(true) }).default({}),
+                local: z.object({ enabled: z.boolean().default(true) }).default({}),
+                proxy: z.object({ enabled: z.boolean().default(true) }).default({}),
+                ldap: z.object({ enabled: z.boolean().default(true) }).default({}),
+                ntlm: z.object({ enabled: z.boolean().default(true) }).default({})
+              })
+              .default({})
+          })
+          .default({})
       })
       .default({}),
     anonymousAuth: z
@@ -152,7 +152,6 @@ export const platformConfigSchema = z
         options: z.record(z.any()).optional()
       })
       .default({}),
-    authDebug: authDebugSchema.default({}),
     rateLimit: rateLimitSchema.default({}),
     logging: loggingSchema.default({})
   })
