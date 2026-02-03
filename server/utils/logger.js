@@ -4,11 +4,53 @@ import winston from 'winston';
 const DEFAULT_LOG_LEVEL = 'info';
 const DEFAULT_LOG_FORMAT = 'json';
 
-// JSON format for structured logging
+/**
+ * Custom JSON formatter with fixed field order
+ * Ensures consistent field ordering: component, level, timestamp, message, then other fields
+ */
+const orderedJsonFormat = winston.format.printf(info => {
+  // Define the desired field order
+  const orderedLog = {};
+
+  // 1. Component (if present)
+  if (info.component !== undefined) {
+    orderedLog.component = info.component;
+  }
+
+  // 2. Log level
+  orderedLog.level = info.level;
+
+  // 3. Timestamp
+  if (info.timestamp !== undefined) {
+    orderedLog.timestamp = info.timestamp;
+  }
+
+  // 4. Message
+  if (info.message !== undefined) {
+    orderedLog.message = info.message;
+  }
+
+  // 5. Add all other fields (except the ones we've already added)
+  const reservedFields = ['component', 'level', 'timestamp', 'message'];
+  Object.keys(info).forEach(key => {
+    if (
+      !reservedFields.includes(key) &&
+      key !== Symbol.for('level') &&
+      key !== Symbol.for('message') &&
+      key !== Symbol.for('splat')
+    ) {
+      orderedLog[key] = info[key];
+    }
+  });
+
+  return JSON.stringify(orderedLog);
+});
+
+// JSON format for structured logging with fixed field order
 const jsonFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
-  winston.format.json()
+  orderedJsonFormat
 );
 
 // Custom format for text/console output with colors
