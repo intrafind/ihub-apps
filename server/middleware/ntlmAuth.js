@@ -264,11 +264,23 @@ export function ntlmAuthMiddleware(req, res, next) {
     });
   }
 
+  // Check if this is the NTLM login endpoint - use exact path matching for security
+  // Note: req.path does not include query string, so just check the path
+  const isNtlmLoginEndpoint = req.path === '/api/auth/ntlm/login';
+
+  // Check if NTLM was explicitly requested (session flag set by login endpoint)
+  const ntlmExplicitlyRequested = req.session?.ntlmRequested === true;
+
   // Skip NTLM for Vite proxy in development to avoid authentication loops
   // NTLM requires multiple round trips with specific headers that Vite proxy doesn't handle well
+  // EXCEPTIONS:
+  //  - Always allow NTLM on the explicit login endpoint
+  //  - Always allow NTLM when session flag indicates explicit request (during auth flow)
   // Set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite (may cause issues)
   const skipNtlmForVite = process.env.SKIP_NTLM_VITE_PROXY !== 'false';
   const isViteProxy =
+    !isNtlmLoginEndpoint && // Don't skip NTLM login endpoint
+    !ntlmExplicitlyRequested && // Don't skip when NTLM explicitly requested
     skipNtlmForVite &&
     process.env.NODE_ENV === 'development' &&
     (req.hostname === 'localhost' || req.hostname === '127.0.0.1') &&
@@ -287,10 +299,6 @@ export function ntlmAuthMiddleware(req, res, next) {
   // This prevents automatic NTLM SSO from blocking access to local/LDAP login
   const multipleProviders = hasMultipleAuthProviders(platform);
   const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
-
-  // Check if this is the NTLM login endpoint - use exact path matching for security
-  const isNtlmLoginEndpoint =
-    req.path === '/api/auth/ntlm/login' || req.path.startsWith('/api/auth/ntlm/login?');
 
   if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
     if (isDev) {
