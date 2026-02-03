@@ -244,7 +244,9 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
 
       // Check if provider with this ID already exists
       if (providers.find(p => p.id === newProvider.id)) {
-        return res.status(400).json({ error: `Provider with id '${newProvider.id}' already exists` });
+        return res
+          .status(400)
+          .json({ error: `Provider with id '${newProvider.id}' already exists` });
       }
 
       // Handle API key encryption

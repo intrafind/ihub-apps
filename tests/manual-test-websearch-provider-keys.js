@@ -76,19 +76,28 @@ async function runTests() {
     logTest('Custom provider exists in config', !!customProvider);
 
     if (tavilyProvider) {
-      logTest(`Tavily has category: ${tavilyProvider.category}`, tavilyProvider.category === 'websearch');
+      logTest(
+        `Tavily has category: ${tavilyProvider.category}`,
+        tavilyProvider.category === 'websearch'
+      );
       log(`  Name (EN): ${tavilyProvider.name?.en || 'N/A'}`, 'reset');
       log(`  Description (EN): ${tavilyProvider.description?.en || 'N/A'}`, 'reset');
     }
 
     if (braveProvider) {
-      logTest(`Brave has category: ${braveProvider.category}`, braveProvider.category === 'websearch');
+      logTest(
+        `Brave has category: ${braveProvider.category}`,
+        braveProvider.category === 'websearch'
+      );
       log(`  Name (EN): ${braveProvider.name?.en || 'N/A'}`, 'reset');
       log(`  Description (EN): ${braveProvider.description?.en || 'N/A'}`, 'reset');
     }
 
     if (customProvider) {
-      logTest(`Custom has category: ${customProvider.category}`, customProvider.category === 'custom');
+      logTest(
+        `Custom has category: ${customProvider.category}`,
+        customProvider.category === 'custom'
+      );
       log(`  Name (EN): ${customProvider.name?.en || 'N/A'}`, 'reset');
       log(`  Description (EN): ${customProvider.description?.en || 'N/A'}`, 'reset');
     }
@@ -140,7 +149,8 @@ async function runTests() {
         await webSearchService.search('test query', { provider: 'tavily' });
         logTest('Tavily error message test', false);
       } catch (error) {
-        const hasGoodErrorMessage = error.message.includes('admin panel') || error.message.includes('environment variable');
+        const hasGoodErrorMessage =
+          error.message.includes('admin panel') || error.message.includes('environment variable');
         logTest(`Tavily shows helpful error: "${error.message}"`, hasGoodErrorMessage);
       }
 
@@ -149,7 +159,8 @@ async function runTests() {
         await webSearchService.search('test query', { provider: 'brave' });
         logTest('Brave error message test', false);
       } catch (error) {
-        const hasGoodErrorMessage = error.message.includes('admin panel') || error.message.includes('environment variable');
+        const hasGoodErrorMessage =
+          error.message.includes('admin panel') || error.message.includes('environment variable');
         logTest(`Brave shows helpful error: "${error.message}"`, hasGoodErrorMessage);
       }
 
@@ -180,9 +191,14 @@ async function runTests() {
     logTest('Custom has name.en', !!customInFile?.name?.en);
     logTest('Custom has name.de', !!customInFile?.name?.de);
 
-    const test5Passed = tavilyInFile && braveInFile && customInFile &&
-                        tavilyInFile.name?.en && tavilyInFile.name?.de &&
-                        braveInFile.name?.en && braveInFile.name?.de;
+    const test5Passed =
+      tavilyInFile &&
+      braveInFile &&
+      customInFile &&
+      tavilyInFile.name?.en &&
+      tavilyInFile.name?.de &&
+      braveInFile.name?.en &&
+      braveInFile.name?.de;
     if (test5Passed) passedTests++;
 
     // Summary

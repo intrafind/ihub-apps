@@ -10,11 +10,13 @@
 ## What Was Built
 
 ### Core Feature
+
 Administrators can now configure API keys for websearch providers (Tavily and Brave) through the admin panel instead of only via environment variables. Additionally, a generic "Custom" provider category was added for storing arbitrary third-party API keys.
 
 ### Visual Changes
 
 **Admin Providers Page** now shows:
+
 ```
 ┌─ LLM Providers ───────────────────────┐
 │ • OpenAI                              │
@@ -48,6 +50,7 @@ Administrators can now configure API keys for websearch providers (Tavily and Br
 ### For Developers
 
 **API Key Resolution:**
+
 ```javascript
 // 1. Check provider config (encrypted)
 if (provider.apiKey) {
@@ -64,6 +67,7 @@ throw new Error('Please configure in admin panel or set ENV variable');
 ## Testing Status
 
 ### Automated Tests: ✅ Passing
+
 ```bash
 $ node tests/manual-test-websearch-provider-keys.js
 
@@ -77,6 +81,7 @@ Total: 5/5 passing
 ```
 
 ### Code Quality: ✅ Passing
+
 - Linting: No errors
 - Formatting: All files formatted correctly
 - Server startup: Successful
@@ -85,17 +90,21 @@ Total: 5/5 passing
 ## Files Changed (8 total)
 
 ### Backend (2 files)
+
 1. `server/defaults/config/providers.json` - Added Tavily, Brave, Custom providers
 2. `server/services/WebSearchService.js` - API key resolution logic
 
 ### Frontend (1 file)
+
 3. `client/src/features/admin/pages/AdminProvidersPage.jsx` - Category grouping UI
 
 ### Translations (2 files)
+
 4. `shared/i18n/en.json` - English translations
 5. `shared/i18n/de.json` - German translations
 
 ### Tests & Docs (3 files)
+
 6. `tests/manual-test-websearch-provider-keys.js` - Test suite
 7. `concepts/2026-02-03 Websearch Provider API Key Configuration.md` - Full documentation
 8. `concepts/2026-02-03 Websearch Provider UI Screenshots.md` - UI documentation
@@ -118,6 +127,7 @@ Total: 5/5 passing
 ## Usage Examples
 
 ### Before (Old Way)
+
 ```bash
 # .env file
 TAVILY_SEARCH_API_KEY=tvly-abc123...
@@ -125,6 +135,7 @@ BRAVE_SEARCH_API_KEY=BSA_abc123...
 ```
 
 ### After (New Way - Both Work!)
+
 ```bash
 # Option 1: Use admin panel (no .env needed)
 # Just configure via UI
@@ -139,6 +150,7 @@ BRAVE_SEARCH_API_KEY=BSA_abc123...
 ## What's Next
 
 ### Manual Testing Checklist
+
 - [ ] Start server and client
 - [ ] Navigate to `/admin/providers`
 - [ ] Verify categorized display looks correct
@@ -150,6 +162,7 @@ BRAVE_SEARCH_API_KEY=BSA_abc123...
 - [ ] Test persistence across restarts
 
 ### Code Review
+
 - [ ] Backend changes reviewed
 - [ ] Frontend changes reviewed
 - [ ] Security considerations verified
@@ -157,6 +170,7 @@ BRAVE_SEARCH_API_KEY=BSA_abc123...
 - [ ] Tests verified
 
 ### Deployment
+
 - [ ] Merge to main branch
 - [ ] Deploy to staging
 - [ ] Test in staging environment
@@ -187,6 +201,7 @@ None. This is a complete implementation with no known issues.
 ## Support
 
 For questions or issues:
+
 - See `concepts/2026-02-03 Websearch Provider API Key Configuration.md` for full details
 - Run tests with `node tests/manual-test-websearch-provider-keys.js`
 - Check server logs for API key resolution messages

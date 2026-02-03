@@ -36,7 +36,9 @@ export async function ensureDefaultProviders() {
       return;
     }
 
-    console.log(`📦 Adding ${missingProviders.length} missing default provider(s) to providers.json:`);
+    console.log(
+      `📦 Adding ${missingProviders.length} missing default provider(s) to providers.json:`
+    );
     missingProviders.forEach(p => {
       console.log(`   - ${p.id} (${p.category || 'llm'})`);
     });
