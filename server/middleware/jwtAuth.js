@@ -231,26 +231,28 @@ export default function jwtAuthMiddleware(req, res, next) {
       try {
         const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
         const usersConfig = loadUsers(usersFilePath);
-        
+
         // OIDC users can be identified by their subject ID or email
         const userId = decoded.sub || decoded.username;
         let userRecord = usersConfig.users?.[userId];
-        
+
         // If not found by ID, try to find by email (OIDC users may have different IDs)
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u => u.email === decoded.email && u.authMethods?.includes('oidc')
           );
         }
-        
+
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(`[JWT Auth] Token rejected: OIDC user account disabled | user_id=${userRecord.id}`);
+          logger.warn(
+            `[JWT Auth] Token rejected: OIDC user account disabled | user_id=${userRecord.id}`
+          );
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
           });
         }
-        
+
         // User either doesn't exist (not yet persisted) or is active
         user = {
           id: decoded.sub || decoded.username,
@@ -275,25 +277,27 @@ export default function jwtAuthMiddleware(req, res, next) {
       try {
         const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
         const usersConfig = loadUsers(usersFilePath);
-        
+
         const userId = decoded.username;
         let userRecord = usersConfig.users?.[userId];
-        
+
         // If not found by username, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u => u.email === decoded.email && u.authMethods?.includes('ldap')
           );
         }
-        
+
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(`[JWT Auth] Token rejected: LDAP user account disabled | user_id=${userRecord.id}`);
+          logger.warn(
+            `[JWT Auth] Token rejected: LDAP user account disabled | user_id=${userRecord.id}`
+          );
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
           });
         }
-        
+
         user = {
           id: decoded.username,
           username: decoded.username,
@@ -316,25 +320,27 @@ export default function jwtAuthMiddleware(req, res, next) {
       try {
         const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
         const usersConfig = loadUsers(usersFilePath);
-        
+
         const userId = decoded.id || decoded.sub;
         let userRecord = usersConfig.users?.[userId];
-        
+
         // If not found by ID, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u => u.email === decoded.email && u.authMethods?.includes('teams')
           );
         }
-        
+
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(`[JWT Auth] Token rejected: Teams user account disabled | user_id=${userRecord.id}`);
+          logger.warn(
+            `[JWT Auth] Token rejected: Teams user account disabled | user_id=${userRecord.id}`
+          );
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
           });
         }
-        
+
         user = {
           id: decoded.id || decoded.sub,
           username: decoded.username || decoded.userPrincipalName,
