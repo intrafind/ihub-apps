@@ -1,6 +1,8 @@
 import { actionTracker } from '../actionTracker.js';
 import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
+import configCache from '../configCache.js';
+import tokenStorageService from './TokenStorageService.js';
 
 /**
  * Base Search Provider Interface
@@ -34,12 +36,41 @@ class BraveSearchProvider extends SearchProvider {
     return 'brave';
   }
 
+  /**
+   * Get API key with fallback logic:
+   * 1. Check provider-level API key (from providers.json)
+   * 2. Fallback to environment variable
+   */
+  getApiKey() {
+    try {
+      const { data: providers } = configCache.getProviders(true);
+      const braveProvider = providers.find(p => p.id === 'brave');
+
+      if (braveProvider?.apiKey) {
+        try {
+          return tokenStorageService.decryptString(braveProvider.apiKey);
+        } catch (error) {
+          console.error('Failed to decrypt Brave provider API key:', error);
+          // Fall through to environment variable
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load Brave provider configuration:', error);
+      // Fall through to environment variable
+    }
+
+    // Fallback to environment variable
+    return config.BRAVE_SEARCH_API_KEY;
+  }
+
   async search(query, options = {}) {
     const { chatId } = options;
-    const apiKey = config.BRAVE_SEARCH_API_KEY;
+    const apiKey = this.getApiKey();
 
     if (!apiKey) {
-      throw new Error('BRAVE_SEARCH_API_KEY is not set');
+      throw new Error(
+        'Brave Search API key is not configured. Please configure it in the admin panel or set BRAVE_SEARCH_API_KEY environment variable.'
+      );
     }
 
     const endpoint =
@@ -86,12 +117,41 @@ class TavilySearchProvider extends SearchProvider {
     return 'tavily';
   }
 
+  /**
+   * Get API key with fallback logic:
+   * 1. Check provider-level API key (from providers.json)
+   * 2. Fallback to environment variable
+   */
+  getApiKey() {
+    try {
+      const { data: providers } = configCache.getProviders(true);
+      const tavilyProvider = providers.find(p => p.id === 'tavily');
+
+      if (tavilyProvider?.apiKey) {
+        try {
+          return tokenStorageService.decryptString(tavilyProvider.apiKey);
+        } catch (error) {
+          console.error('Failed to decrypt Tavily provider API key:', error);
+          // Fall through to environment variable
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load Tavily provider configuration:', error);
+      // Fall through to environment variable
+    }
+
+    // Fallback to environment variable
+    return config.TAVILY_SEARCH_API_KEY;
+  }
+
   async search(query, options = {}) {
     const { chatId, search_depth = 'basic', max_results = 5 } = options;
-    const apiKey = config.TAVILY_SEARCH_API_KEY;
+    const apiKey = this.getApiKey();
 
     if (!apiKey) {
-      throw new Error('TAVILY_SEARCH_API_KEY is not set');
+      throw new Error(
+        'Tavily Search API key is not configured. Please configure it in the admin panel or set TAVILY_SEARCH_API_KEY environment variable.'
+      );
     }
 
     const endpoint = config.TAVILY_ENDPOINT || 'https://api.tavily.com/search';

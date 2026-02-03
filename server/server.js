@@ -112,6 +112,15 @@ if (cluster.isPrimary && workerCount > 1) {
     console.warn('Encrypted API keys and tokens may not work properly');
   }
 
+  // Ensure default providers are present (migration for existing installations)
+  try {
+    const { ensureDefaultProviders } = await import('./utils/providerMigration.js');
+    await ensureDefaultProviders();
+  } catch (error) {
+    console.error('⚠️  Error ensuring default providers:', error.message);
+    // Continue - this is non-critical
+  }
+
   // Initialize configuration cache for optimal performance
   try {
     await configCache.initialize();

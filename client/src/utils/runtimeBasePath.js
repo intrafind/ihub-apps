@@ -18,13 +18,12 @@ export const detectBasePath = () => {
   // Find the base path by looking for where index.html is served
   // The app's root is where we are now, before any React routing
   // Remove any trailing /index.html or just trailing slash
-  let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+  const cleanPath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
 
-  // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
-  // We can detect this by checking if there's a known React route pattern
-  // These are top-level application routes, not deployment subpaths
+  // Known React routes - these are app routes, not deployment subpaths
   //
   // ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this array!
+  // Also update the matching array in index.html for consistency.
   // This includes any new routes like:
   // - New feature routes (e.g., /reports, /analytics)
   // - New page routes (e.g., /help, /docs)
@@ -34,87 +33,39 @@ export const detectBasePath = () => {
   // deployments (e.g., /ihub/newroute will incorrectly detect /ihub/newroute as base path
   // instead of /ihub).
   const knownRoutes = [
-    '/apps', // App listing and individual app routes
-    '/admin', // Admin panel routes
-    '/auth', // Authentication routes
-    '/login', // Login page
-    '/chat', // Direct chat routes
-    '/pages', // Dynamic pages
-    '/prompts', // Prompts listing
-    '/settings', // Settings pages (integrations, etc.)
-    '/teams', // Microsoft Teams routes
-    '/s' // Short links
+    'apps', // App listing and individual app routes
+    'admin', // Admin panel routes
+    'auth', // Authentication routes
+    'login', // Login page
+    'chat', // Direct chat routes
+    'pages', // Dynamic pages
+    'prompts', // Prompts listing
+    'settings', // Settings pages (integrations, etc.)
+    'teams', // Microsoft Teams routes
+    's' // Short links
   ];
 
-  // Find the first occurrence of any known route at a path boundary
-  let firstRouteIndex = -1;
-  let foundRoute = null;
+  // Split path into segments and find the first known route
+  // This correctly handles paths like /admin/apps (route 'admin' at segment 0)
+  // vs /ihub/admin/apps (route 'admin' at segment 1, base path is '/ihub')
+  const segments = cleanPath.split('/').filter(s => s); // Remove empty strings
 
-  for (const route of knownRoutes) {
-    // Check if basePath starts with this route
-    if (basePath === route || basePath.startsWith(route + '/')) {
-      // Route is at the very beginning
-      firstRouteIndex = 0;
-      foundRoute = route;
+  // Find the index of the first segment that matches a known route
+  let routeSegmentIndex = -1;
+  for (let i = 0; i < segments.length; i++) {
+    if (knownRoutes.includes(segments[i])) {
+      routeSegmentIndex = i;
       break;
     }
-
-    // Check if route appears after a slash (e.g., /ihub/apps)
-    const searchPattern = route; // e.g., "/apps"
-    let searchIndex = basePath.indexOf(searchPattern);
-
-    // Keep searching for valid occurrences
-    while (searchIndex > 0) {
-      // Check if there's a slash right before this occurrence
-      // (there should be since route starts with /)
-      // This ensures we match /ihub/apps but not /ihubapps
-      const prevChar = basePath[searchIndex - 1];
-      if (prevChar === '/' || searchIndex === 0) {
-        // This is a false match - route already starts with /
-        // so prevChar being / means we have //apps which is wrong
-        searchIndex = basePath.indexOf(searchPattern, searchIndex + 1);
-        continue;
-      }
-
-      // Found a valid route occurrence (not at boundary)
-      // This shouldn't happen with our current logic, skip it
-      searchIndex = basePath.indexOf(searchPattern, searchIndex + 1);
-    }
-
-    // Simpler approach: split by / and check segments
-    const segments = basePath.split('/').filter(s => s); // Remove empty strings
-    const routeSegment = route.substring(1); // Remove leading / from route
-
-    const segmentIndex = segments.indexOf(routeSegment);
-    if (segmentIndex !== -1) {
-      // Calculate the actual string index
-      let actualIndex = 0;
-      for (let i = 0; i < segmentIndex; i++) {
-        actualIndex += segments[i].length + 1; // +1 for the /
-      }
-
-      if (firstRouteIndex === -1 || actualIndex < firstRouteIndex) {
-        firstRouteIndex = actualIndex;
-        foundRoute = route;
-      }
-    }
   }
 
-  // If we found a route at the start (index 0), we're at application root
-  if (firstRouteIndex === 0) {
+  // Determine base path from segment analysis
+  if (routeSegmentIndex === 0) {
+    // Route is at root (e.g., /admin/apps) - no subpath deployment
     return '';
-  }
-
-  // If we found a route elsewhere, everything before it is the base path
-  if (firstRouteIndex > 0) {
-    // Build base path from segments
-    const segments = basePath.split('/').filter(s => s);
-    const routeSegment = foundRoute.substring(1);
-    const routeSegmentIndex = segments.indexOf(routeSegment);
-
-    if (routeSegmentIndex > 0) {
-      return '/' + segments.slice(0, routeSegmentIndex).join('/');
-    }
+  } else if (routeSegmentIndex > 0) {
+    // Route found after subpath (e.g., /ihub/admin/apps) - base is /ihub
+    return '/' + segments.slice(0, routeSegmentIndex).join('/');
   }
 
   // No known routes found, return empty string
@@ -146,18 +97,18 @@ export const getBasePath = () => {
 
     // Check if cached base path is actually a known route (invalid - routes are not base paths)
     const knownRoutes = [
-      '/apps',
-      '/admin',
-      '/auth',
-      '/login',
-      '/chat',
-      '/pages',
-      '/prompts',
-      '/settings',
-      '/teams',
-      '/s'
+      'apps',
+      'admin',
+      'auth',
+      'login',
+      'chat',
+      'pages',
+      'prompts',
+      'settings',
+      'teams',
+      's'
     ];
-    const isKnownRoute = knownRoutes.some(route => basePath === route);
+    const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
 
     if (isKnownRoute) {
       // Cached base path is a React route, not a deployment path - invalid!

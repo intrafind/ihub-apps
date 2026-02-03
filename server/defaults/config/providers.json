@@ -59,6 +59,32 @@
         "de": "Lokale LLM-Anbieter (LM Studio, Jan.ai, vLLM)"
       },
       "enabled": true
+    },
+    {
+      "id": "tavily",
+      "name": {
+        "en": "Tavily Search",
+        "de": "Tavily Suche"
+      },
+      "description": {
+        "en": "Tavily web search API for real-time information retrieval",
+        "de": "Tavily Websuche-API für Echtzeit-Informationsabruf"
+      },
+      "enabled": true,
+      "category": "websearch"
+    },
+    {
+      "id": "brave",
+      "name": {
+        "en": "Brave Search",
+        "de": "Brave Suche"
+      },
+      "description": {
+        "en": "Brave web search API for privacy-focused search results",
+        "de": "Brave Websuche-API für datenschutzorientierte Suchergebnisse"
+      },
+      "enabled": true,
+      "category": "websearch"
     }
   ]
 }

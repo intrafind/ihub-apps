@@ -632,3 +632,43 @@ function UserComponent(props) {
 - Access to all React hooks and app context through props
 
 This architecture supports enterprise-grade AI applications with flexible authentication, real-time chat, and extensive customization capabilities.
+
+## Documentation Organization
+
+### Concept Documents
+
+Every significant feature, bug fix, or change should be documented in the `concepts/` folder following these guidelines:
+
+**Single Document Features:**
+
+- Use format: `concepts/YYYY-MM-DD {title}.md`
+- Examples: `2026-02-02 Provider API Key Persistence Fix.md`
+
+**Multi-Document Features:**
+
+- Create a dedicated subfolder: `concepts/{feature-name}/`
+- Include a `README.md` that provides an overview
+- Place all related documents in the subfolder
+- Example structure:
+  ```
+  concepts/websearch-provider-api-keys/
+  ├── README.md
+  ├── 2026-02-03 Websearch Provider API Key Configuration.md
+  ├── 2026-02-03 Websearch Provider UI Screenshots.md
+  └── IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md
+  ```
+
+**When to Use Subfolders:**
+
+- Features with 3+ related documents
+- Features with implementation summaries, UI documentation, and concept docs
+- Complex features that need organized documentation
+
+**What to Document:**
+
+- Feature concepts and design documents
+- Fix summaries and root cause analyses
+- Migration guides for breaking changes
+- Implementation summaries
+- UI/UX changes with screenshots
+- API changes and usage examples
