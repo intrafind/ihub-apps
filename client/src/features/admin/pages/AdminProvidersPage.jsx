@@ -55,6 +55,23 @@ const AdminProvidersPage = () => {
     return name.includes(search) || description.includes(search) || provider.id.includes(search);
   });
 
+  // Group providers by category
+  const groupedProviders = filteredProviders.reduce((acc, provider) => {
+    const category = provider.category || 'llm';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(provider);
+    return acc;
+  }, {});
+
+  const categoryOrder = ['llm', 'websearch', 'custom'];
+  const categoryLabels = {
+    llm: t('admin.providers.category.llm', 'LLM Providers'),
+    websearch: t('admin.providers.category.websearch', 'Web Search Providers'),
+    custom: t('admin.providers.category.custom', 'Custom / Generic API Keys')
+  };
+
   return (
     <AdminAuth>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -68,7 +85,7 @@ const AdminProvidersPage = () => {
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
               {t(
                 'admin.providers.description',
-                'Manage API keys for LLM providers. Provider-level keys are used as fallback for models that do not have their own API key configured.'
+                'Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.'
               )}
             </p>
           </div>
@@ -105,112 +122,120 @@ const AdminProvidersPage = () => {
             </div>
           </div>
 
-          {/* Providers List */}
+          {/* Providers List - Grouped by Category */}
           {loading ? (
             <div className="flex justify-center items-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-            <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.providers.table.provider', 'Provider')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.providers.table.description', 'Description')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.providers.table.apiKey', 'API Key')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.providers.table.status', 'Status')}
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.providers.table.actions', 'Actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredProviders.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan="5"
-                        className="px-6 py-12 text-center text-gray-500 dark:text-gray-400"
-                      >
-                        {searchTerm
-                          ? t(
-                              'admin.providers.noResults',
-                              'No providers found matching your search.'
-                            )
-                          : t('admin.providers.noProviders', 'No providers configured.')}
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredProviders.map(provider => (
-                      <tr
-                        key={provider.id}
-                        className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                        onClick={() => editProvider(provider.id)}
-                      >
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          <div className="flex items-center">
-                            <div>
-                              <div className="text-sm font-medium text-gray-900 dark:text-white">
-                                {getLocalizedContent(provider.name, currentLanguage)}
-                              </div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">
-                                {provider.id}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="text-sm text-gray-900 dark:text-gray-300">
-                            {getLocalizedContent(provider.description, currentLanguage)}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {provider.apiKeySet ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
-                              <Icon name="KeyIcon" className="w-3 h-3 mr-1" />
-                              {t('admin.providers.configured', 'Configured')}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
-                              <Icon name="ExclamationTriangleIcon" className="w-3 h-3 mr-1" />
-                              {t('admin.providers.notConfigured', 'Not Configured')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap">
-                          {provider.enabled ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
-                              {t('admin.providers.enabled', 'Enabled')}
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
-                              {t('admin.providers.disabled', 'Disabled')}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              editProvider(provider.id);
-                            }}
-                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                          >
-                            {t('admin.providers.configure', 'Configure')}
-                          </button>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+            <div className="space-y-6">
+              {categoryOrder.map(category => {
+                const categoryProviders = groupedProviders[category] || [];
+                if (categoryProviders.length === 0) return null;
+
+                return (
+                  <div key={category}>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 px-2">
+                      {categoryLabels[category]}
+                    </h2>
+                    <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className="bg-gray-50 dark:bg-gray-900">
+                          <tr>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {t('admin.providers.table.provider', 'Provider')}
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {t('admin.providers.table.description', 'Description')}
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {t('admin.providers.table.apiKey', 'API Key')}
+                            </th>
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {t('admin.providers.table.status', 'Status')}
+                            </th>
+                            <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                              {t('admin.providers.table.actions', 'Actions')}
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
+                          {categoryProviders.map(provider => (
+                            <tr
+                              key={provider.id}
+                              className="hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                              onClick={() => editProvider(provider.id)}
+                            >
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <div className="flex items-center">
+                                  <div>
+                                    <div className="text-sm font-medium text-gray-900 dark:text-white">
+                                      {getLocalizedContent(provider.name, currentLanguage)}
+                                    </div>
+                                    <div className="text-sm text-gray-500 dark:text-gray-400">
+                                      {provider.id}
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4">
+                                <div className="text-sm text-gray-900 dark:text-gray-300">
+                                  {getLocalizedContent(provider.description, currentLanguage)}
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {provider.apiKeySet ? (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                    <Icon name="KeyIcon" className="w-3 h-3 mr-1" />
+                                    {t('admin.providers.configured', 'Configured')}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+                                    <Icon name="ExclamationTriangleIcon" className="w-3 h-3 mr-1" />
+                                    {t('admin.providers.notConfigured', 'Not Configured')}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                {provider.enabled ? (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200">
+                                    {t('admin.providers.enabled', 'Enabled')}
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+                                    {t('admin.providers.disabled', 'Disabled')}
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={e => {
+                                    e.stopPropagation();
+                                    editProvider(provider.id);
+                                  }}
+                                  className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                >
+                                  {t('admin.providers.configure', 'Configure')}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {filteredProviders.length === 0 && (
+                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-12 text-center">
+                  <p className="text-gray-500 dark:text-gray-400">
+                    {searchTerm
+                      ? t('admin.providers.noResults', 'No providers found matching your search.')
+                      : t('admin.providers.noProviders', 'No providers configured.')}
+                  </p>
+                </div>
+              )}
             </div>
           )}
 

@@ -410,7 +410,7 @@
   "admin": {
     "providers": {
       "title": "Anbieter-Zugangsdaten",
-      "description": "API-Schlüssel für LLM-Anbieter verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
+      "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
       "search": "Anbieter suchen...",
       "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
       "noProviders": "Keine Anbieter konfiguriert.",
@@ -420,6 +420,11 @@
       "disabled": "Deaktiviert",
       "configure": "Konfigurieren",
       "backToList": "Zurück zu Anbietern",
+      "category": {
+        "llm": "LLM-Anbieter",
+        "websearch": "Websuchanbieter",
+        "custom": "Benutzerdefinierte / Generische API-Schlüssel"
+      },
       "table": {
         "provider": "Anbieter",
         "description": "Beschreibung",

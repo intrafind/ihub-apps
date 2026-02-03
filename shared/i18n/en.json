@@ -276,7 +276,7 @@
   "admin": {
     "providers": {
       "title": "Provider Credentials",
-      "description": "Manage API keys for LLM providers. Provider-level keys are used as fallback for models that do not have their own API key configured.",
+      "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
       "search": "Search providers...",
       "noResults": "No providers found matching your search.",
       "noProviders": "No providers configured.",
@@ -286,6 +286,11 @@
       "disabled": "Disabled",
       "configure": "Configure",
       "backToList": "Back to Providers",
+      "category": {
+        "llm": "LLM Providers",
+        "websearch": "Web Search Providers",
+        "custom": "Custom / Generic API Keys"
+      },
       "table": {
         "provider": "Provider",
         "description": "Description",
