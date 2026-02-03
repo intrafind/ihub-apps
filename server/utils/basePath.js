@@ -56,7 +56,7 @@ export const isValidBasePath = path => {
 };
 
 /**
- * Build server route path with base path
+ * Build server route path with base path. base path is automatically prepended.
  * @param {string} path - Route path
  * @returns {string} Complete route path
  */
