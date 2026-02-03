@@ -100,7 +100,10 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --check .",
     "format:fix": "prettier --write .",
-    "lint-format:fix": "npm run lint:fix && npm run format:fix"
+    "lint-format:fix": "npm run lint:fix && npm run format:fix",
+    "// === SECURITY ===": "",
+    "security:audit": "node scripts/audit-admin-endpoints.js",
+    "security:audit:admin": "node scripts/audit-admin-endpoints.js"
   },
   "keywords": [
     "ai",
