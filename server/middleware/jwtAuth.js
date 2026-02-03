@@ -2,6 +2,7 @@ import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
+import { loadUsers, isUserActive } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -170,17 +171,65 @@ export default function jwtAuthMiddleware(req, res, next) {
         });
       }
     } else if (decoded.authMode === 'local') {
-      // For local auth, the user ID is stored in the 'sub' field
-      const userId = decoded.sub || decoded.username || decoded.id;
-      user = {
-        id: userId,
-        username: decoded.username || userId,
-        name: decoded.name || decoded.username || userId,
-        email: decoded.email || '',
-        groups: decoded.groups || [],
-        authMode: 'local',
-        timestamp: Date.now()
-      };
+      // For local auth, validate that user still exists and is active
+      const localAuthConfig = platform.localAuth || {};
+      if (localAuthConfig.enabled) {
+        try {
+          const usersFilePath = localAuthConfig.usersFile || 'contents/config/users.json';
+          const usersConfig = loadUsers(usersFilePath);
+          const userId = decoded.sub || decoded.username || decoded.id;
+
+          // Find the user in the database
+          const userRecord = usersConfig.users?.[userId];
+
+          if (!userRecord) {
+            logger.warn(`[JWT Auth] Token rejected: user not found | user_id=${userId}`);
+            return res.status(401).json({
+              error: 'invalid_token',
+              error_description: 'User account no longer exists'
+            });
+          }
+
+          if (!isUserActive(userRecord)) {
+            logger.warn(`[JWT Auth] Token rejected: user account disabled | user_id=${userId}`);
+            return res.status(403).json({
+              error: 'access_denied',
+              error_description: 'User account has been disabled'
+            });
+          }
+
+          // User exists and is active, create user object from token
+          user = {
+            id: userId,
+            username: decoded.username || userId,
+            name: decoded.name || decoded.username || userId,
+            email: decoded.email || '',
+            groups: decoded.groups || [],
+            authMode: 'local',
+            timestamp: Date.now()
+          };
+        } catch (loadError) {
+          logger.error('[JWT Auth] Failed to validate user status:', loadError);
+          // Continue anyway to avoid breaking on config errors
+          const userId = decoded.sub || decoded.username || decoded.id;
+          user = {
+            id: userId,
+            username: decoded.username || userId,
+            name: decoded.name || decoded.username || userId,
+            email: decoded.email || '',
+            groups: decoded.groups || [],
+            authMode: 'local',
+            timestamp: Date.now()
+          };
+        }
+      } else {
+        // Local auth not enabled, but token is local type - reject
+        logger.warn('[JWT Auth] Token rejected: Local authentication is not enabled');
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'Local authentication is not enabled'
+        });
+      }
     } else if (decoded.authMode === 'oidc') {
       user = {
         id: decoded.sub || decoded.username,
