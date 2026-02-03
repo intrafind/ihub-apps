@@ -47,6 +47,27 @@ const AdminProvidersPage = () => {
     navigate(`/admin/providers/${providerId}`);
   };
 
+  const createProvider = () => {
+    navigate('/admin/providers/new');
+  };
+
+  const deleteProvider = async (providerId, providerName) => {
+    if (!confirm(`Delete provider "${providerName}"?`)) {
+      return;
+    }
+
+    try {
+      await makeAdminApiCall(`/admin/providers/${providerId}`, {
+        method: 'DELETE'
+      });
+      // Reload providers after deletion
+      await loadProviders();
+    } catch (err) {
+      console.error('Error deleting provider:', err);
+      setError(err.message);
+    }
+  };
+
   // Filter providers based on search term
   const filteredProviders = providers.filter(provider => {
     const name = getLocalizedContent(provider.name, currentLanguage).toLowerCase();
@@ -118,6 +139,16 @@ const AdminProvidersPage = () => {
                   onChange={e => setSearchTerm(e.target.value)}
                   className="pl-10 w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white dark:bg-gray-800 text-gray-900 dark:text-white"
                 />
+              </div>
+            </div>
+            <button
+              onClick={createProvider}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+            >
+              <Icon name="PlusIcon" className="w-5 h-5" />
+              {t('admin.providers.createNew', 'Create New Provider')}
+            </button>
+          </div>
               </div>
             </div>
           </div>
@@ -208,15 +239,31 @@ const AdminProvidersPage = () => {
                                 )}
                               </td>
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                <button
-                                  onClick={e => {
-                                    e.stopPropagation();
-                                    editProvider(provider.id);
-                                  }}
-                                  className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-                                >
-                                  {t('admin.providers.configure', 'Configure')}
-                                </button>
+                                <div className="flex justify-end gap-2">
+                                  <button
+                                    onClick={e => {
+                                      e.stopPropagation();
+                                      editProvider(provider.id);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                                  >
+                                    {t('admin.providers.configure', 'Configure')}
+                                  </button>
+                                  {provider.category && provider.category !== 'llm' && (
+                                    <button
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        deleteProvider(
+                                          provider.id,
+                                          getLocalizedContent(provider.name, currentLanguage)
+                                        );
+                                      }}
+                                      className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
+                                    >
+                                      {t('admin.providers.delete', 'Delete')}
+                                    </button>
+                                  )}
+                                </div>
                               </td>
                             </tr>
                           ))}

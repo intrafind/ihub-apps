@@ -419,6 +419,8 @@
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
       "configure": "Konfigurieren",
+      "delete": "Löschen",
+      "createNew": "Neuen Anbieter erstellen",
       "backToList": "Zurück zu Anbietern",
       "category": {
         "llm": "LLM-Anbieter",
@@ -451,6 +453,23 @@
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
         }
+      },
+      "create": {
+        "title": "Neuen Anbieter erstellen",
+        "description": "Erstellen Sie einen neuen benutzerdefinierten Anbieter zum Speichern von API-Schlüsseln",
+        "saved": "Anbieter erfolgreich erstellt!",
+        "id": "Anbieter-ID",
+        "idHelp": "Eindeutige Kennung (Kleinbuchstaben, verwenden Sie Bindestriche anstelle von Leerzeichen)",
+        "name": "Anbieter-Name",
+        "description": "Beschreibung",
+        "category": "Kategorie",
+        "apiKey": "API-Schlüssel",
+        "apiKeyOptional": "(Optional)",
+        "apiKeyEnter": "API-Schlüssel eingeben",
+        "enabled": "Anbieter aktiviert",
+        "cancel": "Abbrechen",
+        "save": "Anbieter erstellen",
+        "saving": "Wird erstellt..."
       },
       "info": {
         "title": "API-Schlüssel-Priorität",
