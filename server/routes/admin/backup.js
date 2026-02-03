@@ -6,7 +6,7 @@ import yauzl from 'yauzl';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import configCache from '../../configCache.js';
-import { authRequired } from '../../middleware/authRequired.js';
+import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
@@ -348,12 +348,12 @@ export default async function registerBackupRoutes(app, basePath = '') {
   });
 
   // Export configuration
-  app.get(buildServerPath('/api/admin/backup/export', basePath), authRequired, exportConfig);
+  app.get(buildServerPath('/api/admin/backup/export', basePath), adminAuth, exportConfig);
 
   // Import configuration
   app.post(
     buildServerPath('/api/admin/backup/import', basePath),
-    authRequired,
+    adminAuth,
     upload.single('backup'),
     importConfig
   );
