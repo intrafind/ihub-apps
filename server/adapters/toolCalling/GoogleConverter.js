@@ -227,18 +227,23 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         }
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name
+          // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
+          const metadata = { originalFormat: 'google' };
+          if (part.thoughtSignature) {
+            metadata.thoughtSignature = part.thoughtSignature;
+          }
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
               part.functionCall.name,
               part.functionCall.args || {},
               result.tool_calls.length,
-              { originalFormat: 'google' }
+              metadata
             )
           );
           if (!result.finishReason) result.finishReason = 'tool_calls';
         }
-        // Collect thought signatures for multi-turn conversations
+        // Collect thought signatures for multi-turn conversations (for backward compatibility)
         if (part.thoughtSignature) {
           if (!result.thoughtSignatures) result.thoughtSignatures = [];
           result.thoughtSignatures.push(part.thoughtSignature);
@@ -285,13 +290,19 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         if (part.functionCall && part.functionCall.name) {
           // Only create tool call if we have a valid name (non-empty)
           // This prevents creating tool calls with empty names during streaming
+
+          // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
+          const metadata = { originalFormat: 'google' };
+          if (part.thoughtSignature) {
+            metadata.thoughtSignature = part.thoughtSignature;
+          }
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
               part.functionCall.name,
               part.functionCall.args || {},
               result.tool_calls.length,
-              { originalFormat: 'google' }
+              metadata
             )
           );
           if (!result.finishReason) result.finishReason = 'tool_calls';
@@ -304,7 +315,7 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
             part.functionCall
           );
         }
-        // Collect thought signatures for multi-turn conversations
+        // Collect thought signatures for multi-turn conversations (for backward compatibility)
         if (part.thoughtSignature) {
           if (!result.thoughtSignatures) result.thoughtSignatures = [];
           result.thoughtSignatures.push(part.thoughtSignature);

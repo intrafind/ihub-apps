@@ -462,6 +462,15 @@ class ToolExecutor {
             }
           }
 
+          // Process images (important for image generation with tools like google_search)
+          this.streamingHandler.processImages(result, chatId);
+
+          // Process thinking content
+          this.streamingHandler.processThinking(result, chatId);
+
+          // Process grounding metadata (for Google Search grounding)
+          this.streamingHandler.processGroundingMetadata(result, chatId);
+
           // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
           if (result.tool_calls?.length > 0) {
             result.tool_calls.forEach(call => {
@@ -471,6 +480,8 @@ class ToolExecutor {
                 // Merge properties into the existing tool call
                 if (call.id) existingCall.id = call.id;
                 if (call.type) existingCall.type = call.type;
+                // Preserve metadata (critical for thoughtSignature in Gemini 3)
+                if (call.metadata) existingCall.metadata = call.metadata;
                 if (call.function) {
                   if (call.function.name) existingCall.function.name = call.function.name;
 
@@ -507,6 +518,7 @@ class ToolExecutor {
                   index: call.index,
                   id: call.id || null,
                   type: call.type || 'function',
+                  metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
                   function: {
                     name: call.function?.name || '',
                     arguments: initialArgs
@@ -532,7 +544,7 @@ class ToolExecutor {
         }
       }
 
-      if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+      if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
         logger.info(
           `No tool calls to process for chat ID ${chatId}:`,
           JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
@@ -579,6 +591,23 @@ class ToolExecutor {
         action: 'processing',
         message: `Using tool(s): ${toolNames}...`
       });
+
+      // Debug: Log collected tool calls to verify metadata preservation
+      console.log(
+        `[ToolExecutor] Collected ${validToolCalls.length} tool call(s):`,
+        JSON.stringify(
+          validToolCalls.map(c => ({
+            name: c.function?.name,
+            hasMetadata: !!c.metadata,
+            hasThoughtSignature: !!c.metadata?.thoughtSignature,
+            thoughtSignaturePreview: c.metadata?.thoughtSignature
+              ? `${c.metadata.thoughtSignature.substring(0, 20)}...`
+              : undefined
+          })),
+          null,
+          2
+        )
+      );
 
       const assistantMessage = { role: 'assistant', tool_calls: validToolCalls };
       assistantMessage.content = assistantContent || null;
@@ -785,6 +814,7 @@ class ToolExecutor {
 
         let assistantContent = '';
         const collectedToolCalls = [];
+        const collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
         let finishReason = null;
         let done = false;
 
@@ -827,18 +857,33 @@ class ToolExecutor {
                     if (call.function.arguments)
                       existingCall.function.arguments += call.function.arguments;
                   }
+                  // Merge metadata (important for Gemini thoughtSignatures)
+                  if (call.metadata) {
+                    existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
+                  }
                 } else if (call.index !== undefined) {
-                  collectedToolCalls.push({
+                  const toolCall = {
                     index: call.index,
                     id: call.id || null,
                     type: call.type || 'function',
                     function: {
                       name: call.function?.name || '',
                       arguments: call.function?.arguments || ''
-                    }
-                  });
+                    },
+                    // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
+                    metadata: call.metadata || {}
+                  };
+                  collectedToolCalls.push(toolCall);
                 }
               });
+            }
+
+            // Collect thoughtSignatures for Google Gemini thinking models
+            if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
+              collectedThoughtSignatures.push(...result.thoughtSignatures);
+              console.log(
+                `[ToolExecutor] Collected ${result.thoughtSignatures.length} thoughtSignature(s) from response`
+              );
             }
 
             if (result.finishReason) {
@@ -853,7 +898,7 @@ class ToolExecutor {
         }
 
         // If no tool calls, this is the final response - stream it back to client
-        if (finishReason !== 'tool_calls' || collectedToolCalls.length === 0) {
+        if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
           clearTimeout(timeoutId);
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
@@ -878,6 +923,12 @@ class ToolExecutor {
 
         const assistantMessage = { role: 'assistant', tool_calls: collectedToolCalls };
         assistantMessage.content = assistantContent || null;
+
+        // Preserve thoughtSignatures for Gemini 3 models (required for multi-turn function calling)
+        if (collectedThoughtSignatures.length > 0) {
+          assistantMessage.thoughtSignatures = collectedThoughtSignatures;
+        }
+
         llmMessages.push(assistantMessage);
 
         for (const call of collectedToolCalls) {

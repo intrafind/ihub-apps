@@ -276,7 +276,7 @@
   "admin": {
     "providers": {
       "title": "Provider Credentials",
-      "description": "Manage API keys for LLM providers. Provider-level keys are used as fallback for models that do not have their own API key configured.",
+      "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
       "search": "Search providers...",
       "noResults": "No providers found matching your search.",
       "noProviders": "No providers configured.",
@@ -285,7 +285,14 @@
       "enabled": "Enabled",
       "disabled": "Disabled",
       "configure": "Configure",
+      "delete": "Delete",
+      "createNew": "Create New Provider",
       "backToList": "Back to Providers",
+      "category": {
+        "llm": "LLM Providers",
+        "websearch": "Web Search Providers",
+        "custom": "Custom / Generic API Keys"
+      },
       "table": {
         "provider": "Provider",
         "description": "Description",
@@ -312,6 +319,23 @@
           "title": "About Provider API Keys",
           "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
         }
+      },
+      "create": {
+        "title": "Create New Provider",
+        "description": "Create a new custom provider for storing API keys",
+        "saved": "Provider created successfully!",
+        "id": "Provider ID",
+        "idHelp": "Unique identifier (lowercase, use hyphens instead of spaces)",
+        "name": "Provider Name",
+        "description": "Description",
+        "category": "Category",
+        "apiKey": "API Key",
+        "apiKeyOptional": "(Optional)",
+        "apiKeyEnter": "Enter API key",
+        "enabled": "Provider Enabled",
+        "cancel": "Cancel",
+        "save": "Create Provider",
+        "saving": "Creating..."
       },
       "info": {
         "title": "API Key Priority",
@@ -798,7 +822,18 @@
     "system": "System",
     "copy": "Copy",
     "copied": "Copied!",
-    "edit": "Edit"
+    "edit": "Edit",
+    "resend": "Resend",
+    "editMessage": "Edit message",
+    "resendMessage": "Resend message",
+    "openInCanvas": "Open in Canvas",
+    "generatedImage": "Generated image",
+    "downloadImage": "Download image",
+    "saveImageWarning": "Download this image. Images are not persisted.",
+    "imageNotPersisted": "Image not available",
+    "imageNotPersistedDetail": "Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied!"
   },
   "serverErrors": {
     "appNotFound": "Application not found",

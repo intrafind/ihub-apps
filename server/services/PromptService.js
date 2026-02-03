@@ -251,12 +251,20 @@ class PromptService {
           }
 
           // Replace {{sources}} template with combined content
-          if (systemPrompt.includes('{{sources}}')) {
+          const hasSourcesPlaceholder = systemPrompt.includes('{{sources}}');
+          const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
+
+          if (hasSourcesPlaceholder) {
             systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
           }
           // Also support legacy {{source}} template
-          if (systemPrompt.includes('{{source}}')) {
+          if (hasSourcePlaceholder) {
             systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+          }
+
+          // If no placeholder was found but we have source content, append it automatically
+          if (!hasSourcesPlaceholder && !hasSourcePlaceholder && sourceContent) {
+            systemPrompt += `\n\nSources:\n<sources>${sourceContent}</sources>`;
           }
         }
       } catch (error) {

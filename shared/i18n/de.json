@@ -288,7 +288,18 @@
     "system": "System",
     "copy": "Kopieren",
     "copied": "Kopiert!",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
+    "resend": "Erneut senden",
+    "editMessage": "Nachricht bearbeiten",
+    "resendMessage": "Nachricht erneut senden",
+    "openInCanvas": "In Canvas öffnen",
+    "generatedImage": "Generiertes Bild",
+    "downloadImage": "Bild herunterladen",
+    "saveImageWarning": "Laden Sie dieses Bild herunter, Bilder werden nicht gespeichert.",
+    "imageNotPersisted": "Bild nicht verfügbar",
+    "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar.",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert!"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -399,7 +410,7 @@
   "admin": {
     "providers": {
       "title": "Anbieter-Zugangsdaten",
-      "description": "API-Schlüssel für LLM-Anbieter verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
+      "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
       "search": "Anbieter suchen...",
       "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
       "noProviders": "Keine Anbieter konfiguriert.",
@@ -408,7 +419,14 @@
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
       "configure": "Konfigurieren",
+      "delete": "Löschen",
+      "createNew": "Neuen Anbieter erstellen",
       "backToList": "Zurück zu Anbietern",
+      "category": {
+        "llm": "LLM-Anbieter",
+        "websearch": "Websuchanbieter",
+        "custom": "Benutzerdefinierte / Generische API-Schlüssel"
+      },
       "table": {
         "provider": "Anbieter",
         "description": "Beschreibung",
@@ -435,6 +453,23 @@
           "title": "Über Anbieter-API-Schlüssel",
           "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
         }
+      },
+      "create": {
+        "title": "Neuen Anbieter erstellen",
+        "description": "Erstellen Sie einen neuen benutzerdefinierten Anbieter zum Speichern von API-Schlüsseln",
+        "saved": "Anbieter erfolgreich erstellt!",
+        "id": "Anbieter-ID",
+        "idHelp": "Eindeutige Kennung (Kleinbuchstaben, verwenden Sie Bindestriche anstelle von Leerzeichen)",
+        "name": "Anbieter-Name",
+        "description": "Beschreibung",
+        "category": "Kategorie",
+        "apiKey": "API-Schlüssel",
+        "apiKeyOptional": "(Optional)",
+        "apiKeyEnter": "API-Schlüssel eingeben",
+        "enabled": "Anbieter aktiviert",
+        "cancel": "Abbrechen",
+        "save": "Anbieter erstellen",
+        "saving": "Wird erstellt..."
       },
       "info": {
         "title": "API-Schlüssel-Priorität",

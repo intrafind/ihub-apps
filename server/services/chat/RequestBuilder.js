@@ -35,6 +35,42 @@ function preprocessMessagesWithFileData(messages) {
   });
 }
 
+/**
+ * Filter models based on app requirements
+ * @param {Array} models - All available models
+ * @param {Object} app - App configuration
+ * @returns {Array} Filtered models that match app requirements
+ */
+function filterModelsForApp(models, app) {
+  let availableModels = models;
+
+  // Filter by allowedModels if specified
+  if (app?.allowedModels && app.allowedModels.length > 0) {
+    availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
+  }
+
+  // Filter by tools requirement
+  if (app?.tools && app.tools.length > 0) {
+    availableModels = availableModels.filter(model => model.supportsTools);
+  }
+
+  // Apply model settings filter if specified (e.g., supportsImageGeneration)
+  if (app?.settings?.model?.filter) {
+    const filter = app.settings.model.filter;
+    availableModels = availableModels.filter(model => {
+      // Check each filter property
+      for (const [key, value] of Object.entries(filter)) {
+        if (model[key] !== value) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
+
+  return availableModels;
+}
+
 class RequestBuilder {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -83,11 +119,60 @@ class RequestBuilder {
         return { success: false, error };
       }
 
-      const defaultModel = models.find(m => m.default)?.id;
+      // Filter models based on app requirements (allowedModels, tools, settings.model.filter)
+      const filteredModels = filterModelsForApp(models, app);
+      console.log(
+        `App ${app.id}: Filtered ${filteredModels.length} compatible models from ${models.length} total models`
+      );
+
+      // Find the default model from filtered models, or fall back to global default
+      const defaultModelFromFiltered = filteredModels.find(m => m.default)?.id;
+      const globalDefaultModel = models.find(m => m.default)?.id;
+      const defaultModel = defaultModelFromFiltered || globalDefaultModel;
+
+      // Determine which model to use
       let resolvedModelId = modelId || app.preferredModel || defaultModel;
-      if (!models.some(m => m.id === resolvedModelId)) {
-        resolvedModelId = defaultModel;
+
+      // Check if the resolved model is in the filtered list
+      const isModelInFilteredList = filteredModels.some(m => m.id === resolvedModelId);
+
+      if (!isModelInFilteredList) {
+        console.log(
+          `Model ${resolvedModelId} is not compatible with app ${app.id} requirements. Searching for fallback...`
+        );
+
+        // Try to find a compatible fallback model
+        let fallbackModel = null;
+
+        // 1. Try app's preferred model if it's in the filtered list
+        if (app.preferredModel && filteredModels.some(m => m.id === app.preferredModel)) {
+          fallbackModel = app.preferredModel;
+          console.log(`Using app's preferred model as fallback: ${fallbackModel}`);
+        }
+        // 2. Try default model from filtered list
+        else if (defaultModelFromFiltered) {
+          fallbackModel = defaultModelFromFiltered;
+          console.log(`Using default model from filtered list as fallback: ${fallbackModel}`);
+        }
+        // 3. Try first available model from filtered list
+        else if (filteredModels.length > 0) {
+          fallbackModel = filteredModels[0].id;
+          console.log(`Using first available compatible model as fallback: ${fallbackModel}`);
+        }
+
+        if (fallbackModel) {
+          resolvedModelId = fallbackModel;
+        } else {
+          // No compatible models found
+          const error = new Error(
+            `No models available that meet the requirements for app '${app.id}'. ` +
+              `Please check the app configuration and ensure at least one compatible model is enabled.`
+          );
+          error.code = 'NO_COMPATIBLE_MODELS';
+          return { success: false, error };
+        }
       }
+
       const model = models.find(m => m.id === resolvedModelId);
 
       if (!model) {

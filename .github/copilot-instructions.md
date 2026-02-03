@@ -36,9 +36,28 @@ npm run dev
 
 ## Concepts
 
-Every new feature, will have a concept in the folder concept folder. Always check the concept regarding information. When implementing new features, make sure that an concept document exists. If none exists, always make sure to create one.
+Every new feature, bug fix, or significant change should have a concept document in the `concepts/` folder. Always check the concept regarding information. When implementing new features, make sure that a concept document exists. If none exists, always make sure to create one.
 If one exists, make sure that you update it with decisions we have taken and where code related to the feature can be found.
-Always store them in the concepts folder `concepts` and format them `{year}-{month}-{day} {title}.md`
+
+**Always store the following in the concepts folder `concepts/` and format them `YYYY-MM-DD {title}.md`:**
+- Feature concepts and design documents
+- Fix summaries and root cause analyses
+- Migration guides for breaking changes or major updates
+- Implementation summaries
+
+**For larger features with multiple documents, organize them in a dedicated subfolder:**
+- Create a subfolder in `concepts/` with a descriptive name (e.g., `concepts/websearch-provider-api-keys/`)
+- Place all related documents in that subfolder
+- Include a `README.md` in the subfolder that provides an overview and links to the documents
+- This keeps related documentation together and makes it easier to find
+
+**Example naming:**
+- Single document: `concepts/2026-02-02 Provider API Key Persistence Fix.md`
+- Organized feature: 
+  - `concepts/websearch-provider-api-keys/README.md`
+  - `concepts/websearch-provider-api-keys/2026-02-03 Websearch Provider API Key Configuration.md`
+  - `concepts/websearch-provider-api-keys/2026-02-03 Websearch Provider UI Screenshots.md`
+  - `concepts/websearch-provider-api-keys/IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md`
 
 ## Development Workflow
 

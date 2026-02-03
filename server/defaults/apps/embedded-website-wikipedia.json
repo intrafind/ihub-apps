@@ -1,13 +1,13 @@
 {
-  "id": "embedded-website-intrafind",
+  "id": "embedded-website-wikipedia",
   "order": 100,
   "name": {
-    "en": "Website IntraFind (embedded)",
-    "de": "Website IntraFind (eingebettet)"
+    "en": "Website Wikipedia (embedded)",
+    "de": "Website Wikipedia (eingebettet)"
   },
   "description": {
-    "en": "Open the IntraFind website within the application.",
-    "de": "Öffnen Sie die IntraFind-Website innerhalb der Anwendung."
+    "en": "Open the wikipedia website within the application.",
+    "de": "Öffnen Sie die Wikipedia-Website innerhalb der Anwendung."
   },
   "type": "iframe",
   "iframeConfig": {
@@ -19,16 +19,6 @@
   "icon": "pencil",
   "enabled": true,
   "tools": [],
-  "greeting": {
-    "en": {
-      "title": "👋 Hello!",
-      "subtitle": "How can I help you today?"
-    },
-    "de": {
-      "title": "👋 Hallo!",
-      "subtitle": "Wie kann ich Ihnen heute helfen?"
-    }
-  },
   "allowEmptyContent": false,
   "sendChatHistory": true,
   "inputMode": {

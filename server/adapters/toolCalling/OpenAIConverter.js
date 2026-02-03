@@ -21,6 +21,10 @@ import logger from '../../utils/logger.js';
  * @returns {Object[]} OpenAI formatted tools
  */
 export function convertGenericToolsToOpenAI(genericTools = []) {
+  // Check if webSearch (OpenAI native) is present
+  const hasWebSearch = genericTools.some(t => t.id === 'webSearch');
+  const webSearchToolIds = ['enhancedWebSearch', 'braveSearch', 'tavilySearch', 'googleSearch'];
+
   const filteredTools = genericTools.filter(tool => {
     // If tool specifies this provider (or compatible), always include it
     if (tool.provider === 'openai' || tool.provider === 'openai-responses') {
@@ -36,6 +40,13 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
       logger.info(`[OpenAI Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // If webSearch is present, filter out other web search tools
+    if (hasWebSearch && webSearchToolIds.includes(tool.id)) {
+      console.log(
+        `[OpenAI Converter] Filtering out web search tool ${tool.id} because webSearch (native) is available`
+      );
       return false;
     }
     // Universal tool - include it

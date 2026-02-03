@@ -91,6 +91,10 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
   const functionTools = [];
   let webSearchTool = null;
 
+  // Check if webSearch is present
+  const hasWebSearch = genericTools.some(t => t.id === 'webSearch');
+  const webSearchToolIds = ['enhancedWebSearch', 'braveSearch', 'tavilySearch', 'googleSearch'];
+
   // Single pass to separate web search from regular tools
   for (const tool of genericTools) {
     // Handle webSearch specially
@@ -114,6 +118,13 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
     if (tool.isSpecialTool) {
       logger.info(
         `[OpenAI Responses Converter] Filtering out special tool: ${tool.id || tool.name}`
+      );
+      continue;
+    }
+    // If webSearch is present, filter out other web search tools (but not webSearch itself)
+    if (hasWebSearch && webSearchToolIds.includes(tool.id)) {
+      console.log(
+        `[OpenAI Responses Converter] Filtering out web search tool ${tool.id} because webSearch (native) is available`
       );
       continue;
     }

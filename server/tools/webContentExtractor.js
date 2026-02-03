@@ -1,10 +1,10 @@
 import { JSDOM } from 'jsdom';
-import https from 'https';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
 import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { enhanceFetchOptions } from '../utils/httpConfig.js';
 
 function createError(message, code) {
   const err = new Error(message);
@@ -51,22 +51,18 @@ export default async function webContentExtractor({
     throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
-  try {
-    // Determine SSL ignore setting: explicit parameter > global config > default false
-    const platformConfig = configCache.getPlatform() || {};
-    const shouldIgnoreSSL =
-      ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
+  // Determine SSL ignore setting: explicit parameter > global config > default false
+  const platformConfig = configCache.getPlatform() || {};
+  const shouldIgnoreSSL =
+    ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
+  try {
     // Fetch the webpage with appropriate headers and timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    const dispatcher =
-      shouldIgnoreSSL && validUrl.protocol === 'https:'
-        ? new https.Agent({ rejectUnauthorized: false })
-        : undefined;
-    // Ignoring SSL certificate errors if requested or configured globally
-    const response = await throttledFetch('webContentExtractor', targetUrl, {
+    // Build base fetch options
+    const fetchOptions = {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -76,9 +72,13 @@ export default async function webContentExtractor({
         Connection: 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       },
-      signal: controller.signal,
-      ...(dispatcher ? { dispatcher } : {})
-    });
+      signal: controller.signal
+    };
+
+    // Apply SSL and proxy configuration using the centralized httpConfig utility
+    const enhancedOptions = enhanceFetchOptions(fetchOptions, targetUrl, shouldIgnoreSSL);
+
+    const response = await throttledFetch('webContentExtractor', targetUrl, enhancedOptions);
 
     actionTracker.trackToolCallProgress(chatId, {
       toolName: 'webContentExtractor',

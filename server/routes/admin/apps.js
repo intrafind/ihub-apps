@@ -15,6 +15,47 @@ import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.
 import logger from '../../utils/logger.js';
 
 /**
+ * Find the actual filename for an app ID
+ * Handles cases where the filename doesn't match the app ID
+ * @param {string} appId - The app ID to search for
+ * @param {string} appsDir - The apps directory path
+ * @returns {Promise<string|null>} The filename if found, null otherwise
+ */
+async function findAppFile(appId, appsDir) {
+  try {
+    const files = await fs.readdir(appsDir);
+    const jsonFiles = files.filter(f => f.endsWith('.json'));
+
+    // First try the expected filename
+    const expectedFilename = `${appId}.json`;
+    if (jsonFiles.includes(expectedFilename)) {
+      return expectedFilename;
+    }
+
+    // If not found, search through all files to find one with matching ID
+    for (const file of jsonFiles) {
+      try {
+        const filePath = join(appsDir, file);
+        const content = await fs.readFile(filePath, 'utf8');
+        const app = JSON.parse(content);
+        if (app.id === appId) {
+          return file;
+        }
+      } catch (err) {
+        // Skip files that can't be read or parsed
+        console.debug(`Skipping malformed app file: ${file}`, err.message);
+        continue;
+      }
+    }
+
+    return null;
+  } catch (err) {
+    console.warn(`Failed to read apps directory: ${appsDir}`, err.message);
+    return null;
+  }
+}
+
+/**
  * @swagger
  * components:
  *   schemas:
@@ -562,7 +603,15 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       }
 
       const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+      const appsDir = join(rootDir, 'contents', 'apps');
+      // Ensure directory exists before writing
+      await fs.mkdir(appsDir, { recursive: true });
+      // Find the actual file for this app ID (may not match ${appId}.json)
+      const filename = await findAppFile(appId, appsDir);
+      if (!filename) {
+        return res.status(404).json({ error: 'App file not found on disk' });
+      }
+      const appFilePath = join(appsDir, filename);
       await atomicWriteJSON(appFilePath, updatedApp);
       await configCache.refreshAppsCache();
       res.json({ message: 'App updated successfully', app: updatedApp });
@@ -661,13 +710,16 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       }
 
       const rootDir = getRootDir();
-      const appFilePath = join(rootDir, 'contents', 'apps', `${newApp.id}.json`);
+      const appsDir = join(rootDir, 'contents', 'apps');
+      const appFilePath = join(appsDir, `${newApp.id}.json`);
       try {
         readFileSync(appFilePath, 'utf8');
         return res.status(409).json({ error: 'App with this ID already exists' });
       } catch {
         // file does not exist
       }
+      // Ensure directory exists before writing
+      await fs.mkdir(appsDir, { recursive: true });
       await fs.writeFile(appFilePath, JSON.stringify(newApp, null, 2));
       await configCache.refreshAppsCache();
       res.json({ message: 'App created successfully', app: newApp });
@@ -748,7 +800,15 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
         const newEnabledState = !app.enabled;
         app.enabled = newEnabledState;
         const rootDir = getRootDir();
-        const appFilePath = join(rootDir, 'contents', 'apps', `${appId}.json`);
+        const appsDir = join(rootDir, 'contents', 'apps');
+        // Ensure directory exists before writing
+        await fs.mkdir(appsDir, { recursive: true });
+        // Find the actual file for this app ID (may not match ${appId}.json)
+        const filename = await findAppFile(appId, appsDir);
+        if (!filename) {
+          return res.status(404).json({ error: 'App file not found on disk' });
+        }
+        const appFilePath = join(appsDir, filename);
         await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
         await configCache.refreshAppsCache();
         res.json({
@@ -851,13 +911,22 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
         const { data: apps } = configCache.getApps(true);
         const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
         const rootDir = getRootDir();
+        const appsDir = join(rootDir, 'contents', 'apps');
+        // Ensure directory exists before writing
+        await fs.mkdir(appsDir, { recursive: true });
 
         for (const id of resolvedIds) {
           const app = apps.find(a => a.id === id);
           if (!app) continue;
           if (app.enabled !== enabled) {
             app.enabled = enabled;
-            const appFilePath = join(rootDir, 'contents', 'apps', `${id}.json`);
+            // Find the actual file for this app ID (may not match ${id}.json)
+            const filename = await findAppFile(id, appsDir);
+            if (!filename) {
+              console.warn(`App file not found for ID: ${id}`);
+              continue;
+            }
+            const appFilePath = join(appsDir, filename);
             await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
           }
         }

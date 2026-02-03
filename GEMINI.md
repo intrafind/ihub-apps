@@ -106,3 +106,36 @@ When adding new top-level routes to `client/src/App.jsx`, you **MUST** update th
 ## Adaptation Requirements
 
 These guidelines may be superseded by explicit instructions, but should be followed by default to maintain project integrity.
+
+## Documentation Organization
+
+### Concept Documents
+
+Document all significant features, bug fixes, and changes in the `concepts/` folder:
+
+**Single Document Features:**
+
+- Format: `concepts/YYYY-MM-DD {title}.md`
+- Example: `2026-02-02 Provider API Key Persistence Fix.md`
+
+**Multi-Document Features (3+ related documents):**
+
+- Create subfolder: `concepts/{feature-name}/`
+- Include `README.md` with overview
+- Place all related documents in subfolder
+- Example:
+  ```
+  concepts/websearch-provider-api-keys/
+  ├── README.md
+  ├── 2026-02-03 Websearch Provider API Key Configuration.md
+  ├── 2026-02-03 Websearch Provider UI Screenshots.md
+  └── IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md
+  ```
+
+**Documentation Types:**
+
+- Feature concepts and design documents
+- Fix summaries and root cause analyses
+- Migration guides
+- Implementation summaries
+- UI/UX documentation with screenshots

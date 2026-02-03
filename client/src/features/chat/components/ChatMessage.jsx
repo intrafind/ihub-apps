@@ -44,6 +44,7 @@ const ChatMessage = ({
   );
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0); // 0-5 rating scale
@@ -143,6 +144,47 @@ const ChatMessage = ({
       })
       .catch(err => {
         console.error('Failed to copy content: ', err);
+      });
+  };
+
+  const handleCopyLink = () => {
+    // Get the current page URL (without query params)
+    const currentUrl = new URL(window.location.href);
+    const baseUrl = `${currentUrl.origin}${currentUrl.pathname}`;
+
+    // Get the message content (raw content if available, otherwise regular content)
+    const messageContent =
+      message.meta?.rawContent || (typeof message.content === 'string' ? message.content : '');
+
+    // Create URLSearchParams to build the query string
+    const params = new URLSearchParams();
+
+    // Add prefill parameter with the message content
+    params.set('prefill', messageContent);
+
+    // Add send=true to auto-execute
+    params.set('send', 'true');
+
+    // Add variables if they exist
+    const variables = message.meta?.variables || message.variables;
+    if (variables && Object.keys(variables).length > 0) {
+      Object.entries(variables).forEach(([key, value]) => {
+        params.set(key, value);
+      });
+    }
+
+    // Construct the final URL
+    const shareableLink = `${baseUrl}?${params.toString()}`;
+
+    // Copy to clipboard
+    navigator.clipboard
+      .writeText(shareableLink)
+      .then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy link: ', err);
       });
   };
 
@@ -442,28 +484,76 @@ const ChatMessage = ({
         {/* Display generated images */}
         {message.images && message.images.length > 0 && (
           <div className="mt-3 space-y-2">
-            {message.images.map((image, idx) => (
-              <div key={idx} className="relative inline-block">
-                <img
-                  src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
-                  alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
-                  className="max-w-full rounded-lg shadow-md"
-                  style={{ maxHeight: '512px' }}
-                />
-                <button
-                  onClick={() => {
-                    const link = document.createElement('a');
-                    link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
-                    link.download = `generated-image-${Date.now()}.png`;
-                    link.click();
-                  }}
-                  className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
-                  title={t('chatMessage.downloadImage', 'Download image')}
-                >
-                  <Icon name="download" size="sm" />
-                </button>
-              </div>
-            ))}
+            {message.images.map((image, idx) => {
+              // Check if image has data or was lost due to storage limitations
+              if (image.data) {
+                return (
+                  <div key={idx} className="space-y-2">
+                    <div className="relative inline-block">
+                      <img
+                        src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
+                        alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
+                        className="max-w-full rounded-lg shadow-md"
+                        style={{ maxHeight: '512px' }}
+                      />
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
+                          link.download = `generated-image-${Date.now()}.png`;
+                          link.click();
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+                        title={t('chatMessage.downloadImage', 'Download image')}
+                      >
+                        <Icon name="download" size="sm" />
+                      </button>
+                    </div>
+                    {/* Proactive warning to save images */}
+                    <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Icon
+                        name="information-circle"
+                        className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                        size="sm"
+                      />
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        {t(
+                          'chatMessage.saveImageWarning',
+                          'Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              } else if (image._hadImageData) {
+                // Image was present but not persisted due to storage quota
+                return (
+                  <div
+                    key={idx}
+                    className="mt-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
+                  >
+                    <div className="flex items-start space-x-2">
+                      <Icon
+                        name="exclamation-circle"
+                        className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5"
+                      />
+                      <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                        <p className="font-medium">
+                          {t('chatMessage.imageNotPersisted', 'Image not available')}
+                        </p>
+                        <p className="mt-1 text-yellow-700 dark:text-yellow-300">
+                          {t(
+                            'chatMessage.imageNotPersistedDetail',
+                            'Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })}
           </div>
         )}
 
@@ -519,17 +609,7 @@ const ChatMessage = ({
               className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
               title={t('pages.appChat.copyToClipboard')}
             >
-              {copied ? (
-                <>
-                  <Icon name="check" size="sm" />
-                  {!compact && <span>{t('chatMessage.copied')}</span>}
-                </>
-              ) : (
-                <>
-                  <Icon name="copy" size="sm" />
-                  {!compact && <span>{t('chatMessage.copy')}</span>}
-                </>
-              )}
+              {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
             </button>
             <button
               onClick={() => setShowCopyMenu(!showCopyMenu)}
@@ -570,7 +650,6 @@ const ChatMessage = ({
               title={t('chatMessage.openInCanvas', 'Open in Canvas')}
             >
               <Icon name="document-text" size="sm" />
-              {!compact && <span>{t('chatMessage.openInCanvas', 'Canvas')}</span>}
             </button>
           )}
 
@@ -581,7 +660,6 @@ const ChatMessage = ({
               title={t('canvas.insertIntoDocument', 'Insert into document')}
             >
               <Icon name="arrow-right" size="sm" />
-              {!compact && <span>{t('canvas.insert', 'Insert')}</span>}
             </button>
           )}
 
@@ -593,7 +671,6 @@ const ChatMessage = ({
                 title={t('chatMessage.editMessage', 'Edit message')}
               >
                 <Icon name="edit" size="sm" />
-                {!compact && <span>{t('common.edit')}</span>}
               </button>
 
               <button
@@ -602,7 +679,14 @@ const ChatMessage = ({
                 title={t('chatMessage.resendMessage', 'Resend message')}
               >
                 <Icon name="refresh" size="sm" />
-                {!compact && <span>{t('chatMessage.resend', 'Resend')}</span>}
+              </button>
+
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('chatMessage.copyLink', 'Copy link')}
+              >
+                {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
               </button>
             </>
           )}
@@ -613,7 +697,6 @@ const ChatMessage = ({
             title={t('chatMessage.deleteMessage', 'Delete message')}
           >
             <Icon name="trash" size="sm" />
-            {!compact && <span>{t('common.delete')}</span>}
           </button>
 
           {/* Add star rating for AI responses only */}
@@ -629,14 +712,6 @@ const ChatMessage = ({
                   showTooltip={true}
                   className="flex-shrink-0"
                 />
-                {!compact && (
-                  <span
-                    className="text-sm text-gray-600"
-                    style={{ visibility: activeFeedback > 0 ? 'visible' : 'hidden' }}
-                  >
-                    {t('feedback.rated', 'Rated')}
-                  </span>
-                )}
               </div>
             </>
           )}
