@@ -280,7 +280,12 @@
     "plainText": "Klartext",
     "json": "JSON",
     "toolsSettings": "Werkzeuge",
-    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung"
+    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung",
+    "imageGeneration": "Bildgenerierung",
+    "aspectRatio": "Seitenverhältnis",
+    "imageSize": "Bildgröße",
+    "aspectRatioDescription": "Wählen Sie das Seitenverhältnis für generierte Bilder",
+    "imageSizeDescription": "Wählen Sie die Auflösungsqualität (1K, 2K oder 4K)"
   },
   "chatMessage": {
     "user": "Du",

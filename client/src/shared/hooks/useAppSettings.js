@@ -20,6 +20,8 @@ const useAppSettings = (appId, app) => {
   const [thinkingBudget, setThinkingBudget] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
+  const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
+  const [imageSize, setImageSize] = useState('1K');
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -67,6 +69,9 @@ const useAppSettings = (appId, app) => {
       initialModel = defaultModel ? defaultModel.id : models[0]?.id || null;
     }
 
+    // Get initial model to check for image generation settings
+    const initialModelObj = models.find(m => m.id === initialModel);
+
     // Initialize with app defaults
     const initialState = {
       selectedModel: initialModel,
@@ -77,7 +82,9 @@ const useAppSettings = (appId, app) => {
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingBudget: app.thinking?.budget ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
-      enabledTools: app.tools || []
+      enabledTools: app.tools || [],
+      imageAspectRatio: initialModelObj?.imageGeneration?.aspectRatio || '1:1',
+      imageSize: initialModelObj?.imageGeneration?.imageSize || '1K'
     };
 
     // Set initial states
@@ -90,6 +97,8 @@ const useAppSettings = (appId, app) => {
     setThinkingBudget(initialState.thinkingBudget);
     setThinkingThoughts(initialState.thinkingThoughts);
     setEnabledTools(initialState.enabledTools);
+    setImageAspectRatio(initialState.imageAspectRatio);
+    setImageSize(initialState.imageSize);
 
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
@@ -109,6 +118,9 @@ const useAppSettings = (appId, app) => {
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
       if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
+      if (savedSettings.imageAspectRatio !== undefined)
+        setImageAspectRatio(savedSettings.imageAspectRatio);
+      if (savedSettings.imageSize !== undefined) setImageSize(savedSettings.imageSize);
     }
   }, [app, appId, setHeaderColor, models, modelsLoading]);
 
@@ -124,7 +136,9 @@ const useAppSettings = (appId, app) => {
         thinkingEnabled,
         thinkingBudget,
         thinkingThoughts,
-        enabledTools
+        enabledTools,
+        imageAspectRatio,
+        imageSize
       });
     }
   }, [
@@ -138,7 +152,9 @@ const useAppSettings = (appId, app) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
-    enabledTools
+    enabledTools,
+    imageAspectRatio,
+    imageSize
   ]);
 
   // Settings object for easy passing to components
@@ -151,7 +167,9 @@ const useAppSettings = (appId, app) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
-    enabledTools
+    enabledTools,
+    imageAspectRatio,
+    imageSize
   };
 
   // Setters object for easy passing to components
@@ -164,7 +182,9 @@ const useAppSettings = (appId, app) => {
     setThinkingEnabled,
     setThinkingBudget,
     setThinkingThoughts,
-    setEnabledTools
+    setEnabledTools,
+    setImageAspectRatio,
+    setImageSize
   };
 
   return {

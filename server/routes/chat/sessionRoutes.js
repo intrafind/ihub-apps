@@ -284,7 +284,8 @@ export default function registerSessionRoutes(
           thinkingEnabled,
           thinkingBudget,
           thinkingThoughts,
-          enabledTools
+          enabledTools,
+          imageConfig
         } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
@@ -341,6 +342,7 @@ export default function registerSessionRoutes(
             thinkingBudget,
             thinkingThoughts,
             enabledTools,
+            imageConfig,
             res,
             user: req.user,
             chatId
@@ -391,6 +393,7 @@ export default function registerSessionRoutes(
             thinkingBudget,
             thinkingThoughts,
             enabledTools,
+            imageConfig,
             clientRes,
             user: req.user,
             chatId

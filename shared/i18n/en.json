@@ -852,7 +852,12 @@
     "plainText": "Plain text",
     "json": "JSON",
     "toolsSettings": "Tools",
-    "toolsSettingsHelp": "Enable or disable individual tools for this session"
+    "toolsSettingsHelp": "Enable or disable individual tools for this session",
+    "imageGeneration": "Image Generation",
+    "aspectRatio": "Aspect Ratio",
+    "imageSize": "Image Size",
+    "aspectRatioDescription": "Select the aspect ratio for generated images",
+    "imageSizeDescription": "Select the resolution quality (1K, 2K, or 4K)"
   },
   "chatMessage": {
     "user": "You",

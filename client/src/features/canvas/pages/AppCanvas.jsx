@@ -45,6 +45,8 @@ const AppCanvas = () => {
     temperature,
     sendChatHistory,
     enabledTools,
+    imageAspectRatio,
+    imageSize,
     models,
     styles,
     setSelectedModel,
@@ -53,6 +55,8 @@ const AppCanvas = () => {
     setTemperature,
     setSendChatHistory,
     setEnabledTools,
+    setImageAspectRatio,
+    setImageSize,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -581,12 +585,16 @@ const AppCanvas = () => {
         sendChatHistory={sendChatHistory}
         temperature={temperature}
         enabledTools={enabledTools}
+        imageAspectRatio={imageAspectRatio}
+        imageSize={imageSize}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
         onTemperatureChange={setTemperature}
         onEnabledToolsChange={setEnabledTools}
+        onImageAspectRatioChange={setImageAspectRatio}
+        onImageSizeChange={setImageSize}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onShare={() => setShowShare(true)}

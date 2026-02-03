@@ -69,6 +69,14 @@ export const chatPostSchema = {
     thinkingEnabled: z.boolean().optional(),
     thinkingBudget: z.number().optional(),
     thinkingThoughts: z.boolean().optional(),
-    enabledTools: z.array(z.string()).optional()
+    enabledTools: z.array(z.string()).optional(),
+    imageConfig: z
+      .object({
+        aspectRatio: z
+          .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3', '3:4', '4:3', '21:9'])
+          .optional(),
+        imageSize: z.enum(['1K', '2K', '4K']).optional()
+      })
+      .optional()
   })
 };

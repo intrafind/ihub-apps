@@ -13,6 +13,8 @@ const AppConfigForm = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  imageAspectRatio,
+  imageSize,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -21,6 +23,8 @@ const AppConfigForm = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onImageAspectRatioChange,
+  onImageSizeChange,
   currentLanguage
 }) => {
   const { t } = useTranslation();
@@ -56,6 +60,7 @@ const AppConfigForm = ({
   // Check if selected model supports thinking
   const selectedModelData = models.find(m => m.id === selectedModel);
   const supportsThinking = selectedModelData?.thinking?.enabled === true;
+  const supportsImageGeneration = selectedModelData?.supportsImageGeneration === true;
 
   // Available output formats
   const outputFormats = [
@@ -248,6 +253,65 @@ const AppConfigForm = ({
               </div>
             </>
           )}
+        </>
+      )}
+
+      {/* Image Generation Settings - Only show if selected model supports image generation */}
+      {supportsImageGeneration && app?.settings?.imageGeneration?.enabled !== false && (
+        <>
+          <div className="col-span-1 md:col-span-3 mt-4 mb-2">
+            <h3 className="text-sm font-semibold text-gray-700">
+              {t('appConfig.imageGeneration', 'Image Generation')}
+            </h3>
+          </div>
+
+          {/* Aspect Ratio Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('appConfig.aspectRatio', 'Aspect Ratio')}
+            </label>
+            <select
+              value={imageAspectRatio}
+              onChange={e => onImageAspectRatioChange?.(e.target.value)}
+              className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="1:1">1:1 (Square)</option>
+              <option value="16:9">16:9 (Landscape)</option>
+              <option value="9:16">9:16 (Portrait)</option>
+              <option value="3:2">3:2 (Landscape)</option>
+              <option value="2:3">2:3 (Portrait)</option>
+              <option value="4:3">4:3 (Landscape)</option>
+              <option value="3:4">3:4 (Portrait)</option>
+              <option value="5:4">5:4 (Landscape)</option>
+              <option value="4:5">4:5 (Portrait)</option>
+              <option value="21:9">21:9 (Ultrawide)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {t(
+                'appConfig.aspectRatioDescription',
+                'Select the aspect ratio for generated images'
+              )}
+            </p>
+          </div>
+
+          {/* Image Size Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              {t('appConfig.imageSize', 'Image Size')}
+            </label>
+            <select
+              value={imageSize}
+              onChange={e => onImageSizeChange?.(e.target.value)}
+              className="w-full p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+            >
+              <option value="1K">1K (Standard)</option>
+              <option value="2K">2K (High Quality)</option>
+              <option value="4K">4K (Ultra HD)</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              {t('appConfig.imageSizeDescription', 'Select the resolution quality (1K, 2K, or 4K)')}
+            </p>
+          </div>
         </>
       )}
     </div>

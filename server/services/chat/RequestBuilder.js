@@ -91,6 +91,7 @@ class RequestBuilder {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    imageConfig,
     processMessageTemplates,
     res,
     clientRes,
@@ -250,7 +251,8 @@ class RequestBuilder {
         chatId,
         thinkingEnabled,
         thinkingBudget,
-        thinkingThoughts
+        thinkingThoughts,
+        imageConfig
       });
 
       return {
