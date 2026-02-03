@@ -79,15 +79,17 @@ The script verifies that:
 When adding new admin endpoints:
 
 1. **Always use `adminAuth` middleware**:
+
    ```javascript
    import { adminAuth } from '../../middleware/adminAuth.js';
-   
+
    app.get(buildServerPath('/api/admin/my-endpoint', basePath), adminAuth, async (req, res) => {
      // Your handler code
    });
    ```
 
 2. **Run the audit script**:
+
    ```bash
    npm run security:audit
    ```
