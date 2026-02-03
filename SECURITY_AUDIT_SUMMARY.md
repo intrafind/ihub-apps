@@ -10,18 +10,19 @@ A comprehensive security audit was performed on all admin API endpoints in the i
 
 ## Quick Stats
 
-| Metric | Count | Percentage |
-|--------|-------|------------|
-| Total Admin Endpoints | 106 | 100% |
-| Protected Endpoints | 105 | 99.06% |
-| Intentional Exceptions | 1 | 0.94% |
-| **Vulnerabilities** | **0** | **0%** ✅ |
+| Metric                 | Count | Percentage |
+| ---------------------- | ----- | ---------- |
+| Total Admin Endpoints  | 106   | 100%       |
+| Protected Endpoints    | 105   | 99.06%     |
+| Intentional Exceptions | 1     | 0.94%      |
+| **Vulnerabilities**    | **0** | **0%** ✅  |
 
 ## What Was Done
 
 ### 1. Automated Security Audit Tool
 
 Created `scripts/audit-admin-endpoints.js` that:
+
 - Scans all 18 admin route files
 - Extracts and validates all endpoint definitions
 - Verifies `adminAuth` middleware presence
@@ -55,11 +56,13 @@ Created `scripts/audit-admin-endpoints.js` that:
 The `adminAuth` middleware enforces:
 
 **Anonymous Mode:**
+
 - Requires admin secret via Bearer token
 - Secret configured in `ADMIN_SECRET` environment variable
 - Supports both plain text and bcrypt-hashed secrets
 
 **Local/OIDC/Proxy Modes:**
+
 - Requires authenticated user session
 - User must be in a group with `adminAccess: true` permission
 - Group permissions resolved hierarchically
@@ -70,12 +73,14 @@ The `adminAuth` middleware enforces:
 **Endpoint:** `GET /api/admin/auth/status`
 
 **Why It's Public:**
+
 - Only returns auth requirement status
 - No sensitive data exposed
 - No admin operations allowed
 - Required for admin UI to show correct login prompt
 
 **Response:**
+
 ```json
 {
   "authRequired": true,
@@ -99,6 +104,7 @@ npm run security:audit
 ```
 
 Expected output:
+
 ```
 🔒 Security Audit: PASSED
 ✅ All admin endpoints are properly protected!
@@ -129,16 +135,13 @@ Always use `adminAuth` middleware:
 ```javascript
 import { adminAuth } from '../../middleware/adminAuth.js';
 
-app.get(
-  buildServerPath('/api/admin/my-endpoint', basePath),
-  adminAuth,
-  async (req, res) => {
-    // Your handler code
-  }
-);
+app.get(buildServerPath('/api/admin/my-endpoint', basePath), adminAuth, async (req, res) => {
+  // Your handler code
+});
 ```
 
 Then verify:
+
 ```bash
 npm run security:audit
 ```
