@@ -1,10 +1,18 @@
 import winston from 'winston';
 
-// Default log level (fallback if not configured)
+// Default log level and format (fallback if not configured)
 const DEFAULT_LOG_LEVEL = 'info';
+const DEFAULT_LOG_FORMAT = 'json';
 
-// Custom format for console output with colors
-const consoleFormat = winston.format.combine(
+// JSON format for structured logging
+const jsonFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.errors({ stack: true }),
+  winston.format.json()
+);
+
+// Custom format for text/console output with colors
+const textFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize(),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
@@ -16,8 +24,8 @@ const consoleFormat = winston.format.combine(
   })
 );
 
-// Custom format for file output without colors
-const fileFormat = winston.format.combine(
+// File format without colors (text or JSON based on config)
+const fileTextFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.printf(({ timestamp, level, message, ...meta }) => {
     let msg = `${timestamp} [${level}]: ${message}`;
@@ -58,9 +66,30 @@ function getLogLevel() {
 }
 
 /**
+ * Get the current log format from platform configuration
+ * @returns {string} Current log format ('json' or 'text')
+ */
+function getLogFormat() {
+  try {
+    // Only try to get from config if configCache has been set
+    if (configCacheRef) {
+      const platformConfig = configCacheRef.get('platform');
+      return platformConfig?.logging?.format || DEFAULT_LOG_FORMAT;
+    }
+    return DEFAULT_LOG_FORMAT;
+  } catch (error) {
+    // If config is not yet loaded, use default
+    return DEFAULT_LOG_FORMAT;
+  }
+}
+
+/**
  * Create winston logger instance
  */
 function createLogger() {
+  const format = getLogFormat();
+  const consoleFormat = format === 'json' ? jsonFormat : textFormat;
+
   const logger = winston.createLogger({
     level: getLogLevel(),
     levels: winston.config.npm.levels,
@@ -77,6 +106,7 @@ function createLogger() {
       const platformConfig = configCacheRef.get('platform');
       if (platformConfig?.logging?.file?.enabled) {
         const logFile = platformConfig.logging.file.path || 'logs/app.log';
+        const fileFormat = format === 'json' ? jsonFormat : fileTextFormat;
         logger.add(
           new winston.transports.File({
             filename: logFile,

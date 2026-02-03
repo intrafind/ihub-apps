@@ -105,6 +105,7 @@
   },
   "logging": {
     "level": "info",
+    "format": "json",
     "file": {
       "enabled": false,
       "path": "logs/app.log",
