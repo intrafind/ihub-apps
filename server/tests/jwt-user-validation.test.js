@@ -1,6 +1,6 @@
 /**
  * JWT User Validation Security Test Suite
- * 
+ *
  * Tests to verify that JWT tokens are validated against the user database
  * to ensure disabled or deleted users cannot access the system with valid JWTs.
  */
@@ -12,12 +12,6 @@ import { setupMiddleware } from '../middleware/setup.js';
 import registerAuthRoutes from '../routes/auth.js';
 import jwtAuthMiddleware from '../middleware/jwtAuth.js';
 import { authRequired } from '../middleware/authRequired.js';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Mock JWT secret
 const TEST_JWT_SECRET = 'test-jwt-secret-key-12345';
@@ -76,7 +70,7 @@ jest.mock('../configCache.js', () => ({
   __esModule: true,
   default: {
     getPlatform: () => mockPlatformConfig,
-    get: (key) => {
+    get: key => {
       if (key === 'config/users.json' || key === 'config/users-test.json') {
         return mockTestUsersConfig;
       }

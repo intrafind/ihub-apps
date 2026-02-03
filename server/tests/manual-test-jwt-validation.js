@@ -1,22 +1,21 @@
 #!/usr/bin/env node
 /**
  * Manual Test: JWT User Validation Security
- * 
+ *
  * Tests that JWT tokens are validated against the user database
  * to ensure disabled or deleted users cannot access the system.
- * 
+ *
  * Usage: node server/tests/manual-test-jwt-validation.js
  */
 
 import jwt from 'jsonwebtoken';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
-import configCache from '../configCache.js';
 
 // Test JWT secret (use the actual secret from config)
 const JWT_SECRET = 'test-jwt-secret-for-manual-testing';
 
 console.log('🧪 JWT User Validation Security Test\n');
-console.log('=' . repeat(60));
+console.log('='.repeat(60));
 
 // Test 1: Load users from database
 console.log('\n📋 Test 1: Load users from database');
@@ -24,12 +23,14 @@ try {
   const usersConfig = loadUsers('contents/config/users.json');
   const userCount = Object.keys(usersConfig.users || {}).length;
   console.log(`✓ Loaded ${userCount} users from database`);
-  
+
   // Display first user for reference
   const firstUserId = Object.keys(usersConfig.users || {})[0];
   if (firstUserId) {
     const firstUser = usersConfig.users[firstUserId];
-    console.log(`  Sample user: ${firstUser.username} (id: ${firstUser.id}, active: ${firstUser.active})`);
+    console.log(
+      `  Sample user: ${firstUser.username} (id: ${firstUser.id}, active: ${firstUser.active})`
+    );
   }
 } catch (error) {
   console.log(`✗ Failed to load users: ${error.message}`);
@@ -57,7 +58,9 @@ const testDisabledUser = {
   active: false
 };
 const isDisabledActive = isUserActive(testDisabledUser);
-console.log(`✓ Disabled user check: ${testDisabledUser.username} -> ${isDisabledActive} (expected: false)`);
+console.log(
+  `✓ Disabled user check: ${testDisabledUser.username} -> ${isDisabledActive} (expected: false)`
+);
 
 // Test 4: Create test scenario - simulate deleted user (null)
 console.log('\n📋 Test 4: Simulate deleted user scenario');
@@ -82,9 +85,9 @@ if (activeUser) {
       issuer: 'ihub-apps'
     }
   );
-  
+
   console.log(`✓ Generated JWT for user: ${activeUser.username}`);
-  
+
   // Decode and verify
   try {
     const decoded = jwt.verify(token, JWT_SECRET, {
@@ -93,12 +96,12 @@ if (activeUser) {
     console.log(`✓ JWT decoded successfully`);
     console.log(`  - User ID: ${decoded.sub}`);
     console.log(`  - Auth Mode: ${decoded.authMode}`);
-    
+
     // Simulate the validation logic from jwtAuth.js
     console.log('\n  🔍 Simulating jwtAuth.js validation logic:');
     const userId = decoded.sub;
     const userRecord = usersConfig.users?.[userId];
-    
+
     if (!userRecord) {
       console.log(`  ✗ Validation failed: User not found (would return 401)`);
     } else if (!isUserActive(userRecord)) {
@@ -133,13 +136,13 @@ try {
   const decoded = jwt.verify(deletedUserToken, JWT_SECRET, {
     issuer: 'ihub-apps'
   });
-  
+
   console.log(`✓ JWT decoded for deleted user`);
-  
+
   // Simulate validation
   const userId = decoded.sub;
   const userRecord = usersConfig.users?.[userId];
-  
+
   if (!userRecord) {
     console.log(`  ✓ Validation correctly rejects: User not found (would return 401)`);
   } else {
@@ -168,18 +171,18 @@ if (disabledUserObj) {
       issuer: 'ihub-apps'
     }
   );
-  
+
   try {
     const decoded = jwt.verify(disabledUserToken, JWT_SECRET, {
       issuer: 'ihub-apps'
     });
-    
+
     console.log(`✓ JWT decoded for disabled user: ${disabledUserObj.username}`);
-    
+
     // Simulate validation
     const userId = decoded.sub;
     const userRecord = usersConfig.users?.[userId];
-    
+
     if (!userRecord) {
       console.log(`  ✗ Unexpected: User not found`);
     } else if (!isUserActive(userRecord)) {
@@ -192,7 +195,7 @@ if (disabledUserObj) {
   }
 } else {
   console.log(`⚠ No disabled users found in database - creating test scenario`);
-  
+
   // Create a test disabled user scenario
   const testUser = {
     id: 'test_user_disabled',
@@ -200,7 +203,7 @@ if (disabledUserObj) {
     active: false,
     internalGroups: ['users']
   };
-  
+
   if (!isUserActive(testUser)) {
     console.log(`  ✓ isUserActive correctly returns false for disabled test user`);
   } else {

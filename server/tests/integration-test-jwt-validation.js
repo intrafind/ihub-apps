@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 /**
  * Integration Test: JWT User Validation via HTTP
- * 
+ *
  * Tests JWT validation by making actual HTTP requests to the server.
  * This test requires the server to be running.
- * 
+ *
  * Usage:
  * 1. Start the server: npm run dev
  * 2. Run this test: node server/tests/integration-test-jwt-validation.js
@@ -13,32 +13,31 @@
 import jwt from 'jsonwebtoken';
 import { loadUsers, saveUsers } from '../utils/userManager.js';
 import configCache from '../configCache.js';
-import fetch from 'node-fetch';
 
 const SERVER_URL = 'http://localhost:3000';
 const JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
 
 console.log('🧪 JWT User Validation Integration Test\n');
-console.log('=' .repeat(60));
+console.log('='.repeat(60));
 console.log('Server URL:', SERVER_URL);
-console.log('=' .repeat(60));
+console.log('='.repeat(60));
 
 async function testEndpoint(description, token, expectedStatus, expectedErrorType) {
   console.log(`\n📋 ${description}`);
-  
+
   try {
     const response = await fetch(`${SERVER_URL}/api/auth/user`, {
       headers: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
       }
     });
-    
+
     const data = await response.json();
-    
+
     if (response.status === expectedStatus) {
       console.log(`  ✓ Status: ${response.status} (expected: ${expectedStatus})`);
-      
+
       if (expectedErrorType && data.error === expectedErrorType) {
         console.log(`  ✓ Error type: ${data.error} (expected: ${expectedErrorType})`);
         console.log(`  ✓ Error message: ${data.error_description || data.message}`);
@@ -49,7 +48,7 @@ async function testEndpoint(description, token, expectedStatus, expectedErrorTyp
       console.log(`  ✗ Status: ${response.status} (expected: ${expectedStatus})`);
       console.log(`  Response:`, JSON.stringify(data, null, 2));
     }
-    
+
     return { success: response.status === expectedStatus, data };
   } catch (error) {
     console.log(`  ✗ Request failed: ${error.message}`);
@@ -72,12 +71,12 @@ async function runTests() {
     console.log('    Run: npm run dev');
     process.exit(1);
   }
-  
+
   // Load users
   const platform = configCache.getPlatform();
   const usersFilePath = platform?.localAuth?.usersFile || 'contents/config/users.json';
   const usersConfig = loadUsers(usersFilePath);
-  
+
   // Test 1: Active user should work
   const activeUser = Object.values(usersConfig.users || {}).find(u => u.active !== false);
   if (activeUser) {
@@ -96,15 +95,10 @@ async function runTests() {
         issuer: 'ihub-apps'
       }
     );
-    
-    await testEndpoint(
-      'Test 1: Active user with valid JWT',
-      activeUserToken,
-      200,
-      null
-    );
+
+    await testEndpoint('Test 1: Active user with valid JWT', activeUserToken, 200, null);
   }
-  
+
   // Test 2: Deleted user should fail with 401
   const deletedUserToken = jwt.sign(
     {
@@ -121,17 +115,17 @@ async function runTests() {
       issuer: 'ihub-apps'
     }
   );
-  
+
   await testEndpoint(
     'Test 2: Deleted user (non-existent) with valid JWT',
     deletedUserToken,
     401,
     'invalid_token'
   );
-  
+
   // Test 3: Create a disabled user and test
   console.log('\n📋 Test 3: Create disabled user and test JWT validation');
-  
+
   // Create a test disabled user
   const testDisabledUserId = `user_test_disabled_${Date.now()}`;
   const testDisabledUser = {
@@ -145,13 +139,13 @@ async function runTests() {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString()
   };
-  
+
   // Add user to config and save
   usersConfig.users[testDisabledUserId] = testDisabledUser;
   try {
     await saveUsers(usersConfig, usersFilePath);
     console.log(`  ✓ Created disabled test user: ${testDisabledUser.username}`);
-    
+
     // Generate JWT for disabled user
     const disabledUserToken = jwt.sign(
       {
@@ -168,14 +162,14 @@ async function runTests() {
         issuer: 'ihub-apps'
       }
     );
-    
+
     await testEndpoint(
       'Test 3: Disabled user with valid JWT',
       disabledUserToken,
       403,
       'access_denied'
     );
-    
+
     // Cleanup: Remove test user
     delete usersConfig.users[testDisabledUserId];
     await saveUsers(usersConfig, usersFilePath);
@@ -183,7 +177,7 @@ async function runTests() {
   } catch (error) {
     console.log(`  ✗ Failed to create/cleanup test user: ${error.message}`);
   }
-  
+
   console.log('\n' + '='.repeat(60));
   console.log('\n✅ Integration test completed!\n');
 }
