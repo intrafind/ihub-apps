@@ -319,59 +319,55 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.delete(
-   buildServerPath('/api/admin/providers/:providerId'),
-   adminAuth,
-   async (req, res) => {
-      try {
-        const { providerId } = req.params;
+  app.delete(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
 
-        // Validate providerId for security
-        if (!validateIdForPath(providerId, 'provider', res)) {
-          return;
-        }
-
-        // Prevent deletion of built-in LLM providers
-        const builtInProviders = ['openai', 'anthropic', 'google', 'mistral', 'local'];
-        if (builtInProviders.includes(providerId)) {
-          return res.status(400).json({
-            error: `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
-          });
-        }
-
-        const rootDir = getRootDir();
-        const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-
-        // Load current providers
-        let providers = [];
-        try {
-          if (existsSync(providersPath)) {
-            const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
-            providers = providersFromDisk.providers || [];
-          }
-        } catch (error) {
-          console.error('Error reading providers file:', error);
-          return res.status(500).json({ error: 'Failed to read providers configuration' });
-        }
-
-        // Find provider index
-        const index = providers.findIndex(p => p.id === providerId);
-        if (index === -1) {
-          return res.status(404).json({ error: 'Provider not found' });
-        }
-
-        // Remove provider
-        providers.splice(index, 1);
-
-        // Save updated providers
-        await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
-        await configCache.refreshProvidersCache();
-
-        res.json({ message: 'Provider deleted successfully' });
-      } catch (error) {
-        console.error('Error deleting provider:', error);
-        res.status(500).json({ error: 'Failed to delete provider' });
+      // Validate providerId for security
+      if (!validateIdForPath(providerId, 'provider', res)) {
+        return;
       }
+
+      // Prevent deletion of built-in LLM providers
+      const builtInProviders = ['openai', 'anthropic', 'google', 'mistral', 'local'];
+      if (builtInProviders.includes(providerId)) {
+        return res.status(400).json({
+          error: `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
+        });
+      }
+
+      const rootDir = getRootDir();
+      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+
+      // Load current providers
+      let providers = [];
+      try {
+        if (existsSync(providersPath)) {
+          const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
+          providers = providersFromDisk.providers || [];
+        }
+      } catch (error) {
+        console.error('Error reading providers file:', error);
+        return res.status(500).json({ error: 'Failed to read providers configuration' });
+      }
+
+      // Find provider index
+      const index = providers.findIndex(p => p.id === providerId);
+      if (index === -1) {
+        return res.status(404).json({ error: 'Provider not found' });
+      }
+
+      // Remove provider
+      providers.splice(index, 1);
+
+      // Save updated providers
+      await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
+      await configCache.refreshProvidersCache();
+
+      res.json({ message: 'Provider deleted successfully' });
+    } catch (error) {
+      console.error('Error deleting provider:', error);
+      res.status(500).json({ error: 'Failed to delete provider' });
     }
-  );
+  });
 }
