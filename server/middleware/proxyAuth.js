@@ -1,6 +1,6 @@
 import fetch from 'node-fetch';
 import jwt from 'jsonwebtoken';
-import jwkToPem from 'jwk-to-pem';
+import * as jose from 'jose';
 import config from '../config.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
@@ -31,12 +31,15 @@ async function verifyJwt(token, provider) {
     const kid = decoded?.header?.kid;
     const jwk = kid ? jwks.keys.find(k => k.kid === kid) : jwks.keys[0];
     if (!jwk) throw new Error('Key not found');
-    const pem = jwkToPem(jwk);
-    return jwt.verify(token, pem, {
-      algorithms: ['RS256'],
+
+    // Use jose to import the JWK and verify the JWT
+    const publicKey = await jose.importJWK(jwk, 'RS256');
+    const { payload } = await jose.jwtVerify(token, publicKey, {
       issuer: provider.issuer,
       audience: provider.audience
     });
+
+    return payload;
   } catch (err) {
     logger.error('JWT verification failed', err.message);
     return null;
