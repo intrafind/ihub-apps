@@ -139,10 +139,9 @@
         "ignoreSSL": {
           "type": "boolean",
           "description": {
-            "en": "Ignore invalid HTTPS certificates (default: false, configurable by admin)",
-            "de": "Ungültige HTTPS-Zertifikate ignorieren (Standard: false, vom Administrator konfigurierbar)"
-          },
-          "default": false
+            "en": "Ignore invalid HTTPS certificates (uses platform SSL config if not specified)",
+            "de": "Ungültige HTTPS-Zertifikate ignorieren (verwendet Plattform-SSL-Konfiguration wenn nicht angegeben)"
+          }
         }
       },
       "required": ["url"]
