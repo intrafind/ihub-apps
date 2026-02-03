@@ -45,10 +45,19 @@ If one exists, make sure that you update it with decisions we have taken and whe
 - Migration guides for breaking changes or major updates
 - Implementation summaries
 
+**For larger features with multiple documents, organize them in a dedicated subfolder:**
+- Create a subfolder in `concepts/` with a descriptive name (e.g., `concepts/websearch-provider-api-keys/`)
+- Place all related documents in that subfolder
+- Include a `README.md` in the subfolder that provides an overview and links to the documents
+- This keeps related documentation together and makes it easier to find
+
 **Example naming:**
-- `2026-02-02 Provider API Key Persistence Fix.md`
-- `2026-02-02 Encryption Key Persistence Migration.md`
-- `2026-01-21 Model API Key Storage Fix.md`
+- Single document: `concepts/2026-02-02 Provider API Key Persistence Fix.md`
+- Organized feature: 
+  - `concepts/websearch-provider-api-keys/README.md`
+  - `concepts/websearch-provider-api-keys/2026-02-03 Websearch Provider API Key Configuration.md`
+  - `concepts/websearch-provider-api-keys/2026-02-03 Websearch Provider UI Screenshots.md`
+  - `concepts/websearch-provider-api-keys/IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md`
 
 ## Development Workflow
 
