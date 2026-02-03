@@ -54,12 +54,28 @@ Added a "Copy Link" quick action button to user messages that:
 The generated URL follows this pattern:
 
 ```
-{baseUrl}?prefill={encodedMessage}&send=true&{variable1}={value1}&{variable2}={value2}...
+{baseUrl}?prefill={encodedMessage}&send=true&model={modelId}&{variable1}={value1}&{variable2}={value2}...
 ```
 
-**Example:**
+**Note:** The `model` parameter is only included when:
+1. There are more than one model available (after filtering by allowedModels, tools, and settings)
+2. The selected model is NOT the default/preferred model
+
+**Examples:**
+
+Single model app (no model parameter):
 ```
 https://ihub.example.com/apps/translator?prefill=Hello%20World&send=true&targetLanguage=German
+```
+
+Multiple models with default selected (no model parameter):
+```
+https://ihub.example.com/apps/chat?prefill=Explain%20quantum%20physics&send=true
+```
+
+Multiple models with non-default selected (model parameter included):
+```
+https://ihub.example.com/apps/chat?prefill=Explain%20quantum%20physics&send=true&model=gemini-2.5-pro
 ```
 
 ### Key Features
@@ -67,15 +83,16 @@ https://ihub.example.com/apps/translator?prefill=Hello%20World&send=true&targetL
 1. **Automatic Message Population**: The `prefill` parameter pre-fills the chat input
 2. **Auto-Execution**: The `send=true` parameter triggers automatic message sending
 3. **Variable Preservation**: All app variables are included in the URL
-4. **User Feedback**: Visual feedback with icon change when link is copied
-5. **i18n Support**: Fully internationalized with English and German translations
+4. **Smart Model Inclusion**: The `model` parameter is included only when necessary (multiple models + non-default selection)
+5. **User Feedback**: Visual feedback with icon change when link is copied
+6. **i18n Support**: Fully internationalized with English and German translations
 
 ### Code Location
 
 **Link Generation Logic:**
 ```javascript
 // File: client/src/features/chat/components/ChatMessage.jsx
-// Lines: ~150-185
+// Lines: ~150-220
 
 const handleCopyLink = () => {
   // Get the current page URL (without query params)
@@ -101,6 +118,51 @@ const handleCopyLink = () => {
     Object.entries(variables).forEach(([key, value]) => {
       params.set(key, value);
     });
+  }
+
+  // Determine if we should include the model parameter
+  // Model should be included if:
+  // 1. There are more than one model available (after filtering)
+  // 2. The selected model is not the default/preferred model
+  if (app && models && models.length > 0 && modelId) {
+    // Filter models the same way as ModelSelector.jsx
+    let availableModels =
+      app.allowedModels && app.allowedModels.length > 0
+        ? models.filter(model => app.allowedModels.includes(model.id))
+        : models;
+
+    // Filter by tools requirement
+    if (app.tools && app.tools.length > 0) {
+      availableModels = availableModels.filter(model => model.supportsTools);
+    }
+
+    // Apply model settings filter if specified
+    if (app.settings?.model?.filter) {
+      const filter = app.settings.model.filter;
+      availableModels = availableModels.filter(model => {
+        for (const [key, value] of Object.entries(filter)) {
+          if (model[key] !== value) {
+            return false;
+          }
+        }
+        return true;
+      });
+    }
+
+    // Check if there are multiple models available
+    if (availableModels.length > 1) {
+      // Determine the default model
+      // Priority: app.preferredModel > model with default flag > first available model
+      const defaultModelFromList = availableModels.find(m => m.default);
+      const defaultModel =
+        app.preferredModel ||
+        (defaultModelFromList ? defaultModelFromList.id : availableModels[0]?.id);
+
+      // Include model parameter only if selected model is not the default
+      if (modelId !== defaultModel) {
+        params.set('model', modelId);
+      }
+    }
   }
 
   // Construct the final URL
@@ -176,6 +238,21 @@ Users can:
 **Input:** Message with special characters (`&`, `=`, etc.)  
 **Expected:** Proper URL encoding of all special characters
 
+### Test Case 5: Single Model (No Model Parameter)
+**Input:** User message in an app with only one model available  
+**Expected URL:** No `model` parameter included  
+**Example:** `{base}?prefill=Test&send=true`
+
+### Test Case 6: Multiple Models - Default Selected (No Model Parameter)
+**Input:** User message using the default/preferred model when multiple models are available  
+**Expected URL:** No `model` parameter included  
+**Example:** `{base}?prefill=Test&send=true`
+
+### Test Case 7: Multiple Models - Non-Default Selected (Model Parameter Included)
+**Input:** User message using a non-default model when multiple models are available  
+**Expected URL:** `model` parameter included with the selected model ID  
+**Example:** `{base}?prefill=Test&send=true&model=gemini-2.5-pro`
+
 ## Integration Points
 
 ### Existing Features
@@ -229,3 +306,29 @@ Potential improvements:
 
 - Issue: "New quick action for chat input messages"
 - PR: #[PR_NUMBER] - Copy Link Quick Action Implementation
+
+## Updates (2026-02-03)
+
+### Model Parameter Support
+
+**Issue:** "Link for a message should contain the model if more than 1"
+
+**Implementation:** Enhanced the `handleCopyLink()` function to conditionally include the model parameter in generated links.
+
+**Key Changes:**
+1. Added `models` prop to `ChatMessage`, `ChatMessageList`, `CanvasChatPanel` components
+2. Modified `handleCopyLink()` to:
+   - Filter available models using the same logic as `ModelSelector` (allowedModels, tools, settings filters)
+   - Determine the default model (preferredModel > default flag > first model)
+   - Include `model` parameter only when:
+     - Multiple models are available after filtering
+     - Selected model differs from the default model
+
+**Files Modified:**
+- `client/src/features/chat/components/ChatMessage.jsx` - Added model filtering and conditional model parameter logic
+- `client/src/features/chat/components/ChatMessageList.jsx` - Pass models prop to ChatMessage
+- `client/src/features/apps/pages/AppChat.jsx` - Pass models from useAppSettings hook
+- `client/src/features/canvas/components/CanvasChatPanel.jsx` - Added models and modelId props
+- `client/src/features/canvas/pages/AppCanvas.jsx` - Pass models to CanvasChatPanel
+
+**Benefit:** Users sharing links with non-default models will now have those model selections preserved, ensuring recipients use the same model when executing the shared link.

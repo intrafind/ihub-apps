@@ -21,7 +21,9 @@ const CanvasChatPanel = ({
   width,
   cleanupEventSource,
   inputRef,
-  onInsertAnswer
+  onInsertAnswer,
+  modelId,
+  models = []
 }) => {
   const { t } = useTranslation();
 
@@ -45,6 +47,9 @@ const CanvasChatPanel = ({
             compact={true}
             onInsert={onInsertAnswer}
             canvasEnabled={true}
+            modelId={modelId}
+            app={app}
+            models={models}
           />
         </div>
       </div>

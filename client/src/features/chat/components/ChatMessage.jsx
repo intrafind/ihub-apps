@@ -24,7 +24,8 @@ const ChatMessage = ({
   onOpenInCanvas,
   onInsert,
   canvasEnabled = false,
-  app = null // App configuration for custom response rendering
+  app = null, // App configuration for custom response rendering
+  models = [] // Available models for determining if model param should be included in link
 }) => {
   const { t } = useTranslation();
 
@@ -171,6 +172,51 @@ const ChatMessage = ({
       Object.entries(variables).forEach(([key, value]) => {
         params.set(key, value);
       });
+    }
+
+    // Determine if we should include the model parameter
+    // Model should be included if:
+    // 1. There are more than one model available (after filtering)
+    // 2. The selected model is not the default/preferred model
+    if (app && models && models.length > 0 && modelId) {
+      // Filter models the same way as ModelSelector.jsx
+      let availableModels =
+        app.allowedModels && app.allowedModels.length > 0
+          ? models.filter(model => app.allowedModels.includes(model.id))
+          : models;
+
+      // Filter by tools requirement
+      if (app.tools && app.tools.length > 0) {
+        availableModels = availableModels.filter(model => model.supportsTools);
+      }
+
+      // Apply model settings filter if specified
+      if (app.settings?.model?.filter) {
+        const filter = app.settings.model.filter;
+        availableModels = availableModels.filter(model => {
+          for (const [key, value] of Object.entries(filter)) {
+            if (model[key] !== value) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      // Check if there are multiple models available
+      if (availableModels.length > 1) {
+        // Determine the default model
+        // Priority: app.preferredModel > model with default flag > first available model
+        const defaultModelFromList = availableModels.find(m => m.default);
+        const defaultModel =
+          app.preferredModel ||
+          (defaultModelFromList ? defaultModelFromList.id : availableModels[0]?.id);
+
+        // Include model parameter only if selected model is not the default
+        if (modelId !== defaultModel) {
+          params.set('model', modelId);
+        }
+      }
     }
 
     // Construct the final URL

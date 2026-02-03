@@ -328,7 +328,10 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.send = function (...args) {
     responseSent = true;
     if (isDev) {
-      logger.debug('[NTLM Debug] Response sent by express-ntlm (via send), status:', res.statusCode);
+      logger.debug(
+        '[NTLM Debug] Response sent by express-ntlm (via send), status:',
+        res.statusCode
+      );
       if (res.statusCode === 500 && args.length > 0) {
         logger.error('[NTLM Debug] 500 Error body:', args[0]);
       }

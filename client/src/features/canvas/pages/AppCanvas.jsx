@@ -614,6 +614,8 @@ const AppCanvas = () => {
           width={panelSizes.chat}
           inputRef={chatInputRef}
           onInsertAnswer={handleInsertAnswer}
+          modelId={selectedModel}
+          models={models}
         />
 
         {/* Resize Handle */}

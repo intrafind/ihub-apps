@@ -1173,6 +1173,7 @@ const AppChat = ({ preloadedApp = null }) => {
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
                         app={app}
+                        models={models}
                       />
                     </div>
                   ) : (
@@ -1210,6 +1211,7 @@ const AppChat = ({ preloadedApp = null }) => {
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
                         app={app}
+                        models={models}
                       />
                     </div>
                   ) : (
@@ -1246,6 +1248,7 @@ const AppChat = ({ preloadedApp = null }) => {
                     requiredIntegrations={requiredIntegrations}
                     onConnectIntegration={connectIntegration}
                     app={app}
+                    models={models}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
@@ -1271,6 +1274,7 @@ const AppChat = ({ preloadedApp = null }) => {
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
+                  models={models}
                 />
 
                 {renderChatInput()}

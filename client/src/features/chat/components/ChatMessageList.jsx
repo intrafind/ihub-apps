@@ -26,7 +26,8 @@ const ChatMessageList = ({
   // Integration auth props
   requiredIntegrations = [],
   onConnectIntegration,
-  app = null // App configuration for custom response rendering
+  app = null, // App configuration for custom response rendering
+  models = [] // Available models to pass to ChatMessage for link generation
 }) => {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
@@ -111,6 +112,7 @@ const ChatMessageList = ({
                 onInsert={onInsert}
                 canvasEnabled={canvasEnabled}
                 app={app}
+                models={models}
               />
             </div>
           </div>
