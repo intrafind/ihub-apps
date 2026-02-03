@@ -320,9 +320,9 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.delete(
-    buildServerPath('/api/admin/providers/:providerId', basePath),
-    adminAuth,
-    async (req, res) => {
+   buildServerPath('/api/admin/providers/:providerId'),
+   adminAuth,
+   async (req, res) => {
       try {
         const { providerId } = req.params;
 
