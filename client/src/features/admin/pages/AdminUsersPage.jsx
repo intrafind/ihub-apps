@@ -12,6 +12,12 @@ const AdminUsersPage = () => {
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
+  const [authMethodFilter, setAuthMethodFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [lastActiveDaysFilter, setLastActiveDaysFilter] = useState('all');
+  const [sortColumn, setSortColumn] = useState('name');
+  const [sortDirection, setSortDirection] = useState('asc');
 
   useEffect(() => {
     loadUsers();
@@ -94,26 +100,99 @@ const AdminUsersPage = () => {
     setSearchTerm('');
   };
 
-  // Filter users based on search term
+  const handleSort = column => {
+    if (sortColumn === column) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortColumn(column);
+      setSortDirection('asc');
+    }
+  };
+
+  // Filter users based on search term and filters
   const filteredUsers = users.filter(user => {
-    if (!searchTerm) return true;
+    // Search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase();
+      const id = (user.id || '').toLowerCase();
+      const name = (user.name || '').toLowerCase();
+      const username = (user.username || '').toLowerCase();
+      const email = (user.email || '').toLowerCase();
+      const groups = (user.internalGroups || []).join(' ').toLowerCase();
+      const authMethods = (user.authMethods || ['local']).join(' ').toLowerCase();
 
-    const searchLower = searchTerm.toLowerCase();
-    const id = (user.id || '').toLowerCase();
-    const name = (user.name || '').toLowerCase();
-    const username = (user.username || '').toLowerCase();
-    const email = (user.email || '').toLowerCase();
-    const groups = (user.internalGroups || []).join(' ').toLowerCase();
-    const authMethods = (user.authMethods || ['local']).join(' ').toLowerCase();
+      if (
+        !(
+          id.includes(searchLower) ||
+          name.includes(searchLower) ||
+          username.includes(searchLower) ||
+          email.includes(searchLower) ||
+          groups.includes(searchLower) ||
+          authMethods.includes(searchLower)
+        )
+      ) {
+        return false;
+      }
+    }
 
-    return (
-      id.includes(searchLower) ||
-      name.includes(searchLower) ||
-      username.includes(searchLower) ||
-      email.includes(searchLower) ||
-      groups.includes(searchLower) ||
-      authMethods.includes(searchLower)
-    );
+    // Auth method filter
+    if (authMethodFilter !== 'all') {
+      const userAuthMethods = user.authMethods || ['local'];
+      if (!userAuthMethods.includes(authMethodFilter)) {
+        return false;
+      }
+    }
+
+    // Group filter
+    if (groupFilter !== 'all') {
+      const userGroups = user.internalGroups || [];
+      if (!userGroups.includes(groupFilter)) {
+        return false;
+      }
+    }
+
+    // Status filter
+    if (statusFilter !== 'all') {
+      const isActive = user.active !== false;
+      if ((statusFilter === 'active' && !isActive) || (statusFilter === 'inactive' && isActive)) {
+        return false;
+      }
+    }
+
+    // Last active days filter
+    if (lastActiveDaysFilter !== 'all') {
+      if (!user.lastActiveDate) {
+        return lastActiveDaysFilter === 'never';
+      }
+
+      const daysAgo = Math.floor(
+        (Date.now() - new Date(user.lastActiveDate)) / (1000 * 60 * 60 * 24)
+      );
+
+      if (lastActiveDaysFilter === '7' && daysAgo > 7) return false;
+      if (lastActiveDaysFilter === '30' && daysAgo > 30) return false;
+      if (lastActiveDaysFilter === '90' && daysAgo > 90) return false;
+      if (lastActiveDaysFilter === 'never' && user.lastActiveDate) return false;
+    }
+
+    return true;
+  });
+
+  // Sort users
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
+    let compareValue = 0;
+
+    if (sortColumn === 'name') {
+      const nameA = (a.name || a.username || '').toLowerCase();
+      const nameB = (b.name || b.username || '').toLowerCase();
+      compareValue = nameA.localeCompare(nameB);
+    } else if (sortColumn === 'lastActive') {
+      const dateA = a.lastActiveDate ? new Date(a.lastActiveDate).getTime() : 0;
+      const dateB = b.lastActiveDate ? new Date(b.lastActiveDate).getTime() : 0;
+      compareValue = dateA - dateB;
+    }
+
+    return sortDirection === 'asc' ? compareValue : -compareValue;
   });
 
   if (loading) {
@@ -207,11 +286,74 @@ const AdminUsersPage = () => {
             </div>
           </div>
 
+          {/* Filters */}
+          <div className="mb-6 bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Auth Method</label>
+                <select
+                  value={authMethodFilter}
+                  onChange={e => setAuthMethodFilter(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Methods</option>
+                  <option value="local">Local</option>
+                  <option value="oidc">OIDC</option>
+                  <option value="proxy">Proxy</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Group</label>
+                <select
+                  value={groupFilter}
+                  onChange={e => setGroupFilter(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Groups</option>
+                  {[...new Set(users.flatMap(u => u.internalGroups || []))].map(group => (
+                    <option key={group} value={group}>
+                      {group}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                <select
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">All Status</option>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Last Active</label>
+                <select
+                  value={lastActiveDaysFilter}
+                  onChange={e => setLastActiveDaysFilter(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option value="all">Any Time</option>
+                  <option value="7">Last 7 days</option>
+                  <option value="30">Last 30 days</option>
+                  <option value="90">Last 90 days</option>
+                  <option value="never">Never</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
           {/* Users List */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200">
             <div className="px-6 py-4 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">
-                Users ({filteredUsers.length}
+                Users ({sortedUsers.length}
                 {searchTerm && ` of ${users.length}`})
               </h3>
             </div>
@@ -219,8 +361,20 @@ const AdminUsersPage = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      User
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('name')}
+                    >
+                      <div className="flex items-center">
+                        User
+                        {sortColumn === 'name' && (
+                          <Icon
+                            name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'}
+                            size="xs"
+                            className="ml-1"
+                          />
+                        )}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Auth Method
@@ -231,8 +385,20 @@ const AdminUsersPage = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Last Active
+                    <th
+                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                      onClick={() => handleSort('lastActive')}
+                    >
+                      <div className="flex items-center">
+                        Last Active
+                        {sortColumn === 'lastActive' && (
+                          <Icon
+                            name={sortDirection === 'asc' ? 'chevron-up' : 'chevron-down'}
+                            size="xs"
+                            className="ml-1"
+                          />
+                        )}
+                      </div>
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Actions
@@ -240,7 +406,7 @@ const AdminUsersPage = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredUsers.length === 0 ? (
+                  {sortedUsers.length === 0 ? (
                     <tr>
                       <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                         <Icon name="users" size="lg" className="mx-auto mb-4 text-gray-400" />
@@ -258,7 +424,7 @@ const AdminUsersPage = () => {
                       </td>
                     </tr>
                   ) : (
-                    filteredUsers.map(user => (
+                    sortedUsers.map(user => (
                       <tr key={user.id}>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center">
@@ -371,14 +537,23 @@ const AdminUsersPage = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex space-x-2">
                             <button
+                              onClick={() => navigate(`/admin/users/${user.id}/view`)}
+                              className="text-gray-600 hover:text-gray-900"
+                              title="View user"
+                            >
+                              <Icon name="eye" size="sm" />
+                            </button>
+                            <button
                               onClick={() => navigate(`/admin/users/${user.id}`)}
                               className="text-blue-600 hover:text-blue-900"
+                              title="Edit user"
                             >
                               <Icon name="edit" size="sm" />
                             </button>
                             <button
                               onClick={() => handleDeleteUser(user.id)}
                               className="text-red-600 hover:text-red-900"
+                              title="Delete user"
                             >
                               <Icon name="trash" size="sm" />
                             </button>

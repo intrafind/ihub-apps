@@ -48,6 +48,7 @@ const AdminOAuthClientEditPage = React.lazy(
 );
 const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
 const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
+const AdminUserViewPage = React.lazy(() => import('./features/admin/pages/AdminUserViewPage'));
 const AdminGroupsPage = React.lazy(() => import('./features/admin/pages/AdminGroupsPage'));
 const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/AdminGroupEditPage'));
 const AdminUICustomization = React.lazy(
@@ -307,6 +308,12 @@ function App() {
                       <Route
                         path="admin/users"
                         element={<LazyAdminRoute component={AdminUsersPage} />}
+                      />
+                    )}
+                    {showAdminPage('users') && (
+                      <Route
+                        path="admin/users/:userId/view"
+                        element={<LazyAdminRoute component={AdminUserViewPage} />}
                       />
                     )}
                     {showAdminPage('users') && (
