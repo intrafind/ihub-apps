@@ -149,9 +149,6 @@ const AdminProvidersPage = () => {
               {t('admin.providers.createNew', 'Create New Provider')}
             </button>
           </div>
-              </div>
-            </div>
-          </div>
 
           {/* Providers List - Grouped by Category */}
           {loading ? (
