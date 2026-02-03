@@ -640,10 +640,12 @@ This architecture supports enterprise-grade AI applications with flexible authen
 Every significant feature, bug fix, or change should be documented in the `concepts/` folder following these guidelines:
 
 **Single Document Features:**
+
 - Use format: `concepts/YYYY-MM-DD {title}.md`
 - Examples: `2026-02-02 Provider API Key Persistence Fix.md`
 
 **Multi-Document Features:**
+
 - Create a dedicated subfolder: `concepts/{feature-name}/`
 - Include a `README.md` that provides an overview
 - Place all related documents in the subfolder
@@ -657,11 +659,13 @@ Every significant feature, bug fix, or change should be documented in the `conce
   ```
 
 **When to Use Subfolders:**
+
 - Features with 3+ related documents
 - Features with implementation summaries, UI documentation, and concept docs
 - Complex features that need organized documentation
 
 **What to Document:**
+
 - Feature concepts and design documents
 - Fix summaries and root cause analyses
 - Migration guides for breaking changes

@@ -114,10 +114,12 @@ These guidelines may be superseded by explicit instructions, but should be follo
 Document all significant features, bug fixes, and changes in the `concepts/` folder:
 
 **Single Document Features:**
+
 - Format: `concepts/YYYY-MM-DD {title}.md`
 - Example: `2026-02-02 Provider API Key Persistence Fix.md`
 
 **Multi-Document Features (3+ related documents):**
+
 - Create subfolder: `concepts/{feature-name}/`
 - Include `README.md` with overview
 - Place all related documents in subfolder
@@ -131,6 +133,7 @@ Document all significant features, bug fixes, and changes in the `concepts/` fol
   ```
 
 **Documentation Types:**
+
 - Feature concepts and design documents
 - Fix summaries and root cause analyses
 - Migration guides
