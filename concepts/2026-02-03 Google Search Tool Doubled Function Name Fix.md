@@ -136,7 +136,10 @@ Created `server/tests/google-search-doubled-name-fix.test.js` with 4 tests:
 
 ## Code Locations
 
-- **Fix Implementation**: `server/adapters/toolCalling/GoogleConverter.js` (lines 18-29, 153, 250, 318)
+- **Fix Implementation**: `server/adapters/toolCalling/GoogleConverter.js`
+  - `normalizeGoogleFunctionName()` function definition
+  - Applied in `convertGoogleFunctionCallsToGeneric()`
+  - Applied in `convertGoogleResponseToGeneric()` (both streaming and non-streaming paths)
 - **Test Suite**: `server/tests/google-search-doubled-name-fix.test.js`
 - **Related Concept**: `concepts/2026-01-16 Google Search Grounding.md`
 
