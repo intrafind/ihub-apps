@@ -348,7 +348,7 @@ export default async function registerBackupRoutes(app, basePath = '') {
   });
 
   // Export configuration
-  app.get(buildServerPath('/api/admin/backup/export', basePath), adminAuth, exportConfig);
+  app.get(buildServerPath('/api/admin/backup/export'), adminAuth, exportConfig);
 
   // Import configuration
   app.post(
