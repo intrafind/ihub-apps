@@ -224,8 +224,19 @@ function setupSessionMiddleware(app, platformConfig) {
   // we might need basic session support for other features
   if (!needsOidcSessions && !needsIntegrationSessions) {
     const authConfig = platformConfig.auth || {};
-    if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
-      logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication');
+    const ntlmConfig = platformConfig.ntlmAuth || {};
+
+    // Enable session for local, LDAP, or NTLM authentication
+    // NTLM needs session to track explicit login requests when multiple auth providers are enabled
+    if (authConfig.mode === 'local' || authConfig.mode === 'ldap' || ntlmConfig.enabled) {
+      const enabledMethods = [];
+      if (authConfig.mode === 'local') enabledMethods.push('local');
+      if (authConfig.mode === 'ldap') enabledMethods.push('LDAP');
+      if (ntlmConfig.enabled) enabledMethods.push('NTLM');
+
+      logger.info(
+        `🍪 Enabling session middleware for: ${enabledMethods.join(', ')} authentication`
+      );
       app.use(
         session({
           secret: config.JWT_SECRET || 'fallback-session-secret',
