@@ -1,6 +1,7 @@
 import SourceHandler from './SourceHandler.js';
 import configCache from '../configCache.js';
 import { enhanceFetchOptions } from '../utils/httpConfig.js';
+import logger from '../utils/logger.js';
 
 /**
  * URL Source Handler
@@ -92,7 +93,7 @@ class URLHandler extends SourceHandler {
         }
       };
     } catch (error) {
-      console.warn('Could not load webContentExtractor tool, using fallback:', error.message);
+      logger.warn('Could not load webContentExtractor tool, using fallback:', error.message);
       // Fallback implementation if tool not available
       return this.createFallbackExtractor();
     }
@@ -103,7 +104,7 @@ class URLHandler extends SourceHandler {
    * @returns {Object} - Basic extractor implementation
    */
   createFallbackExtractor() {
-    console.log('Using fallback web content extractor (limited functionality)');
+    logger.info('Using fallback web content extractor (limited functionality)');
 
     return {
       extract: async ({
@@ -113,7 +114,7 @@ class URLHandler extends SourceHandler {
         cleanContent = true
       }) => {
         try {
-          console.log(`Fallback extractor: Fetching ${url}`);
+          logger.info(`Fallback extractor: Fetching ${url}`);
 
           // Use native fetch if available, otherwise import node-fetch
           let fetch;
@@ -151,7 +152,7 @@ class URLHandler extends SourceHandler {
           }
 
           let content = await response.text();
-          console.log(`Fallback extractor: Retrieved ${content.length} characters`);
+          logger.info(`Fallback extractor: Retrieved ${content.length} characters`);
 
           // Basic HTML content cleaning if requested
           if (cleanContent) {
@@ -170,7 +171,7 @@ class URLHandler extends SourceHandler {
           // Truncate content if too long
           if (content.length > maxContentLength) {
             content = content.substring(0, maxContentLength);
-            console.log(`Fallback extractor: Content truncated to ${maxContentLength} characters`);
+            logger.info(`Fallback extractor: Content truncated to ${maxContentLength} characters`);
           }
 
           return {
@@ -190,7 +191,7 @@ class URLHandler extends SourceHandler {
           if (error.name === 'AbortError') {
             throw new Error('Request timeout after 30 seconds');
           }
-          console.error('Fallback extractor error:', error.message);
+          logger.error('Fallback extractor error:', error.message);
           throw error;
         }
       }

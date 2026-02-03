@@ -1,5 +1,6 @@
 import configCache from '../configCache.js';
 import { EventEmitter } from 'events';
+import logger from './logger.js';
 
 /**
  * Centralized authentication debugging service
@@ -98,7 +99,7 @@ class AuthDebugService extends EventEmitter {
 
     // Console logging if enabled
     if (config.consoleLogging) {
-      console.log(`[AuthDebug:${provider}:${level}] ${event}`, logEntry.data);
+      logger.info(`[AuthDebug:${provider}:${level}] ${event}`, logEntry.data);
     }
   }
 
@@ -288,7 +289,7 @@ class AuthDebugService extends EventEmitter {
 
     const removedCount = initialCount - this.debugLogs.length;
     if (removedCount > 0) {
-      console.log(`AuthDebugService: Cleaned up ${removedCount} old log entries`);
+      logger.info(`AuthDebugService: Cleaned up ${removedCount} old log entries`);
     }
   }
 

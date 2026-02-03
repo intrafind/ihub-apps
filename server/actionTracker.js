@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { UnifiedEvents } from '../shared/unifiedEventSchema.js';
+import logger from './utils/logger.js';
 
 export class ActionTracker extends EventEmitter {
   constructor() {
@@ -14,7 +15,7 @@ export class ActionTracker extends EventEmitter {
 
   trackError(chatId, error = {}) {
     const stacktrace = new Error().stack;
-    console.error(`Error for chat ID ${chatId}:`, { ...error, stacktrace });
+    logger.error(`Error for chat ID ${chatId}:`, { ...error, stacktrace });
     this.emit('fire-sse', { event: 'error', chatId, ...error });
   }
 

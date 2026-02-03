@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
+import logger from './utils/logger.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
@@ -42,7 +43,7 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
     if (error.code === 'ENOENT' && relativePath.includes('locales/')) {
       return null; // Silent fail for missing locale override files
     }
-    console.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, error);
+    logger.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, error);
     return null;
   }
 }
@@ -63,7 +64,7 @@ export async function loadBuiltinLocaleJson(relativePath) {
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    console.error(`Error loading builtin locale ${relativePath}:`, error);
+    logger.error(`Error loading builtin locale ${relativePath}:`, error);
     return null;
   }
 }

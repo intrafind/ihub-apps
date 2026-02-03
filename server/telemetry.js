@@ -38,7 +38,7 @@ export async function initTelemetry(config = {}) {
   if (!config.enabled) {
     return;
   }
-  console.info('Initializing telemetry... with config:', config);
+  console.log('Initializing telemetry... with config:', config);
 
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
@@ -87,5 +87,5 @@ export function recordTokenUsage(tokens) {
 
 export async function shutdownTelemetry() {
   await sdk?.shutdown();
-  console.info('Telemetry shutdown completed successfully.');
+  console.log('Telemetry shutdown completed successfully.');
 }

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -39,7 +40,7 @@ export function loadOAuthClients(clientsFilePath) {
     }
 
     // Fallback to file system if cache miss
-    console.warn(
+    logger.warn(
       `[WARN] OAuth clients configuration not found in cache for: ${cacheKey}, attempting file system fallback`
     );
 
@@ -49,7 +50,7 @@ export function loadOAuthClients(clientsFilePath) {
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
-      console.warn(`[WARN] OAuth clients file not found: ${fullPath}, creating empty structure`);
+      logger.warn(`[WARN] OAuth clients file not found: ${fullPath}, creating empty structure`);
       const emptyConfig = {
         clients: {},
         metadata: { version: '1.0.0', lastUpdated: new Date().toISOString() }
@@ -84,8 +85,8 @@ export function loadOAuthClients(clientsFilePath) {
 
     return clientsConfig;
   } catch (error) {
-    console.error(`[ERROR] Could not load OAuth clients configuration:`, error.message);
-    console.error(`[ERROR] Stack trace:`, error.stack);
+    logger.error(`[ERROR] Could not load OAuth clients configuration:`, error.message);
+    logger.error(`[ERROR] Stack trace:`, error.stack);
 
     // Return safe empty structure as last resort
     const safeConfig = {
@@ -93,7 +94,7 @@ export function loadOAuthClients(clientsFilePath) {
       metadata: { version: '1.0.0', lastUpdated: new Date().toISOString(), error: error.message }
     };
 
-    console.warn(`[WARN] Returning safe empty OAuth clients structure due to error`);
+    logger.warn(`[WARN] Returning safe empty OAuth clients structure due to error`);
     return safeConfig;
   }
 }
@@ -131,7 +132,7 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
 
     configCache.setCacheEntry(cacheKey, clientsConfig);
   } catch (error) {
-    console.error('Could not save OAuth clients configuration:', error.message);
+    logger.error('Could not save OAuth clients configuration:', error.message);
     throw error;
   }
 }
@@ -241,7 +242,7 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client creation
-  console.log(
+  logger.info(
     `[OAuth] Client created | client_id=${clientId} | name=${clientData.name} | created_by=${createdBy}`
   );
 
@@ -293,7 +294,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client update
-  console.log(
+  logger.info(
     `[OAuth] Client updated | client_id=${clientId} | updated_by=${updatedBy} | changes=${Object.keys(updates).join(',')}`
   );
 
@@ -330,7 +331,7 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log secret rotation
-  console.log(`[OAuth] Secret rotated | client_id=${clientId} | rotated_by=${rotatedBy}`);
+  logger.info(`[OAuth] Secret rotated | client_id=${clientId} | rotated_by=${rotatedBy}`);
 
   return {
     clientId: clientId,
@@ -359,7 +360,7 @@ export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client deletion
-  console.log(
+  logger.info(
     `[OAuth] Client deleted | client_id=${clientId} | name=${clientName} | deleted_by=${deletedBy}`
   );
 }
@@ -401,7 +402,7 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
       await saveOAuthClients(clientsConfig, clientsFilePath);
     }
   } catch (error) {
-    console.error(`[OAuth] Failed to update last used for client ${clientId}:`, error.message);
+    logger.error(`[OAuth] Failed to update last used for client ${clientId}:`, error.message);
     // Don't throw - this is a non-critical operation
   }
 }
@@ -418,12 +419,12 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   const client = clientsConfig.clients[clientId];
 
   if (!client) {
-    console.log(`[OAuth] Client not found | client_id=${clientId}`);
+    logger.info(`[OAuth] Client not found | client_id=${clientId}`);
     return null;
   }
 
   if (!client.active) {
-    console.log(`[OAuth] Client suspended | client_id=${clientId}`);
+    logger.info(`[OAuth] Client suspended | client_id=${clientId}`);
     return null;
   }
 
@@ -431,15 +432,15 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   const isValid = await verifyClientSecret(clientSecret, client.clientSecret);
 
   if (!isValid) {
-    console.log(`[OAuth] Invalid credentials | client_id=${clientId}`);
+    logger.info(`[OAuth] Invalid credentials | client_id=${clientId}`);
     return null;
   }
 
-  console.log(`[OAuth] Client authenticated | client_id=${clientId} | name=${client.name}`);
+  logger.info(`[OAuth] Client authenticated | client_id=${clientId} | name=${client.name}`);
 
   // Update last used timestamp (async, non-blocking)
   updateClientLastUsed(clientId, clientsFilePath).catch(err => {
-    console.error(`[OAuth] Failed to update last used:`, err);
+    logger.error(`[OAuth] Failed to update last used:`, err);
   });
 
   // Return client without secret

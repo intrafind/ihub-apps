@@ -3,6 +3,7 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
 import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 import { enhanceFetchOptions } from '../utils/httpConfig.js';
 
 function createError(message, code) {
@@ -335,31 +336,31 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ignoreSSLFlag = args.includes('--insecure');
 
   if (!url) {
-    console.error('Usage: node webContentExtractor.js <URL> [--insecure]');
-    console.error('The --insecure flag is for administrators to bypass certificate errors.');
-    console.error('Example: node webContentExtractor.js "https://example.com/article"');
+    logger.error('Usage: node webContentExtractor.js <URL> [--insecure]');
+    logger.error('The --insecure flag is for administrators to bypass certificate errors.');
+    logger.error('Example: node webContentExtractor.js "https://example.com/article"');
     process.exit(1);
   }
 
-  console.log(`Extracting content from: ${url}`);
+  logger.info(`Extracting content from: ${url}`);
   if (ignoreSSLFlag) {
-    console.warn('Warning: ignoring SSL certificate errors');
+    logger.warn('Warning: ignoring SSL certificate errors');
   }
 
   try {
     const result = await webContentExtractor({ url, ignoreSSL: ignoreSSLFlag });
-    console.log('\nExtracted Content:');
-    console.log('==================');
-    console.log(`Title: ${result.title}`);
-    console.log(`Description: ${result.description}`);
-    console.log(`Author: ${result.author}`);
-    console.log(`Word Count: ${result.wordCount}`);
-    console.log(`Extracted At: ${result.extractedAt}`);
-    console.log('\nContent:');
-    console.log('--------');
-    console.log(result.content);
+    logger.info('\nExtracted Content:');
+    logger.info('==================');
+    logger.info(`Title: ${result.title}`);
+    logger.info(`Description: ${result.description}`);
+    logger.info(`Author: ${result.author}`);
+    logger.info(`Word Count: ${result.wordCount}`);
+    logger.info(`Extracted At: ${result.extractedAt}`);
+    logger.info('\nContent:');
+    logger.info('--------');
+    logger.info(result.content);
   } catch (error) {
-    console.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
+    logger.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
     process.exit(1);
   }
 }

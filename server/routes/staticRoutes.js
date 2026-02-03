@@ -3,6 +3,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
+import logger from '../utils/logger.js';
 import {
   buildServerPath,
   buildUploadsPath,
@@ -17,7 +18,7 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   // In development, Vite serves the frontend directly
   if (isPackaged || config.NODE_ENV === 'production') {
     const staticPath = path.join(rootDir, 'public');
-    console.log(`Serving static files from: ${staticPath}`);
+    logger.info(`Serving static files from: ${staticPath}`);
 
     // Serve static files at base path
     if (basePath) {
@@ -26,24 +27,24 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       app.use(express.static(staticPath));
     }
   } else {
-    console.log('Development mode: Static files served by Vite on port 5173');
+    logger.info('Development mode: Static files served by Vite on port 5173');
   }
 
   // Serve uploaded assets
   const uploadsPath = path.join(rootDir, 'contents/uploads');
-  console.log(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`);
+  logger.info(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`);
   app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');
-  console.log(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`);
+  logger.info(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`);
   app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
   // Only set up SPA routing in production or packaged mode
   // In development, Vite handles all frontend routing
   if (isPackaged || config.NODE_ENV === 'production') {
     const indexPath = path.join(rootDir, 'public/index.html');
-    console.log(`SPA will be served from: ${indexPath}`);
+    logger.info(`SPA will be served from: ${indexPath}`);
 
     // SPA routing handler
     const spaHandler = (req, res, next) => {
@@ -76,6 +77,6 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       app.get('*', spaHandler);
     }
   } else {
-    console.log('Development mode: SPA routing handled by Vite on port 5173');
+    logger.info('Development mode: SPA routing handled by Vite on port 5173');
   }
 }

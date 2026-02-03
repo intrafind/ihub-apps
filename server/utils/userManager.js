@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
 import { mapExternalGroups } from './authorization.js';
+import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,7 +43,7 @@ export function loadUsers(usersFilePath) {
     }
 
     // Fallback to file system if cache miss or invalid data
-    console.warn(
+    logger.warn(
       `[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`
     );
 
@@ -52,7 +53,7 @@ export function loadUsers(usersFilePath) {
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
-      console.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`);
+      logger.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`);
       const emptyConfig = {
         users: {},
         metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() }
@@ -87,8 +88,8 @@ export function loadUsers(usersFilePath) {
 
     return usersConfig;
   } catch (error) {
-    console.error(`[ERROR] Could not load users configuration:`, error.message);
-    console.error(`[ERROR] Stack trace:`, error.stack);
+    logger.error(`[ERROR] Could not load users configuration:`, error.message);
+    logger.error(`[ERROR] Stack trace:`, error.stack);
 
     // Return safe empty structure as last resort
     const safeConfig = {
@@ -96,7 +97,7 @@ export function loadUsers(usersFilePath) {
       metadata: { version: '2.0.0', lastUpdated: new Date().toISOString(), error: error.message }
     };
 
-    console.warn(`[WARN] Returning safe empty users structure due to error`);
+    logger.warn(`[WARN] Returning safe empty users structure due to error`);
     return safeConfig;
   }
 }
@@ -137,7 +138,7 @@ export async function saveUsers(usersConfig, usersFilePath) {
 
     configCache.setCacheEntry(cacheKey, usersConfig);
   } catch (error) {
-    console.error('Could not save users configuration:', error.message);
+    logger.error('Could not save users configuration:', error.message);
     throw error;
   }
 }

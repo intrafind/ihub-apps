@@ -5,6 +5,7 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class MistralAdapterClass extends BaseAdapter {
   /**
@@ -77,7 +78,7 @@ class MistralAdapterClass extends BaseAdapter {
     }
 
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
-    // console.log('Mistral request body:', body);
+    // logger.info('Mistral request body:', body);
 
     return {
       url: model.url,
@@ -178,7 +179,7 @@ class MistralAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      console.error('Error parsing Mistral response chunk:', error);
+      logger.error('Error parsing Mistral response chunk:', error);
       result.error = true;
       result.errorMessage = `Error parsing Mistral response: ${error.message}`;
     }

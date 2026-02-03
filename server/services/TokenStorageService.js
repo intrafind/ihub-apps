@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
+import logger from '../utils/logger.js';
 
 /**
  * Centralized Token Storage Service
@@ -31,7 +32,7 @@ class TokenStorageService {
     // Priority 1: Environment variable (allows override)
     if (process.env.TOKEN_ENCRYPTION_KEY) {
       this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
-      console.log('🔐 Using encryption key from TOKEN_ENCRYPTION_KEY environment variable');
+      logger.info('🔐 Using encryption key from TOKEN_ENCRYPTION_KEY environment variable');
       return;
     }
 
@@ -42,22 +43,22 @@ class TokenStorageService {
         // Validate it's a valid hex string
         if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
           this.encryptionKey = persistedKey.trim();
-          console.log('🔐 Using persisted encryption key from disk');
+          logger.info('🔐 Using persisted encryption key from disk');
           return;
         } else {
-          console.warn('⚠️  Persisted encryption key has invalid format, generating new key');
+          logger.warn('⚠️  Persisted encryption key has invalid format, generating new key');
         }
       }
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('Error reading encryption key file:', error.message);
+        logger.error('Error reading encryption key file:', error.message);
       }
       // File doesn't exist or error reading, will generate new key
     }
 
     // Priority 3: Generate new key and persist it
     this.encryptionKey = crypto.randomBytes(32).toString('hex');
-    console.warn(
+    logger.warn(
       '⚠️  Generated new encryption key. This will be persisted to maintain API key compatibility across restarts.'
     );
 
@@ -70,13 +71,13 @@ class TokenStorageService {
       await fs.writeFile(this.keyFilePath, this.encryptionKey, {
         mode: 0o600 // Read/write for owner only
       });
-      console.log(`✅ Encryption key persisted to: ${this.keyFilePath}`);
-      console.log(
+      logger.info(`✅ Encryption key persisted to: ${this.keyFilePath}`);
+      logger.info(
         '⚠️  IMPORTANT: Keep this file secure and back it up. Losing it will make encrypted API keys unrecoverable.'
       );
     } catch (error) {
-      console.error('❌ Failed to persist encryption key:', error.message);
-      console.warn('⚠️  Encryption key is not persisted. API keys will be lost on server restart!');
+      logger.error('❌ Failed to persist encryption key:', error.message);
+      logger.warn('⚠️  Encryption key is not persisted. API keys will be lost on server restart!');
     }
   }
 
@@ -127,7 +128,7 @@ class TokenStorageService {
         contextHash: context.toString('hex')
       };
     } catch (error) {
-      console.error('❌ Error encrypting tokens:', error.message);
+      logger.error('❌ Error encrypting tokens:', error.message);
       throw new Error('Failed to encrypt tokens');
     }
   }
@@ -165,7 +166,7 @@ class TokenStorageService {
       delete parsedData.context;
       return parsedData;
     } catch (error) {
-      console.error('❌ Error decrypting tokens:', error.message);
+      logger.error('❌ Error decrypting tokens:', error.message);
       throw new Error('Failed to decrypt tokens');
     }
   }
@@ -192,10 +193,10 @@ class TokenStorageService {
       const tokenFile = path.join(tokenDir, `${userId}.json`);
       await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
 
-      console.log(`✅ ${serviceName} tokens stored for user ${userId}`);
+      logger.info(`✅ ${serviceName} tokens stored for user ${userId}`);
       return true;
     } catch (error) {
-      console.error('❌ Error storing user tokens:', error.message);
+      logger.error('❌ Error storing user tokens:', error.message);
       throw new Error('Failed to store user tokens');
     }
   }
@@ -213,7 +214,7 @@ class TokenStorageService {
       if (error.code === 'ENOENT') {
         throw new Error(`User not authenticated with ${serviceName}`);
       }
-      console.error('❌ Error retrieving user tokens:', error.message);
+      logger.error('❌ Error retrieving user tokens:', error.message);
       throw new Error('Failed to retrieve user tokens');
     }
   }
@@ -256,11 +257,11 @@ class TokenStorageService {
     try {
       const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
       await fs.unlink(tokenFile);
-      console.log(`✅ ${serviceName} tokens deleted for user ${userId}`);
+      logger.info(`✅ ${serviceName} tokens deleted for user ${userId}`);
       return true;
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('❌ Error deleting user tokens:', error.message);
+        logger.error('❌ Error deleting user tokens:', error.message);
       }
       return false;
     }
@@ -299,7 +300,7 @@ class TokenStorageService {
 
       return services;
     } catch (error) {
-      console.error('❌ Error listing user services:', error.message);
+      logger.error('❌ Error listing user services:', error.message);
       return [];
     }
   }
@@ -366,7 +367,7 @@ class TokenStorageService {
 
       return encryptedValue;
     } catch (error) {
-      console.error('❌ Error encrypting string:', error.message);
+      logger.error('❌ Error encrypting string:', error.message);
       throw new Error('Failed to encrypt string');
     }
   }
@@ -386,7 +387,7 @@ class TokenStorageService {
     try {
       return this._decrypt(encryptedData);
     } catch (error) {
-      console.error('❌ Error decrypting string:', error.message);
+      logger.error('❌ Error decrypting string:', error.message);
       throw new Error('Failed to decrypt string. The encryption key may have changed.');
     }
   }

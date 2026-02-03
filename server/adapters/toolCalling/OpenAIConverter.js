@@ -12,6 +12,7 @@ import {
   normalizeFinishReason,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Convert generic tools to OpenAI format
@@ -31,14 +32,14 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      console.log(
+      logger.info(
         `[OpenAI Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
       );
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      console.log(`[OpenAI Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info(`[OpenAI Converter] Filtering out special tool: ${tool.id || tool.name}`);
       return false;
     }
     // If webSearch is present, filter out other web search tools
@@ -162,7 +163,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
                 : { __raw_arguments: argsStr };
           } catch (error) {
             // If parsing fails, keep as raw string for later accumulation (preserving original spacing)
-            console.warn(
+            logger.warn(
               'Failed to parse OpenAI tool call arguments (likely streaming partial JSON):',
               error.message
             );
@@ -256,7 +257,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       result.error = true;
       result.errorMessage = parsed.error.message || 'Unknown error';
       result.complete = true;
-      console.log(`[OpenAI Converter] Detected error response: ${result.errorMessage}`);
+      logger.info(`[OpenAI Converter] Detected error response: ${result.errorMessage}`);
       return result;
     }
 
@@ -309,7 +310,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
         }
 
         // Log accumulation progress for debugging
-        console.log(
+        logger.info(
           `[OpenAI Converter] Accumulated tool calls:`,
           Array.from(state.pendingToolCalls.values())
         );
@@ -322,13 +323,13 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
       result.finishReason = state.finishReason;
 
-      console.log(
+      logger.info(
         `[OpenAI Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`
       );
 
       // For OpenAI, finalize tool calls on tool_calls finish reason or if we have pending calls
       if (state.pendingToolCalls.size > 0) {
-        console.log(
+        logger.info(
           `[OpenAI Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`
         );
         for (const [index, pending] of state.pendingToolCalls.entries()) {
@@ -339,11 +340,11 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
                 parsedArgs = JSON.parse(pending.arguments);
               }
             } catch (e) {
-              console.warn('Failed to parse accumulated OpenAI tool arguments:', e);
+              logger.warn('Failed to parse accumulated OpenAI tool arguments:', e);
               parsedArgs = { __raw_arguments: pending.arguments };
             }
 
-            console.log(
+            logger.info(
               `[OpenAI Converter] Adding tool call: ${pending.name} with args:`,
               parsedArgs
             );
@@ -360,7 +361,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (error) {
-    console.error('Error parsing OpenAI response chunk:', error);
+    logger.error('Error parsing OpenAI response chunk:', error);
     result.error = true;
     result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
   }

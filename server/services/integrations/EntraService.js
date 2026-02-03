@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import axios from 'axios';
 import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Entra ID (Azure AD) Service for Microsoft Graph API integration
@@ -27,7 +28,7 @@ class EntraService {
       return this.accessToken;
     }
 
-    console.log('EntraService: No valid token found, fetching a new one...');
+    logger.info('EntraService: No valid token found, fetching a new one...');
     const params = new URLSearchParams();
     params.append('client_id', this.clientId);
     params.append('scope', 'https://graph.microsoft.com/.default');
@@ -45,10 +46,10 @@ class EntraService {
       const tokenData = response.data;
       this.accessToken = tokenData.access_token;
       this.tokenExpiry = Date.now() + tokenData.expires_in * 1000;
-      console.log('EntraService: ✅ Token acquired');
+      logger.info('EntraService: ✅ Token acquired');
       return this.accessToken;
     } catch (error) {
-      console.error('❌ Error fetching access token:', error.response?.data || error.message);
+      logger.error('❌ Error fetching access token:', error.response?.data || error.message);
       throw new Error('Failed to acquire access token.');
     }
   }
@@ -68,10 +69,10 @@ class EntraService {
       return response.data;
     } catch (error) {
       if (error.response?.status === 404) {
-        console.log(`EntraService: Resource not found at endpoint: ${endpoint}`);
+        logger.info(`EntraService: Resource not found at endpoint: ${endpoint}`);
         return null;
       }
-      console.error(
+      logger.error(
         `❌ Error calling Graph API endpoint ${endpoint}:`,
         error.response?.data || error.message
       );
@@ -80,7 +81,7 @@ class EntraService {
   }
 
   async findUser(name) {
-    console.log(`EntraService: Searching for user: ${name}`);
+    logger.info(`EntraService: Searching for user: ${name}`);
     const encodedName = encodeURIComponent(name);
     const endpoint = `/users?$filter=startswith(displayName,'${encodedName}') or startswith(mail,'${encodedName}')&$select=id,displayName,mail,jobTitle,department,officeLocation`;
     const result = await this._makeGraphRequest(endpoint);
@@ -88,17 +89,17 @@ class EntraService {
   }
 
   async getAllUserDetails(userId) {
-    console.log(`EntraService: Getting all details for user ID: ${userId}`);
+    logger.info(`EntraService: Getting all details for user ID: ${userId}`);
     return this._makeGraphRequest(`/users/${userId}`);
   }
 
   async getUserManager(userId) {
-    console.log(`EntraService: Getting manager for user ID: ${userId}`);
+    logger.info(`EntraService: Getting manager for user ID: ${userId}`);
     return this._makeGraphRequest(`/users/${userId}/manager`);
   }
 
   async getUserPhotoBase64(userId) {
-    console.log(`EntraService: Getting photo for user ID: ${userId}`);
+    logger.info(`EntraService: Getting photo for user ID: ${userId}`);
     const photoBuffer = await this._makeGraphRequest(`/users/${userId}/photo/$value`, {
       responseType: 'arraybuffer'
     });
@@ -106,7 +107,7 @@ class EntraService {
   }
 
   async getUserGroups(userId) {
-    console.log(`EntraService: Getting groups for user ID: ${userId}`);
+    logger.info(`EntraService: Getting groups for user ID: ${userId}`);
     const endpoint = `/users/${userId}/memberOf?$select=id,displayName,description,resourceProvisioningOptions`;
     const result = await this._makeGraphRequest(endpoint);
     const teams = result?.value.filter(group =>
@@ -116,14 +117,14 @@ class EntraService {
   }
 
   async getTeamMembers(groupId) {
-    console.log(`EntraService: Getting members for group ID: ${groupId}`);
+    logger.info(`EntraService: Getting members for group ID: ${groupId}`);
     const endpoint = `/groups/${groupId}/members?$select=id,displayName,jobTitle`;
     const result = await this._makeGraphRequest(endpoint);
     return result?.value || [];
   }
 
   async getTeamChannels(teamId) {
-    console.log(`EntraService: Getting channels for team ID: ${teamId}`);
+    logger.info(`EntraService: Getting channels for team ID: ${teamId}`);
     const result = await this._makeGraphRequest(`/teams/${teamId}/channels`);
     return result?.value || [];
   }

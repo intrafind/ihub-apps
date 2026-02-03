@@ -12,6 +12,7 @@ import {
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Find the actual filename for an app ID
@@ -723,7 +724,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       await configCache.refreshAppsCache();
       res.json({ message: 'App created successfully', app: newApp });
     } catch (error) {
-      console.error('Error creating app:', error);
+      logger.error('Error creating app:', error);
       res.status(500).json({ error: 'Failed to create app' });
     }
   });
@@ -816,7 +817,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
           enabled: newEnabledState
         });
       } catch (error) {
-        console.error('Error toggling app:', error);
+        logger.error('Error toggling app:', error);
         res.status(500).json({ error: 'Failed to toggle app' });
       }
     }
@@ -937,7 +938,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
           ids: resolvedIds
         });
       } catch (error) {
-        console.error('Error toggling apps:', error);
+        logger.error('Error toggling apps:', error);
         res.status(500).json({ error: 'Failed to toggle apps' });
       }
     }
@@ -1017,7 +1018,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
       await configCache.refreshAppsCache();
       res.json({ message: 'App deleted successfully' });
     } catch (error) {
-      console.error('Error deleting app:', error);
+      logger.error('Error deleting app:', error);
       res.status(500).json({ error: 'Failed to delete app' });
     }
   });

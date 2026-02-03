@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 import { isValidId } from '../utils/pathSecurity.js';
+import logger from '../utils/logger.js';
 
 describe('pathSecurity', () => {
   describe('isValidId', () => {

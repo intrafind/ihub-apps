@@ -7,6 +7,7 @@ import cluster from 'cluster';
 import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
+import logger from './utils/logger.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -52,13 +53,13 @@ import config from './config.js';
 const workerCount = config.WORKERS;
 
 if (cluster.isPrimary && workerCount > 1) {
-  console.log(`Primary process ${process.pid} starting ${workerCount} workers`);
+  logger.info(`Primary process ${process.pid} starting ${workerCount} workers`);
   for (let i = 0; i < workerCount; i++) {
     cluster.fork();
   }
 
   cluster.on('exit', (worker, code, signal) => {
-    console.warn(`Worker ${worker.process.pid} exited (${code || signal}).`);
+    logger.warn(`Worker ${worker.process.pid} exited (${code || signal}).`);
     cluster.fork();
   });
 } else {
@@ -69,22 +70,22 @@ if (cluster.isPrimary && workerCount > 1) {
   // Resolve the application root directory
   const rootDir = getRootDir();
   if (isPackaged) {
-    console.log(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
+    logger.info(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
   } else {
-    console.log('Running in normal mode');
+    logger.info('Running in normal mode');
   }
-  console.log(`Root directory: ${rootDir}`);
+  logger.info(`Root directory: ${rootDir}`);
 
   // Get the contents directory, either from environment variable or use default 'contents'
   const contentsDir = config.CONTENTS_DIR;
-  console.log(`Using contents directory: ${contentsDir}`);
+  logger.info(`Using contents directory: ${contentsDir}`);
 
   // Perform initial setup if contents directory is empty
   try {
     await performInitialSetup();
   } catch (err) {
-    console.error('Failed to perform initial setup:', err);
-    console.warn('Server will continue, but may not function properly without configuration files');
+    logger.error('Failed to perform initial setup:', err);
+    logger.warn('Server will continue, but may not function properly without configuration files');
   }
 
   // Load platform configuration and initialize telemetry
@@ -96,7 +97,7 @@ if (cluster.isPrimary && workerCount > 1) {
     }
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (err) {
-    console.error('Failed to initialize telemetry:', err);
+    logger.error('Failed to initialize telemetry:', err);
   }
 
   // Log application version information
@@ -124,9 +125,13 @@ if (cluster.isPrimary && workerCount > 1) {
   // Initialize configuration cache for optimal performance
   try {
     await configCache.initialize();
+    // Set configCache reference in logger after initialization
+    logger.setConfigCache(configCache);
+    // Reconfigure logger to pick up logging settings from platform config
+    logger.reconfigureLogger();
   } catch (err) {
-    console.error('Failed to initialize configuration cache:', err);
-    console.warn('Server will continue with file-based configuration loading');
+    logger.error('Failed to initialize configuration cache:', err);
+    logger.warn('Server will continue with file-based configuration loading');
   }
 
   // Create Express application
@@ -243,23 +248,23 @@ if (cluster.isPrimary && workerCount > 1) {
 
       // Create HTTPS server
       server = https.createServer(httpsOptions, app);
-      console.log(`Starting HTTPS server with SSL certificate from ${config.SSL_CERT}`);
+      logger.info(`Starting HTTPS server with SSL certificate from ${config.SSL_CERT}`);
     } catch (error) {
-      console.error('Error setting up HTTPS server:', error);
-      console.log('Falling back to HTTP server');
+      logger.error('Error setting up HTTPS server:', error);
+      logger.info('Falling back to HTTP server');
       server = http.createServer(serverOptions, app);
     }
   } else {
     // Create regular HTTP server with socket reuse options
     server = http.createServer(serverOptions, app);
-    console.log('Starting HTTP server (no SSL configuration provided)');
+    logger.info('Starting HTTP server (no SSL configuration provided)');
   }
 
   // Start server
   server.listen(PORT, HOST, () => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
-    console.log(`Server is running on ${protocol}://${HOST}:${PORT}`);
-    console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use iHub Apps`);
+    logger.info(`Server is running on ${protocol}://${HOST}:${PORT}`);
+    logger.info(`Open ${protocol}://${HOST}:${PORT} in your browser to use iHub Apps`);
   });
 
   const handleShutdownSignal = async () => {

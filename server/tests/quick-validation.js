@@ -7,12 +7,13 @@
  */
 
 import {
+import logger from '../utils/logger.js';
   authRequired,
   appAccessRequired,
   modelAccessRequired
 } from '../middleware/authRequired.js';
 
-console.log('🔒 Quick Authentication Validation\n');
+logger.info('🔒 Quick Authentication Validation\n');
 
 // Mock request/response objects
 function createMockReq(user = null, params = {}) {
@@ -117,7 +118,7 @@ const tests = [
   }
 ];
 
-console.log('Running validation tests...\n');
+logger.info('Running validation tests...\n');
 
 let passed = 0;
 let failed = 0;
@@ -155,44 +156,44 @@ for (const test of tests) {
     // Check results
     if (test.expectedStatus) {
       if (res.statusCode === test.expectedStatus) {
-        console.log(`✅ ${test.name}`);
+        logger.info(`✅ ${test.name}`);
         if (test.expectedError && res.responseData?.error) {
-          console.log(`   Expected error: "${test.expectedError}"`);
-          console.log(`   Actual error: "${res.responseData.error}"`);
+          logger.info(`   Expected error: "${test.expectedError}"`);
+          logger.info(`   Actual error: "${res.responseData.error}"`);
         }
         passed++;
       } else {
-        console.log(`❌ ${test.name}`);
-        console.log(`   Expected status: ${test.expectedStatus}, Got: ${res.statusCode}`);
+        logger.info(`❌ ${test.name}`);
+        logger.info(`   Expected status: ${test.expectedStatus}, Got: ${res.statusCode}`);
         failed++;
       }
     } else if (test.shouldCallNext) {
       if (next.calls && next.calls.length > 0) {
-        console.log(`✅ ${test.name}`);
+        logger.info(`✅ ${test.name}`);
         passed++;
       } else {
-        console.log(`❌ ${test.name}`);
-        console.log(`   Expected next() to be called, but it wasn't`);
+        logger.info(`❌ ${test.name}`);
+        logger.info(`   Expected next() to be called, but it wasn't`);
         failed++;
       }
     }
   } catch (error) {
-    console.log(`❌ ${test.name}`);
-    console.log(`   Error: ${error.message}`);
+    logger.info(`❌ ${test.name}`);
+    logger.info(`   Error: ${error.message}`);
     failed++;
   }
 }
 
-console.log('\n' + '='.repeat(50));
-console.log(`📊 Quick Validation Results: ${passed}/${passed + failed} passed`);
+logger.info('\n' + '='.repeat(50));
+logger.info(`📊 Quick Validation Results: ${passed}/${passed + failed} passed`);
 
 if (failed === 0) {
-  console.log('🎉 All basic validations passed!');
-  console.log('✅ Authentication middleware is working correctly');
+  logger.info('🎉 All basic validations passed!');
+  logger.info('✅ Authentication middleware is working correctly');
 } else {
-  console.log('⚠️  Some validations failed');
-  console.log('🔧 Please check the middleware implementation');
+  logger.info('⚠️  Some validations failed');
+  logger.info('🔧 Please check the middleware implementation');
 }
 
-console.log('\n💡 Run full test suite with: npm run test:security');
-console.log('='.repeat(50));
+logger.info('\n💡 Run full test suite with: npm run test:security');
+logger.info('='.repeat(50));

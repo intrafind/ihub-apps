@@ -2,13 +2,14 @@ import { getAdapter, createCompletionRequest } from '../adapters/index.js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
+import logger from '../utils/logger.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });
 
-console.log('📋 Comprehensive API Documentation Test\n');
-console.log('This test documents ALL messages, requests, and responses for each provider');
-console.log('to analyze API differences and verify tool calling behavior.\n');
+logger.info('📋 Comprehensive API Documentation Test\n');
+logger.info('This test documents ALL messages, requests, and responses for each provider');
+logger.info('to analyze API differences and verify tool calling behavior.\n');
 
 // Create logs directory
 const logsDir = path.join(process.cwd(), 'tests', 'logs');
@@ -126,13 +127,13 @@ async function documentAPIInteraction(provider, model, messages, tools, scenario
   };
 
   if (!apiKeys[provider]) {
-    console.log(`❌ ${provider.toUpperCase()}: API key not set, skipping`);
+    logger.info(`❌ ${provider.toUpperCase()}: API key not set, skipping`);
     documentation.error = 'API key not set';
     fs.writeFileSync(logFile, JSON.stringify(documentation, null, 2));
     return documentation;
   }
 
-  console.log(`\n🔄 Documenting ${provider.toUpperCase()} - ${scenarioName}`);
+  logger.info(`\n🔄 Documenting ${provider.toUpperCase()} - ${scenarioName}`);
 
   try {
     // Step 1: Initial greeting and question
@@ -239,10 +240,10 @@ async function documentAPIInteraction(provider, model, messages, tools, scenario
       'STEP_6_FINAL_RECOMMENDATION'
     );
 
-    console.log(`  ✅ Full conversation flow completed for ${provider.toUpperCase()}`);
-    console.log(`  📄 Documentation saved to: ${logFile}`);
+    logger.info(`  ✅ Full conversation flow completed for ${provider.toUpperCase()}`);
+    logger.info(`  📄 Documentation saved to: ${logFile}`);
   } catch (error) {
-    console.log(`  ❌ Error in ${provider.toUpperCase()}: ${error.message}`);
+    logger.info(`  ❌ Error in ${provider.toUpperCase()}: ${error.message}`);
     documentation.error = error.message;
   }
 
@@ -277,7 +278,7 @@ async function makeAPICall(provider, model, messages, tools, documentation, step
     body: requestBody
   });
 
-  console.log(`  📤 ${stepName}: Making API call...`);
+  logger.info(`  📤 ${stepName}: Making API call...`);
 
   // Prepare request options for fetch
   const fetchOptions = {
@@ -301,7 +302,7 @@ async function makeAPICall(provider, model, messages, tools, documentation, step
   });
 
   if (!response.ok) {
-    console.log(`  ❌ ${stepName}: API call failed - ${response.status}`);
+    logger.info(`  ❌ ${stepName}: API call failed - ${response.status}`);
     return { success: false, error: responseData };
   }
 
@@ -318,7 +319,7 @@ async function makeAPICall(provider, model, messages, tools, documentation, step
     tool_call_count: toolCalls.length
   });
 
-  console.log(`  📥 ${stepName}: Got response, ${toolCalls.length} tool calls`);
+  logger.info(`  📥 ${stepName}: Got response, ${toolCalls.length} tool calls`);
 
   return {
     success: true,
@@ -519,7 +520,7 @@ function extractToolCalls(provider, responseData) {
         break;
     }
   } catch (error) {
-    console.log(`Error extracting tool calls for ${provider}: ${error.message}`);
+    logger.info(`Error extracting tool calls for ${provider}: ${error.message}`);
   }
 
   return { toolCalls, content };
@@ -708,7 +709,7 @@ async function generateComparisonReport(allResults) {
     `comparison_report_${new Date().toISOString().replace(/[:.]/g, '-')}.json`
   );
   fs.writeFileSync(reportFile, JSON.stringify(report, null, 2));
-  console.log(`📊 Comparison report saved to: ${reportFile}`);
+  logger.info(`📊 Comparison report saved to: ${reportFile}`);
 
   return report;
 }
@@ -717,13 +718,13 @@ async function generateComparisonReport(allResults) {
  * Main test execution
  */
 async function runComprehensiveDocumentation() {
-  console.log('🚀 Starting comprehensive API documentation...\n');
+  logger.info('🚀 Starting comprehensive API documentation...\n');
 
   const allResults = {};
 
   // Test each provider with the full conversation scenario
   for (const [provider, model] of Object.entries(testModels)) {
-    console.log(`\n🔍 Testing ${provider.toUpperCase()}`);
+    logger.info(`\n🔍 Testing ${provider.toUpperCase()}`);
     allResults[provider] = {};
 
     for (const scenario of conversationScenarios) {
@@ -745,17 +746,17 @@ async function runComprehensiveDocumentation() {
   // Generate comparison report
   const report = await generateComparisonReport(allResults);
 
-  console.log('\n📋 DOCUMENTATION COMPLETE!');
-  console.log(`\nResults summary:`);
-  console.log(`- Total providers tested: ${report.summary.total_providers}`);
-  console.log(`- Successful API calls: ${report.summary.successful_calls}`);
-  console.log(`- Providers that made tool calls: ${report.summary.providers_with_tool_calls}`);
-  console.log(`- Total tool calls made: ${report.summary.total_tool_calls}`);
-  console.log(`- Total conversation steps: ${report.summary.total_conversation_steps}`);
-  console.log(`\nAll logs saved to: ${logsDir}`);
+  logger.info('\n📋 DOCUMENTATION COMPLETE!');
+  logger.info(`\nResults summary:`);
+  logger.info(`- Total providers tested: ${report.summary.total_providers}`);
+  logger.info(`- Successful API calls: ${report.summary.successful_calls}`);
+  logger.info(`- Providers that made tool calls: ${report.summary.providers_with_tool_calls}`);
+  logger.info(`- Total tool calls made: ${report.summary.total_tool_calls}`);
+  logger.info(`- Total conversation steps: ${report.summary.total_conversation_steps}`);
+  logger.info(`\nAll logs saved to: ${logsDir}`);
 
   return { allResults, report };
 }
 
 // Run the comprehensive documentation
-runComprehensiveDocumentation().catch(console.error);
+runComprehensiveDocumentation().catch(logger.error);

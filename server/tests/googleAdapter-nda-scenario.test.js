@@ -1,5 +1,6 @@
 import assert from 'assert';
 import GoogleAdapter from '../adapters/google.js';
+import logger from '../utils/logger.js';
 
 // This test simulates the exact scenario from the issue:
 // NDA risk analyzer app with structured output schema
@@ -50,10 +51,10 @@ const ndaLikeSchema = {
   additionalProperties: false // This was also causing the error
 };
 
-console.log('Testing NDA Risk Analyzer scenario from the issue...');
-console.log('\nOriginal schema has additionalProperties at:');
-console.log('- Root level:', ndaLikeSchema.additionalProperties);
-console.log('- Array items:', ndaLikeSchema.properties.risks.items.additionalProperties);
+logger.info('Testing NDA Risk Analyzer scenario from the issue...');
+logger.info('\nOriginal schema has additionalProperties at:');
+logger.info('- Root level:', ndaLikeSchema.additionalProperties);
+logger.info('- Array items:', ndaLikeSchema.properties.risks.items.additionalProperties);
 
 const req = GoogleAdapter.createCompletionRequest(model, messages, 'test-key', {
   responseFormat: 'json',
@@ -61,12 +62,12 @@ const req = GoogleAdapter.createCompletionRequest(model, messages, 'test-key', {
   stream: true
 });
 
-console.log('\nAfter processing:');
-console.log(
+logger.info('\nAfter processing:');
+logger.info(
   '- Root level additionalProperties:',
   req.body.generationConfig.response_schema.additionalProperties
 );
-console.log(
+logger.info(
   '- Array items additionalProperties:',
   req.body.generationConfig.response_schema.properties.risks.items.additionalProperties
 );
@@ -92,11 +93,11 @@ assert.strictEqual(req.body.generationConfig.response_schema.properties.risks.it
 assert.strictEqual(ndaLikeSchema.additionalProperties, false);
 assert.strictEqual(ndaLikeSchema.properties.risks.items.additionalProperties, false);
 
-console.log('\n✅ NDA Risk Analyzer scenario test passed!');
-console.log('The fix correctly removes additionalProperties that was causing:');
-console.log(
+logger.info('\n✅ NDA Risk Analyzer scenario test passed!');
+logger.info('The fix correctly removes additionalProperties that was causing:');
+logger.info(
   '  - "Unknown name \\"additionalProperties\\" at \'generation_config.response_schema.properties[1].value.items\'"'
 );
-console.log(
+logger.info(
   '  - "Unknown name \\"additionalProperties\\" at \'generation_config.response_schema\'"'
 );

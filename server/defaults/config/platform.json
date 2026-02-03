@@ -102,5 +102,15 @@
   },
   "ssl": {
     "ignoreInvalidCertificates": false
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "file": {
+      "enabled": false,
+      "path": "logs/app.log",
+      "maxSize": 10485760,
+      "maxFiles": 5
+    }
   }
 }

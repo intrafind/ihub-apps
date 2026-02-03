@@ -13,6 +13,7 @@ import {
   sanitizeSchemaForProvider,
   normalizeToolName
 } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Convert generic tools to Google format
@@ -36,14 +37,14 @@ export function convertGenericToolsToGoogle(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      console.log(
+      logger.info(
         `[Google Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
       );
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      console.log(`[Google Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info(`[Google Converter] Filtering out special tool: ${tool.id || tool.name}`);
       return false;
     }
     // Universal tool - include it
@@ -57,7 +58,7 @@ export function convertGenericToolsToGoogle(genericTools = []) {
     // Google API limitation: google_search cannot be combined with functionDeclarations
     // If both are present, prioritize google_search and warn about skipped function tools
     if (functionTools.length > 0) {
-      console.warn(
+      logger.warn(
         `Google API limitation: Cannot combine google_search with function calling. ` +
           `Skipping ${functionTools.length} function tool(s): ${functionTools.map(t => t.name).join(', ')}`
       );
@@ -309,7 +310,7 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
         // Handle partial function calls during streaming - ignore incomplete ones
         else if (part.functionCall && !part.functionCall.name) {
           // Log partial function call for debugging but don't create incomplete tool calls
-          console.log(
+          logger.info(
             'Google streaming: Ignoring partial function call without name:',
             part.functionCall
           );
@@ -341,7 +342,7 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
       }
     }
   } catch (jsonError) {
-    console.error('Failed to parse Google response as JSON:', jsonError.message);
+    logger.error('Failed to parse Google response as JSON:', jsonError.message);
     result.error = true;
     result.errorMessage = `Error parsing Google response: ${jsonError.message}`;
 
@@ -467,7 +468,7 @@ export function processMessageForGoogle(message) {
             ? JSON.parse(toolCall.function.arguments)
             : toolCall.function.arguments;
       } catch (error) {
-        console.warn('Failed to parse tool call arguments:', error);
+        logger.warn('Failed to parse tool call arguments:', error);
         args = {};
       }
 

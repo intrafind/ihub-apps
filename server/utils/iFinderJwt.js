@@ -1,6 +1,7 @@
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import logger from './logger.js';
 
 /**
  * iFinder JWT utility for generating tokens based on authenticated users
@@ -90,7 +91,7 @@ export function generateIFinderJWT(user, options = {}) {
     scope: scope
   };
 
-  console.log(
+  logger.info(
     `Generating iFinder JWT for user ${payload.sub} with scope '${scope}' and expiresIn ${expiresIn} seconds`
   );
 

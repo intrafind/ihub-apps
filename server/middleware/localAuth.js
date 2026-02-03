@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,14 +22,14 @@ function loadUsers(usersFilePath) {
       : path.join(__dirname, '../../', usersFilePath);
 
     if (!fs.existsSync(fullPath)) {
-      console.warn(`Users file not found: ${fullPath}`);
+      logger.warn(`Users file not found: ${fullPath}`);
       return { users: {} };
     }
 
     const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
     return config;
   } catch (error) {
-    console.warn('Could not load users configuration:', error.message);
+    logger.warn('Could not load users configuration:', error.message);
     return { users: {} };
   }
 }

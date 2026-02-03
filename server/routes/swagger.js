@@ -5,6 +5,7 @@ import { loadJson } from '../configLoader.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,7 +76,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   try {
     platformConfig = (await loadJson('config/platform.json')) || {};
   } catch (error) {
-    console.warn('Could not load platform configuration for Swagger setup:', error.message);
+    logger.warn('Could not load platform configuration for Swagger setup:', error.message);
   }
 
   const swaggerConfig = platformConfig.swagger || {};
@@ -83,11 +84,11 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   const requireAuth = swaggerConfig.requireAuth !== false; // Default to requiring auth
 
   if (!isEnabled) {
-    console.log('📚 Swagger documentation is disabled in platform configuration');
+    logger.info('📚 Swagger documentation is disabled in platform configuration');
     return;
   }
 
-  console.log('📚 Setting up Swagger documentation routes...');
+  logger.info('📚 Setting up Swagger documentation routes...');
 
   // Apply authentication middleware if required
   const middleware = requireAuth ? [authRequired] : [];
@@ -135,19 +136,19 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   const openaiApiSpec = swaggerJSDoc(openaiApiConfig);
 
   // Debug logging
-  console.log('📚 Generated API specs:');
-  console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`);
-  console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`);
-  console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`);
+  logger.info('📚 Generated API specs:');
+  logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`);
+  logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`);
+  logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`);
 
   if (Object.keys(normalApiSpec.paths || {}).length > 0) {
-    console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`);
   }
   if (Object.keys(adminApiSpec.paths || {}).length > 0) {
-    console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`);
   }
   if (Object.keys(openaiApiSpec.paths || {}).length > 0) {
-    console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`);
   }
 
   // Swagger UI options
@@ -226,15 +227,15 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(openaiApiSpec, customOptions));
   });
 
-  console.log('📚 Swagger documentation available at:');
-  console.log(`   📖 All APIs: ${buildServerPath('/api/docs', basePath)}`);
-  console.log(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`);
-  console.log(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`);
-  console.log(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`);
+  logger.info('📚 Swagger documentation available at:');
+  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs')}`);
+  logger.info(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`);
+  logger.info(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`);
+  logger.info(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`);
 
   if (requireAuth) {
-    console.log('🔐 Authentication required for Swagger access');
+    logger.info('🔐 Authentication required for Swagger access');
   } else {
-    console.log('🌐 Swagger accessible without authentication');
+    logger.info('🌐 Swagger accessible without authentication');
   }
 }

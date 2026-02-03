@@ -6,6 +6,7 @@ import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 export default function registerToolRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/tools', basePath), authRequired, async (req, res) => {
@@ -37,7 +38,7 @@ export default function registerToolRoutes(app, basePath = '') {
       res.setHeader('ETag', userSpecificEtag);
       res.json(tools);
     } catch (error) {
-      console.error('Error fetching tools:', error);
+      logger.error('Error fetching tools:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -64,7 +65,7 @@ export default function registerToolRoutes(app, basePath = '') {
         });
         res.json(result);
       } catch (error) {
-        console.error(`Tool ${toolId} error:`, error);
+        logger.error(`Tool ${toolId} error:`, error);
         res.status(500).json({ error: 'Tool execution failed' });
       }
     }

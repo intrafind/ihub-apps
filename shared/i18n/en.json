@@ -572,7 +572,44 @@
       "viewRelease": "View Release on GitHub",
       "checkingUpdate": "Checking for updates...",
       "updateCheckFailed": "Failed to check for updates",
-      "noUpdateAvailable": "You are running the latest version"
+      "noUpdateAvailable": "You are running the latest version",
+      "logging": {
+        "title": "Logging Configuration",
+        "description": "Configure application logging levels and output",
+        "currentLevel": "Current Log Level",
+        "availableLevels": "Available Log Levels",
+        "changeLevel": "Change Log Level",
+        "changingLevel": "Changing Log Level...",
+        "levelChanged": "Log level changed to {{level}}",
+        "levelChangeError": "Failed to change log level",
+        "levels": {
+          "error": "Error - Only errors",
+          "warn": "Warning - Errors and warnings",
+          "info": "Info - General information (default)",
+          "http": "HTTP - HTTP requests and responses",
+          "verbose": "Verbose - Detailed information",
+          "debug": "Debug - Debugging information",
+          "silly": "Silly - Everything (very detailed)"
+        },
+        "levelDescriptions": {
+          "error": "Only log errors",
+          "warn": "Log warnings and errors",
+          "info": "Log general information, warnings, and errors (recommended)",
+          "http": "Log HTTP requests along with info, warnings, and errors",
+          "verbose": "Log detailed information useful for troubleshooting",
+          "debug": "Log debugging information for development",
+          "silly": "Log everything - use only for detailed debugging"
+        },
+        "fileLogging": "File Logging",
+        "fileLoggingEnabled": "Enable file logging",
+        "fileLoggingPath": "Log file path",
+        "fileLoggingMaxSize": "Max file size (bytes)",
+        "fileLoggingMaxFiles": "Max number of log files",
+        "saveConfig": "Save Configuration",
+        "savingConfig": "Saving Configuration...",
+        "configSaved": "Logging configuration saved successfully",
+        "configSaveError": "Failed to save logging configuration"
+      }
     },
     "tools": {
       "title": "Tool Management",

@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from './pathUtils.js';
+import logger from './utils/logger.js';
 
 /**
  * Renderers Loader Service
@@ -24,7 +25,7 @@ import { getRootDir } from './pathUtils.js';
 async function loadRenderersFromDirectory(dirPath, source, verbose = true) {
   if (!existsSync(dirPath)) {
     if (verbose) {
-      console.log(`📁 ${source} renderers directory not found, skipping`);
+      logger.info(`📁 ${source} renderers directory not found, skipping`);
     }
     return [];
   }
@@ -34,7 +35,7 @@ async function loadRenderersFromDirectory(dirPath, source, verbose = true) {
   const files = dirContents.filter(file => file.endsWith('.jsx') || file.endsWith('.js'));
 
   if (verbose && files.length > 0) {
-    console.log(`📱 Found ${files.length} renderer file(s) in ${source}`);
+    logger.info(`📱 Found ${files.length} renderer file(s) in ${source}`);
   }
 
   const loadedItems = [];
@@ -69,10 +70,10 @@ async function loadRenderersFromDirectory(dirPath, source, verbose = true) {
 
   // Log all items together for better clustering
   if (verbose && loadedItems.length > 0) {
-    console.log(loadedItems.join('\n'));
+    logger.info(loadedItems.join('\n'));
   }
   if (errorItems.length > 0) {
-    console.log(errorItems.join('\n'));
+    logger.info(errorItems.join('\n'));
   }
 
   return renderers;
@@ -86,7 +87,7 @@ async function loadRenderersFromDirectory(dirPath, source, verbose = true) {
  */
 export async function loadAllRenderers(verbose = true) {
   if (verbose) {
-    console.log('\n━━━ Loading Custom Response Renderers ━━━');
+    logger.info('\n━━━ Loading Custom Response Renderers ━━━');
   }
 
   const rootDir = getRootDir();
@@ -103,10 +104,10 @@ export async function loadAllRenderers(verbose = true) {
     try {
       await fs.mkdir(contentsPath, { recursive: true });
       if (verbose) {
-        console.log(`📁 Created contents/renderers directory: ${contentsPath}`);
+        logger.info(`📁 Created contents/renderers directory: ${contentsPath}`);
       }
     } catch (error) {
-      console.error(`Failed to create contents/renderers directory: ${error.message}`);
+      logger.error(`Failed to create contents/renderers directory: ${error.message}`);
     }
   }
 
@@ -123,7 +124,7 @@ export async function loadAllRenderers(verbose = true) {
   // Override with contents (if any)
   contentRenderers.forEach(renderer => {
     if (rendererMap.has(renderer.id) && verbose) {
-      console.log(`   🔄 Overriding default renderer: ${renderer.id}`);
+      logger.info(`   🔄 Overriding default renderer: ${renderer.id}`);
     }
     rendererMap.set(renderer.id, renderer);
   });
@@ -132,7 +133,7 @@ export async function loadAllRenderers(verbose = true) {
 
   if (verbose) {
     const enabledCount = allRenderers.filter(r => r.enabled).length;
-    console.log(`📊 Summary: ${allRenderers.length} total renderers (${enabledCount} enabled)`);
+    logger.info(`📊 Summary: ${allRenderers.length} total renderers (${enabledCount} enabled)`);
   }
 
   return allRenderers;

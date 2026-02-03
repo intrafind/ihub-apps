@@ -12,6 +12,7 @@ import {
   createGenericStreamingResponse,
   normalizeFinishReason
 } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Sanitize JSON Schema for vLLM compatibility
@@ -67,14 +68,14 @@ export function convertGenericToolsToVLLM(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      console.log(
+      logger.info(
         `[vLLM Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
       );
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      console.log(`[vLLM Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info(`[vLLM Converter] Filtering out special tool: ${tool.id || tool.name}`);
       return false;
     }
     // Universal tool - include it
@@ -180,7 +181,7 @@ export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
                 ? parsed
                 : { __raw_arguments: argsStr };
           } catch (error) {
-            console.warn('Failed to parse vLLM tool call arguments:', error.message);
+            logger.warn('Failed to parse vLLM tool call arguments:', error.message);
             args = { __raw_arguments: argsStr };
           }
         } else {
@@ -261,7 +262,7 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
               parsedArgs = JSON.parse(pending.arguments);
             }
           } catch (e) {
-            console.warn('Failed to parse accumulated vLLM tool arguments on [DONE]:', e);
+            logger.warn('Failed to parse accumulated vLLM tool arguments on [DONE]:', e);
             parsedArgs = { __raw_arguments: pending.arguments };
           }
 
@@ -360,7 +361,7 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
                 parsedArgs = JSON.parse(pending.arguments);
               }
             } catch (e) {
-              console.warn('Failed to parse accumulated vLLM tool arguments:', e);
+              logger.warn('Failed to parse accumulated vLLM tool arguments:', e);
               parsedArgs = { __raw_arguments: pending.arguments };
             }
 
@@ -380,7 +381,7 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (error) {
-    console.error('Error parsing vLLM response chunk:', error);
+    logger.error('Error parsing vLLM response chunk:', error);
     result.error = true;
     result.errorMessage = `Error parsing vLLM response: ${error.message}`;
   }

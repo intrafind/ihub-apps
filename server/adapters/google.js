@@ -3,6 +3,7 @@
  */
 import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class GoogleAdapterClass extends BaseAdapter {
   /**
@@ -169,7 +170,7 @@ class GoogleAdapterClass extends BaseAdapter {
 
     // Debug logs to trace message transformation
     this.debugLogMessages(messages, geminiContents, 'Google');
-    console.log('System instruction:', systemInstruction);
+    logger.info('System instruction:', systemInstruction);
 
     // Return both regular messages and the system instruction
     return {
@@ -259,12 +260,12 @@ class GoogleAdapterClass extends BaseAdapter {
           thinkingBudget: options.thinkingBudget ?? model.thinking.budget,
           includeThoughts: options.thinkingThoughts ?? model.thinking.thoughts
         };
-        console.log(
+        logger.info(
           'Thinking enabled - added thinkingConfig with budget:',
           requestBody.generationConfig.thinkingConfig.thinkingBudget
         );
       } else {
-        console.log('Thinking disabled - not adding thinkingConfig');
+        logger.info('Thinking disabled - not adding thinkingConfig');
       }
     }
 
@@ -288,14 +289,14 @@ class GoogleAdapterClass extends BaseAdapter {
         }
       }
 
-      console.log('Image generation enabled with config:', {
+      logger.info('Image generation enabled with config:', {
         responseModalities: requestBody.generationConfig.responseModalities,
         imageConfig: requestBody.generationConfig.imageConfig
       });
     }
 
     // Note: Request body logging disabled to prevent exposing sensitive data in logs
-    // console.log('Google request body:', requestBody);
+    // logger.info('Google request body:', requestBody);
 
     return {
       url,
@@ -331,7 +332,7 @@ class GoogleAdapterClass extends BaseAdapter {
         const parsed = JSON.parse(data);
 
         // Debug: Log the full parsed response to see what metadata we receive
-        console.log('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
+        logger.info('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
 
         // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
         // OR if the response contains all expected fields for a complete response
@@ -467,12 +468,12 @@ class GoogleAdapterClass extends BaseAdapter {
           }
         }
       } catch (jsonError) {
-        console.error('Failed to parse Google response as JSON:', jsonError.message);
-        console.error('Raw response data that failed to parse:', data);
+        logger.error('Failed to parse Google response as JSON:', jsonError.message);
+        logger.error('Raw response data that failed to parse:', data);
 
         // Check if this is an error response from Google API
         if (data.includes('callbacks') && data.includes('function')) {
-          console.error(
+          logger.error(
             'Google API returned a callbacks-related error. This suggests an issue with the request format.'
           );
           result.error = true;
@@ -508,9 +509,9 @@ class GoogleAdapterClass extends BaseAdapter {
 
       return result;
     } catch (error) {
-      console.error('Error processing Gemini response:', error);
-      console.error('Error stack:', error.stack);
-      console.error('Raw data that caused the error:', data);
+      logger.error('Error processing Gemini response:', error);
+      logger.error('Error stack:', error.stack);
+      logger.error('Raw data that caused the error:', data);
       return {
         content: [],
         complete: true,
