@@ -133,7 +133,8 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
   // Always call getSSLConfig() to ensure NODE_TLS_REJECT_UNAUTHORIZED is set if needed
   // This is critical for https-proxy-agent v7+ which relies on the global env var
   const sslConfig = getSSLConfig();
-  const shouldIgnoreSSL = forceIgnoreSSL !== null ? forceIgnoreSSL : sslConfig.ignoreInvalidCertificates;
+  const shouldIgnoreSSL =
+    forceIgnoreSSL !== null ? forceIgnoreSSL : sslConfig.ignoreInvalidCertificates;
   const proxyConfig = getProxyConfig();
 
   const isHttps = url.startsWith('https://');
