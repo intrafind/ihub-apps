@@ -210,7 +210,12 @@ class ChatService {
         clientLanguage
       });
     } catch (error) {
-      logger.error('Error in ChatService.processChat:', error);
+      logger.error({
+        component: 'ChatService',
+        message: 'Error in processChat',
+        error: error.message,
+        stack: error.stack
+      });
 
       const errorResponse = this.errorHandler.formatErrorResponse(error);
       if (res && !clientRes) {
