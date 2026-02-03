@@ -15,6 +15,26 @@ import {
 } from './GenericToolCalling.js';
 
 /**
+ * Normalize Google function call names
+ * Google's API sometimes doubles the tool name for special tools like google_search
+ * This function handles the mapping back to the correct tool ID
+ * @param {string} googleFunctionName - Function name from Google API
+ * @returns {string} Normalized function name
+ */
+function normalizeGoogleFunctionName(googleFunctionName) {
+  // Handle the doubled google_search name bug
+  // Google returns "google_search_google_search" but we need "googleSearch"
+  if (
+    googleFunctionName === 'google_search_google_search' ||
+    googleFunctionName === 'google_search'
+  ) {
+    return 'googleSearch';
+  }
+
+  return googleFunctionName;
+}
+
+/**
  * Convert generic tools to Google format
  * Filters out provider-specific special tools from other providers (webSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
@@ -129,7 +149,7 @@ export function convertGoogleFunctionCallsToGeneric(googleFunctionCalls = []) {
       if (part.functionCall) {
         return createGenericToolCall(
           `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
-          part.functionCall.name,
+          normalizeGoogleFunctionName(part.functionCall.name),
           part.functionCall.args || {},
           index,
           { originalFormat: 'google' }
@@ -234,7 +254,7 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
-              part.functionCall.name,
+              normalizeGoogleFunctionName(part.functionCall.name),
               part.functionCall.args || {},
               result.tool_calls.length,
               metadata
@@ -298,7 +318,7 @@ export function convertGoogleResponseToGeneric(data, streamId = 'default') {
           result.tool_calls.push(
             createGenericToolCall(
               `call_${result.tool_calls.length}_${Date.now()}`,
-              part.functionCall.name,
+              normalizeGoogleFunctionName(part.functionCall.name),
               part.functionCall.args || {},
               result.tool_calls.length,
               metadata
