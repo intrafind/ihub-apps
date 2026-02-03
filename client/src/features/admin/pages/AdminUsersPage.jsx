@@ -99,6 +99,7 @@ const AdminUsersPage = () => {
     if (!searchTerm) return true;
 
     const searchLower = searchTerm.toLowerCase();
+    const id = (user.id || '').toLowerCase();
     const name = (user.name || '').toLowerCase();
     const username = (user.username || '').toLowerCase();
     const email = (user.email || '').toLowerCase();
@@ -106,6 +107,7 @@ const AdminUsersPage = () => {
     const authMethods = (user.authMethods || ['local']).join(' ').toLowerCase();
 
     return (
+      id.includes(searchLower) ||
       name.includes(searchLower) ||
       username.includes(searchLower) ||
       email.includes(searchLower) ||
@@ -187,7 +189,7 @@ const AdminUsersPage = () => {
               </div>
               <input
                 type="text"
-                placeholder="Search users by name, username, email, groups, or auth method..."
+                placeholder="Search users by ID, name, username, email, groups, or auth method..."
                 value={searchTerm}
                 onChange={e => setSearchTerm(e.target.value)}
                 className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
