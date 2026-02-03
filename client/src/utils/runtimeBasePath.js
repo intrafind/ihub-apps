@@ -96,7 +96,18 @@ export const getBasePath = () => {
     const currentPath = window.location.pathname;
 
     // Check if cached base path is actually a known route (invalid - routes are not base paths)
-    const knownRoutes = ['apps', 'admin', 'auth', 'login', 'chat', 'pages', 'prompts', 'settings', 'teams', 's'];
+    const knownRoutes = [
+      'apps',
+      'admin',
+      'auth',
+      'login',
+      'chat',
+      'pages',
+      'prompts',
+      'settings',
+      'teams',
+      's'
+    ];
     const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
 
     if (isKnownRoute) {
