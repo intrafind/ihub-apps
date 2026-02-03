@@ -2,7 +2,7 @@
 
 **Date**: 2026-02-03  
 **Issue**: Security: Users which have been deleted or disabled, can still work with a valid JWT  
-**Status**: ✅ Implemented  
+**Status**: ✅ Implemented (Updated to cover all auth modes)
 
 ## Problem Statement
 
@@ -16,21 +16,23 @@ This created a security vulnerability where:
 - Deleted users could continue using the system with old JWT tokens
 - There was no way to immediately revoke access for compromised accounts
 
+**Important Discovery**: This issue affected **all authentication modes** (Local, OIDC, LDAP, Teams), not just local authentication. OIDC, LDAP, and Teams users are persisted to the users database via `validateAndPersistExternalUser()` during login, but their JWTs were not validated on subsequent requests.
+
 ## Root Cause Analysis
 
 The JWT authentication middleware (`server/middleware/jwtAuth.js`) was validating JWT tokens using only:
 - JWT signature verification
 - Expiration time check
 
-For local authentication, the middleware did **not** validate:
-- Whether the user still exists in the database
+For **all authentication modes** (local, OIDC, LDAP, Teams), the middleware did **not** validate:
+- Whether the user still exists in the database (local only)
 - Whether the user account is still active
 
 This was different from OAuth client validation, which already included checks for client existence and active status.
 
 ## Solution
 
-Added user validation to the JWT authentication middleware for local auth mode, following the same pattern as OAuth client validation.
+Added user validation to the JWT authentication middleware for **all auth modes**: Local, OIDC, LDAP, and Teams, following the same pattern as OAuth client validation.
 
 ### Implementation Details
 
@@ -83,24 +85,34 @@ Added user validation to the JWT authentication middleware for local auth mode, 
    ```
 
 3. **Error Handling Strategy**:
-   - **401 Unauthorized**: User account no longer exists (deleted)
-   - **403 Forbidden**: User account has been disabled
-   - **503 Service Unavailable**: Database cannot be loaded (prevents bypass)
+   - **401 Unauthorized**: User account no longer exists (deleted - local only)
+   - **403 Forbidden**: User account has been disabled (all auth modes)
+   - **503 Service Unavailable**: Database cannot be loaded (prevents bypass - all auth modes)
    - **401 Unauthorized**: Local authentication is disabled
+
+4. **Auth Modes Covered**:
+   - **Local**: Full validation (user existence + active status)
+   - **OIDC**: Active status validation if user is persisted
+   - **LDAP**: Active status validation if user is persisted  
+   - **Teams**: Active status validation if user is persisted
+
+   Note: OIDC, LDAP, and Teams users are persisted to the users database via `validateAndPersistExternalUser()` during their first login. If they exist in the database, they are validated.
 
 ## Security Improvements
 
 ### Before
-- ❌ Disabled users could still use valid JWT tokens
-- ❌ Deleted users could access the system with old tokens
+- ❌ Disabled users could still use valid JWT tokens (all auth modes)
+- ❌ Deleted users could access the system with old tokens (local only)
 - ❌ No way to immediately revoke access
 - ❌ Database errors allowed authentication to proceed (bypass vulnerability)
+- ❌ OIDC/LDAP/Teams users not validated against database
 
 ### After
-- ✅ Disabled users receive 403 error
-- ✅ Deleted users receive 401 error
-- ✅ Access can be revoked by setting `active: false`
+- ✅ Disabled users receive 403 error (all auth modes)
+- ✅ Deleted users receive 401 error (local only)
+- ✅ Access can be revoked by setting `active: false` (all auth modes)
 - ✅ Database errors reject authentication (503 error)
+- ✅ OIDC/LDAP/Teams users validated if persisted
 
 ## Testing
 
@@ -124,10 +136,13 @@ Added user validation to the JWT authentication middleware for local auth mode, 
 ### Test Results
 
 ```
-✓ Active users can use their JWT tokens
-✓ Deleted users receive 401 "User account no longer exists"
-✓ Disabled users receive 403 "User account has been disabled"
-✓ Database errors receive 503 "Service unavailable"
+✓ Active users can use their JWT tokens (all auth modes)
+✓ Deleted users receive 401 "User account no longer exists" (local only)
+✓ Disabled users receive 403 "User account has been disabled" (all auth modes)
+✓ Database errors receive 503 "Service unavailable" (all auth modes)
+✓ OIDC users validated if persisted to database
+✓ LDAP users validated if persisted to database
+✓ Teams users validated if persisted to database
 ```
 
 ## Code Quality Checks

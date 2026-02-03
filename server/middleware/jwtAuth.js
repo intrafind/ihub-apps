@@ -226,35 +226,131 @@ export default function jwtAuthMiddleware(req, res, next) {
         });
       }
     } else if (decoded.authMode === 'oidc') {
-      user = {
-        id: decoded.sub || decoded.username,
-        username: decoded.username || decoded.preferred_username || decoded.sub,
-        name: decoded.name || decoded.given_name || decoded.username,
-        email: decoded.email || '',
-        groups: decoded.groups || [],
-        authMode: 'oidc',
-        timestamp: Date.now()
-      };
+      // For OIDC auth, validate that user still exists and is active
+      // OIDC users are persisted to users.json via validateAndPersistExternalUser
+      try {
+        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersConfig = loadUsers(usersFilePath);
+        
+        // OIDC users can be identified by their subject ID or email
+        const userId = decoded.sub || decoded.username;
+        let userRecord = usersConfig.users?.[userId];
+        
+        // If not found by ID, try to find by email (OIDC users may have different IDs)
+        if (!userRecord && decoded.email) {
+          userRecord = Object.values(usersConfig.users || {}).find(
+            u => u.email === decoded.email && u.authMethods?.includes('oidc')
+          );
+        }
+        
+        if (userRecord && !isUserActive(userRecord)) {
+          logger.warn(`[JWT Auth] Token rejected: OIDC user account disabled | user_id=${userRecord.id}`);
+          return res.status(403).json({
+            error: 'access_denied',
+            error_description: 'User account has been disabled'
+          });
+        }
+        
+        // User either doesn't exist (not yet persisted) or is active
+        user = {
+          id: decoded.sub || decoded.username,
+          username: decoded.username || decoded.preferred_username || decoded.sub,
+          name: decoded.name || decoded.given_name || decoded.username,
+          email: decoded.email || '',
+          groups: decoded.groups || [],
+          authMode: 'oidc',
+          timestamp: Date.now()
+        };
+      } catch (loadError) {
+        logger.error('[JWT Auth] Failed to validate OIDC user status:', loadError);
+        // Return 503 error to prevent authentication bypass
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate user credentials. Please try again later.'
+        });
+      }
     } else if (decoded.authMode === 'ldap') {
-      user = {
-        id: decoded.username,
-        username: decoded.username,
-        name: decoded.name || decoded.displayName || decoded.username,
-        email: decoded.email || decoded.mail || '',
-        groups: decoded.groups || [],
-        authMode: 'ldap',
-        timestamp: Date.now()
-      };
+      // For LDAP auth, validate that user still exists and is active
+      // LDAP users may be persisted to users.json
+      try {
+        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersConfig = loadUsers(usersFilePath);
+        
+        const userId = decoded.username;
+        let userRecord = usersConfig.users?.[userId];
+        
+        // If not found by username, try to find by email
+        if (!userRecord && decoded.email) {
+          userRecord = Object.values(usersConfig.users || {}).find(
+            u => u.email === decoded.email && u.authMethods?.includes('ldap')
+          );
+        }
+        
+        if (userRecord && !isUserActive(userRecord)) {
+          logger.warn(`[JWT Auth] Token rejected: LDAP user account disabled | user_id=${userRecord.id}`);
+          return res.status(403).json({
+            error: 'access_denied',
+            error_description: 'User account has been disabled'
+          });
+        }
+        
+        user = {
+          id: decoded.username,
+          username: decoded.username,
+          name: decoded.name || decoded.displayName || decoded.username,
+          email: decoded.email || decoded.mail || '',
+          groups: decoded.groups || [],
+          authMode: 'ldap',
+          timestamp: Date.now()
+        };
+      } catch (loadError) {
+        logger.error('[JWT Auth] Failed to validate LDAP user status:', loadError);
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate user credentials. Please try again later.'
+        });
+      }
     } else if (decoded.authMode === 'teams') {
-      user = {
-        id: decoded.id || decoded.sub,
-        username: decoded.username || decoded.userPrincipalName,
-        name: decoded.name || decoded.displayName,
-        email: decoded.email || decoded.userPrincipalName,
-        groups: decoded.groups || [],
-        authMode: 'teams',
-        timestamp: Date.now()
-      };
+      // For Teams auth, validate that user still exists and is active
+      // Teams users are persisted to users.json via validateAndPersistExternalUser
+      try {
+        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersConfig = loadUsers(usersFilePath);
+        
+        const userId = decoded.id || decoded.sub;
+        let userRecord = usersConfig.users?.[userId];
+        
+        // If not found by ID, try to find by email
+        if (!userRecord && decoded.email) {
+          userRecord = Object.values(usersConfig.users || {}).find(
+            u => u.email === decoded.email && u.authMethods?.includes('teams')
+          );
+        }
+        
+        if (userRecord && !isUserActive(userRecord)) {
+          logger.warn(`[JWT Auth] Token rejected: Teams user account disabled | user_id=${userRecord.id}`);
+          return res.status(403).json({
+            error: 'access_denied',
+            error_description: 'User account has been disabled'
+          });
+        }
+        
+        user = {
+          id: decoded.id || decoded.sub,
+          username: decoded.username || decoded.userPrincipalName,
+          name: decoded.name || decoded.displayName,
+          email: decoded.email || decoded.userPrincipalName,
+          groups: decoded.groups || [],
+          authMode: 'teams',
+          timestamp: Date.now()
+        };
+      } catch (loadError) {
+        logger.error('[JWT Auth] Failed to validate Teams user status:', loadError);
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate user credentials. Please try again later.'
+        });
+      }
     } else {
       // Fallback for unknown auth modes
       user = {
