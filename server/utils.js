@@ -329,28 +329,58 @@ export async function logInteraction(interactionType, data) {
 
     // For debugging purposes, log to console with appropriate type prefix
     const userInfo = logEntry.user
-      ? `| User: ${logEntry.user.username || logEntry.user.id || logEntry.user.email || 'unknown'}`
-      : '| User: anonymous';
+      ? logEntry.user.username || logEntry.user.id || logEntry.user.email || 'unknown'
+      : 'anonymous';
 
     if (logType === 'feedback') {
-      logger.info(
-        `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} | Rating: ${data.feedback?.rating || 'unknown'}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'User feedback received',
+        type: 'FEEDBACK',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo,
+        rating: data.feedback?.rating || 'unknown'
+      });
     } else if (logType === 'chat_response') {
-      logger.info(
-        `[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'Chat response generated',
+        type: 'CHAT_RESPONSE',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo
+      });
     } else if (logType === 'chat_request') {
       const queryPreview = logEntry.query
-        ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}`
+        ? logEntry.query.substring(0, 50) + (logEntry.query.length > 50 ? '...' : '')
         : '';
-      logger.info(
-        `[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} ${queryPreview}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'Chat request received',
+        type: 'CHAT_REQUEST',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo,
+        query: queryPreview
+      });
     } else {
-      logger.info(
-        `[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'Interaction logged',
+        type: 'INTERACTION',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo
+      });
     }
 
     // Write to log file
@@ -360,7 +390,12 @@ export async function logInteraction(interactionType, data) {
     return interactionId;
   } catch (error) {
     // Don't let logging errors affect the main application flow
-    logger.error('Error logging interaction:', error);
+    logger.error({
+      component: 'ChatService',
+      message: 'Error logging interaction',
+      error: error.message,
+      stack: error.stack
+    });
     return null;
   }
 }
