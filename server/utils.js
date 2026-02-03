@@ -356,9 +356,6 @@ export async function logInteraction(interactionType, data) {
         user: userInfo
       });
     } else if (logType === 'chat_request') {
-      const queryPreview = logEntry.query
-        ? logEntry.query.substring(0, 50) + (logEntry.query.length > 50 ? '...' : '')
-        : '';
       logger.info({
         component: 'ChatService',
         message: 'Chat request received',
@@ -368,7 +365,7 @@ export async function logInteraction(interactionType, data) {
         modelId: logEntry.modelId || 'unknown',
         sessionId: logEntry.sessionId,
         user: userInfo,
-        query: queryPreview
+        query: logEntry.query
       });
     } else {
       logger.info({
