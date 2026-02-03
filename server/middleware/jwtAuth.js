@@ -210,17 +210,12 @@ export default function jwtAuthMiddleware(req, res, next) {
           };
         } catch (loadError) {
           logger.error('[JWT Auth] Failed to validate user status:', loadError);
-          // Continue anyway to avoid breaking on config errors
-          const userId = decoded.sub || decoded.username || decoded.id;
-          user = {
-            id: userId,
-            username: decoded.username || userId,
-            name: decoded.name || decoded.username || userId,
-            email: decoded.email || '',
-            groups: decoded.groups || [],
-            authMode: 'local',
-            timestamp: Date.now()
-          };
+          // Return 503 error to prevent authentication bypass
+          // We cannot safely validate the user, so we must reject the request
+          return res.status(503).json({
+            error: 'service_unavailable',
+            error_description: 'Unable to validate user credentials. Please try again later.'
+          });
         }
       } else {
         // Local auth not enabled, but token is local type - reject
