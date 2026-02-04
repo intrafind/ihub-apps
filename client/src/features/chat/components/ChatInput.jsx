@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
+import ImageGenerationControls from './ImageGenerationControls';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
@@ -33,7 +34,13 @@ const ChatInput = ({
   onUndoMagicPrompt = null,
   magicPromptLoading = false,
   enabledTools = [],
-  onEnabledToolsChange = null
+  onEnabledToolsChange = null,
+  // Image generation props
+  model = null,
+  imageAspectRatio = null,
+  imageQuality = null,
+  onImageAspectRatioChange = null,
+  onImageQualityChange = null
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -204,6 +211,20 @@ const ChatInput = ({
           fileData={selectedFile} // Pass the actual selectedFile value from parent
           config={uploadConfig}
         />
+      )}
+
+      {/* Image Generation Controls - Show on desktop only if model supports it */}
+      {model?.supportsImageGeneration && (
+        <div className="hidden md:block mb-2">
+          <ImageGenerationControls
+            app={app}
+            model={model}
+            imageAspectRatio={imageAspectRatio}
+            imageQuality={imageQuality}
+            onImageAspectRatioChange={onImageAspectRatioChange}
+            onImageQualityChange={onImageQualityChange}
+          />
+        </div>
       )}
 
       <form

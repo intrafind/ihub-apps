@@ -998,6 +998,8 @@ const AppChat = ({ preloadedApp = null }) => {
 
   // Helper function to render the appropriate chat input component
   const renderChatInput = () => {
+    const currentModel = models.find(m => m.id === selectedModel);
+
     const commonProps = {
       app,
       value: input,
@@ -1027,7 +1029,13 @@ const AppChat = ({ preloadedApp = null }) => {
       onUndoMagicPrompt: handleUndoMagicPrompt,
       magicPromptLoading: magicPromptHandler.magicLoading,
       enabledTools,
-      onEnabledToolsChange: setEnabledTools
+      onEnabledToolsChange: setEnabledTools,
+      // Image generation props
+      model: currentModel,
+      imageAspectRatio,
+      imageQuality,
+      onImageAspectRatioChange: setImageAspectRatio,
+      onImageQualityChange: setImageQuality
     };
 
     if (useNextGenInput) {
