@@ -47,7 +47,7 @@ const AdminUsersPage = () => {
     }
 
     try {
-      const response = await makeAdminApiCall(`/admin/auth/users/${userId}`, {
+      await makeAdminApiCall(`/admin/auth/users/${userId}`, {
         method: 'DELETE'
       });
 
@@ -69,7 +69,7 @@ const AdminUsersPage = () => {
     const newStatus = !user.active;
 
     try {
-      const response = await makeAdminApiCall(`/admin/auth/users/${user.id}`, {
+      await makeAdminApiCall(`/admin/auth/users/${user.id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json'

@@ -40,7 +40,7 @@ async function updateDocsVersion() {
 
       await writeFile(themeHeadPath, themeHeadContent, 'utf-8');
       console.log('Theme head.hbs version updated!');
-    } catch (error) {
+    } catch {
       console.log('Theme head.hbs not found, skipping');
     }
 

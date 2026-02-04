@@ -5,7 +5,6 @@
 import configCache from './configCache.js';
 import { enhanceFetchOptions } from './utils/httpConfig.js';
 import nodeFetch from 'node-fetch';
-import logger from './utils/logger.js';
 
 const lastCompleted = new Map(); // id -> timestamp when last request finished
 

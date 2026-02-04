@@ -282,6 +282,7 @@ export function AuthProvider({ children }) {
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
       return { success: false, error: error.message };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Load authentication status on mount and handle OIDC callback

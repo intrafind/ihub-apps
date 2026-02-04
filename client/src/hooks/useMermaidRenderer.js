@@ -668,8 +668,6 @@ export const useMermaidRenderer = ({ t }) => {
                     const { jsPDF } = await import('https://cdn.skypack.dev/jspdf@2.5.1');
 
                     // Calculate PDF dimensions based on actual diagram size with better scaling
-                    // Use points (pt) for better precision (1 pt = 0.352778 mm)
-                    const pointsPerMM = 2.834645669; // 72 DPI to mm conversion
                     const margin = 10; // 10mm margin
 
                     // Calculate dimensions in mm, ensuring minimum readable size

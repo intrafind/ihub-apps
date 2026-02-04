@@ -14,7 +14,7 @@ import * as MistralConverter from './MistralConverter.js';
 import * as VLLMConverter from './VLLMConverter.js';
 import * as IAssistantConverter from './IAssistantConverter.js';
 
-import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
+// GenericToolCalling exports are re-exported from converters, not directly used here
 
 /**
  * Provider converter mappings

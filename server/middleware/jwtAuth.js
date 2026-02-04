@@ -16,12 +16,10 @@ export default function jwtAuthMiddleware(req, res, next) {
 
   // Check for token in cookies first (preferred for SSE), then Authorization header
   let token = null;
-  let tokenSource = 'none';
 
   // Check HTTP-only cookie first
   if (req.cookies && req.cookies.authToken) {
     token = req.cookies.authToken;
-    tokenSource = 'cookie';
   }
   // Fallback to Authorization header for API calls
   else {
@@ -29,7 +27,6 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     if (authHeader && authHeader.startsWith('Bearer ')) {
       token = authHeader.substring(7);
-      tokenSource = 'header';
     }
   }
 

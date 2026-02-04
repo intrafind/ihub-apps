@@ -242,7 +242,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerPageRoutes(app, basePath);
   registerRendererRoutes(app, basePath);
   registerSessionRoutes(app, basePath);
-  registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT, basePath });
+  registerMagicPromptRoutes(app, { basePath });
   registerChatRoutes(app, {
     verifyApiKey,
     processMessageTemplates,
@@ -250,7 +250,7 @@ if (cluster.isPrimary && workerCount > 1) {
     DEFAULT_TIMEOUT,
     basePath
   });
-  registerOpenAIProxyRoutes(app, { getLocalizedError, basePath });
+  registerOpenAIProxyRoutes(app, { basePath });
   await registerAdminRoutes(app, basePath);
   registerShortLinkRoutes(app, basePath);
   await registerSwaggerRoutes(app, basePath);

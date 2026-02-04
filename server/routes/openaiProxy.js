@@ -13,7 +13,7 @@ import {
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
-export default function registerOpenAIProxyRoutes(app, { getLocalizedError, basePath = '' } = {}) {
+export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
   const base = buildServerPath('/api/inference', basePath);
   app.use(`${base}/v1`, authRequired);
 

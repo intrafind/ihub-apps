@@ -113,6 +113,7 @@ const ModelFormEditor = ({
     if (data) {
       validateModel(data);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data, jsonSchema]);
 
   const handleChange = (field, value) => {

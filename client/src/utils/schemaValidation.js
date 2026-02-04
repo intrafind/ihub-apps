@@ -60,7 +60,7 @@ function formatValidationErrors(ajvErrors, schema) {
   const errors = {};
 
   ajvErrors.forEach(error => {
-    const { instancePath, keyword, message, params, schemaPath } = error;
+    const { instancePath, keyword, message, params } = error;
 
     // Extract field name from instancePath
     let field = instancePath.replace(/^\//, '').replace(/\//g, '.');

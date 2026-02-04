@@ -163,7 +163,7 @@ function useChatMessages(chatId = 'default') {
           const textOnlyMessages = messages
             .filter(msg => !msg.isGreeting)
             .map(msg => {
-              const { images, ...rest } = msg;
+              const { images: _images, ...rest } = msg;
               return rest;
             });
           if (textOnlyMessages.length > 0) {

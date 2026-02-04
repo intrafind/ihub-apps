@@ -16,7 +16,7 @@ import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PromptFormEditor from '../components/PromptFormEditor';
 
 const AdminPromptEditPage = () => {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const { promptId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();

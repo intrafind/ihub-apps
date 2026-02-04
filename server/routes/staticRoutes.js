@@ -1,6 +1,5 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
 import logger from '../utils/logger.js';
@@ -12,8 +11,6 @@ import {
 } from '../utils/basePath.js';
 
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath = '' }) {
-  fileURLToPath(import.meta.url);
-
   // Only serve static files in production or packaged mode
   // In development, Vite serves the frontend directly
   if (isPackaged || config.NODE_ENV === 'production') {

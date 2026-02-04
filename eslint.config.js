@@ -34,7 +34,14 @@ export default [
       }
     },
     rules: {
-      'no-unused-vars': 'warn',
+      'no-unused-vars': [
+        'warn',
+        {
+          argsIgnorePattern: '^_',
+          varsIgnorePattern: '^_',
+          caughtErrorsIgnorePattern: '^_'
+        }
+      ],
       'no-console': 'off'
       // Removed all formatting rules that conflict with Prettier
       // Prettier handles: indent, quotes, semi, no-multiple-empty-lines, eol-last,

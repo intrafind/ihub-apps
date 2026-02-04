@@ -42,7 +42,6 @@ const ChatInputActionsMenu = ({
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
-  const [expandedDescriptions, setExpandedDescriptions] = useState({});
   const dropdownRef = useRef(null);
 
   // Tool grouping configuration

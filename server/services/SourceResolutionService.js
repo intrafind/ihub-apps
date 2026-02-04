@@ -211,7 +211,7 @@ class SourceResolutionService {
     let validEntries = 0;
     let expiredEntries = 0;
 
-    for (const [key, value] of this.resolutionCache.entries()) {
+    for (const [_key, value] of this.resolutionCache.entries()) {
       if (now - value.timestamp < this.cacheTimeout) {
         validEntries++;
       } else {

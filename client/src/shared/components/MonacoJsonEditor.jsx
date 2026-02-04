@@ -126,7 +126,7 @@ const MonacoJsonEditor = ({
       if (onChange) {
         onChange(parsed);
       }
-    } catch (error) {
+    } catch {
       setIsValidJson(false);
       // Don't call onChange for invalid JSON
     }

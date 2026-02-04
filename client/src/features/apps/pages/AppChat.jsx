@@ -231,7 +231,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const {
     monitorChatMessages,
     connectIntegration,
-    checkConnectionStatus,
+    // checkConnectionStatus is available but not currently used
     getRequiredIntegrations
   } = useIntegrationAuth();
 

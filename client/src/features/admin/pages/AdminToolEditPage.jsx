@@ -175,13 +175,6 @@ const AdminToolEditPage = () => {
     setToolData(newData);
   };
 
-  const handleInputChange = (field, value) => {
-    setToolData(prev => ({
-      ...prev,
-      [field]: value
-    }));
-  };
-
   if (loading) {
     return (
       <AdminAuth>

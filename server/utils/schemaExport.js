@@ -279,7 +279,7 @@ export function validateDependencies() {
     const testSchema = z.object({ test: z.string() });
     zodToJsonSchema(testSchema);
     return true;
-  } catch (error) {
+  } catch {
     throw new Error(
       'Missing required dependency: zod-to-json-schema. ' +
         'Please install it with: npm install zod-to-json-schema'

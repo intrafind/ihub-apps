@@ -143,7 +143,7 @@ class ErrorHandler {
    * @param {number} status - HTTP status code
    * @returns {boolean} True if it's a context window error
    */
-  isContextWindowError(errorBody, status) {
+  isContextWindowError(errorBody, _status) {
     if (!errorBody) return false;
 
     const errorBodyLower = errorBody.toLowerCase();

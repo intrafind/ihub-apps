@@ -11,8 +11,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
 const AdminAppEditPage = () => {
-  const { t, i18n } = useTranslation();
-  const currentLanguage = i18n.language;
+  const { t } = useTranslation();
   const { appId } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState(null);

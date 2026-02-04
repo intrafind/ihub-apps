@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -8,8 +8,9 @@ const AdminNavigation = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { platformConfig } = usePlatformConfig();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const pageConfig = platformConfig?.admin?.pages || {};
-  const isEnabled = key => pageConfig[key] !== false;
+  const isEnabled = useCallback(key => pageConfig[key] !== false, [pageConfig]);
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const desktopMoreMenuRef = useRef(null);
@@ -212,6 +213,7 @@ const AdminNavigation = () => {
   ];
 
   // Memoize navigation calculations to prevent unnecessary re-renders
+
   const { desktopVisibleItems, desktopHiddenItems, mobileVisibleItems, mobileHiddenItems } =
     useMemo(() => {
       // Flatten nav items for compatibility with existing overflow logic
@@ -291,27 +293,6 @@ const AdminNavigation = () => {
       {groupName}
     </div>
   );
-
-  // Helper function to get groups with items that should be in dropdown
-  const getGroupedDropdownItems = () => {
-    const result = [];
-
-    navGroups.forEach(group => {
-      const groupItems = group.items.filter(
-        item => isEnabled(item.key) && hiddenItems.some(hiddenItem => hiddenItem.key === item.key)
-      );
-
-      if (groupItems.length > 0) {
-        result.push({
-          type: 'group',
-          group: group,
-          items: groupItems
-        });
-      }
-    });
-
-    return result;
-  };
 
   return (
     <nav className="bg-white shadow-sm border-b border-gray-200">

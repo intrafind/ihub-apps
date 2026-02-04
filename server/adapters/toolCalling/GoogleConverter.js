@@ -183,7 +183,7 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
  * @param {string} streamId - Stream identifier for stateful processing (unused for Google)
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertGoogleResponseToGeneric(data, streamId = 'default') {
+export function convertGoogleResponseToGeneric(data, _streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!data) return result;

@@ -375,7 +375,7 @@ export function listOAuthClients(clientsFilePath) {
   const clients = clientsConfig.clients || {};
 
   return Object.values(clients).map(client => {
-    const { clientSecret, ...clientWithoutSecret } = client;
+    const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
     return clientWithoutSecret;
   });
 }
@@ -444,7 +444,7 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   });
 
   // Return client without secret
-  // eslint-disable-next-line no-unused-vars
+
   const { clientSecret: _, ...clientWithoutSecret } = client;
   return clientWithoutSecret;
 }

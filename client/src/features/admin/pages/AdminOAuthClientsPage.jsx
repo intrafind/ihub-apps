@@ -25,6 +25,7 @@ const AdminOAuthClientsPage = () => {
   useEffect(() => {
     checkOAuthStatus();
     loadClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const checkOAuthStatus = async () => {
