@@ -4,7 +4,6 @@ import { getToolsForApp } from '../../toolLoader.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
 import logger from '../../utils/logger.js';
-import { translateImageConfig } from '../../utils/imageGenerationConfig.js';
 
 function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
@@ -244,6 +243,7 @@ class RequestBuilder {
       const tools = await getToolsForApp(app, language, context);
 
       // Build imageConfig if image generation is supported and parameters are provided
+      // Pass raw user parameters to adapter for provider-specific translation
       let imageConfig = null;
       if (model.supportsImageGeneration) {
         // Use provided parameters or fall back to model/app defaults
@@ -255,14 +255,16 @@ class RequestBuilder {
           imageQuality || model.imageGeneration?.quality || app.imageGeneration?.quality;
 
         if (aspectRatio || quality) {
-          imageConfig = translateImageConfig(aspectRatio, quality, model.provider);
+          // Pass raw parameters to adapter - adapter will handle provider-specific translation
+          imageConfig = {
+            aspectRatio,
+            quality
+          };
           logger.info({
             component: 'RequestBuilder',
-            message: 'Image generation config created',
+            message: 'Image generation config passed to adapter',
             aspectRatio,
-            quality,
-            provider: model.provider,
-            imageConfig
+            quality
           });
         }
       }
