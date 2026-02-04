@@ -228,6 +228,7 @@ When `logging.format` is set to `"json"` (default), logs are output as structure
 {
   "component": "ChatService",
   "level": "info",
+  "timestamp": "2026-02-03T11:19:35.830Z",
   "message": "Chat request received",
   "type": "CHAT_REQUEST",
   "id": "msg-1770117575710-703",
@@ -235,15 +236,40 @@ When `logging.format` is set to `"json"` (default), logs are output as structure
   "modelId": "gpt-4",
   "sessionId": "chat-98bc4fb4-3545",
   "user": "john.doe",
-  "query": "How do I...?",
-  "timestamp": "2026-02-03T11:19:35.830Z"
+  "query": "How do I...?"
 }
+```
+
+**Field Order Guarantee:**
+
+The JSON formatter guarantees a consistent field order in all log entries:
+
+1. **`component`** (if present) - Source component/module name
+2. **`level`** - Log level (error, warn, info, etc.)
+3. **`timestamp`** - ISO 8601 timestamp
+4. **`message`** - Log message
+5. **All other fields** - Additional attributes in the order they were added
+
+This consistent ordering makes logs easier to read and parse, even when different log entries have different sets of fields.
+
+**Example with varying fields:**
+
+```json
+// Log with component
+{"component":"Server","level":"info","timestamp":"...","message":"Started"}
+
+// Log without component
+{"level":"info","timestamp":"...","message":"Request processed"}
+
+// Log with many extra fields
+{"component":"ChatService","level":"info","timestamp":"...","message":"Chat request","appId":"...","modelId":"...","userId":"..."}
 ```
 
 Benefits:
 - Easy to filter by component: `cat logs/app.log | jq 'select(.component == "ChatService")'`
 - Query specific fields: `cat logs/app.log | jq 'select(.type == "CHAT_REQUEST")'`
 - Compatible with log aggregation tools (Splunk, ELK, Datadog)
+- **Consistent field order** makes visual inspection and parsing easier
 
 #### Text Format
 
