@@ -24,11 +24,15 @@ function ensureOneDefaultModel(models) {
     const enabledModels = models.filter(model => model.enabled === true);
     if (enabledModels.length > 0) {
       enabledModels[0].default = true;
-      logger.info(`🎯 Set ${enabledModels[0].id} as default model (no default was configured)`, { component: 'ModelsLoader' });
+      logger.info(`🎯 Set ${enabledModels[0].id} as default model (no default was configured)`, {
+        component: 'ModelsLoader'
+      });
     }
   } else if (defaultModels.length > 1) {
     // Multiple default models found, keep only the first one
-    logger.warn(`⚠️ Multiple default models found, keeping only ${defaultModels[0].id}`, { component: 'ModelsLoader' });
+    logger.warn(`⚠️ Multiple default models found, keeping only ${defaultModels[0].id}`, {
+      component: 'ModelsLoader'
+    });
     for (let i = 1; i < defaultModels.length; i++) {
       defaultModels[i].default = false;
     }

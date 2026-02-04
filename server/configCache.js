@@ -23,7 +23,9 @@ function resolveEnvVars(value) {
   return value.replace(/\$\{([^}]+)\}/g, (match, varName) => {
     const envValue = process.env[varName];
     if (envValue === undefined) {
-      logger.warn(`Environment variable ${varName} is not defined, keeping placeholder: ${match}`, { component: 'ConfigCache' });
+      logger.warn(`Environment variable ${varName} is not defined, keeping placeholder: ${match}`, {
+        component: 'ConfigCache'
+      });
       return match;
     }
     return envValue;
@@ -143,7 +145,9 @@ class ConfigCache {
           // Load all apps (including disabled) for admin access
           const allApps = await loadAllApps(true);
           this.setCacheEntry(configPath, allApps);
-          logger.info(`✓ Cached: ${configPath} (${allApps.length} total apps)`, { component: 'ConfigCache' });
+          logger.info(`✓ Cached: ${configPath} (${allApps.length} total apps)`, {
+            component: 'ConfigCache'
+          });
           return;
         }
 
@@ -152,7 +156,9 @@ class ConfigCache {
           // Also load and cache all models (including disabled)
           const allModels = await loadAllModels(true);
           this.setCacheEntry('config/models.json', allModels);
-          logger.info(`✓ Cached: config/models.json (${allModels.length} total models)`, { component: 'ConfigCache' });
+          logger.info(`✓ Cached: config/models.json (${allModels.length} total models)`, {
+            component: 'ConfigCache'
+          });
           return;
         }
 
@@ -161,7 +167,9 @@ class ConfigCache {
           // Load all prompts (including disabled) for admin access
           const allPrompts = await loadAllPrompts(true);
           this.setCacheEntry(configPath, allPrompts);
-          logger.info(`✓ Cached: ${configPath} (${allPrompts.length} total prompts)`, { component: 'ConfigCache' });
+          logger.info(`✓ Cached: ${configPath} (${allPrompts.length} total prompts)`, {
+            component: 'ConfigCache'
+          });
           return;
         }
 
@@ -191,7 +199,10 @@ class ConfigCache {
           logger.warn(`⚠️  Failed to load: ${configPath}`, { component: 'ConfigCache' });
         }
       } catch (error) {
-        logger.error(`❌ Error caching ${configPath}:`, { component: 'ConfigCache', error: error.message });
+        logger.error(`❌ Error caching ${configPath}:`, {
+          component: 'ConfigCache',
+          error: error.message
+        });
       }
     });
 
@@ -210,7 +221,9 @@ class ConfigCache {
       }
 
       if (failedLocales.length > 0) {
-        logger.error(`❌ Failed to load default locales: ${failedLocales.join(', ')}`, { component: 'ConfigCache' });
+        logger.error(`❌ Failed to load default locales: ${failedLocales.join(', ')}`, {
+          component: 'ConfigCache'
+        });
         // Don't fail startup, but log the issue
       }
 
@@ -227,7 +240,9 @@ class ConfigCache {
       }
 
       this.isInitialized = true;
-      logger.info(`✅ Configuration cache initialized with ${this.cache.size} files`, { component: 'ConfigCache' });
+      logger.info(`✅ Configuration cache initialized with ${this.cache.size} files`, {
+        component: 'ConfigCache'
+      });
     } catch (error) {
       logger.error('❌ Error during cache initialization:', { component: 'ConfigCache', error });
       this.isInitialized = true; // Still mark as initialized to avoid blocking
@@ -249,7 +264,9 @@ class ConfigCache {
     if (typeof overrides !== 'object' || overrides === null) return result;
     for (const [key, value] of Object.entries(overrides)) {
       if (!(key in base)) {
-        logger.warn(`Unknown locale key '${path + key}' in overrides`, { component: 'ConfigCache' });
+        logger.warn(`Unknown locale key '${path + key}' in overrides`, {
+          component: 'ConfigCache'
+        });
         continue;
       }
       if (typeof value === 'object' && value !== null && typeof base[key] === 'object') {
@@ -303,7 +320,9 @@ class ConfigCache {
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, apps);
-          logger.info(`✓ Cached: config/apps.json (${apps.length} total apps)`, { component: 'ConfigCache' });
+          logger.info(`✓ Cached: config/apps.json (${apps.length} total apps)`, {
+            component: 'ConfigCache'
+          });
         }
         return;
       }
@@ -315,7 +334,9 @@ class ConfigCache {
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, models);
-          logger.info(`✓ Cached: config/models.json (${models.length} total models)`, { component: 'ConfigCache' });
+          logger.info(`✓ Cached: config/models.json (${models.length} total models)`, {
+            component: 'ConfigCache'
+          });
         }
         return;
       }
@@ -327,7 +348,9 @@ class ConfigCache {
         const existing = this.cache.get(key);
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, prompts);
-          logger.info(`✓ Cached: config/prompts.json (${prompts.length} total prompts)`, { component: 'ConfigCache' });
+          logger.info(`✓ Cached: config/prompts.json (${prompts.length} total prompts)`, {
+            component: 'ConfigCache'
+          });
         }
         return;
       }
@@ -362,7 +385,10 @@ class ConfigCache {
         this.setCacheEntry(key, finalData);
       }
     } catch (error) {
-      logger.error(`Error refreshing cache for ${key}:`, { component: 'ConfigCache', error: error.message });
+      logger.error(`Error refreshing cache for ${key}:`, {
+        component: 'ConfigCache',
+        error: error.message
+      });
       // Keep the old data in cache on refresh failure
     }
   }
@@ -382,7 +408,9 @@ class ConfigCache {
 
     // Validate cache entry structure
     if (!entry.data || typeof entry.data !== 'object') {
-      logger.warn(`Cache entry for ${configPath} has invalid data structure`, { component: 'ConfigCache' });
+      logger.warn(`Cache entry for ${configPath} has invalid data structure`, {
+        component: 'ConfigCache'
+      });
       return {
         data: null,
         etag: null
@@ -422,7 +450,9 @@ class ConfigCache {
     // After cache simplification, all models (including disabled) are now stored in config/models.json
     const models = this.get('config/models.json');
     if (models === null || !models.data) {
-      logger.warn('Models cache not initialized - returning empty object', { component: 'ConfigCache' });
+      logger.warn('Models cache not initialized - returning empty object', {
+        component: 'ConfigCache'
+      });
       return { data: [], etag: null };
     }
 
@@ -444,7 +474,9 @@ class ConfigCache {
     // After cache simplification, all apps (including disabled) are now stored in config/apps.json
     const apps = this.get('config/apps.json');
     if (apps === null || !apps.data) {
-      logger.warn('Apps cache not initialized - returning empty array', { component: 'ConfigCache' });
+      logger.warn('Apps cache not initialized - returning empty array', {
+        component: 'ConfigCache'
+      });
       return [];
     }
 
@@ -466,7 +498,9 @@ class ConfigCache {
     // After cache simplification, all tools (including disabled) are now stored in config/tools.json
     const tools = this.get('config/tools.json');
     if (tools === null || !tools.data) {
-      logger.warn('Tools cache not initialized - returning empty array', { component: 'ConfigCache' });
+      logger.warn('Tools cache not initialized - returning empty array', {
+        component: 'ConfigCache'
+      });
       return [];
     }
 
@@ -496,7 +530,9 @@ class ConfigCache {
     const prompts = this.get(cacheKey);
 
     if (prompts === null || !prompts.data) {
-      logger.warn('Prompts cache not initialized - returning empty array', { component: 'ConfigCache' });
+      logger.warn('Prompts cache not initialized - returning empty array', {
+        component: 'ConfigCache'
+      });
       return [];
     }
 
@@ -608,7 +644,9 @@ class ConfigCache {
 
     // Check if this locale is already being loaded
     if (this.localeLoadingLocks.has(lockKey)) {
-      logger.info(`⏳ Locale ${language} already being loaded, waiting...`, { component: 'ConfigCache' });
+      logger.info(`⏳ Locale ${language} already being loaded, waiting...`, {
+        component: 'ConfigCache'
+      });
       return await this.localeLoadingLocks.get(lockKey);
     }
 
@@ -633,7 +671,9 @@ class ConfigCache {
 
       const base = await loadBuiltinLocaleJson(`${language}.json`);
       if (!base) {
-        logger.warn(`⚠️  Failed to load builtin locale for ${language}`, { component: 'ConfigCache' });
+        logger.warn(`⚠️  Failed to load builtin locale for ${language}`, {
+          component: 'ConfigCache'
+        });
         return null;
       }
 
@@ -666,7 +706,11 @@ class ConfigCache {
 
       return merged;
     } catch (error) {
-      logger.error(`❌ Error caching locale ${language}:`, { component: 'ConfigCache', error: error.message, stack: error.stack });
+      logger.error(`❌ Error caching locale ${language}:`, {
+        component: 'ConfigCache',
+        error: error.message,
+        stack: error.stack
+      });
       return null;
     }
   }
@@ -683,9 +727,14 @@ class ConfigCache {
       const models = await loadAllModels(true);
       this.setCacheEntry('config/models.json', models);
 
-      logger.info(`✅ Models cache refreshed: ${models.length} enabled, ${models.length} total`, { component: 'ConfigCache' });
+      logger.info(`✅ Models cache refreshed: ${models.length} enabled, ${models.length} total`, {
+        component: 'ConfigCache'
+      });
     } catch (error) {
-      logger.error('❌ Error refreshing models cache:', { component: 'ConfigCache', error: error.message });
+      logger.error('❌ Error refreshing models cache:', {
+        component: 'ConfigCache',
+        error: error.message
+      });
     }
   }
 
@@ -701,9 +750,14 @@ class ConfigCache {
       const apps = await loadAllApps(true);
       this.setCacheEntry('config/apps.json', apps);
 
-      logger.info(`✅ Apps cache refreshed: ${apps.length} enabled, ${apps.length} total`, { component: 'ConfigCache' });
+      logger.info(`✅ Apps cache refreshed: ${apps.length} enabled, ${apps.length} total`, {
+        component: 'ConfigCache'
+      });
     } catch (error) {
-      logger.error('❌ Error refreshing apps cache:', { component: 'ConfigCache', error: error.message });
+      logger.error('❌ Error refreshing apps cache:', {
+        component: 'ConfigCache',
+        error: error.message
+      });
     }
   }
 
@@ -719,9 +773,15 @@ class ConfigCache {
       const prompts = await loadAllPrompts(true);
       this.setCacheEntry('config/prompts.json', prompts);
 
-      logger.info(`✅ Prompts cache refreshed: ${prompts.length} enabled, ${prompts.length} total`, { component: 'ConfigCache' });
+      logger.info(
+        `✅ Prompts cache refreshed: ${prompts.length} enabled, ${prompts.length} total`,
+        { component: 'ConfigCache' }
+      );
     } catch (error) {
-      logger.error('❌ Error refreshing prompts cache:', { component: 'ConfigCache', error: error.message });
+      logger.error('❌ Error refreshing prompts cache:', {
+        component: 'ConfigCache',
+        error: error.message
+      });
     }
   }
 
@@ -740,11 +800,16 @@ class ConfigCache {
       for (const source of sources) {
         const validation = validateSourceConfig(source);
         if (!validation.success) {
-          logger.warn(`Invalid source configuration for ${source.id}:`, { component: 'ConfigCache', errors: validation.errors });
+          logger.warn(`Invalid source configuration for ${source.id}:`, {
+            component: 'ConfigCache',
+            errors: validation.errors
+          });
         }
       }
 
-      logger.info(`✅ Sources cache refreshed: ${sources.length} sources loaded`, { component: 'ConfigCache' });
+      logger.info(`✅ Sources cache refreshed: ${sources.length} sources loaded`, {
+        component: 'ConfigCache'
+      });
       return true;
     } catch (error) {
       logger.error('❌ Failed to refresh sources cache:', { component: 'ConfigCache', error });
@@ -762,7 +827,9 @@ class ConfigCache {
     try {
       await this.refreshCacheEntry('config/providers.json');
       const { data: providers } = this.getProviders(true);
-      logger.info(`✅ Providers cache refreshed: ${providers.length} providers loaded`, { component: 'ConfigCache' });
+      logger.info(`✅ Providers cache refreshed: ${providers.length} providers loaded`, {
+        component: 'ConfigCache'
+      });
       return true;
     } catch (error) {
       logger.error('❌ Failed to refresh providers cache:', { component: 'ConfigCache', error });

@@ -29,7 +29,10 @@ export function getAppVersion() {
         return version;
       }
     } catch (error) {
-      logger.warn('Could not read version from version.txt:', { component: 'Version', error: error.message });
+      logger.warn('Could not read version from version.txt:', {
+        component: 'Version',
+        error: error.message
+      });
     }
   }
 
@@ -42,7 +45,10 @@ export function getAppVersion() {
         return packageJson.version;
       }
     } catch (error) {
-      logger.warn('Could not read version from package.json:', { component: 'Version', error: error.message });
+      logger.warn('Could not read version from package.json:', {
+        component: 'Version',
+        error: error.message
+      });
     }
   }
 

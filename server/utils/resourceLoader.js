@@ -64,7 +64,9 @@ export function createResourceLoader({
 
     if (verbose && files.length > 0) {
       logger.info(`\n━━━ Loading ${resourceName} ━━━`, { component: 'ResourceLoader' });
-      logger.info(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`, { component: 'ResourceLoader' });
+      logger.info(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`, {
+        component: 'ResourceLoader'
+      });
     }
 
     const loadedItems = [];
@@ -179,7 +181,10 @@ export function createResourceLoader({
 
       return resources;
     } catch (error) {
-      logger.error(`❌ Error loading legacy ${legacyPath}:`, { component: 'ResourceLoader', error: error.message });
+      logger.error(`❌ Error loading legacy ${legacyPath}:`, {
+        component: 'ResourceLoader',
+        error: error.message
+      });
       return [];
     }
   }
@@ -301,7 +306,9 @@ export function createValidator(requiredFields = []) {
   return function (item, source) {
     const missing = requiredFields.filter(field => !(field in item) || item[field] == null);
     if (missing.length > 0) {
-      logger.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`, { component: 'ResourceLoader' });
+      logger.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`, {
+        component: 'ResourceLoader'
+      });
     }
     return item;
   };
@@ -343,7 +350,9 @@ export function createSchemaValidator(schema, knownKeys = []) {
         const messages = result.error.errors
           .map(e => `${e.path.join('.')}: ${e.message}`)
           .join('; ');
-        logger.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`, { component: 'ResourceLoader' });
+        logger.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`, {
+          component: 'ResourceLoader'
+        });
       } else {
         // Apply the parsed data which includes Zod defaults
         validatedItem = result.data;
@@ -354,7 +363,9 @@ export function createSchemaValidator(schema, knownKeys = []) {
     if (knownKeys.length > 0) {
       const unknown = Object.keys(validatedItem).filter(key => !knownKeys.includes(key));
       if (unknown.length > 0) {
-        logger.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`, { component: 'ResourceLoader' });
+        logger.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`, {
+          component: 'ResourceLoader'
+        });
       }
     }
 

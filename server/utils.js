@@ -68,18 +68,25 @@ export async function getApiKeyForModel(modelId) {
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          logger.info(`Using stored encrypted API key for model: %s`, { component: 'Utils', modelId: sanitizeForLog(modelId) });
+          logger.info(`Using stored encrypted API key for model: %s`, {
+            component: 'Utils',
+            modelId: sanitizeForLog(modelId)
+          });
           return decryptedKey;
         } else {
           // If not encrypted, use as-is (for backwards compatibility during migration)
-          logger.info(`Using stored plaintext API key for model: %s`, { component: 'Utils', modelId: sanitizeForLog(modelId) });
+          logger.info(`Using stored plaintext API key for model: %s`, {
+            component: 'Utils',
+            modelId: sanitizeForLog(modelId)
+          });
           return model.apiKey;
         }
       } catch (error) {
-        logger.error(
-          'Failed to decrypt API key for model',
-          { component: 'Utils', modelId: sanitizeForLog(modelId), error: error.message }
-        );
+        logger.error('Failed to decrypt API key for model', {
+          component: 'Utils',
+          modelId: sanitizeForLog(modelId),
+          error: error.message
+        });
         // Continue to fallback options
       }
     }
@@ -95,24 +102,25 @@ export async function getApiKeyForModel(modelId) {
 
           if (isEncrypted) {
             const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
-            logger.info(
-              `Using stored encrypted provider API key for provider`,
-              { component: 'Utils', provider: sanitizeForLog(provider) }
-            );
+            logger.info(`Using stored encrypted provider API key for provider`, {
+              component: 'Utils',
+              provider: sanitizeForLog(provider)
+            });
             return decryptedKey;
           } else {
             // If not encrypted, use as-is (for backwards compatibility during migration)
-            logger.info(
-              `Using stored plaintext provider API key for provider`,
-              { component: 'Utils', provider: sanitizeForLog(provider) }
-            );
+            logger.info(`Using stored plaintext provider API key for provider`, {
+              component: 'Utils',
+              provider: sanitizeForLog(provider)
+            });
             return providerConfig.apiKey;
           }
         } catch (error) {
-          logger.error(
-            'Failed to decrypt provider API key',
-            { component: 'Utils', provider: sanitizeForLog(provider), error: error.message }
-          );
+          logger.error('Failed to decrypt provider API key', {
+            component: 'Utils',
+            provider: sanitizeForLog(provider),
+            error: error.message
+          });
           // Continue to fallback options
         }
       }
@@ -126,7 +134,10 @@ export async function getApiKeyForModel(modelId) {
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
     if (modelSpecificKey) {
-      logger.info(`Using environment variable API key`, { component: 'Utils', envVar: modelSpecificKeyName });
+      logger.info(`Using environment variable API key`, {
+        component: 'Utils',
+        envVar: modelSpecificKeyName
+      });
       return modelSpecificKey;
     }
 
@@ -161,10 +172,11 @@ export async function getApiKeyForModel(modelId) {
           return config.DEFAULT_API_KEY;
         }
 
-        logger.error(
-          `No API key found for provider or model-specific key`,
-          { component: 'Utils', provider, modelSpecificKeyName }
-        );
+        logger.error(`No API key found for provider or model-specific key`, {
+          component: 'Utils',
+          provider,
+          modelSpecificKeyName
+        });
         return null;
     }
   } catch (error) {
@@ -495,10 +507,7 @@ export async function simpleCompletion(
   });
   // Try to get models from cache first
   let { data: models = [] } = configCache.getModels();
-  logger.info(
-    'Available models:',
-    { component: 'Utils', models: models.map(m => m.id) }
-  );
+  logger.info('Available models:', { component: 'Utils', models: models.map(m => m.id) });
 
   const modelConfig = models.find(m => m.id === resolvedModelId);
   logger.info('Using model:', { component: 'Utils', modelConfig });

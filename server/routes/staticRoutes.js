@@ -27,17 +27,23 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       app.use(express.static(staticPath));
     }
   } else {
-    logger.info('Development mode: Static files served by Vite on port 5173', { component: 'StaticRoutes' });
+    logger.info('Development mode: Static files served by Vite on port 5173', {
+      component: 'StaticRoutes'
+    });
   }
 
   // Serve uploaded assets
   const uploadsPath = path.join(rootDir, 'contents/uploads');
-  logger.info(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`, { component: 'StaticRoutes' });
+  logger.info(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`, {
+    component: 'StaticRoutes'
+  });
   app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');
-  logger.info(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`, { component: 'StaticRoutes' });
+  logger.info(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`, {
+    component: 'StaticRoutes'
+  });
   app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
   // Only set up SPA routing in production or packaged mode
@@ -77,6 +83,8 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       app.get('*', spaHandler);
     }
   } else {
-    logger.info('Development mode: SPA routing handled by Vite on port 5173', { component: 'StaticRoutes' });
+    logger.info('Development mode: SPA routing handled by Vite on port 5173', {
+      component: 'StaticRoutes'
+    });
   }
 }

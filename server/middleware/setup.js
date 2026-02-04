@@ -175,7 +175,9 @@ function setupSessionMiddleware(app, platformConfig) {
 
   // Setup OIDC user authentication sessions
   if (needsOidcSessions) {
-    logger.info('🔐 Enabling session middleware for OIDC user authentication', { component: 'Middleware' });
+    logger.info('🔐 Enabling session middleware for OIDC user authentication', {
+      component: 'Middleware'
+    });
     app.use(
       '/api/auth/oidc',
       session({
@@ -226,7 +228,9 @@ function setupSessionMiddleware(app, platformConfig) {
   if (!needsOidcSessions && !needsIntegrationSessions) {
     const authConfig = platformConfig.auth || {};
     if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
-      logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication', { component: 'Middleware' });
+      logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication', {
+        component: 'Middleware'
+      });
       app.use(
         session({
           secret: config.JWT_SECRET || 'fallback-session-secret',
@@ -257,7 +261,9 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)
   if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {
-      logger.debug(`${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`, { component: 'Middleware' });
+      logger.debug(`${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`, {
+        component: 'Middleware'
+      });
       next();
     });
   }

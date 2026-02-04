@@ -60,7 +60,10 @@ export function cleanupInactiveClients() {
             controller.abort();
             activeRequests.delete(chatId);
           } catch (e) {
-            logger.error(`Error aborting request for chat ID: ${chatId}`, { component: 'SSE', error: e });
+            logger.error(`Error aborting request for chat ID: ${chatId}`, {
+              component: 'SSE',
+              error: e
+            });
           }
         }
         client.response.end();
