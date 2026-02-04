@@ -227,6 +227,14 @@ const ChatInput = ({
         </div>
       )}
 
+      {/* Debug: Log model info */}
+      {typeof window !== 'undefined' && model && console.log('ChatInput model:', {
+        id: model.id,
+        supportsImageGeneration: model.supportsImageGeneration,
+        imageAspectRatio,
+        imageQuality
+      })}
+
       <form
         ref={formRef}
         onSubmit={handleSubmit}
