@@ -8,8 +8,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
 const AdminProviderEditPage = () => {
-  const { t, i18n } = useTranslation();
-  const currentLanguage = i18n.language;
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { providerId } = useParams();
 

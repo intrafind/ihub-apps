@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
  */
 const ImageGenerationControls = ({
   app,
-  model,
+  model: _model,
   imageAspectRatio,
   imageQuality,
   onImageAspectRatioChange,

@@ -26,7 +26,7 @@ const SourceConfigForm = ({ source, onChange, onSave, saving, isEditing }) => {
     // Clear validation errors for this field
     if (validationErrors[field]) {
       setValidationErrors(prev => {
-        const { [field]: removed, ...rest } = prev;
+        const { [field]: _removed, ...rest } = prev;
         return rest;
       });
     }

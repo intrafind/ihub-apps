@@ -30,7 +30,7 @@ export const convertMistralToolCallsToGeneric = convertOpenAIToolCallsToGeneric;
  * @param {string} streamId - Stream identifier for stateful processing (unused for Mistral)
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertMistralResponseToGeneric(data, streamId = 'default') {
+export function convertMistralResponseToGeneric(data, _streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!data) return result;

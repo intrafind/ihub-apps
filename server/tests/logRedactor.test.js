@@ -2,8 +2,8 @@
  * Simple tests for log redaction utility
  */
 import assert from 'assert';
-import {
 import logger from '../utils/logger.js';
+import {
   redactUrl,
   redactHeaders,
   redactRequestBody,

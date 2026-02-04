@@ -35,7 +35,6 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
-    setMessageError,
     deleteMessage,
     editMessage,
     addSystemMessage,
@@ -164,14 +163,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           console.log('🔍 Unknown event type:', type, data);
       }
     },
-    [
-      pendingMessageDataRef,
-      setMessageError,
-      updateAssistantMessage,
-      onMessageComplete,
-      t,
-      messagesRef
-    ]
+    [pendingMessageDataRef, updateAssistantMessage, onMessageComplete, t, messagesRef]
   );
 
   const { initEventSource, cleanupEventSource } = useEventSource({

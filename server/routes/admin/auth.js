@@ -481,7 +481,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
       logger.info(`👤 Created new user: ${username} (${userId})`);
 
       // Return user without password hash
-      // eslint-disable-next-line no-unused-vars
+
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
     } catch (error) {

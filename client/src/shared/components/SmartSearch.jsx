@@ -42,6 +42,7 @@ const SmartSearch = () => {
           .catch(err => console.error('Failed to load apps', err));
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, apps.length]);
 
   const searchItems = apps.map(app => ({

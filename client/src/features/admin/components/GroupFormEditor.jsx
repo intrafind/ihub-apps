@@ -69,6 +69,7 @@ const GroupFormEditor = ({
     if (group) {
       validateGroup(group);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group]);
 
   const handleInputChange = (field, value) => {

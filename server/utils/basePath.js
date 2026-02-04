@@ -75,7 +75,7 @@ export const buildServerPath = path => {
  * @param {Object} req - Express request object (optional)
  * @returns {string} Complete public URL
  */
-export const buildPublicUrl = (path, req) => {
+export const buildPublicUrl = (path, _req) => {
   const basePath = getBasePath();
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 

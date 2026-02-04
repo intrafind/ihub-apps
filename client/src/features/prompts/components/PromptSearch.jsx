@@ -25,6 +25,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       setFavoritePromptIds(getFavoritePrompts());
       setRecentPromptIds(getRecentPromptIds());
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -67,6 +68,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
           .catch(err => console.error('Failed to load prompts', err));
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, i18n.language, prompts.length]);
 
   const searchItems = prompts;

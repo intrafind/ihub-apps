@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
@@ -66,6 +66,7 @@ const AdminUserEditPage = () => {
       };
       loadExistingUser();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const loadSchema = async () => {
@@ -109,7 +110,7 @@ const AdminUserEditPage = () => {
         throw new Error('Password is required for new users');
       }
 
-      const response = await makeAdminApiCall(url, {
+      await makeAdminApiCall(url, {
         method,
         headers: {
           'Content-Type': 'application/json'

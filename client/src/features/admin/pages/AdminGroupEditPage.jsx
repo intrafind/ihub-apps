@@ -96,7 +96,7 @@ const AdminGroupEditPage = () => {
       const method = groupId === 'new' ? 'POST' : 'PUT';
       const url = groupId === 'new' ? '/admin/groups' : `/admin/groups/${groupId}`;
 
-      const response = await makeAdminApiCall(url, {
+      await makeAdminApiCall(url, {
         method,
         headers: {
           'Content-Type': 'application/json'

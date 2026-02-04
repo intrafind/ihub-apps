@@ -5,7 +5,7 @@
  * and path operations that need to be aware of base path configuration.
  */
 
-import { getBasePath, getRelativePath as getRelativePathname } from './runtimeBasePath';
+import { getRelativePath as getRelativePathname } from './runtimeBasePath';
 
 /**
  * Check if current pathname starts with a given path, accounting for base path

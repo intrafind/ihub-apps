@@ -6,8 +6,8 @@
  * Performs basic validation of authentication middleware without full test suite
  */
 
-import {
 import logger from '../utils/logger.js';
+import {
   authRequired,
   appAccessRequired,
   modelAccessRequired

@@ -14,7 +14,7 @@ import logger from '../../utils/logger.js';
  * @param {string} streamId - Stream identifier
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse}
  */
-export function convertIassistantResponseToGeneric(data, streamId) {
+export function convertIassistantResponseToGeneric(data, _streamId) {
   // Create result with properly initialized arrays
   const result = createGenericStreamingResponse();
   result.tool_calls = []; // iAssistant doesn't support tool calling

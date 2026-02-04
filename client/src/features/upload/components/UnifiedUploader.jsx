@@ -57,7 +57,6 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const ALL_FORMATS = formatAcceptAttribute([...IMAGE_FORMATS, ...TEXT_FORMATS]);
 
   const isImageFile = type => IMAGE_FORMATS.includes(type);
-  const isTextFile = type => TEXT_FORMATS.includes(type);
 
   const getFileTypeDisplay = mimeType => {
     // Image types

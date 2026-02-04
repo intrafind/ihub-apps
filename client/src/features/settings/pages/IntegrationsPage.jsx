@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/hooks/useAuth';
 import Icon from '../../../shared/components/Icon';
 
 const IntegrationsPage = () => {
-  const { t } = useTranslation();
+  useTranslation(); // Hook called for future i18n, not currently used
   const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();

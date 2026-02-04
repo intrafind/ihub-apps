@@ -131,7 +131,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
         }
 
         // Remove secret from response
-        const { clientSecret, ...clientWithoutSecret } = client;
+        const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
 
         res.json({
           success: true,

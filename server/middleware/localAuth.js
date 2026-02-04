@@ -199,7 +199,7 @@ export async function createUser(userData, usersFilePath) {
   fs.writeFileSync(fullPath, JSON.stringify(usersConfig, null, 2));
 
   // Return user without sensitive data
-  // eslint-disable-next-line no-unused-vars
+
   const { passwordHash: _pw, ...userResponse } = newUser;
   return userResponse;
 }

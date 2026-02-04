@@ -260,7 +260,7 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
       if (typeof toolCall.function?.arguments === 'string') {
         try {
           args = JSON.parse(toolCall.function.arguments);
-        } catch (e) {
+        } catch {
           // If parsing fails, keep as raw string in __raw_arguments for streaming
           args = { __raw_arguments: toolCall.function.arguments };
         }
@@ -285,7 +285,7 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
  * @param {string} streamId - Stream identifier
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertOpenaiResponsesResponseToGeneric(data, streamId = 'default') {
+export function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'default') {
   if (!data || data === '[DONE]') {
     return createGenericStreamingResponse([], [], [], true, false, null, 'stop');
   }

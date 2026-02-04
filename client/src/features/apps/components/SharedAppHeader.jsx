@@ -32,7 +32,7 @@ const SharedAppHeader = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
-  enabledTools,
+  enabledTools: _enabledTools,
   imageAspectRatio,
   imageQuality,
   onModelChange,
@@ -43,7 +43,7 @@ const SharedAppHeader = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
-  onEnabledToolsChange,
+  onEnabledToolsChange: _onEnabledToolsChange,
   onImageAspectRatioChange,
   onImageQualityChange,
 

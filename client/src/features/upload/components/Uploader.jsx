@@ -18,7 +18,6 @@ const Uploader = ({
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragCounter, setDragCounter] = useState(0);
   const fileInputRef = useRef(null);
 
   // Reset preview when parent clears the data

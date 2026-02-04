@@ -50,7 +50,7 @@ class VLLMAdapterClass extends BaseAdapter {
    * Create a completion request for vLLM
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+    const { temperature, stream, tools, toolChoice, responseFormat, maxTokens } =
       this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);

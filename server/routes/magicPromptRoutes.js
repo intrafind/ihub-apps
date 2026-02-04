@@ -9,7 +9,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
 export default function registerMagicPromptRoutes(app, deps = {}) {
-  const { verifyApiKey, DEFAULT_TIMEOUT, basePath = '' } = deps;
+  const { basePath = '' } = deps;
   app.post(
     buildServerPath('/api/magic-prompt', basePath),
     authRequired,

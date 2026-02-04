@@ -58,6 +58,7 @@ const FileUploader = ({ source, onChange, isEditing }) => {
       });
       setFileContent(source.config.tempContent);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.config?.path, source?.config?.tempContent, isEditing, loadCurrentFile]);
 
   const processFile = async file => {

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
@@ -7,7 +7,6 @@ import Icon from '../../../shared/components/Icon';
  */
 const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => {
   const { t } = useTranslation();
-  const [validationErrors, setValidationErrors] = useState({});
 
   // Validation function
   const validateConfig = configData => {
@@ -17,8 +16,6 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
     if (!configData.auth?.mode) {
       errors['auth.mode'] = 'Authentication mode is required';
     }
-
-    setValidationErrors(errors);
 
     const isValid = Object.keys(errors).length === 0;
     if (onValidationChange) {
@@ -40,6 +37,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
     if (config) {
       validateConfig(config);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config]);
 
   const updateAuthMode = mode => {

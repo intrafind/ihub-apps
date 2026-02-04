@@ -39,7 +39,7 @@ const LoggingConfig = () => {
     setMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/logging/level', {
+      await makeAdminApiCall('/admin/logging/level', {
         method: 'PUT',
         data: {
           level: newLevel,
