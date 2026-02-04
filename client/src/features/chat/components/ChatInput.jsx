@@ -235,20 +235,6 @@ const ChatInput = ({
         />
       )}
 
-      {/* Image Generation Controls - Show on desktop only if model supports it */}
-      {model?.supportsImageGeneration && (
-        <div className="hidden md:block mb-2">
-          <ImageGenerationControls
-            app={app}
-            model={model}
-            imageAspectRatio={imageAspectRatio}
-            imageQuality={imageQuality}
-            onImageAspectRatioChange={onImageAspectRatioChange}
-            onImageQualityChange={onImageQualityChange}
-          />
-        </div>
-      )}
-
       <form
         ref={formRef}
         onSubmit={handleSubmit}
@@ -343,6 +329,21 @@ const ChatInput = ({
                 inputRef={actualInputRef}
                 disabled={disabled || isProcessing}
                 onCommand={onVoiceCommand}
+              />
+            </div>
+          )}
+
+          {/* Image Generation Controls - Show on desktop only if model supports it */}
+          {model?.supportsImageGeneration && (
+            <div className="hidden md:flex gap-2">
+              <ImageGenerationControls
+                app={app}
+                model={model}
+                imageAspectRatio={imageAspectRatio}
+                imageQuality={imageQuality}
+                onImageAspectRatioChange={onImageAspectRatioChange}
+                onImageQualityChange={onImageQualityChange}
+                inline={true}
               />
             </div>
           )}
