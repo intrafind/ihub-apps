@@ -23,7 +23,8 @@ class ApiKeyVerifier {
 
       if (!apiKey) {
         logger.error(
-          `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`
+          `API key not found for model: ${model.id} (${model.provider}). Please set ${model.provider.toUpperCase()}_API_KEY in your environment.`,
+          { component: 'ApiKeyVerifier' }
         );
 
         const error = await this.errorHandler.createApiKeyError(model.provider, lang);
@@ -41,7 +42,10 @@ class ApiKeyVerifier {
 
       return { success: true, apiKey };
     } catch (error) {
-      logger.error(`Error getting API key for model ${model.id}:`, error);
+      logger.error(`Error getting API key for model ${model.id}:`, {
+        component: 'ApiKeyVerifier',
+        error
+      });
 
       const internalError = await this.errorHandler.getLocalizedError('internalError', {}, lang);
       const chatError = new Error(internalError);
@@ -71,11 +75,15 @@ class ApiKeyVerifier {
     }
 
     if (missing.length > 0) {
-      logger.warn(`⚠️ WARNING: Missing API keys for providers: ${missing.join(', ')}`);
-      logger.warn('Some models may not work. Please check your .env file configuration.');
+      logger.warn(`⚠️ WARNING: Missing API keys for providers: ${missing.join(', ')}`, {
+        component: 'ApiKeyVerifier'
+      });
+      logger.warn('Some models may not work. Please check your .env file configuration.', {
+        component: 'ApiKeyVerifier'
+      });
       return { valid: false, missing };
     } else {
-      logger.info('✓ All provider API keys are configured');
+      logger.info('✓ All provider API keys are configured', { component: 'ApiKeyVerifier' });
       return { valid: true, missing: [] };
     }
   }
@@ -123,15 +131,23 @@ class ApiKeyVerifier {
 
     // Log results
     if (missingKeys.size > 0) {
-      logger.warn('\n⚠️  API Key Validation Results:');
+      logger.warn('\n⚠️  API Key Validation Results:', { component: 'ApiKeyVerifier' });
       for (const [provider, modelIds] of missingKeys) {
-        logger.warn(`   ❌ ${provider.toUpperCase()}: Missing ${provider.toUpperCase()}_API_KEY`);
-        logger.warn(`      Required for models: ${modelIds.join(', ')}`);
+        logger.warn(`   ❌ ${provider.toUpperCase()}: Missing ${provider.toUpperCase()}_API_KEY`, {
+          component: 'ApiKeyVerifier'
+        });
+        logger.warn(`      Required for models: ${modelIds.join(', ')}`, {
+          component: 'ApiKeyVerifier'
+        });
       }
-      logger.warn('   Please add the missing API keys to your .env or config.env file\n');
+      logger.warn('   Please add the missing API keys to your .env or config.env file\n', {
+        component: 'ApiKeyVerifier'
+      });
       return { valid: false, missing: Object.fromEntries(missingKeys) };
     } else if (enabledModels.length > 0) {
-      logger.info(`✅ All API keys configured for ${enabledModels.length} enabled models`);
+      logger.info(`✅ All API keys configured for ${enabledModels.length} enabled models`, {
+        component: 'ApiKeyVerifier'
+      });
       return { valid: true, missing: {} };
     }
 
@@ -179,12 +195,20 @@ class ApiKeyVerifier {
 
     // Log results
     if (missingVars.size > 0) {
-      logger.warn(`\n⚠️  Environment Variable Validation for ${configName}:`);
-      logger.warn(`   ❌ Missing variables: ${Array.from(missingVars).join(', ')}`);
-      logger.warn('   These variables are referenced in configuration but not set\n');
+      logger.warn(`\n⚠️  Environment Variable Validation for ${configName}:`, {
+        component: 'ApiKeyVerifier'
+      });
+      logger.warn(`   ❌ Missing variables: ${Array.from(missingVars).join(', ')}`, {
+        component: 'ApiKeyVerifier'
+      });
+      logger.warn('   These variables are referenced in configuration but not set\n', {
+        component: 'ApiKeyVerifier'
+      });
       return { valid: false, missing: Array.from(missingVars) };
     } else if (foundVars.size > 0) {
-      logger.info(`✅ All ${foundVars.size} environment variables found for ${configName}`);
+      logger.info(`✅ All ${foundVars.size} environment variables found for ${configName}`, {
+        component: 'ApiKeyVerifier'
+      });
       return { valid: true, found: Array.from(foundVars) };
     }
 

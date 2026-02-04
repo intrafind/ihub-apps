@@ -16,7 +16,6 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import ChatInput from '../../chat/components/ChatInput';
-import NextGenChatInput from '../../chat/components/NextGenChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
@@ -115,9 +114,6 @@ const AppChat = ({ preloadedApp = null }) => {
   const [, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
 
-  // Use next-gen chat input (can be controlled via app settings or feature flag)
-  const useNextGenInput = true; // Enable by default
-
   // Shared app settings hook
   const {
     selectedModel,
@@ -129,6 +125,8 @@ const AppChat = ({ preloadedApp = null }) => {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    imageAspectRatio,
+    imageQuality,
     models,
     styles,
     setSelectedModel,
@@ -140,6 +138,8 @@ const AppChat = ({ preloadedApp = null }) => {
     setThinkingBudget,
     setThinkingThoughts,
     setEnabledTools,
+    setImageAspectRatio,
+    setImageQuality,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -840,7 +840,9 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {})
+      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+      ...(imageAspectRatio ? { imageAspectRatio } : {}),
+      ...(imageQuality ? { imageQuality } : {})
     };
 
     console.log('📤 Sending message with params:', params);
@@ -992,6 +994,8 @@ const AppChat = ({ preloadedApp = null }) => {
 
   // Helper function to render the appropriate chat input component
   const renderChatInput = () => {
+    const currentModel = models.find(m => m.id === selectedModel);
+
     const commonProps = {
       app,
       value: input,
@@ -1021,25 +1025,28 @@ const AppChat = ({ preloadedApp = null }) => {
       onUndoMagicPrompt: handleUndoMagicPrompt,
       magicPromptLoading: magicPromptHandler.magicLoading,
       enabledTools,
-      onEnabledToolsChange: setEnabledTools
+      onEnabledToolsChange: setEnabledTools,
+      // Image generation props
+      model: currentModel,
+      imageAspectRatio,
+      imageQuality,
+      onImageAspectRatioChange: setImageAspectRatio,
+      onImageQualityChange: setImageQuality
     };
 
-    if (useNextGenInput) {
-      return (
-        <NextGenChatInput
-          {...commonProps}
-          models={models}
-          selectedModel={selectedModel}
-          onModelChange={setSelectedModel}
-          currentLanguage={currentLanguage}
-          showModelSelector={
-            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
-          }
-        />
-      );
-    }
-
-    return <ChatInput {...commonProps} />;
+    // Always use ChatInput (which now has the NextGen design with model selector)
+    return (
+      <ChatInput
+        {...commonProps}
+        models={models}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        currentLanguage={currentLanguage}
+        showModelSelector={
+          app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+        }
+      />
+    );
   };
 
   if (loading) {
@@ -1086,6 +1093,8 @@ const AppChat = ({ preloadedApp = null }) => {
         thinkingBudget={thinkingBudget}
         thinkingThoughts={thinkingThoughts}
         enabledTools={enabledTools}
+        imageAspectRatio={imageAspectRatio}
+        imageQuality={imageQuality}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
@@ -1095,6 +1104,8 @@ const AppChat = ({ preloadedApp = null }) => {
         onThinkingBudgetChange={setThinkingBudget}
         onThinkingThoughtsChange={setThinkingThoughts}
         onEnabledToolsChange={setEnabledTools}
+        onImageAspectRatioChange={setImageAspectRatio}
+        onImageQualityChange={setImageQuality}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}

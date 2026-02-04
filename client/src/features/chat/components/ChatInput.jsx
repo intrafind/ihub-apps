@@ -4,10 +4,16 @@ import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
+import ImageGenerationControls from './ImageGenerationControls';
+import ModelSelector from './ModelSelector';
+import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
- * A reusable chat input component for chat interfaces
+ * Chat input component following Claude's design
+ * Two-line layout:
+ * - Top line: User input (auto-expanding textarea)
+ * - Bottom line: Actions menu (+), model selector, send/stop button
  */
 const ChatInput = ({
   app,
@@ -24,7 +30,7 @@ const ChatInput = ({
   formRef = null,
   disabled = false,
   uploadConfig = {},
-  selectedFile = null, // Add this prop to pass from parent
+  selectedFile = null,
   showUploader: externalShowUploader = undefined,
   onToggleUploader = null,
   magicPromptEnabled = false,
@@ -33,7 +39,19 @@ const ChatInput = ({
   onUndoMagicPrompt = null,
   magicPromptLoading = false,
   enabledTools = [],
-  onEnabledToolsChange = null
+  onEnabledToolsChange = null,
+  // Model selection props
+  models = [],
+  selectedModel = null,
+  onModelChange = null,
+  currentLanguage = 'en',
+  showModelSelector = true,
+  // Image generation props
+  model = null,
+  imageAspectRatio = null,
+  imageQuality = null,
+  onImageAspectRatioChange = null,
+  onImageQualityChange = null
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -77,6 +95,17 @@ const ChatInput = ({
       el.setSelectionRange(len, len);
     }
   }, [actualInputRef]);
+
+  // Calculate if single-action optimization is active in ChatInputActionsMenu
+  // This logic mirrors the calculation in ChatInputActionsMenu.jsx
+  const hasTools = app?.tools && app.tools.length > 0;
+  const quickActionCount =
+    (uploadConfig?.enabled === true ? 1 : 0) +
+    (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
+    (showUndoMagicPrompt ? 1 : 0) +
+    (onVoiceInput ? 1 : 0);
+  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const isSingleActionOptimization = totalActions === 1 && quickActionCount === 1 && !hasTools;
 
   // When processing finishes, refocus the input field
   useEffect(() => {
@@ -182,7 +211,7 @@ const ChatInput = ({
   };
 
   return (
-    <div className="chat-input-container">
+    <div className="next-gen-chat-input-container">
       {promptsListEnabled && (
         <PromptSearch
           isOpen={showPromptSearch}
@@ -201,7 +230,7 @@ const ChatInput = ({
         <UnifiedUploader
           onFileSelect={onFileSelect}
           disabled={disabled || isProcessing}
-          fileData={selectedFile} // Pass the actual selectedFile value from parent
+          fileData={selectedFile}
           config={uploadConfig}
         />
       )}
@@ -210,58 +239,38 @@ const ChatInput = ({
         ref={formRef}
         onSubmit={handleSubmit}
         autoComplete="off"
-        className="flex space-x-2 items-center"
+        className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
       >
-        {/* Chat Input Actions Menu - positioned before input */}
-        <ChatInputActionsMenu
-          app={app}
-          enabledTools={enabledTools}
-          onEnabledToolsChange={onEnabledToolsChange}
-          uploadConfig={uploadConfig}
-          onToggleUploader={onToggleUploader || toggleUploader}
-          disabled={disabled}
-          isProcessing={isProcessing}
-          magicPromptEnabled={magicPromptEnabled}
-          onMagicPrompt={onMagicPrompt}
-          showUndoMagicPrompt={showUndoMagicPrompt}
-          onUndoMagicPrompt={onUndoMagicPrompt}
-          magicPromptLoading={magicPromptLoading}
-          onVoiceInput={onVoiceInput}
-          onVoiceCommand={onVoiceCommand}
-          inputRef={actualInputRef}
-        />
-
-        <textarea
-          autoComplete="off"
-          data-lpignore="true"
-          data-1p-ignore="true"
-          type="text"
-          value={value}
-          onChange={onChange}
-          onKeyDown={handleKeyDown}
-          disabled={disabled || isProcessing}
-          className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
-          placeholder={defaultPlaceholder}
-          ref={actualInputRef}
-          style={{
-            resize: multilineMode ? 'vertical' : 'none',
-            minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-            maxHeight: multilineMode ? 'calc(11 * 1.5em + 1.5rem)' : undefined,
-            overflowY: multilineMode ? 'auto' : 'hidden',
-            height: multilineMode ? 'auto' : undefined
-          }}
-          title={
-            multilineMode
-              ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
-              : t('input.singlelineTooltip', 'Press Enter to send')
-          }
-        />
-        <span className="sr-only"></span>
-        <div className="flex-1 relative">
+        {/* Top line: User input */}
+        <div className="relative flex-1">
+          <textarea
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore="true"
+            type="text"
+            value={value}
+            onChange={onChange}
+            onKeyDown={handleKeyDown}
+            disabled={disabled || isProcessing}
+            className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
+            placeholder={defaultPlaceholder}
+            ref={actualInputRef}
+            style={{
+              minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
+              maxHeight: multilineMode ? 'calc(11 * 1.5em + 1.5rem)' : undefined,
+              overflowY: multilineMode ? 'auto' : 'hidden',
+              height: multilineMode ? 'auto' : undefined
+            }}
+            title={
+              multilineMode
+                ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
+                : t('input.singlelineTooltip', 'Press Enter to send')
+            }
+          />
           {value && (
             <button
               type="button"
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 h-fit"
+              className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
               onClick={handleClearInput}
               title={t('common.clear', 'Clear')}
             >
@@ -270,33 +279,106 @@ const ChatInput = ({
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={isProcessing ? handleCancel : handleSubmit}
-          disabled={disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
-          className={`px-4 py-3 rounded-lg font-medium flex items-center justify-center h-fit ${
-            disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : isProcessing
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
-          }`}
-        >
-          {isProcessing ? (
-            <>
-              <Icon name="close" size="sm" className="mr-1" />
-              <span>{t('common.cancel')}</span>
-            </>
-          ) : (
-            <>
-              <span>{t('common.send')}</span>
-              {/* Display shortcut hint */}
-              <span className="ml-1 text-xs opacity-70 hidden sm:inline">
-                {multilineMode ? '⌘↵' : '↵'}
-              </span>
-            </>
+        {/* Bottom line: Actions menu, model selector, send/stop button */}
+        <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
+          {/* Chat Input Actions Menu */}
+          <ChatInputActionsMenu
+            app={app}
+            enabledTools={enabledTools}
+            onEnabledToolsChange={onEnabledToolsChange}
+            uploadConfig={uploadConfig}
+            onToggleUploader={onToggleUploader || toggleUploader}
+            disabled={disabled}
+            isProcessing={isProcessing}
+            magicPromptEnabled={magicPromptEnabled}
+            onMagicPrompt={onMagicPrompt}
+            showUndoMagicPrompt={showUndoMagicPrompt}
+            onUndoMagicPrompt={onUndoMagicPrompt}
+            magicPromptLoading={magicPromptLoading}
+            onVoiceInput={onVoiceInput}
+            onVoiceCommand={onVoiceCommand}
+            inputRef={actualInputRef}
+            model={model}
+            imageAspectRatio={imageAspectRatio}
+            imageQuality={imageQuality}
+            onImageAspectRatioChange={onImageAspectRatioChange}
+            onImageQualityChange={onImageQualityChange}
+          />
+
+          {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
+          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+          {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+            <button
+              type="button"
+              onClick={onToggleUploader || toggleUploader}
+              disabled={disabled || isProcessing}
+              title={t('chatActions.attachFile', 'Attach File')}
+              className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+            >
+              <Icon name="paper-clip" size="md" />
+            </button>
           )}
-        </button>
+
+          {/* Microphone icon - show directly on desktop if enabled and NOT in single-action mode */}
+          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+          {onVoiceInput && !isSingleActionOptimization && (
+            <div className="hidden md:flex">
+              <VoiceInputComponent
+                app={app}
+                onSpeechResult={onVoiceInput}
+                inputRef={actualInputRef}
+                disabled={disabled || isProcessing}
+                onCommand={onVoiceCommand}
+              />
+            </div>
+          )}
+
+          {/* Image Generation Controls - Show on desktop only if model supports it */}
+          {model?.supportsImageGeneration && (
+            <div className="hidden md:flex gap-2">
+              <ImageGenerationControls
+                app={app}
+                model={model}
+                imageAspectRatio={imageAspectRatio}
+                imageQuality={imageQuality}
+                onImageAspectRatioChange={onImageAspectRatioChange}
+                onImageQualityChange={onImageQualityChange}
+                inline={true}
+              />
+            </div>
+          )}
+
+          <div className="flex-1"></div>
+
+          {/* Model Selector */}
+          {showModelSelector && models && models.length > 0 && onModelChange && (
+            <ModelSelector
+              app={app}
+              models={models}
+              selectedModel={selectedModel}
+              onModelChange={onModelChange}
+              currentLanguage={currentLanguage}
+              disabled={disabled || isProcessing}
+            />
+          )}
+
+          {/* Send/Stop Button */}
+          <button
+            type="button"
+            onClick={isProcessing ? handleCancel : handleSubmit}
+            disabled={disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
+            className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+              disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+                ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                : isProcessing
+                  ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
+                  : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
+            }`}
+            title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
+          >
+            {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}
+          </button>
+        </div>
       </form>
     </div>
   );

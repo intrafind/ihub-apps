@@ -41,6 +41,12 @@ When working with Node.js server code, follow these specific guidelines:
 3. **Error Handling** - Handle provider-specific errors and convert to standardized format
 4. **Token Limits** - Respect model token limits from configuration
 5. **Tool Calling** - Support tool/function calling when the provider allows it
+6. **Provider-Specific Logic** - **CRITICAL**: Keep all provider-specific transformations and logic inside the adapter
+   - Translation of standard parameters to provider-specific formats belongs in the adapter
+   - Example: Converting quality levels (Low/Medium/High) to provider-specific values (1K/2K/4K for Google)
+   - The application should pass standard, provider-agnostic parameters to adapters
+   - Adapters handle the translation to provider-specific API formats
+   - This ensures the codebase maintains one standard interface across all providers
 
 ## Database & Persistence
 
@@ -140,6 +146,21 @@ for await (const chunk of adapter.streamChat(messages)) {
   res.write(`data: ${JSON.stringify(chunk)}\n\n`);
 }
 res.end();
+```
+
+### Provider-Specific Transformations
+```javascript
+// BAD: Don't put provider-specific logic outside adapters
+import { translateToGoogleFormat } from '../utils/googleHelpers.js';
+const config = translateToGoogleFormat(userParams, model.provider);
+
+// GOOD: Pass standard parameters, let adapter handle translation
+const imageConfig = {
+  aspectRatio: userParams.aspectRatio,  // Standard format: '1:1', '16:9', etc.
+  quality: userParams.quality            // Standard format: 'Low', 'Medium', 'High'
+};
+// Adapter will translate quality 'High' to '4K' for Google, or exact pixels for other providers
+const request = createCompletionRequest(model, messages, apiKey, { imageConfig });
 ```
 
 ## Performance Considerations

@@ -69,6 +69,8 @@ export const chatPostSchema = {
     thinkingEnabled: z.boolean().optional(),
     thinkingBudget: z.number().optional(),
     thinkingThoughts: z.boolean().optional(),
-    enabledTools: z.array(z.string()).optional()
+    enabledTools: z.array(z.string()).optional(),
+    imageAspectRatio: z.string().optional(),
+    imageQuality: z.string().optional()
   })
 };

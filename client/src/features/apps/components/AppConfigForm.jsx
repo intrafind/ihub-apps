@@ -13,6 +13,8 @@ const AppConfigForm = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  imageAspectRatio,
+  imageQuality,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -21,6 +23,8 @@ const AppConfigForm = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onImageAspectRatioChange,
+  onImageQualityChange,
   currentLanguage
 }) => {
   const { t } = useTranslation();

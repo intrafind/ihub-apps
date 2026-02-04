@@ -852,7 +852,15 @@
     "plainText": "Plain text",
     "json": "JSON",
     "toolsSettings": "Tools",
-    "toolsSettingsHelp": "Enable or disable individual tools for this session"
+    "toolsSettingsHelp": "Enable or disable individual tools for this session",
+    "imageGeneration": "Image Generation Settings",
+    "imageAspectRatio": "Aspect Ratio",
+    "imageAspectRatioHelp": "Select the aspect ratio for generated images",
+    "imageQuality": "Quality",
+    "imageQualityHelp": "Select the quality level for generated images",
+    "qualityLow": "Low (1K)",
+    "qualityMedium": "Medium (2K)",
+    "qualityHigh": "High (4K)"
   },
   "chatMessage": {
     "user": "You",

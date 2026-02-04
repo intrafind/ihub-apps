@@ -82,6 +82,11 @@ const settingsSchema = z
         enabled: z.boolean().optional().default(true)
       })
       .optional(),
+    imageGeneration: z
+      .object({
+        enabled: z.boolean().optional().default(true)
+      })
+      .optional(),
     speechRecognition: z
       .object({
         service: z.enum(['default', 'azure']).optional().default('default'),
@@ -149,6 +154,16 @@ const uploadSchema = z
           ])
       })
       .optional()
+  })
+  .optional();
+
+// Image generation configuration schema for app-level defaults
+const imageGenerationConfigSchema = z
+  .object({
+    aspectRatio: z
+      .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3', '3:4', '4:3', '21:9'])
+      .optional(),
+    quality: z.enum(['Low', 'Medium', 'High']).optional()
   })
   .optional();
 
@@ -267,6 +282,7 @@ const baseAppConfigSchema = z.object({
   preferredTemperature: z.number().min(0).max(2).optional(),
   sendChatHistory: z.boolean().optional().default(true),
   thinking: thinkingSchema.optional(),
+  imageGeneration: imageGenerationConfigSchema,
   messagePlaceholder: localizedStringSchema.optional(),
   prompt: localizedStringSchema.optional(),
   variables: z.array(variableSchema).optional(),

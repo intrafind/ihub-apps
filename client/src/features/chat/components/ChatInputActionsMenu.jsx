@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import { fetchToolsBasic } from '../../../api/api';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
+import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 
 /**
@@ -29,7 +30,13 @@ const ChatInputActionsMenu = ({
   // Voice props
   onVoiceInput,
   onVoiceCommand,
-  inputRef
+  inputRef,
+  // Image generation props
+  model,
+  imageAspectRatio,
+  imageQuality,
+  onImageAspectRatioChange,
+  onImageQualityChange
 }) => {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -307,6 +314,23 @@ const ChatInputActionsMenu = ({
               )}
             </div>
           </div>
+
+          {/* Image Generation Settings - Show on mobile only if model supports it */}
+          {model?.supportsImageGeneration && (
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700 md:hidden">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t('appConfig.imageGeneration', 'Image Generation Settings')}
+              </h3>
+              <ImageGenerationControls
+                app={app}
+                model={model}
+                imageAspectRatio={imageAspectRatio}
+                imageQuality={imageQuality}
+                onImageAspectRatioChange={onImageAspectRatioChange}
+                onImageQualityChange={onImageQualityChange}
+              />
+            </div>
+          )}
 
           {/* Tools Section */}
           {hasTools && (

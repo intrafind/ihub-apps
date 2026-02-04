@@ -17,7 +17,7 @@
   "supportsImageGeneration": true,
   "imageGeneration": {
     "aspectRatio": "1:1",
-    "imageSize": "1K",
+    "quality": "Low",
     "maxReferenceImages": 5
   },
   "enabled": true,

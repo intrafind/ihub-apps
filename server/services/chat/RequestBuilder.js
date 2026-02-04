@@ -91,6 +91,8 @@ class RequestBuilder {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    imageAspectRatio,
+    imageQuality,
     processMessageTemplates,
     res,
     clientRes,
@@ -239,6 +241,34 @@ class RequestBuilder {
 
       const context = { user, chatId, language, enabledTools };
       const tools = await getToolsForApp(app, language, context);
+
+      // Build imageConfig if image generation is supported and parameters are provided
+      // Pass raw user parameters to adapter for provider-specific translation
+      let imageConfig = null;
+      if (model.supportsImageGeneration) {
+        // Use provided parameters or fall back to model/app defaults
+        const aspectRatio =
+          imageAspectRatio ||
+          model.imageGeneration?.aspectRatio ||
+          app.imageGeneration?.aspectRatio;
+        const quality =
+          imageQuality || model.imageGeneration?.quality || app.imageGeneration?.quality;
+
+        if (aspectRatio || quality) {
+          // Pass raw parameters to adapter - adapter will handle provider-specific translation
+          imageConfig = {
+            aspectRatio,
+            quality
+          };
+          logger.info({
+            component: 'RequestBuilder',
+            message: 'Image generation config passed to adapter',
+            aspectRatio,
+            quality
+          });
+        }
+      }
+
       const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
         maxTokens: finalTokens,
@@ -250,7 +280,8 @@ class RequestBuilder {
         chatId,
         thinkingEnabled,
         thinkingBudget,
-        thinkingThoughts
+        thinkingThoughts,
+        imageConfig
       });
 
       return {

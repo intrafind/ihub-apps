@@ -5,6 +5,63 @@ import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 
+/**
+ * Aspect ratio and resolution mapping table for Google Gemini image generation
+ * Based on: https://ai.google.dev/gemini-api/docs/image-generation#aspect_ratios_and_image_size
+ */
+const GOOGLE_IMAGE_RESOLUTION_TABLE = {
+  '1:1': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '2:3': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '3:2': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '3:4': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '4:3': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '4:5': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '5:4': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '9:16': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '16:9': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '21:9': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  }
+};
+
 class GoogleAdapterClass extends BaseAdapter {
   /**
    * Helper to process inline image data from response parts
@@ -282,26 +339,50 @@ class GoogleAdapterClass extends BaseAdapter {
       // Enable image generation by setting responseModalities to include IMAGE
       requestBody.generationConfig.responseModalities = ['TEXT', 'IMAGE'];
 
-      // Add imageConfig if provided in options or model configuration
+      // Get image config from options or model configuration
       const imageConfig = options.imageConfig || model.imageGeneration || {};
 
-      if (imageConfig.aspectRatio || imageConfig.imageSize) {
-        requestBody.generationConfig.imageConfig = {};
+      // Translate user-friendly parameters to Google-specific format
+      let aspectRatio = imageConfig.aspectRatio || '1:1'; // Default to square
+      let quality = imageConfig.quality || 'Medium'; // Default to medium
 
-        if (imageConfig.aspectRatio) {
-          requestBody.generationConfig.imageConfig.aspectRatio = imageConfig.aspectRatio;
-        }
-
-        if (imageConfig.imageSize) {
-          requestBody.generationConfig.imageConfig.imageSize = imageConfig.imageSize;
-        }
+      // Validate aspect ratio
+      if (!GOOGLE_IMAGE_RESOLUTION_TABLE[aspectRatio]) {
+        logger.warn({
+          component: 'GoogleAdapter',
+          message: 'Invalid aspect ratio, using default',
+          providedRatio: aspectRatio,
+          defaultRatio: '1:1'
+        });
+        aspectRatio = '1:1';
       }
+
+      // Validate quality
+      if (!['Low', 'Medium', 'High'].includes(quality)) {
+        logger.warn({
+          component: 'GoogleAdapter',
+          message: 'Invalid quality level, using default',
+          providedQuality: quality,
+          defaultQuality: 'Medium'
+        });
+        quality = 'Medium';
+      }
+
+      // Translate quality to Google's imageSize format
+      const imageSize = GOOGLE_IMAGE_RESOLUTION_TABLE[aspectRatio][quality];
+
+      // Set the imageConfig
+      requestBody.generationConfig.imageConfig = {
+        aspectRatio,
+        imageSize
+      };
 
       logger.info({
         component: 'GoogleAdapter',
         message: 'Image generation enabled',
         responseModalities: requestBody.generationConfig.responseModalities,
-        imageConfig: requestBody.generationConfig.imageConfig
+        imageConfig: requestBody.generationConfig.imageConfig,
+        translatedFrom: { aspectRatio: imageConfig.aspectRatio, quality: imageConfig.quality }
       });
     }
 

@@ -43,7 +43,10 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
     if (error.code === 'ENOENT' && relativePath.includes('locales/')) {
       return null; // Silent fail for missing locale override files
     }
-    logger.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, error);
+    logger.error(`Error loading ${parse === 'json' ? 'JSON' : 'text'} ${relativePath}:`, {
+      component: 'ConfigLoader',
+      error
+    });
     return null;
   }
 }
@@ -64,7 +67,10 @@ export async function loadBuiltinLocaleJson(relativePath) {
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    logger.error(`Error loading builtin locale ${relativePath}:`, error);
+    logger.error(`Error loading builtin locale ${relativePath}:`, {
+      component: 'ConfigLoader',
+      error
+    });
     return null;
   }
 }

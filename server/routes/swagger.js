@@ -76,7 +76,10 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   try {
     platformConfig = (await loadJson('config/platform.json')) || {};
   } catch (error) {
-    logger.warn('Could not load platform configuration for Swagger setup:', error.message);
+    logger.warn('Could not load platform configuration for Swagger setup:', {
+      component: 'Swagger',
+      error: error.message
+    });
   }
 
   const swaggerConfig = platformConfig.swagger || {};
@@ -84,11 +87,13 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   const requireAuth = swaggerConfig.requireAuth !== false; // Default to requiring auth
 
   if (!isEnabled) {
-    logger.info('📚 Swagger documentation is disabled in platform configuration');
+    logger.info('📚 Swagger documentation is disabled in platform configuration', {
+      component: 'Swagger'
+    });
     return;
   }
 
-  logger.info('📚 Setting up Swagger documentation routes...');
+  logger.info('📚 Setting up Swagger documentation routes...', { component: 'Swagger' });
 
   // Apply authentication middleware if required
   const middleware = requireAuth ? [authRequired] : [];
@@ -136,19 +141,31 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   const openaiApiSpec = swaggerJSDoc(openaiApiConfig);
 
   // Debug logging
-  logger.info('📚 Generated API specs:');
-  logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`);
-  logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`);
-  logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`);
+  logger.info('📚 Generated API specs:', { component: 'Swagger' });
+  logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`, {
+    component: 'Swagger'
+  });
 
   if (Object.keys(normalApiSpec.paths || {}).length > 0) {
-    logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`, {
+      component: 'Swagger'
+    });
   }
   if (Object.keys(adminApiSpec.paths || {}).length > 0) {
-    logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`, {
+      component: 'Swagger'
+    });
   }
   if (Object.keys(openaiApiSpec.paths || {}).length > 0) {
-    logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`, {
+      component: 'Swagger'
+    });
   }
 
   // Swagger UI options
@@ -227,15 +244,21 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(openaiApiSpec, customOptions));
   });
 
-  logger.info('📚 Swagger documentation available at:');
-  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs')}`);
-  logger.info(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`);
-  logger.info(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`);
-  logger.info(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`);
+  logger.info('📚 Swagger documentation available at:', { component: 'Swagger' });
+  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs')}`, { component: 'Swagger' });
+  logger.info(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`, {
+    component: 'Swagger'
+  });
 
   if (requireAuth) {
-    logger.info('🔐 Authentication required for Swagger access');
+    logger.info('🔐 Authentication required for Swagger access', { component: 'Swagger' });
   } else {
-    logger.info('🌐 Swagger accessible without authentication');
+    logger.info('🌐 Swagger accessible without authentication', { component: 'Swagger' });
   }
 }

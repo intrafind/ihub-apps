@@ -49,13 +49,15 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
         try {
           await fs.stat(destPath);
           // File exists, skip copying
-          logger.info(`⏭️  Skipping existing file: ${path.relative(dest, destPath)}`);
+          logger.info(`⏭️  Skipping existing file: ${path.relative(dest, destPath)}`, {
+            component: 'Setup'
+          });
         } catch (error) {
           if (error.code === 'ENOENT') {
             // File doesn't exist, copy it
             await fs.copyFile(srcPath, destPath);
             copiedCount++;
-            logger.info(`📄 Copied file: ${path.relative(dest, destPath)}`);
+            logger.info(`📄 Copied file: ${path.relative(dest, destPath)}`, { component: 'Setup' });
           } else {
             throw error;
           }
@@ -65,7 +67,10 @@ async function copyMissingFiles(src, dest, copiedCount = 0) {
 
     return copiedCount;
   } catch (error) {
-    logger.error(`Error copying missing files from ${src} to ${dest}:`, error);
+    logger.error(`Error copying missing files from ${src} to ${dest}:`, {
+      component: 'Setup',
+      error
+    });
     throw error;
   }
 }
@@ -86,28 +91,35 @@ export async function copyDefaultConfiguration() {
       await fs.stat(defaultConfigPath);
     } catch (error) {
       if (error.code === 'ENOENT') {
-        logger.warn(`Default configuration directory not found at: ${defaultConfigPath}`);
+        logger.warn(`Default configuration directory not found at: ${defaultConfigPath}`, {
+          component: 'Setup'
+        });
         return false;
       }
       throw error;
     }
 
     logger.info(
-      `📋 Copying missing default configuration files from ${defaultConfigPath} to ${contentsPath}`
+      `📋 Copying missing default configuration files from ${defaultConfigPath} to ${contentsPath}`,
+      { component: 'Setup' }
     );
 
     // Copy only missing files and directories
     const copiedCount = await copyMissingFiles(defaultConfigPath, contentsPath);
 
     if (copiedCount > 0) {
-      logger.info(`✅ ${copiedCount} default configuration files copied successfully`);
+      logger.info(`✅ ${copiedCount} default configuration files copied successfully`, {
+        component: 'Setup'
+      });
       return true;
     } else {
-      logger.info('ℹ️  All default configuration files already exist, no files copied');
+      logger.info('ℹ️  All default configuration files already exist, no files copied', {
+        component: 'Setup'
+      });
       return false;
     }
   } catch (error) {
-    logger.error('❌ Failed to copy default configuration:', error);
+    logger.error('❌ Failed to copy default configuration:', { component: 'Setup', error });
     throw error;
   }
 }
@@ -119,19 +131,23 @@ export async function copyDefaultConfiguration() {
  */
 export async function performInitialSetup() {
   try {
-    logger.info('🔍 Checking for missing default configuration files...');
+    logger.info('🔍 Checking for missing default configuration files...', { component: 'Setup' });
 
     const filesCopied = await copyDefaultConfiguration();
 
     if (filesCopied) {
-      logger.info('📦 Initial setup completed - missing default files have been copied');
+      logger.info('📦 Initial setup completed - missing default files have been copied', {
+        component: 'Setup'
+      });
     } else {
-      logger.info('✅ All default configuration files already exist, no setup needed');
+      logger.info('✅ All default configuration files already exist, no setup needed', {
+        component: 'Setup'
+      });
     }
 
     return filesCopied;
   } catch (error) {
-    logger.error('❌ Error during initial setup:', error);
+    logger.error('❌ Error during initial setup:', { component: 'Setup', error });
     throw error;
   }
 }

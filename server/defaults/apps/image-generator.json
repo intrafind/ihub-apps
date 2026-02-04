@@ -21,6 +21,10 @@
   "preferredStyle": "creative",
   "preferredTemperature": 0.8,
   "sendChatHistory": true,
+  "imageGeneration": {
+    "aspectRatio": "1:1",
+    "quality": "High"
+  },
   "greeting": {
     "en": {
       "title": "🎨 Image Generator",
@@ -49,6 +53,9 @@
       "enabled": false
     },
     "chatHistory": {
+      "enabled": true
+    },
+    "imageGeneration": {
       "enabled": true
     }
   },
