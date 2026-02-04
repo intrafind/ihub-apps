@@ -33,6 +33,7 @@ const ChatMessageList = ({
   const { uiConfig } = useUIConfig();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
   const isUserScrollingRef = useRef(false);
+  const prevMessageCountRef = useRef(0);
 
   const assistantIcon = uiConfig?.icons?.assistantMessage || 'apps-svg-logo';
   const userIcon = uiConfig?.icons?.userMessage || 'user';
@@ -64,12 +65,35 @@ const ChatMessageList = ({
     return () => container.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Auto-scroll to bottom when messages change, but only if shouldAutoScroll is true
+  // Always scroll to show user's new message, regardless of shouldAutoScroll
+  // This ensures the user can see their input was sent
   useEffect(() => {
-    if (chatContainerRef.current && shouldAutoScroll) {
-      const container = chatContainerRef.current;
+    if (!chatContainerRef.current || messages.length === 0) return;
+
+    const container = chatContainerRef.current;
+    const prevCount = prevMessageCountRef.current;
+    const newMessagesCount = messages.length - prevCount;
+
+    // Check if any of the newly added messages is a user message
+    // (user message and assistant placeholder may be added together)
+    const hasNewUserMessage =
+      newMessagesCount > 0 && messages.slice(-newMessagesCount).some(msg => msg.role === 'user');
+
+    // Always scroll when a new user message is added
+    // Use requestAnimationFrame to ensure DOM has been updated with the new message
+    if (hasNewUserMessage) {
+      requestAnimationFrame(() => {
+        container.scrollTop = container.scrollHeight;
+      });
+      // Re-enable auto-scroll for the upcoming assistant response
+      setShouldAutoScroll(true);
+    }
+    // For assistant messages (streaming), only scroll if shouldAutoScroll is true
+    else if (shouldAutoScroll) {
       container.scrollTop = container.scrollHeight;
     }
+
+    prevMessageCountRef.current = messages.length;
   }, [messages, shouldAutoScroll]);
 
   // Don't render anything if there are no messages
