@@ -1166,9 +1166,9 @@ const AppChat = ({ preloadedApp = null }) => {
             <>
               {/* Mobile layout: content centers, input at bottom */}
               <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden flex flex-col">
                   {messages.length > 0 ? (
-                    <div className="w-full h-full overflow-y-auto bg-gray-50 rounded-lg">
+                    <div className="w-full h-full overflow-y-auto bg-gray-50 rounded-lg flex flex-col">
                       <ChatMessageList
                         messages={messages}
                         outputFormat={selectedOutputFormat}
@@ -1239,7 +1239,7 @@ const AppChat = ({ preloadedApp = null }) => {
             <>
               {/* Mobile layout: content scrollable, input at bottom */}
               <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden flex flex-col">
                   <ChatMessageList
                     messages={messages}
                     outputFormat={selectedOutputFormat}
