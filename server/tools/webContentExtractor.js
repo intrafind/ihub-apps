@@ -15,6 +15,15 @@ function createError(message, code) {
 /**
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
+ * @param {Object} params - The extraction parameters
+ * @param {string} [params.url] - The URL to extract content from
+ * @param {string} [params.uri] - Alternative URL parameter name
+ * @param {string} [params.link] - Alternative URL parameter name
+ * @param {number} [params.maxLength=5000] - Maximum content length to return
+ * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
+ * @param {string} [params.chatId] - The chat ID for action tracking
+ * @returns {Promise<{url: string, title: string, description: string, author: string, content: string, wordCount: number, extractedAt: string}>} Extracted content with metadata
+ * @throws {Error} If URL is missing, invalid, or content extraction fails
  */
 export default async function webContentExtractor({
   url,
@@ -315,6 +324,7 @@ export default async function webContentExtractor({
     return output;
   } catch (error) {
     if (error.name === 'AbortError') {
+      throw createError('Request timed out while fetching webpage', 'TIMEOUT');
     }
     if (/certificate|SSL/i.test(error.message) && !shouldIgnoreSSL) {
       throw createError(

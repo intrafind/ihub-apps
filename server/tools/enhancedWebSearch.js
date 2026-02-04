@@ -3,8 +3,16 @@ import webContentExtractor from './webContentExtractor.js';
 import logger from '../utils/logger.js';
 
 /**
- * Enhanced web search that combines Brave search with content extraction
- * Performs a web search and optionally extracts full content from the top results
+ * Enhanced web search that combines Brave search with content extraction.
+ * Performs a web search and optionally extracts full content from the top results.
+ * @param {Object} params - The search parameters
+ * @param {string} [params.query] - The search query
+ * @param {string} [params.q] - Alternative query parameter name
+ * @param {boolean} [params.extractContent=true] - Whether to extract content from results
+ * @param {number} [params.maxResults=3] - Maximum number of results to process for extraction
+ * @param {number} [params.contentMaxLength=3000] - Maximum length of extracted content per result
+ * @returns {Promise<{query: string, searchResults: Array, extractedContent: Array, summary: string, stats: Object}>} Search results with optional extracted content
+ * @throws {Error} If no query is provided or search fails
  */
 export default async function enhancedWebSearch({
   query,

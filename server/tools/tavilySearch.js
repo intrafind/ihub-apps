@@ -1,6 +1,17 @@
 import webSearchService from '../services/WebSearchService.js';
 import logger from '../utils/logger.js';
 
+/**
+ * Perform a web search using the Tavily Search API
+ * @param {Object} params - The search parameters
+ * @param {string} [params.query] - The search query
+ * @param {string} [params.q] - Alternative query parameter name
+ * @param {string} [params.search_depth='basic'] - Search depth ('basic' or 'advanced')
+ * @param {number} [params.max_results=5] - Maximum number of results to return
+ * @param {string} [params.chatId] - The chat ID for context tracking
+ * @returns {Promise<{results: Array<{title: string, url: string, description: string}>}>} The search results
+ * @throws {Error} If no query is provided
+ */
 export default async function tavilySearch({
   query,
   q,
