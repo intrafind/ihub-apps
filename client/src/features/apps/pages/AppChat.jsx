@@ -16,7 +16,6 @@ import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import ChatInput from '../../chat/components/ChatInput';
-import NextGenChatInput from '../../chat/components/NextGenChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
@@ -114,9 +113,6 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
-
-  // Use next-gen chat input (can be controlled via app settings or feature flag)
-  const useNextGenInput = true; // Enable by default
 
   // Shared app settings hook
   const {
@@ -1038,22 +1034,19 @@ const AppChat = ({ preloadedApp = null }) => {
       onImageQualityChange: setImageQuality
     };
 
-    if (useNextGenInput) {
-      return (
-        <NextGenChatInput
-          {...commonProps}
-          models={models}
-          selectedModel={selectedModel}
-          onModelChange={setSelectedModel}
-          currentLanguage={currentLanguage}
-          showModelSelector={
-            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
-          }
-        />
-      );
-    }
-
-    return <ChatInput {...commonProps} />;
+    // Always use ChatInput (which now has the NextGen design with model selector)
+    return (
+      <ChatInput
+        {...commonProps}
+        models={models}
+        selectedModel={selectedModel}
+        onModelChange={setSelectedModel}
+        currentLanguage={currentLanguage}
+        showModelSelector={
+          app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+        }
+      />
+    );
   };
 
   if (loading) {
