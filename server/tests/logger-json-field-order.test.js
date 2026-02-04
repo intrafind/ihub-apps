@@ -14,7 +14,7 @@ console.log('Running JSON field order tests...\n');
  * Custom JSON formatter with fixed field order
  * Ensures consistent field ordering: component, level, timestamp, message, then other fields
  */
-const orderedJsonFormat = winston.format.printf((info) => {
+const orderedJsonFormat = winston.format.printf(info => {
   // Define the desired field order
   const orderedLog = {};
 
@@ -38,7 +38,7 @@ const orderedJsonFormat = winston.format.printf((info) => {
 
   // 5. Add all other fields (except the ones we've already added)
   const reservedFields = ['component', 'level', 'timestamp', 'message'];
-  Object.keys(info).forEach((key) => {
+  Object.keys(info).forEach(key => {
     if (!reservedFields.includes(key) && typeof key === 'string') {
       orderedLog[key] = info[key];
     }
@@ -73,7 +73,7 @@ const logger = winston.createLogger({
 function getFieldOrder(jsonString) {
   // Extract field names in order they appear in the JSON string
   const fieldMatches = jsonString.matchAll(/"([^"]+)":/g);
-  return Array.from(fieldMatches, (match) => match[1]);
+  return Array.from(fieldMatches, match => match[1]);
 }
 
 // Test 1: Verify field order with all fields present
@@ -147,7 +147,7 @@ console.log(`✓ Field order: ${fields5.join(', ')}`);
 
 // Test 6: Verify all logs have same primary field order
 console.log('\nTest 6: All logs maintain consistent order');
-const allLogs = logs.map((log) => {
+const allLogs = logs.map(log => {
   const parsed = JSON.parse(log);
   const fields = getFieldOrder(log);
   return { parsed, fields };
