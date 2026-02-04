@@ -46,14 +46,14 @@ export async function getApiKeyForModel(modelId) {
     let { data: models = [] } = configCache.getModels();
 
     if (!models) {
-      logger.error('Failed to load models configuration');
+      logger.error('Failed to load models configuration', { component: 'Utils' });
       return null;
     }
 
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      logger.error(`Model not found: ${sanitizeForLog(modelId)}`);
+      logger.error(`Model not found: ${sanitizeForLog(modelId)}`, { component: 'Utils' });
       return null;
     }
 
@@ -68,18 +68,17 @@ export async function getApiKeyForModel(modelId) {
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          logger.info(`Using stored encrypted API key for model: %s`, sanitizeForLog(modelId));
+          logger.info(`Using stored encrypted API key for model: %s`, { component: 'Utils', modelId: sanitizeForLog(modelId) });
           return decryptedKey;
         } else {
           // If not encrypted, use as-is (for backwards compatibility during migration)
-          logger.info(`Using stored plaintext API key for model: %s`, sanitizeForLog(modelId));
+          logger.info(`Using stored plaintext API key for model: %s`, { component: 'Utils', modelId: sanitizeForLog(modelId) });
           return model.apiKey;
         }
       } catch (error) {
         logger.error(
-          'Failed to decrypt API key for model %s:',
-          sanitizeForLog(modelId),
-          error.message
+          'Failed to decrypt API key for model',
+          { component: 'Utils', modelId: sanitizeForLog(modelId), error: error.message }
         );
         // Continue to fallback options
       }
@@ -97,29 +96,28 @@ export async function getApiKeyForModel(modelId) {
           if (isEncrypted) {
             const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
             logger.info(
-              `Using stored encrypted provider API key for provider: %s`,
-              sanitizeForLog(provider)
+              `Using stored encrypted provider API key for provider`,
+              { component: 'Utils', provider: sanitizeForLog(provider) }
             );
             return decryptedKey;
           } else {
             // If not encrypted, use as-is (for backwards compatibility during migration)
             logger.info(
-              `Using stored plaintext provider API key for provider: %s`,
-              sanitizeForLog(provider)
+              `Using stored plaintext provider API key for provider`,
+              { component: 'Utils', provider: sanitizeForLog(provider) }
             );
             return providerConfig.apiKey;
           }
         } catch (error) {
           logger.error(
-            'Failed to decrypt provider API key for %s:',
-            sanitizeForLog(provider),
-            error.message
+            'Failed to decrypt provider API key',
+            { component: 'Utils', provider: sanitizeForLog(provider), error: error.message }
           );
           // Continue to fallback options
         }
       }
     } catch (error) {
-      logger.error('Error checking provider credentials:', error);
+      logger.error('Error checking provider credentials:', { component: 'Utils', error });
       // Continue to environment variable fallbacks
     }
 
@@ -128,7 +126,7 @@ export async function getApiKeyForModel(modelId) {
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
     if (modelSpecificKey) {
-      logger.info(`Using environment variable API key: %s`, modelSpecificKeyName);
+      logger.info(`Using environment variable API key`, { component: 'Utils', envVar: modelSpecificKeyName });
       return modelSpecificKey;
     }
 
@@ -159,17 +157,18 @@ export async function getApiKeyForModel(modelId) {
 
         // Check for a default API key as last resort
         if (config.DEFAULT_API_KEY) {
-          logger.info(`Using DEFAULT_API_KEY for provider: ${provider}`);
+          logger.info(`Using DEFAULT_API_KEY for provider`, { component: 'Utils', provider });
           return config.DEFAULT_API_KEY;
         }
 
         logger.error(
-          `No API key found for provider: ${provider} or model-specific key: ${modelSpecificKeyName}`
+          `No API key found for provider or model-specific key`,
+          { component: 'Utils', provider, modelSpecificKeyName }
         );
         return null;
     }
   } catch (error) {
-    logger.error('Error getting API key for model:', error);
+    logger.error('Error getting API key for model:', { component: 'Utils', error });
     return null;
   }
 }
@@ -489,6 +488,7 @@ export async function simpleCompletion(
   const resolvedModelId = modelId || model;
 
   logger.info('Starting simple completion...', {
+    component: 'Utils',
     messages: JSON.stringify(messages, null, 2),
     modelId: resolvedModelId,
     temperature
@@ -497,11 +497,11 @@ export async function simpleCompletion(
   let { data: models = [] } = configCache.getModels();
   logger.info(
     'Available models:',
-    models.map(m => m.id)
+    { component: 'Utils', models: models.map(m => m.id) }
   );
 
   const modelConfig = models.find(m => m.id === resolvedModelId);
-  logger.info('Using model:', modelConfig);
+  logger.info('Using model:', { component: 'Utils', modelConfig });
   if (!modelConfig) {
     throw new Error(`Model ${resolvedModelId} not found`);
   }
@@ -567,7 +567,7 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
 
     // Check if any models are available
     if (!models || models.length === 0) {
-      logger.warn(`${toolName}: No models available, using fallback`);
+      logger.warn(`${toolName}: No models available, using fallback`, { component: 'Utils' });
       return null;
     }
 
@@ -579,7 +579,8 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
     // Log warning if preferred model was specified but not found
     if (preferredModel) {
       logger.warn(
-        `${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`
+        `${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`,
+        { component: 'Utils' }
       );
     }
 
@@ -592,15 +593,16 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
     const firstModel = models[0]?.id;
     if (firstModel) {
       logger.warn(
-        `${toolName}: Default model not found, using first available model '${firstModel}'`
+        `${toolName}: Default model not found, using first available model '${firstModel}'`,
+        { component: 'Utils' }
       );
       return firstModel;
     }
 
-    logger.error(`${toolName}: No models available`);
+    logger.error(`${toolName}: No models available`, { component: 'Utils' });
     return null;
   } catch (error) {
-    logger.error(`${toolName}: Error resolving model ID:`, error);
+    logger.error(`${toolName}: Error resolving model ID:`, { component: 'Utils', error });
     return null;
   }
 }
