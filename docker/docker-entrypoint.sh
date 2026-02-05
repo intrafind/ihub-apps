@@ -79,7 +79,7 @@ validate_env_vars() {
 # Function to display startup information
 display_startup_info() {
     log_info "=== iHub Apps Container Starting ==="
-    log_info "Node.js version: $(node --version)"
+    log_info "Bun version: $(bun --version 2>/dev/null || echo 'not available')"
     log_info "Environment: ${NODE_ENV:-development}"
     log_info "Port: ${PORT:-3000}"
     log_info "Workers: ${WORKERS:-1}"
