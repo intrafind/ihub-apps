@@ -161,11 +161,14 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
       continue;
     }
 
-    // Match by username, email, or OIDC subject
+    // Match by username, email, or auth-specific subject
     if (
       user.username === identifier ||
-      user.email === identifier ||
-      (user.oidcData && user.oidcData.subject === identifier)
+      (identifier && user.email === identifier) ||
+      (user.oidcData && user.oidcData.subject === identifier) ||
+      (user.proxyData && user.proxyData.subject === identifier) ||
+      (user.teamsData && user.teamsData.subject === identifier) ||
+      (user.ntlmData && user.ntlmData.subject === identifier)
     ) {
       return { ...user, id: userId };
     }
@@ -270,9 +273,9 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
     const newUser = {
       id: userId,
-      username: externalUser.email, // Use email as username for external users
-      email: externalUser.email,
-      name: externalUser.name,
+      username: externalUser.email || externalUser.id, // Use email or fallback to external id
+      email: externalUser.email || null,
+      name: externalUser.name || externalUser.id,
       internalGroups: [], // Only store internal/manual groups, not external groups
       active: true,
       authMethods: [authMethod],

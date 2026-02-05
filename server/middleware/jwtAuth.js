@@ -354,6 +354,52 @@ export default function jwtAuthMiddleware(req, res, next) {
           error_description: 'Unable to validate user credentials. Please try again later.'
         });
       }
+    } else if (decoded.authMode === 'ntlm') {
+      // For NTLM auth, validate that user still exists and is active
+      // NTLM users are persisted to users.json via validateAndPersistExternalUser
+      try {
+        const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+        const usersConfig = loadUsers(usersFilePath);
+
+        const userId = decoded.id || decoded.sub;
+        let userRecord = usersConfig.users?.[userId];
+
+        // If not found by ID, try to find by ntlmData.subject or email
+        if (!userRecord) {
+          userRecord = Object.values(usersConfig.users || {}).find(
+            u =>
+              (u.ntlmData?.subject === userId && u.authMethods?.includes('ntlm')) ||
+              (decoded.email && u.email === decoded.email && u.authMethods?.includes('ntlm'))
+          );
+        }
+
+        if (userRecord && !isUserActive(userRecord)) {
+          logger.warn(
+            `[JWT Auth] Token rejected: NTLM user account disabled | user_id=${userRecord.id}`
+          );
+          return res.status(403).json({
+            error: 'access_denied',
+            error_description: 'User account has been disabled'
+          });
+        }
+
+        user = {
+          id: decoded.id || decoded.sub,
+          username: decoded.username || decoded.id,
+          name: decoded.name || decoded.id,
+          email: decoded.email || '',
+          groups: decoded.groups || [],
+          authMode: 'ntlm',
+          domain: decoded.domain,
+          timestamp: Date.now()
+        };
+      } catch (loadError) {
+        logger.error('[JWT Auth] Failed to validate NTLM user status:', loadError);
+        return res.status(503).json({
+          error: 'service_unavailable',
+          error_description: 'Unable to validate user credentials. Please try again later.'
+        });
+      }
     } else {
       // Fallback for unknown auth modes
       user = {
