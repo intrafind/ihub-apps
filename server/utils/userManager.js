@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
-import { mapExternalGroups } from './authorization.js';
+import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -439,7 +439,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
     const mergedGroups = Array.from(allGroups);
 
-    return {
+    let result = {
       ...externalUser,
       id: persistedUser.id,
       groups: mergedGroups,
@@ -448,6 +448,11 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       lastActiveDate: persistedUser.lastActiveDate,
       persistedUser: true
     };
+
+    // Admin rescue: Ensure there's at least one admin user
+    result = await ensureFirstUserIsAdmin(result, usersFilePath);
+
+    return result;
   }
 
   // User doesn't exist - check self-signup settings
@@ -480,7 +485,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
   const combinedGroups = Array.from(allGroups);
 
-  return {
+  let result = {
     ...externalUser,
     id: persistedUser.id,
     groups: combinedGroups,
@@ -489,4 +494,81 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     lastActiveDate: persistedUser.lastActiveDate,
     persistedUser: true
   };
+
+  // Admin rescue: Ensure there's at least one admin user
+  result = await ensureFirstUserIsAdmin(result, usersFilePath);
+
+  return result;
+}
+
+/**
+ * Check if any user in the system has admin access
+ * @param {string} usersFilePath - Path to users.json file
+ * @returns {boolean} True if at least one admin exists
+ */
+export function hasAnyAdminUser(usersFilePath) {
+  const usersConfig = loadUsers(usersFilePath);
+  const groupsConfig = loadGroupsConfiguration();
+
+  for (const user of Object.values(usersConfig.users || {})) {
+    if (user.active === false) continue;
+
+    // Check if user has admin group in internalGroups
+    const userGroups = user.internalGroups || [];
+    for (const groupName of userGroups) {
+      const group = groupsConfig.groups?.[groupName];
+      if (group?.permissions?.adminAccess === true) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Ensure the first user gets admin access if no admin exists
+ * This is a safety feature to prevent being locked out of admin
+ * @param {Object} user - User object
+ * @param {string} usersFilePath - Path to users.json file
+ * @returns {Object} User object potentially with admin group added
+ */
+export async function ensureFirstUserIsAdmin(user, usersFilePath) {
+  try {
+    // Check if there's already an admin
+    if (hasAnyAdminUser(usersFilePath)) {
+      return user;
+    }
+
+    // No admin exists - make this user an admin
+    logger.warn(
+      `[Admin Rescue] No admin user found in system. Granting admin access to first user: ${user.id} (${user.username || user.name})`
+    );
+
+    // Add 'admin' group to user's groups if not already present
+    const adminGroup = 'admin';
+    if (!user.groups.includes(adminGroup)) {
+      user.groups = [...user.groups, adminGroup];
+    }
+
+    // Also persist the admin group to internalGroups in users.json
+    const usersConfig = loadUsers(usersFilePath);
+    const userRecord = usersConfig.users[user.id];
+    if (userRecord) {
+      if (!userRecord.internalGroups) {
+        userRecord.internalGroups = [];
+      }
+      if (!userRecord.internalGroups.includes(adminGroup)) {
+        userRecord.internalGroups.push(adminGroup);
+        userRecord.updatedAt = new Date().toISOString();
+        await saveUsers(usersConfig, usersFilePath);
+        logger.info(`[Admin Rescue] Persisted admin group for user: ${user.id}`);
+      }
+    }
+
+    return user;
+  } catch (error) {
+    logger.error('[Admin Rescue] Error checking/setting admin status:', error);
+    return user;
+  }
 }
