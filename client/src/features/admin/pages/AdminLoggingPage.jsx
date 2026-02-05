@@ -69,10 +69,28 @@ const AdminLoggingPage = () => {
       const loggingResponse = await makeAdminApiCall('/admin/logging/config', {
         method: 'GET'
       });
-      setLoggingConfig(prevConfig => ({
-        ...prevConfig,
-        ...loggingResponse.data
-      }));
+
+      // Set config with proper defaults for fields that might not be in response
+      const loadedConfig = loggingResponse.data;
+      setLoggingConfig({
+        level: loadedConfig.level || 'info',
+        format: loadedConfig.format || 'json',
+        file: loadedConfig.file || {
+          enabled: false,
+          path: 'logs/app.log',
+          maxSize: 10485760,
+          maxFiles: 5
+        },
+        components: loadedConfig.components || {
+          enabled: false,
+          filter: []
+        },
+        metadata: loadedConfig.metadata || {
+          includeTimestamp: true,
+          includeComponent: true,
+          includeLevel: true
+        }
+      });
 
       // Load platform config for authDebug
       const platformResponse = await makeAdminApiCall('/admin/configs/platform', {

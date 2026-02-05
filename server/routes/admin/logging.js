@@ -146,6 +146,7 @@ export default function registerAdminLoggingRoutes(app, basePath = '') {
       const platformConfig = configCache.get('platform');
       const loggingConfig = platformConfig?.logging || {
         level: 'info',
+        format: 'json',
         file: {
           enabled: false,
           path: 'logs/app.log',
