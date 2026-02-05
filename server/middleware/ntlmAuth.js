@@ -2,6 +2,7 @@ import expressNtlm from 'express-ntlm';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -353,7 +354,7 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   // Apply express-ntlm middleware first to populate req.ntlm
   try {
-    ntlmMiddleware(req, res, err => {
+    ntlmMiddleware(req, res, async err => {
       clearTimeout(timeout);
       res.end = originalEnd;
       res.send = originalSend;
@@ -403,6 +404,13 @@ export function ntlmAuthMiddleware(req, res, next) {
         // Enhance user with authenticated group
         const authConfig = platform.auth || {};
         user = enhanceUserGroups(user, authConfig, ntlmAuth);
+
+        // Validate and persist NTLM user (similar to OIDC/Proxy)
+        // User must be persisted - if this fails, authentication fails
+        user = await validateAndPersistExternalUser(user, platform);
+        logger.info(
+          `[NTLM Auth] User persisted: ${user.id} with groups: ${user.groups.join(', ')}`
+        );
 
         // Set user in request
         req.user = user;
@@ -471,9 +479,9 @@ export function getNtlmConfig() {
  * Login function for NTLM authentication (for API endpoints)
  * @param {Object} req - Express request object with NTLM data
  * @param {Object} ntlmConfig - NTLM configuration
- * @returns {Object} Login result with user and token
+ * @returns {Promise<Object>} Login result with user and token
  */
-export function processNtlmLogin(req, ntlmConfig) {
+export async function processNtlmLogin(req, ntlmConfig) {
   if (!req.ntlm || !req.ntlm.Authenticated) {
     throw new Error('NTLM authentication required');
   }
@@ -490,6 +498,15 @@ export function processNtlmLogin(req, ntlmConfig) {
   const authConfig = platform.auth || {};
 
   user = enhanceUserGroups(user, authConfig, ntlmConfig);
+
+  // Validate and persist NTLM user (similar to OIDC/Proxy)
+  try {
+    user = await validateAndPersistExternalUser(user, platform);
+    logger.info(`[NTLM Auth] User persisted via login: ${user.id}`);
+  } catch (userError) {
+    logger.error('[NTLM Auth] User persistence error during login:', userError.message);
+    // Continue with authentication even if persistence fails
+  }
 
   // Generate JWT token using centralized token service
   const sessionTimeout =

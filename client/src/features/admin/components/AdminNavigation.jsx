@@ -147,34 +147,20 @@ const AdminNavigation = () => {
           // icon: 'key',
           current: location.pathname.startsWith('/admin/oauth')
         },
-        // Only show Users navigation if authentication is enabled
-        ...(platformConfig?.localAuth?.enabled ||
-        platformConfig?.oidcAuth?.enabled ||
-        platformConfig?.proxyAuth?.enabled
-          ? [
-              {
-                key: 'users',
-                name: t('admin.nav.users', 'Users'),
-                href: '/admin/users',
-                // icon: 'user',
-                current: location.pathname.startsWith('/admin/users')
-              }
-            ]
-          : []),
-        // Only show Groups navigation if authentication is enabled
-        ...(platformConfig?.localAuth?.enabled ||
-        platformConfig?.oidcAuth?.enabled ||
-        platformConfig?.proxyAuth?.enabled
-          ? [
-              {
-                key: 'groups',
-                name: t('admin.nav.groups', 'Groups'),
-                href: '/admin/groups',
-                // icon: 'users',
-                current: location.pathname.startsWith('/admin/groups')
-              }
-            ]
-          : [])
+        {
+          key: 'users',
+          name: t('admin.nav.users', 'Users'),
+          href: '/admin/users',
+          // icon: 'user',
+          current: location.pathname.startsWith('/admin/users')
+        },
+        {
+          key: 'groups',
+          name: t('admin.nav.groups', 'Groups'),
+          href: '/admin/groups',
+          // icon: 'users',
+          current: location.pathname.startsWith('/admin/groups')
+        }
       ]
     },
     {
