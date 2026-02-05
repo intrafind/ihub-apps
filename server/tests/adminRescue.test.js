@@ -61,7 +61,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'john',
               active: true,
@@ -82,7 +82,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'admin',
               active: true,
@@ -103,7 +103,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'admin',
               active: false,
@@ -126,7 +126,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'john',
               active: true,
@@ -152,7 +152,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'admin',
               active: true,
@@ -189,7 +189,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'admin',
               active: true,
@@ -209,7 +209,7 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'john',
               active: true,
@@ -229,13 +229,13 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'admin1',
               active: true,
               internalGroups: ['admins']
             },
-            'user_2': {
+            user_2: {
               id: 'user_2',
               username: 'admin2',
               active: true,
@@ -255,13 +255,13 @@ describe('adminRescue', () => {
         usersFilePath,
         JSON.stringify({
           users: {
-            'user_1': {
+            user_1: {
               id: 'user_1',
               username: 'admin1',
               active: true,
               internalGroups: ['admins']
             },
-            'user_2': {
+            user_2: {
               id: 'user_2',
               username: 'admin2',
               active: false,
