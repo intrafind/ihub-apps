@@ -310,13 +310,15 @@ const AppChat = ({ preloadedApp = null }) => {
   const {
     messages,
     processing,
+    clarificationPending,
     sendMessage: sendChatMessage,
     resendMessage: prepareResend,
     deleteMessage,
     editMessage,
     clearMessages,
     cancelGeneration,
-    addSystemMessage
+    addSystemMessage,
+    submitClarificationResponse
   } = useAppChat({
     appId,
     chatId: chatId.current,
@@ -703,6 +705,60 @@ const AppChat = ({ preloadedApp = null }) => {
     }, 0);
   };
 
+  /**
+   * Handle clarification response submission.
+   * Formats the response and continues the conversation.
+   *
+   * @param {Object} response - The clarification response
+   */
+  const handleClarificationSubmit = useCallback(
+    response => {
+      const params = {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage
+      };
+      submitClarificationResponse(response, params);
+    },
+    [
+      submitClarificationResponse,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage
+    ]
+  );
+
+  /**
+   * Handle clarification skip.
+   * Creates a skip response and continues the conversation.
+   *
+   * @param {Object} response - The skip response
+   */
+  const handleClarificationSkip = useCallback(
+    response => {
+      const params = {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage
+      };
+      submitClarificationResponse(response, params);
+    },
+    [
+      submitClarificationResponse,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage
+    ]
+  );
+
   const clearChat = () => {
     if (
       window.confirm(
@@ -1031,7 +1087,9 @@ const AppChat = ({ preloadedApp = null }) => {
       imageAspectRatio,
       imageQuality,
       onImageAspectRatioChange: setImageAspectRatio,
-      onImageQualityChange: setImageQuality
+      onImageQualityChange: setImageQuality,
+      // Clarification state
+      clarificationPending
     };
 
     // Always use ChatInput (which now has the NextGen design with model selector)
@@ -1185,6 +1243,8 @@ const AppChat = ({ preloadedApp = null }) => {
                         onConnectIntegration={connectIntegration}
                         app={app}
                         models={models}
+                        onClarificationSubmit={handleClarificationSubmit}
+                        onClarificationSkip={handleClarificationSkip}
                       />
                     </div>
                   ) : (
@@ -1223,6 +1283,8 @@ const AppChat = ({ preloadedApp = null }) => {
                         onConnectIntegration={connectIntegration}
                         app={app}
                         models={models}
+                        onClarificationSubmit={handleClarificationSubmit}
+                        onClarificationSkip={handleClarificationSkip}
                       />
                     </div>
                   ) : (
@@ -1260,6 +1322,8 @@ const AppChat = ({ preloadedApp = null }) => {
                     onConnectIntegration={connectIntegration}
                     app={app}
                     models={models}
+                    onClarificationSubmit={handleClarificationSubmit}
+                    onClarificationSkip={handleClarificationSkip}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
@@ -1286,6 +1350,8 @@ const AppChat = ({ preloadedApp = null }) => {
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
                   models={models}
+                  onClarificationSubmit={handleClarificationSubmit}
+                  onClarificationSkip={handleClarificationSkip}
                 />
 
                 {renderChatInput()}

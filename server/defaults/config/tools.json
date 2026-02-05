@@ -805,5 +805,142 @@
         }
       }
     }
+  },
+  {
+    "id": "ask_user",
+    "name": {
+      "en": "Ask User for Clarification",
+      "de": "Benutzer um Klärung bitten"
+    },
+    "description": {
+      "en": "Ask the user a clarifying question when you need more information to complete a task. Use this tool when the user's request is ambiguous, missing critical details, or when you need to confirm important assumptions before proceeding. Do not use for general conversation - only for gathering specific missing information needed to fulfill the user's actual request.",
+      "de": "Stellen Sie dem Benutzer eine klärende Frage, wenn Sie mehr Informationen benötigen, um eine Aufgabe abzuschließen. Verwenden Sie dieses Tool, wenn die Anfrage des Benutzers mehrdeutig ist, wichtige Details fehlen oder wenn Sie wichtige Annahmen bestätigen müssen, bevor Sie fortfahren. Nicht für allgemeine Konversation verwenden - nur zum Sammeln spezifischer fehlender Informationen, die zur Erfüllung der eigentlichen Anfrage des Benutzers benötigt werden."
+    },
+    "script": "askUser.js",
+    "requiresUserInput": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": {
+            "en": "The clarifying question to ask the user. Keep it concise and specific. Maximum 500 characters.",
+            "de": "Die klärende Frage an den Benutzer. Halten Sie sie prägnant und spezifisch. Maximal 500 Zeichen."
+          },
+          "maxLength": 500
+        },
+        "input_type": {
+          "type": "string",
+          "enum": ["text", "select", "multiselect", "confirm", "number", "date"],
+          "default": "text",
+          "description": {
+            "en": "The type of input expected from the user. Use 'text' for free-form answers, 'select' for single choice from options, 'multiselect' for multiple choices, 'confirm' for yes/no questions, 'number' for numeric input, 'date' for date selection.",
+            "de": "Der erwartete Eingabetyp vom Benutzer. Verwenden Sie 'text' für freie Antworten, 'select' für Einzelauswahl aus Optionen, 'multiselect' für Mehrfachauswahl, 'confirm' für Ja/Nein-Fragen, 'number' für numerische Eingabe, 'date' für Datumsauswahl."
+          }
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": {
+                  "en": "Display text for the option (max 100 chars)",
+                  "de": "Anzeigetext für die Option (max. 100 Zeichen)"
+                },
+                "maxLength": 100
+              },
+              "value": {
+                "type": "string",
+                "description": {
+                  "en": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                  "de": "Rückgabewert bei Auswahl (standardmäßig Label, wenn nicht angegeben, max. 100 Zeichen)"
+                },
+                "maxLength": 100
+              }
+            },
+            "required": ["label"]
+          },
+          "maxItems": 20,
+          "description": {
+            "en": "Array of options for select/multiselect input types. Required for select/multiselect, ignored for other types. Maximum 20 options.",
+            "de": "Array von Optionen für select/multiselect-Eingabetypen. Erforderlich für select/multiselect, wird bei anderen Typen ignoriert. Maximal 20 Optionen."
+          }
+        },
+        "allow_other": {
+          "type": "boolean",
+          "default": false,
+          "description": {
+            "en": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+            "de": "Für select/multiselect: Erlaubt dem Benutzer, einen benutzerdefinierten 'Sonstiges'-Wert einzugeben, der nicht in der Optionsliste steht."
+          }
+        },
+        "allow_skip": {
+          "type": "boolean",
+          "default": false,
+          "description": {
+            "en": "Allow the user to skip this question without providing an answer.",
+            "de": "Erlaubt dem Benutzer, diese Frage zu überspringen, ohne eine Antwort zu geben."
+          }
+        },
+        "placeholder": {
+          "type": "string",
+          "description": {
+            "en": "Placeholder text shown in the input field before user types.",
+            "de": "Platzhaltertext, der im Eingabefeld angezeigt wird, bevor der Benutzer tippt."
+          },
+          "maxLength": 200
+        },
+        "validation": {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": {
+                "en": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                "de": "Regulärer Ausdruck für Textvalidierung (max. 200 Zeichen). Verwenden Sie einfache Muster, um ReDoS zu vermeiden."
+              },
+              "maxLength": 200
+            },
+            "min": {
+              "type": "number",
+              "description": {
+                "en": "Minimum value for number input or minimum length for text.",
+                "de": "Mindestwert für Zahleneingabe oder Mindestlänge für Text."
+              }
+            },
+            "max": {
+              "type": "number",
+              "description": {
+                "en": "Maximum value for number input or maximum length for text.",
+                "de": "Maximalwert für Zahleneingabe oder Maximallänge für Text."
+              }
+            },
+            "message": {
+              "type": "string",
+              "description": {
+                "en": "Custom error message to show when validation fails.",
+                "de": "Benutzerdefinierte Fehlermeldung bei fehlgeschlagener Validierung."
+              },
+              "maxLength": 200
+            }
+          },
+          "description": {
+            "en": "Validation rules for the user's input.",
+            "de": "Validierungsregeln für die Eingabe des Benutzers."
+          }
+        },
+        "context": {
+          "type": "string",
+          "description": {
+            "en": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+            "de": "Kurze Erklärung, warum Sie diese Information benötigen, wird dem Benutzer angezeigt, um den Zweck der Frage zu verstehen."
+          },
+          "maxLength": 500
+        }
+      },
+      "required": ["question"]
+    }
   }
 ]

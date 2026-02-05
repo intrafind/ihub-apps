@@ -22,6 +22,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const chatId = initialChatId || `chat-${uuidv4()}`;
   const [processing, setProcessing] = useState(false);
 
+  // Clarification state - tracks when a clarification question is pending
+  const [clarificationPending, setClarificationPending] = useState(false);
+  const activeClarificationRef = useRef(null); // Store active clarification data
+
   // Refs to keep mutable values between renders without relying on window
   const lastMessageIdRef = useRef(null);
   const pendingMessageDataRef = useRef(null);
@@ -126,6 +130,28 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             });
           }
           break;
+        case 'clarification':
+          if (lastMessageIdRef.current && data) {
+            console.log('📝 Clarification event received:', data);
+            // Store the clarification data and set pending state
+            activeClarificationRef.current = data;
+            setClarificationPending(true);
+            // Update the assistant message with clarification data
+            // Keep loading=true since we're waiting for user input
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              clarification: {
+                questionId: data.questionId,
+                question: data.question,
+                inputType: data.inputType || 'text',
+                options: data.options || [],
+                allowOther: data.allowOther || false,
+                allowSkip: data.allowSkip || false,
+                context: data.context
+              },
+              awaitingInput: true
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message
@@ -133,12 +159,30 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
               finishReason: data?.finishReason,
               ...(messageMetadataRef.current || {})
             };
+
+            // Check if this is a clarification finish reason
+            if (data?.finishReason === 'clarification') {
+              console.log('📝 Done event with clarification finish reason');
+              // Keep the message in awaiting input state, don't mark as complete
+              updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
+                ...metadata,
+                awaitingInput: true
+              });
+              // Processing stops but clarification is still pending
+              setProcessing(false);
+              // Don't call onMessageComplete yet - wait for clarification response
+              break;
+            }
+
             updateAssistantMessage(lastMessageIdRef.current, fullContent, false, metadata);
             if (onMessageComplete) {
               onMessageComplete(fullContent, lastUserMessageRef.current);
             }
           }
           setProcessing(false);
+          // Reset clarification state when done normally
+          setClarificationPending(false);
+          activeClarificationRef.current = null;
           break;
         case 'error':
           if (lastMessageIdRef.current && !isCancellingRef.current) {
@@ -329,6 +373,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     }
 
     setProcessing(false);
+    setClarificationPending(false);
+    activeClarificationRef.current = null;
 
     // Reset the cancellation flag after a short delay to allow cleanup to complete
     setTimeout(() => {
@@ -336,17 +382,144 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     }, 100);
   }, [cleanupEventSource, updateAssistantMessage, t, messagesRef]);
 
+  /**
+   * Submit a response to a clarification question.
+   * Updates the current message with the response and continues the conversation.
+   *
+   * @param {Object} response - The clarification response
+   * @param {string} response.questionId - ID of the question being answered
+   * @param {boolean} response.answered - Whether the question was answered (vs skipped)
+   * @param {boolean} response.skipped - Whether the question was skipped
+   * @param {*} response.value - The actual response value
+   * @param {string} response.displayText - Human-readable display text
+   * @param {Object} params - Parameters for the continuation request
+   */
+  const submitClarificationResponse = useCallback(
+    (response, params = {}) => {
+      console.log('📝 Submitting clarification response:', response);
+
+      if (!activeClarificationRef.current) {
+        console.warn('No active clarification to respond to');
+        return;
+      }
+
+      const clarificationData = activeClarificationRef.current;
+      const messageId = lastMessageIdRef.current;
+
+      // Update the assistant message to mark clarification as responded
+      if (messageId) {
+        const currentMessage = messagesRef.current.find(m => m.id === messageId);
+        if (currentMessage) {
+          updateAssistantMessage(messageId, currentMessage.content || '', false, {
+            clarification: currentMessage.clarification,
+            clarificationResponse: {
+              ...response,
+              answeredAt: Date.now()
+            },
+            awaitingInput: false,
+            loading: false
+          });
+        }
+      }
+
+      // Clear clarification state
+      setClarificationPending(false);
+      activeClarificationRef.current = null;
+
+      // Create a user message showing the Q&A
+      const userMessageContent = response.skipped
+        ? `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.skipped', 'Skipped')}`
+        : `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.answerPrefix', 'Answer')}: ${response.displayText}`;
+
+      // Continue the conversation with the response
+      // The response is sent as a special message that the server will process
+      try {
+        isCancellingRef.current = false;
+        cleanupEventSource();
+        setProcessing(true);
+
+        const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        lastMessageIdRef.current = exchangeId;
+
+        // Add a user message showing the clarification response
+        addUserMessage(userMessageContent, {
+          clarificationResponse: response,
+          isClarificationAnswer: true
+        });
+
+        // Add placeholder for assistant response
+        addAssistantMessage(exchangeId);
+
+        // Build the messages for API with clarification response context
+        const messagesForAPI = getMessagesForApi(true, {
+          role: 'user',
+          content: `[Clarification Response for "${clarificationData.question}"]: ${response.skipped ? 'User skipped this question' : response.value}`,
+          messageId: exchangeId,
+          clarificationResponse: {
+            questionId: response.questionId,
+            question: clarificationData.question,
+            answered: response.answered,
+            skipped: response.skipped,
+            value: response.value
+          }
+        });
+
+        pendingMessageDataRef.current = {
+          appId,
+          chatId: chatId,
+          messages: messagesForAPI,
+          params: {
+            ...params,
+            clarificationResponse: {
+              questionId: response.questionId,
+              answered: response.answered,
+              skipped: response.skipped,
+              value: response.value
+            }
+          }
+        };
+
+        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+      } catch (err) {
+        console.error('Error submitting clarification response:', err);
+        addSystemMessage(
+          `Error: ${t('error.clarificationFailed', 'Failed to submit clarification response.')} ${
+            err.message || t('error.tryAgain', 'Please try again.')
+          }`,
+          true
+        );
+        setProcessing(false);
+        setClarificationPending(false);
+      }
+    },
+    [
+      cleanupEventSource,
+      updateAssistantMessage,
+      addUserMessage,
+      addAssistantMessage,
+      getMessagesForApi,
+      initEventSource,
+      addSystemMessage,
+      messagesRef,
+      t,
+      appId,
+      chatId
+    ]
+  );
+
   return {
     chatId: chatId,
     messages,
     processing,
+    clarificationPending,
     sendMessage,
     resendMessage,
     deleteMessage,
     editMessage,
     clearMessages,
     cancelGeneration,
-    addSystemMessage
+    addSystemMessage,
+    submitClarificationResponse
   };
 }
 

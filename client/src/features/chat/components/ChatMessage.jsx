@@ -8,6 +8,8 @@ import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
+import ClarificationCard from './ClarificationCard';
+import ClarificationResponse from './ClarificationResponse';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -25,7 +27,9 @@ const ChatMessage = ({
   onInsert,
   canvasEnabled = false,
   app = null, // App configuration for custom response rendering
-  models = [] // Available models for determining if model param should be included in link
+  models = [], // Available models for determining if model param should be included in link
+  onClarificationSubmit = null, // Callback when a clarification response is submitted
+  onClarificationSkip = null // Callback when a clarification is skipped
 }) => {
   const { t } = useTranslation();
 
@@ -616,6 +620,23 @@ const ChatMessage = ({
               </ul>
             )}
           </div>
+        )}
+
+        {/* Clarification UI - show card for pending clarifications, response for answered ones */}
+        {!isUser && message.clarification && !message.clarificationResponse && (
+          <ClarificationCard
+            clarification={message.clarification}
+            onSubmit={onClarificationSubmit}
+            onSkip={onClarificationSkip}
+          />
+        )}
+
+        {/* Show clarification response for answered clarifications */}
+        {!isUser && message.clarification && message.clarificationResponse && (
+          <ClarificationResponse
+            question={message.clarification.question}
+            response={message.clarificationResponse}
+          />
         )}
       </div>
 
