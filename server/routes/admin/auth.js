@@ -438,7 +438,9 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
 
       // Only require password for local auth users
       if (isLocalAuth && !password) {
-        return res.status(400).json({ error: 'Password is required for local authentication users' });
+        return res
+          .status(400)
+          .json({ error: 'Password is required for local authentication users' });
       }
 
       if (password && password.length < 6) {
@@ -499,7 +501,9 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
       // Refresh cache to ensure new user is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(`👤 Created new user: ${username} (${userId}) with auth methods: ${authMethods.join(', ')}`);
+      logger.info(
+        `👤 Created new user: ${username} (${userId}) with auth methods: ${authMethods.join(', ')}`
+      );
 
       // Return user without password hash
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
