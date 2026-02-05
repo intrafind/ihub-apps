@@ -61,7 +61,9 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
   const hasEnabledAuthMethods =
     authConfig?.authMethods?.local?.enabled ||
     authConfig?.authMethods?.oidc?.enabled ||
-    authConfig?.authMethods?.proxy?.enabled;
+    authConfig?.authMethods?.proxy?.enabled ||
+    authConfig?.authMethods?.ldap?.enabled ||
+    authConfig?.authMethods?.ntlm?.enabled;
 
   // Don't show login options when in anonymous-only mode
   // This happens when anonymousAuth is enabled and no auth methods are enabled
