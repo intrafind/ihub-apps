@@ -412,7 +412,8 @@ export function ntlmAuthMiddleware(req, res, next) {
             `[NTLM Auth] User persisted: ${user.id} with groups: ${user.groups.join(', ')}`
           );
         } catch (userError) {
-          logger.error('[NTLM Auth] User persistence error:', userError.message);
+          logger.error('[NTLM Auth] User persistence error:', userError.message || userError);
+          logger.error('[NTLM Auth] User persistence stack:', userError.stack);
           // Continue with authentication even if persistence fails
           // This prevents breaking existing NTLM authentication
         }
