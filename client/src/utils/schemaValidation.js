@@ -25,7 +25,7 @@ function createValidator() {
 
 /**
  * Preprocess data before validation
- * Converts empty strings to null for optional fields to avoid format validation issues
+ * Converts empty strings and null to undefined for optional fields to avoid validation issues
  * @param {Object} data - Data to preprocess
  * @param {Object} schema - JSON Schema
  * @returns {Object} Preprocessed data
@@ -36,13 +36,16 @@ function preprocessData(data, schema) {
   }
 
   const required = schema.required || [];
-  const properties = schema.properties || {};
   const processed = { ...data };
 
   Object.keys(processed).forEach(key => {
-    // Convert empty strings to null for non-required fields with format validation
-    if (processed[key] === '' && !required.includes(key) && properties[key]?.format) {
-      processed[key] = null;
+    // Convert empty strings and null to undefined for non-required fields
+    // This allows optional fields to pass validation without format checks
+    if (
+      (processed[key] === '' || processed[key] === null) &&
+      !required.includes(key)
+    ) {
+      delete processed[key];
     }
   });
 
