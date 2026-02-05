@@ -4,6 +4,7 @@
  */
 
 import iAssistantService from '../services/integrations/iAssistantService.js';
+import { getStreamReader } from '../utils/streamUtils.js';
 
 // Export main method for RAG question answering
 export async function ask(params) {
@@ -18,10 +19,13 @@ export async function ask(params) {
       appConfig: params.appConfig || null
     });
 
+    // Get the reader outside the generator to ensure module import is accessible
+    // Use getStreamReader to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+    const reader = getStreamReader(response);
+
     // Return custom async generator that yields content chunks using our proven SSE parsing
     return {
       [Symbol.asyncIterator]: async function* () {
-        const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
 

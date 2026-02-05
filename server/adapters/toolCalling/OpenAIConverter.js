@@ -16,18 +16,16 @@ import logger from '../../utils/logger.js';
 
 /**
  * Convert generic tools to OpenAI format
- * Filters out provider-specific special tools from other providers (googleSearch, etc.)
+ * Filters out provider-specific special tools from other providers (googleSearch, webSearch, etc.)
+ * Note: webSearch is specific to openai-responses (Azure) and not supported by regular OpenAI
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
  * @returns {Object[]} OpenAI formatted tools
  */
 export function convertGenericToolsToOpenAI(genericTools = []) {
-  // Check if webSearch (OpenAI native) is present
-  const hasWebSearch = genericTools.some(t => t.id === 'webSearch');
-  const webSearchToolIds = ['enhancedWebSearch', 'braveSearch', 'tavilySearch', 'googleSearch'];
-
   const filteredTools = genericTools.filter(tool => {
-    // If tool specifies this provider (or compatible), always include it
-    if (tool.provider === 'openai' || tool.provider === 'openai-responses') {
+    // If tool specifies this provider, always include it
+    // Note: 'openai-responses' tools are NOT included here - they are specific to the OpenAI Responses API (Azure)
+    if (tool.provider === 'openai') {
       return true;
     }
     // If tool specifies a different provider, exclude it
@@ -40,13 +38,6 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
       logger.info(`[OpenAI Converter] Filtering out special tool: ${tool.id || tool.name}`);
-      return false;
-    }
-    // If webSearch is present, filter out other web search tools
-    if (hasWebSearch && webSearchToolIds.includes(tool.id)) {
-      console.log(
-        `[OpenAI Converter] Filtering out web search tool ${tool.id} because webSearch (native) is available`
-      );
       return false;
     }
     // Universal tool - include it

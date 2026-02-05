@@ -1,5 +1,10 @@
 /**
- * Test to verify OpenAI converters filter out other web search tools when webSearch is present
+ * Test to verify OpenAI converters filter out provider-specific tools correctly
+ *
+ * Key behaviors:
+ * - webSearch (provider: 'openai-responses') should ONLY be included for openai-responses converter
+ * - Regular OpenAI converter should NOT include webSearch (it's Azure-specific)
+ * - googleSearch (provider: 'google') should be filtered out from all OpenAI converters
  */
 
 import assert from 'assert';
@@ -8,14 +13,15 @@ import { convertGenericToolsToOpenaiResponses } from '../adapters/toolCalling/Op
 
 console.log('Testing OpenAI web search tool filtering...\n');
 
-// Test 1: OpenAI Converter - with webSearch, should filter out other search tools
-console.log('Test 1: OpenAI Converter - webSearch present → filter out other search tools');
+// Test 1: OpenAI Converter - should filter out webSearch (openai-responses specific)
+console.log('Test 1: OpenAI Converter - webSearch should be filtered (openai-responses provider)');
 const tools1 = [
   {
     id: 'webSearch',
     name: 'webSearch',
     description: 'OpenAI native web search',
     provider: 'openai-responses',
+    isSpecialTool: true,
     parameters: { type: 'object', properties: {} }
   },
   {
@@ -44,15 +50,22 @@ const hasEnhanced1 = result1.some(t => t.function.name === 'enhancedWebSearch');
 const hasBrave1 = result1.some(t => t.function.name === 'braveSearch');
 const hasExtractor1 = result1.some(t => t.function.name === 'webContentExtractor');
 
-assert.ok(hasWebSearch1, 'Should include webSearch');
-assert.ok(!hasEnhanced1, 'Should NOT include enhancedWebSearch when webSearch is present');
-assert.ok(!hasBrave1, 'Should NOT include braveSearch when webSearch is present');
-assert.ok(hasExtractor1, 'Should include webContentExtractor (not a search tool)');
+assert.ok(!hasWebSearch1, 'Should NOT include webSearch (openai-responses provider specific)');
+assert.ok(hasEnhanced1, 'Should include enhancedWebSearch (universal tool)');
+assert.ok(hasBrave1, 'Should include braveSearch (universal tool)');
+assert.ok(hasExtractor1, 'Should include webContentExtractor (universal tool)');
 console.log('✓ Test 1 passed\n');
 
-// Test 2: OpenAI Converter - without webSearch, should include other search tools
-console.log('Test 2: OpenAI Converter - no webSearch → include other search tools');
+// Test 2: OpenAI Converter - should include openai-specific tools
+console.log('Test 2: OpenAI Converter - include openai-specific and universal tools');
 const tools2 = [
+  {
+    id: 'myOpenaiTool',
+    name: 'myOpenaiTool',
+    description: 'An OpenAI specific tool',
+    provider: 'openai',
+    parameters: { type: 'object', properties: { input: { type: 'string' } } }
+  },
   {
     id: 'enhancedWebSearch',
     name: 'enhancedWebSearch',
@@ -74,13 +87,15 @@ const tools2 = [
 ];
 
 const result2 = convertGenericToolsToOpenAI(tools2);
+const hasOpenaiTool2 = result2.some(t => t.function.name === 'myOpenaiTool');
 const hasEnhanced2 = result2.some(t => t.function.name === 'enhancedWebSearch');
 const hasBrave2 = result2.some(t => t.function.name === 'braveSearch');
 const hasExtractor2 = result2.some(t => t.function.name === 'webContentExtractor');
 
-assert.ok(hasEnhanced2, 'Should include enhancedWebSearch when webSearch is NOT present');
-assert.ok(hasBrave2, 'Should include braveSearch when webSearch is NOT present');
-assert.ok(hasExtractor2, 'Should include webContentExtractor');
+assert.ok(hasOpenaiTool2, 'Should include openai-specific tools');
+assert.ok(hasEnhanced2, 'Should include enhancedWebSearch (universal tool)');
+assert.ok(hasBrave2, 'Should include braveSearch (universal tool)');
+assert.ok(hasExtractor2, 'Should include webContentExtractor (universal tool)');
 console.log('✓ Test 2 passed\n');
 
 // Test 3: OpenAI Converter - should filter out googleSearch regardless
@@ -179,7 +194,14 @@ console.log('✓ Test 5 passed\n');
 
 console.log('✅ All tests passed! OpenAI converters correctly filter web search tools.\n');
 console.log('Summary:');
-console.log('- When webSearch (OpenAI native) is present, other search tools are filtered out');
-console.log('- When webSearch is NOT present, generic search tools are included');
-console.log('- Provider-specific tools (like googleSearch) are always filtered out');
-console.log('- Non-search tools (like webContentExtractor) are not affected');
+console.log(
+  '- webSearch (openai-responses provider) is ONLY included for openai-responses converter'
+);
+console.log(
+  '- Regular OpenAI converter filters out webSearch (it is Azure/OpenAI Responses specific)'
+);
+console.log('- When webSearch is present in openai-responses, other search tools are filtered out');
+console.log(
+  '- Provider-specific tools (like googleSearch) are always filtered out from other providers'
+);
+console.log('- Universal tools (no provider) are included by all converters');

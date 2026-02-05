@@ -9,17 +9,58 @@
  */
 
 import {
-  convertGenericToolsToOpenAI,
   convertOpenAIToolsToGeneric,
   convertGenericToolCallsToOpenAI,
   convertOpenAIToolCallsToGeneric
 } from './OpenAIConverter.js';
 
-import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
+import {
+  createGenericStreamingResponse,
+  normalizeFinishReason,
+  sanitizeSchemaForProvider
+} from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
 
-// Mistral uses OpenAI format for tools, so we can reuse most OpenAI functions
-export const convertGenericToolsToMistral = convertGenericToolsToOpenAI;
+/**
+ * Convert generic tools to Mistral format
+ * Mistral uses OpenAI-compatible format but needs its own provider filtering
+ * Filters out provider-specific special tools (googleSearch, webSearch, etc.)
+ * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
+ * @returns {Object[]} Mistral formatted tools
+ */
+export function convertGenericToolsToMistral(genericTools = []) {
+  const filteredTools = genericTools.filter(tool => {
+    // If tool specifies this provider, always include it
+    if (tool.provider === 'mistral') {
+      return true;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      logger.info(
+        `[Mistral Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      return false;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      logger.info(`[Mistral Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // Universal tool - include it
+    return true;
+  });
+
+  return filteredTools.map(tool => ({
+    type: 'function',
+    function: {
+      name: tool.id || tool.name,
+      description: tool.description,
+      parameters: sanitizeSchemaForProvider(tool.parameters, 'mistral')
+    }
+  }));
+}
+
+// Mistral uses OpenAI format for other conversions
 export const convertMistralToolsToGeneric = convertOpenAIToolsToGeneric;
 export const convertGenericToolCallsToMistral = convertGenericToolCallsToOpenAI;
 export const convertMistralToolCallsToGeneric = convertOpenAIToolCallsToGeneric;

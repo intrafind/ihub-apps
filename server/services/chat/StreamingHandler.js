@@ -7,7 +7,7 @@ import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
-import { Readable } from 'stream';
+import { getReadableStream } from '../../utils/streamUtils.js';
 import { redactUrl } from '../../utils/logRedactor.js';
 import logger from '../../utils/logger.js';
 
@@ -61,20 +61,8 @@ class StreamingHandler {
    * @returns {ReadableStream} Web Streams ReadableStream
    */
   getReadableStream(response) {
-    // Check if body already has getReader (native fetch with Web Streams API)
-    if (response.body && typeof response.body.getReader === 'function') {
-      return response.body;
-    }
-
-    // node-fetch returns a Node.js stream - convert to Web Streams
-    if (response.body && typeof response.body.pipe === 'function') {
-      // Use Node.js Readable.toWeb() to convert Node.js stream to Web Streams ReadableStream
-      return Readable.toWeb(response.body);
-    }
-
-    throw new Error(
-      'Response body is not a readable stream. Expected Web Streams API or Node.js stream.'
-    );
+    // Delegate to the shared utility
+    return getReadableStream(response);
   }
 
   async executeStreamingResponse({
