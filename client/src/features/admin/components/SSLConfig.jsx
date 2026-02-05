@@ -18,17 +18,15 @@ const SSLConfig = () => {
   useEffect(() => {
     const fetchSSLConfig = async () => {
       try {
-        const response = await makeAdminApiCall('/admin/configs/platform', {
+        const response = await makeAdminApiCall('/admin/ssl/config', {
           method: 'GET'
         });
-        const sslConfig = response.data?.ssl || {
-          ignoreInvalidCertificates: false,
-          domainWhitelist: []
-        };
         // Ensure domainWhitelist is always an array for backward compatibility
         setConfig({
-          ignoreInvalidCertificates: sslConfig.ignoreInvalidCertificates || false,
-          domainWhitelist: Array.isArray(sslConfig.domainWhitelist) ? sslConfig.domainWhitelist : []
+          ignoreInvalidCertificates: response.data.ignoreInvalidCertificates || false,
+          domainWhitelist: Array.isArray(response.data.domainWhitelist)
+            ? response.data.domainWhitelist
+            : []
         });
         setMessage('');
       } catch (error) {
@@ -78,21 +76,10 @@ const SSLConfig = () => {
     setMessage('');
 
     try {
-      // Get the full platform config first
-      const currentConfigResponse = await makeAdminApiCall('/admin/configs/platform', {
-        method: 'GET'
-      });
-
-      // Update only the SSL section
-      const updatedConfig = {
-        ...currentConfigResponse.data,
-        ssl: config
-      };
-
-      // Save the updated config
-      await makeAdminApiCall('/admin/configs/platform', {
+      // Save the SSL config using dedicated endpoint
+      await makeAdminApiCall('/admin/ssl/config', {
         method: 'PUT',
-        data: updatedConfig
+        data: config
       });
 
       setMessage({
