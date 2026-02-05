@@ -40,9 +40,24 @@ const MonacoJsonEditor = ({
   const [jsonString, setJsonString] = useState('');
   const [validationErrors, setValidationErrors] = useState([]);
   const [isValidJson, setIsValidJson] = useState(true);
+  const isInternalChange = useRef(false);
+  const lastExternalValue = useRef(null);
 
-  // Convert object to formatted JSON string
+  // Convert object to formatted JSON string - only when value changes externally
   useEffect(() => {
+    // Skip if this is our own internal change
+    if (isInternalChange.current) {
+      isInternalChange.current = false;
+      return;
+    }
+
+    // Check if value actually changed from external source
+    const valueStr = JSON.stringify(value);
+    if (valueStr === lastExternalValue.current) {
+      return;
+    }
+    lastExternalValue.current = valueStr;
+
     try {
       const formatted = JSON.stringify(value, null, 2);
       setJsonString(formatted);
@@ -124,6 +139,9 @@ const MonacoJsonEditor = ({
       setIsValidJson(true);
 
       if (onChange) {
+        // Mark this as an internal change to prevent useEffect from resetting
+        isInternalChange.current = true;
+        lastExternalValue.current = JSON.stringify(parsed);
         onChange(parsed);
       }
     } catch {
@@ -239,8 +257,8 @@ const MonacoJsonEditor = ({
             bracketMatching: 'always',
             autoClosingBrackets: 'always',
             autoClosingQuotes: 'always',
-            formatOnPaste: true,
-            formatOnType: true,
+            formatOnPaste: false,
+            formatOnType: false,
             tabSize: 2,
             insertSpaces: true,
             detectIndentation: false,
