@@ -67,27 +67,20 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && cd ..
-          cd server && npm ci && cd ..
-
-      - name: Install client dependencies with uuid package
-        run: |
-          cd client
-          npm install
-          npm install uuid
-          cd ..
+          bun install
+          cd client && bun install && cd ..
+          cd server && bun install && cd ..
 
       - name: Build client
         run: |
           cd client
-          npm run build
+          bun run build
           cd ..
 
       - name: Verify build
         run: |
           # Create production build
-          npm run prod:build
+          bun run prod:build
 
           # Verify the build was successful
           if [ -d "dist" ] && [ -d "dist/public" ] && [ -d "dist/server" ]; then
@@ -163,9 +156,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          npm ci
-          cd client && npm ci && npm install uuid && cd ..
-          cd server && npm ci && cd ..
+          bun install
+          cd client && bun install && cd ..
+          cd server && bun install && cd ..
 
       - name: Set version
         run: |
@@ -182,22 +175,22 @@ jobs:
         run: |
           if [ -n "${{ env.VERSION }}" ]; then
             echo "Syncing version with release tag: ${{ env.VERSION }}"
-            node scripts/sync-release-version.js ${{ env.VERSION }}
+            bun run scripts/sync-release-version.js ${{ env.VERSION }}
           fi
         shell: bash
 
-      - name: Build using Node.js SEA
+      - name: Build using Bun compile
         run: |
-          # Use Node.js SEA (Single Executable Application) feature with platform-specific argument
-          chmod +x ./build-sea.sh
-          ./build-sea.sh ${{ matrix.platform }}
+          # Use Bun's built-in compiler with platform-specific argument
+          chmod +x ./build-bun.sh
+          ./build-bun.sh ${{ matrix.platform }}
         shell: bash
 
       - name: Windows-specific setup
         if: matrix.platform == 'win'
         run: |
           # Check Windows binary architecture
-          node -e "console.log('Windows build: Node.js architecture is ' + process.arch)"
+          bun --version
 
           # Create a simple diagnostic script for Windows
           echo '@echo off
@@ -302,14 +295,13 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install
 
       - name: Set version for commit job
         run: |
@@ -323,7 +315,7 @@ jobs:
       - name: Sync and commit version changes
         run: |
           echo "Syncing and committing version changes for ${{ env.VERSION }}"
-          node scripts/sync-release-version.js ${{ env.VERSION }} --commit
+          bun run scripts/sync-release-version.js ${{ env.VERSION }} --commit
           
           # Push changes back to the repository
           git push origin HEAD:${{ github.ref_name }} || echo "No changes to push or push failed"

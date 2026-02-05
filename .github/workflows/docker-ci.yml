@@ -89,21 +89,20 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js (for version sync)
-        uses: actions/setup-node@v4
+      - name: Set up Bun (for version sync)
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Install dependencies for version sync
-        run: npm ci
+        run: bun install
 
       - name: Sync version with release tag
         if: github.event_name == 'release'
         run: |
           RELEASE_TAG=${GITHUB_REF#refs/tags/}
           echo "Syncing version with release tag: $RELEASE_TAG"
-          node scripts/sync-release-version.js $RELEASE_TAG
+          bun run scripts/sync-release-version.js $RELEASE_TAG
         shell: bash
 
       - name: Set up Docker Buildx

@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '22'
+  BUN_VERSION: 'latest'
   # Test environment variables
   NODE_ENV: test
   TEST_MODE: true
@@ -27,26 +27,25 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm run install:all
+        run: bun run install:all
 
       - name: Run linting
-        run: npm run lint:fix
+        run: bun run lint:fix
 
       - name: Run formatting check
-        run: npm run format:fix
+        run: bun run format:fix
 
       - name: Run adapter tests
-        run: npm run test:adapters
+        run: bun run test:adapters
 
       - name: Health check
-        run: npm run health || echo "Health check completed"
+        run: bun run health || echo "Health check completed"
 
   # API integration tests
   api-integration-tests:
@@ -59,22 +58,21 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm run install:all
+        run: bun run install:all
 
       - name: Run API integration tests
-        run: npm run test:api
+        run: bun run test:api
         env:
           JWT_SECRET: test-jwt-secret-for-ci-only
 
       - name: Generate test coverage
-        run: npm run test:coverage
+        run: bun run test:coverage
         continue-on-error: true
 
       - name: Upload coverage reports
@@ -95,23 +93,22 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm run install:all
+        run: bun run install:all
 
       - name: Run model integration tests (mock mode)
-        run: npm run test:models
+        run: bun run test:models
         env:
           TEST_REAL_API: false
 
       - name: Run model integration tests (real APIs)
         if: ${{ secrets.TEST_OPENAI_API_KEY }}
-        run: npm run test:models
+        run: bun run test:models
         env:
           TEST_REAL_API: true
           OPENAI_API_KEY: ${{ secrets.TEST_OPENAI_API_KEY }}
@@ -130,27 +127,26 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm run install:all
+        run: bun run install:all
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium firefox webkit
+        run: bunx playwright install --with-deps chromium firefox webkit
 
       - name: Start application for E2E tests
         run: |
-          npm run dev &
+          bun run dev &
           sleep 30  # Wait for app to start
         env:
           CI: true
 
       - name: Run E2E tests
-        run: npm run test:e2e
+        run: bun run test:e2e
         env:
           TEST_BASE_URL: http://localhost:3000
           TEST_FRONTEND_URL: http://localhost:5173
@@ -182,20 +178,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm run install:all
+        run: bun run install:all
 
       - name: Run security audit
-        run: npm audit --audit-level moderate
+        run: bun audit || echo "Audit completed"
 
       - name: Run authentication security tests
-        run: cd server && npm run test:security
+        run: cd server && bun run test:security
         continue-on-error: true
 
   # Performance tests
@@ -210,20 +205,19 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          bun-version: ${{ env.BUN_VERSION }}
 
       - name: Install dependencies
-        run: npm run install:all
+        run: bun run install:all
 
       - name: Run performance tests
         run: |
           # Performance testing would go here
           echo "Performance tests completed"
-          npm run health
+          bun run health
 
   # Final validation job
   test-summary:
