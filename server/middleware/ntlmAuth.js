@@ -406,17 +406,11 @@ export function ntlmAuthMiddleware(req, res, next) {
         user = enhanceUserGroups(user, authConfig, ntlmAuth);
 
         // Validate and persist NTLM user (similar to OIDC/Proxy)
-        try {
-          user = await validateAndPersistExternalUser(user, platform);
-          logger.info(
-            `[NTLM Auth] User persisted: ${user.id} with groups: ${user.groups.join(', ')}`
-          );
-        } catch (userError) {
-          logger.error('[NTLM Auth] User persistence error:', userError.message || userError);
-          logger.error('[NTLM Auth] User persistence stack:', userError.stack);
-          // Continue with authentication even if persistence fails
-          // This prevents breaking existing NTLM authentication
-        }
+        // User must be persisted - if this fails, authentication fails
+        user = await validateAndPersistExternalUser(user, platform);
+        logger.info(
+          `[NTLM Auth] User persisted: ${user.id} with groups: ${user.groups.join(', ')}`
+        );
 
         // Set user in request
         req.user = user;
