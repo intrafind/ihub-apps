@@ -432,7 +432,9 @@ class ToolExecutor {
         });
       }
 
-      const reader = llmResponse.body.getReader();
+      // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+      const readableStream = this.streamingHandler.getReadableStream(llmResponse);
+      const reader = readableStream.getReader();
       const decoder = new TextDecoder();
       const events = [];
       const parser = createParser({ onEvent: e => events.push(e) });
@@ -815,7 +817,9 @@ class ToolExecutor {
           });
         }
 
-        const reader = llmResponse.body.getReader();
+        // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+        const readableStream = this.streamingHandler.getReadableStream(llmResponse);
+        const reader = readableStream.getReader();
         const decoder = new TextDecoder();
         const events = [];
         const parser = createParser({ onEvent: e => events.push(e) });

@@ -11,6 +11,7 @@ import {
   convertToolsToGeneric
 } from '../adapters/toolCalling/index.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { getStreamReader } from '../utils/streamUtils.js';
 import logger from '../utils/logger.js';
 
 export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
@@ -276,7 +277,8 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       }
       if (stream) {
         // Use generic tool calling system for all providers
-        const reader = llmResponse.body.getReader();
+        // Use getStreamReader to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+        const reader = getStreamReader(llmResponse);
         const decoder = new TextDecoder();
         let chunkCount = 0;
         let buffer = '';

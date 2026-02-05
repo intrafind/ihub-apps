@@ -4,6 +4,7 @@ import { throttledFetch } from '../../requestThrottler.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import configCache from '../../configCache.js';
 import authDebugService from '../../utils/authDebugService.js';
+import { getStreamReader } from '../../utils/streamUtils.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -255,7 +256,8 @@ class IAssistantService {
   async collectStreamingResponse(response) {
     // Delegate to the new consolidated method
     // return this.collectCompleteResponse(response);
-    const reader = response.body.getReader();
+    // Use getStreamReader to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+    const reader = getStreamReader(response);
     const decoder = new TextDecoder();
     let buffer = '';
 
@@ -505,10 +507,11 @@ class IAssistantService {
    */
   createStreamingIterator(response, options = {}) {
     const { contentOnly = true } = options;
+    // Get the reader outside the generator to ensure module import is accessible
+    const reader = getStreamReader(response);
 
     return {
       [Symbol.asyncIterator]: async function* () {
-        const reader = response.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
 
@@ -574,7 +577,8 @@ class IAssistantService {
    * @returns {Object} Complete collected response
    */
   async collectCompleteResponse(response) {
-    const reader = response.body.getReader();
+    // Use getStreamReader to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
+    const reader = getStreamReader(response);
     const decoder = new TextDecoder();
     let buffer = '';
 
