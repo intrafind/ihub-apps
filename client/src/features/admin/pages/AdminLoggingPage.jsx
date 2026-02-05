@@ -75,7 +75,7 @@ const AdminLoggingPage = () => {
       }));
 
       // Load platform config for authDebug
-      const platformResponse = await makeAdminApiCall('/admin/configs/config/platform', {
+      const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
         method: 'GET'
       });
       if (platformResponse.data?.authDebug) {
@@ -123,7 +123,7 @@ const AdminLoggingPage = () => {
       setMessage('');
 
       // Load current platform config
-      const platformResponse = await makeAdminApiCall('/admin/configs/config/platform', {
+      const platformResponse = await makeAdminApiCall('/admin/configs/platform', {
         method: 'GET'
       });
       const platformConfig = platformResponse.data;
@@ -132,8 +132,8 @@ const AdminLoggingPage = () => {
       platformConfig.authDebug = authDebugConfig;
 
       // Save back
-      await makeAdminApiCall('/admin/configs/config/platform', {
-        method: 'PUT',
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
         data: platformConfig
       });
 
