@@ -143,7 +143,7 @@ export default function registerAdminLoggingRoutes(app, basePath = '') {
    */
   app.get(`${basePath}/api/admin/logging/config`, adminAuth, (req, res) => {
     try {
-      const platformConfig = configCache.get('platform');
+      const platformConfig = configCache.getPlatform();
       const loggingConfig = platformConfig?.logging || {
         level: 'info',
         format: 'json',
