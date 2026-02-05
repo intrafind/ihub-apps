@@ -50,6 +50,7 @@ const orderedJsonFormat = winston.format.printf(info => {
 const jsonFormat = winston.format.combine(
   winston.format.timestamp(),
   winston.format.errors({ stack: true }),
+  componentFilterFormat(),
   orderedJsonFormat
 );
 
@@ -57,6 +58,7 @@ const jsonFormat = winston.format.combine(
 const textFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
   winston.format.colorize(),
+  componentFilterFormat(),
   winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
     const componentTag = component ? `[${component}]` : '';
     let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
@@ -70,6 +72,7 @@ const textFormat = winston.format.combine(
 // File format without colors (text or JSON based on config)
 const fileTextFormat = winston.format.combine(
   winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  componentFilterFormat(),
   winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
     const componentTag = component ? `[${component}]` : '';
     let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
@@ -99,7 +102,7 @@ function getLogLevel() {
   try {
     // Only try to get from config if configCache has been set
     if (configCacheRef) {
-      const platformConfig = configCacheRef.get('platform');
+      const platformConfig = configCacheRef.getPlatform();
       return platformConfig?.logging?.level || DEFAULT_LOG_LEVEL;
     }
     return DEFAULT_LOG_LEVEL;
@@ -117,7 +120,7 @@ function getLogFormat() {
   try {
     // Only try to get from config if configCache has been set
     if (configCacheRef) {
-      const platformConfig = configCacheRef.get('platform');
+      const platformConfig = configCacheRef.getPlatform();
       return platformConfig?.logging?.format || DEFAULT_LOG_FORMAT;
     }
     return DEFAULT_LOG_FORMAT;
@@ -126,6 +129,51 @@ function getLogFormat() {
     return DEFAULT_LOG_FORMAT;
   }
 }
+
+/**
+ * Check if component filtering is enabled and get filter list
+ * @returns {Object} { enabled: boolean, filter: string[] }
+ */
+function getComponentFilter() {
+  try {
+    if (configCacheRef) {
+      const platformConfig = configCacheRef.getPlatform();
+      const components = platformConfig?.logging?.components;
+      return {
+        enabled: components?.enabled || false,
+        filter: components?.filter || []
+      };
+    }
+    return { enabled: false, filter: [] };
+  } catch {
+    return { enabled: false, filter: [] };
+  }
+}
+
+/**
+ * Custom filter format to filter logs by component
+ */
+const componentFilterFormat = winston.format(info => {
+  const componentFilter = getComponentFilter();
+  
+  // If filtering is not enabled, allow all logs
+  if (!componentFilter.enabled) {
+    return info;
+  }
+  
+  // If filter list is empty, allow all logs
+  if (!componentFilter.filter || componentFilter.filter.length === 0) {
+    return info;
+  }
+  
+  // If log has a component and it's in the filter list, allow it
+  if (info.component && componentFilter.filter.includes(info.component)) {
+    return info;
+  }
+  
+  // Otherwise, filter it out (return false to suppress the log)
+  return false;
+});
 
 /**
  * Create winston logger instance
@@ -147,7 +195,7 @@ function createLogger() {
   // Add file transport if file logging is enabled
   try {
     if (configCacheRef) {
-      const platformConfig = configCacheRef.get('platform');
+      const platformConfig = configCacheRef.getPlatform();
       if (platformConfig?.logging?.file?.enabled) {
         const logFile = platformConfig.logging.file.path || 'logs/app.log';
         const fileFormat = format === 'json' ? jsonFormat : fileTextFormat;
