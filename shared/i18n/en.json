@@ -322,7 +322,7 @@
       },
       "create": {
         "title": "Create New Provider",
-        "description": "Description",
+        "description": "Create a new custom provider for storing API keys",
         "saved": "Provider created successfully!",
         "id": "Provider ID",
         "idHelp": "Unique identifier (lowercase, use hyphens instead of spaces)",

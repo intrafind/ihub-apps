@@ -464,7 +464,7 @@
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
-        "description": "Beschreibung",
+        "description": "Erstellen Sie einen neuen benutzerdefinierten Anbieter zum Speichern von API-Schlüsseln",
         "saved": "Anbieter erfolgreich erstellt!",
         "id": "Anbieter-ID",
         "idHelp": "Eindeutige Kennung (Kleinbuchstaben, verwenden Sie Bindestriche anstelle von Leerzeichen)",
