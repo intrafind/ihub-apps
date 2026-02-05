@@ -46,43 +46,6 @@ const orderedJsonFormat = winston.format.printf(info => {
   return JSON.stringify(orderedLog);
 });
 
-// JSON format for structured logging with fixed field order
-const jsonFormat = winston.format.combine(
-  winston.format.timestamp(),
-  winston.format.errors({ stack: true }),
-  componentFilterFormat(),
-  orderedJsonFormat
-);
-
-// Custom format for text/console output with colors
-const textFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  winston.format.colorize(),
-  componentFilterFormat(),
-  winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
-    const componentTag = component ? `[${component}]` : '';
-    let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
-    if (Object.keys(meta).length > 0) {
-      msg += ` ${JSON.stringify(meta)}`;
-    }
-    return msg;
-  })
-);
-
-// File format without colors (text or JSON based on config)
-const fileTextFormat = winston.format.combine(
-  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-  componentFilterFormat(),
-  winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
-    const componentTag = component ? `[${component}]` : '';
-    let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
-    if (Object.keys(meta).length > 0) {
-      msg += ` ${JSON.stringify(meta)}`;
-    }
-    return msg;
-  })
-);
-
 // Store reference to configCache (set later to avoid circular dependency)
 let configCacheRef = null;
 
@@ -155,25 +118,62 @@ function getComponentFilter() {
  */
 const componentFilterFormat = winston.format(info => {
   const componentFilter = getComponentFilter();
-  
+
   // If filtering is not enabled, allow all logs
   if (!componentFilter.enabled) {
     return info;
   }
-  
+
   // If filter list is empty, allow all logs
   if (!componentFilter.filter || componentFilter.filter.length === 0) {
     return info;
   }
-  
+
   // If log has a component and it's in the filter list, allow it
   if (info.component && componentFilter.filter.includes(info.component)) {
     return info;
   }
-  
+
   // Otherwise, filter it out (return false to suppress the log)
   return false;
 });
+
+// JSON format for structured logging with fixed field order
+const jsonFormat = winston.format.combine(
+  winston.format.timestamp(),
+  winston.format.errors({ stack: true }),
+  componentFilterFormat(),
+  orderedJsonFormat
+);
+
+// Custom format for text/console output with colors
+const textFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  winston.format.colorize(),
+  componentFilterFormat(),
+  winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
+    const componentTag = component ? `[${component}]` : '';
+    let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
+    if (Object.keys(meta).length > 0) {
+      msg += ` ${JSON.stringify(meta)}`;
+    }
+    return msg;
+  })
+);
+
+// File format without colors (text or JSON based on config)
+const fileTextFormat = winston.format.combine(
+  winston.format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+  componentFilterFormat(),
+  winston.format.printf(({ timestamp, level, message, component, ...meta }) => {
+    const componentTag = component ? `[${component}]` : '';
+    let msg = `${timestamp} [${level}]${componentTag}: ${message}`;
+    if (Object.keys(meta).length > 0) {
+      msg += ` ${JSON.stringify(meta)}`;
+    }
+    return msg;
+  })
+);
 
 /**
  * Create winston logger instance
