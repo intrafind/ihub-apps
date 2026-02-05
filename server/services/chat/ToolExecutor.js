@@ -186,12 +186,17 @@ class ToolExecutor {
     // Increment the clarification count
     const newCount = this.incrementClarificationCount(chatId);
 
-    // Build the clarification event data
+    // Generate a unique question ID for tracking
+    const questionId = `clarify-${chatId}-${newCount}-${Date.now()}`;
+
+    // Build the clarification event data (use camelCase for client compatibility)
     const clarificationData = {
+      questionId,
       toolCallId: toolCall.id,
       question: args.question,
-      input_type: args.input_type || 'text',
-      allow_skip: Boolean(args.allow_skip),
+      inputType: args.input_type || 'text',
+      allowSkip: Boolean(args.allow_skip),
+      allowOther: Boolean(args.allow_other),
       clarificationNumber: newCount,
       maxClarifications: MAX_CLARIFICATIONS,
       timestamp: new Date().toISOString()
@@ -205,9 +210,7 @@ class ToolExecutor {
       }));
     }
 
-    if (args.allow_other) {
-      clarificationData.allow_other = true;
-    }
+    // allowOther is already set above from args.allow_other
 
     if (args.placeholder) {
       clarificationData.placeholder = String(args.placeholder).substring(0, 200);

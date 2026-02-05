@@ -386,17 +386,17 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
    * Submit a response to a clarification question.
    * Updates the current message with the response and continues the conversation.
    *
-   * @param {Object} response - The clarification response
-   * @param {string} response.questionId - ID of the question being answered
-   * @param {boolean} response.answered - Whether the question was answered (vs skipped)
-   * @param {boolean} response.skipped - Whether the question was skipped
-   * @param {*} response.value - The actual response value
-   * @param {string} response.displayText - Human-readable display text
+   * @param {Object|string} rawResponse - The clarification response (object or simple value)
+   * @param {string} rawResponse.questionId - ID of the question being answered
+   * @param {boolean} rawResponse.answered - Whether the question was answered (vs skipped)
+   * @param {boolean} rawResponse.skipped - Whether the question was skipped
+   * @param {*} rawResponse.value - The actual response value
+   * @param {string} rawResponse.displayText - Human-readable display text
    * @param {Object} params - Parameters for the continuation request
    */
   const submitClarificationResponse = useCallback(
-    (response, params = {}) => {
-      console.log('📝 Submitting clarification response:', response);
+    (rawResponse, params = {}) => {
+      console.log('📝 Submitting clarification response:', rawResponse);
 
       if (!activeClarificationRef.current) {
         console.warn('No active clarification to respond to');
@@ -406,6 +406,25 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       const clarificationData = activeClarificationRef.current;
       const messageId = lastMessageIdRef.current;
 
+      // Normalize response - handle both object and simple value formats
+      // ClarificationCard may pass either an object or just the value depending on whether questionId was set
+      let response;
+      if (typeof rawResponse === 'object' && rawResponse !== null && 'value' in rawResponse) {
+        // Full response object
+        response = rawResponse;
+      } else {
+        // Simple value - convert to full response object
+        const value = rawResponse;
+        const displayText = Array.isArray(value) ? value.join(', ') : String(value);
+        response = {
+          questionId: clarificationData.questionId,
+          answered: true,
+          skipped: false,
+          value,
+          displayText
+        };
+      }
+
       // Update the assistant message to mark clarification as responded
       if (messageId) {
         const currentMessage = messagesRef.current.find(m => m.id === messageId);
@@ -413,7 +432,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           updateAssistantMessage(messageId, currentMessage.content || '', false, {
             clarification: currentMessage.clarification,
             clarificationResponse: {
-              ...response,
+              answered: response.answered,
+              skipped: response.skipped,
+              value: response.value,
+              displayText: response.displayText,
               answeredAt: Date.now()
             },
             awaitingInput: false,
