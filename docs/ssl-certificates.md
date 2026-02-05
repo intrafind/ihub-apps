@@ -127,8 +127,8 @@ iHub Apps provides a secure way to handle SSL certificate validation through the
   - `true`: Use domain whitelist for selective bypass
 
 - **`domainWhitelist`** (array of strings): List of domains to bypass SSL validation
-  - **Empty array** (default): When enabled, bypasses SSL for ALL domains (legacy behavior, NOT recommended)
-  - **With domains**: Only bypasses SSL for specified domains
+  - **Empty array** (default): SSL validation is **enabled** for all domains (secure default)
+  - **With domains**: Only bypasses SSL for explicitly specified domains
 
 **Supported Domain Patterns:**
 - **Exact match**: `api.example.com` - matches only that specific domain
@@ -162,7 +162,7 @@ iHub Apps provides a secure way to handle SSL certificate validation through the
    }
    ```
 
-3. **Legacy global bypass** (NOT recommended for production):
+3. **Secure default** (No SSL bypass):
    ```json
    {
      "ssl": {
@@ -171,6 +171,7 @@ iHub Apps provides a secure way to handle SSL certificate validation through the
      }
    }
    ```
+   With an empty whitelist, SSL validation remains enabled for all domains. You must add specific domains to bypass SSL validation.
 
 **Admin UI Configuration:**
 

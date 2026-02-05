@@ -616,7 +616,7 @@
         "ignoreInvalidCertificates": "Ignore Invalid SSL Certificates",
         "ignoreInvalidCertificatesDesc": "When enabled, allows connections to services with self-signed or invalid SSL certificates. Use only in trusted environments.",
         "domainWhitelist": "Domain Whitelist",
-        "domainWhitelistDesc": "Specify domains for which SSL certificate validation should be ignored. Leave empty to apply the setting globally (not recommended for production).",
+        "domainWhitelistDesc": "Specify domains for which SSL certificate validation should be ignored. SSL validation will only be bypassed for domains explicitly added to this whitelist.",
         "domainWhitelistPlaceholder": "api.example.com, *.internal.company.com",
         "addDomain": "Add Domain",
         "removeDomain": "Remove",
@@ -628,7 +628,7 @@
         "configSaveError": "Failed to save SSL configuration",
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Disabling SSL certificate validation makes your application vulnerable to man-in-the-middle attacks. Only use this feature in secure, trusted network environments.",
-        "globalWarning": "When no domains are specified in the whitelist, SSL validation will be disabled for ALL external connections. This is a security risk in production environments."
+        "globalWarning": "No domains are currently whitelisted. SSL certificate validation is enabled for ALL external connections. Add specific domains above to bypass SSL validation for those domains only."
       }
     },
     "tools": {

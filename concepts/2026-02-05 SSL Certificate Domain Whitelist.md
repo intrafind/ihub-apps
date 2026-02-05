@@ -54,11 +54,11 @@ Implemented domain-based SSL validation with three new functions:
 - Determines if SSL validation should be bypassed for a specific URL
 - Returns `true` only if:
   - `ignoreInvalidCertificates` is enabled AND
-  - Either whitelist is empty (legacy behavior) OR domain is in whitelist
+  - Domain is in whitelist (empty whitelist = secure default, no SSL bypass)
 
 **`createAgent(url, forceIgnoreSSL)`**
 - Updated to use `shouldIgnoreSSLForURL()` for per-request SSL decisions
-- Removed global `NODE_TLS_REJECT_UNAUTHORIZED=0` when whitelist is used
+- No global `NODE_TLS_REJECT_UNAUTHORIZED=0` setting
 - Maintains backward compatibility with `forceIgnoreSSL` parameter
 
 #### 3. Logging Improvements
@@ -120,11 +120,13 @@ Updated default and example `platform.json` files to include the new structure:
 
 ## Backward Compatibility
 
-The implementation maintains full backward compatibility:
+**Important Security Change**: The default behavior has been updated for improved security:
 
-1. **Empty Whitelist**: When `domainWhitelist` is empty and `ignoreInvalidCertificates` is true, behavior matches the legacy global bypass (for existing configurations)
+1. **Empty Whitelist**: When `domainWhitelist` is empty and `ignoreInvalidCertificates` is true, SSL validation is **enabled for all domains** (secure default). Domains must be explicitly whitelisted to bypass SSL validation.
 2. **Missing Configuration**: If `ssl` section is missing, defaults to secure settings (validation enabled, empty whitelist)
 3. **Existing Code**: No changes required to existing adapter or tool code
+
+**Migration Note**: If your existing configuration has `ignoreInvalidCertificates: true` with an empty whitelist, you must now add specific domains to the whitelist to bypass SSL validation for those domains.
 
 ## Usage Examples
 
@@ -170,7 +172,7 @@ Result: SSL validation bypassed for all subdomains of `internal.company.com` (e.
 }
 ```
 
-Result: SSL validation bypassed globally for ALL domains (legacy behavior).
+Result: SSL validation is **enabled** for ALL domains (secure default). No domains will bypass SSL validation unless explicitly added to the whitelist.
 
 ## Code Locations
 
@@ -197,7 +199,7 @@ Result: SSL validation bypassed globally for ALL domains (legacy behavior).
 | Scenario | Config | Expected Behavior |
 |----------|--------|-------------------|
 | Default | `ignoreInvalidCertificates: false` | All SSL certs validated |
-| Legacy Global | `ignoreInvalidCertificates: true`, empty whitelist | All SSL validation bypassed |
+| Secure Default | `ignoreInvalidCertificates: true`, empty whitelist | All SSL certs validated (secure default) |
 | Specific Domain | `ignoreInvalidCertificates: true`, `["api.example.com"]` | Only api.example.com bypassed |
 | Wildcard | `ignoreInvalidCertificates: true`, `["*.example.com"]` | All example.com subdomains bypassed |
 
@@ -217,10 +219,9 @@ Result: SSL validation bypassed globally for ALL domains (legacy behavior).
 
 ## Migration Guide
 
-For existing deployments using `ignoreInvalidCertificates: true`:
+**IMPORTANT**: For existing deployments using `ignoreInvalidCertificates: true`:
 
-1. **No Action Required**: Existing configurations continue to work (global bypass)
-2. **Recommended**: Add specific domains to whitelist and test:
+1. **Action Required**: With the new secure default, an empty whitelist will NOT bypass SSL validation. You must add specific domains to the whitelist:
    ```json
    {
      "ssl": {

@@ -758,7 +758,7 @@
         "ignoreInvalidCertificates": "Ungültige SSL-Zertifikate ignorieren",
         "ignoreInvalidCertificatesDesc": "Wenn aktiviert, werden Verbindungen zu Diensten mit selbstsignierten oder ungültigen SSL-Zertifikaten zugelassen. Nur in vertrauenswürdigen Umgebungen verwenden.",
         "domainWhitelist": "Domain-Whitelist",
-        "domainWhitelistDesc": "Geben Sie Domains an, für die die SSL-Zertifikatvalidierung ignoriert werden soll. Leer lassen, um die Einstellung global anzuwenden (nicht empfohlen für Produktionsumgebungen).",
+        "domainWhitelistDesc": "Geben Sie Domains an, für die die SSL-Zertifikatvalidierung ignoriert werden soll. Die SSL-Validierung wird nur für explizit zu dieser Whitelist hinzugefügte Domains umgangen.",
         "domainWhitelistPlaceholder": "api.example.com, *.internal.company.com",
         "addDomain": "Domain hinzufügen",
         "removeDomain": "Entfernen",
@@ -770,7 +770,7 @@
         "configSaveError": "Fehler beim Speichern der SSL-Konfiguration",
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Das Deaktivieren der SSL-Zertifikatvalidierung macht Ihre Anwendung anfällig für Man-in-the-Middle-Angriffe. Verwenden Sie diese Funktion nur in sicheren, vertrauenswürdigen Netzwerkumgebungen.",
-        "globalWarning": "Wenn keine Domains in der Whitelist angegeben sind, wird die SSL-Validierung für ALLE externen Verbindungen deaktiviert. Dies ist ein Sicherheitsrisiko in Produktionsumgebungen."
+        "globalWarning": "Derzeit sind keine Domains auf der Whitelist. Die SSL-Zertifikatvalidierung ist für ALLE externen Verbindungen aktiviert. Fügen Sie oben bestimmte Domains hinzu, um die SSL-Validierung nur für diese Domains zu umgehen."
       }
     },
     "tools": {

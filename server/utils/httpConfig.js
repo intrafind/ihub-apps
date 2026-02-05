@@ -27,11 +27,10 @@ export function getSSLConfig() {
     );
 
     // Only set NODE_TLS_REJECT_UNAUTHORIZED globally if ignoreInvalidCertificates is true AND whitelist is empty
-    // When whitelist is used, we handle SSL validation per-request instead of globally
+    // NEW BEHAVIOR: Empty whitelist means NO SSL bypass (security improvement)
     if (sslConfig.ignoreInvalidCertificates && sslConfig.domainWhitelist.length === 0) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
       logger.info(
-        '⚠️  NODE_TLS_REJECT_UNAUTHORIZED=0 set globally (SSL certificate verification disabled for ALL domains)'
+        '⚠️  SSL validation is enabled but no domains are whitelisted. SSL certificates will be validated for ALL connections.'
       );
     } else if (sslConfig.ignoreInvalidCertificates && sslConfig.domainWhitelist.length > 0) {
       logger.info(
@@ -102,9 +101,9 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
     return false;
   }
 
-  // If whitelist is empty, ignore SSL for all domains (legacy behavior)
+  // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting)
   if (!config.domainWhitelist || config.domainWhitelist.length === 0) {
-    return true;
+    return false;
   }
 
   // Extract hostname from URL

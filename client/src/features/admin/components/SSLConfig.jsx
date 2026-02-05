@@ -228,15 +228,15 @@ const SSLConfig = () => {
             {t('admin.system.ssl.domainWhitelistDesc')}
           </p>
 
-          {/* Global Warning if whitelist is empty */}
+          {/* Info message if whitelist is empty - this is now the secure default */}
           {config.domainWhitelist && config.domainWhitelist.length === 0 && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+            <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
               <div className="flex">
                 <Icon
-                  name="ExclamationCircleIcon"
-                  className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5 mr-3 flex-shrink-0"
+                  name="InformationCircleIcon"
+                  className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 mr-3 flex-shrink-0"
                 />
-                <p className="text-sm text-red-700 dark:text-red-300">
+                <p className="text-sm text-blue-700 dark:text-blue-300">
                   {t('admin.system.ssl.globalWarning')}
                 </p>
               </div>
