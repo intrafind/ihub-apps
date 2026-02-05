@@ -101,9 +101,87 @@ export NODE_EXTRA_CA_CERTS=/path/to/custom-ca-bundle.pem
 
 ## Alternative Approach: Disable Certificate Verification
 
-> ⚠️ **Security Warning**: This approach disables SSL certificate verification entirely, making your application vulnerable to man-in-the-middle attacks. Use only in development or secure network environments.
+> ⚠️ **Security Warning**: This approach disables SSL certificate verification, making your application vulnerable to man-in-the-middle attacks. Use only in development or secure network environments.
 
-### Environment Variable Method
+### Platform Configuration Method (Recommended)
+
+iHub Apps provides a secure way to handle SSL certificate validation through the platform configuration with domain whitelisting:
+
+```json
+// contents/config/platform.json
+{
+  "ssl": {
+    "ignoreInvalidCertificates": true,
+    "domainWhitelist": [
+      "api.internal.company.com",
+      "*.development.local"
+    ]
+  }
+}
+```
+
+**Configuration Options:**
+
+- **`ignoreInvalidCertificates`** (boolean): Master switch for SSL certificate validation
+  - `false` (default): Validate all SSL certificates
+  - `true`: Use domain whitelist for selective bypass
+
+- **`domainWhitelist`** (array of strings): List of domains to bypass SSL validation
+  - **Empty array** (default): When enabled, bypasses SSL for ALL domains (legacy behavior, NOT recommended)
+  - **With domains**: Only bypasses SSL for specified domains
+
+**Supported Domain Patterns:**
+- **Exact match**: `api.example.com` - matches only that specific domain
+- **Wildcard**: `*.example.com` - matches all subdomains (e.g., `api.example.com`, `auth.example.com`)
+- **Subdomain**: `.example.com` - matches subdomains but not the root domain
+
+**Example Configurations:**
+
+1. **Trust specific internal APIs** (Recommended):
+   ```json
+   {
+     "ssl": {
+       "ignoreInvalidCertificates": true,
+       "domainWhitelist": [
+         "api.internal.company.com",
+         "llm.development.local"
+       ]
+     }
+   }
+   ```
+
+2. **Trust all subdomains of internal network**:
+   ```json
+   {
+     "ssl": {
+       "ignoreInvalidCertificates": true,
+       "domainWhitelist": [
+         "*.internal.company.com"
+       ]
+     }
+   }
+   ```
+
+3. **Legacy global bypass** (NOT recommended for production):
+   ```json
+   {
+     "ssl": {
+       "ignoreInvalidCertificates": true,
+       "domainWhitelist": []
+     }
+   }
+   ```
+
+**Admin UI Configuration:**
+
+Navigate to **Admin → System** in the iHub Apps interface to configure SSL settings:
+1. Toggle "Ignore Invalid SSL Certificates" to enable/disable
+2. Add domains to the whitelist using the domain input field
+3. Save configuration
+
+Changes take effect immediately without server restart.
+
+### Environment Variable Method (Legacy)
 
 Set the `NODE_TLS_REJECT_UNAUTHORIZED` environment variable to disable certificate verification:
 
@@ -121,7 +199,7 @@ Or when running the binary:
 NODE_TLS_REJECT_UNAUTHORIZED=0 ./ihub-apps-v1.0.0-linux
 ```
 
-### Configuration File Method
+### Configuration File Method (Legacy)
 
 Add the environment variable to your `config.env` file:
 
@@ -130,7 +208,7 @@ Add the environment variable to your `config.env` file:
 NODE_TLS_REJECT_UNAUTHORIZED=0
 ```
 
-> ⚠️ **Important**: When using this method, ALL outbound HTTPS connections will skip certificate verification, not just the ones with self-signed certificates.
+> ⚠️ **Important**: The platform configuration method with domain whitelisting is recommended over environment variables. When using `NODE_TLS_REJECT_UNAUTHORIZED=0`, ALL outbound HTTPS connections will skip certificate verification globally.
 
 ## Production Deployment Guidance
 
@@ -260,12 +338,16 @@ tail -f /var/log/ihub-apps/app.log | grep -i "certificate\|ssl\|tls"
 
 ### Risk Assessment
 
-| Method                         | Security Level | Suitable For                |
-| ------------------------------ | -------------- | --------------------------- |
-| Import to system store         | High           | Production environments     |
-| NODE_EXTRA_CA_CERTS            | High           | Production environments     |
-| Certificate bundle             | High           | Container/cloud deployments |
-| NODE_TLS_REJECT_UNAUTHORIZED=0 | Low            | Development only            |
+| Method                                      | Security Level | Suitable For                          |
+| ------------------------------------------- | -------------- | ------------------------------------- |
+| Import to system store                      | High           | Production environments               |
+| NODE_EXTRA_CA_CERTS                         | High           | Production environments               |
+| Certificate bundle                          | High           | Container/cloud deployments           |
+| Platform config with domain whitelist       | Medium-High    | Production with specific internal APIs|
+| Platform config without whitelist (global)  | Low            | Development/testing only              |
+| NODE_TLS_REJECT_UNAUTHORIZED=0             | Low            | Development only                      |
+
+**Recommendation**: For production environments handling self-signed certificates, use the platform configuration method with a specific domain whitelist. This provides granular control while maintaining security for other connections.
 
 ## Troubleshooting
 
