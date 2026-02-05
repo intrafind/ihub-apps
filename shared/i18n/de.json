@@ -751,6 +751,26 @@
         "savingConfig": "Konfiguration wird gespeichert...",
         "configSaved": "Logging-Konfiguration erfolgreich gespeichert",
         "configSaveError": "Fehler beim Speichern der Logging-Konfiguration"
+      },
+      "ssl": {
+        "title": "SSL-Zertifikat-Konfiguration",
+        "description": "Konfigurieren Sie die SSL-Zertifikatvalidierung und Domain-Whitelist für externe Verbindungen",
+        "ignoreInvalidCertificates": "Ungültige SSL-Zertifikate ignorieren",
+        "ignoreInvalidCertificatesDesc": "Wenn aktiviert, werden Verbindungen zu Diensten mit selbstsignierten oder ungültigen SSL-Zertifikaten zugelassen. Nur in vertrauenswürdigen Umgebungen verwenden.",
+        "domainWhitelist": "Domain-Whitelist",
+        "domainWhitelistDesc": "Geben Sie Domains an, für die die SSL-Zertifikatvalidierung ignoriert werden soll. Leer lassen, um die Einstellung global anzuwenden (nicht empfohlen für Produktionsumgebungen).",
+        "domainWhitelistPlaceholder": "api.example.com, *.internal.company.com",
+        "addDomain": "Domain hinzufügen",
+        "removeDomain": "Entfernen",
+        "domainPatternHelp": "Unterstützte Muster: exakte Domain (api.example.com), Wildcard (*.example.com), Subdomain (.example.com)",
+        "noDomains": "Keine Domains in der Whitelist",
+        "saveConfig": "Konfiguration speichern",
+        "savingConfig": "Konfiguration wird gespeichert...",
+        "configSaved": "SSL-Konfiguration erfolgreich gespeichert",
+        "configSaveError": "Fehler beim Speichern der SSL-Konfiguration",
+        "securityWarning": "Sicherheitswarnung",
+        "securityWarningDesc": "Das Deaktivieren der SSL-Zertifikatvalidierung macht Ihre Anwendung anfällig für Man-in-the-Middle-Angriffe. Verwenden Sie diese Funktion nur in sicheren, vertrauenswürdigen Netzwerkumgebungen.",
+        "globalWarning": "Wenn keine Domains in der Whitelist angegeben sind, wird die SSL-Validierung für ALLE externen Verbindungen deaktiviert. Dies ist ein Sicherheitsrisiko in Produktionsumgebungen."
       }
     },
     "tools": {
