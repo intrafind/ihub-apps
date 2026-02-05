@@ -1,0 +1,31 @@
+# Bun configuration file for iHub Apps
+# Documentation: https://bun.sh/docs/runtime/bunfig
+
+[install]
+# Configure package installation behavior
+cache = true
+exact = false
+frozen-lockfile = false
+production = false
+optional = true
+dev = true
+peer = true
+auto = "auto"
+
+[install.scopes]
+# Configure private registries if needed
+# "@myorg" = { token = "$NPM_TOKEN", url = "https://registry.myorg.com/" }
+
+[test]
+# Test configuration
+coverage = true
+coverageThreshold = 0.8
+coverageReporter = ["text", "lcov", "html"]
+coverageDir = "tests/coverage"
+timeout = 30000
+preload = []
+
+[run]
+# Runtime configuration
+# shell can be "bun" or "system"
+smol = false
