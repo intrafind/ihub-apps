@@ -26,12 +26,12 @@ Get up and running in development mode with hot reload:
 ```bash
 git clone <repository-url>
 cd ihub-apps
-npm run setup:dev
+bun run setup:dev
 # Edit .env with your API keys (OpenAI, Anthropic, Google)
-npm run dev
+bun run dev
 ```
 
-**📖 Need help?** See [Developer Setup Guide](#method-1-npm-installation-development) | [Complete Documentation](docs/README.md)
+**📖 Need help?** See [Developer Setup Guide](#method-1-bun-installation-development) | [Complete Documentation](docs/README.md)
 
 ### 🏭 For Production
 
@@ -259,17 +259,17 @@ iHub Apps provides multiple installation methods to suit different use cases and
 
 | Method     | Best For                               | Setup Time | System Requirements                      | Auto-Updates      |
 | ---------- | -------------------------------------- | ---------- | ---------------------------------------- | ----------------- |
-| **npm**    | Development, customization             | ~5 min     | Node.js 22+, npm 8+                      | Manual            |
+| **Bun**    | Development, customization             | ~3 min     | Bun 1.3+                                 | Manual            |
 | **Docker** | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+ | Container restart |
 | **Binary** | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)      | Manual download   |
 
 ### Quick Start Commands
 
 ```bash
-# npm Installation (Development)
+# Bun Installation (Development)
 git clone <repository-url> && cd ihub-apps
-npm run setup:dev
-# Edit .env with your API keys, then run: npm run dev
+bun run setup:dev
+# Edit .env with your API keys, then run: bun run dev
 
 # Docker Installation (Production-ready)
 docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ihub-apps:latest
@@ -279,24 +279,23 @@ docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ihub-apps:la
 # Extract and run the executable
 
 # Electron Desktop App
-npm run install:all && npm run electron:dev
+bun run install:all && bun run electron:dev
 ```
 
 ### Choosing Your Installation Method
 
-- **Choose npm** if you need to customize code, develop features, or contribute to the project
+- **Choose Bun** if you need to customize code, develop features, or contribute to the project (recommended for development)
 - **Choose Docker** for production deployments, containerized environments, or easy scaling
-- **Choose Binary** for quick setup, no dependencies, or when Node.js is not available
+- **Choose Binary** for quick setup, no dependencies, or when Bun is not available
 - **Choose Electron** for a desktop application experience or offline usage
 
 ### System Requirements
 
 #### Minimum Requirements by Installation Method
 
-**npm Installation:**
+**Bun Installation:**
 
-- Node.js 22.x or higher
-- npm 8.x or higher
+- Bun 1.3.0 or higher
 - 2GB RAM, 1GB free disk space
 
 **Docker Installation:**
@@ -326,18 +325,23 @@ npm run install:all && npm run electron:dev
 
 ## Setup and Installation
 
-### Method 1: npm Installation (Development)
+### Method 1: Bun Installation (Development)
 
 **Best for:** Development, customization, contributing to the project
 
 #### Prerequisites
 
-- Node.js 22.x or higher
-- npm 8.x or higher
+- Bun 1.3.0 or higher
 
 #### Installation Steps (Development)
 
-1. Clone the repository:
+1. Install Bun (if not already installed):
+
+   ```bash
+   curl -fsSL https://bun.sh/install | bash
+   ```
+
+2. Clone the repository:
 
    ```bash
    git clone <repository-url>
@@ -347,7 +351,7 @@ npm run install:all && npm run electron:dev
 2. **Set up the development environment:**
 
    ```bash
-   npm run setup:dev
+   bun run setup:dev
    # This will copy .env.example to .env and install all dependencies
    ```
 
@@ -365,14 +369,14 @@ npm run install:all && npm run electron:dev
 4. **Optional tools setup:**
 
    ```bash
-   npx playwright install (optional)
+   bunx playwright install (optional)
    # Selenium tools require Chrome or Chromium in your PATH
    ```
 
 5. **Start the application** (automatically sets up default configuration):
 
    ```bash
-   npm run dev
+   bun run dev
    ```
 
    🎉 **That's it!** The server will automatically create default configuration files on first startup, so you can start using iHub Apps immediately.
