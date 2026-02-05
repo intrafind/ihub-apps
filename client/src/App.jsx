@@ -54,6 +54,7 @@ const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/Admin
 const AdminUICustomization = React.lazy(
   () => import('./features/admin/pages/AdminUICustomization')
 );
+const AdminLoggingPage = React.lazy(() => import('./features/admin/pages/AdminLoggingPage'));
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
@@ -186,6 +187,12 @@ function App() {
                       <Route
                         path="admin/system"
                         element={<LazyAdminRoute component={AdminSystemPage} />}
+                      />
+                    )}
+                    {showAdminPage('logging') && (
+                      <Route
+                        path="admin/logging"
+                        element={<LazyAdminRoute component={AdminLoggingPage} />}
                       />
                     )}
                     {showAdminPage('apps') && (

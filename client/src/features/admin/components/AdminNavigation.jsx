@@ -175,6 +175,13 @@ const AdminNavigation = () => {
           current: location.pathname === '/admin/ui'
         },
         {
+          key: 'logging',
+          name: t('admin.nav.logging', 'Logging'),
+          href: '/admin/logging',
+          // icon: 'adjustments',
+          current: location.pathname === '/admin/logging'
+        },
+        {
           key: 'system',
           name: t('admin.nav.system', 'System'),
           href: '/admin/system',

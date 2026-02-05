@@ -464,12 +464,11 @@
       },
       "create": {
         "title": "Neuen Anbieter erstellen",
-        "description": "Erstellen Sie einen neuen benutzerdefinierten Anbieter zum Speichern von API-Schlüsseln",
+        "description": "Beschreibung",
         "saved": "Anbieter erfolgreich erstellt!",
         "id": "Anbieter-ID",
         "idHelp": "Eindeutige Kennung (Kleinbuchstaben, verwenden Sie Bindestriche anstelle von Leerzeichen)",
         "name": "Anbieter-Name",
-        "description": "Beschreibung",
         "category": "Kategorie",
         "apiKey": "API-Schlüssel",
         "apiKeyOptional": "(Optional)",
@@ -878,6 +877,49 @@
         "cancel": "Abbrechen",
         "save": "Benutzer speichern",
         "saving": "Speichern..."
+      }
+    },
+    "logging": {
+      "loadError": "Fehler beim Laden der Logging-Konfiguration",
+      "saveSuccess": "Logging-Konfiguration erfolgreich gespeichert",
+      "saveError": "Fehler beim Speichern der Logging-Konfiguration",
+      "authDebugSaveSuccess": "Authentifizierungs-Debug-Konfiguration erfolgreich gespeichert",
+      "authDebugSaveError": "Fehler beim Speichern der Authentifizierungs-Debug-Konfiguration",
+      "levelSection": "Log-Level",
+      "formatSection": "Log-Format",
+      "componentSection": "Komponenten-Filterung",
+      "fileSection": "Datei-Logging",
+      "authDebugSection": "Authentifizierungs-Debug-Logging",
+      "jsonDescription": "Strukturiertes JSON-Logging für Parsing und Analyse",
+      "textDescription": "Menschenlesbares Textformat mit Farben",
+      "enableComponentFilter": "Komponenten-Filterung aktivieren",
+      "componentFilterHelp": "Wenn aktiviert, werden nur Logs von ausgewählten Komponenten angezeigt",
+      "enableFileLogging": "Datei-Logging aktivieren",
+      "filePath": "Log-Dateipfad",
+      "maxSize": "Maximale Größe (Bytes)",
+      "maxFiles": "Maximale Dateien",
+      "enableAuthDebug": "Authentifizierungs-Debug-Logging aktivieren",
+      "maskTokens": "Tokens in Logs maskieren",
+      "redactPasswords": "Passwörter in Logs schwärzen",
+      "consoleLogging": "Konsolen-Logging aktivieren",
+      "includeRawData": "Rohe Authentifizierungsdaten einschließen",
+      "authProviders": "Debug nach Provider",
+      "saveAuthDebug": "Authentifizierungs-Debug-Einstellungen speichern",
+      "saveChanges": "Änderungen speichern",
+      "saveDescription": "Logging-Konfiguration speichern und Änderungen sofort anwenden",
+      "save": "Logging-Konfiguration speichern",
+      "note1": "Änderungen werden sofort auf alle Serverprozesse angewendet",
+      "note2": "Log-Level-Änderungen werden in platform.json gespeichert",
+      "note3": "Niedrigere Level (error, warn) zeigen weniger Nachrichten, höhere Level (debug, silly) mehr",
+      "note4": "Verwenden Sie \"info\" Level für Produktion, \"debug\" für Entwicklung",
+      "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart"
+    },
+    "nav": {
+      "logging": "Logging"
+    },
+    "home": {
+      "sections": {
+        "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren"
       }
     }
   },
