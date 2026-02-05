@@ -6,6 +6,7 @@ import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
 import { mapExternalGroups } from './authorization.js';
 import logger from './logger.js';
+import { ensureFirstUserIsAdmin } from './adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -439,7 +440,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
     const mergedGroups = Array.from(allGroups);
 
-    return {
+    // Admin rescue: Ensure first user gets admin rights if no admin exists
+    let userWithAdminCheck = {
       ...externalUser,
       id: persistedUser.id,
       groups: mergedGroups,
@@ -448,6 +450,14 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       lastActiveDate: persistedUser.lastActiveDate,
       persistedUser: true
     };
+
+    userWithAdminCheck = await ensureFirstUserIsAdmin(
+      userWithAdminCheck,
+      authMethod,
+      usersFilePath
+    );
+
+    return userWithAdminCheck;
   }
 
   // User doesn't exist - check self-signup settings
@@ -480,7 +490,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
   const combinedGroups = Array.from(allGroups);
 
-  return {
+  // Admin rescue: Ensure first user gets admin rights if no admin exists
+  let userWithAdminCheck = {
     ...externalUser,
     id: persistedUser.id,
     groups: combinedGroups,
@@ -489,4 +500,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     lastActiveDate: persistedUser.lastActiveDate,
     persistedUser: true
   };
+
+  userWithAdminCheck = await ensureFirstUserIsAdmin(userWithAdminCheck, authMethod, usersFilePath);
+
+  return userWithAdminCheck;
 }
