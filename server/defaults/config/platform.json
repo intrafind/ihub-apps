@@ -101,7 +101,8 @@
     }
   },
   "ssl": {
-    "ignoreInvalidCertificates": false
+    "ignoreInvalidCertificates": false,
+    "domainWhitelist": []
   },
   "logging": {
     "level": "info",
