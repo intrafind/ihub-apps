@@ -45,16 +45,142 @@ const AdminLoggingPage = () => {
   });
 
   const availableLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
+
+  // Component filtering options with descriptions
   const availableComponents = [
-    'Server',
-    'ChatService',
-    'AuthService',
-    'ConfigCache',
-    'ApiKeyVerifier',
-    'ToolExecutor',
-    'Version',
-    'DataRoutes',
-    'AdminRoutes'
+    {
+      id: 'Server',
+      name: 'Server',
+      description: 'Main server initialization, startup, shutdown, and clustering operations'
+    },
+    {
+      id: 'ChatService',
+      name: 'Chat Service',
+      description:
+        'Chat request processing, LLM interactions, streaming responses, and conversation handling'
+    },
+    {
+      id: 'AuthService',
+      name: 'Authentication Service',
+      description:
+        'User authentication, login/logout operations, session management (Local, OIDC, Proxy, LDAP, NTLM)'
+    },
+    {
+      id: 'JwtAuth',
+      name: 'JWT Authentication',
+      description:
+        'JWT token validation, user authentication via bearer tokens, token expiration checks'
+    },
+    {
+      id: 'ConfigCache',
+      name: 'Configuration Cache',
+      description:
+        'Configuration loading, caching, hot-reload operations for apps, models, and platform settings'
+    },
+    {
+      id: 'ApiKeyVerifier',
+      name: 'API Key Verifier',
+      description:
+        'Verification of provider API keys (OpenAI, Anthropic, Google, Mistral) at startup'
+    },
+    {
+      id: 'ToolExecutor',
+      name: 'Tool Executor',
+      description:
+        'Execution of tools called by LLMs (web search, code execution, file operations, browser automation)'
+    },
+    {
+      id: 'DataRoutes',
+      name: 'Data Routes',
+      description: 'API routes for chat, prompts, models, apps, and general data endpoints'
+    },
+    {
+      id: 'AdminRoutes',
+      name: 'Admin Routes',
+      description:
+        'Admin API endpoints for configuration management, user management, and system administration'
+    },
+    {
+      id: 'Middleware',
+      name: 'Middleware',
+      description:
+        'Request processing middleware (CORS, authentication, rate limiting, error handling)'
+    },
+    {
+      id: 'StaticRoutes',
+      name: 'Static Routes',
+      description: 'Static file serving, SPA routing, uploaded assets, and documentation serving'
+    },
+    {
+      id: 'Swagger',
+      name: 'Swagger/OpenAPI',
+      description: 'API documentation generation and Swagger UI serving'
+    },
+    {
+      id: 'Version',
+      name: 'Version Info',
+      description: 'Application version information, build details, and version checking'
+    },
+    {
+      id: 'SSE',
+      name: 'Server-Sent Events',
+      description: 'SSE connection management for real-time LLM streaming responses'
+    },
+    {
+      id: 'OpenAIAdapter',
+      name: 'OpenAI Adapter',
+      description: 'OpenAI API integration, request formatting, response parsing for GPT models'
+    },
+    {
+      id: 'AnthropicAdapter',
+      name: 'Anthropic Adapter',
+      description: 'Anthropic API integration for Claude models, streaming support'
+    },
+    {
+      id: 'GoogleAdapter',
+      name: 'Google Adapter',
+      description: 'Google AI (Gemini) API integration, multimodal support, safety settings'
+    },
+    {
+      id: 'MistralAdapter',
+      name: 'Mistral Adapter',
+      description: 'Mistral AI API integration for Mistral models'
+    },
+    {
+      id: 'VLLMAdapter',
+      name: 'vLLM Adapter',
+      description: 'vLLM server integration for local model hosting'
+    },
+    {
+      id: 'Setup',
+      name: 'Setup',
+      description: 'Initial application setup, environment configuration, dependency checks'
+    },
+    {
+      id: 'Utils',
+      name: 'Utilities',
+      description: 'General utility functions, helpers, and common operations'
+    },
+    {
+      id: 'TokenStorage',
+      name: 'Token Storage',
+      description: 'Token storage and retrieval for authentication sessions'
+    },
+    {
+      id: 'ResourceLoader',
+      name: 'Resource Loader',
+      description: 'Loading of application resources, assets, and configuration files'
+    },
+    {
+      id: 'ModelsLoader',
+      name: 'Models Loader',
+      description: 'Loading and validation of model configurations'
+    },
+    {
+      id: 'ConfigLoader',
+      name: 'Config Loader',
+      description: 'Configuration file loading, parsing, and validation'
+    }
   ];
 
   useEffect(() => {
@@ -381,18 +507,26 @@ const AdminLoggingPage = () => {
             </div>
 
             {loggingConfig.components?.enabled && (
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              <div className="space-y-3">
                 {availableComponents.map(component => (
-                  <label key={component} className="flex items-center">
+                  <label
+                    key={component.id}
+                    className="flex items-start p-3 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                  >
                     <input
                       type="checkbox"
-                      checked={loggingConfig.components?.filter?.includes(component) || false}
-                      onChange={() => handleComponentToggle(component)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                      checked={loggingConfig.components?.filter?.includes(component.id) || false}
+                      onChange={() => handleComponentToggle(component.id)}
+                      className="mt-1 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                     />
-                    <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                      {component}
-                    </span>
+                    <div className="ml-3 flex-1">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {component.name}
+                      </div>
+                      <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+                        {component.description}
+                      </div>
+                    </div>
                   </label>
                 ))}
               </div>
