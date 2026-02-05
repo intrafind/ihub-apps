@@ -25,7 +25,11 @@ const SSLConfig = () => {
           ignoreInvalidCertificates: false,
           domainWhitelist: []
         };
-        setConfig(sslConfig);
+        // Ensure domainWhitelist is always an array for backward compatibility
+        setConfig({
+          ignoreInvalidCertificates: sslConfig.ignoreInvalidCertificates || false,
+          domainWhitelist: Array.isArray(sslConfig.domainWhitelist) ? sslConfig.domainWhitelist : []
+        });
         setMessage('');
       } catch (error) {
         setMessage({
@@ -52,10 +56,11 @@ const SSLConfig = () => {
 
     // Basic validation for domain format
     const domain = newDomain.trim();
-    if (!config.domainWhitelist.includes(domain)) {
+    const whitelist = config.domainWhitelist || [];
+    if (!whitelist.includes(domain)) {
       setConfig(prev => ({
         ...prev,
-        domainWhitelist: [...prev.domainWhitelist, domain]
+        domainWhitelist: [...(prev.domainWhitelist || []), domain]
       }));
       setNewDomain('');
     }
@@ -64,7 +69,7 @@ const SSLConfig = () => {
   const handleRemoveDomain = domainToRemove => {
     setConfig(prev => ({
       ...prev,
-      domainWhitelist: prev.domainWhitelist.filter(d => d !== domainToRemove)
+      domainWhitelist: (prev.domainWhitelist || []).filter(d => d !== domainToRemove)
     }));
   };
 
@@ -224,7 +229,7 @@ const SSLConfig = () => {
           </p>
 
           {/* Global Warning if whitelist is empty */}
-          {config.domainWhitelist.length === 0 && (
+          {config.domainWhitelist && config.domainWhitelist.length === 0 && (
             <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
               <div className="flex">
                 <Icon
@@ -264,7 +269,7 @@ const SSLConfig = () => {
           </p>
 
           {/* Domain List */}
-          {config.domainWhitelist.length > 0 ? (
+          {config.domainWhitelist && config.domainWhitelist.length > 0 ? (
             <div className="space-y-2">
               {config.domainWhitelist.map((domain, index) => (
                 <div
