@@ -58,7 +58,6 @@ const DualModeEditor = ({
     if (newMode === editingMode) return;
 
     if (hasUnsavedChanges) {
-      setPendingModeSwitch(newMode);
       const shouldSwitch = window.confirm(
         t(
           'admin.editor.unsavedChangesWarning',
@@ -69,7 +68,6 @@ const DualModeEditor = ({
       if (shouldSwitch) {
         performModeSwitch(newMode);
       }
-      setPendingModeSwitch(null);
     } else {
       performModeSwitch(newMode);
     }
