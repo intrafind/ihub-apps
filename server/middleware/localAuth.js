@@ -6,6 +6,7 @@ import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -124,6 +125,10 @@ export async function loginUser(username, password, localAuthConfig) {
   const authConfig = platform.auth || {};
 
   userResponse = enhanceUserGroups(userResponse, authConfig);
+
+  // Admin rescue: Ensure first user gets admin rights if no admin exists
+  const usersFilePath = localAuthConfig.usersFile || 'contents/config/users.json';
+  userResponse = await ensureFirstUserIsAdmin(userResponse, 'local', usersFilePath);
 
   // Create JWT token using centralized token service
   const sessionTimeoutMinutes = localAuthConfig.sessionTimeoutMinutes || 480;

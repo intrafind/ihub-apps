@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { isLastAdmin } from '../../utils/adminRescue.js';
 
 /**
  * @swagger
@@ -710,6 +711,15 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         // Check if user exists
         if (!usersData.users[userId]) {
           return res.status(404).json({ error: 'User not found' });
+        }
+
+        // Check if user is the last admin - prevent deletion
+        if (isLastAdmin(userId, usersFilePath)) {
+          return res.status(403).json({
+            error: 'Cannot delete the last admin user',
+            message:
+              'At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
+          });
         }
 
         const username = usersData.users[userId].username;

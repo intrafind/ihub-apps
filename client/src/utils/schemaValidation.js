@@ -41,10 +41,7 @@ function preprocessData(data, schema) {
   Object.keys(processed).forEach(key => {
     // Convert empty strings and null to undefined for non-required fields
     // This allows optional fields to pass validation without format checks
-    if (
-      (processed[key] === '' || processed[key] === null) &&
-      !required.includes(key)
-    ) {
+    if ((processed[key] === '' || processed[key] === null) && !required.includes(key)) {
       delete processed[key];
     }
   });

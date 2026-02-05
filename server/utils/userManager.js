@@ -6,6 +6,7 @@ import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
 import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
 import logger from './logger.js';
+import { ensureFirstUserIsAdmin } from './adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -439,7 +440,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
     const mergedGroups = Array.from(allGroups);
 
-    let result = {
+    // Admin rescue: Ensure first user gets admin rights if no admin exists
+    let userWithAdminCheck = {
       ...externalUser,
       id: persistedUser.id,
       groups: mergedGroups,
@@ -449,10 +451,13 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       persistedUser: true
     };
 
-    // Admin rescue: Ensure there's at least one admin who can log in with enabled auth methods
-    result = await ensureFirstUserIsAdmin(result, usersFilePath, platformConfig);
+    userWithAdminCheck = await ensureFirstUserIsAdmin(
+      userWithAdminCheck,
+      authMethod,
+      usersFilePath
+    );
 
-    return result;
+    return userWithAdminCheck;
   }
 
   // User doesn't exist - check self-signup settings
@@ -485,7 +490,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
   const combinedGroups = Array.from(allGroups);
 
-  let result = {
+  // Admin rescue: Ensure first user gets admin rights if no admin exists
+  let userWithAdminCheck = {
     ...externalUser,
     id: persistedUser.id,
     groups: combinedGroups,
@@ -495,124 +501,7 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     persistedUser: true
   };
 
-  // Admin rescue: Ensure there's at least one admin who can log in with enabled auth methods
-  result = await ensureFirstUserIsAdmin(result, usersFilePath, platformConfig);
+  userWithAdminCheck = await ensureFirstUserIsAdmin(userWithAdminCheck, authMethod, usersFilePath);
 
-  return result;
-}
-
-/**
- * Check if an auth method is enabled in platform config
- * @param {string} authMethod - The auth method to check
- * @param {Object} platformConfig - Platform configuration
- * @returns {boolean} True if auth method is enabled
- */
-function isAuthMethodEnabled(authMethod, platformConfig) {
-  switch (authMethod) {
-    case 'local':
-      return platformConfig.localAuth?.enabled !== false;
-    case 'ntlm':
-      return platformConfig.ntlmAuth?.enabled === true;
-    case 'oidc':
-      return platformConfig.oidcAuth?.enabled === true;
-    case 'ldap':
-      return platformConfig.ldapAuth?.enabled === true;
-    case 'proxy':
-      return platformConfig.proxyAuth?.enabled === true;
-    case 'teams':
-      return platformConfig.teamsAuth?.enabled === true;
-    default:
-      return false;
-  }
-}
-
-/**
- * Check if a user can log in with any enabled auth method
- * @param {Object} user - User object
- * @param {Object} platformConfig - Platform configuration
- * @returns {boolean} True if user has at least one enabled auth method
- */
-function canUserLogin(user, platformConfig) {
-  const userAuthMethods = user.authMethods || ['local'];
-  return userAuthMethods.some(method => isAuthMethodEnabled(method, platformConfig));
-}
-
-/**
- * Check if any user in the system has admin access AND can log in with enabled auth methods
- * @param {string} usersFilePath - Path to users.json file
- * @param {Object} platformConfig - Platform configuration (optional, if not provided checks any admin)
- * @returns {boolean} True if at least one active admin can log in
- */
-export function hasAnyAdminUser(usersFilePath, platformConfig = null) {
-  const usersConfig = loadUsers(usersFilePath);
-  const groupsConfig = loadGroupsConfiguration();
-
-  for (const user of Object.values(usersConfig.users || {})) {
-    if (user.active === false) continue;
-
-    // If platformConfig provided, check if user can log in with enabled auth methods
-    if (platformConfig && !canUserLogin(user, platformConfig)) {
-      continue;
-    }
-
-    // Check if user has admin group in internalGroups
-    const userGroups = user.internalGroups || [];
-    for (const groupName of userGroups) {
-      const group = groupsConfig.groups?.[groupName];
-      if (group?.permissions?.adminAccess === true) {
-        return true;
-      }
-    }
-  }
-
-  return false;
-}
-
-/**
- * Ensure the first user gets admin access if no admin can log in
- * This is a safety feature to prevent being locked out of admin
- * when auth methods change (e.g., switching from local to NTLM)
- * @param {Object} user - User object
- * @param {string} usersFilePath - Path to users.json file
- * @param {Object} platformConfig - Platform configuration to check enabled auth methods
- * @returns {Object} User object potentially with admin group added
- */
-export async function ensureFirstUserIsAdmin(user, usersFilePath, platformConfig = null) {
-  try {
-    // Check if there's already an admin who can log in with enabled auth methods
-    if (hasAnyAdminUser(usersFilePath, platformConfig)) {
-      return user;
-    }
-
-    // No admin who can log in - make this user an admin
-    logger.warn(
-      `[Admin Rescue] No admin user can log in with currently enabled auth methods. Granting admin access to: ${user.id} (${user.username || user.name})`
-    );
-
-    // Add 'admin' group to user's groups if not already present
-    const adminGroup = 'admin';
-    if (!user.groups.includes(adminGroup)) {
-      user.groups = [...user.groups, adminGroup];
-    }
-
-    // Also persist the admin group to internalGroups in users.json
-    const usersConfig = loadUsers(usersFilePath);
-    const userRecord = usersConfig.users[user.id];
-    if (userRecord) {
-      if (!userRecord.internalGroups) {
-        userRecord.internalGroups = [];
-      }
-      if (!userRecord.internalGroups.includes(adminGroup)) {
-        userRecord.internalGroups.push(adminGroup);
-        userRecord.updatedAt = new Date().toISOString();
-        await saveUsers(usersConfig, usersFilePath);
-        logger.info(`[Admin Rescue] Persisted admin group for user: ${user.id}`);
-      }
-    }
-
-    return user;
-  } catch (error) {
-    logger.error('[Admin Rescue] Error checking/setting admin status:', error);
-    return user;
-  }
+  return userWithAdminCheck;
 }

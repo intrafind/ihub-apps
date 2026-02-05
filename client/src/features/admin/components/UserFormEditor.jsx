@@ -47,7 +47,8 @@ const UserFormEditor = ({
         );
       }
 
-      // Email is optional - only validate format if provided
+      // Email is optional for external auth users (NTLM, OIDC, proxy, etc.)
+      // Only validate format if email is provided
       if (userData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(userData.email)) {
         errors.email = t(
           'admin.users.validation.emailInvalid',
