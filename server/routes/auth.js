@@ -256,7 +256,7 @@ export default function registerAuthRoutes(app, basePath = '') {
       }
 
       // User is authenticated via NTLM
-      const result = processNtlmLogin(req, ntlmAuthConfig);
+      const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, {
@@ -331,7 +331,7 @@ export default function registerAuthRoutes(app, basePath = '') {
         });
       }
 
-      const result = processNtlmLogin(req, ntlmAuthConfig);
+      const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, {

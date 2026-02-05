@@ -185,11 +185,13 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
   // Determine auth method based on provider
   const authMethod =
-    externalUser.provider === 'proxy'
-      ? 'proxy'
-      : externalUser.provider === 'teams'
-        ? 'teams'
-        : 'oidc';
+    externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+      ? 'ntlm'
+      : externalUser.provider === 'proxy'
+        ? 'proxy'
+        : externalUser.provider === 'teams'
+          ? 'teams'
+          : 'oidc';
 
   // Try to find existing user by email or external subject
   let existingUser =
@@ -234,6 +236,15 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
         tenantId: externalUser.teamsData?.tenantId,
         upn: externalUser.teamsData?.upn,
         ...user.teamsData
+      };
+    } else if (authMethod === 'ntlm') {
+      user.ntlmData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        domain: externalUser.domain,
+        workstation: externalUser.workstation,
+        ...user.ntlmData
       };
     }
 
@@ -290,6 +301,14 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
         lastProvider: externalUser.provider,
         tenantId: externalUser.teamsData?.tenantId,
         upn: externalUser.teamsData?.upn
+      };
+    } else if (authMethod === 'ntlm') {
+      newUser.ntlmData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        domain: externalUser.domain,
+        workstation: externalUser.workstation
       };
     }
 
@@ -351,18 +370,20 @@ export function mergeUserGroups(externalGroups = [], internalGroups = []) {
 
 /**
  * Validate and persist external user based on platform configuration
- * Consolidates the validation logic from proxyAuth.js and oidcAuth.js
- * @param {Object} externalUser - External user data (OIDC/Proxy/Teams)
+ * Consolidates the validation logic from proxyAuth.js, oidcAuth.js, and ntlmAuth.js
+ * @param {Object} externalUser - External user data (OIDC/Proxy/Teams/NTLM)
  * @param {Object} platformConfig - Platform configuration
  * @returns {Object} Validated and persisted user object
  */
 export async function validateAndPersistExternalUser(externalUser, platformConfig) {
   const authMethod =
-    externalUser.provider === 'proxy'
-      ? 'proxy'
-      : externalUser.provider === 'teams'
-        ? 'teams'
-        : 'oidc';
+    externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+      ? 'ntlm'
+      : externalUser.provider === 'proxy'
+        ? 'proxy'
+        : externalUser.provider === 'teams'
+          ? 'teams'
+          : 'oidc';
 
   // Get the appropriate auth config based on auth method
   let authConfig;
@@ -370,6 +391,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     authConfig = platformConfig.proxyAuth || {};
   } else if (authMethod === 'teams') {
     authConfig = platformConfig.teamsAuth || {};
+  } else if (authMethod === 'ntlm') {
+    authConfig = platformConfig.ntlmAuth || {};
   } else {
     authConfig = platformConfig.oidcAuth || {};
   }
