@@ -51,6 +51,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     // Debug: Log JWT payload in development
     if (process.env.NODE_ENV === 'development') {
       logger.info('🔐 JWT User authenticated:', {
+        component: 'JwtAuth',
         userId: decoded.sub || decoded.username || decoded.id,
         name: decoded.name,
         authMode: decoded.authMode

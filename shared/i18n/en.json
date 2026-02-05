@@ -327,7 +327,6 @@
         "id": "Provider ID",
         "idHelp": "Unique identifier (lowercase, use hyphens instead of spaces)",
         "name": "Provider Name",
-        "description": "Description",
         "category": "Category",
         "apiKey": "API Key",
         "apiKeyOptional": "(Optional)",
@@ -736,6 +735,51 @@
         "cancel": "Cancel",
         "save": "Save User",
         "saving": "Saving..."
+      }
+    },
+    "logging": {
+      "loadError": "Failed to load logging configuration",
+      "saveSuccess": "Logging configuration saved successfully",
+      "saveError": "Failed to save logging configuration",
+      "authDebugSaveSuccess": "Authentication debug configuration saved successfully",
+      "authDebugSaveError": "Failed to save authentication debug configuration",
+      "levelSection": "Log Level",
+      "formatSection": "Log Format",
+      "componentSection": "Component Filtering",
+      "fileSection": "File Logging",
+      "authDebugSection": "Authentication Debug Logging",
+      "jsonDescription": "Structured JSON logging for parsing and analysis",
+      "textDescription": "Human-readable text format with colors",
+      "enableComponentFilter": "Enable component filtering",
+      "componentFilterHelp": "When enabled, only logs from selected components will be shown",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
+      "enableFileLogging": "Enable file logging",
+      "filePath": "Log File Path",
+      "maxSize": "Max Size (bytes)",
+      "maxFiles": "Max Files",
+      "enableAuthDebug": "Enable authentication debug logging",
+      "maskTokens": "Mask tokens in logs",
+      "redactPasswords": "Redact passwords in logs",
+      "consoleLogging": "Enable console logging",
+      "includeRawData": "Include raw authentication data",
+      "authProviders": "Debug by Provider",
+      "saveAuthDebug": "Save Authentication Debug Settings",
+      "saveChanges": "Save Changes",
+      "saveDescription": "Save logging configuration and apply changes immediately",
+      "save": "Save Logging Configuration",
+      "note1": "Changes take effect immediately across all server processes",
+      "note2": "Log level changes are persisted to platform.json configuration",
+      "note3": "Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more",
+      "note4": "Use \"info\" level for production, \"debug\" for development",
+      "note5": "Authentication debug logging is separate and requires restart"
+    },
+    "nav": {
+      "logging": "Logging"
+    },
+    "home": {
+      "sections": {
+        "loggingDesc": "Configure logging levels, components, metadata, and debug settings"
       }
     }
   },

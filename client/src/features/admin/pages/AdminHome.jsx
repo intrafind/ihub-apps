@@ -84,6 +84,17 @@ const AdminHome = () => {
       href: '/admin/ui',
       //icon: 'paint-brush',
       color: 'bg-pink-500'
+    },
+    {
+      key: 'logging',
+      title: t('admin.nav.logging', 'Logging Configuration'),
+      description: t(
+        'admin.home.sections.loggingDesc',
+        'Configure logging levels, components, metadata, and debug settings'
+      ),
+      href: '/admin/logging',
+      //icon: 'adjustments',
+      color: 'bg-yellow-500'
     }
   ];
 

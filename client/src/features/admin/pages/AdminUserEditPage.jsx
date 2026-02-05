@@ -97,7 +97,8 @@ const AdminUserEditPage = () => {
       const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
 
       // Check if this is a local auth user (needs password)
-      const isLocalAuth = !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
+      const isLocalAuth =
+        !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
 
       // Prepare the data for API call
       const apiData = {
