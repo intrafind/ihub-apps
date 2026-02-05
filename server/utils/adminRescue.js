@@ -4,6 +4,21 @@ import configCache from '../configCache.js';
 import logger from './logger.js';
 
 /**
+ * Helper function to check if any admin group mappings exist
+ * Used for LDAP/NTLM to determine if external groups can map to admin
+ * @param {Object} groupsConfig - Groups configuration object
+ * @returns {boolean} True if admin group mappings exist
+ */
+function hasAdminGroupMappings(groupsConfig) {
+  for (const group of Object.values(groupsConfig.groups || {})) {
+    if (group.permissions?.adminAccess === true && group.mappings?.length > 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Check if there is at least one admin user across all enabled authentication methods
  * @param {string} usersFilePath - Path to users.json file
  * @returns {boolean} True if at least one admin exists
@@ -64,14 +79,11 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
       }
 
       // Check if any external LDAP groups map to admin groups
-      for (const [groupId, group] of Object.entries(groupsConfig.groups || {})) {
-        if (group.permissions?.adminAccess === true && group.mappings?.length > 0) {
-          logger.debug(
-            `[AdminRescue] Found admin group mapping for LDAP: ${groupId} with mappings ${group.mappings.join(', ')}`
-          );
-          // If there are admin group mappings, we assume LDAP users can be admins
-          return true;
-        }
+      // NOTE: This assumes that if admin group mappings exist, LDAP users CAN be admins.
+      // We cannot verify actual LDAP user membership without querying the LDAP server.
+      if (hasAdminGroupMappings(groupsConfig)) {
+        logger.debug('[AdminRescue] Found admin group mappings for LDAP in groups configuration');
+        return true;
       }
     }
 
@@ -91,14 +103,10 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
       }
 
       // Check if any external NTLM groups map to admin groups
-      for (const [groupId, group] of Object.entries(groupsConfig.groups || {})) {
-        if (group.permissions?.adminAccess === true && group.mappings?.length > 0) {
-          logger.debug(
-            `[AdminRescue] Found admin group mapping for NTLM: ${groupId} with mappings ${group.mappings.join(', ')}`
-          );
-          // If there are admin group mappings, we assume NTLM users can be admins
-          return true;
-        }
+      // Similar to LDAP, we can only check if mappings exist, not actual user membership
+      if (hasAdminGroupMappings(groupsConfig)) {
+        logger.debug('[AdminRescue] Found admin group mappings for NTLM in groups configuration');
+        return true;
       }
     }
 
