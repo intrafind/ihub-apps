@@ -226,22 +226,45 @@ const UserFormEditor = ({
                 </p>
               </div>
 
-              {/* Auth Methods - read-only display */}
-              {!isNewUser && user.authMethods && user.authMethods.length > 0 && (
-                <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {t('admin.users.authMethods', 'Authentication Methods')}
-                  </label>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {user.authMethods.map((method, index) => (
-                      <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        {method.toUpperCase()}
-                      </span>
-                    ))}
-                  </div>
-                  <p className="mt-1 text-xs text-gray-500">How this user authenticates</p>
-                </div>
-              )}
+              {/* Auth Methods - selector for new users, read-only for existing */}
+              <div className="col-span-6 sm:col-span-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('admin.users.authMethods', 'Authentication Method')}
+                </label>
+                {isNewUser ? (
+                  <>
+                    <select
+                      value={user.authMethods?.[0] || 'local'}
+                      onChange={e => handleInputChange('authMethods', [e.target.value])}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="local">{t('admin.users.authMethod.local', 'Local (Username/Password)')}</option>
+                      <option value="ntlm">{t('admin.users.authMethod.ntlm', 'NTLM (Windows Domain)')}</option>
+                      <option value="ldap">{t('admin.users.authMethod.ldap', 'LDAP')}</option>
+                      <option value="oidc">{t('admin.users.authMethod.oidc', 'OIDC (OpenID Connect)')}</option>
+                      <option value="proxy">{t('admin.users.authMethod.proxy', 'Proxy (Header-based)')}</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('admin.users.authMethodHelp', 'How this user will authenticate. Local users need a password.')}
+                    </p>
+                  </>
+                ) : user.authMethods && user.authMethods.length > 0 ? (
+                  <>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {user.authMethods.map((method, index) => (
+                        <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {method.toUpperCase()}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('admin.users.authMethodReadOnly', 'Authentication method cannot be changed after creation')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500">{t('admin.users.noAuthMethod', 'No authentication method set')}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
