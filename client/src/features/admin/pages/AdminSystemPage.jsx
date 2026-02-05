@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
-import LoggingConfig from '../components/LoggingConfig';
 import SSLConfig from '../components/SSLConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -919,9 +918,6 @@ const AdminSystemPage = () => {
                 </div>
               </div>
             </div>
-
-            {/* Logging Configuration Section */}
-            <LoggingConfig />
 
             {/* SSL Configuration Section */}
             <SSLConfig />
