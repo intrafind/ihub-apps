@@ -22,19 +22,24 @@ const AdminUserEditPage = () => {
 
   const isNewUser = userId === 'new';
 
+  // Generate a unique ID for new users
+  const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
+
   useEffect(() => {
     loadSchema();
 
     if (isNewUser) {
-      // Initialize new user
+      // Initialize new user with generated ID
       setUser({
+        id: generateUserId(),
         username: '',
-        email: '',
+        email: null,
         fullName: '',
         name: '',
         password: '',
         groups: [],
         internalGroups: [],
+        authMethods: ['local'],
         enabled: true,
         active: true
       });
@@ -81,8 +86,8 @@ const AdminUserEditPage = () => {
   const handleSave = async data => {
     if (!data) data = user;
 
-    if (!data.username || !data.email) {
-      setError('Username and email are required');
+    if (!data.username) {
+      setError('Username is required');
       return;
     }
 
@@ -91,13 +96,17 @@ const AdminUserEditPage = () => {
       const method = isNewUser ? 'POST' : 'PUT';
       const url = isNewUser ? '/admin/auth/users' : `/admin/auth/users/${userId}`;
 
+      // Check if this is a local auth user (needs password)
+      const isLocalAuth = !data.authMethods || data.authMethods.length === 0 || data.authMethods.includes('local');
+
       // Prepare the data for API call
       const apiData = {
         username: data.username,
-        email: data.email,
+        email: data.email || null,
         name: data.fullName || data.name || '',
         internalGroups: data.groups || data.internalGroups || [],
-        active: data.enabled !== false
+        active: data.enabled !== false,
+        authMethods: data.authMethods || ['local']
       };
 
       // Only include password if it's provided
@@ -105,9 +114,9 @@ const AdminUserEditPage = () => {
         apiData.password = data.password;
       }
 
-      // For new users, ensure password is provided
-      if (isNewUser && !data.password) {
-        throw new Error('Password is required for new users');
+      // For new local auth users, ensure password is provided
+      if (isNewUser && isLocalAuth && !data.password) {
+        throw new Error('Password is required for local authentication users');
       }
 
       await makeAdminApiCall(url, {

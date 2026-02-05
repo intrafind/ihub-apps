@@ -22,22 +22,19 @@ const UserFormEditor = ({
   const [validationErrors, setValidationErrors] = useState({});
   const [confirmPassword, setConfirmPassword] = useState('');
 
+  // Check if user uses local auth (needs password)
+  const isLocalAuthUser = !user?.authMethods || user.authMethods.length === 0 || user.authMethods.includes('local');
+  const hasExternalAuth = user?.authMethods?.some(m => ['ntlm', 'oidc', 'ldap', 'proxy', 'teams'].includes(m));
+
   // Validation function
   const validateUser = userData => {
     let errors = {};
 
     // Use schema validation if available
     if (jsonSchema) {
-      // For new users, create a copy of userData with a temporary ID to satisfy schema validation
-      const dataToValidate = isNewUser ? { ...userData, id: 'temp-id' } : userData;
-
-      const validation = validateWithSchema(dataToValidate, jsonSchema);
+      const validation = validateWithSchema(userData, jsonSchema);
       if (!validation.isValid) {
         errors = errorsToFieldErrors(validation.errors);
-        // Remove the ID error for new users since it's temporary
-        if (isNewUser && errors.id) {
-          delete errors.id;
-        }
       }
     } else {
       // Fallback to manual validation if no schema
@@ -58,22 +55,22 @@ const UserFormEditor = ({
           'Please enter a valid email address'
         );
       }
-
-      // Password validation for new users or when password is provided
-      if (isNewUser && !userData.password) {
-        errors.password = t('admin.users.validation.passwordRequired', 'Password is required');
-      } else if (userData.password && userData.password.length < 6) {
-        errors.password = t(
-          'admin.users.validation.passwordTooShort',
-          'Password must be at least 6 characters long'
-        );
-      }
     }
 
-    // Confirm password validation (not part of schema)
-    const passwordError = validatePasswordConfirmation(userData.password, confirmPassword);
-    if (passwordError) {
-      errors.confirmPassword = t('admin.users.validation.passwordMismatch', passwordError);
+    // Password validation - only required for new local auth users
+    const needsPassword = isNewUser && isLocalAuthUser && !hasExternalAuth;
+    if (needsPassword && !userData.password) {
+      errors.password = t('admin.users.validation.passwordRequired', 'Password is required for local authentication');
+    } else if (userData.password && userData.password.length > 0 && userData.password.length < 6) {
+      errors.password = t('admin.users.validation.passwordTooShort', 'Password must be at least 6 characters long');
+    }
+
+    // Confirm password validation
+    if (userData.password) {
+      const passwordError = validatePasswordConfirmation(userData.password, confirmPassword);
+      if (passwordError) {
+        errors.confirmPassword = t('admin.users.validation.passwordMismatch', passwordError);
+      }
     }
 
     setValidationErrors(errors);
@@ -213,12 +210,12 @@ const UserFormEditor = ({
                 />
               </div>
 
-              <div className="col-span-6">
+              <div className="col-span-6 sm:col-span-3">
                 <div className="flex items-center">
                   <input
                     type="checkbox"
-                    checked={user.enabled !== false}
-                    onChange={e => handleInputChange('enabled', e.target.checked)}
+                    checked={user.enabled !== false && user.active !== false}
+                    onChange={e => { handleInputChange('enabled', e.target.checked); handleInputChange('active', e.target.checked); }}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                   />
                   <label className="ml-2 block text-sm text-gray-900">
@@ -229,12 +226,53 @@ const UserFormEditor = ({
                   Disabled users cannot log in or access the system
                 </p>
               </div>
+
+              {/* Auth Methods - selector for new users, read-only for existing */}
+              <div className="col-span-6 sm:col-span-3">
+                <label className="block text-sm font-medium text-gray-700">
+                  {t('admin.users.authMethods', 'Authentication Method')}
+                </label>
+                {isNewUser ? (
+                  <>
+                    <select
+                      value={user.authMethods?.[0] || 'local'}
+                      onChange={e => handleInputChange('authMethods', [e.target.value])}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    >
+                      <option value="local">{t('admin.users.authMethod.local', 'Local (Username/Password)')}</option>
+                      <option value="ntlm">{t('admin.users.authMethod.ntlm', 'NTLM (Windows Domain)')}</option>
+                      <option value="ldap">{t('admin.users.authMethod.ldap', 'LDAP')}</option>
+                      <option value="oidc">{t('admin.users.authMethod.oidc', 'OIDC (OpenID Connect)')}</option>
+                      <option value="proxy">{t('admin.users.authMethod.proxy', 'Proxy (Header-based)')}</option>
+                    </select>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('admin.users.authMethodHelp', 'How this user will authenticate. Local users need a password.')}
+                    </p>
+                  </>
+                ) : user.authMethods && user.authMethods.length > 0 ? (
+                  <>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {user.authMethods.map((method, index) => (
+                        <span key={index} className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                          {method.toUpperCase()}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t('admin.users.authMethodReadOnly', 'Authentication method cannot be changed after creation')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-2 text-sm text-gray-500">{t('admin.users.noAuthMethod', 'No authentication method set')}</p>
+                )}
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Password Settings */}
+      {/* Password Settings - only show for local auth users or new users */}
+      {(isLocalAuthUser || isNewUser) && (
       <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
@@ -242,9 +280,11 @@ const UserFormEditor = ({
               {t('admin.users.passwordSettings', 'Password Settings')}
             </h3>
             <p className="mt-1 text-sm text-gray-500">
-              {isNewUser
-                ? t('admin.users.setInitialPassword', 'Set the initial password for this user')
-                : t('admin.users.changePassword', 'Leave blank to keep current password')}
+              {hasExternalAuth
+                ? t('admin.users.passwordOptionalExternal', 'Optional - user authenticates via external provider')
+                : isNewUser
+                  ? t('admin.users.setInitialPassword', 'Set the initial password for this user')
+                  : t('admin.users.changePassword', 'Leave blank to keep current password')}
             </p>
           </div>
           <div className="mt-5 md:col-span-2 md:mt-0">
@@ -254,17 +294,17 @@ const UserFormEditor = ({
                   {isNewUser
                     ? t('admin.users.password', 'Password')
                     : t('admin.users.newPassword', 'New Password')}
-                  {isNewUser && <span className="text-red-500 ml-1">*</span>}
+                  {isNewUser && isLocalAuthUser && !hasExternalAuth && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 <input
                   type="password"
-                  required={isNewUser}
+                  required={isNewUser && isLocalAuthUser && !hasExternalAuth}
                   value={user.password || ''}
                   onChange={e => handleInputChange('password', e.target.value)}
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                     validationErrors.password ? 'border-red-300' : ''
                   }`}
-                  placeholder={isNewUser ? 'Enter password' : 'Enter new password (optional)'}
+                  placeholder={hasExternalAuth ? 'Optional - user has external auth' : (isNewUser ? 'Enter password' : 'Enter new password (optional)')}
                 />
                 {validationErrors.password && (
                   <p className="mt-1 text-sm text-red-600">{validationErrors.password}</p>
@@ -274,11 +314,11 @@ const UserFormEditor = ({
               <div className="col-span-6 sm:col-span-3">
                 <label className="block text-sm font-medium text-gray-700">
                   {t('admin.users.confirmPassword', 'Confirm Password')}
-                  {(isNewUser || user.password) && <span className="text-red-500 ml-1">*</span>}
+                  {user.password && <span className="text-red-500 ml-1">*</span>}
                 </label>
                 <input
                   type="password"
-                  required={isNewUser || user.password}
+                  required={!!user.password}
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
@@ -301,6 +341,7 @@ const UserFormEditor = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Group Membership */}
       <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">

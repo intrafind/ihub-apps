@@ -419,13 +419,29 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    */
   app.post(buildServerPath('/api/admin/auth/users', basePath), adminAuth, async (req, res) => {
     try {
-      const { username, email, name, password, internalGroups = [], active = true } = req.body;
+      const {
+        username,
+        email,
+        name,
+        password,
+        internalGroups = [],
+        active = true,
+        authMethods = ['local']
+      } = req.body;
 
-      if (!username || !password) {
-        return res.status(400).json({ error: 'Username and password are required' });
+      // Check if this is a local auth user (needs password)
+      const isLocalAuth = authMethods.includes('local');
+
+      if (!username) {
+        return res.status(400).json({ error: 'Username is required' });
       }
 
-      if (password.length < 6) {
+      // Only require password for local auth users
+      if (isLocalAuth && !password) {
+        return res.status(400).json({ error: 'Password is required for local authentication users' });
+      }
+
+      if (password && password.length < 6) {
         return res.status(400).json({ error: 'Password must be at least 6 characters long' });
       }
 
@@ -456,19 +472,23 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
 
       // Create new user
       const userId = `user_${uuidv4().replace(/-/g, '_')}`;
-      const passwordHash = await hashPasswordWithUserId(password, userId);
 
       const newUser = {
         id: userId,
         username,
-        email: email || '',
+        email: email || null,
         name: name || '',
         internalGroups: Array.isArray(internalGroups) ? internalGroups : [],
+        authMethods: Array.isArray(authMethods) ? authMethods : ['local'],
         active,
-        passwordHash,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
+
+      // Only add password hash for local auth users
+      if (isLocalAuth && password) {
+        newUser.passwordHash = await hashPasswordWithUserId(password, userId);
+      }
 
       usersData.users[userId] = newUser;
       usersData.metadata.lastUpdated = new Date().toISOString();
@@ -479,10 +499,9 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
       // Refresh cache to ensure new user is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(`👤 Created new user: ${username} (${userId})`);
+      logger.info(`👤 Created new user: ${username} (${userId}) with auth methods: ${authMethods.join(', ')}`);
 
       // Return user without password hash
-
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
     } catch (error) {
