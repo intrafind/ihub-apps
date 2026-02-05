@@ -66,7 +66,8 @@ export function isDomainWhitelisted(hostname, whitelist) {
     // but NOT example.com itself
     if (lowerPattern.startsWith('*.')) {
       const domain = lowerPattern.slice(2); // Remove *.
-      if (lowerHostname.endsWith('.' + domain)) {
+      // Validate that domain is not empty after removing wildcard
+      if (domain && lowerHostname.endsWith('.' + domain)) {
         return true;
       }
     }
@@ -76,7 +77,9 @@ export function isDomainWhitelisted(hostname, whitelist) {
     }
     // Subdomain pattern: .example.com matches sub.example.com but not example.com
     else if (lowerPattern.startsWith('.')) {
-      if (lowerHostname.endsWith(lowerPattern)) {
+      const domain = lowerPattern.slice(1); // Remove leading .
+      // Validate that domain is not empty after removing leading dot
+      if (domain && lowerHostname.endsWith(lowerPattern)) {
         return true;
       }
     }
