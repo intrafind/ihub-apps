@@ -63,9 +63,10 @@ export function isDomainWhitelisted(hostname, whitelist) {
     if (!lowerPattern) continue;
 
     // Wildcard pattern: *.example.com matches api.example.com, sub.example.com, etc.
+    // but NOT example.com itself
     if (lowerPattern.startsWith('*.')) {
       const domain = lowerPattern.slice(2); // Remove *.
-      if (lowerHostname.endsWith(domain) || lowerHostname === domain.slice(1)) {
+      if (lowerHostname.endsWith('.' + domain)) {
         return true;
       }
     }
