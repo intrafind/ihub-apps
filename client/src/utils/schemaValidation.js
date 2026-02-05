@@ -41,11 +41,7 @@ function preprocessData(data, schema) {
 
   Object.keys(processed).forEach(key => {
     // Convert empty strings to null for non-required fields with format validation
-    if (
-      processed[key] === '' &&
-      !required.includes(key) &&
-      properties[key]?.format
-    ) {
+    if (processed[key] === '' && !required.includes(key) && properties[key]?.format) {
       processed[key] = null;
     }
   });
