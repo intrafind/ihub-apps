@@ -6,7 +6,16 @@
 import iAssistantService from '../services/integrations/iAssistantService.js';
 import { getStreamReader } from '../utils/streamUtils.js';
 
-// Export main method for RAG question answering
+/**
+ * Ask a question using the iAssistant RAG service.
+ * Supports both streaming and buffered response modes.
+ * @param {Object} params - The question parameters
+ * @param {string} params.question - The question to ask
+ * @param {boolean} [params.passthrough] - Enable streaming mode via passthrough
+ * @param {boolean} [params.streaming] - Enable streaming mode
+ * @param {Object} [params.appConfig] - Optional app configuration
+ * @returns {Promise<Object|AsyncIterable>} Buffered response object or async iterable for streaming
+ */
 export async function ask(params) {
   // Check if streaming mode is requested (passthrough to client)
   const isStreaming = params.passthrough === true || params.streaming === true;

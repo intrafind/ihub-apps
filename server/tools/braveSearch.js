@@ -1,6 +1,15 @@
 import webSearchService from '../services/WebSearchService.js';
 import logger from '../utils/logger.js';
 
+/**
+ * Perform a web search using the Brave Search API
+ * @param {Object} params - The search parameters
+ * @param {string} [params.query] - The search query
+ * @param {string} [params.q] - Alternative query parameter name
+ * @param {string} [params.chatId] - The chat ID for context tracking
+ * @returns {Promise<{results: Array<{title: string, url: string, description: string}>}>} The search results
+ * @throws {Error} If no query is provided
+ */
 export default async function braveSearch({ query, q, chatId }) {
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;

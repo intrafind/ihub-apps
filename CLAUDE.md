@@ -579,6 +579,18 @@ fetch('https://your-ihub-domain.com/api/health', {
 - **ES modules**: Use `import/export` syntax throughout
 - **Error handling**: Always handle async operations properly
 
+### Linting & Code Quality
+
+When fixing lint errors, batch similar fixes across files (e.g., fix all unused variable warnings together, then all formatting issues) rather than file-by-file to improve efficiency.
+
+### Pre-commit Checklist
+
+For JavaScript projects, always check for and fix ESLint/Prettier errors before committing. Run `npm run lint:fix && npm run format:fix` as the standard command.
+
+## Editing Guidelines
+
+When making multi-file changes, group related edits and verify no new lint errors are introduced after each logical batch of changes.
+
 ## File Structure Context
 
 ### Critical Server Files

@@ -6,6 +6,16 @@ import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 
+/**
+ * Take a screenshot or generate a PDF of a web page using Playwright
+ * @param {Object} params - The screenshot parameters
+ * @param {string} params.url - The URL to capture
+ * @param {string} [params.format='png'] - Output format ('png' or 'pdf')
+ * @param {boolean} [params.fullPage=true] - Whether to capture the full page
+ * @param {string} [params.chatId='default'] - The chat ID for file storage
+ * @returns {Promise<{attachmentId: string, type: string, text: string|undefined, downloadUrl: string}>} The screenshot result
+ * @throws {Error} If URL is not provided or screenshot fails
+ */
 export default async function playwrightScreenshot({
   url,
   format = 'png',
@@ -33,7 +43,7 @@ export default async function playwrightScreenshot({
   }
   await browser.close();
 
-  let text = undefined;
+  let text;
   if (format === 'pdf') {
     const data = await fs.readFile(filePath);
 

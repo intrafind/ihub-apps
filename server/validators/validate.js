@@ -1,5 +1,15 @@
 import { ZodError } from 'zod';
 
+/**
+ * Creates an Express middleware that validates request data against Zod schemas.
+ * Validates body, query, and params if corresponding schemas are provided.
+ * Replaces request data with parsed/validated data on success.
+ * @param {Object} schemas - Object containing Zod schemas for validation
+ * @param {import('zod').ZodSchema} [schemas.body] - Schema for request body validation
+ * @param {import('zod').ZodSchema} [schemas.query] - Schema for query parameters validation
+ * @param {import('zod').ZodSchema} [schemas.params] - Schema for route parameters validation
+ * @returns {Function} Express middleware function (req, res, next)
+ */
 export default function validate(schemas = {}) {
   return (req, res, next) => {
     try {

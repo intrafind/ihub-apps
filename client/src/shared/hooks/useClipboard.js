@@ -3,6 +3,17 @@ import TurndownService from 'turndown';
 
 const turndownService = new TurndownService();
 
+/**
+ * Custom hook for clipboard operations with multiple format support.
+ * Supports copying content as plain text, markdown, HTML, or JSON.
+ * @returns {Object} Clipboard utilities
+ * @returns {Function} returns.copyText - Copy content as plain text
+ * @returns {Function} returns.copyMarkdown - Copy HTML content as markdown
+ * @returns {Function} returns.copyHTML - Copy content as rich HTML
+ * @returns {Function} returns.copyJSON - Copy data as formatted JSON
+ * @returns {boolean} returns.isLoading - Whether a copy operation is in progress
+ * @returns {string|null} returns.lastCopied - Type of last successful copy ('text'|'markdown'|'html'|'json')
+ */
 export const useClipboard = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [lastCopied, setLastCopied] = useState(null);

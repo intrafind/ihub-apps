@@ -1,5 +1,19 @@
 import { useState } from 'react';
 
+/**
+ * Custom hook for handling file uploads in chat applications.
+ * Manages file selection state and creates upload configurations from app settings.
+ * @returns {Object} File upload utilities
+ * @returns {Object|null} returns.selectedFile - Currently selected file data
+ * @returns {boolean} returns.showUploader - Whether uploader UI is visible
+ * @returns {Function} returns.handleFileSelect - Handle file selection (fileData) => void
+ * @returns {Function} returns.toggleUploader - Toggle uploader visibility () => void
+ * @returns {Function} returns.createUploadConfig - Create upload config from app settings (app, selectedModel) => Object
+ * @returns {Function} returns.clearSelectedFile - Clear the selected file () => void
+ * @returns {Function} returns.hideUploader - Hide the uploader UI () => void
+ * @returns {Function} returns.setSelectedFile - Direct state setter for selected file
+ * @returns {Function} returns.setShowUploader - Direct state setter for uploader visibility
+ */
 export const useFileUploadHandler = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [showUploader, setShowUploader] = useState(false);

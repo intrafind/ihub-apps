@@ -70,6 +70,15 @@ export const PlatformConfigProvider = ({ children }) => {
   );
 };
 
+/**
+ * Hook to access platform configuration context.
+ * Provides server configuration, authentication settings, and feature flags.
+ * @returns {Object} Platform config context value
+ * @returns {Object|null} returns.platformConfig - The platform configuration object
+ * @returns {boolean} returns.isLoading - Whether config is still loading
+ * @returns {string|null} returns.error - Error message if loading failed
+ * @returns {Function} returns.refreshConfig - Function to reload configuration
+ */
 export const usePlatformConfig = () => useContext(PlatformConfigContext);
 
 export default PlatformConfigContext;
