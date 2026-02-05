@@ -17,6 +17,7 @@ Bun is a modern, all-in-one JavaScript runtime, package manager, bundler, and te
 ### Current Status: ✅ ANALYSIS COMPLETE
 
 **Compatibility Testing Results:**
+
 - ✅ **Server Runtime:** Server starts successfully with Bun
 - ✅ **Package Installation:** 900+ server dependencies, 390+ client dependencies installed flawlessly
 - ✅ **Client Build:** Vite build completed successfully (22s)
@@ -75,6 +76,7 @@ Bun is a modern, all-in-one JavaScript runtime, package manager, bundler, and te
 ### ✅ **RECOMMENDED: Proceed with Migration**
 
 **Rationale:**
+
 1. High compatibility confirmed through testing
 2. Significant performance benefits
 3. Simplified toolchain reduces complexity
@@ -129,6 +131,7 @@ $ cd client && bun run build
 **Timeline:** 1 week
 
 **Phases:**
+
 1. **Day 1-2:** Update all package.json files and configurations
 2. **Day 3-4:** Rewrite binary build scripts and Docker
 3. **Day 5:** Update CI/CD workflows
@@ -143,15 +146,17 @@ $ cd client && bun run build
 ### 1. Package Files (Medium Effort)
 
 **Files to modify:**
+
 - `package.json` (root)
 - `client/package.json`
 - `server/package.json`
 
 **Changes:**
+
 ```json
 {
   "engines": {
-    "bun": ">=1.3.0"  // Instead of "node": ">=24.0.0"
+    "bun": ">=1.3.0" // Instead of "node": ">=24.0.0"
   },
   "scripts": {
     "dev": "bun run server & sleep 2 && bun run client",
@@ -177,6 +182,7 @@ $ cd client && bun run build
 ### 4. CI/CD Workflows 🔴 (High Effort - Breaking Change)
 
 All GitHub Actions workflows need updates:
+
 - `.github/workflows/build-binaries.yml`
 - `.github/workflows/docker-ci.yml`
 - `.github/workflows/test-suite.yml`
@@ -198,14 +204,14 @@ All GitHub Actions workflows need updates:
 
 ## Breaking Changes Summary
 
-| Area | Impact | Effort | Rollback Ease |
-|------|--------|--------|---------------|
-| Lock Files | Medium | Auto | Easy |
-| Binary Builds | High | High | Medium |
-| Docker Images | Medium | Medium | Easy |
-| CI/CD Workflows | High | Medium | Easy |
-| Test Config | Low | Low | Easy |
-| npm Scripts | Low | Low | Easy |
+| Area            | Impact | Effort | Rollback Ease |
+| --------------- | ------ | ------ | ------------- |
+| Lock Files      | Medium | Auto   | Easy          |
+| Binary Builds   | High   | High   | Medium        |
+| Docker Images   | Medium | Medium | Easy          |
+| CI/CD Workflows | High   | Medium | Easy          |
+| Test Config     | Low    | Low    | Easy          |
+| npm Scripts     | Low    | Low    | Easy          |
 
 ---
 
@@ -213,13 +219,13 @@ All GitHub Actions workflows need updates:
 
 Based on our testing and Bun's official benchmarks:
 
-| Task | npm/Node.js | Bun | Improvement |
-|------|-------------|-----|-------------|
-| Package Install | 8-10s | 2-3s | 4x faster |
-| Server Startup | ~2s | ~1s | 2x faster |
-| Test Execution | 30-60s | 5-10s | 5x faster |
-| Hot Reload | ~3s | ~1s | 3x faster |
-| Client Build | 22s | 22s | Same (Vite) |
+| Task            | npm/Node.js | Bun   | Improvement |
+| --------------- | ----------- | ----- | ----------- |
+| Package Install | 8-10s       | 2-3s  | 4x faster   |
+| Server Startup  | ~2s         | ~1s   | 2x faster   |
+| Test Execution  | 30-60s      | 5-10s | 5x faster   |
+| Hot Reload      | ~3s         | ~1s   | 3x faster   |
+| Client Build    | 22s         | 22s   | Same (Vite) |
 
 **Note:** Client build time remains the same because we're keeping Vite (recommended).
 
@@ -270,18 +276,21 @@ Based on our testing and Bun's official benchmarks:
 ## Resources
 
 ### Documentation
+
 - **Full Analysis Report:** [`concepts/2026-02-05 Bun Migration Analysis and Report.md`](./concepts/2026-02-05%20Bun%20Migration%20Analysis%20and%20Report.md)
 - **Bun Official Docs:** https://bun.sh/docs
 - **Migration Guide:** https://bun.sh/docs/guides/migrate-from-node
 - **Bun GitHub:** https://github.com/oven-sh/bun
 
 ### Testing Artifacts
+
 - ✅ `server/bun.lockb` - Server dependencies lock file
 - ✅ `client/bun.lockb` - Client dependencies lock file
 - ✅ Successful server startup logs
 - ✅ Successful client build output
 
 ### Support
+
 - **Bun Discord:** https://bun.sh/discord
 - **GitHub Issues:** https://github.com/oven-sh/bun/issues
 
@@ -330,4 +339,4 @@ The next decision point is whether to proceed with the full migration implementa
 
 **End of Summary**
 
-*For detailed information, see the full analysis report in the `concepts/` directory.*
+_For detailed information, see the full analysis report in the `concepts/` directory._

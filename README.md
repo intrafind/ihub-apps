@@ -348,14 +348,14 @@ bun run install:all && bun run electron:dev
    cd ihub-apps
    ```
 
-2. **Set up the development environment:**
+3. **Set up the development environment:**
 
    ```bash
    bun run setup:dev
    # This will copy .env.example to .env and install all dependencies
    ```
 
-3. **Configure API keys:**
+4. **Configure API keys:**
 
    Edit the `.env` file with your API keys:
 
@@ -366,14 +366,14 @@ bun run install:all && bun run electron:dev
    GEMINI_API_KEY=AIza...
    ```
 
-4. **Optional tools setup:**
+5. **Optional tools setup:**
 
    ```bash
    bunx playwright install (optional)
    # Selenium tools require Chrome or Chromium in your PATH
    ```
 
-5. **Start the application** (automatically sets up default configuration):
+6. **Start the application** (automatically sets up default configuration):
 
    ```bash
    bun run dev
