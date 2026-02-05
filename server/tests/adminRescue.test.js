@@ -118,6 +118,112 @@ describe('adminRescue', () => {
       const result = hasAnyAdmin(usersFilePath);
       assert.strictEqual(result, false);
     });
+
+    it('should ignore local admin when localAuth is disabled', async () => {
+      // Mock configCache to disable local auth (and all other external auths to isolate the test)
+      const configCache = await import('../configCache.js');
+      const originalGetPlatform = configCache.default.getPlatform;
+      configCache.default.getPlatform = () => ({
+        localAuth: { enabled: false },
+        ntlmAuth: { enabled: false },
+        ldapAuth: { enabled: false },
+        oidcAuth: { enabled: false },
+        proxyAuth: { enabled: false }
+      });
+
+      try {
+        await fs.writeFile(
+          usersFilePath,
+          JSON.stringify({
+            users: {
+              user_1: {
+                id: 'user_1',
+                username: 'admin',
+                active: true,
+                internalGroups: ['admins'],
+                passwordHash: 'hash'
+                // No authMethods means legacy local user
+              }
+            },
+            metadata: { version: '2.0.0' }
+          })
+        );
+
+        // Local admin exists but localAuth is disabled, so no admin can login
+        const result = hasAnyAdmin(usersFilePath);
+        assert.strictEqual(result, false);
+      } finally {
+        configCache.default.getPlatform = originalGetPlatform;
+      }
+    });
+
+    it('should find NTLM admin when NTLM is enabled', async () => {
+      // Mock configCache to enable NTLM
+      const configCache = await import('../configCache.js');
+      const originalGetPlatform = configCache.default.getPlatform;
+      configCache.default.getPlatform = () => ({
+        localAuth: { enabled: false },
+        ntlmAuth: { enabled: true }
+      });
+
+      try {
+        await fs.writeFile(
+          usersFilePath,
+          JSON.stringify({
+            users: {
+              user_1: {
+                id: 'user_1',
+                username: 'ntlm-admin',
+                active: true,
+                internalGroups: ['admins'],
+                authMethods: ['ntlm']
+              }
+            },
+            metadata: { version: '2.0.0' }
+          })
+        );
+
+        // NTLM admin exists and NTLM is enabled
+        const result = hasAnyAdmin(usersFilePath);
+        assert.strictEqual(result, true);
+      } finally {
+        configCache.default.getPlatform = originalGetPlatform;
+      }
+    });
+
+    it('should ignore NTLM admin when NTLM is disabled', async () => {
+      // Mock configCache to disable NTLM
+      const configCache = await import('../configCache.js');
+      const originalGetPlatform = configCache.default.getPlatform;
+      configCache.default.getPlatform = () => ({
+        localAuth: { enabled: true },
+        ntlmAuth: { enabled: false }
+      });
+
+      try {
+        await fs.writeFile(
+          usersFilePath,
+          JSON.stringify({
+            users: {
+              user_1: {
+                id: 'user_1',
+                username: 'ntlm-admin',
+                active: true,
+                internalGroups: ['admins'],
+                authMethods: ['ntlm']
+              }
+            },
+            metadata: { version: '2.0.0' }
+          })
+        );
+
+        // NTLM admin exists but NTLM is disabled
+        const result = hasAnyAdmin(usersFilePath);
+        assert.strictEqual(result, false);
+      } finally {
+        configCache.default.getPlatform = originalGetPlatform;
+      }
+    });
   });
 
   describe('assignAdminGroup', () => {

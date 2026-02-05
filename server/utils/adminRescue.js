@@ -4,42 +4,77 @@ import configCache from '../configCache.js';
 import logger from './logger.js';
 
 /**
- * Helper function to check if any admin group mappings exist
- * Used for LDAP/NTLM to determine if external groups can map to admin
- * @param {Object} groupsConfig - Groups configuration object
- * @returns {boolean} True if admin group mappings exist
+ * Check if a user's authentication method is enabled in platform config
+ * @param {Object} user - User object
+ * @param {Object} platform - Platform configuration
+ * @returns {boolean} True if user can login with at least one enabled auth method
  */
-function hasAdminGroupMappings(groupsConfig) {
-  for (const group of Object.values(groupsConfig.groups || {})) {
-    if (group.permissions?.adminAccess === true && group.mappings?.length > 0) {
-      return true;
+function isUserAuthMethodEnabled(user, platform) {
+  const authMethods = user.authMethods || [];
+
+  // If user has no authMethods array, they are a legacy local user
+  if (authMethods.length === 0) {
+    // Check if they have a passwordHash (local user)
+    if (user.passwordHash) {
+      return platform.localAuth?.enabled === true;
     }
+    // Unknown auth method, assume enabled to be safe
+    return true;
   }
-  return false;
+
+  // Check if ANY of the user's auth methods is enabled
+  return authMethods.some(method => {
+    switch (method) {
+      case 'local':
+        return platform.localAuth?.enabled === true;
+      case 'oidc':
+        return platform.oidcAuth?.enabled === true;
+      case 'proxy':
+        return platform.proxyAuth?.enabled === true;
+      case 'ntlm':
+        return platform.ntlmAuth?.enabled === true;
+      case 'ldap':
+        return platform.ldapAuth?.enabled === true;
+      case 'teams':
+        return platform.teamsAuth?.enabled === true;
+      default:
+        // Unknown auth method, assume enabled to be safe
+        return true;
+    }
+  });
 }
 
 /**
  * Check if there is at least one admin user across all enabled authentication methods
  * @param {string} usersFilePath - Path to users.json file
- * @returns {boolean} True if at least one admin exists
+ * @returns {boolean} True if at least one admin exists who can actually login
  */
 export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
   try {
     const platform = configCache.getPlatform() || {};
     const groupsConfig = loadGroupsConfiguration();
 
-    // Check persisted users (local, OIDC, proxy auth users)
+    // Check persisted users (local, OIDC, proxy, NTLM auth users)
     const usersConfig = loadUsers(usersFilePath);
     const users = usersConfig.users || {};
 
     // For each user, check if they:
     // 1. Are active
-    // 2. Have admin access through their groups
+    // 2. Have an enabled authentication method (can actually login)
+    // 3. Have admin access through their groups
     for (const userId in users) {
       const user = users[userId];
 
       // Skip inactive users
       if (user.active === false) {
+        continue;
+      }
+
+      // Skip users whose authentication method is disabled (they can't login)
+      if (!isUserAuthMethodEnabled(user, platform)) {
+        logger.debug(
+          `[AdminRescue] Skipping user ${user.username} (${userId}) - auth method disabled`
+        );
         continue;
       }
 
@@ -58,8 +93,10 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
       }
     }
 
-    // Check if LDAP is enabled and has admin group mappings
-    // LDAP users are not persisted, so we check if any LDAP groups map to admin groups
+    // Check if LDAP is enabled and has default admin groups
+    // LDAP users are not persisted, so we only check if LDAP default groups include admin
+    // Note: We do NOT check hasAdminGroupMappings here because that would block the rescue
+    // mechanism even when no actual LDAP user has the mapped external groups
     if (platform.ldapAuth?.enabled && platform.ldapAuth?.providers?.length > 0) {
       for (const ldapProvider of platform.ldapAuth.providers) {
         // Check if LDAP provider has default groups that include admin
@@ -77,17 +114,11 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
           }
         }
       }
-
-      // Check if any external LDAP groups map to admin groups
-      // NOTE: This assumes that if admin group mappings exist, LDAP users CAN be admins.
-      // We cannot verify actual LDAP user membership without querying the LDAP server.
-      if (hasAdminGroupMappings(groupsConfig)) {
-        logger.debug('[AdminRescue] Found admin group mappings for LDAP in groups configuration');
-        return true;
-      }
     }
 
-    // Check if NTLM is enabled and has admin group mappings
+    // Check if NTLM is enabled and has default admin groups
+    // Note: We do NOT check hasAdminGroupMappings here because that would block the rescue
+    // mechanism even when no actual NTLM user has the mapped external groups
     if (platform.ntlmAuth?.enabled) {
       // Check if NTLM has default groups that include admin
       if (platform.ntlmAuth.defaultGroups?.length > 0) {
@@ -100,13 +131,6 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
           logger.debug('[AdminRescue] Found admin in NTLM default groups');
           return true;
         }
-      }
-
-      // Check if any external NTLM groups map to admin groups
-      // Similar to LDAP, we can only check if mappings exist, not actual user membership
-      if (hasAdminGroupMappings(groupsConfig)) {
-        logger.debug('[AdminRescue] Found admin group mappings for NTLM in groups configuration');
-        return true;
       }
     }
 
@@ -208,8 +232,9 @@ export async function ensureFirstUserIsAdmin(
       return user;
     }
 
-    // Skip for LDAP and NTLM users (they don't get persisted, admin rights via group mapping)
-    if (authMode === 'ldap' || authMode === 'ntlm') {
+    // Skip for LDAP users (they don't get persisted, admin rights via group mapping only)
+    // Note: NTLM users ARE persisted since PR #867, so they can receive admin rights
+    if (authMode === 'ldap') {
       return user;
     }
 
