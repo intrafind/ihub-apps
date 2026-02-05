@@ -26,21 +26,20 @@ jobs:
           ref: ${{ github.head_ref }}
           fetch-depth: 0
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          node-version: '22'
-          cache: 'npm'
+          bun-version: latest
 
       - name: Install dependencies
-        run: npm ci
+        run: bun install
 
       - name: Auto-fix lint issues
-        run: npm run lint:fix
+        run: bun run lint:fix
         continue-on-error: true
 
       - name: Auto-fix format issues
-        run: npm run format:fix
+        run: bun run format:fix
         continue-on-error: true
 
       - name: Check for changes
@@ -65,8 +64,8 @@ jobs:
 
       - name: Final validation
         run: |
-          npm run lint
-          npm run format
+          bun run lint
+          bun run format
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
