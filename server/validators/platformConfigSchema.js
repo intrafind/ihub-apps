@@ -153,7 +153,18 @@ export const platformConfigSchema = z
       })
       .default({}),
     rateLimit: rateLimitSchema.default({}),
-    logging: loggingSchema.default({})
+    logging: loggingSchema.default({}),
+    ssl: z
+      .object({
+        ignoreInvalidCertificates: z.boolean().default(false),
+        domainWhitelist: z
+          .array(z.string())
+          .default([])
+          .describe(
+            'List of domains/patterns for which SSL certificate validation should be ignored. Supports wildcards (*.example.com) and exact domains (api.example.com)'
+          )
+      })
+      .default({})
   })
   .passthrough();
 
