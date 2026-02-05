@@ -752,6 +752,8 @@
       "textDescription": "Human-readable text format with colors",
       "enableComponentFilter": "Enable component filtering",
       "componentFilterHelp": "When enabled, only logs from selected components will be shown",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
       "enableFileLogging": "Enable file logging",
       "filePath": "Log File Path",
       "maxSize": "Max Size (bytes)",

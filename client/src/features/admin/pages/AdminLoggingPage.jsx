@@ -324,6 +324,26 @@ const AdminLoggingPage = () => {
     });
   };
 
+  const handleSelectAllComponents = () => {
+    setLoggingConfig(prev => ({
+      ...prev,
+      components: {
+        ...prev.components,
+        filter: availableComponents.map(c => c.id)
+      }
+    }));
+  };
+
+  const handleDeselectAllComponents = () => {
+    setLoggingConfig(prev => ({
+      ...prev,
+      components: {
+        ...prev.components,
+        filter: []
+      }
+    }));
+  };
+
   if (loading) {
     return (
       <AdminAuth>
@@ -505,6 +525,23 @@ const AdminLoggingPage = () => {
                 )}
               </p>
             </div>
+
+            {loggingConfig.components?.enabled && (
+              <div className="mb-4 flex gap-2">
+                <button
+                  onClick={handleSelectAllComponents}
+                  className="px-3 py-1.5 text-sm bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+                >
+                  {t('admin.logging.selectAll', 'Select All')}
+                </button>
+                <button
+                  onClick={handleDeselectAllComponents}
+                  className="px-3 py-1.5 text-sm bg-gray-600 hover:bg-gray-700 text-white rounded-md transition-colors"
+                >
+                  {t('admin.logging.deselectAll', 'Deselect All')}
+                </button>
+              </div>
+            )}
 
             {loggingConfig.components?.enabled && (
               <div className="space-y-3">

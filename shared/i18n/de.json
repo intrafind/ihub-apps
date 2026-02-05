@@ -894,6 +894,8 @@
       "textDescription": "Menschenlesbares Textformat mit Farben",
       "enableComponentFilter": "Komponenten-Filterung aktivieren",
       "componentFilterHelp": "Wenn aktiviert, werden nur Logs von ausgewählten Komponenten angezeigt",
+      "selectAll": "Alle auswählen",
+      "deselectAll": "Alle abwählen",
       "enableFileLogging": "Datei-Logging aktivieren",
       "filePath": "Log-Dateipfad",
       "maxSize": "Maximale Größe (Bytes)",
