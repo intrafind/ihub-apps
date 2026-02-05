@@ -57,7 +57,10 @@ const openaiToolNames = openaiResult.map(t => t.function.name);
 assert.ok(!openaiToolNames.includes('googleSearch'), 'OpenAI should NOT include googleSearch');
 assert.ok(!openaiToolNames.includes('webSearch'), 'OpenAI should NOT include webSearch');
 assert.ok(openaiToolNames.includes('braveSearch'), 'OpenAI should include braveSearch (universal)');
-assert.ok(openaiToolNames.includes('webContentExtractor'), 'OpenAI should include webContentExtractor (universal)');
+assert.ok(
+  openaiToolNames.includes('webContentExtractor'),
+  'OpenAI should include webContentExtractor (universal)'
+);
 console.log('✓ Test 1 passed - OpenAI filters: googleSearch, webSearch\n');
 
 // Test 2: OpenAI Responses Converter - should include webSearch, filter googleSearch
@@ -66,10 +69,16 @@ const responsesResult = convertGenericToolsToOpenaiResponses(testTools);
 const hasWebSearchType = responsesResult.some(t => t.type === 'web_search');
 const responsesToolNames = responsesResult.filter(t => t.name).map(t => t.name);
 
-assert.ok(!responsesToolNames.includes('googleSearch'), 'OpenAI Responses should NOT include googleSearch');
+assert.ok(
+  !responsesToolNames.includes('googleSearch'),
+  'OpenAI Responses should NOT include googleSearch'
+);
 assert.ok(hasWebSearchType, 'OpenAI Responses should include webSearch as web_search type');
 // Note: braveSearch is filtered when webSearch is present
-assert.ok(responsesToolNames.includes('webContentExtractor'), 'OpenAI Responses should include webContentExtractor');
+assert.ok(
+  responsesToolNames.includes('webContentExtractor'),
+  'OpenAI Responses should include webContentExtractor'
+);
 console.log('✓ Test 2 passed - OpenAI Responses includes: webSearch; filters: googleSearch\n');
 
 // Test 3: Google Converter - should include googleSearch, filter webSearch
@@ -84,8 +93,13 @@ const googleFunctionNames = googleResult
 assert.ok(hasGoogleSearch, 'Google should include google_search');
 assert.ok(!googleFunctionNames.includes('webSearch'), 'Google should NOT include webSearch');
 // Note: When google_search is present, function declarations are not included (API limitation)
-assert.ok(googleFunctionNames.length === 0, 'Google should skip function tools when google_search is present');
-console.log('✓ Test 3 passed - Google includes: google_search; filters: webSearch, skips functions\n');
+assert.ok(
+  googleFunctionNames.length === 0,
+  'Google should skip function tools when google_search is present'
+);
+console.log(
+  '✓ Test 3 passed - Google includes: google_search; filters: webSearch, skips functions\n'
+);
 
 // Test 4: vLLM Converter - should filter both googleSearch and webSearch
 console.log('Test 4: vLLM Converter - filters out googleSearch and webSearch');
@@ -95,7 +109,10 @@ const vllmToolNames = vllmResult.map(t => t.function.name);
 assert.ok(!vllmToolNames.includes('googleSearch'), 'vLLM should NOT include googleSearch');
 assert.ok(!vllmToolNames.includes('webSearch'), 'vLLM should NOT include webSearch');
 assert.ok(vllmToolNames.includes('braveSearch'), 'vLLM should include braveSearch (universal)');
-assert.ok(vllmToolNames.includes('webContentExtractor'), 'vLLM should include webContentExtractor (universal)');
+assert.ok(
+  vllmToolNames.includes('webContentExtractor'),
+  'vLLM should include webContentExtractor (universal)'
+);
 console.log('✓ Test 4 passed - vLLM filters: googleSearch, webSearch\n');
 
 // Test 5: Mistral Converter - should filter both googleSearch and webSearch
@@ -105,8 +122,14 @@ const mistralToolNames = mistralResult.map(t => t.function.name);
 
 assert.ok(!mistralToolNames.includes('googleSearch'), 'Mistral should NOT include googleSearch');
 assert.ok(!mistralToolNames.includes('webSearch'), 'Mistral should NOT include webSearch');
-assert.ok(mistralToolNames.includes('braveSearch'), 'Mistral should include braveSearch (universal)');
-assert.ok(mistralToolNames.includes('webContentExtractor'), 'Mistral should include webContentExtractor (universal)');
+assert.ok(
+  mistralToolNames.includes('braveSearch'),
+  'Mistral should include braveSearch (universal)'
+);
+assert.ok(
+  mistralToolNames.includes('webContentExtractor'),
+  'Mistral should include webContentExtractor (universal)'
+);
 console.log('✓ Test 5 passed - Mistral filters: googleSearch, webSearch\n');
 
 // Test 6: Anthropic Converter - should filter both googleSearch and webSearch
@@ -114,10 +137,19 @@ console.log('Test 6: Anthropic Converter - filters out googleSearch and webSearc
 const anthropicResult = convertGenericToolsToAnthropic(testTools);
 const anthropicToolNames = anthropicResult.map(t => t.name);
 
-assert.ok(!anthropicToolNames.includes('googleSearch'), 'Anthropic should NOT include googleSearch');
+assert.ok(
+  !anthropicToolNames.includes('googleSearch'),
+  'Anthropic should NOT include googleSearch'
+);
 assert.ok(!anthropicToolNames.includes('webSearch'), 'Anthropic should NOT include webSearch');
-assert.ok(anthropicToolNames.includes('braveSearch'), 'Anthropic should include braveSearch (universal)');
-assert.ok(anthropicToolNames.includes('webContentExtractor'), 'Anthropic should include webContentExtractor (universal)');
+assert.ok(
+  anthropicToolNames.includes('braveSearch'),
+  'Anthropic should include braveSearch (universal)'
+);
+assert.ok(
+  anthropicToolNames.includes('webContentExtractor'),
+  'Anthropic should include webContentExtractor (universal)'
+);
 console.log('✓ Test 6 passed - Anthropic filters: googleSearch, webSearch\n');
 
 console.log('✅ All tests passed! All converters properly filter provider-specific tools.\n');
@@ -130,4 +162,6 @@ console.log('| Google            | ✅ included  | ❌ filtered | ✅ included* 
 console.log('| vLLM              | ❌ filtered  | ❌ filtered | ✅ included    |');
 console.log('| Mistral           | ❌ filtered  | ❌ filtered | ✅ included    |');
 console.log('| Anthropic         | ❌ filtered  | ❌ filtered | ✅ included    |');
-console.log('\n* Google has API limitation: google_search cannot be combined with function calling');
+console.log(
+  '\n* Google has API limitation: google_search cannot be combined with function calling'
+);

@@ -194,8 +194,14 @@ console.log('✓ Test 5 passed\n');
 
 console.log('✅ All tests passed! OpenAI converters correctly filter web search tools.\n');
 console.log('Summary:');
-console.log('- webSearch (openai-responses provider) is ONLY included for openai-responses converter');
-console.log('- Regular OpenAI converter filters out webSearch (it is Azure/OpenAI Responses specific)');
+console.log(
+  '- webSearch (openai-responses provider) is ONLY included for openai-responses converter'
+);
+console.log(
+  '- Regular OpenAI converter filters out webSearch (it is Azure/OpenAI Responses specific)'
+);
 console.log('- When webSearch is present in openai-responses, other search tools are filtered out');
-console.log('- Provider-specific tools (like googleSearch) are always filtered out from other providers');
+console.log(
+  '- Provider-specific tools (like googleSearch) are always filtered out from other providers'
+);
 console.log('- Universal tools (no provider) are included by all converters');
