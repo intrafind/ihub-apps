@@ -530,7 +530,13 @@ const ChatMessage = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div className={showBubble ? `chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}` : 'w-full'}>
+      <div
+        className={
+          showBubble
+            ? `chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`
+            : 'w-full'
+        }
+      >
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
