@@ -1011,9 +1011,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-   buildServerPath('/api/workflows/executions/:executionId/stream'),
-   authRequired,
-   (req, res) => {
+    buildServerPath('/api/workflows/executions/:executionId/stream'),
+    authRequired,
+    (req, res) => {
       const { executionId } = req.params;
 
       // Set up SSE headers
