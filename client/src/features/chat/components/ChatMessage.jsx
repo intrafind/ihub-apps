@@ -539,16 +539,9 @@ const ChatMessage = ({
       >
         {/* Show just the question for answered clarifications (at top of bubble) */}
         {!isUser && message.clarification && message.clarificationAnswered && (
-          <div className="flex items-start gap-2">
-            <Icon
-              name="question-mark-circle"
-              size="sm"
-              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
-            />
-            <p className="text-sm text-gray-700 dark:text-gray-300">
-              {message.clarification.question}
-            </p>
-          </div>
+          <p className="text-slate-800 dark:text-slate-200">
+            {message.clarification.question}
+          </p>
         )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
