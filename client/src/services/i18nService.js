@@ -3,6 +3,9 @@ import { initReactI18next } from 'react-i18next';
 import LanguageDetector from 'i18next-browser-languagedetector';
 import { fetchTranslations } from '../api/api';
 import { apiClient } from '../api/client';
+// Import core translations statically to avoid Firefox dynamic import issues
+import enCoreTranslations from '../../../shared/i18n/en.json';
+import deCoreTranslations from '../../../shared/i18n/de.json';
 
 class I18nService {
   constructor() {
@@ -69,15 +72,9 @@ class I18nService {
       // Load platform configuration asynchronously
       await this.loadPlatformConfig();
 
-      // Dynamically import core translations
-      const [enCoreTranslations, deCoreTranslations] = await Promise.all([
-        import('../../../shared/i18n/en.json'),
-        import('../../../shared/i18n/de.json')
-      ]);
-
-      // Add core translations to existing i18n instance
-      i18n.addResourceBundle('en', 'translation', enCoreTranslations.default, true, true);
-      i18n.addResourceBundle('de', 'translation', deCoreTranslations.default, true, true);
+      // Add core translations to existing i18n instance (already imported statically)
+      i18n.addResourceBundle('en', 'translation', enCoreTranslations, true, true);
+      i18n.addResourceBundle('de', 'translation', deCoreTranslations, true, true);
 
       // Load full translations for the current language
       const currentLanguage = i18n.language || this.defaultLanguage;
