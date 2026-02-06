@@ -189,12 +189,38 @@ class ToolExecutor {
     // Generate a unique question ID for tracking
     const questionId = `clarify-${chatId}-${newCount}-${Date.now()}`;
 
+    // Map server input_type values to client inputType values
+    // Server/LLM uses: text, select, multiselect, confirm, number, date
+    // Client expects: single_select, multi_select, text, number, date, date_range, file
+    const inputTypeMapping = {
+      select: 'single_select',
+      multiselect: 'multi_select',
+      confirm: 'single_select', // confirm maps to single_select with Yes/No options
+      text: 'text',
+      number: 'number',
+      date: 'date'
+    };
+
+    const rawInputType = args.input_type || 'text';
+    const mappedInputType = inputTypeMapping[rawInputType] || rawInputType;
+
+    logger.info({
+      component: 'ToolExecutor',
+      message: 'Processing ask_user tool call arguments',
+      chatId,
+      rawInputType,
+      mappedInputType,
+      hasOptions: Boolean(args.options?.length),
+      optionCount: args.options?.length || 0,
+      question: args.question?.substring(0, 100)
+    });
+
     // Build the clarification event data (use camelCase for client compatibility)
     const clarificationData = {
       questionId,
       toolCallId: toolCall.id,
       question: args.question,
-      inputType: args.input_type || 'text',
+      inputType: mappedInputType,
       allowSkip: Boolean(args.allow_skip),
       allowOther: Boolean(args.allow_other),
       clarificationNumber: newCount,
