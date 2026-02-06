@@ -243,6 +243,21 @@ const ClarificationCard = ({
 
     // For select types, choose between chips and dropdown based on option count
     if (isSelectType) {
+      // FALLBACK: If no options provided and no allowOther, fall back to text input
+      // This handles cases where the LLM calls ask_user with select but forgets options
+      if ((!options || options.length === 0) && !allowOther) {
+        console.warn('ClarificationCard: select/multi_select type with no options, falling back to text input');
+        return (
+          <ClarificationInput
+            inputType="text"
+            value={value}
+            onChange={setValue}
+            placeholder={placeholder || t('clarification.typeYourAnswer', 'Type your answer...')}
+            disabled={disabled || isSubmitting}
+          />
+        );
+      }
+
       const useChips = options.length <= CHIP_THRESHOLD;
 
       if (useChips) {

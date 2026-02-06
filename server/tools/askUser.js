@@ -175,7 +175,7 @@ export function validateAskUserParams(params) {
     if (!options || !Array.isArray(options) || options.length === 0) {
       return {
         valid: false,
-        error: `Options array is required for input_type '${input_type}'`
+        error: `Options array is required for input_type '${input_type}'. Either provide options like [{label: "Option 1", value: "opt1"}] or use input_type: 'text' for open-ended questions.`
       };
     }
   }
