@@ -652,7 +652,6 @@ const ChatMessage = ({
             onSkip={onClarificationSkip}
           />
         )}
-
       </div>
 
       {/* Info about finish reason and retry options */}
