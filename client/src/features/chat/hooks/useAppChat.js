@@ -426,16 +426,13 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       }
 
       // Update the assistant message to mark clarification as responded
-      // Store only minimal display data (not full response) - the complete answer is in the next user message
+      // Just store a flag - the answer is shown in the user message below
       if (messageId) {
         const currentMessage = messagesRef.current.find(m => m.id === messageId);
         if (currentMessage) {
           updateAssistantMessage(messageId, currentMessage.content || '', false, {
             clarification: currentMessage.clarification,
-            clarificationAnswered: {
-              displayText: response.displayText,
-              skipped: response.skipped
-            },
+            clarificationAnswered: true,
             awaitingInput: false,
             loading: false
           });
@@ -446,10 +443,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       setClarificationPending(false);
       activeClarificationRef.current = null;
 
-      // Create user message content - just the answer (question is already in the assistant message)
+      // Create user message content with Q+A for context
       const userMessageContent = response.skipped
-        ? t('clarification.skipped', 'Skipped')
-        : response.displayText;
+        ? `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.skipped', 'Skipped')}`
+        : `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.answerPrefix', 'Answer')}: ${response.displayText}`;
 
       // Continue the conversation with the response
       // The response is sent as a special message that the server will process
