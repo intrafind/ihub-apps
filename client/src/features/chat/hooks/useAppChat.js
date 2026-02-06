@@ -426,17 +426,15 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       }
 
       // Update the assistant message to mark clarification as responded
+      // Store only minimal display data (not full response) - the complete answer is in the next user message
       if (messageId) {
         const currentMessage = messagesRef.current.find(m => m.id === messageId);
         if (currentMessage) {
           updateAssistantMessage(messageId, currentMessage.content || '', false, {
             clarification: currentMessage.clarification,
-            clarificationResponse: {
-              answered: response.answered,
-              skipped: response.skipped,
-              value: response.value,
+            clarificationAnswered: {
               displayText: response.displayText,
-              answeredAt: Date.now()
+              skipped: response.skipped
             },
             awaitingInput: false,
             loading: false
@@ -448,10 +446,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       setClarificationPending(false);
       activeClarificationRef.current = null;
 
-      // Create a user message showing the Q&A
+      // Create user message content - just the answer (question is already in the assistant message)
       const userMessageContent = response.skipped
-        ? `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.skipped', 'Skipped')}`
-        : `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.answerPrefix', 'Answer')}: ${response.displayText}`;
+        ? t('clarification.skipped', 'Skipped')
+        : response.displayText;
 
       // Continue the conversation with the response
       // The response is sent as a special message that the server will process
@@ -463,26 +461,28 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
         lastMessageIdRef.current = exchangeId;
 
-        // Add a user message showing the clarification response
+        // Add a user message with minimal clarification metadata (questionId links to the question in previous message)
         addUserMessage(userMessageContent, {
-          clarificationResponse: response,
+          clarificationResponse: {
+            questionId: response.questionId,
+            value: response.value,
+            skipped: response.skipped
+          },
           isClarificationAnswer: true
         });
 
         // Add placeholder for assistant response
         addAssistantMessage(exchangeId);
 
-        // Build the messages for API with clarification response context
+        // Build the messages for API - just the answer value (question context is in chat history)
         const messagesForAPI = getMessagesForApi(true, {
           role: 'user',
-          content: `[Clarification Response for "${clarificationData.question}"]: ${response.skipped ? 'User skipped this question' : response.value}`,
+          content: response.skipped ? '[Skipped]' : String(response.value),
           messageId: exchangeId,
           clarificationResponse: {
             questionId: response.questionId,
-            question: clarificationData.question,
-            answered: response.answered,
-            skipped: response.skipped,
-            value: response.value
+            value: response.value,
+            skipped: response.skipped
           }
         });
 
@@ -494,9 +494,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             ...params,
             clarificationResponse: {
               questionId: response.questionId,
-              answered: response.answered,
-              skipped: response.skipped,
-              value: response.value
+              value: response.value,
+              skipped: response.skipped
             }
           }
         };

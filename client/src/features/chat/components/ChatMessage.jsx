@@ -623,7 +623,7 @@ const ChatMessage = ({
         )}
 
         {/* Clarification UI - show card for pending clarifications, response for answered ones */}
-        {!isUser && message.clarification && !message.clarificationResponse && (
+        {!isUser && message.clarification && !message.clarificationAnswered && (
           <ClarificationCard
             clarification={message.clarification}
             onSubmit={onClarificationSubmit}
@@ -631,11 +631,11 @@ const ChatMessage = ({
           />
         )}
 
-        {/* Show clarification response for answered clarifications */}
-        {!isUser && message.clarification && message.clarificationResponse && (
+        {/* Show clarification response for answered clarifications (minimal display data only) */}
+        {!isUser && message.clarification && message.clarificationAnswered && (
           <ClarificationResponse
             question={message.clarification.question}
-            response={message.clarificationResponse}
+            response={message.clarificationAnswered}
           />
         )}
       </div>
