@@ -545,9 +545,7 @@ const ChatMessage = ({
               size="sm"
               className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
             />
-            <p className="text-slate-800 dark:text-slate-200">
-              {message.clarification.question}
-            </p>
+            <p className="text-slate-800 dark:text-slate-200">{message.clarification.question}</p>
           </div>
         )}
         {renderContent()}
