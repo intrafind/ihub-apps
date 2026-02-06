@@ -104,12 +104,9 @@ const ChatMessageList = ({
     return null;
   }
 
-  // Filter out clarification answer messages - they're displayed in ClarificationResponse on the assistant message
-  const visibleMessages = messages.filter(m => !m.isClarificationAnswer);
-
   return (
     <div ref={chatContainerRef} className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg">
-      {visibleMessages.map((message, index) => (
+      {messages.map((message, index) => (
         <div key={message.id}>
           <div
             className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
@@ -150,7 +147,7 @@ const ChatMessageList = ({
           </div>
 
           {/* Show integration auth prompts after the last assistant message if auth is required */}
-          {index === visibleMessages.length - 1 &&
+          {index === messages.length - 1 &&
             message.role === 'assistant' &&
             requiredIntegrations.length > 0 && (
               <div className="mt-4 ml-12">
