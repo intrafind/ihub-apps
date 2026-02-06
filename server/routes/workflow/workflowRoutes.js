@@ -62,8 +62,7 @@ function filterByPermissions(workflows, user) {
     }
 
     // Check if user has admin access (admins can see all workflows)
-    const hasAdminAccess =
-      user.groups.includes('admin') || user.permissions?.adminAccess === true;
+    const hasAdminAccess = user.groups.includes('admin') || user.permissions?.adminAccess === true;
     if (hasAdminAccess) {
       return true;
     }

@@ -90,8 +90,7 @@ export function getExecutor(nodeType, options = {}) {
   if (!ExecutorClass) {
     const availableTypes = Object.keys(executorRegistry).join(', ');
     throw new Error(
-      `No executor found for node type: '${nodeType}'. ` +
-        `Available types are: ${availableTypes}`
+      `No executor found for node type: '${nodeType}'. ` + `Available types are: ${availableTypes}`
     );
   }
 

@@ -120,10 +120,10 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
         break;
 
       default:
-        return this.createErrorResult(
-          `Unknown decision type '${type}' in node '${node.id}'`,
-          { nodeId: node.id, decisionType: type }
-        );
+        return this.createErrorResult(`Unknown decision type '${type}' in node '${node.id}'`, {
+          nodeId: node.id,
+          decisionType: type
+        });
     }
 
     this.logger.info({
@@ -286,7 +286,7 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
 
     // Use Function constructor for safe evaluation in strict mode
     // This creates an isolated scope - safer than eval()
-     
+
     const evaluator = new Function(`"use strict"; return (${processedExpr});`);
     return evaluator();
   }

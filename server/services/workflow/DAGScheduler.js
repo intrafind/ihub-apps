@@ -98,9 +98,7 @@ export class DAGScheduler {
     // If we couldn't process all nodes, there's a cycle
     if (processedCount !== nodes.length) {
       // Find nodes involved in cycles (those not processed)
-      const cycleNodes = nodes
-        .map(n => n.id)
-        .filter(id => !processedNodes.has(id));
+      const cycleNodes = nodes.map(n => n.id).filter(id => !processedNodes.has(id));
 
       logger.warn({
         component: 'DAGScheduler',
@@ -236,13 +234,9 @@ export class DAGScheduler {
     const firstNode = currentNodes[0];
 
     // Check if all incoming edges to this node have completed sources
-    const incomingEdges = (workflow.edges || []).filter(
-      edge => edge.target === firstNode
-    );
+    const incomingEdges = (workflow.edges || []).filter(edge => edge.target === firstNode);
 
-    const allDependenciesMet = incomingEdges.every(
-      edge => completedSet.has(edge.source)
-    );
+    const allDependenciesMet = incomingEdges.every(edge => completedSet.has(edge.source));
 
     if (allDependenciesMet) {
       logger.debug({
@@ -634,9 +628,7 @@ export class DAGScheduler {
     const targetNodes = new Set(edges.map(e => e.target));
 
     // Start nodes are those not targeted by any edge
-    const startNodes = nodes
-      .filter(node => !targetNodes.has(node.id))
-      .map(node => node.id);
+    const startNodes = nodes.filter(node => !targetNodes.has(node.id)).map(node => node.id);
 
     if (startNodes.length === 0 && nodes.length > 0) {
       // If no clear start node, use the first node (for simple linear workflows)
@@ -674,9 +666,7 @@ export class DAGScheduler {
     const sourceNodes = new Set(edges.map(e => e.source));
 
     // End nodes are those not the source of any edge
-    const endNodes = nodes
-      .filter(node => !sourceNodes.has(node.id))
-      .map(node => node.id);
+    const endNodes = nodes.filter(node => !sourceNodes.has(node.id)).map(node => node.id);
 
     if (endNodes.length === 0 && nodes.length > 0) {
       // If no clear end node, use the last node

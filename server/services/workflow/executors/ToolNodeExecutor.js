@@ -208,7 +208,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
         const mappedOutput = this.mapError(error, config.errorMapping);
         if (mappedOutput !== undefined) {
           return this.createSuccessResult(mappedOutput, {
-            stateUpdates: config.outputVariable ? { [config.outputVariable]: mappedOutput } : undefined
+            stateUpdates: config.outputVariable
+              ? { [config.outputVariable]: mappedOutput }
+              : undefined
           });
         }
       }

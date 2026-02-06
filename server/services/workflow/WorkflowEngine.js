@@ -204,20 +204,17 @@ export class WorkflowEngine {
     });
 
     // 6. Begin execution loop (non-blocking)
-    this._runExecutionLoop(
-      workflowDefinition,
-      executionId,
-      options,
-      abortController.signal
-    ).catch(error => {
-      logger.error({
-        component: 'WorkflowEngine',
-        message: 'Workflow execution failed',
-        executionId,
-        error: error.message,
-        stack: error.stack
-      });
-    });
+    this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
+      error => {
+        logger.error({
+          component: 'WorkflowEngine',
+          message: 'Workflow execution failed',
+          executionId,
+          error: error.message,
+          stack: error.stack
+        });
+      }
+    );
 
     // 7. Return initial state (execution continues in background)
     return state;
@@ -317,12 +314,7 @@ export class WorkflowEngine {
 
             // Determine next nodes based on result
             const currentState = await this.stateManager.get(executionId);
-            const nextNodes = this.scheduler.getNextNodes(
-              nodeId,
-              result,
-              workflow,
-              currentState
-            );
+            const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
 
             // Update current nodes (remove completed, add next)
             const newCurrentNodes = [
@@ -678,12 +670,7 @@ export class WorkflowEngine {
     }
 
     // Continue execution loop
-    this._runExecutionLoop(
-      workflow,
-      executionId,
-      options,
-      abortController.signal
-    ).catch(error => {
+    this._runExecutionLoop(workflow, executionId, options, abortController.signal).catch(error => {
       logger.error({
         component: 'WorkflowEngine',
         message: 'Resumed workflow execution failed',

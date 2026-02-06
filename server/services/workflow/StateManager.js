@@ -82,12 +82,7 @@ export class StateManager {
    * });
    */
   async create(initialState) {
-    const {
-      executionId,
-      workflowId,
-      data = {},
-      currentNodes = []
-    } = initialState;
+    const { executionId, workflowId, data = {}, currentNodes = [] } = initialState;
 
     if (!executionId) {
       throw new Error('executionId is required to create workflow state');
@@ -552,7 +547,7 @@ export class StateManager {
       const limitMB = (MAX_STATE_SIZE / (1024 * 1024)).toFixed(2);
       throw new Error(
         `Workflow state size (${sizeMB}MB) exceeds limit (${limitMB}MB). ` +
-        'Consider checkpointing and cleaning up history.'
+          'Consider checkpointing and cleaning up history.'
       );
     }
   }

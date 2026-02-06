@@ -17,7 +17,10 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import ChatService from '../../chat/ChatService.js';
 import { createCompletionRequest } from '../../../adapters/index.js';
-import { convertResponseToGeneric, normalizeToolName } from '../../../adapters/toolCalling/index.js';
+import {
+  convertResponseToGeneric,
+  normalizeToolName
+} from '../../../adapters/toolCalling/index.js';
 import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import { createParser } from 'eventsource-parser';
