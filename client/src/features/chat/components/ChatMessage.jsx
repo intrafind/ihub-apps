@@ -519,6 +519,10 @@ const ChatMessage = ({
     );
   };
 
+  // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
+  const hasPendingClarification = message.clarification && !message.clarificationAnswered;
+  const showBubble = !hasPendingClarification;
+
   return (
     <div
       ref={messageRef}
@@ -526,7 +530,7 @@ const ChatMessage = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div className={`chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`}>
+      <div className={showBubble ? `chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}` : 'w-full'}>
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
