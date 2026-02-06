@@ -326,7 +326,7 @@ const ClarificationCard = ({
       aria-modal="true"
       aria-labelledby="clarification-question"
       className={`
-        w-full max-w-lg mx-auto my-4 p-5 rounded-xl
+        w-full max-w-lg p-5 rounded-xl
         bg-white dark:bg-gray-800
         border-2 border-indigo-100 dark:border-indigo-900/50
         shadow-lg shadow-indigo-500/5

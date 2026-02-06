@@ -642,7 +642,7 @@ const ChatMessage = ({
 
         {/* Show just the question for answered clarifications (answer is in user message below) */}
         {!isUser && message.clarification && message.clarificationAnswered && (
-          <div className="flex items-start gap-2 py-2 px-3 my-2 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700">
+          <div className="flex items-start gap-2">
             <Icon
               name="question-mark-circle"
               size="sm"
