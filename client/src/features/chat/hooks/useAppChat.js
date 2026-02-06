@@ -443,10 +443,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       setClarificationPending(false);
       activeClarificationRef.current = null;
 
-      // Create user message content with Q+A for context
+      // Create user message content - just the answer (question is shown on assistant message)
       const userMessageContent = response.skipped
-        ? `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.skipped', 'Skipped')}`
-        : `${t('clarification.questionPrefix', 'Question')}: ${clarificationData.question}\n${t('clarification.answerPrefix', 'Answer')}: ${response.displayText}`;
+        ? t('clarification.skipped', 'Skipped')
+        : response.displayText;
 
       // Continue the conversation with the response
       // The response is sent as a special message that the server will process
