@@ -25,6 +25,7 @@ import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
+import registerWorkflowRoutes from './routes/workflow/index.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
@@ -254,6 +255,7 @@ if (cluster.isPrimary && workerCount > 1) {
   await registerAdminRoutes(app, basePath);
   registerShortLinkRoutes(app, basePath);
   await registerSwaggerRoutes(app, basePath);
+  registerWorkflowRoutes(app, { basePath, getLocalizedError });
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
