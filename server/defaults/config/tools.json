@@ -813,8 +813,8 @@
       "de": "Benutzer um Klärung bitten"
     },
     "description": {
-      "en": "Ask the user a clarifying question when you need more information to complete a task. Use this tool when the user's request is ambiguous, missing critical details, or when you need to confirm important assumptions before proceeding. Do not use for general conversation - only for gathering specific missing information needed to fulfill the user's actual request.",
-      "de": "Stellen Sie dem Benutzer eine klärende Frage, wenn Sie mehr Informationen benötigen, um eine Aufgabe abzuschließen. Verwenden Sie dieses Tool, wenn die Anfrage des Benutzers mehrdeutig ist, wichtige Details fehlen oder wenn Sie wichtige Annahmen bestätigen müssen, bevor Sie fortfahren. Nicht für allgemeine Konversation verwenden - nur zum Sammeln spezifischer fehlender Informationen, die zur Erfüllung der eigentlichen Anfrage des Benutzers benötigt werden."
+      "en": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+      "de": "Stellen Sie dem Benutzer eine klärende Frage, wenn Sie mehr Informationen benötigen. WICHTIG: Verwenden Sie immer 'select' oder 'multiselect' mit Optionen, wenn es gängige Auswahlmöglichkeiten gibt - das ist schneller für Benutzer als Tippen. Halten Sie Fragen KURZ (z.B. 'Welche Sprache?' nicht 'In welche Sprache möchten Sie Ihren Text übersetzen?'). Wiederholen Sie NICHT die Eingabe des Benutzers in Ihrer Frage."
     },
     "script": "askUser.js",
     "requiresUserInput": true,
@@ -824,18 +824,18 @@
         "question": {
           "type": "string",
           "description": {
-            "en": "The clarifying question to ask the user. Keep it concise and specific. Maximum 500 characters.",
-            "de": "Die klärende Frage an den Benutzer. Halten Sie sie prägnant und spezifisch. Maximal 500 Zeichen."
+            "en": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+            "de": "Eine KURZE klärende Frage (z.B. 'Welche Sprache?' oder 'Welches Format?'). Fügen Sie NICHT den Text des Benutzers in die Frage ein. Maximal 500 Zeichen."
           },
           "maxLength": 500
         },
         "input_type": {
           "type": "string",
           "enum": ["text", "select", "multiselect", "confirm", "number", "date"],
-          "default": "text",
+          "default": "select",
           "description": {
-            "en": "The type of input expected from the user. Use 'text' for free-form answers, 'select' for single choice from options, 'multiselect' for multiple choices, 'confirm' for yes/no questions, 'number' for numeric input, 'date' for date selection.",
-            "de": "Der erwartete Eingabetyp vom Benutzer. Verwenden Sie 'text' für freie Antworten, 'select' für Einzelauswahl aus Optionen, 'multiselect' für Mehrfachauswahl, 'confirm' für Ja/Nein-Fragen, 'number' für numerische Eingabe, 'date' für Datumsauswahl."
+            "en": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+            "de": "BEVORZUGEN Sie 'select' oder 'multiselect' gegenüber 'text', wenn es gängige Auswahlmöglichkeiten gibt! Verwenden Sie 'select' für Einzelauswahl (EMPFOHLEN), 'multiselect' für Mehrfachauswahl, 'text' NUR für wirklich offene Antworten, 'confirm' für Ja/Nein, 'number' für Zahlen, 'date' für Daten."
           }
         },
         "options": {
@@ -864,8 +864,8 @@
           },
           "maxItems": 20,
           "description": {
-            "en": "Array of options for select/multiselect input types. Required for select/multiselect, ignored for other types. Maximum 20 options.",
-            "de": "Array von Optionen für select/multiselect-Eingabetypen. Erforderlich für select/multiselect, wird bei anderen Typen ignoriert. Maximal 20 Optionen."
+            "en": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+            "de": "ERFORDERLICH für select/multiselect! Geben Sie 2-10 gängige Optionen an. Beispiel: [{\"label\": \"Englisch\", \"value\": \"en\"}, {\"label\": \"Französisch\", \"value\": \"fr\"}]. Setzen Sie allow_other=true, wenn der Benutzer eine nicht aufgeführte Option benötigen könnte."
           }
         },
         "allow_other": {
