@@ -246,7 +246,9 @@ const ClarificationCard = ({
       // FALLBACK: If no options provided and no allowOther, fall back to text input
       // This handles cases where the LLM calls ask_user with select but forgets options
       if ((!options || options.length === 0) && !allowOther) {
-        console.warn('ClarificationCard: select/multi_select type with no options, falling back to text input');
+        console.warn(
+          'ClarificationCard: select/multi_select type with no options, falling back to text input'
+        );
         return (
           <ClarificationInput
             inputType="text"
