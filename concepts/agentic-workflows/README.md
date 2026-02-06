@@ -4,21 +4,318 @@
 
 Add a comprehensive agentic workflow system to iHub Apps that enables multi-step, multi-agent task execution with parallel processing, human-in-the-loop checkpoints, and configurable observability. Built from scratch using industry patterns as reference (no third-party agentic libraries).
 
+**PR:** https://github.com/intrafind/ihub-apps/pull/871
+**Branch:** `feature/agentic-workflows`
+
+---
+
+## Implementation Status
+
+### Phase 1: Core Foundation - ✅ COMPLETE
+
+| Component | Status | Files |
+|-----------|--------|-------|
+| Workflow Schema & Validation | ✅ Done | `server/validators/workflowConfigSchema.js` |
+| StateManager | ✅ Done | `server/services/workflow/StateManager.js` |
+| DAGScheduler | ✅ Done | `server/services/workflow/DAGScheduler.js` |
+| WorkflowEngine | ✅ Done | `server/services/workflow/WorkflowEngine.js` |
+| StartNodeExecutor | ✅ Done | `server/services/workflow/executors/StartNodeExecutor.js` |
+| EndNodeExecutor | ✅ Done | `server/services/workflow/executors/EndNodeExecutor.js` |
+| AgentNodeExecutor | ✅ Done | `server/services/workflow/executors/AgentNodeExecutor.js` |
+| ToolNodeExecutor | ✅ Done | `server/services/workflow/executors/ToolNodeExecutor.js` |
+| DecisionNodeExecutor | ✅ Done | `server/services/workflow/executors/DecisionNodeExecutor.js` |
+| REST API | ✅ Done | `server/routes/workflow/workflowRoutes.js` |
+| SSE Streaming | ✅ Done | Included in workflowRoutes.js |
+| configCache Extension | ✅ Done | `server/configCache.js`, `server/workflowsLoader.js` |
+| Server Integration | ✅ Done | `server/server.js` |
+
+### Phase 2: Execution Features - 🔜 NEXT
+
+| Component | Status | Priority |
+|-----------|--------|----------|
+| Parallel/Join Nodes | 🔜 Planned | High |
+| Human Checkpoint Node | 🔜 Planned | High |
+| LLM-based Routing | 🔜 Planned | Medium |
+| Configurable Error Handling | ⚠️ Partial | Medium |
+
+### Phase 3-5: Future
+
+| Phase | Components | Status |
+|-------|------------|--------|
+| Phase 3 | Memory System, Cost Tracking, Execution Replay | 🔜 Planned |
+| Phase 4 | Visual Editor (React Flow), NL Generation | 🔜 Planned |
+| Phase 5 | Subworkflows, Dynamic Branching, Sandboxing | 🔜 Planned |
+
+---
+
+## How to Test
+
+### 1. Start the Server
+
+```bash
+npm run dev
+```
+
+### 2. Create a Test Workflow
+
+Create a file `contents/workflows/test-workflow.json`:
+
+```json
+{
+  "id": "test-workflow",
+  "name": {
+    "en": "Test Workflow",
+    "de": "Test-Workflow"
+  },
+  "description": {
+    "en": "Simple test workflow with start, tool, and end nodes",
+    "de": "Einfacher Test-Workflow mit Start-, Tool- und End-Knoten"
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "full",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 60000,
+    "maxNodes": 10
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Start" },
+      "position": { "x": 100, "y": 200 },
+      "config": {},
+      "execution": { "timeout": 5000 }
+    },
+    {
+      "id": "search",
+      "type": "tool",
+      "name": { "en": "Web Search" },
+      "position": { "x": 300, "y": 200 },
+      "config": {
+        "toolId": "braveSearch",
+        "parameters": {
+          "query": "iHub Apps AI platform",
+          "count": 3
+        },
+        "outputVariable": "searchResults"
+      },
+      "execution": { "timeout": 15000, "retries": 1 }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "End" },
+      "position": { "x": 500, "y": 200 },
+      "config": {
+        "outputMapping": {
+          "results": "$.searchResults"
+        }
+      },
+      "execution": { "timeout": 5000 }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "search", "condition": { "type": "always" } },
+    { "id": "e2", "source": "search", "target": "end", "condition": { "type": "always" } }
+  ],
+  "allowedGroups": ["users", "admin"]
+}
+```
+
+### 3. Test API Endpoints
+
+**List Workflows:**
+```bash
+curl -X GET http://localhost:3001/api/workflows \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Get Workflow by ID:**
+```bash
+curl -X GET http://localhost:3001/api/workflows/test-workflow \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Execute Workflow:**
+```bash
+curl -X POST http://localhost:3001/api/workflows/test-workflow/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"initialData": {"query": "test"}, "options": {}}'
+```
+
+**Get Execution State:**
+```bash
+curl -X GET http://localhost:3001/api/workflows/executions/EXECUTION_ID \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+**Stream Execution Progress (SSE):**
+```bash
+curl -N http://localhost:3001/api/workflows/executions/EXECUTION_ID/stream \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
+
+### 4. Test with Agent Node
+
+Create `contents/workflows/agent-test.json`:
+
+```json
+{
+  "id": "agent-test",
+  "name": { "en": "Agent Test" },
+  "description": { "en": "Test workflow with LLM agent" },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "full",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 120000,
+    "maxNodes": 10
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Start" },
+      "position": { "x": 100, "y": 200 },
+      "config": {},
+      "execution": { "timeout": 5000 }
+    },
+    {
+      "id": "researcher",
+      "type": "agent",
+      "name": { "en": "Research Agent" },
+      "position": { "x": 300, "y": 200 },
+      "config": {
+        "system": {
+          "en": "You are a research assistant. Answer the user's question concisely."
+        },
+        "tools": ["braveSearch"],
+        "maxIterations": 3,
+        "outputVariable": "research"
+      },
+      "execution": { "timeout": 60000 }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "End" },
+      "position": { "x": 500, "y": 200 },
+      "config": {},
+      "execution": { "timeout": 5000 }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "researcher", "condition": { "type": "always" } },
+    { "id": "e2", "source": "researcher", "target": "end", "condition": { "type": "always" } }
+  ],
+  "allowedGroups": ["users", "admin"]
+}
+```
+
+### 5. Test Decision Node
+
+Create `contents/workflows/decision-test.json`:
+
+```json
+{
+  "id": "decision-test",
+  "name": { "en": "Decision Test" },
+  "description": { "en": "Test conditional branching" },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "full",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 30000,
+    "maxNodes": 10
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Start" },
+      "position": { "x": 100, "y": 200 },
+      "config": {
+        "inputMapping": { "value": "$.initialData.value" }
+      },
+      "execution": { "timeout": 5000 }
+    },
+    {
+      "id": "check",
+      "type": "decision",
+      "name": { "en": "Check Value" },
+      "position": { "x": 300, "y": 200 },
+      "config": {
+        "type": "expression",
+        "expression": "state.data.value > 10"
+      },
+      "execution": { "timeout": 5000 }
+    },
+    {
+      "id": "high",
+      "type": "end",
+      "name": { "en": "High Value" },
+      "position": { "x": 500, "y": 100 },
+      "config": { "outputMapping": { "result": "high" } },
+      "execution": { "timeout": 5000 }
+    },
+    {
+      "id": "low",
+      "type": "end",
+      "name": { "en": "Low Value" },
+      "position": { "x": 500, "y": 300 },
+      "config": { "outputMapping": { "result": "low" } },
+      "execution": { "timeout": 5000 }
+    }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "check", "condition": { "type": "always" } },
+    { "id": "e2", "source": "check", "target": "high", "condition": { "type": "expression", "expression": "result.branch === 'true'" } },
+    { "id": "e3", "source": "check", "target": "low", "condition": { "type": "expression", "expression": "result.branch === 'false'" } }
+  ],
+  "allowedGroups": ["users", "admin"]
+}
+```
+
+Execute with different values:
+```bash
+# Should go to "high" path
+curl -X POST http://localhost:3001/api/workflows/decision-test/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"initialData": {"value": 15}}'
+
+# Should go to "low" path
+curl -X POST http://localhost:3001/api/workflows/decision-test/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"initialData": {"value": 5}}'
+```
+
 ---
 
 ## Requirements Summary
 
-| Aspect | Requirement |
-|--------|-------------|
-| **Workflow Definition** | Visual editor + JSON config + Natural language generation |
-| **Observability** | Configurable (minimal → full transparency) |
-| **Persistence** | Configurable (none → session → long-term memory) |
-| **Collaboration** | Sequential, parallel, supervisor patterns |
-| **Integration** | Unified with existing app/tool infrastructure |
-| **Error Handling** | Configurable (fail fast, retry, LLM-driven recovery) |
-| **Human-in-Loop** | No intervention → approval gates → real-time control |
-| **Execution** | Hybrid (server + sandbox + external APIs) |
-| **MVP Focus** | Core execution loop first |
+| Aspect | Requirement | Status |
+|--------|-------------|--------|
+| **Workflow Definition** | Visual editor + JSON config + NL generation | JSON ✅, Visual 🔜, NL 🔜 |
+| **Observability** | Configurable (minimal → full transparency) | ✅ Done |
+| **Persistence** | Configurable (none → session → long-term) | Session ✅, Long-term 🔜 |
+| **Collaboration** | Sequential, parallel, supervisor patterns | Sequential ✅, Parallel 🔜 |
+| **Integration** | Unified with existing app/tool infrastructure | ✅ Done |
+| **Error Handling** | Configurable (fail fast, retry, LLM-recovery) | Fail/Retry ✅, LLM 🔜 |
+| **Human-in-Loop** | No intervention → approval gates → real-time | None ✅, Gates 🔜 |
+| **Execution** | Hybrid (server + sandbox + external APIs) | Server ✅, Sandbox 🔜 |
 
 ---
 
@@ -31,12 +328,13 @@ Add a comprehensive agentic workflow system to iHub Apps that enables multi-step
 │                        Client (React)                           │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
 │  │Visual Editor │  │ Execution UI │  │ NL Workflow Generator│  │
+│  │    🔜        │  │     🔜       │  │         🔜           │  │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │ REST/SSE
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
-│                     Workflow API Layer                          │
+│                     Workflow API Layer ✅                        │
 │  /api/workflows, /api/workflows/:id/execute, /stream            │
 └─────────────────────────────────────────────────────────────────┘
                               │
@@ -44,360 +342,120 @@ Add a comprehensive agentic workflow system to iHub Apps that enables multi-step
         ▼                     ▼                     ▼
 ┌──────────────┐    ┌──────────────┐    ┌──────────────────────┐
 │WorkflowEngine│◄──►│ StateManager │◄──►│  CheckpointStorage   │
+│      ✅      │    │      ✅      │    │         ✅           │
 └──────────────┘    └──────────────┘    └──────────────────────┘
         │
         ├─────────────────┬─────────────────┬─────────────────┐
         ▼                 ▼                 ▼                 ▼
 ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
 │DAGScheduler  │  │NodeExecutors │  │ MemorySystem │  │ActionTracker │
-│(dependencies)│  │(agent,tool,  │  │(short/session│  │(SSE events)  │
-│              │  │ decision...) │  │ /long-term)  │  │              │
+│      ✅      │  │      ✅      │  │      🔜      │  │      ✅      │
 └──────────────┘  └──────────────┘  └──────────────┘  └──────────────┘
                          │
                          ▼
               ┌──────────────────────┐
               │  Existing Systems    │
-              │  - ToolExecutor      │
-              │  - ChatService       │
-              │  - configCache       │
+              │  - ToolExecutor ✅   │
+              │  - ChatService  ✅   │
+              │  - configCache  ✅   │
               └──────────────────────┘
 ```
 
 ---
 
-## Core Data Structures
-
-### Workflow Definition Schema
-
-```javascript
-{
-  "id": "research-workflow",
-  "name": { "en": "Research Workflow", "de": "Forschungs-Workflow" },
-  "description": { "en": "Multi-agent research with synthesis" },
-  "version": "1.0.0",
-  "enabled": true,
-
-  "config": {
-    "observability": "full",           // minimal | standard | full
-    "persistence": "session",          // none | session | long_term
-    "errorHandling": "llm_recovery",   // fail | retry | llm_recovery
-    "humanInLoop": "approval_gates",   // none | approval_gates | real_time
-    "maxExecutionTime": 300000,        // 5 minutes
-    "maxNodes": 50                     // Safety limit
-  },
-
-  "nodes": [...],  // See Node Types below
-  "edges": [...],  // See Edge Types below
-
-  "allowedGroups": ["users", "admin"]
-}
-```
-
-### Node Types
-
-| Type | Purpose | Key Config |
-|------|---------|------------|
-| `start` | Entry point | Initial data mapping |
-| `end` | Exit point | Output mapping |
-| `agent` | LLM agent with tools | system, tools[], maxIterations, outputSchema |
-| `tool` | Direct tool invocation | toolId, parameters |
-| `decision` | Conditional branching | expression or llmPrompt |
-| `parallel` | Fork execution | dynamicBranches (optional) |
-| `join` | Wait for parallel branches | aggregation strategy |
-| `human` | Approval checkpoint | message, options[], timeout |
-| `transform` | Data manipulation | JSONPath expression |
-| `memory` | Read/write memory | scope, key, operation |
-
-### Edge Schema
-
-```javascript
-{
-  "id": "e1",
-  "source": "nodeA",
-  "target": "nodeB",
-  "condition": {
-    "type": "always" | "expression" | "llm",
-    "expression": "$.result.approved === true"
-  }
-}
-```
-
-### Execution State
-
-```javascript
-{
-  "executionId": "exec-abc123",
-  "workflowId": "research-workflow",
-  "status": "running" | "paused" | "completed" | "failed",
-  "currentNodes": ["search-node"],     // Active nodes
-  "data": { ... },                     // Accumulated state
-  "history": [...],                    // Execution steps
-  "checkpoints": [...],                // Recovery points
-  "errors": [...]
-}
-```
-
----
-
-## Key Components
-
-### 1. WorkflowEngine
-
-**Location:** `server/services/workflow/WorkflowEngine.js`
-
-**Responsibilities:**
-- Load workflow definitions from configCache
-- Execute workflow loop with DAG scheduling
-- Coordinate node executors
-- Manage checkpoints and recovery
-
-**Core Loop:**
-```
-while (activeNodes.length > 0 && status === 'running'):
-  1. Get executable nodes (dependencies satisfied)
-  2. Execute nodes (parallel when independent)
-  3. Process results, update state
-  4. Determine next nodes based on edges
-  5. Create checkpoint if configured
-```
-
-### 2. DAGScheduler
-
-**Location:** `server/services/workflow/DAGScheduler.js`
-
-**Responsibilities:**
-- Topological sort with cycle detection
-- Determine executable nodes based on dependencies
-- Handle parallel execution coordination
-
-**Critical Safety:**
-- Cycle detection before execution starts
-- Max node limit to prevent runaway workflows
-
-### 3. StateManager
-
-**Location:** `server/services/workflow/StateManager.js`
-
-**Responsibilities:**
-- In-memory state during execution
-- Checkpoint persistence (file-based initially)
-- State recovery from checkpoints
-
-**Storage Strategy:**
-- Memory for active execution
-- File-based checkpoints via atomicWrite pattern
-- Future: Database for scaling
-
-### 4. Node Executors
-
-**Location:** `server/services/workflow/executors/`
-
-Each node type has a dedicated executor:
-- `AgentNodeExecutor` - Reuses existing ToolExecutor
-- `ToolNodeExecutor` - Direct tool invocation
-- `DecisionNodeExecutor` - Expression/LLM evaluation
-- `ParallelNodeExecutor` - Fork management
-- `JoinNodeExecutor` - Branch synchronization
-- `HumanNodeExecutor` - Checkpoint and pause
-
-### 5. MemorySystem
-
-**Location:** `server/services/workflow/MemorySystem.js`
-
-Three tiers:
-- **Short-term:** Per-execution, in-memory
-- **Session:** Per-chat-session, cached
-- **Long-term:** Persistent storage (optional)
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Purpose |
-|--------|----------|---------|
-| GET | `/api/workflows` | List available workflows |
-| GET | `/api/workflows/:id` | Get workflow definition |
-| POST | `/api/workflows` | Create workflow (admin) |
-| PUT | `/api/workflows/:id` | Update workflow (admin) |
-| DELETE | `/api/workflows/:id` | Delete workflow (admin) |
-| POST | `/api/workflows/:id/execute` | Start execution |
-| GET | `/api/workflows/executions/:id` | Get execution state |
-| POST | `/api/workflows/executions/:id/resume` | Resume paused workflow |
-| POST | `/api/workflows/executions/:id/cancel` | Cancel execution |
-| GET | `/api/workflows/executions/:id/stream` | SSE event stream |
-
----
-
-## Integration with Existing Systems
-
-### Reusing ToolExecutor
-
-The existing `ToolExecutor.js` handles:
-- LLM tool calling loop (max 10 iterations)
-- Tool execution and result handling
-- Streaming responses
-- Error handling
-
-**Integration:** AgentNodeExecutor wraps ToolExecutor:
-```javascript
-class AgentNodeExecutor {
-  async execute(node, state, options) {
-    const toolExecutor = new ToolExecutor();
-    return toolExecutor.processChatWithTools({...});
-  }
-}
-```
-
-### Extending configCache
-
-Add workflow loading to `configCache.js`:
-```javascript
-getWorkflows(includeDisabled = false) {
-  return this.loadConfigDir('workflows', includeDisabled);
-}
-```
-
-### Extending ActionTracker
-
-New events for workflow visibility:
-- `workflow.start`
-- `workflow.node.start`
-- `workflow.node.complete`
-- `workflow.node.error`
-- `workflow.human.required`
-- `workflow.checkpoint.saved`
-- `workflow.complete`
-- `workflow.failed`
-
----
-
-## Critical Concerns & Mitigations
-
-### From Challenger Review
-
-| Concern | Severity | Mitigation |
-|---------|----------|------------|
-| **Memory explosion** | CRITICAL | Max state size (50MB), lazy materialization, state sharding |
-| **Race conditions in parallel** | CRITICAL | Immutable state updates, proper locking |
-| **Circular dependencies** | HIGH | Pre-execution cycle detection |
-| **Tool sandbox escapes** | HIGH | Tool allowlist, path sanitization, output size limits |
-| **SSE client lifecycle** | HIGH | Store results for disconnected clients, polling fallback |
-| **Checkpoint atomicity** | HIGH | atomicWrite pattern, file locking |
-| **Node timeout** | MEDIUM | Per-node timeout, cleanup of orphaned executions |
-| **Message history explosion** | MEDIUM | Token compression, history summarization |
-
-### MVP Scope Constraints
-
-To de-risk implementation:
-- **Max 20 nodes** per workflow initially
-- **30 second** default node timeout
-- **Sequential execution** first, parallel later
-- **File-based checkpoints** (no database initially)
-- **No distributed execution** (single instance)
-
----
-
-## Implementation Phases
-
-### Phase 1: Core Foundation (MVP)
-1. Workflow schema and validation (Zod)
-2. StateManager with file-based checkpoints
-3. WorkflowEngine with sequential execution
-4. Basic node executors: start, end, agent, tool
-5. REST API for CRUD and execution
-6. SSE streaming for progress
-
-### Phase 2: Execution Features
-1. DAGScheduler with cycle detection
-2. Decision node (expression evaluation)
-3. Parallel/Join nodes
-4. Human checkpoint node
-5. Configurable error handling
-
-### Phase 3: Observability & Memory
-1. Full ActionTracker event integration
-2. Memory system (short-term, session)
-3. Execution history and replay
-4. Cost tracking (token counting)
-
-### Phase 4: Visual Editor
-1. React Flow-based graph editor
-2. Node palette and drag-drop
-3. Edge condition editor
-4. Workflow import/export
-5. NL-to-workflow generation
-
-### Phase 5: Advanced Features
-1. Subworkflow support
-2. Dynamic parallel branching
-3. LLM-based routing
-4. Long-term memory
-5. Sandboxed tool execution
-
----
-
-## File Structure
+## File Structure (Implemented)
 
 ```
 server/
 ├── services/
 │   └── workflow/
-│       ├── WorkflowEngine.js
-│       ├── StateManager.js
-│       ├── DAGScheduler.js
-│       ├── MemorySystem.js
+│       ├── WorkflowEngine.js      ✅ (911 lines)
+│       ├── StateManager.js        ✅ (561 lines)
+│       ├── DAGScheduler.js        ✅ (701 lines)
+│       ├── index.js               ✅
 │       └── executors/
-│           ├── AgentNodeExecutor.js
-│           ├── ToolNodeExecutor.js
-│           ├── DecisionNodeExecutor.js
-│           ├── ParallelNodeExecutor.js
-│           ├── JoinNodeExecutor.js
-│           └── HumanNodeExecutor.js
+│           ├── index.js           ✅
+│           ├── BaseNodeExecutor.js    ✅ (328 lines)
+│           ├── StartNodeExecutor.js   ✅ (214 lines)
+│           ├── EndNodeExecutor.js     ✅ (227 lines)
+│           ├── AgentNodeExecutor.js   ✅ (590 lines)
+│           ├── ToolNodeExecutor.js    ✅ (266 lines)
+│           └── DecisionNodeExecutor.js ✅ (438 lines)
 ├── routes/
 │   └── workflow/
-│       └── workflowRoutes.js
-└── validators/
-    └── workflowConfigSchema.js
-
-client/src/
-└── features/
-    └── workflows/
-        ├── pages/
-        │   ├── WorkflowList.jsx
-        │   ├── WorkflowEditor.jsx
-        │   └── WorkflowExecution.jsx
-        └── components/
-            ├── WorkflowCanvas.jsx
-            ├── NodePalette.jsx
-            └── ExecutionProgress.jsx
+│       ├── index.js               ✅
+│       └── workflowRoutes.js      ✅ (1,292 lines)
+├── validators/
+│   └── workflowConfigSchema.js    ✅ (440 lines)
+├── workflowsLoader.js             ✅ (51 lines)
+├── configCache.js                 ✅ (extended)
+└── server.js                      ✅ (routes registered)
 
 contents/
-└── workflows/
+└── workflows/                     📁 (create your workflows here)
     └── {id}.json
 ```
 
+**Total: 7,545 lines of new code**
+
 ---
 
-## Verification Plan
+## API Endpoints (Implemented)
 
-### Unit Tests
-- Schema validation for workflow definitions
-- DAG cycle detection
-- State serialization/deserialization
-- Node executor behavior
+| Method | Endpoint | Status | Purpose |
+|--------|----------|--------|---------|
+| GET | `/api/workflows` | ✅ | List available workflows |
+| GET | `/api/workflows/:id` | ✅ | Get workflow definition |
+| POST | `/api/workflows` | ✅ | Create workflow (admin) |
+| PUT | `/api/workflows/:id` | ✅ | Update workflow (admin) |
+| DELETE | `/api/workflows/:id` | ✅ | Delete workflow (admin) |
+| POST | `/api/workflows/:id/execute` | ✅ | Start execution |
+| GET | `/api/workflows/executions/:id` | ✅ | Get execution state |
+| POST | `/api/workflows/executions/:id/resume` | ✅ | Resume paused workflow |
+| POST | `/api/workflows/executions/:id/cancel` | ✅ | Cancel execution |
+| GET | `/api/workflows/executions/:id/stream` | ✅ | SSE event stream |
+| GET | `/api/admin/workflows` | ✅ | List all workflows (admin) |
+| POST | `/api/admin/workflows/:id/toggle` | ✅ | Toggle enabled (admin) |
 
-### Integration Tests
-- Workflow execution end-to-end
-- Checkpoint save/restore
-- Human node pause/resume
-- Error recovery scenarios
+---
 
-### Manual Testing
-1. Create simple 3-node workflow
-2. Execute and verify SSE events
-3. Test pause at human node
-4. Resume and complete
-5. Verify checkpoint recovery after simulated failure
+## Node Types (Implemented)
+
+| Type | Status | Purpose | Key Config |
+|------|--------|---------|------------|
+| `start` | ✅ | Entry point | inputMapping |
+| `end` | ✅ | Exit point | outputMapping |
+| `agent` | ✅ | LLM agent with tools | system, tools[], maxIterations, outputSchema |
+| `tool` | ✅ | Direct tool invocation | toolId, parameters, outputVariable |
+| `decision` | ✅ | Conditional branching | type (expression/switch), expression |
+| `parallel` | 🔜 | Fork execution | dynamicBranches |
+| `join` | 🔜 | Wait for branches | aggregation |
+| `human` | 🔜 | Approval checkpoint | message, options[], timeout |
+| `transform` | 🔜 | Data manipulation | expression |
+| `memory` | 🔜 | Read/write memory | scope, key, operation |
+
+---
+
+## Next Steps
+
+### Immediate (Phase 2)
+
+1. **Parallel/Join Nodes** - Enable concurrent execution of independent branches
+2. **Human Checkpoint Node** - Pause workflow for user approval
+3. **Client UI** - Basic workflow list and execution viewer
+4. **Integration Tests** - End-to-end test suite
+
+### Short-term (Phase 3)
+
+1. **Memory System** - Short-term, session, and long-term memory
+2. **Cost Tracking** - Token counting per node
+3. **Execution Replay** - Debug and audit workflow runs
+
+### Medium-term (Phase 4)
+
+1. **Visual Editor** - React Flow-based drag-and-drop editor
+2. **NL Generation** - Natural language to workflow conversion
+3. **Workflow Templates** - Pre-built workflow patterns
 
 ---
 
@@ -408,55 +466,19 @@ contents/
 | **Persistence** | File-based | Use atomicWrite pattern like configs. No new dependencies. |
 | **Visual Editor** | Minimal in MVP | Simple node/edge view. Full drag-drop editor later. |
 | **Tool Sandboxing** | Trust existing tools | Existing tools run directly. Add sandboxing for custom tools later. |
+| **Third-party libs** | None | Build from scratch using LangGraph/CrewAI as reference patterns. |
 
 ---
 
-## Subagent Parallelization Strategy
+## Research References
 
-The implementation can leverage parallel subagents for efficiency:
+The architecture was informed by analysis of:
 
-### Phase 1 Parallel Work
-```
-Agent 1: Schema & Validation
-├── workflowConfigSchema.js (Zod schema)
-├── Validator integration
-└── Test fixtures
+- **LangGraph** - Graph-based state management with checkpointing
+- **CrewAI** - Role-based agents with hierarchical orchestration
+- **AutoGen** - Message-driven multi-agent patterns
+- **dAgent** - DAG-based parallel execution
+- **CAOS** - Agents-as-operating-systems architecture
+- **OpenClaw** - Session isolation and sandbox patterns
 
-Agent 2: Core Engine
-├── WorkflowEngine.js
-├── DAGScheduler.js
-└── StateManager.js
-
-Agent 3: Node Executors
-├── AgentNodeExecutor.js
-├── ToolNodeExecutor.js
-├── DecisionNodeExecutor.js
-└── (start/end are trivial)
-```
-
-### Phase 2 Parallel Work
-```
-Agent 1: API Routes
-├── workflowRoutes.js
-├── Execution endpoints
-└── SSE streaming
-
-Agent 2: Client Components
-├── WorkflowList.jsx
-├── Basic WorkflowViewer.jsx
-└── ExecutionProgress.jsx
-
-Agent 3: Integration
-├── configCache extension
-├── ActionTracker events
-└── Permission integration
-```
-
----
-
-## Next Steps After Approval
-
-1. Create the concept document in `concepts/agentic-workflows/` folder
-2. Begin Phase 1 implementation with parallel subagents
-3. Set up test fixtures for workflow validation
-4. Implement core engine with sequential execution first
+See `concepts/agentic-workflows/2026-02-06 Workflow API Routes Implementation.md` for detailed implementation notes.
