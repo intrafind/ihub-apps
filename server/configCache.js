@@ -2,6 +2,7 @@ import { loadJson, loadBuiltinLocaleJson } from './configLoader.js';
 import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
+import { loadAllWorkflows } from './workflowsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
@@ -119,6 +120,7 @@ class ConfigCache {
       'config/tools.json',
       'config/styles.json',
       'config/prompts.json',
+      'config/workflows.json',
       'config/platform.json',
       'config/ui.json',
       'config/groups.json',
@@ -168,6 +170,17 @@ class ConfigCache {
           const allPrompts = await loadAllPrompts(true);
           this.setCacheEntry(configPath, allPrompts);
           logger.info(`✓ Cached: ${configPath} (${allPrompts.length} total prompts)`, {
+            component: 'ConfigCache'
+          });
+          return;
+        }
+
+        // Special handling for workflows.json - load from both sources
+        if (configPath === 'config/workflows.json') {
+          // Load all workflows (including disabled) for admin access
+          const allWorkflows = await loadAllWorkflows(true);
+          this.setCacheEntry(configPath, allWorkflows);
+          logger.info(`✓ Cached: ${configPath} (${allWorkflows.length} total workflows)`, {
             component: 'ConfigCache'
           });
           return;
@@ -349,6 +362,20 @@ class ConfigCache {
         if (!existing || existing.etag !== newEtag) {
           this.setCacheEntry(key, prompts);
           logger.info(`✓ Cached: config/prompts.json (${prompts.length} total prompts)`, {
+            component: 'ConfigCache'
+          });
+        }
+        return;
+      }
+
+      // Special handling for workflows.json - load from both sources
+      if (key === 'config/workflows.json') {
+        const workflows = await loadAllWorkflows(true, false);
+        const newEtag = this.generateETag(workflows);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, workflows);
+          logger.info(`✓ Cached: config/workflows.json (${workflows.length} total workflows)`, {
             component: 'ConfigCache'
           });
         }
@@ -545,6 +572,75 @@ class ConfigCache {
       data: prompts.data.filter(prompt => prompt.enabled !== false),
       etag: prompts.etag
     };
+  }
+
+  /**
+   * Get all workflow definitions
+   * @param {boolean} includeDisabled - Include disabled workflows
+   * @returns {{ data: Array, etag: string }} Workflows with ETag
+   */
+  getWorkflows(includeDisabled = false) {
+    const cacheKey = 'config/workflows.json';
+    const workflows = this.get(cacheKey);
+
+    if (workflows === null || !workflows.data) {
+      logger.warn('Workflows cache not initialized - returning empty array', {
+        component: 'ConfigCache'
+      });
+      return { data: [], etag: null };
+    }
+
+    if (includeDisabled) {
+      return workflows;
+    }
+
+    // Filter to only enabled workflows
+    return {
+      data: workflows.data.filter(workflow => workflow.enabled !== false),
+      etag: workflows.etag
+    };
+  }
+
+  /**
+   * Get a single workflow by ID
+   * @param {string} id - Workflow ID
+   * @returns {object|null} Workflow definition or null if not found
+   */
+  getWorkflowById(id) {
+    const { data } = this.getWorkflows(true);
+    return data.find(workflow => workflow.id === id) || null;
+  }
+
+  /**
+   * Get workflows accessible to a specific user based on their groups
+   * @param {object} user - User object with groups array
+   * @returns {{ data: Array, etag: string }} Filtered workflows with ETag
+   */
+  getWorkflowsForUser(user) {
+    const { data, etag } = this.getWorkflows();
+
+    const filtered = data.filter(workflow => {
+      // No restrictions means everyone can access
+      if (!workflow.allowedGroups || workflow.allowedGroups.length === 0) {
+        return true;
+      }
+      // User must have at least one matching group
+      if (!user?.groups) return false;
+      return workflow.allowedGroups.some(group => user.groups.includes(group));
+    });
+
+    // Generate user-specific ETag if workflows were filtered
+    let userSpecificEtag = etag;
+    if (filtered.length < data.length) {
+      const workflowIds = filtered.map(w => w.id).sort();
+      const contentHash = createHash('md5')
+        .update(JSON.stringify(workflowIds))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${etag}-${contentHash}`;
+    }
+
+    return { data: filtered, etag: userSpecificEtag };
   }
 
   /**
@@ -779,6 +875,30 @@ class ConfigCache {
       );
     } catch (error) {
       logger.error('❌ Error refreshing prompts cache:', {
+        component: 'ConfigCache',
+        error: error.message
+      });
+    }
+  }
+
+  /**
+   * Refresh workflows cache (both enabled and all workflows)
+   * Should be called when workflows are modified (create, update, delete, toggle)
+   */
+  async refreshWorkflowsCache() {
+    logger.info('🔄 Refreshing workflows cache...', { component: 'ConfigCache' });
+
+    try {
+      // Refresh workflows cache
+      const workflows = await loadAllWorkflows(true);
+      this.setCacheEntry('config/workflows.json', workflows);
+
+      logger.info(
+        `✅ Workflows cache refreshed: ${workflows.length} enabled, ${workflows.length} total`,
+        { component: 'ConfigCache' }
+      );
+    } catch (error) {
+      logger.error('❌ Error refreshing workflows cache:', {
         component: 'ConfigCache',
         error: error.message
       });
