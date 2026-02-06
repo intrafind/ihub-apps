@@ -8,6 +8,7 @@ import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
+import ClarificationCard from './ClarificationCard';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -25,7 +26,9 @@ const ChatMessage = ({
   onInsert,
   canvasEnabled = false,
   app = null, // App configuration for custom response rendering
-  models = [] // Available models for determining if model param should be included in link
+  models = [], // Available models for determining if model param should be included in link
+  onClarificationSubmit = null, // Callback when a clarification response is submitted
+  onClarificationSkip = null // Callback when a clarification is skipped
 }) => {
   const { t } = useTranslation();
 
@@ -516,6 +519,10 @@ const ChatMessage = ({
     );
   };
 
+  // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
+  const hasPendingClarification = message.clarification && !message.clarificationAnswered;
+  const showBubble = !hasPendingClarification;
+
   return (
     <div
       ref={messageRef}
@@ -523,7 +530,24 @@ const ChatMessage = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div className={`chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`}>
+      <div
+        className={
+          showBubble
+            ? `chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`
+            : 'w-full'
+        }
+      >
+        {/* Show just the question for answered clarifications (at top of bubble) */}
+        {!isUser && message.clarification && message.clarificationAnswered && (
+          <div className="flex items-start gap-2">
+            <Icon
+              name="question-mark-circle"
+              size="sm"
+              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
+            />
+            <p className="text-slate-800 dark:text-slate-200">{message.clarification.question}</p>
+          </div>
+        )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
@@ -616,6 +640,15 @@ const ChatMessage = ({
               </ul>
             )}
           </div>
+        )}
+
+        {/* Clarification UI - show card for pending clarifications */}
+        {!isUser && message.clarification && !message.clarificationAnswered && (
+          <ClarificationCard
+            clarification={message.clarification}
+            onSubmit={onClarificationSubmit}
+            onSkip={onClarificationSkip}
+          />
         )}
       </div>
 

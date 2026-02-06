@@ -27,7 +27,10 @@ const ChatMessageList = ({
   requiredIntegrations = [],
   onConnectIntegration,
   app = null, // App configuration for custom response rendering
-  models = [] // Available models to pass to ChatMessage for link generation
+  models = [], // Available models to pass to ChatMessage for link generation
+  // Clarification handlers
+  onClarificationSubmit = null, // Callback when a clarification response is submitted
+  onClarificationSkip = null // Callback when a clarification is skipped
 }) => {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
@@ -137,6 +140,8 @@ const ChatMessageList = ({
                 canvasEnabled={canvasEnabled}
                 app={app}
                 models={models}
+                onClarificationSubmit={onClarificationSubmit}
+                onClarificationSkip={onClarificationSkip}
               />
             </div>
           </div>

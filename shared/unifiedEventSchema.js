@@ -12,5 +12,6 @@ export const UnifiedEvents = {
   CITATION: 'citation',
   SAFETY_WARNING: 'safety.warning',
   THINKING: 'thinking',
-  IMAGE: 'image'
+  IMAGE: 'image',
+  CLARIFICATION: 'clarification'
 };

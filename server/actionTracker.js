@@ -74,6 +74,16 @@ export class ActionTracker extends EventEmitter {
   trackToolStreamComplete(chatId, data = {}) {
     this.emit('fire-sse', { event: 'tool-stream-complete', chatId, ...data });
   }
+
+  /**
+   * Track a clarification request from the ask_user tool
+   * Emits a clarification event to the client with the question and input configuration
+   * @param {string} chatId - The chat session ID
+   * @param {Object} data - Clarification data including question, input_type, options, etc.
+   */
+  trackClarification(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.CLARIFICATION, chatId, ...data });
+  }
 }
 
 export const actionTracker = new ActionTracker();

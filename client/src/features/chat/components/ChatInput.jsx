@@ -51,7 +51,9 @@ const ChatInput = ({
   imageAspectRatio = null,
   imageQuality = null,
   onImageAspectRatioChange = null,
-  onImageQualityChange = null
+  onImageQualityChange = null,
+  // Clarification state
+  clarificationPending = false // When true, input is disabled waiting for clarification answer
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -78,13 +80,26 @@ const ChatInput = ({
       : app.messagePlaceholder
     : null;
 
-  let defaultPlaceholder = isProcessing
-    ? t('pages.appChat.thinking')
-    : customPlaceholder
-      ? customPlaceholder
-      : allowEmptySubmit
-        ? t('pages.appChat.optionalMessagePlaceholder', 'Type here (optional)...')
-        : t('pages.appChat.messagePlaceholder', 'Type here...');
+  // Determine placeholder text based on state
+  let defaultPlaceholder;
+  if (clarificationPending) {
+    // When waiting for clarification response, show a helpful message
+    defaultPlaceholder = t(
+      'pages.appChat.answerQuestionAbove',
+      'Please answer the question above to continue'
+    );
+  } else if (isProcessing) {
+    defaultPlaceholder = t('pages.appChat.thinking');
+  } else if (customPlaceholder) {
+    defaultPlaceholder = customPlaceholder;
+  } else if (allowEmptySubmit) {
+    defaultPlaceholder = t('pages.appChat.optionalMessagePlaceholder', 'Type here (optional)...');
+  } else {
+    defaultPlaceholder = t('pages.appChat.messagePlaceholder', 'Type here...');
+  }
+
+  // Disable input when clarification is pending
+  const isInputDisabled = disabled || clarificationPending;
 
   const focusInputAtEnd = useCallback(() => {
     if (actualInputRef.current) {
@@ -229,7 +244,7 @@ const ChatInput = ({
       {uploadConfig?.enabled === true && showUploader && (
         <UnifiedUploader
           onFileSelect={onFileSelect}
-          disabled={disabled || isProcessing}
+          disabled={isInputDisabled || isProcessing}
           fileData={selectedFile}
           config={uploadConfig}
         />
@@ -251,7 +266,7 @@ const ChatInput = ({
             value={value}
             onChange={onChange}
             onKeyDown={handleKeyDown}
-            disabled={disabled || isProcessing}
+            disabled={isInputDisabled || isProcessing}
             className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
             placeholder={defaultPlaceholder}
             ref={actualInputRef}
@@ -288,7 +303,7 @@ const ChatInput = ({
             onEnabledToolsChange={onEnabledToolsChange}
             uploadConfig={uploadConfig}
             onToggleUploader={onToggleUploader || toggleUploader}
-            disabled={disabled}
+            disabled={isInputDisabled}
             isProcessing={isProcessing}
             magicPromptEnabled={magicPromptEnabled}
             onMagicPrompt={onMagicPrompt}
@@ -311,7 +326,7 @@ const ChatInput = ({
             <button
               type="button"
               onClick={onToggleUploader || toggleUploader}
-              disabled={disabled || isProcessing}
+              disabled={isInputDisabled || isProcessing}
               title={t('chatActions.attachFile', 'Attach File')}
               className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
             >
@@ -327,7 +342,7 @@ const ChatInput = ({
                 app={app}
                 onSpeechResult={onVoiceInput}
                 inputRef={actualInputRef}
-                disabled={disabled || isProcessing}
+                disabled={isInputDisabled || isProcessing}
                 onCommand={onVoiceCommand}
               />
             </div>
@@ -358,7 +373,7 @@ const ChatInput = ({
               selectedModel={selectedModel}
               onModelChange={onModelChange}
               currentLanguage={currentLanguage}
-              disabled={disabled || isProcessing}
+              disabled={isInputDisabled || isProcessing}
             />
           )}
 
@@ -366,7 +381,7 @@ const ChatInput = ({
           <button
             type="button"
             onClick={isProcessing ? handleCancel : handleSubmit}
-            disabled={disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
+            disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
             className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
               disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
                 ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
