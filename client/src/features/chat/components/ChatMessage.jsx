@@ -537,6 +537,19 @@ const ChatMessage = ({
             : 'w-full'
         }
       >
+        {/* Show just the question for answered clarifications (at top of bubble) */}
+        {!isUser && message.clarification && message.clarificationAnswered && (
+          <div className="flex items-start gap-2">
+            <Icon
+              name="question-mark-circle"
+              size="sm"
+              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
+            />
+            <p className="text-sm text-gray-700 dark:text-gray-300">
+              {message.clarification.question}
+            </p>
+          </div>
+        )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
 
@@ -640,19 +653,6 @@ const ChatMessage = ({
           />
         )}
 
-        {/* Show just the question for answered clarifications (answer is in user message below) */}
-        {!isUser && message.clarification && message.clarificationAnswered && (
-          <div className="flex items-start gap-2">
-            <Icon
-              name="question-mark-circle"
-              size="sm"
-              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
-            />
-            <p className="text-sm text-gray-700 dark:text-gray-300">
-              {message.clarification.question}
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Info about finish reason and retry options */}
