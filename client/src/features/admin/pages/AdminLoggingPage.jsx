@@ -101,6 +101,11 @@ const AdminLoggingPage = () => {
         'Admin API endpoints for configuration management, user management, and system administration'
     },
     {
+      id: 'ModelsRoutes',
+      name: 'Models Admin Routes',
+      description: 'Admin API endpoints for model configuration, updates, and management'
+    },
+    {
       id: 'Middleware',
       name: 'Middleware',
       description:
