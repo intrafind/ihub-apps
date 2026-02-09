@@ -1,4 +1,5 @@
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import { deepMerge } from '../../utils/deepMerge.js';
 import path from 'path';
 import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
@@ -151,12 +152,10 @@ export class StateManager {
       updatedAt: new Date().toISOString()
     };
 
-    // Deep merge for nested objects like data
+    // Deep merge for nested objects like data to preserve nested state
+    // (e.g., researchState.iteration preserved when only currentFocus is updated)
     if (updates.data) {
-      updatedState.data = {
-        ...state.data,
-        ...updates.data
-      };
+      updatedState.data = deepMerge(state.data, updates.data);
     }
 
     // Validate state size after update
@@ -408,14 +407,51 @@ export class StateManager {
     state.currentNodes = state.currentNodes.filter(id => id !== nodeId);
 
     // Add to completed nodes if not already there
+    // Note: completedNodes tracks unique nodes for routing purposes
     if (!state.completedNodes.includes(nodeId)) {
       state.completedNodes.push(nodeId);
     }
 
+    // Track total node invocations (counts every execution, including loops)
+    state.data.nodeInvocations = (state.data.nodeInvocations || 0) + 1;
+
     // Store result in data if provided
     if (result !== null) {
       state.data.nodeResults = state.data.nodeResults || {};
+
+      // Store with iteration key if iteration info is available (for loops)
+      // This allows UI to display each iteration separately
+      const iteration = result.iteration || result.output?.iteration;
+      if (iteration !== undefined) {
+        state.data.nodeResults[`${nodeId}_iter${iteration}`] = result;
+      }
+
+      // Always store latest result under nodeId for backward compatibility
       state.data.nodeResults[nodeId] = result;
+
+      // Track metrics if available
+      if (result.metrics) {
+        state.data.executionMetrics = state.data.executionMetrics || {
+          totalDuration: 0,
+          totalTokens: { input: 0, output: 0, total: 0 },
+          nodeCount: 0
+        };
+        state.data.executionMetrics.totalDuration += result.metrics.duration || 0;
+        if (result.metrics.tokens) {
+          state.data.executionMetrics.totalTokens.input += result.metrics.tokens.input || 0;
+          state.data.executionMetrics.totalTokens.output += result.metrics.tokens.output || 0;
+          state.data.executionMetrics.totalTokens.total +=
+            (result.metrics.tokens.input || 0) + (result.metrics.tokens.output || 0);
+        }
+        state.data.executionMetrics.nodeCount++;
+      }
+
+      // Apply stateUpdates to state.data using deep merge (e.g., outputVariable values)
+      // This allows subsequent nodes and showData to access values like $.research_results
+      // Deep merge preserves nested properties (e.g., researchState.iteration during loops)
+      if (result.stateUpdates && typeof result.stateUpdates === 'object') {
+        state.data = deepMerge(state.data, result.stateUpdates);
+      }
     }
 
     state.updatedAt = new Date().toISOString();

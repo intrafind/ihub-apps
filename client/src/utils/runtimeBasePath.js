@@ -42,6 +42,7 @@ export const detectBasePath = () => {
     'prompts', // Prompts listing
     'settings', // Settings pages (integrations, etc.)
     'teams', // Microsoft Teams routes
+    'workflows', // Workflow management and execution
     's' // Short links
   ];
 
@@ -106,6 +107,7 @@ export const getBasePath = () => {
       'prompts',
       'settings',
       'teams',
+      'workflows',
       's'
     ];
     const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);

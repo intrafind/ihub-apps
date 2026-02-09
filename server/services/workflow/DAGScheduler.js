@@ -24,13 +24,15 @@ import logger from '../../utils/logger.js';
 export class DAGScheduler {
   /**
    * Detects cycles in the workflow graph using Kahn's algorithm.
-   * A cycle indicates an invalid workflow that would result in infinite execution.
+   * A cycle indicates a potential for infinite execution if not properly controlled.
    *
    * @param {Object[]} nodes - Array of workflow nodes
    * @param {string} nodes[].id - Unique node identifier
    * @param {Object[]} edges - Array of workflow edges
    * @param {string} edges[].source - Source node ID
    * @param {string} edges[].target - Target node ID
+   * @param {Object} [options={}] - Detection options
+   * @param {boolean} [options.allowCycles=true] - If true, skip cycle detection (cycles are allowed)
    * @returns {Object} Cycle detection result
    * @returns {boolean} result.hasCycle - Whether a cycle was detected
    * @returns {string[]} result.cycleNodes - Node IDs involved in cycles (empty if no cycle)
@@ -42,10 +44,23 @@ export class DAGScheduler {
    *   { source: 'b', target: 'c' },
    *   { source: 'c', target: 'a' } // Creates a cycle
    * ];
-   * const result = scheduler.detectCycles(nodes, edges);
+   *
+   * // Strict DAG mode - reject cycles
+   * const result = scheduler.detectCycles(nodes, edges, { allowCycles: false });
    * // result = { hasCycle: true, cycleNodes: ['a', 'b', 'c'] }
+   *
+   * // Permissive mode - allow cycles (default)
+   * const result2 = scheduler.detectCycles(nodes, edges, { allowCycles: true });
+   * // result2 = { hasCycle: false, cycleNodes: [] }
    */
-  detectCycles(nodes, edges) {
+  detectCycles(nodes, edges, options = {}) {
+    const { allowCycles = true } = options;
+
+    // If cycles are allowed, skip detection entirely
+    // Runtime protection (maxIterations per node) handles infinite loop prevention
+    if (allowCycles) {
+      return { hasCycle: false, cycleNodes: [] };
+    }
     if (!nodes || nodes.length === 0) {
       return { hasCycle: false, cycleNodes: [] };
     }
@@ -233,25 +248,36 @@ export class DAGScheduler {
     // For now, just validate that the first node can execute
     const firstNode = currentNodes[0];
 
-    // Check if all incoming edges to this node have completed sources
+    // Check incoming edges to this node
     const incomingEdges = (workflow.edges || []).filter(edge => edge.target === firstNode);
 
-    const allDependenciesMet = incomingEdges.every(edge => completedSet.has(edge.source));
+    // For workflows with cycles/loops, we use "any" dependency logic:
+    // A node is ready if AT LEAST ONE incoming edge has a completed source.
+    // This allows:
+    // - Initial execution when the "forward" edge source is complete
+    // - Loop execution when the "back" edge source (loop trigger) is complete
+    //
+    // For strict DAG workflows (no cycles), this is equivalent to "all" logic
+    // since each node typically has only one incoming edge path active at a time.
+    const anyDependencyMet =
+      incomingEdges.length === 0 || incomingEdges.some(edge => completedSet.has(edge.source));
 
-    if (allDependenciesMet) {
+    if (anyDependencyMet) {
+      const satisfiedEdges = incomingEdges.filter(e => completedSet.has(e.source));
       logger.debug({
         component: 'DAGScheduler',
         message: 'Node ready for execution',
         nodeId: firstNode,
-        completedDependencies: incomingEdges.map(e => e.source)
+        satisfiedDependencies: satisfiedEdges.map(e => e.source),
+        totalIncomingEdges: incomingEdges.length
       });
       return [firstNode];
     }
 
-    // This shouldn't happen in a well-formed workflow, but handle gracefully
+    // No incoming edges are satisfied - node is blocked
     logger.warn({
       component: 'DAGScheduler',
-      message: 'Node has unmet dependencies',
+      message: 'Node has no satisfied dependencies',
       nodeId: firstNode,
       requiredNodes: incomingEdges.map(e => e.source),
       completedNodes: Array.from(completedSet)

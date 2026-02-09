@@ -24,3 +24,9 @@
 export { WorkflowEngine, default as workflowEngine } from './WorkflowEngine.js';
 export { DAGScheduler } from './DAGScheduler.js';
 export { StateManager, WorkflowStatus } from './StateManager.js';
+export {
+  ExecutionRegistry,
+  getExecutionRegistry,
+  resetExecutionRegistry
+} from './ExecutionRegistry.js';
+export { WorkflowLLMHelper, default as workflowLLMHelper } from './WorkflowLLMHelper.js';

@@ -147,6 +147,17 @@ export const nodeConfigSchema = z.object({
    * - decision: { conditions: array }
    * - transform: { mappings: object }
    * - memory: { operation: 'read' | 'write', key: string }
+   * - human: {
+   *     message: LocalizedString,        // Message to display to user
+   *     options: Array<{                 // Available response options
+   *       value: string,                 // Option value for workflow routing
+   *       label: LocalizedString,        // Display label
+   *       style?: 'primary' | 'secondary' | 'danger'  // Button style
+   *     }>,
+   *     inputSchema?: JSONSchema,        // Optional form schema for additional input
+   *     showData?: string[],             // JSONPath expressions for data to display
+   *     timeout?: number                 // Optional timeout in milliseconds
+   *   }
    */
   config: z.object({}).passthrough().optional(),
 
@@ -162,19 +173,37 @@ export const nodeConfigSchema = z.object({
  * Edge condition types
  *
  * - always: Edge is always traversed (default)
- * - expression: Edge is traversed if JSONPath expression evaluates to true
+ * - never: Edge is never traversed (useful for disabling paths)
+ * - expression: Edge is traversed if expression evaluates to true
+ * - equals: Edge is traversed if field equals value
+ * - contains: Edge is traversed if field contains value
+ * - exists: Edge is traversed if field exists and is truthy
  * - llm: Edge is traversed based on LLM evaluation of a prompt
  */
 const edgeConditionSchema = z
   .object({
     /** Type of condition evaluation */
-    type: z.enum(['always', 'expression', 'llm']).optional().default('always'),
+    type: z
+      .enum(['always', 'never', 'expression', 'equals', 'contains', 'exists', 'llm'])
+      .optional()
+      .default('always'),
 
     /**
-     * JSONPath expression for 'expression' type conditions
-     * Example: "$.output.sentiment == 'positive'"
+     * Expression for 'expression' type conditions
+     * Example: "result.success === true"
      */
     expression: z.string().optional(),
+
+    /**
+     * Field path for 'equals', 'contains', 'exists' type conditions
+     * Example: "result.branch" or "data.status"
+     */
+    field: z.string().optional(),
+
+    /**
+     * Value to compare against for 'equals' and 'contains' conditions
+     */
+    value: z.union([z.string(), z.number(), z.boolean()]).optional(),
 
     /**
      * Prompt for LLM-based routing decisions
@@ -274,7 +303,22 @@ const workflowGlobalConfigSchema = z
      * Maximum number of nodes allowed in this workflow
      * Default: 20, Maximum: 50
      */
-    maxNodes: z.number().int().min(2).max(50).optional().default(20)
+    maxNodes: z.number().int().min(2).max(50).optional().default(20),
+
+    /**
+     * Maximum times any single node can be executed (for cycles/loops)
+     * Used to prevent infinite loops in workflows with intentional cycles.
+     * Default: 10, Maximum: 100
+     */
+    maxIterations: z.number().int().min(1).max(100).optional().default(10),
+
+    /**
+     * Whether to allow cycles/loops in the workflow graph
+     * When true (default), workflows can contain intentional cycles for revision loops
+     * and iterative patterns. The maxIterations config protects against infinite loops.
+     * When false, strict DAG validation is enforced and cycles are rejected at start.
+     */
+    allowCycles: z.boolean().optional().default(true)
   })
   .optional();
 

@@ -29,22 +29,41 @@ Add a comprehensive agentic workflow system to iHub Apps that enables multi-step
 | configCache Extension | ✅ Done | `server/configCache.js`, `server/workflowsLoader.js` |
 | Server Integration | ✅ Done | `server/server.js` |
 
-### Phase 2: Execution Features - 🔜 NEXT
+### Phase 2: UI, Session Recovery & Human Checkpoints - ✅ COMPLETE
+
+| Component | Status | Files |
+|-----------|--------|-------|
+| ExecutionRegistry | ✅ Done | `server/services/workflow/ExecutionRegistry.js` |
+| HumanNodeExecutor | ✅ Done | `server/services/workflow/executors/HumanNodeExecutor.js` |
+| My Executions API | ✅ Done | `GET /api/workflows/my-executions` |
+| Checkpoint Respond API | ✅ Done | `POST /api/workflows/executions/:id/respond` |
+| WorkflowsPage | ✅ Done | `client/src/features/workflows/pages/WorkflowsPage.jsx` |
+| WorkflowListTab | ✅ Done | `client/src/features/workflows/pages/WorkflowListTab.jsx` |
+| MyExecutionsTab | ✅ Done | `client/src/features/workflows/pages/MyExecutionsTab.jsx` |
+| WorkflowExecutionPage | ✅ Done | `client/src/features/workflows/pages/WorkflowExecutionPage.jsx` |
+| HumanCheckpoint Component | ✅ Done | `client/src/features/workflows/components/HumanCheckpoint.jsx` |
+| StartWorkflowModal | ✅ Done | `client/src/features/workflows/components/StartWorkflowModal.jsx` |
+| useWorkflowExecution Hook | ✅ Done | `client/src/features/workflows/hooks/useWorkflowExecution.js` |
+| useMyExecutions Hook | ✅ Done | `client/src/features/workflows/hooks/useMyExecutions.js` |
+| useWorkflowList Hook | ✅ Done | `client/src/features/workflows/hooks/useWorkflowList.js` |
+| Header Navigation | ✅ Done | `contents/config/ui.json` |
+| Example Approval Workflow | ✅ Done | `contents/workflows/approval-workflow.json` |
+
+### Phase 3: Advanced Execution Features - 🔜 NEXT
 
 | Component | Status | Priority |
 |-----------|--------|----------|
 | Parallel/Join Nodes | 🔜 Planned | High |
-| Human Checkpoint Node | 🔜 Planned | High |
 | LLM-based Routing | 🔜 Planned | Medium |
 | Configurable Error Handling | ⚠️ Partial | Medium |
 
-### Phase 3-5: Future
+### Phase 4-6: Future
 
 | Phase | Components | Status |
 |-------|------------|--------|
-| Phase 3 | Memory System, Cost Tracking, Execution Replay | 🔜 Planned |
-| Phase 4 | Visual Editor (React Flow), NL Generation | 🔜 Planned |
-| Phase 5 | Subworkflows, Dynamic Branching, Sandboxing | 🔜 Planned |
+| Phase 4 | Memory System, Cost Tracking, Execution Replay | 🔜 Planned |
+| Phase 5 | Visual Editor (React Flow), NL Generation | 🔜 Planned |
+| Phase 6 | Subworkflows, Dynamic Branching, Sandboxing | 🔜 Planned |
 
 ---
 
@@ -314,8 +333,10 @@ curl -X POST http://localhost:3001/api/workflows/decision-test/execute \
 | **Collaboration** | Sequential, parallel, supervisor patterns | Sequential ✅, Parallel 🔜 |
 | **Integration** | Unified with existing app/tool infrastructure | ✅ Done |
 | **Error Handling** | Configurable (fail fast, retry, LLM-recovery) | Fail/Retry ✅, LLM 🔜 |
-| **Human-in-Loop** | No intervention → approval gates → real-time | None ✅, Gates 🔜 |
+| **Human-in-Loop** | No intervention → approval gates → real-time | ✅ Approval Gates Done |
 | **Execution** | Hybrid (server + sandbox + external APIs) | Server ✅, Sandbox 🔜 |
+| **Client UI** | Workflow list, execution view, session recovery | ✅ Done (Phase 2) |
+| **Session Recovery** | Reconnect to running/paused workflows | ✅ Done (Phase 2) |
 
 ---
 
@@ -325,17 +346,21 @@ curl -X POST http://localhost:3001/api/workflows/decision-test/execute \
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
-│                        Client (React)                           │
+│                     Client (React) - Phase 2 ✅                  │
 │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
-│  │Visual Editor │  │ Execution UI │  │ NL Workflow Generator│  │
-│  │    🔜        │  │     🔜       │  │         🔜           │  │
+│  │WorkflowsPage │  │ExecutionPage │  │ HumanCheckpoint      │  │
+│  │      ✅      │  │     ✅       │  │         ✅           │  │
+│  └──────────────┘  └──────────────┘  └──────────────────────┘  │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │Visual Editor │  │ StartModal   │  │ NL Workflow Generator│  │
+│  │    🔜        │  │     ✅       │  │         🔜           │  │
 │  └──────────────┘  └──────────────┘  └──────────────────────┘  │
 └─────────────────────────────────────────────────────────────────┘
                               │ REST/SSE
                               ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                     Workflow API Layer ✅                        │
-│  /api/workflows, /api/workflows/:id/execute, /stream            │
+│  /api/workflows, /execute, /stream, /my-executions, /respond    │
 └─────────────────────────────────────────────────────────────────┘
                               │
         ┌─────────────────────┼─────────────────────┐
@@ -344,6 +369,14 @@ curl -X POST http://localhost:3001/api/workflows/decision-test/execute \
 │WorkflowEngine│◄──►│ StateManager │◄──►│  CheckpointStorage   │
 │      ✅      │    │      ✅      │    │         ✅           │
 └──────────────┘    └──────────────┘    └──────────────────────┘
+        │                                        ▲
+        │                                        │
+        ├──────────────────────────────┬─────────┘
+        ▼                              ▼
+┌──────────────────┐    ┌──────────────────────────┐
+│ExecutionRegistry │    │    HumanNodeExecutor     │
+│    ✅ (Phase 2)  │    │       ✅ (Phase 2)       │
+└──────────────────┘    └──────────────────────────┘
         │
         ├─────────────────┬─────────────────┬─────────────────┐
         ▼                 ▼                 ▼                 ▼
@@ -372,6 +405,7 @@ server/
 │       ├── WorkflowEngine.js      ✅ (911 lines)
 │       ├── StateManager.js        ✅ (561 lines)
 │       ├── DAGScheduler.js        ✅ (701 lines)
+│       ├── ExecutionRegistry.js   ✅ (Phase 2)
 │       ├── index.js               ✅
 │       └── executors/
 │           ├── index.js           ✅
@@ -380,23 +414,45 @@ server/
 │           ├── EndNodeExecutor.js     ✅ (227 lines)
 │           ├── AgentNodeExecutor.js   ✅ (590 lines)
 │           ├── ToolNodeExecutor.js    ✅ (266 lines)
-│           └── DecisionNodeExecutor.js ✅ (438 lines)
+│           ├── DecisionNodeExecutor.js ✅ (438 lines)
+│           └── HumanNodeExecutor.js   ✅ (Phase 2)
 ├── routes/
 │   └── workflow/
 │       ├── index.js               ✅
-│       └── workflowRoutes.js      ✅ (1,292 lines)
+│       └── workflowRoutes.js      ✅ (extended with Phase 2 endpoints)
 ├── validators/
 │   └── workflowConfigSchema.js    ✅ (440 lines)
 ├── workflowsLoader.js             ✅ (51 lines)
 ├── configCache.js                 ✅ (extended)
 └── server.js                      ✅ (routes registered)
 
+client/src/features/workflows/
+├── pages/
+│   ├── WorkflowsPage.jsx          ✅ (Phase 2) - Main page with tabs
+│   ├── WorkflowListTab.jsx        ✅ (Phase 2) - Available workflows grid
+│   ├── MyExecutionsTab.jsx        ✅ (Phase 2) - User's executions list
+│   └── WorkflowExecutionPage.jsx  ✅ (Phase 2) - Single execution view
+├── components/
+│   ├── WorkflowCard.jsx           ✅ (Phase 2) - Workflow definition card
+│   ├── ExecutionCard.jsx          ✅ (Phase 2) - Execution status card
+│   ├── ExecutionProgress.jsx      ✅ (Phase 2) - Timeline visualization
+│   ├── HumanCheckpoint.jsx        ✅ (Phase 2) - Approval/input UI
+│   └── StartWorkflowModal.jsx     ✅ (Phase 2) - Configure and start
+├── hooks/
+│   ├── useWorkflowList.js         ✅ (Phase 2) - Fetch available workflows
+│   ├── useMyExecutions.js         ✅ (Phase 2) - Fetch user's executions
+│   └── useWorkflowExecution.js    ✅ (Phase 2) - SSE + state management
+└── index.js                       ✅ (Phase 2) - Feature exports
+
 contents/
-└── workflows/                     📁 (create your workflows here)
-    └── {id}.json
+├── workflows/                     📁 (create your workflows here)
+│   ├── {id}.json
+│   └── approval-workflow.json     ✅ (Phase 2) - Example with human checkpoint
+└── config/
+    └── ui.json                    ✅ (extended) - Workflows nav link
 ```
 
-**Total: 7,545 lines of new code**
+**Total: ~10,000+ lines of code (Phase 1 + Phase 2)**
 
 ---
 
@@ -413,7 +469,9 @@ contents/
 | GET | `/api/workflows/executions/:id` | ✅ | Get execution state |
 | POST | `/api/workflows/executions/:id/resume` | ✅ | Resume paused workflow |
 | POST | `/api/workflows/executions/:id/cancel` | ✅ | Cancel execution |
+| POST | `/api/workflows/executions/:id/respond` | ✅ | Respond to human checkpoint |
 | GET | `/api/workflows/executions/:id/stream` | ✅ | SSE event stream |
+| GET | `/api/workflows/my-executions` | ✅ | List user's executions |
 | GET | `/api/admin/workflows` | ✅ | List all workflows (admin) |
 | POST | `/api/admin/workflows/:id/toggle` | ✅ | Toggle enabled (admin) |
 
@@ -430,7 +488,7 @@ contents/
 | `decision` | ✅ | Conditional branching | type (expression/switch), expression |
 | `parallel` | 🔜 | Fork execution | dynamicBranches |
 | `join` | 🔜 | Wait for branches | aggregation |
-| `human` | 🔜 | Approval checkpoint | message, options[], timeout |
+| `human` | ✅ | Approval checkpoint | message, options[], inputSchema, showData |
 | `transform` | 🔜 | Data manipulation | expression |
 | `memory` | 🔜 | Read/write memory | scope, key, operation |
 
@@ -438,24 +496,24 @@ contents/
 
 ## Next Steps
 
-### Immediate (Phase 2)
+### Immediate (Phase 3)
 
 1. **Parallel/Join Nodes** - Enable concurrent execution of independent branches
-2. **Human Checkpoint Node** - Pause workflow for user approval
-3. **Client UI** - Basic workflow list and execution viewer
-4. **Integration Tests** - End-to-end test suite
+2. **Integration Tests** - End-to-end test suite for workflow system
+3. **Timeout Handling** - Configurable timeouts for human checkpoints
+4. **Workflow Templates** - Pre-built workflow patterns
 
-### Short-term (Phase 3)
+### Short-term (Phase 4)
 
 1. **Memory System** - Short-term, session, and long-term memory
 2. **Cost Tracking** - Token counting per node
 3. **Execution Replay** - Debug and audit workflow runs
 
-### Medium-term (Phase 4)
+### Medium-term (Phase 5)
 
 1. **Visual Editor** - React Flow-based drag-and-drop editor
 2. **NL Generation** - Natural language to workflow conversion
-3. **Workflow Templates** - Pre-built workflow patterns
+3. **Subworkflows** - Nested workflow execution
 
 ---
 
@@ -467,6 +525,95 @@ contents/
 | **Visual Editor** | Minimal in MVP | Simple node/edge view. Full drag-drop editor later. |
 | **Tool Sandboxing** | Trust existing tools | Existing tools run directly. Add sandboxing for custom tools later. |
 | **Third-party libs** | None | Build from scratch using LangGraph/CrewAI as reference patterns. |
+| **Execution Visibility** | User only (Phase 2) | Each user sees only their own executions. Simple, private. |
+| **Checkpoint Timeout** | Wait indefinitely (Phase 2) | No timeout by default - workflow blocked until user responds. |
+| **Navigation** | Header link (Phase 2) | 'Workflows' link in main header navigation. |
+| **API URL Patterns** | No /api/ prefix in client | `apiClient` and `buildApiUrl` already include base paths. |
+| **Cycle Support** | Allowed by default | Workflows can contain intentional cycles for revision loops. Per-node iteration limits prevent infinite loops (`maxIterations` config, default 10). |
+
+---
+
+---
+
+## Testing Phase 2 Features
+
+### 1. Access Workflows UI
+
+Navigate to `http://localhost:5173/workflows` to see the Workflows page with two tabs:
+- **Available Workflows** - Shows all workflow definitions you can start
+- **My Executions** - Shows your running, paused, and completed workflows
+
+### 2. Test Human Checkpoint Workflow
+
+The `approval-workflow.json` demonstrates the human checkpoint feature:
+
+**Start the workflow:**
+```bash
+curl -X POST http://localhost:3001/api/workflows/approval-workflow/execute \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"initialData": {"topic": "climate change"}, "options": {}}'
+```
+
+Or use the UI:
+1. Click on "Research with Approval" card
+2. Enter initial data: `{"topic": "AI safety"}`
+3. Click "Start Workflow"
+
+**Workflow Flow:**
+1. **Research** - Agent researches the topic
+2. **Human Checkpoint** - Workflow pauses for your approval
+3. **Decision** - Routes based on your choice (approve/reject/revise)
+4. **Summary** - If approved, creates a summary
+
+### 3. Respond to Human Checkpoint
+
+When the workflow pauses at a human checkpoint:
+
+**Via UI:**
+1. Navigate to "My Executions" tab
+2. Click on the paused execution
+3. Review the research results displayed
+4. Choose an option (Approve, Reject, or Request Revision)
+5. Optionally add feedback
+6. Click Submit
+
+**Via API:**
+```bash
+curl -X POST http://localhost:3001/api/workflows/executions/EXECUTION_ID/respond \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "checkpointId": "CHECKPOINT_ID",
+    "response": "approve",
+    "data": {"feedback": "Looks good!"}
+  }'
+```
+
+### 4. Session Recovery Test
+
+1. Start a workflow that will pause at human checkpoint
+2. Close the browser tab
+3. Reopen the browser and navigate to `/workflows`
+4. Go to "My Executions" tab
+5. The paused workflow should appear - click to rejoin
+6. Complete the human checkpoint
+
+### 5. List User's Executions
+
+```bash
+# Get all your executions
+curl -X GET "http://localhost:3001/api/workflows/my-executions" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# Filter by status
+curl -X GET "http://localhost:3001/api/workflows/my-executions?status=paused" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+
+# With pagination
+curl -X GET "http://localhost:3001/api/workflows/my-executions?limit=10&offset=0" \
+  -H "Authorization: Bearer YOUR_TOKEN"
+```
 
 ---
 

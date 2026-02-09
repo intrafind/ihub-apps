@@ -6,7 +6,10 @@
  * @module routes/workflow
  */
 
-export { default as registerWorkflowRoutes } from './workflowRoutes.js';
+import registerWorkflowRoutes from './workflowRoutes.js';
+
+// Named exports
+export { registerWorkflowRoutes };
 export {
   filterByPermissions,
   isAdmin,
@@ -14,3 +17,6 @@ export {
   findWorkflowFile,
   validateWorkflow
 } from './workflowRoutes.js';
+
+// Default export for compatibility with server.js
+export default registerWorkflowRoutes;

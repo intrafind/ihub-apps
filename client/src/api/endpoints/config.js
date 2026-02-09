@@ -13,3 +13,11 @@ export const fetchUIConfig = async (options = {}) => {
     DEFAULT_CACHE_TTL.LONG
   );
 };
+
+// Platform Configuration (includes features)
+export const fetchPlatformConfig = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.PLATFORM_CONFIG);
+
+  return handleApiResponse(() => apiClient.get('/config'), cacheKey, DEFAULT_CACHE_TTL.LONG);
+};

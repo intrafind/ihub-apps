@@ -16,15 +16,11 @@
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import ChatService from '../../chat/ChatService.js';
-import { createCompletionRequest } from '../../../adapters/index.js';
-import {
-  convertResponseToGeneric,
-  normalizeToolName
-} from '../../../adapters/toolCalling/index.js';
+import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
 import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
-import { createParser } from 'eventsource-parser';
-import { throttledFetch } from '../../../requestThrottler.js';
+import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import { estimateTokens } from '../../../usageTracker.js';
 
 /**
  * Agent node configuration
@@ -77,6 +73,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
   constructor(options = {}) {
     super(options);
     this.chatService = options.chatService || new ChatService();
+    this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
     this.maxIterations = options.maxIterations || 10;
   }
 
@@ -106,8 +103,8 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       // Build messages from config and state
       const messages = this.buildMessages(config, state, context);
 
-      // Get model configuration
-      const model = await this.getModel(config.modelId, context);
+      // Get model configuration (pass state for model override support)
+      const model = await this.getModel(config.modelId, context, state);
       if (!model) {
         return this.createErrorResult(`Model not found: ${config.modelId || 'default'}`, {
           nodeId: node.id
@@ -140,13 +137,35 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         component: 'AgentNodeExecutor',
         message: `Agent node '${node.id}' completed`,
         nodeId: node.id,
-        hasOutput: output !== undefined
+        hasOutput: output !== undefined,
+        model: model.id
       });
 
       // Build state updates
       const stateUpdates = config.outputVariable ? { [config.outputVariable]: output } : undefined;
 
-      return this.createSuccessResult(output, { stateUpdates });
+      // Build result with model info and token usage for UI display
+      const result = this.createSuccessResult(
+        {
+          content: output,
+          model: model.id,
+          modelName: model.name,
+          iterations: response.iterations,
+          tokens: response.tokens
+        },
+        { stateUpdates }
+      );
+
+      // Include tokens at result level for metrics aggregation
+      result.tokens = response.tokens;
+
+      // Add outputVariable to result for UI display
+      if (config.outputVariable) {
+        result.outputVariable = config.outputVariable;
+        result.output = output; // Store the actual output value directly
+      }
+
+      return result;
     } catch (error) {
       this.logger.error({
         component: 'AgentNodeExecutor',
@@ -168,16 +187,18 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
    *
    * @param {Object} config - Agent configuration
    * @param {Object} state - Workflow state
-   * @param {Object} _context - Execution context (reserved for future use)
+   * @param {Object} context - Execution context
    * @returns {Array<Object>} Array of message objects
    * @private
    */
-  buildMessages(config, state, _context) {
+  buildMessages(config, state, context) {
     const messages = [];
+    const language = context?.language || 'en';
 
     // Add system message if configured
     if (config.system) {
-      const systemContent = this.resolveVariables(config.system, state);
+      const systemTemplate = this.getLocalizedValue(config.system, language);
+      const systemContent = this.resolveTemplateVariables(systemTemplate, state);
       messages.push({
         role: 'system',
         content: systemContent
@@ -192,7 +213,8 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     // Build user message from prompt or state input
     let userContent;
     if (config.prompt) {
-      userContent = this.resolveVariables(config.prompt, state);
+      const promptTemplate = this.getLocalizedValue(config.prompt, language);
+      userContent = this.resolveTemplateVariables(promptTemplate, state);
     } else if (state.data?.input) {
       userContent = state.data.input;
     } else if (state.data?.message) {
@@ -210,28 +232,323 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
+   * Get localized value from a string or localized object.
+   *
+   * @param {string|Object} value - String or {en: "...", de: "..."} object
+   * @param {string} language - Language code
+   * @returns {string} Localized string value
+   * @private
+   */
+  getLocalizedValue(value, language) {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'object' && value !== null) {
+      return value[language] || value['en'] || Object.values(value)[0] || '';
+    }
+    return String(value || '');
+  }
+
+  /**
+   * Resolve template variables in a string.
+   * Supports multiple syntaxes:
+   * - {{variable}} - Simple Handlebars-style (looks up in state.data)
+   * - {{#if condition}}...{{/if}} - Simple conditional blocks
+   * - {{#each array}}...{{/each}} - Loop over arrays
+   * - {{@index}} - Current loop index (0-based)
+   * - {{this}} and {{this.property}} - Current item reference
+   * - {{#compare val1 "op" val2}}...{{/compare}} - Comparison blocks
+   * - $.path - JSONPath-style (via resolveVariables)
+   * - ${$.path} - Embedded JSONPath-style (via resolveVariables)
+   *
+   * @param {string} template - Template string
+   * @param {Object} state - Workflow state
+   * @returns {string} Resolved template
+   * @private
+   */
+  resolveTemplateVariables(template, state) {
+    if (typeof template !== 'string') {
+      return template;
+    }
+
+    let result = template;
+
+    // Handle {{#each array}}...{{/each}} blocks with proper nesting support
+    // Process from outermost to innermost using balanced matching
+    result = this.processEachBlocks(result, state);
+
+    // Handle {{#compare val1 "op" val2}}...{{/compare}} blocks
+    // Supports operators: <, >, <=, >=, ==, !=
+    result = result.replace(
+      /\{\{#compare\s+([^\s"]+)\s+"([^"]+)"\s+([^\s}]+)\s*\}\}([\s\S]*?)\{\{\/compare\}\}/g,
+      (match, left, operator, right, content) => {
+        // Resolve left value - could be a variable path or literal
+        let leftVal = this.getNestedValue(left.trim(), state.data || {});
+        if (leftVal === undefined) {
+          // Treat as literal if not found in state
+          leftVal = left.trim();
+        }
+
+        // Resolve right value - could be a variable path or literal
+        let rightVal = this.getNestedValue(right.trim(), state.data || {});
+        if (rightVal === undefined) {
+          // Treat as literal if not found in state
+          rightVal = right.trim();
+        }
+
+        let comparisonResult = false;
+
+        switch (operator) {
+          case '<':
+            comparisonResult = Number(leftVal) < Number(rightVal);
+            break;
+          case '>':
+            comparisonResult = Number(leftVal) > Number(rightVal);
+            break;
+          case '<=':
+            comparisonResult = Number(leftVal) <= Number(rightVal);
+            break;
+          case '>=':
+            comparisonResult = Number(leftVal) >= Number(rightVal);
+            break;
+          case '==':
+            comparisonResult = leftVal == rightVal;
+            break;
+          case '===':
+            comparisonResult = leftVal === rightVal;
+            break;
+          case '!=':
+            comparisonResult = leftVal != rightVal;
+            break;
+          case '!==':
+            comparisonResult = leftVal !== rightVal;
+            break;
+          default:
+            this.logger.warn({
+              component: 'AgentNodeExecutor',
+              message: `Unknown comparison operator: ${operator}`
+            });
+        }
+
+        return comparisonResult ? this.resolveTemplateVariables(content, state) : '';
+      }
+    );
+
+    // Handle {{#if condition}}...{{/if}} blocks
+    result = result.replace(
+      /\{\{#if\s+([^}]+)\}\}([\s\S]*?)\{\{\/if\}\}/g,
+      (match, condition, content) => {
+        // Resolve the condition variable
+        const conditionValue = this.getNestedValue(condition.trim(), state.data || {});
+        if (conditionValue) {
+          // Recursively resolve variables in the content
+          return this.resolveTemplateVariables(content, state);
+        }
+        return '';
+      }
+    );
+
+    // Handle simple {{variable}} or {{path.to.value}} substitution
+    // Exclude @index and this which are handled in each loops
+    result = result.replace(/\{\{([^#/@}][^}]*)\}\}/g, (match, variable) => {
+      const trimmed = variable.trim();
+
+      // Skip 'this' references outside of each loops (they should be empty)
+      if (trimmed === 'this' || trimmed.startsWith('this.')) {
+        return '';
+      }
+
+      const value = this.getNestedValue(trimmed, state.data || {});
+      if (value !== undefined && value !== null) {
+        // Convert objects to JSON string to avoid [object Object]
+        if (typeof value === 'object') {
+          return JSON.stringify(value);
+        }
+        return String(value);
+      }
+      return ''; // Remove unresolved variables
+    });
+
+    // Finally, handle $.path syntax via existing resolveVariables
+    result = this.resolveVariables(result, state);
+
+    return result;
+  }
+
+  /**
+   * Get a nested value from an object using dot notation.
+   *
+   * @param {string} path - Dot-notation path like "user.name" or "items.0.id"
+   * @param {Object} obj - Object to search
+   * @returns {*} Value at path or undefined
+   * @private
+   */
+  getNestedValue(path, obj) {
+    const parts = path.split('.');
+    let current = obj;
+
+    for (const part of parts) {
+      if (current === undefined || current === null) {
+        return undefined;
+      }
+      current = current[part];
+    }
+
+    return current;
+  }
+
+  /**
+   * Process {{#each}}...{{/each}} blocks with proper nesting support.
+   * Uses balanced matching to correctly handle nested loops.
+   *
+   * @param {string} template - Template string to process
+   * @param {Object} state - Workflow state
+   * @returns {string} Processed template
+   * @private
+   */
+  processEachBlocks(template, state) {
+    let result = template;
+    let iterations = 0;
+    const maxIterations = 20; // Prevent infinite loops
+
+    // Process from outermost to innermost
+    // Find the first {{#each ...}} and its matching {{/each}} with balanced nesting
+    while (iterations < maxIterations) {
+      iterations++;
+
+      const startMatch = result.match(/\{\{#each\s+([^}]+)\}\}/);
+      if (!startMatch) {
+        break; // No more each blocks
+      }
+
+      const startIndex = startMatch.index;
+      const arrayPath = startMatch[1].trim();
+      const afterOpenTag = startIndex + startMatch[0].length;
+
+      // Find the matching closing tag with balanced nesting
+      let depth = 1;
+      let searchPos = afterOpenTag;
+      let closingIndex = -1;
+
+      while (depth > 0 && searchPos < result.length) {
+        const nextOpen = result.indexOf('{{#each', searchPos);
+        const nextClose = result.indexOf('{{/each}}', searchPos);
+
+        if (nextClose === -1) {
+          // No closing tag found - malformed template
+          break;
+        }
+
+        if (nextOpen !== -1 && nextOpen < nextClose) {
+          // Found another opening tag before the closing tag
+          depth++;
+          searchPos = nextOpen + 7; // Move past "{{#each"
+        } else {
+          // Found closing tag
+          depth--;
+          if (depth === 0) {
+            closingIndex = nextClose;
+          }
+          searchPos = nextClose + 9; // Move past "{{/each}}"
+        }
+      }
+
+      if (closingIndex === -1) {
+        // Couldn't find matching closing tag
+        this.logger.warn({
+          component: 'AgentNodeExecutor',
+          message: `Unbalanced {{#each}} block for path: ${arrayPath}`
+        });
+        break;
+      }
+
+      // Extract the content between opening and closing tags
+      const content = result.substring(afterOpenTag, closingIndex);
+      const fullMatch = result.substring(startIndex, closingIndex + 9);
+
+      // Get the array to iterate over
+      const array = this.getNestedValue(arrayPath, state.data || {});
+
+      let replacement = '';
+      if (Array.isArray(array) && array.length > 0) {
+        replacement = array
+          .map((item, index) => {
+            let itemContent = content;
+
+            // Replace {{@index}} with current index
+            itemContent = itemContent.replace(/\{\{@index\}\}/g, String(index));
+
+            // Replace {{this.property}} with item.property
+            itemContent = itemContent.replace(/\{\{this\.([^}]+)\}\}/g, (_, prop) => {
+              const propPath = prop.trim();
+              const val = this.getNestedValue(propPath, item);
+              if (val !== undefined && val !== null) {
+                return typeof val === 'object' ? JSON.stringify(val) : String(val);
+              }
+              return '';
+            });
+
+            // Replace {{this}} with JSON of item
+            itemContent = itemContent.replace(/\{\{this\}\}/g, () => {
+              return typeof item === 'object' ? JSON.stringify(item) : String(item);
+            });
+
+            // Recursively process any nested each blocks in this iteration
+            itemContent = this.processEachBlocks(itemContent, state);
+
+            return itemContent;
+          })
+          .join('');
+      }
+
+      // Replace the full match with the processed content
+      result = result.substring(0, startIndex) + replacement + result.substring(closingIndex + 9);
+    }
+
+    return result;
+  }
+
+  /**
    * Get model configuration by ID or use default.
    *
-   * @param {string} modelId - Model ID or null for default
+   * Priority order:
+   * 1. Model specified in node config (config.modelId)
+   * 2. Model override from initial data (_modelOverride)
+   * 3. Model from execution context
+   * 4. Default model
+   *
+   * @param {string} modelId - Model ID from node config or null
    * @param {Object} context - Execution context
+   * @param {Object} state - Current workflow state
    * @returns {Promise<Object|null>} Model configuration or null
    * @private
    */
-  async getModel(modelId, context) {
+  async getModel(modelId, context, state) {
     const { data: models } = configCache.getModels();
     if (!models) {
       return null;
     }
 
+    // 1. Use model from node config if specified
     if (modelId) {
       return models.find(m => m.id === modelId);
     }
 
-    // Use context model or default
+    // 2. Check for model override from initial data (user selection at start)
+    const modelOverride = state?.data?._modelOverride;
+    if (modelOverride) {
+      const overrideModel = models.find(m => m.id === modelOverride);
+      if (overrideModel) {
+        return overrideModel;
+      }
+    }
+
+    // 3. Use context model if available
     if (context.modelId) {
       return models.find(m => m.id === context.modelId);
     }
 
+    // 4. Fall back to default model
     return models.find(m => m.default) || models[0];
   }
 
@@ -278,10 +595,20 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     const maxIterations = config.maxIterations || this.maxIterations;
     const temperature = config.temperature ?? 0.7;
     const maxTokens = config.maxTokens || model.tokenLimit || 4096;
+    const language = context.language || 'en';
 
     let currentMessages = [...messages];
     let iteration = 0;
     let finalContent = '';
+    // Accumulate token usage across iterations
+    const totalTokens = { input: 0, output: 0 };
+
+    // Verify API key using centralized helper
+    const apiKeyResult = await this.llmHelper.verifyApiKey(model, language);
+    if (!apiKeyResult.success) {
+      throw new Error(apiKeyResult.error?.message || 'API key verification failed');
+    }
+    const apiKey = apiKeyResult.apiKey;
 
     while (iteration < maxIterations) {
       iteration++;
@@ -293,25 +620,38 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         messageCount: currentMessages.length
       });
 
-      // Get API key for model
-      const apiKey = await this.getApiKey(model);
-
-      // Create completion request
-      const request = createCompletionRequest(model, currentMessages, apiKey, {
-        temperature,
-        maxTokens,
-        stream: true,
-        tools: tools.length > 0 ? tools : undefined,
-        user: context.user,
-        chatId: context.chatId
+      // Execute the request using the helper (filters invalid options like user, chatId)
+      const response = await this.llmHelper.executeStreamingRequest({
+        model,
+        messages: currentMessages,
+        apiKey,
+        options: {
+          temperature,
+          maxTokens,
+          tools: tools.length > 0 ? tools : undefined
+          // Note: user and chatId are intentionally NOT passed here
+          // They are not valid adapter options and would corrupt provider request bodies
+        },
+        language
       });
-
-      // Execute the request
-      const response = await this.executeStreamingRequest(request, model);
 
       // Accumulate content
       if (response.content) {
         finalContent += response.content;
+      }
+
+      // Accumulate token usage from response (or estimate if not provided)
+      if (response.usage) {
+        totalTokens.input += response.usage.prompt_tokens || response.usage.input_tokens || 0;
+        totalTokens.output += response.usage.completion_tokens || response.usage.output_tokens || 0;
+      } else {
+        // Fallback: estimate tokens when usage data is not provided (streaming responses)
+        // This matches the approach used in StreamingHandler for chat apps
+        const inputText = currentMessages.map(m => m.content || '').join(' ');
+        totalTokens.input += estimateTokens(inputText);
+        if (response.content) {
+          totalTokens.output += estimateTokens(response.content);
+        }
       }
 
       // Check if there are tool calls to process
@@ -347,107 +687,9 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
     return {
       content: finalContent,
-      iterations: iteration
+      iterations: iteration,
+      tokens: totalTokens
     };
-  }
-
-  /**
-   * Execute a streaming LLM request and collect the response.
-   *
-   * @param {Object} request - The request configuration
-   * @param {Object} model - Model configuration
-   * @returns {Promise<Object>} Collected response with content and tool calls
-   * @private
-   */
-  async executeStreamingRequest(request, model) {
-    const response = await throttledFetch(model.id, request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: JSON.stringify(request.body)
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`LLM request failed: ${response.status} - ${errorText}`);
-    }
-
-    // Process streaming response
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    const events = [];
-    const parser = createParser({ onEvent: e => events.push(e) });
-
-    let content = '';
-    const toolCalls = [];
-    let done = false;
-
-    while (!done) {
-      const { value, done: readerDone } = await reader.read();
-      if (readerDone) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      parser.feed(chunk);
-
-      while (events.length > 0) {
-        const evt = events.shift();
-        const result = convertResponseToGeneric(evt.data, model.provider);
-
-        if (result.error) {
-          throw new Error(result.errorMessage || 'Error processing LLM response');
-        }
-
-        // Accumulate content
-        if (result.content?.length > 0) {
-          content += result.content.join('');
-        }
-
-        // Collect tool calls
-        if (result.tool_calls?.length > 0) {
-          this.mergeToolCalls(toolCalls, result.tool_calls);
-        }
-
-        if (result.complete) {
-          done = true;
-          break;
-        }
-      }
-    }
-
-    return { content, toolCalls };
-  }
-
-  /**
-   * Merge streaming tool call chunks into complete tool calls.
-   *
-   * @param {Array} collectedCalls - Array of collected tool calls
-   * @param {Array} newCalls - New tool call chunks
-   * @private
-   */
-  mergeToolCalls(collectedCalls, newCalls) {
-    for (const call of newCalls) {
-      let existing = collectedCalls.find(c => c.index === call.index);
-
-      if (existing) {
-        if (call.id) existing.id = call.id;
-        if (call.type) existing.type = call.type;
-        if (call.function) {
-          if (call.function.name) existing.function.name = call.function.name;
-          if (call.function.arguments) {
-            existing.function.arguments += call.function.arguments;
-          }
-        }
-      } else if (call.index !== undefined) {
-        collectedCalls.push({
-          index: call.index,
-          id: call.id || null,
-          type: call.type || 'function',
-          function: {
-            name: call.function?.name || '',
-            arguments: call.function?.arguments || ''
-          }
-        });
-      }
-    }
   }
 
   /**
@@ -512,31 +754,6 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         })
       };
     }
-  }
-
-  /**
-   * Get API key for a model.
-   *
-   * @param {Object} model - Model configuration
-   * @returns {Promise<string>} API key
-   * @private
-   */
-  async getApiKey(model) {
-    // Check for model-specific API key
-    if (model.apiKeyEnvVar) {
-      return process.env[model.apiKeyEnvVar];
-    }
-
-    // Fall back to provider default
-    const providerKeyMap = {
-      openai: 'OPENAI_API_KEY',
-      anthropic: 'ANTHROPIC_API_KEY',
-      google: 'GOOGLE_API_KEY',
-      mistral: 'MISTRAL_API_KEY'
-    };
-
-    const envVar = providerKeyMap[model.provider];
-    return envVar ? process.env[envVar] : '';
   }
 
   /**

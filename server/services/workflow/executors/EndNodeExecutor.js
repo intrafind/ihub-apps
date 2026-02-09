@@ -17,7 +17,8 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
  * @property {Array<string>} [includeFields] - Specific fields to include in output
  * @property {Array<string>} [excludeFields] - Fields to exclude from output
  * @property {string} [outputFormat] - Output format ('json', 'text', 'raw')
- * @property {string} [statusCode] - Custom status code for the workflow result
+ * @property {string} [status] - Custom workflow status (e.g., 'approved', 'rejected')
+ * @property {string} [statusCode] - Custom status code for the workflow result (deprecated, use status)
  */
 
 /**
@@ -86,9 +87,33 @@ export class EndNodeExecutor extends BaseNodeExecutor {
     } else if (config.excludeFields) {
       // Exclude specific fields from state.data
       output = this.filterFields(state.data || {}, config.excludeFields, 'exclude');
+    } else if (config.outputVariables) {
+      // Use explicitly listed output variables
+      output = {};
+      for (const varName of config.outputVariables) {
+        if (varName in (state.data || {})) {
+          output[varName] = state.data[varName];
+        }
+      }
     } else {
-      // Default: return all state data
-      output = { ...state.data };
+      // Default: return state data excluding internal fields to avoid circular references
+      const internalFields = new Set([
+        'nodeResults',
+        '_nodeIterations',
+        '_workflowDefinition',
+        '_workflow',
+        'pendingCheckpoint',
+        '_pausedAt',
+        '_pauseReason',
+        '_resumedAt'
+      ]);
+
+      output = {};
+      for (const [key, value] of Object.entries(state.data || {})) {
+        if (!internalFields.has(key)) {
+          output[key] = value;
+        }
+      }
     }
 
     // Add node outputs if requested
@@ -111,15 +136,20 @@ export class EndNodeExecutor extends BaseNodeExecutor {
       output = this.formatOutput(output, config.outputFormat);
     }
 
+    // Determine custom workflow status if specified
+    const workflowStatus = config.status || config.statusCode || null;
+
     this.logger.info({
       component: 'EndNodeExecutor',
       message: `End node '${node.id}' completed - workflow finished`,
       nodeId: node.id,
-      outputKeys: typeof output === 'object' ? Object.keys(output) : ['formatted']
+      outputKeys: typeof output === 'object' ? Object.keys(output) : ['formatted'],
+      workflowStatus
     });
 
     return this.createSuccessResult(output, {
-      isTerminal: true
+      isTerminal: true,
+      workflowStatus // Pass custom status to WorkflowEngine
     });
   }
 

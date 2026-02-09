@@ -215,10 +215,22 @@ class GoogleAdapterClass extends BaseAdapter {
             geminiContents.push({ role: geminiRole, parts });
           } else {
             // Regular text message (possibly including file content)
-            geminiContents.push({
-              role: geminiRole,
-              parts: [{ text: textContent }]
-            });
+            // Skip messages with empty/null/undefined content - Google API rejects them
+            // Also ensure content is a string (not an object or other type)
+            const safeTextContent =
+              typeof textContent === 'string' ? textContent : String(textContent || '');
+            if (safeTextContent) {
+              geminiContents.push({
+                role: geminiRole,
+                parts: [{ text: safeTextContent }]
+              });
+            } else {
+              logger.warn({
+                component: 'GoogleAdapter',
+                message: 'Skipping message with empty content',
+                role: message.role
+              });
+            }
           }
         }
       }

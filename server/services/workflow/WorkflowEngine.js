@@ -1,6 +1,8 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DAGScheduler } from './DAGScheduler.js';
 import { StateManager, WorkflowStatus } from './StateManager.js';
+import { getExecutor as getDefaultExecutor } from './executors/index.js';
+import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
 import logger from '../../utils/logger.js';
 
@@ -112,12 +114,24 @@ export class WorkflowEngine {
   }
 
   /**
-   * Gets a registered executor by node type
+   * Gets a registered executor by node type.
+   * First checks custom registered executors, then falls back to default executors.
    * @param {string} nodeType - The node type identifier
    * @returns {Object|null} The executor or null if not registered
    */
   getExecutor(nodeType) {
-    return this.nodeExecutors.get(nodeType) || null;
+    // Check for custom registered executor first
+    const customExecutor = this.nodeExecutors.get(nodeType);
+    if (customExecutor) {
+      return customExecutor;
+    }
+
+    // Fall back to default executor from executors module
+    try {
+      return getDefaultExecutor(nodeType);
+    } catch {
+      return null;
+    }
   }
 
   /**
@@ -155,18 +169,32 @@ export class WorkflowEngine {
       nodeCount: workflowDefinition.nodes?.length || 0
     });
 
-    // 1. Validate workflow has no cycles
+    // 1. Check for cycles (configurable - defaults to allowing cycles)
+    const allowCycles = workflowDefinition.config?.allowCycles !== false;
     const cycleResult = this.scheduler.detectCycles(
       workflowDefinition.nodes || [],
-      workflowDefinition.edges || []
+      workflowDefinition.edges || [],
+      { allowCycles }
     );
 
     if (cycleResult.hasCycle) {
-      const error = new Error(
-        `Workflow contains cycles involving nodes: ${cycleResult.cycleNodes.join(', ')}`
-      );
-      error.code = 'WORKFLOW_CYCLE_DETECTED';
-      throw error;
+      if (allowCycles) {
+        // Cycles are allowed - log for informational purposes
+        logger.info({
+          component: 'WorkflowEngine',
+          message: 'Workflow contains intentional cycles (loops enabled)',
+          executionId,
+          cycleNodes: cycleResult.cycleNodes,
+          maxIterations: workflowDefinition.config?.maxIterations || 10
+        });
+      } else {
+        // Strict DAG mode - reject cycles
+        const error = new Error(
+          `Workflow contains cycles involving nodes: ${cycleResult.cycleNodes.join(', ')}`
+        );
+        error.code = 'WORKFLOW_CYCLE_DETECTED';
+        throw error;
+      }
     }
 
     // 2. Find start node(s)
@@ -238,8 +266,26 @@ export class WorkflowEngine {
         startedAt: new Date().toISOString()
       });
 
+      // Update execution registry
+      const registry = getExecutionRegistry();
+      registry.updateStatus(executionId, WorkflowStatus.RUNNING);
+
       while (iterationCount < MAX_EXECUTION_ITERATIONS) {
         iterationCount++;
+
+        // Emit iteration progress event for debugging
+        this._emitEvent('workflow.iteration', {
+          executionId,
+          iteration: iterationCount,
+          maxIterations: MAX_EXECUTION_ITERATIONS
+        });
+
+        logger.debug({
+          component: 'WorkflowEngine',
+          message: `Workflow iteration ${iterationCount}`,
+          executionId,
+          iteration: iterationCount
+        });
 
         // Check for cancellation
         if (signal.aborted) {
@@ -279,8 +325,13 @@ export class WorkflowEngine {
         // If no nodes to execute, check if workflow is complete
         if (executableNodes.length === 0) {
           if (state.currentNodes.length === 0) {
+            // Get the last completed node to check for custom status
+            const lastNodeId = state.completedNodes?.[state.completedNodes.length - 1];
+            const lastNodeResult = state.data?.nodeResults?.[lastNodeId];
+            const customStatus = lastNodeResult?.workflowStatus || null;
+
             // Workflow complete
-            await this._completeWorkflow(executionId, state);
+            await this._completeWorkflow(executionId, state, customStatus);
           } else {
             // Nodes are blocked (shouldn't happen in valid workflow)
             logger.warn({
@@ -311,6 +362,50 @@ export class WorkflowEngine {
 
           try {
             const result = await this.executeNode(node, workflow, executionId, options);
+
+            // Check if the node returned a paused status (e.g., human checkpoint)
+            if (result && result.status === 'paused') {
+              logger.info({
+                component: 'WorkflowEngine',
+                message: 'Workflow paused by node',
+                executionId,
+                nodeId,
+                pauseReason: result.pauseReason || 'node_requested_pause'
+              });
+
+              // Update state to paused with checkpoint info
+              await this.stateManager.update(executionId, {
+                status: WorkflowStatus.PAUSED,
+                data: {
+                  ...result.stateUpdates,
+                  _pausedAt: nodeId,
+                  _pauseReason: result.pauseReason
+                }
+              });
+
+              // Update execution registry with paused status and checkpoint
+              const registry = getExecutionRegistry();
+              registry.updateStatus(executionId, WorkflowStatus.PAUSED, {
+                currentNode: nodeId,
+                pendingCheckpoint: result.checkpoint
+              });
+
+              // Emit pause event
+              this._emitEvent('workflow.paused', {
+                executionId,
+                nodeId,
+                reason: result.pauseReason,
+                checkpoint: result.checkpoint
+              });
+
+              // Checkpoint the paused state
+              if (options.checkpointOnNode) {
+                await this.stateManager.checkpoint(executionId, `paused_at_${nodeId}`);
+              }
+
+              // Exit the execution loop - workflow will resume when user responds
+              return;
+            }
 
             // Determine next nodes based on result
             const currentState = await this.stateManager.get(executionId);
@@ -457,24 +552,69 @@ export class WorkflowEngine {
     // 4. Get current state for context
     const state = await this.stateManager.get(executionId);
 
-    // 5. Build execution context
+    // 5. Track node iteration count (for cycle/loop protection)
+    const nodeIterations = state.data?._nodeIterations || {};
+    const currentIteration = (nodeIterations[nodeId] || 0) + 1;
+    const maxIterations = workflow.config?.maxIterations || 10;
+
+    if (currentIteration > maxIterations) {
+      const error = new Error(
+        `Node '${nodeId}' exceeded maximum iterations (${maxIterations}). ` +
+          `This may indicate an infinite loop in your workflow.`
+      );
+      error.code = 'MAX_NODE_ITERATIONS_EXCEEDED';
+      error.nodeId = nodeId;
+      error.iterations = currentIteration;
+      error.maxIterations = maxIterations;
+      throw error;
+    }
+
+    // Update iteration count in state
+    await this.stateManager.update(executionId, {
+      data: {
+        ...state.data,
+        _nodeIterations: {
+          ...nodeIterations,
+          [nodeId]: currentIteration
+        }
+      }
+    });
+
+    // Re-fetch state after update for accurate context
+    const updatedState = await this.stateManager.get(executionId);
+
+    if (currentIteration > 1) {
+      logger.info({
+        component: 'WorkflowEngine',
+        message: 'Node executing in loop iteration',
+        executionId,
+        nodeId,
+        iteration: currentIteration,
+        maxIterations
+      });
+    }
+
+    // 6. Build execution context
     const context = {
       executionId,
       nodeId,
       workflow,
-      data: state.data,
-      nodeResults: state.data.nodeResults || {},
+      initialData: updatedState.data, // Initial data stored in state.data
+      nodeResults: updatedState.data?.nodeResults || {},
+      iteration: currentIteration, // Current iteration count for this node
       user: options.user,
+      language: options.language || 'en',
       abortSignal: this.abortControllers.get(executionId)?.signal
     };
 
-    // 6. Execute with timeout
+    // 7. Execute with timeout and timing
     const timeout = options.timeout || node.timeout || this.defaultTimeout;
     let result;
+    const startTime = Date.now();
 
     try {
       result = await this._executeWithTimeout(
-        () => executor.execute(node, context),
+        () => executor.execute(node, updatedState, context),
         timeout,
         `Node ${nodeId} execution timed out after ${timeout}ms`
       );
@@ -483,24 +623,49 @@ export class WorkflowEngine {
       throw error;
     }
 
-    // 7. Update state with result
-    await this.stateManager.markNodeCompleted(executionId, nodeId, result);
+    // Capture execution duration and add metrics to result
+    const duration = Date.now() - startTime;
+    if (result && typeof result === 'object') {
+      result.metrics = {
+        duration,
+        startTime: new Date(startTime).toISOString(),
+        tokens: result.tokens || null
+      };
+    }
 
-    // 8. Add step to history
+    // 8. Check if the executor returned a failed result
+    if (result && result.status === 'failed') {
+      // Convert the failed result into an error for proper handling
+      const error = new Error(result.error || 'Node execution failed');
+      error.code = result.code || 'NODE_EXECUTION_FAILED';
+      error.nodeId = nodeId;
+      error.details = result;
+      throw error;
+    }
+
+    // 9. Update state with result (only for successful executions)
+    // Include iteration in result so StateManager can store with iteration key
+    const resultWithIteration = result
+      ? { ...result, iteration: currentIteration }
+      : { iteration: currentIteration };
+    await this.stateManager.markNodeCompleted(executionId, nodeId, resultWithIteration);
+
+    // 10. Add step to history
     await this.stateManager.addStep(executionId, {
       nodeId,
       type: 'node_complete',
       data: {
         resultType: typeof result,
-        hasOutput: result !== null && result !== undefined
+        hasOutput: result !== null && result !== undefined,
+        iteration: currentIteration
       }
     });
 
-    // 9. Emit node complete event
+    // 11. Emit node complete event (include iteration for UI to track per-iteration results)
     this._emitEvent('workflow.node.complete', {
       executionId,
       nodeId,
-      result: this._sanitizeForEvent(result)
+      result: this._sanitizeForEvent(resultWithIteration)
     });
 
     logger.info({
@@ -566,6 +731,10 @@ export class WorkflowEngine {
         completedAt: new Date().toISOString()
       });
 
+      // Update execution registry
+      const registry = getExecutionRegistry();
+      registry.updateStatus(executionId, WorkflowStatus.FAILED);
+
       this._emitEvent('workflow.failed', {
         executionId,
         error: {
@@ -581,27 +750,53 @@ export class WorkflowEngine {
    * Completes a workflow execution
    * @param {string} executionId - The execution identifier
    * @param {Object} state - Current execution state
+   * @param {string} [customStatus] - Custom status from end node (e.g., 'approved', 'rejected')
    * @private
    */
-  async _completeWorkflow(executionId, state) {
+  async _completeWorkflow(executionId, state, customStatus = null) {
+    // Use custom status if provided, otherwise default to COMPLETED
+    const finalStatus = customStatus || WorkflowStatus.COMPLETED;
+
     logger.info({
       component: 'WorkflowEngine',
       message: 'Workflow execution completed',
       executionId,
-      completedNodes: state.completedNodes.length
+      completedNodes: state.completedNodes.length,
+      finalStatus
     });
 
     await this.stateManager.update(executionId, {
-      status: WorkflowStatus.COMPLETED,
+      status: finalStatus,
       completedAt: new Date().toISOString()
     });
 
-    // Extract output from last node result
+    // Update execution registry
+    const registry = getExecutionRegistry();
+    registry.updateStatus(executionId, finalStatus);
+
+    // Extract output from state.data using end node's outputVariables config
+    const workflow = state.data._workflowDefinition;
     const lastNodeId = state.completedNodes[state.completedNodes.length - 1];
-    const output = state.data.nodeResults?.[lastNodeId];
+    const endNode = workflow?.nodes?.find(n => n.id === lastNodeId);
+    const outputVars = endNode?.config?.outputVariables;
+
+    let output;
+    if (outputVars && Array.isArray(outputVars)) {
+      // Build output from state.data using the end node's outputVariables
+      output = {};
+      for (const varName of outputVars) {
+        if (state.data[varName] !== undefined) {
+          output[varName] = state.data[varName];
+        }
+      }
+    } else {
+      // Fallback to legacy behavior for backwards compatibility
+      output = state.data.nodeResults?.[lastNodeId];
+    }
 
     this._emitEvent('workflow.complete', {
       executionId,
+      status: finalStatus,
       output: this._sanitizeForEvent(output)
     });
   }
@@ -644,11 +839,10 @@ export class WorkflowEngine {
       currentNodes: state.currentNodes
     });
 
-    // Merge resume data into state
+    // Merge resume data into state (stateManager.update uses deep merge internally)
     await this.stateManager.update(executionId, {
       status: WorkflowStatus.RUNNING,
       data: {
-        ...state.data,
         ...resumeData,
         _resumedAt: new Date().toISOString()
       }
@@ -780,6 +974,10 @@ export class WorkflowEngine {
       completedAt: new Date().toISOString()
     });
 
+    // Update execution registry
+    const registry = getExecutionRegistry();
+    registry.updateStatus(executionId, WorkflowStatus.CANCELLED);
+
     // Record cancellation reason
     await this.stateManager.addStep(executionId, {
       nodeId: null,
@@ -866,7 +1064,7 @@ export class WorkflowEngine {
   }
 
   /**
-   * Sanitizes a value for inclusion in events (removes large data)
+   * Sanitizes a value for inclusion in events (removes large data but preserves metadata)
    * @param {*} value - The value to sanitize
    * @returns {*} Sanitized value
    * @private
@@ -879,8 +1077,55 @@ export class WorkflowEngine {
     // Convert to JSON to check size
     try {
       const json = JSON.stringify(value);
-      if (json.length > 1024) {
-        // Truncate large values
+      if (json.length > 2048) {
+        // For workflow results, preserve important metadata even when truncating
+        if (typeof value === 'object' && value !== null) {
+          const sanitized = {
+            _truncated: true,
+            _type: typeof value,
+            _size: json.length
+          };
+
+          // Preserve workflow-relevant metadata
+          const preserveKeys = [
+            'status',
+            'branch',
+            'outputVariable',
+            'model',
+            'modelName',
+            'stateUpdates',
+            'isTerminal',
+            'workflowStatus',
+            'metrics', // Duration and timing
+            'tokens', // Token usage
+            'iterations' // LLM iteration count
+          ];
+
+          for (const key of preserveKeys) {
+            if (key in value) {
+              sanitized[key] = value[key];
+            }
+          }
+
+          // For output, provide a summary
+          if (value.output !== undefined) {
+            if (typeof value.output === 'string') {
+              sanitized.output =
+                value.output.length > 500
+                  ? value.output.substring(0, 500) + '... [truncated]'
+                  : value.output;
+            } else if (typeof value.output === 'object') {
+              // For objects, just show structure
+              const outputJson = JSON.stringify(value.output);
+              sanitized._outputPreview =
+                outputJson.length > 300 ? outputJson.substring(0, 300) + '...' : outputJson;
+            }
+          }
+
+          return sanitized;
+        }
+
+        // Fallback for non-objects
         return {
           _truncated: true,
           _type: typeof value,

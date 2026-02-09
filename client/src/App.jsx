@@ -6,6 +6,11 @@ import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
+// Lazy load workflow components
+const WorkflowsPage = React.lazy(() => import('./features/workflows/pages/WorkflowsPage'));
+const WorkflowExecutionPage = React.lazy(
+  () => import('./features/workflows/pages/WorkflowExecutionPage')
+);
 import AppCanvas from './features/canvas/pages/AppCanvas';
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -171,6 +176,15 @@ function App() {
                     {uiConfig?.promptsList?.enabled !== false && (
                       <Route path="prompts" element={<SafePromptsList />} />
                     )}
+                    {/* Workflow routes - feature flag is enforced by server API (returns 403 if disabled) */}
+                    <Route
+                      path="workflows"
+                      element={<LazyAdminRoute component={WorkflowsPage} />}
+                    />
+                    <Route
+                      path="workflows/executions/:executionId"
+                      element={<LazyAdminRoute component={WorkflowExecutionPage} />}
+                    />
                     <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
                     <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
