@@ -45,7 +45,8 @@ export function loadUsers(usersFilePath) {
 
     // Fallback to file system if cache miss or invalid data
     logger.warn(
-      `[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`
+      `[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`,
+      { component: 'Utils' }
     );
 
     const fullPath = path.isAbsolute(usersFilePath)
@@ -54,7 +55,9 @@ export function loadUsers(usersFilePath) {
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
-      logger.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`);
+      logger.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`, {
+        component: 'Utils'
+      });
       const emptyConfig = {
         users: {},
         metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() }
@@ -89,8 +92,11 @@ export function loadUsers(usersFilePath) {
 
     return usersConfig;
   } catch (error) {
-    logger.error(`[ERROR] Could not load users configuration:`, error.message);
-    logger.error(`[ERROR] Stack trace:`, error.stack);
+    logger.error(`[ERROR] Could not load users configuration:`, {
+      component: 'Utils',
+      message: error.message
+    });
+    logger.error(`[ERROR] Stack trace:`, { component: 'Utils', stack: error.stack });
 
     // Return safe empty structure as last resort
     const safeConfig = {
@@ -98,7 +104,7 @@ export function loadUsers(usersFilePath) {
       metadata: { version: '2.0.0', lastUpdated: new Date().toISOString(), error: error.message }
     };
 
-    logger.warn(`[WARN] Returning safe empty users structure due to error`);
+    logger.warn(`[WARN] Returning safe empty users structure due to error`, { component: 'Utils' });
     return safeConfig;
   }
 }
@@ -139,7 +145,10 @@ export async function saveUsers(usersConfig, usersFilePath) {
 
     configCache.setCacheEntry(cacheKey, usersConfig);
   } catch (error) {
-    logger.error('Could not save users configuration:', error.message);
+    logger.error('Could not save users configuration:', {
+      component: 'Utils',
+      message: error.message
+    });
     throw error;
   }
 }

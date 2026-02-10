@@ -38,7 +38,7 @@ class SourceDependencyTracker {
 
       return usedBy;
     } catch (error) {
-      logger.error('Error getting source usage:', error);
+      logger.error('Error getting source usage:', { component: 'Utils', error });
       return [];
     }
   }
@@ -212,7 +212,7 @@ class SourceDependencyTracker {
 
       return dependencies;
     } catch (error) {
-      logger.error('Error getting all source dependencies:', error);
+      logger.error('Error getting all source dependencies:', { component: 'Utils', error });
       return {};
     }
   }
@@ -270,7 +270,7 @@ class SourceDependencyTracker {
 
       return stats;
     } catch (error) {
-      logger.error('Error getting usage statistics:', error);
+      logger.error('Error getting usage statistics:', { component: 'Utils', error });
       return {};
     }
   }
@@ -325,7 +325,7 @@ class SourceDependencyTracker {
 
       return orphaned;
     } catch (error) {
-      logger.error('Error finding orphaned sources:', error);
+      logger.error('Error finding orphaned sources:', { component: 'Utils', error });
       return [];
     }
   }

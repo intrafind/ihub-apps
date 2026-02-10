@@ -73,7 +73,8 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
       // Skip users whose authentication method is disabled (they can't login)
       if (!isUserAuthMethodEnabled(user, platform)) {
         logger.debug(
-          `[AdminRescue] Skipping user ${user.username} (${userId}) - auth method disabled`
+          `[AdminRescue] Skipping user ${user.username} (${userId}) - auth method disabled`,
+          { component: 'Utils' }
         );
         continue;
       }
@@ -87,7 +88,8 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
 
       if (userHasAdminAccess) {
         logger.debug(
-          `[AdminRescue] Found admin user in persisted users: ${user.username} (${userId})`
+          `[AdminRescue] Found admin user in persisted users: ${user.username} (${userId})`,
+          { component: 'Utils' }
         );
         return true;
       }
@@ -108,7 +110,8 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
 
           if (hasAdminGroup) {
             logger.debug(
-              `[AdminRescue] Found admin in LDAP provider default groups: ${ldapProvider.name}`
+              `[AdminRescue] Found admin in LDAP provider default groups: ${ldapProvider.name}`,
+              { component: 'Utils' }
             );
             return true;
           }
@@ -128,16 +131,18 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
         });
 
         if (hasAdminGroup) {
-          logger.debug('[AdminRescue] Found admin in NTLM default groups');
+          logger.debug('[AdminRescue] Found admin in NTLM default groups', { component: 'Utils' });
           return true;
         }
       }
     }
 
-    logger.debug('[AdminRescue] No admin found in any authentication method');
+    logger.debug('[AdminRescue] No admin found in any authentication method', {
+      component: 'Utils'
+    });
     return false;
   } catch (error) {
-    logger.error('[AdminRescue] Error checking for admin:', error);
+    logger.error('[AdminRescue] Error checking for admin:', { component: 'Utils', error });
     // In case of error, assume there's an admin to avoid unintended changes
     return true;
   }
@@ -155,7 +160,7 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
     const users = usersConfig.users || {};
 
     if (!users[userId]) {
-      logger.error(`[AdminRescue] User not found: ${userId}`);
+      logger.error(`[AdminRescue] User not found: ${userId}`, { component: 'Utils' });
       return false;
     }
 
@@ -174,7 +179,9 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
     });
 
     if (hasAdminGroup) {
-      logger.debug(`[AdminRescue] User ${user.username} (${userId}) already has admin access`);
+      logger.debug(`[AdminRescue] User ${user.username} (${userId}) already has admin access`, {
+        component: 'Utils'
+      });
       return false;
     }
 
@@ -187,7 +194,9 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
       });
 
     if (!adminGroupId) {
-      logger.error('[AdminRescue] No admin group found in groups configuration');
+      logger.error('[AdminRescue] No admin group found in groups configuration', {
+        component: 'Utils'
+      });
       return false;
     }
 
