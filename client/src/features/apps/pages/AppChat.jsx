@@ -353,6 +353,115 @@ const AppChat = ({ preloadedApp = null }) => {
     }
   }, [app, processing, prefillMessage, searchParams, navigate]);
 
+  // Auto-start conversation if app.autoStart is enabled
+  const autoStartTriggered = useRef(false);
+
+  // Reset auto-start trigger when appId or chatId changes
+  useEffect(() => {
+    autoStartTriggered.current = false;
+  }, [appId, chatId.current]);
+
+  useEffect(() => {
+    // Check if we should auto-start the conversation
+    const shouldAutoStart =
+      app?.autoStart === true && // App has autoStart enabled
+      messages.length === 0 && // No messages yet
+      !processing && // Not currently processing
+      !autoStartTriggered.current && // Haven't triggered yet
+      selectedModel && // Model is selected
+      app.variables; // Variables are initialized
+
+    if (shouldAutoStart) {
+      console.log('Auto-starting conversation for app:', appId);
+      autoStartTriggered.current = true;
+
+      // Send an empty message to trigger the LLM
+      // The empty user message will be filtered out in ChatMessageList
+      setTimeout(() => {
+        const params = {
+          modelId: selectedModel,
+          style: selectedStyle,
+          temperature,
+          outputFormat: selectedOutputFormat,
+          language: currentLanguage,
+          ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+          ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+          ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
+          ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+          ...(imageAspectRatio ? { imageAspectRatio } : {}),
+          ...(imageQuality ? { imageQuality } : {})
+        };
+
+        // Prepare validated variables
+        const validatedVariables = {};
+        if (app?.variables && app.variables.length > 0) {
+          app.variables.forEach(varConfig => {
+            const currentValue = variables[varConfig.name];
+            const isEmptyOrWhitespace =
+              currentValue === undefined ||
+              currentValue === null ||
+              (typeof currentValue === 'string' && currentValue.trim() === '');
+
+            if (isEmptyOrWhitespace) {
+              const defaultValue =
+                typeof varConfig.defaultValue === 'object'
+                  ? getLocalizedContent(varConfig.defaultValue, currentLanguage)
+                  : varConfig.defaultValue || '';
+              validatedVariables[varConfig.name] = defaultValue;
+            } else {
+              validatedVariables[varConfig.name] = currentValue;
+            }
+          });
+        }
+
+        // Send empty message to trigger auto-start
+        sendChatMessage({
+          displayMessage: {
+            content: '', // Empty content - will be filtered out in ChatMessageList
+            meta: {
+              rawContent: '',
+              variables:
+                app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined
+            }
+          },
+          apiMessage: {
+            content: '',
+            promptTemplate: app?.prompt || null,
+            variables: { ...validatedVariables },
+            imageData: null,
+            fileData: null
+          },
+          params,
+          sendChatHistory,
+          messageMetadata: {
+            customResponseRenderer: app?.customResponseRenderer,
+            outputFormat: selectedOutputFormat
+          }
+        });
+      }, 300); // Small delay to ensure everything is initialized
+    }
+  }, [
+    app,
+    messages.length,
+    processing,
+    appId,
+    selectedModel,
+    selectedStyle,
+    temperature,
+    selectedOutputFormat,
+    sendChatHistory,
+    currentLanguage,
+    variables,
+    thinkingEnabled,
+    thinkingBudget,
+    thinkingThoughts,
+    enabledTools,
+    imageAspectRatio,
+    imageQuality,
+    sendChatMessage,
+    getLocalizedContent
+  ]);
+
   // Determine which integrations this app uses
   const appIntegrations = useMemo(() => {
     if (!app?.tools) return [];

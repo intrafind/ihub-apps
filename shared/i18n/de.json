@@ -923,6 +923,12 @@
       "sections": {
         "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren"
       }
+    },
+    "apps": {
+      "edit": {
+        "autoStart": "Konversation automatisch starten",
+        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird"
+      }
     }
   },
   "components": {
