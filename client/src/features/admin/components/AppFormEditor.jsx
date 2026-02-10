@@ -1423,6 +1423,105 @@ const AppFormEditor = ({
                           </div>
                         )}
                       </div>
+
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            checked={app.upload?.audioUpload?.enabled || false}
+                            onChange={e =>
+                              handleInputChange('upload', {
+                                ...app.upload,
+                                audioUpload: {
+                                  ...app.upload.audioUpload,
+                                  enabled: e.target.checked
+                                }
+                              })
+                            }
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-2 block text-sm font-medium text-gray-900">
+                            {t('admin.apps.edit.enableAudioUpload', 'Enable Audio Upload')}
+                          </label>
+                        </div>
+                        {app.upload?.audioUpload?.enabled && (
+                          <div className="ml-6 space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700">
+                                {t('admin.apps.edit.maxAudioSize', 'Max Audio File Size (MB)')}
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={app.upload?.audioUpload?.maxFileSizeMB || 20}
+                                onChange={e =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    audioUpload: {
+                                      ...app.upload.audioUpload,
+                                      maxFileSizeMB: parseInt(e.target.value)
+                                    }
+                                  })
+                                }
+                                className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-2">
+                                {t(
+                                  'admin.apps.edit.supportedAudioFormats',
+                                  'Supported Audio Formats'
+                                )}
+                              </label>
+                              <div className="grid grid-cols-2 gap-2">
+                                {[
+                                  { value: 'audio/mpeg', label: 'MP3 (audio/mpeg)' },
+                                  { value: 'audio/mp3', label: 'MP3 (audio/mp3)' },
+                                  { value: 'audio/wav', label: 'WAV' },
+                                  { value: 'audio/flac', label: 'FLAC' },
+                                  { value: 'audio/ogg', label: 'OGG' }
+                                ].map(format => (
+                                  <div key={format.value} className="flex items-center">
+                                    <input
+                                      type="checkbox"
+                                      checked={
+                                        app.upload?.audioUpload?.supportedFormats?.includes(
+                                          format.value
+                                        ) || false
+                                      }
+                                      onChange={e => {
+                                        const currentFormats = app.upload?.audioUpload
+                                          ?.supportedFormats || [
+                                          'audio/mpeg',
+                                          'audio/mp3',
+                                          'audio/wav',
+                                          'audio/flac',
+                                          'audio/ogg'
+                                        ];
+                                        const newFormats = e.target.checked
+                                          ? [...currentFormats, format.value]
+                                          : currentFormats.filter(f => f !== format.value);
+                                        handleInputChange('upload', {
+                                          ...app.upload,
+                                          audioUpload: {
+                                            ...app.upload.audioUpload,
+                                            supportedFormats: newFormats
+                                          }
+                                        });
+                                      }}
+                                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                    />
+                                    <label className="ml-2 block text-xs text-gray-700">
+                                      {format.label}
+                                    </label>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>

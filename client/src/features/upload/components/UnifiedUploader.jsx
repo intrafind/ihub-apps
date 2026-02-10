@@ -351,6 +351,22 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                             className="max-w-full max-h-60 mx-auto"
                           />
                         </div>
+                      ) : item.type === 'audio' ? (
+                        // Audio preview
+                        <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
+                          <div className="flex items-start gap-3">
+                            <Icon
+                              name="musical-note"
+                              className="w-8 h-8 text-purple-500 flex-shrink-0 mt-1"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 truncate">
+                                {item.fileName}
+                              </div>
+                              <div className="text-xs text-gray-500 mb-2">{item.fileType}</div>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         // Document preview
                         <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
@@ -407,6 +423,35 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                   </div>
                   <div className="text-xs text-gray-500 mt-1 text-center">
                     {t('components.uploader.imageSelected', 'Image selected')}
+                  </div>
+                </div>
+              ) : preview.type === 'audio' ? (
+                // Single audio preview
+                <div>
+                  <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
+                    <div className="flex items-start gap-3">
+                      <Icon
+                        name="musical-note"
+                        className="w-8 h-8 text-purple-500 flex-shrink-0 mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 truncate">
+                          {preview.fileName}
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2">{preview.fileType}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClear}
+                        className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
+                        title={t('common.remove', 'Remove file')}
+                      >
+                        <Icon name="x" className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 text-center">
+                    {t('components.uploader.audioSelected', 'Audio file selected')}
                   </div>
                 </div>
               ) : (

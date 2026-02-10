@@ -5,6 +5,7 @@ This document provides instructions for manually testing the audio file upload f
 ## Prerequisites
 
 1. **Google API Key**: Set up a Google API key with Gemini 2.0 access
+
    ```bash
    export GOOGLE_API_KEY="your-api-key-here"
    ```
@@ -25,6 +26,7 @@ This document provides instructions for manually testing the audio file upload f
 ### 1. Basic Audio Upload
 
 **Steps**:
+
 1. Navigate to the Audio Transcription app
 2. Click the upload button (📎)
 3. Select an MP3 or WAV file
@@ -32,6 +34,7 @@ This document provides instructions for manually testing the audio file upload f
 5. Submit the message
 
 **Expected Result**:
+
 - File uploads successfully
 - Audio file indicator (🎵 filename) appears
 - Model transcribes the audio content
@@ -40,10 +43,12 @@ This document provides instructions for manually testing the audio file upload f
 ### 2. Multiple Audio Files
 
 **Steps**:
+
 1. Upload multiple audio files in one message
 2. Submit with prompt: "Transcribe all audio files"
 
 **Expected Result**:
+
 - All files upload successfully
 - Multiple audio indicators appear
 - Model processes all audio files
@@ -52,11 +57,13 @@ This document provides instructions for manually testing the audio file upload f
 ### 3. Audio + Image Upload
 
 **Steps**:
+
 1. Create an app with both image and audio upload enabled
 2. Upload an image and an audio file together
 3. Submit with prompt: "Describe the image and transcribe the audio"
 
 **Expected Result**:
+
 - Both file types upload successfully
 - Both indicators appear (image preview + 🎵 audio)
 - Model processes both files
@@ -65,10 +72,12 @@ This document provides instructions for manually testing the audio file upload f
 ### 4. Speaker Identification
 
 **Steps**:
+
 1. Upload audio with multiple speakers (e.g., conversation, interview)
 2. Use starter prompt: "Identify the speakers"
 
 **Expected Result**:
+
 - Model identifies different speakers
 - Response labels speakers (Speaker 1, Speaker 2, etc.)
 - Transcription includes speaker attribution
@@ -76,10 +85,12 @@ This document provides instructions for manually testing the audio file upload f
 ### 5. Sentiment Analysis
 
 **Steps**:
+
 1. Upload emotional audio (e.g., excited speech, sad narration)
 2. Use starter prompt: "What is the sentiment and tone of this audio?"
 
 **Expected Result**:
+
 - Model analyzes emotional content
 - Response describes sentiment (positive, negative, neutral)
 - Response describes tone (excited, calm, angry, etc.)
@@ -87,10 +98,12 @@ This document provides instructions for manually testing the audio file upload f
 ### 6. Audio Summarization
 
 **Steps**:
+
 1. Upload longer audio (2-5 minutes)
 2. Use starter prompt: "Summarize the main points"
 
 **Expected Result**:
+
 - Model processes full audio
 - Response provides concise summary
 - Key points highlighted
@@ -98,37 +111,48 @@ This document provides instructions for manually testing the audio file upload f
 ### 7. Error Handling Tests
 
 #### File Too Large
+
 **Steps**:
+
 1. Try to upload audio file > 20MB
 
 **Expected Result**:
+
 - Error message: "File too large. Maximum size is 20MB."
 
 #### Unsupported Format
+
 **Steps**:
+
 1. Try to upload non-audio file (e.g., video, document)
 
 **Expected Result**:
+
 - Error message: "Unsupported file format. Please use: MP3, WAV, FLAC, OGG"
 
 #### Wrong Model Selected
+
 **Steps**:
+
 1. Select a non-Gemini 2.0 model (e.g., GPT-4)
 2. Try to upload audio
 
 **Expected Result**:
+
 - Audio upload button disabled or error shown
 - Message: "Audio upload is not supported by the selected model"
 
 ### 8. Resend Functionality
 
 **Steps**:
+
 1. Send message with audio file
 2. Click resend on the message
 3. Optionally edit the prompt
 4. Submit
 
 **Expected Result**:
+
 - Audio file reattached to new message
 - Message sent with same audio
 - Model processes audio again
@@ -174,6 +198,7 @@ Test with different audio qualities to verify transcription accuracy:
 
 **Problem**: Model doesn't respond to audio
 **Solutions**:
+
 - Verify Gemini 2.0 model is selected
 - Check GOOGLE_API_KEY is set correctly
 - Check server logs for API errors
@@ -183,6 +208,7 @@ Test with different audio qualities to verify transcription accuracy:
 
 **Problem**: Transcription has many errors
 **Solutions**:
+
 - Use WAV format instead of MP3
 - Ensure audio is clear with minimal background noise
 - Try shorter clips (under 5 minutes)
@@ -192,6 +218,7 @@ Test with different audio qualities to verify transcription accuracy:
 
 **Problem**: File upload doesn't work
 **Solutions**:
+
 - Check file size (must be under 20MB)
 - Verify file format (MP3, WAV, FLAC, or OGG)
 - Check browser console for errors
@@ -200,6 +227,7 @@ Test with different audio qualities to verify transcription accuracy:
 ## Sample Audio Files
 
 For testing purposes, you can:
+
 1. Record your own audio using a voice recorder app
 2. Use text-to-speech to generate test audio
 3. Download Creative Commons audio from sources like:
@@ -212,6 +240,7 @@ For testing purposes, you can:
 ## Reporting Issues
 
 When reporting issues, include:
+
 1. Browser and version
 2. Audio file format and size
 3. Selected model
@@ -222,6 +251,7 @@ When reporting issues, include:
 ## Success Criteria
 
 ✅ The feature is working correctly if:
+
 - Audio files upload without errors
 - Model successfully processes audio content
 - Transcriptions are accurate and complete
