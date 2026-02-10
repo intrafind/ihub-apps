@@ -176,6 +176,7 @@ export class WorkflowLLMHelper {
 
     let content = '';
     const toolCalls = [];
+    const thoughtSignatures = [];
     let usage = null;
     let done = false;
 
@@ -204,6 +205,11 @@ export class WorkflowLLMHelper {
           this.mergeToolCalls(toolCalls, result.tool_calls);
         }
 
+        // Collect thoughtSignatures (required for Gemini 3 thinking models with tool calling)
+        if (result.thoughtSignatures?.length > 0) {
+          thoughtSignatures.push(...result.thoughtSignatures);
+        }
+
         // Capture usage data (usually in final chunk)
         if (result.usage) {
           usage = result.usage;
@@ -216,7 +222,7 @@ export class WorkflowLLMHelper {
       }
     }
 
-    return { content, toolCalls, usage };
+    return { content, toolCalls, thoughtSignatures, usage };
   }
 
   /**
@@ -241,6 +247,10 @@ export class WorkflowLLMHelper {
             existing.function.arguments += call.function.arguments;
           }
         }
+        // Preserve metadata (critical for Gemini thoughtSignatures)
+        if (call.metadata) {
+          existing.metadata = { ...(existing.metadata || {}), ...call.metadata };
+        }
       } else if (call.index !== undefined) {
         collectedCalls.push({
           index: call.index,
@@ -249,7 +259,8 @@ export class WorkflowLLMHelper {
           function: {
             name: call.function?.name || '',
             arguments: call.function?.arguments || ''
-          }
+          },
+          metadata: call.metadata || undefined
         });
       }
     }

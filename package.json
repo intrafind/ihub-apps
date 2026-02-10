@@ -77,6 +77,7 @@
     "test:api": "jest --config tests/config/jest.config.js tests/integration/api",
     "test:models": "jest --config tests/config/jest.config.js tests/integration/models",
     "test:ui": "jest --config tests/config/jest.config.js tests/unit/client",
+    "test:workflows": "jest --config tests/config/jest.config.js tests/integration/workflows",
     "test:smoke": "npm run test:adapters && npm run health",
     "test:watch": "jest --config tests/config/jest.config.js --watch",
     "test:coverage": "jest --config tests/config/jest.config.js --coverage",

@@ -666,6 +666,10 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         content: response.content || null,
         tool_calls: response.toolCalls
       };
+      // Preserve thoughtSignatures for Gemini 3 thinking models (required for multi-turn tool calling)
+      if (response.thoughtSignatures?.length > 0) {
+        assistantMessage.thoughtSignatures = response.thoughtSignatures;
+      }
       currentMessages.push(assistantMessage);
 
       // Execute each tool call
