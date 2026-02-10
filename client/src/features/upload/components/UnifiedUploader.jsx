@@ -21,6 +21,10 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const imageConfig = config.imageUpload || {};
   const isImageUploadEnabled = imageConfig.enabled !== false && config.imageUploadEnabled !== false;
 
+  // Audio upload configuration
+  const audioConfig = config.audioUpload || {};
+  const isAudioUploadEnabled = audioConfig.enabled !== false && config.audioUploadEnabled !== false;
+
   // File upload configuration
   const fileConfig = config.fileUpload || {};
   const isFileUploadEnabled = fileConfig.enabled !== false && config.fileUploadEnabled !== false;
@@ -31,7 +35,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   // Configuration with defaults
   const MAX_FILE_SIZE_MB =
     config.maxFileSizeMB ||
-    Math.max(imageConfig.maxFileSizeMB || 0, fileConfig.maxFileSizeMB || 0) ||
+    Math.max(
+      imageConfig.maxFileSizeMB || 0,
+      audioConfig.maxFileSizeMB || 0,
+      fileConfig.maxFileSizeMB || 0
+    ) ||
     10;
 
   // Image-specific configuration
@@ -48,20 +56,38 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const RESIZE_IMAGES = imageConfig.resizeImages !== false && config.resizeImages !== false;
   const MAX_DIMENSION = imageConfig.maxResizeDimension || config.maxResizeDimension || 1024;
 
+  // Audio-specific configuration
+  const AUDIO_FORMATS = isAudioUploadEnabled
+    ? audioConfig.supportedFormats ||
+      config.supportedAudioFormats || [
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/wav',
+        'audio/flac',
+        'audio/ogg'
+      ]
+    : [];
+
   // File-specific configuration
   const TEXT_FORMATS = isFileUploadEnabled
     ? fileConfig.supportedFormats || config.supportedFormats || SUPPORTED_TEXT_FORMATS
     : [];
 
   // All supported formats combined - include both MIME types and file extensions for better OS compatibility
-  const ALL_FORMATS = formatAcceptAttribute([...IMAGE_FORMATS, ...TEXT_FORMATS]);
+  const ALL_FORMATS = formatAcceptAttribute([...IMAGE_FORMATS, ...AUDIO_FORMATS, ...TEXT_FORMATS]);
 
   const isImageFile = type => IMAGE_FORMATS.includes(type);
+  const isAudioFile = type => AUDIO_FORMATS.includes(type);
 
   const getFileTypeDisplay = mimeType => {
     // Image types
     if (isImageFile(mimeType)) {
       return mimeType.replace('image/', '').toUpperCase();
+    }
+
+    // Audio types
+    if (isAudioFile(mimeType)) {
+      return mimeType.replace('audio/', '').toUpperCase();
     }
 
     // Use shared utility for document types
@@ -133,10 +159,44 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     });
   };
 
+  const processAudio = file => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = e => {
+        // For audio files, we just need to read the base64 data
+        // No processing or resizing is needed
+        resolve({
+          preview: {
+            type: 'audio',
+            fileName: file.name,
+            fileType: getFileTypeDisplay(file.type),
+            fileSize: file.size
+          },
+          data: {
+            type: 'audio',
+            base64: e.target.result,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type
+          }
+        });
+      };
+
+      reader.onerror = () => reject(new Error('read-error'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processFile = async file => {
     // Check if image files are disabled
     if (!isImageUploadEnabled && IMAGE_FORMATS.some(format => format === file.type)) {
       throw new Error('image-upload-disabled');
+    }
+
+    // Check if audio files are disabled
+    if (!isAudioUploadEnabled && AUDIO_FORMATS.some(format => format === file.type)) {
+      throw new Error('audio-upload-disabled');
     }
 
     // Check if file upload is disabled
@@ -147,6 +207,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     // Handle image files
     if (isImageFile(file.type)) {
       return await processImage(file);
+    }
+
+    // Handle audio files
+    if (isAudioFile(file.type)) {
+      return await processAudio(file);
     }
 
     // Handle text/document files using shared utility
@@ -174,12 +239,16 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
 
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
+    const audioFormats = AUDIO_FORMATS.map(format => format.replace('audio/', '').toUpperCase());
     const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
-    const combined =
-      imageFormats.length > 0
-        ? [...imageFormats, textFormatsDisplay].join(', ')
-        : textFormatsDisplay;
-    return combined;
+    const allFormats = [
+      ...imageFormats,
+      ...audioFormats,
+      textFormatsDisplay.length > 0 ? textFormatsDisplay : null
+    ]
+      .filter(Boolean)
+      .join(', ');
+    return allFormats;
   })();
 
   const getErrorMessage = code => {
@@ -202,6 +271,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         return t(
           'errors.imageUploadDisabled',
           'Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.'
+        );
+      case 'audio-upload-disabled':
+        return t(
+          'errors.audioUploadDisabled',
+          'Audio upload is not supported by the selected model. Please choose a different model.'
         );
       case 'file-upload-disabled':
         return t('errors.fileUploadDisabled', 'File upload is disabled for this application.');
@@ -277,6 +351,22 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                             className="max-w-full max-h-60 mx-auto"
                           />
                         </div>
+                      ) : item.type === 'audio' ? (
+                        // Audio preview
+                        <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
+                          <div className="flex items-start gap-3">
+                            <Icon
+                              name="musical-note"
+                              className="w-8 h-8 text-purple-500 flex-shrink-0 mt-1"
+                            />
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-gray-900 truncate">
+                                {item.fileName}
+                              </div>
+                              <div className="text-xs text-gray-500 mb-2">{item.fileType}</div>
+                            </div>
+                          </div>
+                        </div>
                       ) : (
                         // Document preview
                         <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
@@ -333,6 +423,35 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                   </div>
                   <div className="text-xs text-gray-500 mt-1 text-center">
                     {t('components.uploader.imageSelected', 'Image selected')}
+                  </div>
+                </div>
+              ) : preview.type === 'audio' ? (
+                // Single audio preview
+                <div>
+                  <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
+                    <div className="flex items-start gap-3">
+                      <Icon
+                        name="musical-note"
+                        className="w-8 h-8 text-purple-500 flex-shrink-0 mt-1"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm text-gray-900 truncate">
+                          {preview.fileName}
+                        </div>
+                        <div className="text-xs text-gray-500 mb-2">{preview.fileType}</div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleClear}
+                        className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
+                        title={t('common.remove', 'Remove file')}
+                      >
+                        <Icon name="x" className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1 text-center">
+                    {t('components.uploader.audioSelected', 'Audio file selected')}
                   </div>
                 </div>
               ) : (

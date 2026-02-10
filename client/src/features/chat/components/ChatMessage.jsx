@@ -627,6 +627,47 @@ const ChatMessage = ({
           </div>
         )}
 
+        {/* Display uploaded audio files with playback */}
+        {message.meta?.audioData && (
+          <div className="mt-3 space-y-2">
+            {(Array.isArray(message.meta.audioData)
+              ? message.meta.audioData
+              : [message.meta.audioData]
+            ).map((audio, idx) => (
+              <div
+                key={idx}
+                className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Icon name="musical-note" className="text-purple-600 dark:text-purple-400" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {audio.fileName}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {audio.fileType}
+                      {audio.fileSize && ` • ${(audio.fileSize / 1024 / 1024).toFixed(2)} MB`}
+                    </div>
+                  </div>
+                </div>
+                {audio.base64 && (
+                  <audio
+                    controls
+                    className="w-full mt-2"
+                    style={{ maxWidth: '100%', height: '40px' }}
+                  >
+                    <source src={audio.base64} type={audio.fileType || 'audio/mpeg'} />
+                    {t(
+                      'chatMessage.audioNotSupported',
+                      'Your browser does not support audio playback.'
+                    )}
+                  </audio>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {!isUser && message.thoughts && message.thoughts.length > 0 && (
           <div className="mt-1 text-xs text-gray-600">
             <button onClick={() => setShowThoughts(!showThoughts)} className="underline">

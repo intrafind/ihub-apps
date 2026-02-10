@@ -36,12 +36,15 @@ export const useFileUploadHandler = () => {
 
     // Get upload config from unified structure only
     const imageConfig = uploadConfig?.imageUpload || {};
+    const audioConfig = uploadConfig?.audioUpload || {};
     const fileConfig = uploadConfig?.fileUpload || {};
 
     // Check if upload is enabled at all
     const uploadEnabled =
       uploadConfig?.enabled !== false &&
-      (imageConfig?.enabled === true || fileConfig?.enabled === true);
+      (imageConfig?.enabled === true ||
+        audioConfig?.enabled === true ||
+        fileConfig?.enabled === true);
 
     if (!uploadEnabled) {
       return { enabled: false };
@@ -57,16 +60,28 @@ export const useFileUploadHandler = () => {
         selectedModel.includes('gemini') ||
         selectedModel.includes('4o'));
 
+    // Determine if audio upload should be disabled based on model capabilities
+    // Currently, Gemini 2.0+ models support audio
+    // TODO: Check model.supportsAudio field when model metadata is available in client
+    const isAudioModel =
+      selectedModel && (selectedModel.includes('gemini-2') || selectedModel.includes('gemini-3'));
+
     const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
+    const audioUploadEnabled = audioConfig?.enabled !== false && isAudioModel;
     const fileUploadEnabled = fileConfig?.enabled !== false;
 
     return {
       enabled: true,
       imageUploadEnabled,
+      audioUploadEnabled,
       fileUploadEnabled,
       allowMultiple: uploadConfig?.allowMultiple || false,
       maxFileSizeMB:
-        Math.max(imageConfig?.maxFileSizeMB || 0, fileConfig?.maxFileSizeMB || 0) || 10,
+        Math.max(
+          imageConfig?.maxFileSizeMB || 0,
+          audioConfig?.maxFileSizeMB || 0,
+          fileConfig?.maxFileSizeMB || 0
+        ) || 10,
       // Image-specific settings
       imageUpload: {
         enabled: imageUploadEnabled,
@@ -80,6 +95,18 @@ export const useFileUploadHandler = () => {
           'image/webp'
         ],
         maxFileSizeMB: imageConfig?.maxFileSizeMB || 10
+      },
+      // Audio-specific settings
+      audioUpload: {
+        enabled: audioUploadEnabled,
+        maxFileSizeMB: audioConfig?.maxFileSizeMB || 20,
+        supportedFormats: audioConfig?.supportedFormats || [
+          'audio/mpeg',
+          'audio/mp3',
+          'audio/wav',
+          'audio/flac',
+          'audio/ogg'
+        ]
       },
       // File-specific settings
       fileUpload: {
@@ -107,6 +134,15 @@ export const useFileUploadHandler = () => {
             'image/png',
             'image/gif',
             'image/webp'
+          ]
+        : [],
+      supportedAudioFormats: audioUploadEnabled
+        ? audioConfig?.supportedFormats || [
+            'audio/mpeg',
+            'audio/mp3',
+            'audio/wav',
+            'audio/flac',
+            'audio/ogg'
           ]
         : [],
       supportedFormats: fileUploadEnabled
