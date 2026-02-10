@@ -62,6 +62,7 @@ export const useFileUploadHandler = () => {
 
     // Determine if audio upload should be disabled based on model capabilities
     // Currently, Gemini 2.0+ models support audio
+    // TODO: Check model.supportsAudio field when model metadata is available in client
     const isAudioModel =
       selectedModel && (selectedModel.includes('gemini-2') || selectedModel.includes('gemini-3'));
 
