@@ -750,11 +750,18 @@ const AppChat = ({ preloadedApp = null }) => {
       content: contentToResend,
       variables: variablesToRestore,
       imageData: imageDataToRestore,
+      audioData: audioDataToRestore,
       fileData: fileDataToRestore
     } = resendData;
 
     // Allow resending if there's content OR if the app allows empty content (for variable-only messages)
-    if (!contentToResend && !imageDataToRestore && !fileDataToRestore && !app?.allowEmptyContent)
+    if (
+      !contentToResend &&
+      !imageDataToRestore &&
+      !audioDataToRestore &&
+      !fileDataToRestore &&
+      !app?.allowEmptyContent
+    )
       return;
 
     setInput(contentToResend || '');
@@ -767,9 +774,9 @@ const AppChat = ({ preloadedApp = null }) => {
     // Clear any existing selected files first
     fileUploadHandler.clearSelectedFile();
 
-    // Restore file data (images and/or documents) if they exist
-    if (imageDataToRestore || fileDataToRestore) {
-      // Reconstruct the selectedFile state from imageData and fileData
+    // Restore file data (images, audio, and/or documents) if they exist
+    if (imageDataToRestore || audioDataToRestore || fileDataToRestore) {
+      // Reconstruct the selectedFile state from imageData, audioData, and fileData
       let filesToRestore = [];
 
       // Add images to the array
@@ -778,6 +785,15 @@ const AppChat = ({ preloadedApp = null }) => {
           filesToRestore = [...filesToRestore, ...imageDataToRestore];
         } else {
           filesToRestore.push(imageDataToRestore);
+        }
+      }
+
+      // Add audio files to the array
+      if (audioDataToRestore) {
+        if (Array.isArray(audioDataToRestore)) {
+          filesToRestore = [...filesToRestore, ...audioDataToRestore];
+        } else {
+          filesToRestore.push(audioDataToRestore);
         }
       }
 
@@ -950,6 +966,7 @@ const AppChat = ({ preloadedApp = null }) => {
       // Handle multiple files
       if (Array.isArray(fileUploadHandler.selectedFile)) {
         const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
+        const audioFiles = fileUploadHandler.selectedFile.filter(f => f.type === 'audio');
         const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
 
         let contentParts = [finalInput];
@@ -963,6 +980,17 @@ const AppChat = ({ preloadedApp = null }) => {
             )
             .join('\n');
           contentParts.push(imgPreviews);
+        }
+
+        // Add audio file indicators
+        if (audioFiles.length > 0) {
+          const audioIndicators = audioFiles
+            .map(
+              audio =>
+                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${audio.fileName}</span>\n      </div>`
+            )
+            .join('');
+          contentParts.push(audioIndicators);
         }
 
         // Add file indicators
@@ -979,6 +1007,7 @@ const AppChat = ({ preloadedApp = null }) => {
         messageContent = contentParts.filter(Boolean).join('\n\n');
         messageData = {
           imageData: images.length > 0 ? images : undefined,
+          audioData: audioFiles.length > 0 ? audioFiles : undefined,
           fileData: documents.length > 0 ? documents : undefined
         };
       } else {
@@ -987,6 +1016,10 @@ const AppChat = ({ preloadedApp = null }) => {
           const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
           messageData = { imageData: fileUploadHandler.selectedFile };
+        } else if (fileUploadHandler.selectedFile.type === 'audio') {
+          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
+          messageData = { audioData: fileUploadHandler.selectedFile };
         } else {
           const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
@@ -1063,6 +1096,20 @@ const AppChat = ({ preloadedApp = null }) => {
             ? imageFiles[0]
             : imageFiles.length > 1
               ? imageFiles
+              : null;
+        })(),
+        audioData: (() => {
+          // Handle audio data: convert to object/array/null based on count
+          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
+            : fileUploadHandler.selectedFile?.type === 'audio'
+              ? [fileUploadHandler.selectedFile]
+              : [];
+          // Return single object for 1 file, array for multiple, null for none
+          return audioFiles.length === 1
+            ? audioFiles[0]
+            : audioFiles.length > 1
+              ? audioFiles
               : null;
         })(),
         fileData: (() => {

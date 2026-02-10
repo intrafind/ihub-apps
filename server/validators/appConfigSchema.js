@@ -127,6 +127,16 @@ const uploadSchema = z
           .default(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'])
       })
       .optional(),
+    audioUpload: z
+      .object({
+        enabled: z.boolean().optional().default(false),
+        maxFileSizeMB: z.number().int().min(1).max(100).optional().default(20),
+        supportedFormats: z
+          .array(z.string().regex(/^audio\//))
+          .optional()
+          .default(['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg'])
+      })
+      .optional(),
     fileUpload: z
       .object({
         enabled: z.boolean().optional().default(false),

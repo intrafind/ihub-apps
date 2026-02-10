@@ -72,12 +72,30 @@ export class BaseAdapter {
   }
 
   /**
-   * Extract base64 image data without data URL prefix
-   * @param {string} base64Data - Base64 encoded image data
+   * Handle audio data in messages
+   * @param {Object} message - Message object
+   * @returns {boolean} Whether message contains audio data
+   */
+  hasAudioData(message) {
+    // Check if audioData is an array (multiple audio files)
+    if (Array.isArray(message.audioData)) {
+      return message.audioData.length > 0 && message.audioData.some(audio => audio && audio.base64);
+    }
+    // Check for single audio file
+    return !!(message.audioData && message.audioData.base64);
+  }
+
+  /**
+   * Extract base64 data without data URL prefix
+   * @param {string} base64Data - Base64 encoded data (image or audio)
    * @returns {string} Clean base64 data
    */
   cleanBase64Data(base64Data) {
-    return base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+    // Remove data URL prefix for images
+    const withoutImagePrefix = base64Data.replace(/^data:image\/[a-z]+;base64,/, '');
+    // Remove data URL prefix for audio
+    const withoutAudioPrefix = withoutImagePrefix.replace(/^data:audio\/[a-z0-9]+;base64,/, '');
+    return withoutAudioPrefix;
   }
 
   /**

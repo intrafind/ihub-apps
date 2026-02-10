@@ -56,6 +56,12 @@ export const MIME_TO_EXTENSION = {
   'image/png': '.png',
   'image/gif': '.gif',
   'image/webp': '.webp',
+  // Audio formats
+  'audio/mpeg': '.mp3',
+  'audio/mp3': '.mp3',
+  'audio/wav': '.wav',
+  'audio/flac': '.flac',
+  'audio/ogg': '.ogg',
   // Document formats
   'text/plain': '.txt',
   'text/markdown': '.md',
@@ -127,6 +133,15 @@ export const getFileTypeDisplay = mimeType => {
       return 'ODS';
     case 'application/vnd.oasis.opendocument.presentation':
       return 'ODP';
+    case 'audio/mpeg':
+    case 'audio/mp3':
+      return 'MP3';
+    case 'audio/wav':
+      return 'WAV';
+    case 'audio/flac':
+      return 'FLAC';
+    case 'audio/ogg':
+      return 'OGG';
     default:
       return 'FILE';
   }
