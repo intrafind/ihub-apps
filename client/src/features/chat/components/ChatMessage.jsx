@@ -173,7 +173,7 @@ const ChatMessage = ({
     const variables = message.meta?.variables || message.variables;
     if (variables && Object.keys(variables).length > 0) {
       Object.entries(variables).forEach(([key, value]) => {
-        params.set(key, value);
+        params.set(`var_${key}`, value);
       });
     }
 

@@ -176,31 +176,9 @@ const AppChat = ({ preloadedApp = null }) => {
       changed = true;
     }
 
-    // Standard reserved parameter names that should not be treated as variables
-    const reservedParams = new Set([
-      'model',
-      'style',
-      'outfmt',
-      'temp',
-      'history',
-      'prefill',
-      'send'
-    ]);
-
-    // Collect app variable names for matching
-    const appVariableNames = new Set(app?.variables?.map(v => v.name) || []);
-
     searchParams.forEach((value, key) => {
-      // Support variables with 'var_' prefix (standard format)
       if (key.startsWith('var_')) {
-        const varName = key.slice(4);
-        newVars[varName] = value;
-        changed = true;
-      }
-      // Also support direct variable names (legacy/direct format)
-      // Only if the parameter name matches an app variable and is not a reserved param
-      else if (appVariableNames.has(key) && !reservedParams.has(key)) {
-        newVars[key] = value;
+        newVars[key.slice(4)] = value;
         changed = true;
       }
     });
@@ -219,9 +197,7 @@ const AppChat = ({ preloadedApp = null }) => {
         'history',
         'prefill',
         'send',
-        ...Object.keys(newVars).map(v => `var_${v}`),
-        // Also clean up direct variable names (legacy format)
-        ...Object.keys(newVars)
+        ...Object.keys(newVars).map(v => `var_${v}`)
       ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
     }
