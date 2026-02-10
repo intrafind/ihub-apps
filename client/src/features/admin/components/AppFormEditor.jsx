@@ -522,6 +522,29 @@ const AppFormEditor = ({
                   </label>
                 </div>
               </div>
+
+              {/* Auto-start - Only for chat apps */}
+              {(app.type === 'chat' || !app.type) && (
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.autoStart === true}
+                      onChange={e => handleInputChange('autoStart', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
+                    </label>
+                  </div>
+                  <p className="mt-1 ml-6 text-xs text-gray-500">
+                    {t(
+                      'admin.apps.edit.autoStartHelp',
+                      'When enabled, the app will automatically start the conversation when the chat is opened or reset'
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
