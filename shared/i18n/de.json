@@ -587,6 +587,27 @@
         "imageGeneration": "Bilderzeugungseinstellungen"
       }
     },
+    "chat": {
+      "title": "Chat",
+      "send": "Senden",
+      "sendMessage": "Nachricht senden",
+      "newConversation": "Neue Konversation",
+      "regenerate": "Neu generieren",
+      "stopGeneration": "Generierung stoppen",
+      "deleteMessage": "Nachricht löschen",
+      "deleteConversation": "Konversation löschen",
+      "exportConversation": "Konversation exportieren",
+      "thinking": "Denkt nach...",
+      "responseComplete": "Antwort vollständig",
+      "placeholder": "Gib deine Nachricht hier ein...",
+      "conversationHistory": "Konversationsverlauf",
+      "modelSelector": {
+        "label": "Modell",
+        "choose": "Modell wählen",
+        "noModels": "Keine Modelle verfügbar",
+        "loading": "Modelle werden geladen..."
+      }
+    },
     "auth": {
       "configuration": "Authentifizierungskonfiguration",
       "methods": "Authentifizierungsmethoden",
