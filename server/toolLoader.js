@@ -103,12 +103,11 @@ export async function loadConfiguredTools(language = null) {
     return [];
   }
 
-  // If language is specified, localize the tools
-  if (language) {
-    return localizeTools(tools, language);
-  }
-
-  return tools;
+  // Always localize tools to ensure nested multilingual fields (like descriptions in schemas)
+  // are converted to strings. Use provided language or fall back to platform default.
+  const platformConfig = configCache.getPlatform() || {};
+  const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
+  return localizeTools(tools, effectiveLanguage);
 }
 
 /**
