@@ -974,7 +974,11 @@
     "responseStreamError": "Error processing response stream: {error}",
     "connectionRefused": "Connection refused when trying to access {provider} API for model {model}. Please check your connection or server configuration.",
     "unauthorized": "Invalid API key",
-    "modelAccessDenied": "API key is not allowed to use this model"
+    "modelAccessDenied": "API key is not allowed to use this model",
+    "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",
+    "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
+    "noModelIdProvided": "No model selected. Please select an AI model to continue.",
+    "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access."
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",

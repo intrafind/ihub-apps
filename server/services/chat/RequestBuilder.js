@@ -127,6 +127,35 @@ class RequestBuilder {
         `App ${app.id}: Filtered ${filteredModels.length} compatible models from ${models.length} total models`
       );
 
+      // Check if no models are available at all
+      if (filteredModels.length === 0) {
+        // Determine the most appropriate error message
+        let errorCode = 'noCompatibleModels';
+        
+        // If there are no models in the system at all
+        if (models.length === 0) {
+          errorCode = 'noModelsAvailable';
+        }
+        // If models exist but none passed the app-specific filters
+        else if (app.allowedModels || app.tools || app.settings?.model?.filter) {
+          errorCode = 'noCompatibleModels';
+        }
+        // Otherwise, likely a permissions issue
+        else {
+          errorCode = 'noModelsForUser';
+        }
+
+        const error = new Error(
+          errorCode === 'noModelsAvailable'
+            ? `No AI models are available for this app. Please contact your administrator to configure models and permissions.`
+            : errorCode === 'noCompatibleModels'
+              ? `No compatible AI models found for app '${app.id}'. The app requires specific model features that are not available.`
+              : `You don't have permission to access any AI models for this app.`
+        );
+        error.code = errorCode;
+        return { success: false, error };
+      }
+
       // Find the default model from filtered models, or fall back to global default
       const defaultModelFromFiltered = filteredModels.find(m => m.default)?.id;
       const globalDefaultModel = models.find(m => m.default)?.id;
@@ -134,6 +163,23 @@ class RequestBuilder {
 
       // Determine which model to use
       let resolvedModelId = modelId || app.preferredModel || defaultModel;
+
+      // Check if we still don't have a model ID (all sources were null/undefined)
+      if (!resolvedModelId) {
+        console.log(
+          `No model ID could be determined for app ${app.id}. No modelId provided, no preferred model, and no default model available.`
+        );
+        // Use the first available model from filtered list as last resort
+        if (filteredModels.length > 0) {
+          resolvedModelId = filteredModels[0].id;
+          console.log(`Using first available model as fallback: ${resolvedModelId}`);
+        } else {
+          // This shouldn't happen since we checked filteredModels.length above, but handle it anyway
+          const error = new Error('No model ID provided and no default model available.');
+          error.code = 'noModelIdProvided';
+          return { success: false, error };
+        }
+      }
 
       // Check if the resolved model is in the filtered list
       const isModelInFilteredList = filteredModels.some(m => m.id === resolvedModelId);
@@ -165,12 +211,11 @@ class RequestBuilder {
         if (fallbackModel) {
           resolvedModelId = fallbackModel;
         } else {
-          // No compatible models found
+          // No compatible models found - this should be caught by the earlier check, but handle it
           const error = new Error(
-            `No models available that meet the requirements for app '${app.id}'. ` +
-              `Please check the app configuration and ensure at least one compatible model is enabled.`
+            `No compatible AI models found for app '${app.id}'. The app requires specific model features that are not available.`
           );
-          error.code = 'NO_COMPATIBLE_MODELS';
+          error.code = 'noCompatibleModels';
           return { success: false, error };
         }
       }
