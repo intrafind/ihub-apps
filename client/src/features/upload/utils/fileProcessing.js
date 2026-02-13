@@ -56,6 +56,8 @@ export const MIME_TO_EXTENSION = {
   'image/png': '.png',
   'image/gif': '.gif',
   'image/webp': '.webp',
+  'image/tiff': '.tiff,.tif',
+  'image/tif': '.tif',
   // Audio formats
   'audio/mpeg': '.mp3',
   'audio/mp3': '.mp3',
@@ -142,6 +144,9 @@ export const getFileTypeDisplay = mimeType => {
       return 'FLAC';
     case 'audio/ogg':
       return 'OGG';
+    case 'image/tiff':
+    case 'image/tif':
+      return 'TIFF';
     default:
       return 'FILE';
   }
