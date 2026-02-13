@@ -3,6 +3,7 @@ import { recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { redactUrl } from '../../utils/logRedactor.js';
+import { getAdapter } from '../../adapters/index.js';
 import logger from '../../utils/logger.js';
 
 class NonStreamingHandler {
@@ -20,6 +21,19 @@ class NonStreamingHandler {
     getLocalizedError,
     clientLanguage
   }) {
+    // Special handling for BFL models - use async polling
+    if (model.provider === 'bfl') {
+      return this.executeBFLGeneration({
+        request,
+        res,
+        buildLogData,
+        messageId,
+        model,
+        DEFAULT_TIMEOUT,
+        clientLanguage
+      });
+    }
+
     let timeoutId;
     const timeoutPromise = new Promise((_, reject) => {
       timeoutId = setTimeout(() => {
@@ -154,6 +168,109 @@ class NonStreamingHandler {
         provider: model.provider,
         recommendation: errorDetails.recommendation,
         details: fetchError.message
+      });
+    }
+  }
+
+  /**
+   * Execute BFL image generation with async polling
+   * @param {Object} params - Execution parameters
+   */
+  async executeBFLGeneration({
+    request,
+    res,
+    buildLogData,
+    messageId,
+    model,
+    DEFAULT_TIMEOUT,
+    clientLanguage
+  }) {
+    try {
+      const adapter = getAdapter('bfl');
+      const baseLog = buildLogData(false);
+
+      // Log the request
+      await recordChatRequest({
+        userId: baseLog.userSessionId,
+        appId: baseLog.appId,
+        modelId: model.id,
+        tokens: 0 // BFL doesn't use tokens
+      });
+
+      // Execute the full generation flow (submit + poll + download)
+      logger.info(`[BFL] Starting image generation for model: ${model.id}`);
+      const result = await adapter.executeGeneration(request);
+
+      if (result.error) {
+        const errorLog = buildLogData(false, {
+          responseType: 'error',
+          error: {
+            message: result.errorMessage,
+            code: 'generation_error'
+          }
+        });
+
+        await logInteraction('chat_error', errorLog);
+
+        return res.status(500).json({
+          error: result.errorMessage,
+          code: 'generation_error',
+          modelId: model.id,
+          provider: model.provider
+        });
+      }
+
+      // Format response to match expected structure
+      const responseData = {
+        messageId,
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: result.content.join('\n'),
+              images: result.images
+            },
+            finish_reason: result.finishReason
+          }
+        ],
+        usage: {
+          prompt_tokens: 0,
+          completion_tokens: 0,
+          total_tokens: 0
+        }
+      };
+
+      const responseLog = buildLogData(false, {
+        responseType: 'success',
+        response: `Image generated: ${result.images.length} image(s)`
+      });
+
+      await logInteraction('chat_response', responseLog);
+      await recordChatResponse({
+        userId: baseLog.userSessionId,
+        appId: baseLog.appId,
+        modelId: model.id,
+        tokens: 0 // BFL doesn't use tokens
+      });
+
+      return res.json(responseData);
+    } catch (error) {
+      logger.error('[BFL] Generation error:', error);
+
+      await logInteraction(
+        'chat_error',
+        buildLogData(false, {
+          responseType: 'error',
+          error: { message: error.message, code: 'bfl_error' }
+        })
+      );
+
+      return res.status(500).json({
+        error: error.message,
+        code: 'bfl_error',
+        modelId: model.id,
+        provider: model.provider,
+        details: error.message
       });
     }
   }

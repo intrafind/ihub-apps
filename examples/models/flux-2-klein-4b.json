@@ -1,0 +1,27 @@
+{
+  "id": "flux-2-klein-4b",
+  "modelId": "flux-2-klein-4b",
+  "name": {
+    "en": "FLUX.2 Klein 4B",
+    "de": "FLUX.2 Klein 4B"
+  },
+  "description": {
+    "en": "Ultra-fast image generation with sub-second inference. Perfect for high-volume, real-time applications. Supports up to 4 reference images.",
+    "de": "Ultraschnelle Bildgenerierung mit Sub-Sekunden-Inferenz. Perfekt für hochvolumige Echtzeitanwendungen. Unterstützt bis zu 4 Referenzbilder."
+  },
+  "url": "https://api.bfl.ai/v1/flux-2-klein-4b",
+  "provider": "bfl",
+  "tokenLimit": 0,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "width": 1024,
+    "height": 1024,
+    "aspectRatio": "1:1",
+    "maxReferenceImages": 4,
+    "supportsGrounding": false,
+    "safetyTolerance": 2
+  },
+  "apiKeyEnvVar": "BFL_API_KEY",
+  "enabled": false,
+  "default": false
+}
