@@ -99,6 +99,30 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       const reader = new FileReader();
 
       reader.onload = e => {
+        // TIFF files are not supported by browser Image object, handle them separately
+        const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+        if (isTiff) {
+          // For TIFF files, return base64 data with a document-style preview
+          return resolve({
+            preview: {
+              type: 'document',
+              fileName: file.name,
+              fileType: 'TIFF',
+              content: 'TIFF image file (preview not available in browser)'
+            },
+            data: {
+              type: 'image',
+              base64: e.target.result,
+              fileName: file.name,
+              fileSize: file.size,
+              fileType: file.type,
+              width: null,
+              height: null
+            }
+          });
+        }
+
         const img = new Image();
         img.onload = () => {
           const previewUrl = URL.createObjectURL(file);
