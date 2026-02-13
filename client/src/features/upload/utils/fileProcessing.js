@@ -1,4 +1,134 @@
 // Shared file processing utilities for upload components
+import { fetchMimetypesConfig } from '../../../api/endpoints/config';
+
+// Cache for mimetypes configuration
+let mimetypesConfigCache = null;
+let mimetypesConfigPromise = null;
+
+// Default fallback configuration
+const DEFAULT_CONFIG = {
+  supportedTextFormats: [
+    'text/plain',
+    'text/markdown',
+    'text/csv',
+    'application/json',
+    'text/html',
+    'text/css',
+    'text/javascript',
+    'application/javascript',
+    'text/xml',
+    'message/rfc822',
+    'application/pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-outlook',
+    'application/x-msg',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation'
+  ],
+  mimeToExtension: {
+    'image/jpeg': '.jpeg,.jpg',
+    'image/jpg': '.jpg',
+    'image/png': '.png',
+    'image/gif': '.gif',
+    'image/webp': '.webp',
+    'image/tiff': '.tiff,.tif',
+    'image/tif': '.tif',
+    'audio/mpeg': '.mp3',
+    'audio/mp3': '.mp3',
+    'audio/wav': '.wav',
+    'audio/flac': '.flac',
+    'audio/ogg': '.ogg',
+    'text/plain': '.txt',
+    'text/markdown': '.md',
+    'text/csv': '.csv',
+    'application/json': '.json',
+    'text/html': '.html',
+    'text/css': '.css',
+    'text/javascript': '.js',
+    'application/javascript': '.js',
+    'text/xml': '.xml',
+    'message/rfc822': '.eml',
+    'application/pdf': '.pdf',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
+    'application/vnd.ms-outlook': '.msg',
+    'application/x-msg': '.msg',
+    'application/vnd.oasis.opendocument.text': '.odt',
+    'application/vnd.oasis.opendocument.spreadsheet': '.ods',
+    'application/vnd.oasis.opendocument.presentation': '.odp'
+  },
+  typeDisplayNames: {
+    'text/plain': 'TXT',
+    'text/markdown': 'MD',
+    'text/csv': 'CSV',
+    'application/json': 'JSON',
+    'text/html': 'HTML',
+    'text/css': 'CSS',
+    'text/javascript': 'JS',
+    'application/javascript': 'JS',
+    'text/xml': 'XML',
+    'message/rfc822': 'EML',
+    'application/pdf': 'PDF',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
+    'application/vnd.ms-outlook': 'MSG',
+    'application/vnd.oasis.opendocument.text': 'ODT',
+    'application/vnd.oasis.opendocument.spreadsheet': 'ODS',
+    'application/vnd.oasis.opendocument.presentation': 'ODP',
+    'audio/mpeg': 'MP3',
+    'audio/mp3': 'MP3',
+    'audio/wav': 'WAV',
+    'audio/flac': 'FLAC',
+    'audio/ogg': 'OGG',
+    'image/tiff': 'TIFF',
+    'image/tif': 'TIFF'
+  }
+};
+
+/**
+ * Load mimetypes configuration from server
+ * Uses caching to avoid repeated API calls
+ */
+export const loadMimetypesConfig = async () => {
+  // Return cached config if available
+  if (mimetypesConfigCache) {
+    return mimetypesConfigCache;
+  }
+
+  // Return existing promise if already loading
+  if (mimetypesConfigPromise) {
+    return mimetypesConfigPromise;
+  }
+
+  // Start loading and cache the promise
+  mimetypesConfigPromise = fetchMimetypesConfig()
+    .then(config => {
+      mimetypesConfigCache = config;
+      mimetypesConfigPromise = null;
+      return config;
+    })
+    .catch(error => {
+      console.error('Failed to load mimetypes configuration, using defaults:', error);
+      mimetypesConfigPromise = null;
+      // Use default configuration on error
+      mimetypesConfigCache = DEFAULT_CONFIG;
+      return DEFAULT_CONFIG;
+    });
+
+  return mimetypesConfigPromise;
+};
+
+/**
+ * Get current mimetypes config (synchronous)
+ * Returns default config if not loaded yet
+ */
+const getConfig = () => mimetypesConfigCache || DEFAULT_CONFIG;
+
+// Legacy exports for backward compatibility
+export const SUPPORTED_TEXT_FORMATS = DEFAULT_CONFIG.supportedTextFormats;
+export const MIME_TO_EXTENSION = DEFAULT_CONFIG.mimeToExtension;
+
+// Initialize config on module load (non-blocking)
+loadMimetypesConfig();
 
 // Lazy load PDF.js only when needed
 export const loadPdfjs = async () => {
@@ -27,71 +157,15 @@ export const loadJSZip = async () => {
   return JSZip.default;
 };
 
-// Supported MIME types
-export const SUPPORTED_TEXT_FORMATS = [
-  'text/plain',
-  'text/markdown',
-  'text/csv',
-  'application/json',
-  'text/html',
-  'text/css',
-  'text/javascript',
-  'application/javascript',
-  'text/xml',
-  'message/rfc822', // EML
-  'application/pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // DOCX
-  'application/vnd.ms-outlook', // MSG (Windows)
-  'application/x-msg', // MSG (alternative MIME type used by some systems)
-  'application/vnd.oasis.opendocument.text', // ODT
-  'application/vnd.oasis.opendocument.spreadsheet', // ODS
-  'application/vnd.oasis.opendocument.presentation' // ODP
-];
-
-// File extension mapping for better OS compatibility (especially macOS)
-export const MIME_TO_EXTENSION = {
-  // Image formats
-  'image/jpeg': '.jpeg,.jpg',
-  'image/jpg': '.jpg',
-  'image/png': '.png',
-  'image/gif': '.gif',
-  'image/webp': '.webp',
-  'image/tiff': '.tiff,.tif',
-  'image/tif': '.tif',
-  // Audio formats
-  'audio/mpeg': '.mp3',
-  'audio/mp3': '.mp3',
-  'audio/wav': '.wav',
-  'audio/flac': '.flac',
-  'audio/ogg': '.ogg',
-  // Document formats
-  'text/plain': '.txt',
-  'text/markdown': '.md',
-  'text/csv': '.csv',
-  'application/json': '.json',
-  'text/html': '.html',
-  'text/css': '.css',
-  'text/javascript': '.js',
-  'application/javascript': '.js',
-  'text/xml': '.xml',
-  'message/rfc822': '.eml',
-  'application/pdf': '.pdf',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-  'application/vnd.ms-outlook': '.msg',
-  'application/x-msg': '.msg',
-  'application/vnd.oasis.opendocument.text': '.odt',
-  'application/vnd.oasis.opendocument.spreadsheet': '.ods',
-  'application/vnd.oasis.opendocument.presentation': '.odp'
-};
-
 // Convert MIME types array to accept string with both MIME types and extensions
 export const formatAcceptAttribute = mimeTypes => {
+  const config = getConfig();
   const acceptValues = [];
   mimeTypes.forEach(mimeType => {
     // Add the MIME type
     acceptValues.push(mimeType);
     // Add the file extension(s) if available
-    const extension = MIME_TO_EXTENSION[mimeType];
+    const extension = config.mimeToExtension[mimeType];
     if (extension) {
       // Handle comma-separated extensions (e.g., ".jpeg,.jpg")
       const extensions = extension.split(',');
@@ -103,53 +177,8 @@ export const formatAcceptAttribute = mimeTypes => {
 
 // Get display type for a MIME type
 export const getFileTypeDisplay = mimeType => {
-  switch (mimeType) {
-    case 'text/plain':
-      return 'TXT';
-    case 'text/markdown':
-      return 'MD';
-    case 'text/csv':
-      return 'CSV';
-    case 'application/json':
-      return 'JSON';
-    case 'text/html':
-      return 'HTML';
-    case 'text/css':
-      return 'CSS';
-    case 'text/javascript':
-    case 'application/javascript':
-      return 'JS';
-    case 'text/xml':
-      return 'XML';
-    case 'message/rfc822':
-      return 'EML';
-    case 'application/pdf':
-      return 'PDF';
-    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-      return 'DOCX';
-    case 'application/vnd.ms-outlook':
-      return 'MSG';
-    case 'application/vnd.oasis.opendocument.text':
-      return 'ODT';
-    case 'application/vnd.oasis.opendocument.spreadsheet':
-      return 'ODS';
-    case 'application/vnd.oasis.opendocument.presentation':
-      return 'ODP';
-    case 'audio/mpeg':
-    case 'audio/mp3':
-      return 'MP3';
-    case 'audio/wav':
-      return 'WAV';
-    case 'audio/flac':
-      return 'FLAC';
-    case 'audio/ogg':
-      return 'OGG';
-    case 'image/tiff':
-    case 'image/tif':
-      return 'TIFF';
-    default:
-      return 'FILE';
-  }
+  const config = getConfig();
+  return config.typeDisplayNames[mimeType] || 'FILE';
 };
 
 // Convert MIME types to display format list
