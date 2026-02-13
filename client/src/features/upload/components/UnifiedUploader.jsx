@@ -7,7 +7,8 @@ import {
   getFileTypeDisplay as getFileTypeDisplayUtil,
   formatMimeTypesToDisplay,
   processDocumentFile,
-  formatAcceptAttribute
+  formatAcceptAttribute,
+  processTiffFile
 } from '../utils/fileProcessing';
 
 /**
@@ -94,35 +95,52 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     return getFileTypeDisplayUtil(mimeType);
   };
 
-  const processImage = file => {
+  const processImage = async file => {
+    // Check if this is a TIFF file
+    const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+    if (isTiff) {
+      try {
+        // Process TIFF file and convert to PNG
+        const pages = await processTiffFile(file, {
+          maxDimension: MAX_DIMENSION,
+          resize: RESIZE_IMAGES
+        });
+
+        // For multipage TIFFs, use the first page for preview/data
+        // Additional pages could be handled separately if needed
+        const firstPage = pages[0];
+
+        // Create blob URL for preview
+        const response = await fetch(firstPage.base64);
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+
+        return {
+          preview: { type: 'image', url: previewUrl },
+          data: {
+            type: 'image',
+            base64: firstPage.base64,
+            fileName: file.name.replace(/\.tiff?$/i, '.png'), // Change extension to PNG
+            fileSize: blob.size,
+            fileType: 'image/png', // Converted to PNG
+            width: firstPage.width,
+            height: firstPage.height,
+            originalFileType: file.type,
+            originalFileName: file.name,
+            tiffPages: pages.length > 1 ? pages : undefined // Include all pages if multipage
+          }
+        };
+      } catch (error) {
+        console.error('Error processing TIFF file:', error);
+        throw new Error('tiff-processing-error');
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
       reader.onload = e => {
-        // TIFF files are not supported by browser Image object, handle them separately
-        const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
-
-        if (isTiff) {
-          // For TIFF files, return base64 data with a document-style preview
-          return resolve({
-            preview: {
-              type: 'document',
-              fileName: file.name,
-              fileType: 'TIFF',
-              content: 'TIFF image file (preview not available in browser)'
-            },
-            data: {
-              type: 'image',
-              base64: e.target.result,
-              fileName: file.name,
-              fileSize: file.size,
-              fileType: file.type,
-              width: null,
-              height: null
-            }
-          });
-        }
-
         const img = new Image();
         img.onload = () => {
           const previewUrl = URL.createObjectURL(file);
@@ -289,6 +307,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         });
       case 'invalid-image':
         return t('errors.invalidImage', 'Invalid image file');
+      case 'tiff-processing-error':
+        return t(
+          'errors.tiffProcessingError',
+          'Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.'
+        );
       case 'read-error':
         return t('errors.readError', 'Error reading file');
       case 'image-upload-disabled':
