@@ -130,7 +130,7 @@ class RequestBuilder {
       // Check if no models are available at all
       if (filteredModels.length === 0) {
         // Determine the most appropriate error message
-        let errorCode = 'noCompatibleModels';
+        let errorCode;
 
         // If there are no models in the system at all
         if (models.length === 0) {
