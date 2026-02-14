@@ -32,7 +32,53 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
           resize: RESIZE_IMAGES
         });
 
-        // For multipage TIFFs, use the first page
+        // For multipage TIFFs, return all pages as separate images if supported
+        // Note: ImageUploader doesn't support allowMultiple, so we'll use first page only
+        // but still return multipleResults for future compatibility
+        if (pages.length > 1) {
+          // Prepare all pages
+          const pageResults = [];
+
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+
+            // Create blob URL for preview
+            const response = await fetch(page.base64);
+            const blob = await response.blob();
+            const previewUrl = URL.createObjectURL(blob);
+
+            // Generate filename with page number
+            const baseFileName = file.name.replace(/\.tiff?$/i, '');
+            const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+            pageResults.push({
+              preview: previewUrl,
+              data: {
+                base64: page.base64,
+                fileName: fileName,
+                fileSize: blob.size,
+                fileType: 'image/png',
+                width: page.width,
+                height: page.height,
+                originalFileType: file.type,
+                originalFileName: file.name,
+                pageNumber: page.pageNumber,
+                totalPages: page.totalPages
+              }
+            });
+          }
+
+          // Return first page as primary, but include all pages info
+          return {
+            preview: pageResults[0].preview,
+            data: {
+              ...pageResults[0].data,
+              tiffPages: pages
+            }
+          };
+        }
+
+        // For single-page TIFF
         const firstPage = pages[0];
 
         // Create blob URL for preview
@@ -50,8 +96,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
             width: firstPage.width,
             height: firstPage.height,
             originalFileType: file.type,
-            originalFileName: file.name,
-            tiffPages: pages.length > 1 ? pages : undefined
+            originalFileName: file.name
           }
         };
       } catch (error) {

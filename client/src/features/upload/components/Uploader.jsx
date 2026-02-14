@@ -87,7 +87,13 @@ const Uploader = ({
         for (const file of files) {
           const result = await onProcessFile(file);
           if (result && typeof result === 'object') {
-            results.push(result);
+            // Check if this is a multipage TIFF that returned multiple results
+            if (result.multipleResults && Array.isArray(result.multipleResults)) {
+              // Add all pages from multipage TIFF
+              results.push(...result.multipleResults);
+            } else {
+              results.push(result);
+            }
           }
         }
 
@@ -101,9 +107,19 @@ const Uploader = ({
         // Process single file (legacy behavior)
         const result = await onProcessFile(files[0]);
         if (result && typeof result === 'object') {
-          setPreview(result.preview || null);
-          if (onSelect) {
-            onSelect(result.data);
+          // Check if this is a multipage TIFF that returned multiple results
+          if (result.multipleResults && Array.isArray(result.multipleResults)) {
+            // For single file mode with multipage TIFF, use only the first page
+            const firstResult = result.multipleResults[0];
+            setPreview(firstResult.preview || null);
+            if (onSelect) {
+              onSelect(firstResult.data);
+            }
+          } else {
+            setPreview(result.preview || null);
+            if (onSelect) {
+              onSelect(result.data);
+            }
           }
         }
       }

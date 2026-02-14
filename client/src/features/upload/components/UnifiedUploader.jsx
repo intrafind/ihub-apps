@@ -107,8 +107,46 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
           resize: RESIZE_IMAGES
         });
 
-        // For multipage TIFFs, use the first page for preview/data
-        // Additional pages could be handled separately if needed
+        // For multipage TIFFs, return all pages as separate images
+        if (pages.length > 1 && allowMultiple) {
+          // Return array of page results for multipage TIFF
+          const pageResults = [];
+
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+
+            // Create blob URL for preview
+            const response = await fetch(page.base64);
+            const blob = await response.blob();
+            const previewUrl = URL.createObjectURL(blob);
+
+            // Generate filename with page number
+            const baseFileName = file.name.replace(/\.tiff?$/i, '');
+            const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+            pageResults.push({
+              preview: { type: 'image', url: previewUrl },
+              data: {
+                type: 'image',
+                base64: page.base64,
+                fileName: fileName,
+                fileSize: blob.size,
+                fileType: 'image/png', // Converted to PNG
+                width: page.width,
+                height: page.height,
+                originalFileType: file.type,
+                originalFileName: file.name,
+                pageNumber: page.pageNumber,
+                totalPages: page.totalPages
+              }
+            });
+          }
+
+          // Return special structure to indicate multiple results from single file
+          return { multipleResults: pageResults };
+        }
+
+        // For single-page TIFF or when allowMultiple is false, use first page only
         const firstPage = pages[0];
 
         // Create blob URL for preview
