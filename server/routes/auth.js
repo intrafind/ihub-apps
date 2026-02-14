@@ -149,8 +149,8 @@ export default function registerAuthRoutes(app, basePath = '') {
           logger.info('[Auth] Attempting local authentication');
           result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
           logger.info('[Auth] Local authentication succeeded');
-        } catch {
-          logger.info('[Auth] Local authentication failed');
+        } catch (error) {
+          logger.warn('[Auth] Local authentication failed:', { error: error.message });
           // Continue to try LDAP if enabled
         }
       }
@@ -171,8 +171,10 @@ export default function registerAuthRoutes(app, basePath = '') {
           try {
             result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
             logger.info('[Auth] LDAP authentication succeeded');
-          } catch {
-            logger.info(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}'`);
+          } catch (error) {
+            logger.warn(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}':`, {
+              error: error.message
+            });
           }
         } else {
           // Try each LDAP provider until one succeeds
@@ -186,8 +188,10 @@ export default function registerAuthRoutes(app, basePath = '') {
                 );
                 break;
               }
-            } catch {
-              logger.info(`[Auth] LDAP provider '${ldapProvider.name}' failed`);
+            } catch (error) {
+              logger.warn(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, {
+                error: error.message
+              });
               // Continue to next provider
             }
           }

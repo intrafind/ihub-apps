@@ -18,6 +18,10 @@ class TokenStorageService {
     this.keyFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.encryption-key');
     this.algorithm = 'aes-256-gcm';
     this.storageBasePath = path.join(getRootDir(), config.CONTENTS_DIR, 'integrations');
+
+    // JWT secret for token signing
+    this.jwtSecret = null;
+    this.jwtSecretFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-secret');
   }
 
   /**
@@ -95,6 +99,80 @@ class TokenStorageService {
         component: 'TokenStorage'
       });
     }
+  }
+
+  /**
+   * Initialize the JWT secret for token signing
+   * This MUST be called before any JWT operations
+   * Priority:
+   * 1. Use JWT_SECRET from environment if set
+   * 2. Use persisted encrypted secret from disk if exists
+   * 3. Generate new secret, encrypt with encryption key, and persist it
+   */
+  async initializeJwtSecret() {
+    // Priority 1: Environment variable (allows override, required for multi-node)
+    if (process.env.JWT_SECRET && process.env.JWT_SECRET !== '${JWT_SECRET}') {
+      this.jwtSecret = process.env.JWT_SECRET;
+      logger.info('Using JWT secret from JWT_SECRET environment variable', {
+        component: 'TokenStorage'
+      });
+      return;
+    }
+
+    // Priority 2: Try to load persisted encrypted secret
+    try {
+      const persistedData = await fs.readFile(this.jwtSecretFilePath, 'utf8');
+      const trimmed = persistedData.trim();
+      if (trimmed && this.isEncrypted(trimmed)) {
+        this.jwtSecret = this.decryptString(trimmed);
+        logger.info('Using persisted JWT secret from disk', { component: 'TokenStorage' });
+        return;
+      } else if (trimmed) {
+        logger.warn('Persisted JWT secret has invalid format, generating new secret', {
+          component: 'TokenStorage'
+        });
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.error('Error reading JWT secret file:', {
+          component: 'TokenStorage',
+          error: error.message
+        });
+      }
+      // File doesn't exist or error reading, will generate new secret
+    }
+
+    // Priority 3: Generate new secret, encrypt, and persist it
+    this._ensureKeyInitialized();
+    this.jwtSecret = crypto.randomBytes(64).toString('base64');
+    logger.info('Generated new JWT secret', { component: 'TokenStorage' });
+
+    try {
+      const contentsDir = path.dirname(this.jwtSecretFilePath);
+      await fs.mkdir(contentsDir, { recursive: true });
+
+      const encryptedSecret = this.encryptString(this.jwtSecret);
+      await fs.writeFile(this.jwtSecretFilePath, encryptedSecret, {
+        mode: 0o600
+      });
+      logger.info('JWT secret persisted to disk (encrypted)', { component: 'TokenStorage' });
+    } catch (error) {
+      logger.error('Failed to persist JWT secret:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
+      logger.warn('JWT secret is not persisted. Tokens will be invalidated on server restart.', {
+        component: 'TokenStorage'
+      });
+    }
+  }
+
+  /**
+   * Get the initialized JWT secret
+   * @returns {string|null} The JWT secret or null if not initialized
+   */
+  getJwtSecret() {
+    return this.jwtSecret;
   }
 
   /**
