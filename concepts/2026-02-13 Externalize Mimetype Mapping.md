@@ -1,8 +1,8 @@
 # Externalize Mimetype Mapping
 
-**Date**: 2026-02-13  
+**Date**: 2026-02-13 (Updated: 2026-02-14)  
 **Author**: GitHub Copilot  
-**Status**: Implemented
+**Status**: Implemented (Improved Structure)
 
 ## Problem Statement
 
@@ -11,41 +11,66 @@ The mimetype mappings for file uploads were hardcoded in `client/src/features/up
 1. Adding support for new MIME types always required code changes
 2. Even if models could handle new file types, the system couldn't use them without code modification
 3. File extension mappings and display names were tightly coupled with the code
+4. Apps had to duplicate MIME type lists in their configuration
 
-## Solution
+## Solution (v2 - Improved)
 
-Externalize the mimetype configuration into a JSON configuration file that can be modified without code changes. This allows:
+After initial implementation and review, the solution was improved to use a category-based structure that:
 
-- Dynamic addition of new MIME types
-- Customization of file extension mappings
-- Configuration of display names for different file types
-- No code changes needed to support new file formats
+- Eliminates duplication by grouping MIME types into categories
+- Allows apps to reference categories instead of listing individual MIME types
+- Provides a single source of truth for all file type information
+- Supports both text, image, audio, and document formats in one unified structure
 
 ## Implementation
 
-### 1. Configuration File Structure
+### 1. Configuration File Structure (v2)
 
-Created `/server/defaults/config/mimetypes.json` with three main sections:
+Created `/server/defaults/config/mimetypes.json` with two main sections:
 
 ```json
 {
-  "supportedTextFormats": [
-    "text/plain",
-    "application/pdf",
-    // ... more MIME types
-  ],
-  "mimeToExtension": {
-    "image/jpeg": ".jpeg,.jpg",
-    "application/pdf": ".pdf",
-    // ... more mappings
+  "categories": {
+    "images": {
+      "name": { "en": "Images", "de": "Bilder" },
+      "description": { "en": "Image file formats", "de": "Bilddateiformate" },
+      "mimeTypes": ["image/jpeg", "image/png", "image/gif", "image/webp"]
+    },
+    "audio": {
+      "name": { "en": "Audio", "de": "Audio" },
+      "mimeTypes": ["audio/mpeg", "audio/wav", "audio/flac", "audio/ogg"]
+    },
+    "documents": {
+      "name": { "en": "Documents", "de": "Dokumente" },
+      "mimeTypes": ["application/pdf", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+    },
+    "text": {
+      "name": { "en": "Text Files", "de": "Textdateien" },
+      "mimeTypes": ["text/plain", "text/markdown", "application/json"]
+    }
   },
-  "typeDisplayNames": {
-    "text/plain": "TXT",
-    "application/pdf": "PDF",
-    // ... more display names
+  "mimeTypes": {
+    "image/jpeg": {
+      "extensions": [".jpeg", ".jpg"],
+      "displayName": "JPEG",
+      "category": "images"
+    },
+    "application/pdf": {
+      "extensions": [".pdf"],
+      "displayName": "PDF",
+      "category": "documents"
+    }
+    // ... more MIME types
   }
 }
 ```
+
+### Key Improvements (v2)
+
+1. **Category-Based Organization**: MIME types grouped into `images`, `audio`, `documents`, `text`
+2. **Unified Structure**: No distinction between "supported text formats" and others - all formats equal
+3. **Reduced Duplication**: Apps can reference categories instead of listing MIME types
+4. **Better Data Model**: Extensions as arrays, proper categorization, localized names
 
 ### 2. Server-Side Changes
 
@@ -56,12 +81,13 @@ Created `/server/defaults/config/mimetypes.json` with three main sections:
   - Added `getMimetypes()` method to retrieve configuration
   - Configuration is cached and hot-reloaded like other configs
 
-#### Schema Validation
+#### Schema Validation (Updated)
 
 - **File**: `server/validators/mimetypeConfigSchema.js`
-  - Created Zod schema for validation
-  - Validates structure of mimetypes configuration
-  - Provides default configuration getter
+  - Updated Zod schema for category-based structure
+  - Validates `categories` and `mimeTypes` sections
+  - Cross-validates that MIME types reference valid categories
+  - Warns if categories reference undefined MIME types
 
 #### API Endpoint
 
@@ -85,21 +111,16 @@ Created `/server/defaults/config/mimetypes.json` with three main sections:
   - Added `MIMETYPES_CONFIG` to `CACHE_KEYS` enum
   - Long TTL (30 minutes) for performance
 
-#### File Processing Updates
+#### File Processing Updates (Updated)
 
 - **File**: `client/src/features/upload/utils/fileProcessing.js`
-  - Replaced hardcoded constants with dynamic configuration loading
-  - Maintains backward compatibility with synchronous API
-  - Loads configuration on module initialization
+  - Replaced flat structure with category-based access
+  - Added `getMimeTypesByCategory()` function
+  - Added `getMimeTypesByCategories()` function
+  - Maintains backward compatibility with `SUPPORTED_TEXT_FORMATS`
+  - Updated `formatAcceptAttribute()` to use new extensions array
+  - Updated `getFileTypeDisplay()` to use new displayName field
   - Falls back to default config if server fetch fails
-  - Functions remain synchronous for existing code compatibility
-
-Key changes:
-- `loadMimetypesConfig()`: Async loader with caching
-- `getConfig()`: Internal synchronous accessor
-- `formatAcceptAttribute()`: Uses dynamic config
-- `getFileTypeDisplay()`: Uses dynamic config
-- `formatMimeTypesToDisplay()`: Uses dynamic config
 
 ## Benefits
 
@@ -108,6 +129,30 @@ Key changes:
 3. **Maintainability**: All MIME type definitions in one place
 4. **Performance**: Configuration is cached both server and client-side
 5. **Backward Compatible**: Existing code works without modifications
+6. **Reduced Duplication**: Apps reference categories instead of listing MIME types
+7. **Unified Structure**: Images, audio, documents, and text all in one config
+8. **Logical Organization**: Categories make it easy to find and manage related types
+
+## App Integration (Future Enhancement)
+
+Apps will be able to specify which categories they support instead of listing MIME types:
+
+```json
+{
+  "upload": {
+    "imageUpload": {
+      "enabled": true,
+      "categories": ["images"]
+    },
+    "fileUpload": {
+      "enabled": true,
+      "categories": ["documents", "text"]
+    }
+  }
+}
+```
+
+This eliminates the duplication currently present in app configurations.
 
 ## Testing
 
@@ -115,6 +160,7 @@ The server startup test confirms:
 - Configuration file is loaded correctly
 - API endpoint is created
 - Cache is initialized
+- Schema validation works
 - No breaking changes to existing functionality
 
 ## Configuration Hot-Reload
@@ -124,37 +170,78 @@ The mimetypes configuration supports hot-reload:
 - Client refetches configuration when cache expires
 - No application downtime needed for updates
 
-## Usage Example
+## Usage Examples
 
-To add support for a new file type (e.g., `.epub`):
+### Adding a New File Type (e.g., EPUB)
 
-1. Edit `server/defaults/config/mimetypes.json` or `contents/config/mimetypes.json`
-2. Add to `supportedTextFormats`: `"application/epub+zip"`
-3. Add to `mimeToExtension`: `"application/epub+zip": ".epub"`
-4. Add to `typeDisplayNames`: `"application/epub+zip": "EPUB"`
-5. Save the file
-6. Configuration auto-reloads (or wait for cache expiry on client)
+1. Add to the appropriate category:
+```json
+{
+  "categories": {
+    "documents": {
+      "mimeTypes": [
+        "application/epub+zip"  // Add here
+      ]
+    }
+  }
+}
+```
 
-No code deployment needed!
+2. Add MIME type details:
+```json
+{
+  "mimeTypes": {
+    "application/epub+zip": {
+      "extensions": [".epub"],
+      "displayName": "EPUB",
+      "category": "documents"
+    }
+  }
+}
+```
+
+### Adding a New Category (e.g., Videos)
+
+```json
+{
+  "categories": {
+    "video": {
+      "name": { "en": "Videos", "de": "Videos" },
+      "description": { "en": "Video file formats" },
+      "mimeTypes": ["video/mp4", "video/webm"]
+    }
+  },
+  "mimeTypes": {
+    "video/mp4": {
+      "extensions": [".mp4"],
+      "displayName": "MP4",
+      "category": "video"
+    }
+  }
+}
+```
 
 ## Files Modified
 
 ### Server
-- `server/defaults/config/mimetypes.json` (new)
-- `server/validators/mimetypeConfigSchema.js` (new)
+- `server/defaults/config/mimetypes.json` (new - improved structure)
+- `server/validators/mimetypeConfigSchema.js` (new - updated schema)
+- `server/defaults/config/README_MIMETYPES.md` (new - updated docs)
 - `server/configCache.js`
 - `server/routes/chat/dataRoutes.js`
 
 ### Client
 - `client/src/api/endpoints/config.js`
 - `client/src/utils/cache.js`
-- `client/src/features/upload/utils/fileProcessing.js`
+- `client/src/features/upload/utils/fileProcessing.js` (updated with category support)
+
+### Documentation
+- `concepts/2026-02-13 Externalize Mimetype Mapping.md` (updated)
 
 ## Future Enhancements
 
-Potential improvements:
-1. Admin UI for managing MIME types
-2. Per-app MIME type restrictions
-3. Custom file processors via configuration
-4. Validation of MIME type format
-5. Migration tool for existing customizations
+1. Update app configurations to use categories instead of MIME type lists
+2. Admin UI for managing MIME types and categories
+3. Per-app MIME type restrictions via category selection
+4. Custom file processors via configuration
+5. Migration tool for existing app customizations

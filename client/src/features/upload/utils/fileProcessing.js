@@ -5,84 +5,51 @@ import { fetchMimetypesConfig } from '../../../api/endpoints/config';
 let mimetypesConfigCache = null;
 let mimetypesConfigPromise = null;
 
-// Default fallback configuration
-const DEFAULT_CONFIG = {
-  supportedTextFormats: [
-    'text/plain',
-    'text/markdown',
-    'text/csv',
-    'application/json',
-    'text/html',
-    'text/css',
-    'text/javascript',
-    'application/javascript',
-    'text/xml',
-    'message/rfc822',
-    'application/pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-outlook',
-    'application/x-msg',
-    'application/vnd.oasis.opendocument.text',
-    'application/vnd.oasis.opendocument.spreadsheet',
-    'application/vnd.oasis.opendocument.presentation'
-  ],
-  mimeToExtension: {
-    'image/jpeg': '.jpeg,.jpg',
-    'image/jpg': '.jpg',
-    'image/png': '.png',
-    'image/gif': '.gif',
-    'image/webp': '.webp',
-    'image/tiff': '.tiff,.tif',
-    'image/tif': '.tif',
-    'audio/mpeg': '.mp3',
-    'audio/mp3': '.mp3',
-    'audio/wav': '.wav',
-    'audio/flac': '.flac',
-    'audio/ogg': '.ogg',
-    'text/plain': '.txt',
-    'text/markdown': '.md',
-    'text/csv': '.csv',
-    'application/json': '.json',
-    'text/html': '.html',
-    'text/css': '.css',
-    'text/javascript': '.js',
-    'application/javascript': '.js',
-    'text/xml': '.xml',
-    'message/rfc822': '.eml',
-    'application/pdf': '.pdf',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': '.docx',
-    'application/vnd.ms-outlook': '.msg',
-    'application/x-msg': '.msg',
-    'application/vnd.oasis.opendocument.text': '.odt',
-    'application/vnd.oasis.opendocument.spreadsheet': '.ods',
-    'application/vnd.oasis.opendocument.presentation': '.odp'
-  },
-  typeDisplayNames: {
-    'text/plain': 'TXT',
-    'text/markdown': 'MD',
-    'text/csv': 'CSV',
-    'application/json': 'JSON',
-    'text/html': 'HTML',
-    'text/css': 'CSS',
-    'text/javascript': 'JS',
-    'application/javascript': 'JS',
-    'text/xml': 'XML',
-    'message/rfc822': 'EML',
-    'application/pdf': 'PDF',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'DOCX',
-    'application/vnd.ms-outlook': 'MSG',
-    'application/vnd.oasis.opendocument.text': 'ODT',
-    'application/vnd.oasis.opendocument.spreadsheet': 'ODS',
-    'application/vnd.oasis.opendocument.presentation': 'ODP',
-    'audio/mpeg': 'MP3',
-    'audio/mp3': 'MP3',
-    'audio/wav': 'WAV',
-    'audio/flac': 'FLAC',
-    'audio/ogg': 'OGG',
-    'image/tiff': 'TIFF',
-    'image/tif': 'TIFF'
-  }
+// Build default config from new structure for backward compatibility
+const buildDefaultConfig = () => {
+  return {
+    categories: {
+      images: {
+        name: { en: 'Images', de: 'Bilder' },
+        mimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+      },
+      audio: {
+        name: { en: 'Audio', de: 'Audio' },
+        mimeTypes: ['audio/mpeg', 'audio/wav']
+      },
+      documents: {
+        name: { en: 'Documents', de: 'Dokumente' },
+        mimeTypes: [
+          'application/pdf',
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        ]
+      },
+      text: {
+        name: { en: 'Text Files', de: 'Textdateien' },
+        mimeTypes: ['text/plain', 'text/markdown', 'application/json']
+      }
+    },
+    mimeTypes: {
+      'image/jpeg': { extensions: ['.jpeg', '.jpg'], displayName: 'JPEG', category: 'images' },
+      'image/png': { extensions: ['.png'], displayName: 'PNG', category: 'images' },
+      'image/gif': { extensions: ['.gif'], displayName: 'GIF', category: 'images' },
+      'image/webp': { extensions: ['.webp'], displayName: 'WEBP', category: 'images' },
+      'audio/mpeg': { extensions: ['.mp3'], displayName: 'MP3', category: 'audio' },
+      'audio/wav': { extensions: ['.wav'], displayName: 'WAV', category: 'audio' },
+      'application/pdf': { extensions: ['.pdf'], displayName: 'PDF', category: 'documents' },
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
+        extensions: ['.docx'],
+        displayName: 'DOCX',
+        category: 'documents'
+      },
+      'text/plain': { extensions: ['.txt'], displayName: 'TXT', category: 'text' },
+      'text/markdown': { extensions: ['.md'], displayName: 'MD', category: 'text' },
+      'application/json': { extensions: ['.json'], displayName: 'JSON', category: 'text' }
+    }
+  };
 };
+
+const DEFAULT_CONFIG = buildDefaultConfig();
 
 /**
  * Load mimetypes configuration from server
@@ -123,9 +90,36 @@ export const loadMimetypesConfig = async () => {
  */
 const getConfig = () => mimetypesConfigCache || DEFAULT_CONFIG;
 
-// Legacy exports for backward compatibility
-export const SUPPORTED_TEXT_FORMATS = DEFAULT_CONFIG.supportedTextFormats;
-export const MIME_TO_EXTENSION = DEFAULT_CONFIG.mimeToExtension;
+/**
+ * Get MIME types for a specific category
+ * @param {string} category - Category name (e.g., 'images', 'audio', 'documents', 'text')
+ * @returns {string[]} Array of MIME types in the category
+ */
+export const getMimeTypesByCategory = category => {
+  const config = getConfig();
+  return config.categories[category]?.mimeTypes || [];
+};
+
+/**
+ * Get all MIME types from multiple categories
+ * @param {string[]} categories - Array of category names
+ * @returns {string[]} Array of MIME types
+ */
+export const getMimeTypesByCategories = categories => {
+  const config = getConfig();
+  const mimeTypes = [];
+  categories.forEach(category => {
+    const categoryMimeTypes = config.categories[category]?.mimeTypes || [];
+    mimeTypes.push(...categoryMimeTypes);
+  });
+  return [...new Set(mimeTypes)]; // Remove duplicates
+};
+
+// Legacy export for backward compatibility - returns all text/document MIME types
+export const SUPPORTED_TEXT_FORMATS = getMimeTypesByCategories(['text', 'documents']);
+
+// Legacy MIME_TO_EXTENSION for backward compatibility - empty for now, use getMimeTypeDetails
+export const MIME_TO_EXTENSION = {};
 
 // Initialize config on module load (non-blocking)
 loadMimetypesConfig();
@@ -165,11 +159,9 @@ export const formatAcceptAttribute = mimeTypes => {
     // Add the MIME type
     acceptValues.push(mimeType);
     // Add the file extension(s) if available
-    const extension = config.mimeToExtension[mimeType];
-    if (extension) {
-      // Handle comma-separated extensions (e.g., ".jpeg,.jpg")
-      const extensions = extension.split(',');
-      acceptValues.push(...extensions);
+    const mimeTypeDetails = config.mimeTypes[mimeType];
+    if (mimeTypeDetails && mimeTypeDetails.extensions) {
+      acceptValues.push(...mimeTypeDetails.extensions);
     }
   });
   return acceptValues;
@@ -178,7 +170,8 @@ export const formatAcceptAttribute = mimeTypes => {
 // Get display type for a MIME type
 export const getFileTypeDisplay = mimeType => {
   const config = getConfig();
-  return config.typeDisplayNames[mimeType] || 'FILE';
+  const mimeTypeDetails = config.mimeTypes[mimeType];
+  return mimeTypeDetails?.displayName || 'FILE';
 };
 
 // Convert MIME types to display format list
