@@ -7,7 +7,8 @@ import {
   getFileTypeDisplay as getFileTypeDisplayUtil,
   formatMimeTypesToDisplay,
   processDocumentFile,
-  formatAcceptAttribute
+  formatAcceptAttribute,
+  processTiffFile
 } from '../utils/fileProcessing';
 
 /**
@@ -94,7 +95,86 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     return getFileTypeDisplayUtil(mimeType);
   };
 
-  const processImage = file => {
+  const processImage = async file => {
+    // Check if this is a TIFF file
+    const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+    if (isTiff) {
+      try {
+        // Process TIFF file and convert to PNG
+        const pages = await processTiffFile(file, {
+          maxDimension: MAX_DIMENSION,
+          resize: RESIZE_IMAGES
+        });
+
+        // For multipage TIFFs, return all pages as separate images
+        if (pages.length > 1 && allowMultiple) {
+          // Return array of page results for multipage TIFF
+          const pageResults = [];
+
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+
+            // Create blob URL for preview
+            const response = await fetch(page.base64);
+            const blob = await response.blob();
+            const previewUrl = URL.createObjectURL(blob);
+
+            // Generate filename with page number
+            const baseFileName = file.name.replace(/\.tiff?$/i, '');
+            const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+            pageResults.push({
+              preview: { type: 'image', url: previewUrl },
+              data: {
+                type: 'image',
+                base64: page.base64,
+                fileName: fileName,
+                fileSize: blob.size,
+                fileType: 'image/png', // Converted to PNG
+                width: page.width,
+                height: page.height,
+                originalFileType: file.type,
+                originalFileName: file.name,
+                pageNumber: page.pageNumber,
+                totalPages: page.totalPages
+              }
+            });
+          }
+
+          // Return special structure to indicate multiple results from single file
+          return { multipleResults: pageResults };
+        }
+
+        // For single-page TIFF or when allowMultiple is false, use first page only
+        const firstPage = pages[0];
+
+        // Create blob URL for preview
+        const response = await fetch(firstPage.base64);
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+
+        return {
+          preview: { type: 'image', url: previewUrl },
+          data: {
+            type: 'image',
+            base64: firstPage.base64,
+            fileName: file.name.replace(/\.tiff?$/i, '.png'), // Change extension to PNG
+            fileSize: blob.size,
+            fileType: 'image/png', // Converted to PNG
+            width: firstPage.width,
+            height: firstPage.height,
+            originalFileType: file.type,
+            originalFileName: file.name,
+            tiffPages: pages.length > 1 ? pages : undefined // Include all pages if multipage
+          }
+        };
+      } catch (error) {
+        console.error('Error processing TIFF file:', error);
+        throw new Error('tiff-processing-error');
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -265,6 +345,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         });
       case 'invalid-image':
         return t('errors.invalidImage', 'Invalid image file');
+      case 'tiff-processing-error':
+        return t(
+          'errors.tiffProcessingError',
+          'Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.'
+        );
       case 'read-error':
         return t('errors.readError', 'Error reading file');
       case 'image-upload-disabled':
@@ -301,6 +386,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         isDragging,
         handleButtonClick,
         handleClear,
+        handleRemoveItem,
         handleDragEnter,
         handleDragLeave,
         handleDragOver,
@@ -338,69 +424,96 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
           {preview ? (
             <div className="relative mt-2 mb-4">
               {Array.isArray(preview) ? (
-                // Multiple files preview
+                // Multiple files preview - horizontal scrolling grid
                 <div className="space-y-2">
-                  {preview.map((item, index) => (
-                    <div key={index}>
-                      {item.type === 'image' ? (
-                        // Image preview
-                        <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                          <img
-                            src={item.url}
-                            alt={t('common.preview', 'Preview')}
-                            className="max-w-full max-h-60 mx-auto"
-                          />
-                        </div>
-                      ) : item.type === 'audio' ? (
-                        // Audio preview
-                        <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                          <div className="flex items-start gap-3">
-                            <Icon
-                              name="musical-note"
-                              className="w-8 h-8 text-purple-500 flex-shrink-0 mt-1"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-gray-900 truncate">
+                  <div className="overflow-x-auto overflow-y-hidden">
+                    <div className="flex gap-2 pb-2" style={{ minHeight: '180px' }}>
+                      {preview.map((item, index) => (
+                        <div
+                          key={index}
+                          className="flex-shrink-0 relative group"
+                          style={{ width: '160px' }}
+                        >
+                          {item.type === 'image' ? (
+                            // Image preview in grid
+                            <div className="relative rounded-lg overflow-hidden border border-gray-300 bg-white h-40 flex items-center justify-center">
+                              <img
+                                src={item.url}
+                                alt={t('common.preview', 'Preview')}
+                                className="max-w-full max-h-full object-contain"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(index)}
+                                className="absolute top-1 right-1 bg-red-600 bg-opacity-90 text-white rounded-full p-1 hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={t('common.remove', 'Remove')}
+                              >
+                                <Icon name="x" className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ) : item.type === 'audio' ? (
+                            // Audio preview in grid
+                            <div className="relative rounded-lg overflow-hidden border border-gray-300 p-2 bg-gray-50 h-40 flex flex-col justify-center">
+                              <Icon
+                                name="musical-note"
+                                className="w-8 h-8 text-purple-500 mx-auto mb-2"
+                              />
+                              <div className="text-xs text-gray-900 truncate text-center px-1">
                                 {item.fileName}
                               </div>
-                              <div className="text-xs text-gray-500 mb-2">{item.fileType}</div>
+                              <div className="text-xs text-gray-500 truncate text-center">
+                                {item.fileType}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(index)}
+                                className="absolute top-1 right-1 bg-red-600 bg-opacity-90 text-white rounded-full p-1 hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={t('common.remove', 'Remove')}
+                              >
+                                <Icon name="x" className="w-3 h-3" />
+                              </button>
                             </div>
-                          </div>
-                        </div>
-                      ) : (
-                        // Document preview
-                        <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                          <div className="flex items-start gap-3">
-                            <Icon
-                              name="document-text"
-                              className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-gray-900 truncate">
+                          ) : (
+                            // Document preview in grid
+                            <div className="relative rounded-lg overflow-hidden border border-gray-300 p-2 bg-gray-50 h-40 flex flex-col justify-center">
+                              <Icon
+                                name="document-text"
+                                className="w-8 h-8 text-blue-500 mx-auto mb-2"
+                              />
+                              <div className="text-xs text-gray-900 truncate text-center px-1">
                                 {item.fileName}
                               </div>
-                              <div className="text-xs text-gray-500 mb-2">{item.fileType} file</div>
-                              <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
-                                {item.content}
+                              <div className="text-xs text-gray-500 truncate text-center">
+                                {item.fileType}
                               </div>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveItem(index)}
+                                className="absolute top-1 right-1 bg-red-600 bg-opacity-90 text-white rounded-full p-1 hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
+                                title={t('common.remove', 'Remove')}
+                              >
+                                <Icon name="x" className="w-3 h-3" />
+                              </button>
                             </div>
-                          </div>
+                          )}
                         </div>
-                      )}
+                      ))}
                     </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    className="w-full mt-2 px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
-                    title={t('common.remove', 'Remove files')}
-                  >
-                    {t('common.removeAll', 'Remove All')}
-                  </button>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.filesSelected', '{{count}} file(s) selected', {
-                      count: preview.length
-                    })}
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <div className="text-xs text-gray-500">
+                      {t('components.uploader.filesSelected', '{{count}} file(s) selected', {
+                        count: preview.length
+                      })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleClear}
+                      className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs"
+                      title={t('common.remove', 'Remove all files')}
+                    >
+                      {t('common.removeAll', 'Remove All')}
+                    </button>
                   </div>
                 </div>
               ) : preview.type === 'image' ? (
