@@ -1,19 +1,16 @@
 # =============================================================================
-# iHub Apps - Multi-Stage Docker Build
+# iHub Apps - Multi-Stage Docker Build with Bun
 # =============================================================================
 
 # -----------------------------------------------------------------------------
 # Stage 1: Dependencies Installation
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS dependencies
+FROM oven/bun:1-alpine AS dependencies
 
 # Install system dependencies required for build
 RUN apk add --update --no-cache \
     dumb-init \
     git \
-    python3 \
-    make \
-    g++ \
     curl \
     musl-dev
 
@@ -28,12 +25,15 @@ RUN cargo install mdbook mdbook-mermaid
 WORKDIR /app
 
 # Copy package files for dependency installation
-COPY package*.json ./
-COPY client/package*.json ./client/
-COPY server/package*.json ./server/
+COPY package.json bun.lockb* ./
+COPY client/package.json client/bun.lockb* ./client/
+COPY server/package.json server/bun.lockb* ./server/
+
+# Copy bunfig.toml if exists
+COPY bunfig.toml* ./
 
 # Install all dependencies (including dev dependencies for build)
-RUN npm run install:all
+RUN bun install && cd client && bun install && cd ../server && bun install
 
 # -----------------------------------------------------------------------------
 # Stage 2: Build Stage
@@ -52,7 +52,7 @@ ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 COPY . .
 
 # Build the complete application (client + server) - skip docs for Docker
-RUN npm run build:docker
+RUN bun run build:docker
 
 # -----------------------------------------------------------------------------
 # Stage 3: Development Runtime (for development container)
@@ -71,12 +71,12 @@ RUN mkdir -p \
 EXPOSE 3000 5173
 
 # Development command with hot reload
-CMD ["npm", "run", "dev"]
+CMD ["bun", "run", "dev"]
 
 # -----------------------------------------------------------------------------
 # Stage 4: Production Runtime
 # -----------------------------------------------------------------------------
-FROM node:24-alpine AS production
+FROM oven/bun:1-alpine AS production
 
 # Build arguments for runtime configuration
 ARG BASE_PATH=""
@@ -156,7 +156,7 @@ USER ihub
 
 # Health check configuration
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD node /app/healthcheck.js
+    CMD bun run /app/healthcheck.js
 
 # Expose port
 EXPOSE 3000
@@ -168,4 +168,4 @@ VOLUME ["/app/contents/", "/app/logs"]
 ENTRYPOINT ["/sbin/tini", "--", "/app/docker-entrypoint.sh"]
 
 # Start the application (we're already in /app and copied dist to ./, so server is at ./server/server.js)
-CMD ["node", "server/server.js"]
+CMD ["bun", "run", "server/server.js"]
