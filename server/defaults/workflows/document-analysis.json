@@ -1,0 +1,247 @@
+{
+  "id": "document-analysis",
+  "name": {
+    "en": "Document Analysis",
+    "de": "Dokumentenanalyse"
+  },
+  "description": {
+    "en": "Upload a document (PDF, DOCX, TXT) and get a structured analysis with key findings, summary, and action items. Demonstrates file input variables, inputFiles config, and step counters.",
+    "de": "Laden Sie ein Dokument (PDF, DOCX, TXT) hoch und erhalten Sie eine strukturierte Analyse mit Kernaussagen, Zusammenfassung und Handlungsempfehlungen. Demonstriert Datei-Eingabevariablen, inputFiles-Konfiguration und Schrittzähler."
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "humanInLoop": "none",
+    "maxExecutionTime": 120000,
+    "maxNodes": 20,
+    "maxIterations": 5,
+    "allowCycles": true,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Upload Document",
+        "de": "Dokument hochladen"
+      },
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "document",
+            "type": "file",
+            "required": true,
+            "label": {
+              "en": "Document to Analyze",
+              "de": "Zu analysierendes Dokument"
+            },
+            "description": {
+              "en": "Upload a PDF, DOCX, or text file for analysis",
+              "de": "Laden Sie eine PDF-, DOCX- oder Textdatei zur Analyse hoch"
+            },
+            "accept": [
+              "application/pdf",
+              "text/plain",
+              "text/markdown",
+              "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ],
+            "maxSizeMB": 10
+          },
+          {
+            "name": "analysisType",
+            "type": "select",
+            "required": false,
+            "label": {
+              "en": "Analysis Focus",
+              "de": "Analysefokus"
+            },
+            "description": {
+              "en": "What aspect of the document to focus on",
+              "de": "Auf welchen Aspekt des Dokuments der Fokus liegen soll"
+            },
+            "options": [
+              {
+                "value": "general",
+                "label": {
+                  "en": "General Analysis",
+                  "de": "Allgemeine Analyse"
+                }
+              },
+              {
+                "value": "legal",
+                "label": {
+                  "en": "Legal Review",
+                  "de": "Rechtliche Prüfung"
+                }
+              },
+              {
+                "value": "technical",
+                "label": {
+                  "en": "Technical Review",
+                  "de": "Technische Prüfung"
+                }
+              },
+              {
+                "value": "summary",
+                "label": {
+                  "en": "Executive Summary",
+                  "de": "Zusammenfassung"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "extract-insights",
+      "type": "agent",
+      "name": {
+        "en": "Extract Key Insights",
+        "de": "Kernaussagen extrahieren"
+      },
+      "position": {
+        "x": 100,
+        "y": 200
+      },
+      "config": {
+        "system": {
+          "en": "You are a document analysis expert. Analyze the provided document thoroughly and precisely. Base your analysis ONLY on the actual document content provided — never invent or assume content that is not present. Always cite specific sections or quotes from the document.",
+          "de": "Sie sind ein Experte für Dokumentenanalyse. Analysieren Sie das bereitgestellte Dokument gründlich und präzise. Basieren Sie Ihre Analyse AUSSCHLIESSLICH auf dem tatsächlich bereitgestellten Dokumentinhalt — erfinden oder vermuten Sie niemals Inhalte, die nicht vorhanden sind. Zitieren Sie immer spezifische Abschnitte oder Passagen aus dem Dokument."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Analyze the uploaded document.\n\nAnalysis type: {{analysisType}}\n\nAdapt your analysis based on the requested type:\n- \"legal\": Focus on contractual terms, obligations, liabilities, warranties, indemnification, compliance requirements, governing law, termination conditions. Flag ambiguous or missing legal provisions.\n- \"technical\": Focus on technical specifications, system architecture, APIs, data models, performance requirements, dependencies, security considerations, scalability. Identify technical gaps or risks.\n- \"summary\": Provide only a concise executive overview. Focus on key takeaways, critical decisions needed, and action items. Skip minor details and keep the rawAnalysis brief.\n- \"general\" or empty: Comprehensive balanced analysis covering purpose, key content, important details, entities involved, timeline, and any notable concerns.\n- Any other value: Interpret it as the user's specific instruction for what aspect to focus on.\n\nExtract and return as JSON:\n{\n  \"documentType\": \"type of document (contract, report, article, specification, etc.)\",\n  \"keyFindings\": [\"finding 1 with direct citation from the document\", \"finding 2 with citation\"],\n  \"importantDates\": [\"date and its significance\"],\n  \"entities\": [\"people, organizations, or products mentioned\"],\n  \"risks\": [\"potential risks or concerns identified\"],\n  \"rawAnalysis\": \"detailed analysis focusing on the requested type\"\n}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Analysieren Sie das hochgeladene Dokument.\n\nAnalysetyp: {{analysisType}}\n\nPassen Sie Ihre Analyse an den angeforderten Typ an:\n- \"legal\": Fokus auf Vertragsbedingungen, Pflichten, Haftung, Garantien, Freistellung, Compliance-Anforderungen, geltendes Recht, Kündigungsbedingungen. Markieren Sie mehrdeutige oder fehlende Bestimmungen.\n- \"technical\": Fokus auf technische Spezifikationen, Systemarchitektur, APIs, Datenmodelle, Leistungsanforderungen, Abhängigkeiten, Sicherheitsaspekte, Skalierbarkeit. Identifizieren Sie technische Lücken oder Risiken.\n- \"summary\": Nur eine knappe Zusammenfassung. Fokus auf Kernaussagen, wichtige Entscheidungen und Handlungsempfehlungen. Details überspringen, rawAnalysis kurz halten.\n- \"general\" oder leer: Umfassende, ausgewogene Analyse aller Aspekte — Zweck, Kerninhalt, wichtige Details, beteiligte Entitäten, Zeitrahmen und auffällige Punkte.\n- Jeder andere Wert: Als spezifische Anweisung des Nutzers interpretieren, worauf der Fokus liegen soll.\n\nExtrahieren und als JSON zurückgeben:\n{\n  \"documentType\": \"Art des Dokuments (Vertrag, Bericht, Artikel, Spezifikation, etc.)\",\n  \"keyFindings\": [\"Ergebnis 1 mit direktem Zitat aus dem Dokument\", \"Ergebnis 2 mit Zitat\"],\n  \"importantDates\": [\"Datum und seine Bedeutung\"],\n  \"entities\": [\"Erwähnte Personen, Organisationen oder Produkte\"],\n  \"risks\": [\"Identifizierte potenzielle Risiken oder Bedenken\"],\n  \"rawAnalysis\": \"Detaillierte Analyse mit Fokus auf den angeforderten Typ\"\n}"
+        },
+        "inputFiles": [
+          "document"
+        ],
+        "outputVariable": "insights",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "documentType": {
+              "type": "string"
+            },
+            "keyFindings": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "importantDates": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "entities": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "risks": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "rawAnalysis": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "documentType",
+            "keyFindings",
+            "rawAnalysis"
+          ]
+        }
+      },
+      "execution": {
+        "timeout": 45000,
+        "retries": 1,
+        "retryDelay": 1000
+      }
+    },
+    {
+      "id": "generate-report",
+      "type": "agent",
+      "name": {
+        "en": "Generate Report",
+        "de": "Bericht erstellen"
+      },
+      "position": {
+        "x": 100,
+        "y": 400
+      },
+      "config": {
+        "system": {
+          "en": "You are a report writer. Create a well-structured, readable report from document analysis data. Use markdown formatting. Base the report ONLY on the analysis data provided — never add information that was not in the analysis.",
+          "de": "Sie sind ein Berichtschreiber. Erstellen Sie einen gut strukturierten, lesbaren Bericht aus Dokumentenanalyse-Daten. Verwenden Sie Markdown-Formatierung. Basieren Sie den Bericht AUSSCHLIESSLICH auf den bereitgestellten Analysedaten — fügen Sie niemals Informationen hinzu, die nicht in der Analyse enthalten waren."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}} - Final] Generate an analysis report.\n\nDocument type: {{insights.documentType}}\nAnalysis type: {{analysisType}}\n\nKey Findings:\n{{insights.keyFindings}}\n\nImportant Dates:\n{{insights.importantDates}}\n\nEntities Mentioned:\n{{insights.entities}}\n\nRisks Identified:\n{{insights.risks}}\n\nDetailed Analysis:\n{{insights.rawAnalysis}}\n\nAdapt the report structure to the analysis type:\n\nFor \"legal\":\n1. **Document Overview** — Document type and parties involved\n2. **Key Legal Terms** — Obligations, rights, conditions, warranties\n3. **Liability & Risk Assessment** — Legal exposure and concerns\n4. **Compliance Notes** — Regulatory and compliance considerations\n5. **Recommendations** — Suggested legal actions or revisions\n\nFor \"technical\":\n1. **Document Overview** — Scope and technical context\n2. **Technical Specifications** — Architecture, APIs, data models, requirements\n3. **Dependencies & Prerequisites** — External systems, libraries, constraints\n4. **Technical Assessment** — Gaps, risks, scalability, security concerns\n5. **Implementation Recommendations** — Suggested next steps\n\nFor \"summary\":\nWrite a concise executive summary (max 500 words) with:\n1. **Overview** — What this document is about (2-3 sentences)\n2. **Key Takeaways** — Bullet points of the most important findings\n3. **Action Items** — What needs to happen next\n\nFor \"general\" or unspecified:\n1. **Document Overview** — Type, scope, purpose\n2. **Key Findings** — Most important discoveries with citations\n3. **Detailed Analysis** — Section-by-section breakdown\n4. **Entities & Timeline** — People, organizations, important dates\n5. **Risks & Recommendations** — Issues and suggested actions\n6. **Conclusion** — Overall assessment\n\nFor any other analysis type: Adapt the report structure to best serve the user's requested focus.",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}} - Final] Erstellen Sie einen Analysebericht.\n\nDokumenttyp: {{insights.documentType}}\nAnalysetyp: {{analysisType}}\n\nKernaussagen:\n{{insights.keyFindings}}\n\nWichtige Daten:\n{{insights.importantDates}}\n\nErwähnte Entitäten:\n{{insights.entities}}\n\nIdentifizierte Risiken:\n{{insights.risks}}\n\nDetaillierte Analyse:\n{{insights.rawAnalysis}}\n\nPassen Sie die Berichtsstruktur an den Analysetyp an:\n\nFür \"legal\":\n1. **Dokumentenübersicht** — Dokumenttyp und beteiligte Parteien\n2. **Wesentliche Vertragsbedingungen** — Pflichten, Rechte, Bedingungen, Garantien\n3. **Haftungs- & Risikobewertung** — Rechtliche Risiken und Bedenken\n4. **Compliance-Hinweise** — Regulatorische Aspekte\n5. **Empfehlungen** — Vorgeschlagene rechtliche Maßnahmen oder Änderungen\n\nFür \"technical\":\n1. **Dokumentenübersicht** — Umfang und technischer Kontext\n2. **Technische Spezifikationen** — Architektur, APIs, Datenmodelle, Anforderungen\n3. **Abhängigkeiten & Voraussetzungen** — Externe Systeme, Bibliotheken, Einschränkungen\n4. **Technische Bewertung** — Lücken, Risiken, Skalierbarkeit, Sicherheit\n5. **Implementierungsempfehlungen** — Vorgeschlagene nächste Schritte\n\nFür \"summary\":\nSchreiben Sie eine knappe Zusammenfassung (max. 500 Wörter):\n1. **Überblick** — Worum geht es in diesem Dokument (2-3 Sätze)\n2. **Kernaussagen** — Stichpunkte der wichtigsten Ergebnisse\n3. **Handlungsempfehlungen** — Was als Nächstes geschehen muss\n\nFür \"general\" oder nicht angegeben:\n1. **Dokumentenübersicht** — Typ, Umfang, Zweck\n2. **Kernaussagen** — Wichtigste Entdeckungen mit Zitaten\n3. **Detaillierte Analyse** — Abschnittsweise Aufschlüsselung\n4. **Entitäten & Zeitrahmen** — Personen, Organisationen, wichtige Daten\n5. **Risiken & Empfehlungen** — Probleme und vorgeschlagene Maßnahmen\n6. **Fazit** — Gesamtbewertung\n\nFür jeden anderen Analysetyp: Passen Sie die Berichtsstruktur an den vom Nutzer gewünschten Fokus an."
+        },
+        "outputVariable": "finalReport"
+      },
+      "execution": {
+        "timeout": 45000,
+        "retries": 0,
+        "retryDelay": 1000
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Complete",
+        "de": "Abgeschlossen"
+      },
+      "position": {
+        "x": 100,
+        "y": 600
+      },
+      "config": {
+        "outputVariables": [
+          "insights",
+          "finalReport",
+          "analysisType"
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-extract",
+      "source": "start",
+      "target": "extract-insights"
+    },
+    {
+      "id": "edge-extract-report",
+      "source": "extract-insights",
+      "target": "generate-report"
+    },
+    {
+      "id": "edge-report-end",
+      "source": "generate-report",
+      "target": "end"
+    }
+  ],
+  "allowedGroups": [],
+  "chatIntegration": {
+    "enabled": true,
+    "passthroughResult": false,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  }
+}

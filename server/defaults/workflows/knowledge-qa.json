@@ -1,0 +1,147 @@
+{
+  "id": "knowledge-qa",
+  "name": {
+    "en": "Knowledge Base Q&A",
+    "de": "Wissensdatenbank Q&A"
+  },
+  "description": {
+    "en": "Ask a question and get an answer grounded in the configured knowledge base sources. Demonstrates workflow-level source integration, source content caching, and step counters.",
+    "de": "Stellen Sie eine Frage und erhalten Sie eine Antwort, die auf den konfigurierten Wissensquellen basiert. Demonstriert Workflow-weite Quellenintegration, Quellen-Caching und Schrittzähler."
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "maxExecutionTime": 60000,
+    "maxIterations": 5,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "sources": ["documentation", "faq"],
+  "allowedGroups": [],
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Start",
+        "de": "Start"
+      },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "question",
+            "type": "textarea",
+            "required": true,
+            "label": {
+              "en": "Your Question",
+              "de": "Ihre Frage"
+            },
+            "description": {
+              "en": "Ask a question about the documentation or product",
+              "de": "Stellen Sie eine Frage zur Dokumentation oder zum Produkt"
+            },
+            "rows": 3
+          },
+          {
+            "name": "language",
+            "type": "select",
+            "required": false,
+            "label": {
+              "en": "Answer Language",
+              "de": "Antwortsprache"
+            },
+            "options": [
+              { "value": "en", "label": { "en": "English", "de": "Englisch" } },
+              { "value": "de", "label": { "en": "German", "de": "Deutsch" } }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "classify-question",
+      "type": "agent",
+      "name": {
+        "en": "Classify Question",
+        "de": "Frage klassifizieren"
+      },
+      "position": { "x": 100, "y": 200 },
+      "config": {
+        "system": {
+          "en": "You are a question classifier. Analyze the user's question and determine what type of answer is needed. Return a JSON classification.\n\n{{sources}}",
+          "de": "Sie sind ein Frage-Klassifizierer. Analysieren Sie die Frage des Benutzers und bestimmen Sie, welche Art von Antwort benötigt wird. Geben Sie eine JSON-Klassifikation zurück.\n\n{{sources}}"
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Classify this question: {{question}}\n\nBased on the available source documentation, determine:\n{\n  \"category\": \"faq|howto|conceptual|troubleshooting|api\",\n  \"complexity\": \"simple|moderate|complex\",\n  \"relevantTopics\": [\"topic1\", \"topic2\"],\n  \"needsExamples\": true/false\n}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Klassifizieren Sie diese Frage: {{question}}\n\nBasierend auf der verfügbaren Quelldokumentation bestimmen Sie:\n{\n  \"category\": \"faq|howto|conceptual|troubleshooting|api\",\n  \"complexity\": \"simple|moderate|complex\",\n  \"relevantTopics\": [\"Thema1\", \"Thema2\"],\n  \"needsExamples\": true/false\n}"
+        },
+        "outputVariable": "classification",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "category": { "type": "string" },
+            "complexity": { "type": "string" },
+            "relevantTopics": { "type": "array", "items": { "type": "string" } },
+            "needsExamples": { "type": "boolean" }
+          },
+          "required": ["category", "complexity", "relevantTopics"]
+        }
+      },
+      "execution": {
+        "timeout": 20000
+      }
+    },
+    {
+      "id": "generate-answer",
+      "type": "agent",
+      "name": {
+        "en": "Generate Answer",
+        "de": "Antwort generieren"
+      },
+      "position": { "x": 100, "y": 400 },
+      "config": {
+        "system": {
+          "en": "You are a knowledgeable support assistant. Answer questions accurately based ONLY on the provided source material. If the answer is not in the sources, say so clearly. Always cite which part of the sources your answer comes from.\n\nAvailable Knowledge Base:\n{{sources}}",
+          "de": "Sie sind ein sachkundiger Support-Assistent. Beantworten Sie Fragen genau und NUR auf Basis des bereitgestellten Quellmaterials. Wenn die Antwort nicht in den Quellen steht, sagen Sie das klar. Zitieren Sie immer, aus welchem Teil der Quellen Ihre Antwort stammt.\n\nVerfügbare Wissensdatenbank:\n{{sources}}"
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}} - Final] Answer the following question:\n\n{{question}}\n\nQuestion classification:\n- Category: {{classification.category}}\n- Complexity: {{classification.complexity}}\n- Relevant topics: {{classification.relevantTopics}}\n- Include examples: {{classification.needsExamples}}\n\n{{#compare language \"==\" \"de\"}}Please answer in German.{{/compare}}\n\nProvide a clear, well-structured answer with:\n1. Direct answer to the question\n2. Supporting details from the knowledge base\n3. Code examples if relevant and requested\n4. Related topics the user might want to explore\n5. Source citations",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}} - Final] Beantworten Sie folgende Frage:\n\n{{question}}\n\nFrage-Klassifikation:\n- Kategorie: {{classification.category}}\n- Komplexität: {{classification.complexity}}\n- Relevante Themen: {{classification.relevantTopics}}\n- Beispiele einschließen: {{classification.needsExamples}}\n\n{{#compare language \"==\" \"de\"}}Bitte antworten Sie auf Deutsch.{{/compare}}\n\nGeben Sie eine klare, gut strukturierte Antwort mit:\n1. Direkte Antwort auf die Frage\n2. Unterstützende Details aus der Wissensdatenbank\n3. Code-Beispiele, falls relevant und angefordert\n4. Verwandte Themen, die der Benutzer erkunden könnte\n5. Quellenzitate"
+        },
+        "outputVariable": "answer"
+      },
+      "execution": {
+        "timeout": 30000
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Complete",
+        "de": "Abgeschlossen"
+      },
+      "position": { "x": 100, "y": 600 },
+      "config": {
+        "outputVariables": ["question", "classification", "answer"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-classify",
+      "source": "start",
+      "target": "classify-question"
+    },
+    {
+      "id": "edge-classify-answer",
+      "source": "classify-question",
+      "target": "generate-answer"
+    },
+    {
+      "id": "edge-answer-end",
+      "source": "generate-answer",
+      "target": "end"
+    }
+  ]
+}

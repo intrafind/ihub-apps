@@ -1,0 +1,175 @@
+{
+  "id": "research-assistant",
+  "name": {
+    "en": "Research Assistant",
+    "de": "Forschungsassistent"
+  },
+  "description": {
+    "en": "Multi-step research workflow with web search and synthesis",
+    "de": "Mehrstufiger Forschungs-Workflow mit Websuche und Synthese"
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "retry",
+    "humanInLoop": "none",
+    "maxExecutionTime": 300000,
+    "maxNodes": 20,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": { "en": "Start", "de": "Start" },
+      "position": { "x": 100, "y": 200 },
+      "config": {
+        "inputMapping": {
+          "query": "$.input.query"
+        }
+      },
+      "execution": {
+        "timeout": 5000
+      }
+    },
+    {
+      "id": "planner",
+      "type": "agent",
+      "name": { "en": "Research Planner", "de": "Forschungsplaner" },
+      "description": {
+        "en": "Plans the research approach by breaking down the query",
+        "de": "Plant den Forschungsansatz durch Aufschlüsselung der Anfrage"
+      },
+      "position": { "x": 300, "y": 200 },
+      "config": {
+        "system": {
+          "en": "You are a research planning specialist. Break down the user's research question into 2-3 specific search queries. Return a JSON object with a 'queries' array and an 'approach' string.",
+          "de": "Sie sind ein Forschungsplanungsspezialist. Teilen Sie die Forschungsfrage des Benutzers in 2-3 spezifische Suchanfragen auf. Geben Sie ein JSON-Objekt mit einem 'queries'-Array und einem 'approach'-String zurück."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Plan research queries for: {{query}}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Plane Recherche-Anfragen für: {{query}}"
+        },
+        "outputVariable": "researchPlan",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "queries": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "approach": { "type": "string" }
+          }
+        },
+        "maxIterations": 3
+      },
+      "execution": {
+        "timeout": 30000,
+        "retries": 1
+      }
+    },
+    {
+      "id": "searcher",
+      "type": "agent",
+      "name": { "en": "Web Searcher", "de": "Web-Sucher" },
+      "description": {
+        "en": "Executes web searches based on planned queries using braveSearch",
+        "de": "Führt Websuchen basierend auf geplanten Anfragen mit braveSearch durch"
+      },
+      "position": { "x": 500, "y": 200 },
+      "config": {
+        "system": {
+          "en": "You are a web research assistant. Use the braveSearch tool to execute each search query from the research plan. After completing all searches, compile the key findings into a structured summary.",
+          "de": "Sie sind ein Web-Recherche-Assistent. Verwenden Sie das braveSearch-Tool, um jede Suchanfrage aus dem Forschungsplan auszuführen. Fassen Sie nach Abschluss aller Suchen die wichtigsten Ergebnisse zusammen."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Execute the following search queries and compile results:\n\nResearch Plan: {{researchPlan}}\n\nUse braveSearch for each planned query. After all searches, summarize the key findings.",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Führen Sie die folgenden Suchanfragen aus und stellen Sie die Ergebnisse zusammen:\n\nForschungsplan: {{researchPlan}}\n\nVerwenden Sie braveSearch für jede geplante Anfrage. Fassen Sie nach allen Suchen die wichtigsten Ergebnisse zusammen."
+        },
+        "tools": ["braveSearch"],
+        "maxIterations": 8,
+        "outputVariable": "searchResults"
+      },
+      "execution": {
+        "timeout": 60000,
+        "retries": 1,
+        "retryDelay": 2000
+      }
+    },
+    {
+      "id": "synthesizer",
+      "type": "agent",
+      "name": { "en": "Research Synthesizer", "de": "Forschungssynthesizer" },
+      "description": {
+        "en": "Synthesizes search results into a comprehensive answer",
+        "de": "Synthetisiert Suchergebnisse zu einer umfassenden Antwort"
+      },
+      "position": { "x": 700, "y": 200 },
+      "config": {
+        "system": {
+          "en": "You are a research synthesis specialist. Given the original query and search results, create a comprehensive, well-structured answer. Cite sources where appropriate.",
+          "de": "Sie sind ein Forschungssynthese-Spezialist. Erstellen Sie eine umfassende, gut strukturierte Antwort basierend auf der ursprünglichen Anfrage und den Suchergebnissen. Zitieren Sie Quellen, wo es angebracht ist."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Original question: {{query}}\n\nSearch Results:\n{{searchResults}}\n\nCreate a comprehensive answer with citations.",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Ursprüngliche Frage: {{query}}\n\nSuchergebnisse:\n{{searchResults}}\n\nErstellen Sie eine umfassende Antwort mit Quellenangaben."
+        },
+        "outputVariable": "finalReport",
+        "maxIterations": 3
+      },
+      "execution": {
+        "timeout": 60000
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": { "en": "End", "de": "Ende" },
+      "position": { "x": 900, "y": 200 },
+      "config": {
+        "outputMapping": {
+          "report": "$.finalReport",
+          "searchResults": "$.searchResults",
+          "plan": "$.researchPlan"
+        }
+      },
+      "execution": {
+        "timeout": 5000
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "e1",
+      "source": "start",
+      "target": "planner",
+      "condition": { "type": "always" }
+    },
+    {
+      "id": "e2",
+      "source": "planner",
+      "target": "searcher",
+      "condition": { "type": "always" }
+    },
+    {
+      "id": "e3",
+      "source": "searcher",
+      "target": "synthesizer",
+      "condition": { "type": "always" }
+    },
+    {
+      "id": "e4",
+      "source": "synthesizer",
+      "target": "end",
+      "condition": { "type": "always" }
+    }
+  ],
+  "allowedGroups": ["users", "admin"],
+  "canvas": {
+    "zoom": 1,
+    "offsetX": 0,
+    "offsetY": 0
+  }
+}
