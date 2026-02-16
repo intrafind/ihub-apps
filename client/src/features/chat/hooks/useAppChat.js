@@ -152,12 +152,73 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             });
           }
           break;
+        case 'workflow.step': {
+          if (lastMessageIdRef.current && data) {
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const prevSteps = currentMessage?.workflowSteps || [];
+
+            const newStep = {
+              nodeName: data.nodeName,
+              nodeType: data.nodeType,
+              status: data.status,
+              workflowName: data.workflowName,
+              chatVisible: data.chatVisible
+            };
+
+            let updatedSteps;
+            if (data.status === 'running') {
+              // Mark any previous "running" step as "completed", then add the new one
+              updatedSteps = prevSteps.map(s =>
+                s.status === 'running' ? { ...s, status: 'completed' } : s
+              );
+              updatedSteps = [...updatedSteps, newStep];
+            } else {
+              // Update existing step status (completed/error)
+              const exists = prevSteps.some(s => s.nodeName === data.nodeName);
+              updatedSteps = exists
+                ? prevSteps.map(s => (s.nodeName === data.nodeName ? newStep : s))
+                : [...prevSteps, newStep];
+            }
+
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              workflowSteps: updatedSteps,
+              workflowStep: data.status === 'running' ? newStep : null
+            });
+          }
+          break;
+        }
+        case 'workflow.result':
+          if (lastMessageIdRef.current && data) {
+            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const prevSteps = currentMsg?.workflowSteps || [];
+            // Mark any still-running steps as completed (safety net for race conditions)
+            const finalSteps = prevSteps.map(s =>
+              s.status === 'running'
+                ? { ...s, status: data.status === 'failed' ? 'error' : 'completed' }
+                : s
+            );
+
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              workflowStep: null,
+              workflowSteps: finalSteps,
+              workflowResult: {
+                status: data.status,
+                executionId: data.executionId,
+                workflowName: data.workflowName
+              },
+              outputFormat: data.outputFormat || 'markdown'
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message
+            // Preserve workflow-set outputFormat — don't let app default overwrite it
+            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
             const metadata = {
               finishReason: data?.finishReason,
-              ...(messageMetadataRef.current || {})
+              ...(messageMetadataRef.current || {}),
+              ...(currentMsg?.outputFormat && { outputFormat: currentMsg.outputFormat })
             };
 
             // Check if this is a clarification finish reason

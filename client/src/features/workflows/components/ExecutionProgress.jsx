@@ -46,6 +46,91 @@ function NodeStatus({ status }) {
 }
 
 /**
+ * Expanded detail view for a single progress item
+ */
+function ItemDetails({ item, t }) {
+  return (
+    <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
+      {/* Output variable and value */}
+      {item.outputVariable && item.outputValue && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            {t('workflows.progress.outputVariable', 'Output Variable')}:{' '}
+            <span className="font-mono text-indigo-600 dark:text-indigo-400">
+              {item.outputVariable}
+            </span>
+          </div>
+          <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-48">
+            {typeof item.outputValue === 'string'
+              ? item.outputValue
+              : JSON.stringify(item.outputValue, null, 2)}
+          </pre>
+        </div>
+      )}
+
+      {/* Decision details */}
+      {item.type === 'decision' && item.rawResult?.output && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            {t('workflows.progress.decisionResult', 'Decision Result')}
+          </div>
+          <div className="flex items-center gap-2">
+            <span
+              className={`px-2 py-1 rounded text-xs font-medium ${
+                item.rawResult.output.branch === 'true'
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
+                  : 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
+              }`}
+            >
+              Branch: {item.rawResult.output.branch}
+            </span>
+            {item.rawResult.output.expression && (
+              <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
+                {item.rawResult.output.expression}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Human response details */}
+      {item.type === 'human' && item.rawResult && (
+        <div className="mb-3">
+          <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+            {t('workflows.progress.humanResponse', 'Human Response')}
+          </div>
+          <div className="text-sm">
+            <span className="font-medium">Choice:</span>{' '}
+            {item.rawResult.output?.branch || item.rawResult.branch || item.rawResult.response}
+            {(item.rawResult.output?.data?.feedback || item.rawResult.data?.feedback) && (
+              <div className="mt-1 text-gray-600 dark:text-gray-400">
+                <span className="font-medium">Feedback:</span>{' '}
+                {item.rawResult.output?.data?.feedback || item.rawResult.data?.feedback}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Raw result for debugging (only show if no specific view) */}
+      {item.rawResult &&
+        !item.outputVariable &&
+        item.type !== 'decision' &&
+        item.type !== 'human' && (
+          <div>
+            <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
+              {t('workflows.progress.rawOutput', 'Output')}
+            </div>
+            <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-32">
+              {JSON.stringify(item.rawResult.output, null, 2)}
+            </pre>
+          </div>
+        )}
+    </div>
+  );
+}
+
+/**
  * Component for displaying workflow execution progress.
  *
  * @param {Object} props - Component props
@@ -315,181 +400,228 @@ function ExecutionProgress({ state, nodes = [] }) {
         </span>
       </div>
 
-      {/* Progress timeline */}
+      {/* Progress timeline — groups repeated iterations of the same node */}
       <div className="space-y-3">
-        {progressItems.map(item => {
-          const itemKey = `${item.nodeId}-${item.historyIndex}`;
-          const isExpanded = expandedNodes.has(itemKey);
-          const hasDetails = item.rawResult || item.outputValue;
+        {(() => {
+          // Group items by nodeId, preserving first-occurrence order
+          const groupOrder = [];
+          const groupMap = new Map();
+          progressItems.forEach(item => {
+            if (!groupMap.has(item.nodeId)) {
+              groupMap.set(item.nodeId, []);
+              groupOrder.push(item.nodeId);
+            }
+            groupMap.get(item.nodeId).push(item);
+          });
 
-          return (
-            <div
-              key={itemKey}
-              className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-            >
-              {/* Node header - clickable to expand */}
-              <button
-                onClick={() => hasDetails && toggleNode(itemKey)}
-                className={`w-full flex items-start gap-3 p-3 text-left ${
-                  hasDetails ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : ''
-                }`}
-                disabled={!hasDetails}
+          return groupOrder.map(nodeId => {
+            const items = groupMap.get(nodeId);
+            const isGrouped = items.length > 1;
+            const groupKey = `group-${nodeId}`;
+            const isGroupExpanded = expandedNodes.has(groupKey);
+            const firstItem = items[0];
+            const lastItem = items[items.length - 1];
+
+            // For groups: show a single collapsible card
+            if (isGrouped) {
+              return (
+                <div
+                  key={groupKey}
+                  className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+                >
+                  {/* Group header */}
+                  <button
+                    onClick={() => toggleNode(groupKey)}
+                    className="w-full flex items-start gap-3 p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                  >
+                    <NodeStatus status={lastItem.status} />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Icon
+                          name={getTypeIcon(firstItem.type)}
+                          className="w-4 h-4 text-gray-400"
+                        />
+                        <span className="font-medium text-gray-900 dark:text-white">
+                          {firstItem.name}
+                        </span>
+                        <span className="text-xs bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 px-2 py-0.5 rounded">
+                          {items.length} {t('workflows.progress.iterations', 'iterations')}
+                        </span>
+                      </div>
+                      {!isGroupExpanded && lastItem.insight && (
+                        <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                          {lastItem.insight}
+                        </p>
+                      )}
+                    </div>
+                    <Icon
+                      name={isGroupExpanded ? 'chevron-up' : 'chevron-down'}
+                      className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    />
+                  </button>
+
+                  {/* Expanded: show each iteration as a sub-row */}
+                  {isGroupExpanded && (
+                    <div className="border-t border-gray-200 dark:border-gray-700">
+                      {items.map(item => {
+                        const itemKey = `${item.nodeId}-${item.historyIndex}`;
+                        const isItemExpanded = expandedNodes.has(itemKey);
+                        const hasDetails = item.rawResult || item.outputValue;
+
+                        return (
+                          <div
+                            key={itemKey}
+                            className="border-b last:border-b-0 border-gray-100 dark:border-gray-700"
+                          >
+                            <button
+                              onClick={() => hasDetails && toggleNode(itemKey)}
+                              className={`w-full flex items-start gap-3 p-3 pl-6 text-left ${
+                                hasDetails
+                                  ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer'
+                                  : ''
+                              }`}
+                              disabled={!hasDetails}
+                            >
+                              <NodeStatus status={item.status} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
+                                    #{item.iteration}
+                                  </span>
+                                  {item.type === 'agent' && item.model && (
+                                    <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                                      {item.model}
+                                    </span>
+                                  )}
+                                  {item.tokens &&
+                                    (item.tokens.input > 0 || item.tokens.output > 0) && (
+                                      <span
+                                        className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                                        title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
+                                      >
+                                        {(item.tokens.input + item.tokens.output).toLocaleString()}{' '}
+                                        tokens
+                                      </span>
+                                    )}
+                                  {item.duration !== undefined && item.duration !== null && (
+                                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                                      {item.duration >= 1000
+                                        ? `${(item.duration / 1000).toFixed(1)}s`
+                                        : item.duration > 0
+                                          ? `${item.duration}ms`
+                                          : '<1ms'}
+                                    </span>
+                                  )}
+                                  {item.timestamp && (
+                                    <span className="text-xs text-gray-400 dark:text-gray-500">
+                                      {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
+                                    </span>
+                                  )}
+                                </div>
+                                {item.insight && (
+                                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                                    {item.insight}
+                                  </p>
+                                )}
+                                {item.outputVariable && item.outputValue && !isItemExpanded && (
+                                  <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                                    <span className="font-mono">{item.outputVariable}</span> ={' '}
+                                    {summarizeValue(item.outputValue, 80)}
+                                  </p>
+                                )}
+                              </div>
+                              {hasDetails && (
+                                <Icon
+                                  name={isItemExpanded ? 'chevron-up' : 'chevron-down'}
+                                  className="w-5 h-5 text-gray-400 flex-shrink-0"
+                                />
+                              )}
+                            </button>
+                            {isItemExpanded && hasDetails && <ItemDetails item={item} t={t} />}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            // Single-occurrence nodes render as before
+            const item = firstItem;
+            const itemKey = `${item.nodeId}-${item.historyIndex}`;
+            const isExpanded = expandedNodes.has(itemKey);
+            const hasDetails = item.rawResult || item.outputValue;
+
+            return (
+              <div
+                key={itemKey}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
               >
-                {/* Status indicator */}
-                <NodeStatus status={item.status} />
-
-                {/* Node info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
-                    <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
-                    {/* Iteration badge for repeated nodes in loops */}
-                    {item.showIterationBadge && (
-                      <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
-                        #{item.iteration}
-                      </span>
+                <button
+                  onClick={() => hasDetails && toggleNode(itemKey)}
+                  className={`w-full flex items-start gap-3 p-3 text-left ${
+                    hasDetails ? 'hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer' : ''
+                  }`}
+                  disabled={!hasDetails}
+                >
+                  <NodeStatus status={item.status} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
+                      <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
+                      {item.type === 'agent' && item.model && (
+                        <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
+                          {item.model}
+                        </span>
+                      )}
+                      {item.tokens && (item.tokens.input > 0 || item.tokens.output > 0) && (
+                        <span
+                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                          title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
+                        >
+                          {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
+                        </span>
+                      )}
+                      {item.duration !== undefined && item.duration !== null && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {item.duration >= 1000
+                            ? `${(item.duration / 1000).toFixed(1)}s`
+                            : item.duration > 0
+                              ? `${item.duration}ms`
+                              : '<1ms'}
+                        </span>
+                      )}
+                      {item.timestamp && (
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
+                        </span>
+                      )}
+                    </div>
+                    {item.insight && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                        {item.insight}
+                      </p>
                     )}
-                    {/* Model badge for agent nodes */}
-                    {item.type === 'agent' && item.model && (
-                      <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
-                        {item.model}
-                      </span>
-                    )}
-                    {/* Token count for agent nodes */}
-                    {item.tokens && (item.tokens.input > 0 || item.tokens.output > 0) && (
-                      <span
-                        className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
-                        title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
-                      >
-                        {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
-                      </span>
-                    )}
-                    {/* Duration badge */}
-                    {item.duration !== undefined && item.duration !== null && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {item.duration >= 1000
-                          ? `${(item.duration / 1000).toFixed(1)}s`
-                          : item.duration > 0
-                            ? `${item.duration}ms`
-                            : '<1ms'}
-                      </span>
-                    )}
-                    {item.timestamp && (
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {new Date(item.timestamp).toLocaleTimeString(currentLanguage)}
-                      </span>
+                    {item.outputVariable && item.outputValue && !isExpanded && (
+                      <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
+                        <span className="font-mono">{item.outputVariable}</span> ={' '}
+                        {summarizeValue(item.outputValue, 80)}
+                      </p>
                     )}
                   </div>
-
-                  {/* Insight summary */}
-                  {item.insight && (
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.insight}</p>
+                  {hasDetails && (
+                    <Icon
+                      name={isExpanded ? 'chevron-up' : 'chevron-down'}
+                      className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    />
                   )}
-
-                  {/* Output variable preview for agent nodes */}
-                  {item.outputVariable && item.outputValue && !isExpanded && (
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                      <span className="font-mono">{item.outputVariable}</span> ={' '}
-                      {summarizeValue(item.outputValue, 80)}
-                    </p>
-                  )}
-                </div>
-
-                {/* Expand indicator */}
-                {hasDetails && (
-                  <Icon
-                    name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                    className="w-5 h-5 text-gray-400 flex-shrink-0"
-                  />
-                )}
-              </button>
-
-              {/* Expanded details */}
-              {isExpanded && hasDetails && (
-                <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
-                  {/* Output variable and value */}
-                  {item.outputVariable && item.outputValue && (
-                    <div className="mb-3">
-                      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {t('workflows.progress.outputVariable', 'Output Variable')}:{' '}
-                        <span className="font-mono text-indigo-600 dark:text-indigo-400">
-                          {item.outputVariable}
-                        </span>
-                      </div>
-                      <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-48">
-                        {typeof item.outputValue === 'string'
-                          ? item.outputValue
-                          : JSON.stringify(item.outputValue, null, 2)}
-                      </pre>
-                    </div>
-                  )}
-
-                  {/* Decision details */}
-                  {item.type === 'decision' && item.rawResult?.output && (
-                    <div className="mb-3">
-                      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {t('workflows.progress.decisionResult', 'Decision Result')}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`px-2 py-1 rounded text-xs font-medium ${
-                            item.rawResult.output.branch === 'true'
-                              ? 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300'
-                              : 'bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-300'
-                          }`}
-                        >
-                          Branch: {item.rawResult.output.branch}
-                        </span>
-                        {item.rawResult.output.expression && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
-                            {item.rawResult.output.expression}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Human response details */}
-                  {item.type === 'human' && item.rawResult && (
-                    <div className="mb-3">
-                      <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                        {t('workflows.progress.humanResponse', 'Human Response')}
-                      </div>
-                      <div className="text-sm">
-                        <span className="font-medium">Choice:</span>{' '}
-                        {item.rawResult.output?.branch ||
-                          item.rawResult.branch ||
-                          item.rawResult.response}
-                        {(item.rawResult.output?.data?.feedback ||
-                          item.rawResult.data?.feedback) && (
-                          <div className="mt-1 text-gray-600 dark:text-gray-400">
-                            <span className="font-medium">Feedback:</span>{' '}
-                            {item.rawResult.output?.data?.feedback || item.rawResult.data?.feedback}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Raw result for debugging (only show if no specific view) */}
-                  {item.rawResult &&
-                    !item.outputVariable &&
-                    item.type !== 'decision' &&
-                    item.type !== 'human' && (
-                      <div>
-                        <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
-                          {t('workflows.progress.rawOutput', 'Output')}
-                        </div>
-                        <pre className="text-xs bg-white dark:bg-gray-800 p-2 rounded border border-gray-200 dark:border-gray-700 overflow-auto max-h-32">
-                          {JSON.stringify(item.rawResult.output, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+                </button>
+                {isExpanded && hasDetails && <ItemDetails item={item} t={t} />}
+              </div>
+            );
+          });
+        })()}
       </div>
 
       {/* Empty state */}

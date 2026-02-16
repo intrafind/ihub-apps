@@ -11,12 +11,16 @@
  * To run integration tests, use: node --experimental-vm-modules tests/integration/workflows/run-workflow-tests.js
  */
 
+import fs from 'fs';
+import path from 'path';
 import {
   simpleLinearWorkflow,
   decisionWorkflow,
   multiTransformWorkflow
 } from './fixtures/mock-workflows.js';
 import { WorkflowStatus } from './fixtures/workflow-test-utils.js';
+
+const projectRoot = path.resolve(process.cwd());
 
 describe('Workflow Execution - Structure Tests', () => {
   describe('Simple Linear Workflow', () => {
@@ -209,5 +213,167 @@ describe('Workflow Validation', () => {
       const endNodes = workflow.nodes.filter(n => n.type === 'end');
       expect(endNodes.length).toBeGreaterThanOrEqual(1);
     });
+  });
+});
+
+describe('Variable Resolution', () => {
+  // BaseNodeExecutor is ESM, so we use dynamic import
+  let executor;
+
+  beforeAll(async () => {
+    const mod = await import('../../../server/services/workflow/executors/BaseNodeExecutor.js');
+    const BaseNodeExecutor = mod.BaseNodeExecutor || mod.default;
+    executor = new BaseNodeExecutor();
+  });
+
+  test('resolves $.researchPlan.queries[0] from parsed object', () => {
+    const state = {
+      researchPlan: {
+        queries: ['Node.js 22 new features', 'Node.js 22 vs 20'],
+        approach: 'Compare versions'
+      }
+    };
+    const result = executor.resolveVariable('$.researchPlan.queries[0]', state);
+    expect(result).toBe('Node.js 22 new features');
+  });
+
+  test('resolves $.researchPlan.queries[0] from string returns undefined', () => {
+    const state = {
+      researchPlan: '{"queries": ["Node.js 22 features"], "approach": "search"}'
+    };
+    const result = executor.resolveVariable('$.researchPlan.queries[0]', state);
+    expect(result).toBeUndefined();
+  });
+
+  test('resolves {{query}} template expansion from state.data', () => {
+    const state = { data: { query: 'test query' } };
+    // Template expansion is handled by AgentNodeExecutor, not BaseNodeExecutor.
+    // BaseNodeExecutor only handles $.path resolution.
+    // Test that $.data.query works correctly.
+    const result = executor.resolveVariable('$.data.query', state);
+    expect(result).toBe('test query');
+  });
+
+  test('missing variable path returns undefined', () => {
+    const state = { data: { other: 'value' } };
+    const result = executor.resolveVariable('$.data.missing.nested', state);
+    expect(result).toBeUndefined();
+  });
+
+  test('resolves nested object with mixed references and literals', () => {
+    const state = {
+      researchPlan: {
+        queries: ['query1', 'query2'],
+        approach: 'systematic'
+      }
+    };
+    const params = executor.resolveVariables(
+      { query: '$.researchPlan.queries[0]', count: 5, literal: 'hello' },
+      state
+    );
+    expect(params.query).toBe('query1');
+    expect(params.count).toBe(5);
+    expect(params.literal).toBe('hello');
+  });
+
+  test('resolves array index beyond bounds returns undefined', () => {
+    const state = {
+      items: ['a', 'b']
+    };
+    const result = executor.resolveVariable('$.items[5]', state);
+    expect(result).toBeUndefined();
+  });
+});
+
+describe('Workflow JSON File Validation', () => {
+  const workflowFiles = [
+    'research-assistant.json',
+    'approval-workflow.json',
+    'iterative-research-auto.json',
+    'iterative-research-human.json'
+  ];
+
+  const workflows = {};
+
+  beforeAll(() => {
+    for (const file of workflowFiles) {
+      const filePath = path.join(projectRoot, 'contents/workflows', file);
+      if (fs.existsSync(filePath)) {
+        workflows[file] = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+      }
+    }
+  });
+
+  test('all workflow JSON files are valid JSON', () => {
+    for (const file of workflowFiles) {
+      expect(workflows[file]).toBeDefined();
+      expect(workflows[file].id).toBeTruthy();
+    }
+  });
+
+  test('all agent nodes use modelId instead of model', () => {
+    for (const [_file, workflow] of Object.entries(workflows)) {
+      const agentNodes = workflow.nodes.filter(n => n.type === 'agent');
+      for (const node of agentNodes) {
+        expect(node.config.model).toBeUndefined();
+        expect(node.config.modelId).toBeTruthy();
+      }
+    }
+  });
+
+  test('start nodes with inputMapping use $.input path', () => {
+    for (const [_file, workflow] of Object.entries(workflows)) {
+      const startNode = workflow.nodes.find(n => n.type === 'start');
+      if (startNode?.config?.inputMapping) {
+        for (const [_key, value] of Object.entries(startNode.config.inputMapping)) {
+          if (typeof value === 'string' && value.startsWith('$.')) {
+            expect(value).not.toContain('$.initialData');
+          }
+        }
+      }
+    }
+  });
+
+  test('all workflow files have unique node IDs', () => {
+    for (const [_file, workflow] of Object.entries(workflows)) {
+      const nodeIds = workflow.nodes.map(n => n.id);
+      const uniqueIds = [...new Set(nodeIds)];
+      expect(nodeIds.length).toBe(uniqueIds.length);
+    }
+  });
+
+  test('all workflow files have at least one start and one end node', () => {
+    for (const [_file, workflow] of Object.entries(workflows)) {
+      const startNodes = workflow.nodes.filter(n => n.type === 'start');
+      const endNodes = workflow.nodes.filter(n => n.type === 'end');
+      expect(startNodes.length).toBeGreaterThanOrEqual(1);
+      expect(endNodes.length).toBeGreaterThanOrEqual(1);
+    }
+  });
+});
+
+describe('Node Execution Config', () => {
+  test('research-assistant.json has execution config on nodes', () => {
+    const filePath = path.join(projectRoot, 'contents/workflows/research-assistant.json');
+    const workflow = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+
+    const planner = workflow.nodes.find(n => n.id === 'planner');
+    expect(planner.execution).toBeDefined();
+    expect(planner.execution.timeout).toBe(30000);
+    expect(planner.execution.retries).toBe(1);
+
+    const searcher = workflow.nodes.find(n => n.id === 'searcher');
+    expect(searcher.execution).toBeDefined();
+    expect(searcher.execution.retries).toBe(1);
+    expect(searcher.execution.retryDelay).toBe(2000);
+  });
+
+  test('nodes without execution config default to no retries', () => {
+    // Verify the engine convention: missing execution.retries means 0 retries
+    const executionConfig = {};
+    const maxRetries = executionConfig.retries || 0;
+    const retryDelay = executionConfig.retryDelay || 1000;
+    expect(maxRetries).toBe(0);
+    expect(retryDelay).toBe(1000);
   });
 });

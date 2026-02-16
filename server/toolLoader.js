@@ -5,6 +5,49 @@ import { createSourceManager } from './sources/index.js';
 import logger from './utils/logger.js';
 
 /**
+ * Build JSON Schema parameters from a workflow's start node inputVariables
+ * @param {Object} workflow - Workflow definition
+ * @returns {Object} JSON Schema parameters object
+ */
+function buildWorkflowToolParams(workflow) {
+  const properties = {
+    input: {
+      type: 'string',
+      description: 'The user message or primary input for the workflow'
+    }
+  };
+  const required = ['input'];
+
+  // Extract input variables from the start node config
+  const startNode = (workflow.nodes || []).find(n => n.type === 'start');
+  const inputVariables = startNode?.config?.inputVariables;
+
+  if (Array.isArray(inputVariables)) {
+    for (const varDef of inputVariables) {
+      if (typeof varDef === 'string') {
+        if (varDef !== 'input') {
+          properties[varDef] = { type: 'string', description: varDef };
+        }
+      } else if (varDef && varDef.name && varDef.name !== 'input') {
+        properties[varDef.name] = {
+          type: varDef.type || 'string',
+          description: varDef.description || varDef.name
+        };
+        if (varDef.required) {
+          required.push(varDef.name);
+        }
+      }
+    }
+  }
+
+  return {
+    type: 'object',
+    properties,
+    required
+  };
+}
+
+/**
  * Extract language-specific value from a multilingual object or return the value as-is
  * @param {any} value - Value that might be a multilingual object {en: "...", de: "..."}
  * @param {string} language - Target language (e.g., 'en', 'de')
@@ -222,6 +265,39 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // Add workflow tools (entries like "workflow:<id>" in app.tools)
+  if (Array.isArray(app.tools)) {
+    const workflowToolIds = app.tools.filter(
+      t => typeof t === 'string' && t.startsWith('workflow:')
+    );
+    for (const ref of workflowToolIds) {
+      try {
+        const wfId = ref.replace('workflow:', '');
+        const wf = configCache.getWorkflowById(wfId);
+        if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
+
+        const toolDescription = extractLanguageValue(
+          wf.chatIntegration?.toolDescription || wf.description,
+          language || 'en'
+        );
+        const toolName = extractLanguageValue(wf.name, language || 'en');
+
+        appTools.push({
+          id: `workflow_${wfId}`,
+          name: toolName,
+          description: toolDescription,
+          script: 'workflowRunner.js',
+          isWorkflowTool: true,
+          workflowId: wfId,
+          passthrough: true,
+          parameters: buildWorkflowToolParams(wf)
+        });
+      } catch (error) {
+        logger.error(`Error generating workflow tool for ${ref}:`, error);
+      }
+    }
+  }
+
   return appTools;
 }
 
@@ -244,6 +320,12 @@ export async function runTool(toolId, params = {}) {
   logger.info(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
   if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
+  }
+
+  // Check if this is a workflow tool (starts with 'workflow_')
+  if (toolId.startsWith('workflow_')) {
+    const mod = await import('./tools/workflowRunner.js');
+    return await mod.default({ ...params, workflowId: toolId.replace('workflow_', '') });
   }
 
   // Check if this is a source tool (starts with 'source_')

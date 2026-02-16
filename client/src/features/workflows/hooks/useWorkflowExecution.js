@@ -124,16 +124,41 @@ function useWorkflowExecution(executionId) {
             // Always store latest result under nodeId for backward compatibility
             nodeResults[data.nodeId] = data.result;
 
+            // Update execution metrics from node result
+            const prevMetrics = prev?.data?.executionMetrics || {
+              totalDuration: 0,
+              totalTokens: { input: 0, output: 0, total: 0 },
+              nodeCount: 0
+            };
+            const resultMetrics = data.result?.metrics;
+            const resultTokens = data.result?.tokens;
+            const updatedMetrics = resultMetrics
+              ? {
+                  totalDuration: prevMetrics.totalDuration + (resultMetrics.duration || 0),
+                  totalTokens: {
+                    input: prevMetrics.totalTokens.input + (resultTokens?.input || 0),
+                    output: prevMetrics.totalTokens.output + (resultTokens?.output || 0),
+                    total:
+                      prevMetrics.totalTokens.total +
+                      ((resultTokens?.input || 0) + (resultTokens?.output || 0))
+                  },
+                  nodeCount: prevMetrics.nodeCount + 1
+                }
+              : prevMetrics;
+
             return {
               ...prev,
+              // Remove completed node from currentNodes
+              currentNodes: (prev?.currentNodes || []).filter(id => id !== data.nodeId),
               history: [...(prev?.history || []), { ...data, iteration }],
               completedNodes: [...(prev?.completedNodes || []), data.nodeId].filter(
                 (v, i, a) => a.indexOf(v) === i
               ),
-              // Store node results with iteration support
               data: {
                 ...prev?.data,
-                nodeResults
+                nodeResults,
+                nodeInvocations: (prev?.data?.nodeInvocations || 0) + 1,
+                executionMetrics: updatedMetrics
               }
             };
           });

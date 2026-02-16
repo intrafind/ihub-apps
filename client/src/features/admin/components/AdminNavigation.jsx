@@ -105,6 +105,13 @@ const AdminNavigation = () => {
           href: '/admin/shortlinks',
           // icon: 'link',
           current: location.pathname.startsWith('/admin/shortlinks')
+        },
+        {
+          key: 'workflows',
+          name: t('admin.nav.workflows', 'Workflows'),
+          href: '/admin/workflows',
+          // icon: 'arrows-right-left',
+          current: location.pathname.startsWith('/admin/workflows')
         }
       ]
     },

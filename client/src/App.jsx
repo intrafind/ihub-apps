@@ -40,6 +40,13 @@ const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPr
 const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
 const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
 const AdminToolEditPage = React.lazy(() => import('./features/admin/pages/AdminToolEditPage'));
+const AdminWorkflowsPage = React.lazy(() => import('./features/admin/pages/AdminWorkflowsPage'));
+const AdminWorkflowEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminWorkflowEditPage')
+);
+const AdminWorkflowExecutionsPage = React.lazy(
+  () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
+);
 const AdminSourcesPage = React.lazy(() => import('./features/admin/pages/AdminSourcesPage'));
 const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/AdminSourceEditPage'));
 const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
@@ -297,6 +304,30 @@ function App() {
                       <Route
                         path="admin/tools/:toolId"
                         element={<LazyAdminRoute component={AdminToolEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows"
+                        element={<LazyAdminRoute component={AdminWorkflowsPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/new"
+                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/executions"
+                        element={<LazyAdminRoute component={AdminWorkflowExecutionsPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/:id"
+                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
                       />
                     )}
                     {showAdminPage('sources') && (

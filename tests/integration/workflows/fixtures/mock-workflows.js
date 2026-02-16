@@ -224,7 +224,7 @@ export const simpleAgentWorkflow = {
       config: {
         system: { en: 'You are a helpful assistant. Be concise.' },
         prompt: { en: 'Summarize the following text in one sentence: {{text}}' },
-        model: 'auto',
+        modelId: 'gemini-3.0-flash',
         outputVariable: 'summary'
       }
     },
@@ -270,7 +270,7 @@ export const toolCallingWorkflow = {
         prompt: {
           en: 'Search for information about: {{query}}. Use the googleSearch tool, then summarize what you found in 2-3 sentences.'
         },
-        model: 'auto',
+        modelId: 'gemini-3.0-flash',
         tools: ['googleSearch'],
         maxIterations: 3,
         outputVariable: 'searchResults',
@@ -338,7 +338,7 @@ export const iterativeResearchWorkflow = {
         prompt: {
           en: 'Research topic: {{topic}}\nIteration: {{iteration}}\nPrevious findings: {{findings}}\n\nProvide one new key finding about this topic that was not mentioned in previous findings. Output as JSON with a "finding" field.'
         },
-        model: 'auto',
+        modelId: 'gemini-3.0-flash',
         outputVariable: 'currentFinding',
         outputSchema: {
           type: 'object',

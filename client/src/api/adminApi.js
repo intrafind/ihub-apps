@@ -358,6 +358,48 @@ export const toggleSources = async (ids, enabled) => {
   return response.data;
 };
 
+// Workflow API functions
+export const fetchAdminWorkflows = async () => {
+  try {
+    const response = await makeAdminApiCall('/admin/workflows');
+    const data = response.data;
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error in fetchAdminWorkflows:', error);
+    throw error;
+  }
+};
+
+export const fetchAdminWorkflow = async id => {
+  const response = await makeAdminApiCall(`/workflows/${id}`);
+  return response.data;
+};
+
+export const createAdminWorkflow = async data => {
+  const response = await makeAdminApiCall('/workflows', { method: 'POST', body: data });
+  return response.data;
+};
+
+export const updateAdminWorkflow = async (id, data) => {
+  const response = await makeAdminApiCall(`/workflows/${id}`, { method: 'PUT', body: data });
+  return response.data;
+};
+
+export const deleteAdminWorkflow = async id => {
+  const response = await makeAdminApiCall(`/workflows/${id}`, { method: 'DELETE' });
+  return response.data;
+};
+
+export const toggleAdminWorkflow = async id => {
+  const response = await makeAdminApiCall(`/admin/workflows/${id}/toggle`, { method: 'POST' });
+  return response.data;
+};
+
+export const fetchAdminGroups = async () => {
+  const response = await makeAdminApiCall('/admin/groups');
+  return response.data;
+};
+
 // Tools API functions
 export const fetchAdminTools = async () => {
   try {
@@ -420,6 +462,36 @@ export const updateToolScript = async (toolId, content) => {
   return response.data;
 };
 
+// Workflow Execution Admin API functions
+
+/**
+ * Fetches workflow executions for admin view with optional filtering.
+ * Supports status filter, search, and pagination.
+ *
+ * @param {Object} [params] - Query parameters for filtering
+ * @param {string} [params.status] - Filter by status ('all', 'running', 'paused', 'completed', 'failed', 'cancelled')
+ * @param {string} [params.search] - Search by user ID or workflow name
+ * @param {number} [params.limit] - Maximum number of results
+ * @param {number} [params.offset] - Number of results to skip
+ * @returns {Promise<Object>} Response containing executions array, total count, and stats
+ */
+export const fetchAdminExecutions = async params => {
+  const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
+  const response = await makeAdminApiCall(`/admin/workflows/executions${queryString}`);
+  return response.data;
+};
+
+/**
+ * Cancels a running or paused workflow execution.
+ *
+ * @param {string} id - The execution ID to cancel
+ * @returns {Promise<Object>} Response with success status and new execution state
+ */
+export const cancelAdminExecution = async id => {
+  const response = await makeAdminApiCall(`/workflows/executions/${id}/cancel`, { method: 'POST' });
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -459,6 +531,19 @@ export const adminApi = {
   deleteSource,
   testSource,
   toggleSources,
+
+  // Workflow functions
+  fetchAdminWorkflows,
+  fetchAdminWorkflow,
+  createAdminWorkflow,
+  updateAdminWorkflow,
+  deleteAdminWorkflow,
+  toggleAdminWorkflow,
+  fetchAdminGroups,
+
+  // Workflow Execution functions
+  fetchAdminExecutions,
+  cancelAdminExecution,
 
   // Tools functions
   fetchAdminTools,

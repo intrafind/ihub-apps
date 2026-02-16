@@ -5,6 +5,14 @@
  * They are useful for deterministic operations like data retrieval,
  * API calls, or transformations that don't require AI reasoning.
  *
+ * **`tool` node vs `agent` node with tools:**
+ * - `tool` node: Single deterministic invocation. No LLM involved, fast execution.
+ *   Best for one-shot operations (e.g., a single search query, an API call).
+ *   Cannot iterate over arrays or adapt based on results.
+ * - `agent` node with `tools` array: The LLM decides when and how many times
+ *   to call tools. Adaptive and can handle multi-query scenarios (e.g., running
+ *   all planned search queries). Slower due to LLM reasoning overhead.
+ *
  * @module services/workflow/executors/ToolNodeExecutor
  */
 

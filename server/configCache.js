@@ -8,7 +8,7 @@ import {
   filterResourcesByPermissions,
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
-import { loadTools } from './toolLoader.js';
+import { loadTools, localizeTools } from './toolLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
@@ -1078,6 +1078,22 @@ class ConfigCache {
 
     if (!tools) {
       return { data: [], etag: null };
+    }
+
+    // Append workflow tools that have chatIntegration enabled
+    const { data: workflows } = this.getWorkflows();
+    const workflowTools = workflows
+      .filter(wf => wf.chatIntegration?.enabled)
+      .map(wf => ({
+        id: `workflow:${wf.id}`,
+        name: wf.chatIntegration?.toolDescription || wf.name,
+        description: wf.chatIntegration?.toolDescription || wf.description,
+        isWorkflowTool: true,
+        workflowId: wf.id
+      }));
+
+    if (workflowTools.length > 0) {
+      tools = [...tools, ...localizeTools(workflowTools, language)];
     }
 
     const originalToolsCount = tools.length;

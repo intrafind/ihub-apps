@@ -27,6 +27,7 @@ import {
   sendFailedOperationError,
   sendInsufficientPermissions
 } from '../../utils/responseHelpers.js';
+import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 
@@ -57,11 +58,9 @@ function checkWorkflowsFeature(req, res, next) {
 const workflowClients = new Map();
 
 /**
- * Filters workflows based on user permissions.
- * A workflow is accessible if:
- * - It has no allowedGroups defined (public)
- * - The user belongs to at least one of the allowed groups
- * - The user has admin permissions
+ * Filters workflows based on user permissions from groups.json.
+ * Uses the standard group-based permission system (permissions.workflows)
+ * consistent with how apps, models, and prompts are handled.
  *
  * @param {Object[]} workflows - Array of workflow definitions
  * @param {Object} user - User object with groups and permissions
@@ -72,26 +71,18 @@ function filterByPermissions(workflows, user) {
     return [];
   }
 
-  return workflows.filter(workflow => {
-    // If no allowedGroups defined, workflow is accessible to all authenticated users
-    if (!workflow.allowedGroups || workflow.allowedGroups.length === 0) {
-      return true;
-    }
+  // Admin users can see all workflows
+  if (isAdmin(user)) {
+    return workflows;
+  }
 
-    // If user has no groups, deny access to restricted workflows
-    if (!user?.groups || !Array.isArray(user.groups)) {
-      return false;
-    }
+  // Use the standard permission system via user.permissions.workflows
+  const workflowPermissions = user?.permissions?.workflows;
+  if (!workflowPermissions) {
+    return [];
+  }
 
-    // Check if user has admin access (admins can see all workflows)
-    const hasAdminAccess = user.groups.includes('admin') || user.permissions?.adminAccess === true;
-    if (hasAdminAccess) {
-      return true;
-    }
-
-    // Check if user belongs to any of the allowed groups
-    return workflow.allowedGroups.some(group => user.groups.includes(group));
-  });
+  return filterResourcesByPermissions(workflows, workflowPermissions);
 }
 
 /**
@@ -247,6 +238,26 @@ export default function registerWorkflowRoutes(app, deps = {}) {
   const { basePath = '' } = deps;
   const workflowEngine = deps.workflowEngine || new WorkflowEngine();
 
+  // Recover persisted executions from disk on startup
+  const registry = getExecutionRegistry();
+  registry
+    .loadFromDisk()
+    .then(() => {
+      // Mark previously-running executions as failed (server process died)
+      for (const exec of registry.getActive()) {
+        if (exec.status === 'running') {
+          registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
+        }
+      }
+    })
+    .catch(err => {
+      logger.error({
+        component: 'WorkflowRoutes',
+        message: 'Failed to load execution registry from disk',
+        error: err.message
+      });
+    });
+
   // ============================================================================
   // Workflow Definition Endpoints
   // ============================================================================
@@ -346,7 +357,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     authRequired,
     async (req, res) => {
       try {
-        const userId = req.user?.id || req.user?.username || 'anonymous';
+        const userId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
         const { status, limit = 20, offset = 0 } = req.query;
 
         const registry = getExecutionRegistry();
@@ -508,6 +519,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           message: 'Workflow created successfully',
           workflow: validation.data
         });
+
+        // Refresh workflow cache after successful creation
+        configCache.refreshWorkflowsCache?.();
       } catch (error) {
         sendFailedOperationError(res, 'create workflow', error);
       }
@@ -605,6 +619,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           message: 'Workflow updated successfully',
           workflow: validation.data
         });
+
+        // Refresh workflow cache after successful update
+        configCache.refreshWorkflowsCache?.();
       } catch (error) {
         sendFailedOperationError(res, 'update workflow', error);
       }
@@ -679,6 +696,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         res.json({
           message: 'Workflow deleted successfully'
         });
+
+        // Refresh workflow cache after successful deletion
+        configCache.refreshWorkflowsCache?.();
       } catch (error) {
         sendFailedOperationError(res, 'delete workflow', error);
       }
@@ -1723,6 +1743,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           workflow,
           enabled: newEnabledState
         });
+
+        // Refresh workflow cache after successful toggle
+        configCache.refreshWorkflowsCache?.();
       } catch (error) {
         sendFailedOperationError(res, 'toggle workflow', error);
       }
@@ -1733,9 +1756,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    * @swagger
    * /api/admin/workflows/executions:
    *   get:
-   *     summary: List all active executions (admin view)
+   *     summary: List workflow executions (admin view)
    *     description: |
-   *       Retrieves summaries of all active workflow executions.
+   *       Retrieves workflow executions with optional filtering.
+   *       When status=all or a specific status is provided, returns executions
+   *       from the ExecutionRegistry (which includes completed/failed/cancelled).
+   *       Without filters, returns only active (running/paused) executions.
    *       Admin access required.
    *     tags:
    *       - Workflows
@@ -1743,9 +1769,33 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *       - Execution
    *     security:
    *       - adminAuth: []
+   *     parameters:
+   *       - in: query
+   *         name: status
+   *         schema:
+   *           type: string
+   *           enum: [all, running, paused, completed, failed, cancelled]
+   *         description: Filter by execution status. Use 'all' to return all executions.
+   *       - in: query
+   *         name: search
+   *         schema:
+   *           type: string
+   *         description: Search by user ID or workflow name
+   *       - in: query
+   *         name: limit
+   *         schema:
+   *           type: integer
+   *           default: 100
+   *         description: Maximum number of results
+   *       - in: query
+   *         name: offset
+   *         schema:
+   *           type: integer
+   *           default: 0
+   *         description: Number of results to skip
    *     responses:
    *       200:
-   *         description: Active execution summaries
+   *         description: Execution summaries with stats
    *       401:
    *         description: Authentication required
    *       403:
@@ -1759,10 +1809,72 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     adminAuth,
     async (req, res) => {
       try {
-        const executions = await workflowEngine.listActiveExecutions();
-        res.json(executions);
+        const { status, search, limit = 100, offset = 0 } = req.query;
+        const registry = getExecutionRegistry();
+
+        let executions;
+
+        if (status === 'all' || status) {
+          // Get all executions from the registry
+          let allExecutions = Array.from(registry.executions.values()).map(e => ({ ...e }));
+
+          // Apply status filter (unless 'all')
+          if (status && status !== 'all') {
+            allExecutions = allExecutions.filter(e => e.status === status);
+          }
+
+          // Apply search filter on userId or workflowName
+          if (search) {
+            const searchLower = search.toLowerCase();
+            allExecutions = allExecutions.filter(e => {
+              const userId = (e.userId || '').toLowerCase();
+              const workflowName =
+                typeof e.workflowName === 'object'
+                  ? Object.values(e.workflowName).join(' ').toLowerCase()
+                  : (e.workflowName || '').toLowerCase();
+              const workflowId = (e.workflowId || '').toLowerCase();
+              return (
+                userId.includes(searchLower) ||
+                workflowName.includes(searchLower) ||
+                workflowId.includes(searchLower)
+              );
+            });
+          }
+
+          // Sort by startedAt descending (most recent first)
+          allExecutions.sort((a, b) => new Date(b.startedAt) - new Date(a.startedAt));
+
+          // Apply pagination
+          const parsedOffset = parseInt(offset, 10) || 0;
+          const parsedLimit = parseInt(limit, 10) || 100;
+          const total = allExecutions.length;
+          executions = allExecutions.slice(parsedOffset, parsedOffset + parsedLimit);
+
+          // Get stats from registry
+          const stats = registry.getStats();
+
+          res.json({
+            executions,
+            total,
+            stats,
+            offset: parsedOffset,
+            limit: parsedLimit
+          });
+        } else {
+          // Default behavior: return only active executions from WorkflowEngine
+          const activeExecutions = await workflowEngine.listActiveExecutions();
+          const stats = registry.getStats();
+
+          res.json({
+            executions: activeExecutions,
+            total: activeExecutions.length,
+            stats,
+            offset: 0,
+            limit: activeExecutions.length
+          });
+        }
       } catch (error) {
-        sendFailedOperationError(res, 'fetch active executions', error);
+        sendFailedOperationError(res, 'fetch executions', error);
       }
     }
   );

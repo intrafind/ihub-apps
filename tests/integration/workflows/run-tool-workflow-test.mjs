@@ -32,7 +32,7 @@ const toolCallingWorkflow = {
         prompt: {
           en: 'Search for information about: {{query}}. Use the googleSearch tool, then summarize what you found in 2-3 sentences.'
         },
-        model: 'auto',
+        modelId: 'gemini-3.0-flash',
         tools: ['googleSearch'],
         maxIterations: 3,
         outputVariable: 'searchResults'

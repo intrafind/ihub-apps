@@ -352,10 +352,35 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
         logger.info('Prompts directory not found or empty');
       }
 
+      // Get workflows
+      const workflowsPath = join(rootDir, 'contents', 'workflows');
+      const workflows = [];
+
+      try {
+        const workflowFiles = await fs.readdir(workflowsPath);
+        for (const file of workflowFiles) {
+          if (file.endsWith('.json')) {
+            try {
+              const workflowData = await fs.readFile(join(workflowsPath, file), 'utf8');
+              const workflow = JSON.parse(workflowData);
+              workflows.push({
+                id: workflow.id,
+                name: workflow.name || { en: workflow.id, de: workflow.id }
+              });
+            } catch (error) {
+              logger.warn(`Error reading workflow file ${file}:`, error.message);
+            }
+          }
+        }
+      } catch {
+        logger.info('Workflows directory not found or empty');
+      }
+
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
-        prompts: prompts.sort((a, b) => a.id.localeCompare(b.id))
+        prompts: prompts.sort((a, b) => a.id.localeCompare(b.id)),
+        workflows: workflows.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
       logger.error('Error getting resources:', error);
@@ -514,6 +539,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
           apps: Array.isArray(permissions.apps) ? permissions.apps : [],
           prompts: Array.isArray(permissions.prompts) ? permissions.prompts : [],
           models: Array.isArray(permissions.models) ? permissions.models : [],
+          workflows: Array.isArray(permissions.workflows) ? permissions.workflows : [],
           adminAccess: Boolean(permissions.adminAccess)
         },
         mappings: Array.isArray(mappings) ? mappings : []
@@ -646,6 +672,9 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
           models: Array.isArray(permissions.models)
             ? permissions.models
             : group.permissions.models || [],
+          workflows: Array.isArray(permissions.workflows)
+            ? permissions.workflows
+            : group.permissions.workflows || [],
           adminAccess:
             permissions.adminAccess !== undefined
               ? Boolean(permissions.adminAccess)

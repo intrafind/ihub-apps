@@ -4,12 +4,15 @@ import path from 'path';
 import fs from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger.js';
+import { getRootDir } from '../../pathUtils.js';
+import config from '../../config.js';
 
 /**
  * Default directory for workflow state persistence
+ * Uses the canonical path: {rootDir}/{CONTENTS_DIR}/data/workflow-state
  * @constant {string}
  */
-const STATE_DIR = 'contents/workflow-state';
+const STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
 
 /**
  * Maximum allowed size for workflow state in bytes (50MB)
@@ -44,6 +47,37 @@ export const WorkflowStatus = {
  *   data: { input: 'test' }
  * });
  */
+/**
+ * Singleton StateManager instance shared across all WorkflowEngine instances.
+ * This prevents state isolation when multiple engines (e.g., workflowRunner
+ * and workflowRoutes) each create their own StateManager with separate
+ * in-memory activeStates Maps.
+ * @type {StateManager|null}
+ * @private
+ */
+let _singletonInstance = null;
+
+/**
+ * Returns the shared StateManager singleton instance.
+ * Creates one on first call. All WorkflowEngine instances should use this
+ * to ensure consistent in-memory state across different code paths.
+ * @param {Object} [options] - Options passed to constructor on first creation
+ * @returns {StateManager}
+ */
+export function getStateManager(options) {
+  if (!_singletonInstance) {
+    _singletonInstance = new StateManager(options);
+  }
+  return _singletonInstance;
+}
+
+/**
+ * Resets the singleton instance (for testing purposes only).
+ */
+export function resetStateManager() {
+  _singletonInstance = null;
+}
+
 export class StateManager {
   /**
    * Creates a new StateManager instance
@@ -240,11 +274,7 @@ export class StateManager {
     const checkpointDir = path.join(this.stateDir, executionId);
     await fs.mkdir(checkpointDir, { recursive: true });
 
-    // Write checkpoint file using atomic write
-    const checkpointPath = path.join(checkpointDir, `${checkpointId}.json`);
-    await atomicWriteJSON(checkpointPath, state);
-
-    // Also update the latest checkpoint reference
+    // Write latest checkpoint file using atomic write
     const latestPath = path.join(checkpointDir, 'latest.json');
     await atomicWriteJSON(latestPath, state);
 
@@ -260,26 +290,17 @@ export class StateManager {
   }
 
   /**
-   * Restores execution state from a specific checkpoint
+   * Restores execution state from the latest checkpoint
    * @param {string} executionId - The execution identifier
-   * @param {string} [checkpointId] - Specific checkpoint ID (uses latest if not provided)
    * @returns {Promise<Object>} The restored execution state
    * @throws {Error} If checkpoint file is not found
    *
    * @example
-   * const state = await stateManager.restore('exec-123', 'ckpt-abc123');
+   * const state = await stateManager.restore('exec-123');
    * console.log('Restored from checkpoint:', state.status);
    */
-  async restore(executionId, checkpointId) {
-    const checkpointDir = path.join(this.stateDir, executionId);
-    let checkpointPath;
-
-    if (checkpointId) {
-      checkpointPath = path.join(checkpointDir, `${checkpointId}.json`);
-    } else {
-      // Use latest checkpoint
-      checkpointPath = path.join(checkpointDir, 'latest.json');
-    }
+  async restore(executionId) {
+    const checkpointPath = path.join(this.stateDir, executionId, 'latest.json');
 
     try {
       const checkpointData = await fs.readFile(checkpointPath, 'utf8');
@@ -287,7 +308,7 @@ export class StateManager {
 
       // Mark state as restored
       restoredState.restoredAt = new Date().toISOString();
-      restoredState.restoredFrom = checkpointId || 'latest';
+      restoredState.restoredFrom = 'latest';
 
       // Store in active states
       this.activeStates.set(executionId, restoredState);
@@ -295,8 +316,7 @@ export class StateManager {
       logger.info({
         component: 'StateManager',
         message: 'State restored from checkpoint',
-        executionId,
-        checkpointId: checkpointId || 'latest'
+        executionId
       });
 
       return { ...restoredState };

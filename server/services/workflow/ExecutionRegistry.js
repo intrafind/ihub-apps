@@ -2,12 +2,15 @@ import path from 'path';
 import fs from 'fs/promises';
 import logger from '../../utils/logger.js';
 import { WorkflowStatus } from './StateManager.js';
+import { getRootDir } from '../../pathUtils.js';
+import config from '../../config.js';
 
 /**
  * Default directory for workflow state persistence
+ * Uses the canonical path: {rootDir}/{CONTENTS_DIR}/data/workflow-state
  * @constant {string}
  */
-const STATE_DIR = 'contents/workflow-state';
+const STATE_DIR = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'workflow-state');
 
 /**
  * Registry filename for persisting execution metadata
@@ -105,7 +108,7 @@ export class ExecutionRegistry {
    * });
    */
   register(executionId, metadata) {
-    const { userId, workflowId, workflowName, status, startedAt } = metadata;
+    const { userId, workflowId, workflowName, status, startedAt, source } = metadata;
 
     if (!executionId) {
       throw new Error('executionId is required');
@@ -129,7 +132,8 @@ export class ExecutionRegistry {
       updatedAt: new Date().toISOString(),
       currentNode: null,
       pendingCheckpoint: null,
-      completedAt: null
+      completedAt: null,
+      source: source || 'ui'
     };
 
     this.executions.set(executionId, execution);

@@ -6,6 +6,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { apiClient } from '../../../api/client';
 import { fetchModels } from '../../../api/endpoints/models';
 import WorkflowPreview from './WorkflowPreview';
+import UnifiedUploader from '../../upload/components/UnifiedUploader';
 
 /**
  * Renders a form field based on variable type
@@ -25,7 +26,33 @@ function FormField({ variable, value, onChange, disabled, language }) {
         {variable.required && <span className="text-red-500 ml-1">*</span>}
       </label>
 
-      {variable.type === 'select' && variable.options ? (
+      {variable.type === 'file' || variable.type === 'image' ? (
+        <UnifiedUploader
+          onFileSelect={fileData => onChange(variable.name, fileData)}
+          disabled={disabled}
+          fileData={value}
+          config={{
+            imageUpload: {
+              enabled: variable.type === 'image',
+              resizeImages: true,
+              maxResizeDimension: 1024,
+              supportedFormats: ['image/jpeg', 'image/png', 'image/webp'],
+              maxFileSizeMB: variable.maxSizeMB || 10
+            },
+            fileUpload: {
+              enabled: variable.type === 'file',
+              maxFileSizeMB: variable.maxSizeMB || 5,
+              supportedFormats: variable.accept || [
+                'application/pdf',
+                'text/plain',
+                'text/markdown',
+                'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              ]
+            },
+            allowMultiple: variable.multiple || false
+          }}
+        />
+      ) : variable.type === 'select' && variable.options ? (
         <select
           value={value || ''}
           onChange={e => onChange(variable.name, e.target.value)}

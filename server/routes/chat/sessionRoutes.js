@@ -325,6 +325,78 @@ export default function registerSessionRoutes(
           sessionId: chatId,
           timestamp: new Date().toISOString()
         });
+
+        // --- @mention workflow detection ---
+        // Check if the last user message contains an @workflow-name mention
+        const lastUserMsg = messages[messages.length - 1];
+        const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+        const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
+
+        if (mentionMatch) {
+          const mentionedId = mentionMatch[1];
+          const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
+
+          if (
+            mentionedWorkflow &&
+            mentionedWorkflow.enabled !== false &&
+            mentionedWorkflow.chatIntegration?.enabled
+          ) {
+            logger.info({
+              component: 'sessionRoutes',
+              message: '@mention workflow triggered',
+              workflowId: mentionedId,
+              chatId
+            });
+
+            // Strip the @mention from the input
+            const strippedInput = lastUserContent.replace(/@[\w.-]+/, '').trim();
+
+            // Collect file data from the last message
+            const fileData = lastUserMsg.fileData || null;
+            const imageData = lastUserMsg.imageData || null;
+
+            // Build chat history from all prior messages (excluding the last)
+            const chatHistory = messages.slice(0, -1).map(m => ({
+              role: m.role,
+              content: m.content
+            }));
+
+            try {
+              const workflowRunnerMod = await import('../../tools/workflowRunner.js');
+
+              // Fire-and-forget: start workflow but don't await completion.
+              // The workflowRunner bridge streams step events and final output via SSE.
+              workflowRunnerMod
+                .default({
+                  workflowId: mentionedId,
+                  chatId,
+                  user: req.user,
+                  input: strippedInput,
+                  modelId,
+                  _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
+                  _fileData: fileData || imageData || undefined,
+                  language: clientLanguage
+                })
+                .catch(error => {
+                  logger.error('Error running @mention workflow:', error);
+                  actionTracker.trackError(chatId, {
+                    message: `Workflow execution failed: ${error.message}`
+                  });
+                });
+
+              // Return immediately — the SSE channel delivers all progress + final output
+              return res.json({ status: 'streaming', chatId });
+            } catch (error) {
+              logger.error('Error loading workflow runner:', error);
+              actionTracker.trackError(chatId, {
+                message: `Workflow execution failed: ${error.message}`
+              });
+              return res.json({ status: 'error', message: error.message });
+            }
+          }
+        }
+        // --- end @mention detection ---
+
         if (!clients.has(chatId)) {
           logger.info(
             `No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`
@@ -439,7 +511,7 @@ export default function registerSessionRoutes(
   app.post(
     buildServerPath('/api/apps/:appId/chat/:chatId/stop', basePath),
     chatAuthRequired,
-    (req, res) => {
+    async (req, res) => {
       const { chatId } = req.params;
       if (clients.has(chatId)) {
         if (activeRequests.has(chatId)) {
@@ -452,6 +524,20 @@ export default function registerSessionRoutes(
             logger.error(`Error aborting request for chat ID: ${chatId}`, e);
           }
         }
+
+        // Also cancel any running workflow execution for this chatId
+        const { activeWorkflowExecutions } = await import('../../tools/workflowRunner.js');
+        const workflowExec = activeWorkflowExecutions.get(chatId);
+        if (workflowExec) {
+          try {
+            await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
+            activeWorkflowExecutions.delete(chatId);
+            logger.info(`Cancelled workflow ${workflowExec.executionId} for chat ID: ${chatId}`);
+          } catch (e) {
+            logger.error(`Error cancelling workflow for chat ID: ${chatId}`, e);
+          }
+        }
+
         const client = clients.get(chatId);
         actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
         client.response.end();

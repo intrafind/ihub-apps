@@ -26,7 +26,7 @@ describe('Iterative Research Workflow - Structure Tests', () => {
       expect(agentNode.config.system.en).toContain('helpful assistant');
       expect(agentNode.config.prompt).toBeDefined();
       expect(agentNode.config.prompt.en).toContain('Summarize');
-      expect(agentNode.config.model).toBe('auto');
+      expect(agentNode.config.modelId).toBe('gemini-3.0-flash');
       expect(agentNode.config.outputVariable).toBe('summary');
     });
 

@@ -12,9 +12,10 @@ actionTracker.on('fire-sse', step => {
   const { chatId, event } = step;
   if (!chatId) return;
   if (clients.has(chatId)) {
-    const client = clients.get(chatId).response;
+    const clientEntry = clients.get(chatId);
+    clientEntry.lastActivity = new Date(); // Keep connection marked as active
     try {
-      sendSSE(client, event, step);
+      sendSSE(clientEntry.response, event, step);
     } catch (err) {
       logger.error('Error sending SSE action event:', err);
     }

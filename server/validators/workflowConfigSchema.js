@@ -159,7 +159,13 @@ export const nodeConfigSchema = z.object({
    *     timeout?: number                 // Optional timeout in milliseconds
    *   }
    */
-  config: z.object({}).passthrough().optional(),
+  config: z
+    .object({
+      /** Whether this node's progress is visible in the chat step indicator. Defaults to true. */
+      chatVisible: z.boolean().optional()
+    })
+    .passthrough()
+    .optional(),
 
   /** Execution configuration for this node */
   execution: nodeExecutionSchema
@@ -318,7 +324,13 @@ const workflowGlobalConfigSchema = z
      * and iterative patterns. The maxIterations config protects against infinite loops.
      * When false, strict DAG validation is enforced and cycles are rejected at start.
      */
-    allowCycles: z.boolean().optional().default(true)
+    allowCycles: z.boolean().optional().default(true),
+
+    /**
+     * Default model ID for agent nodes that don't specify their own modelId.
+     * Avoids repeating the same modelId in every agent node config.
+     */
+    defaultModelId: z.string().optional()
   })
   .optional();
 
@@ -391,10 +403,36 @@ const baseWorkflowConfigSchema = z.object({
   edges: z.array(edgeConfigSchema),
 
   /**
+   * Source IDs to load and make available to agent nodes.
+   * Sources are resolved from the admin source configuration (sources.json).
+   * Agent nodes can reference source content via {{sources}} in their prompts.
+   */
+  sources: z.array(z.string()).optional(),
+
+  /**
    * Groups that are allowed to execute this workflow
    * If not specified, workflow visibility follows default platform permissions
    */
   allowedGroups: z.array(z.string()).optional(),
+
+  /**
+   * Chat integration configuration
+   * Controls how this workflow appears and behaves when used as a tool from chat
+   */
+  chatIntegration: z
+    .object({
+      /** Whether the workflow appears as a selectable tool in chat apps */
+      enabled: z.boolean().optional().default(false),
+      /** If true, workflow output streams directly as chat answer; if false, LLM formats the result */
+      passthroughResult: z.boolean().optional().default(false),
+      /** Overrides workflow description for the LLM tool definition */
+      toolDescription: localizedStringSchema.optional(),
+      /** Which output field to display as the primary result (e.g., "finalReport") */
+      primaryOutput: z.string().optional(),
+      /** Output format hint for the client renderer */
+      outputFormat: z.enum(['markdown', 'text', 'json']).optional()
+    })
+    .optional(),
 
   /** Visual editor canvas state */
   canvas: canvasSchema

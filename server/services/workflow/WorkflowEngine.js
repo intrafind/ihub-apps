@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { DAGScheduler } from './DAGScheduler.js';
-import { StateManager, WorkflowStatus } from './StateManager.js';
+import { getStateManager, WorkflowStatus } from './StateManager.js';
 import { getExecutor as getDefaultExecutor } from './executors/index.js';
 import { getExecutionRegistry } from './ExecutionRegistry.js';
 import { actionTracker } from '../../actionTracker.js';
@@ -54,7 +54,7 @@ export class WorkflowEngine {
      * State manager for execution state and checkpoints
      * @type {StateManager}
      */
-    this.stateManager = options.stateManager || new StateManager();
+    this.stateManager = options.stateManager || getStateManager();
 
     /**
      * DAG scheduler for dependency resolution
@@ -206,7 +206,11 @@ export class WorkflowEngine {
       throw error;
     }
 
-    // 3. Create execution state
+    // 3. Calculate execution deadline from maxExecutionTime config
+    const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
+    const executionDeadline = Date.now() + maxExecutionTime;
+
+    // 4. Create execution state
     const state = await this.stateManager.create({
       executionId,
       workflowId,
@@ -215,23 +219,24 @@ export class WorkflowEngine {
         _workflow: {
           startedBy: options.user?.id || 'anonymous',
           startedAt: new Date().toISOString()
-        }
+        },
+        _executionDeadline: executionDeadline
       },
       currentNodes: startNodes
     });
 
-    // 4. Set up abort controller for cancellation
+    // 5. Set up abort controller for cancellation
     const abortController = new AbortController();
     this.abortControllers.set(executionId, abortController);
 
-    // 5. Emit workflow start event
+    // 6. Emit workflow start event
     this._emitEvent('workflow.start', {
       executionId,
       workflowId,
       startNodes
     });
 
-    // 6. Begin execution loop (non-blocking)
+    // 7. Begin execution loop (non-blocking)
     this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
       error => {
         logger.error({
@@ -244,7 +249,7 @@ export class WorkflowEngine {
       }
     );
 
-    // 7. Return initial state (execution continues in background)
+    // 8. Return initial state (execution continues in background)
     return state;
   }
 
@@ -304,6 +309,41 @@ export class WorkflowEngine {
           throw new Error(`Execution state lost: ${executionId}`);
         }
 
+        // Check for execution deadline (maxExecutionTime)
+        const executionDeadline = state.data?._executionDeadline;
+        if (executionDeadline && Date.now() >= executionDeadline) {
+          logger.error({
+            component: 'WorkflowEngine',
+            message: 'Workflow exceeded maximum execution time',
+            executionId
+          });
+
+          await this.stateManager.update(executionId, {
+            status: WorkflowStatus.FAILED,
+            completedAt: new Date().toISOString()
+          });
+
+          await this.stateManager.addError(executionId, {
+            message: 'Workflow exceeded maximum execution time',
+            code: 'MAX_EXECUTION_TIME_EXCEEDED'
+          });
+
+          // Persist failed state to disk
+          await this.stateManager.checkpoint(executionId, 'timeout_failure');
+
+          const registry = getExecutionRegistry();
+          registry.updateStatus(executionId, WorkflowStatus.FAILED, { currentNode: null });
+
+          this._emitEvent('workflow.failed', {
+            executionId,
+            error: {
+              message: 'Maximum execution time exceeded',
+              code: 'MAX_EXECUTION_TIME_EXCEEDED'
+            }
+          });
+          break;
+        }
+
         // Check if workflow should continue
         if (state.status !== WorkflowStatus.RUNNING) {
           logger.info({
@@ -361,7 +401,64 @@ export class WorkflowEngine {
           }
 
           try {
-            const result = await this.executeNode(node, workflow, executionId, options);
+            // Read retry config from node.execution
+            const nodeExecConfig = node.execution || {};
+            const maxRetries = nodeExecConfig.retries || 0;
+            const retryDelay = nodeExecConfig.retryDelay || 1000;
+
+            let result;
+            let attempt = 0;
+
+            // Retry loop: attempt execution up to maxRetries + 1 times
+
+            while (true) {
+              try {
+                result = await this.executeNode(node, workflow, executionId, options);
+                break; // Success - exit retry loop
+              } catch (executeError) {
+                attempt++;
+                if (attempt <= maxRetries) {
+                  // Log retry attempt
+                  logger.warn({
+                    component: 'WorkflowEngine',
+                    message: `Node '${nodeId}' failed (attempt ${attempt}/${maxRetries + 1}), retrying in ${retryDelay}ms`,
+                    executionId,
+                    nodeId,
+                    attempt,
+                    maxRetries,
+                    error: executeError.message
+                  });
+
+                  // Track retry count in state
+                  const retryState = await this.stateManager.get(executionId);
+                  await this.stateManager.update(executionId, {
+                    data: {
+                      ...retryState.data,
+                      _nodeRetries: {
+                        ...(retryState.data?._nodeRetries || {}),
+                        [nodeId]: attempt
+                      }
+                    }
+                  });
+
+                  // Emit retry event
+                  this._emitEvent('workflow.node.retry', {
+                    executionId,
+                    nodeId,
+                    attempt,
+                    maxRetries,
+                    error: executeError.message,
+                    nextRetryIn: retryDelay
+                  });
+
+                  // Wait before retrying
+                  await new Promise(r => setTimeout(r, retryDelay));
+                  continue;
+                }
+                // All retries exhausted - re-throw for outer catch
+                throw executeError;
+              }
+            }
 
             // Check if the node returned a paused status (e.g., human checkpoint)
             if (result && result.status === 'paused') {
@@ -461,6 +558,9 @@ export class WorkflowEngine {
           code: 'MAX_ITERATIONS_EXCEEDED'
         });
 
+        // Persist failed state to disk
+        await this.stateManager.checkpoint(executionId, 'max_iterations_failure');
+
         this._emitEvent('workflow.failed', {
           executionId,
           error: { message: 'Maximum iterations exceeded', code: 'MAX_ITERATIONS_EXCEEDED' }
@@ -484,6 +584,9 @@ export class WorkflowEngine {
         code: error.code || 'EXECUTION_ERROR',
         stack: error.stack
       });
+
+      // Persist failed state to disk
+      await this.stateManager.checkpoint(executionId, 'execution_error');
 
       this._emitEvent('workflow.failed', {
         executionId,
@@ -542,6 +645,12 @@ export class WorkflowEngine {
       nodeType
     });
 
+    // 2b. Update registry currentNode so admin API reflects active node
+    const registry = getExecutionRegistry();
+    registry.updateStatus(executionId, WorkflowStatus.RUNNING, {
+      currentNode: nodeId
+    });
+
     // 3. Add step to history
     await this.stateManager.addStep(executionId, {
       nodeId,
@@ -569,14 +678,21 @@ export class WorkflowEngine {
       throw error;
     }
 
-    // Update iteration count in state
+    // Calculate step counters for template access
+    const nodeInvocations = Object.keys(state.data?.nodeResults || {}).length + 1;
+    const totalNodes = workflow.nodes.filter(n => n.type !== 'start' && n.type !== 'end').length;
+
+    // Update iteration count and step counters in state
     await this.stateManager.update(executionId, {
       data: {
         ...state.data,
         _nodeIterations: {
           ...nodeIterations,
           [nodeId]: currentIteration
-        }
+        },
+        _currentStep: nodeInvocations,
+        _currentNodeIteration: currentIteration,
+        _totalNodes: totalNodes
       }
     });
 
@@ -607,8 +723,10 @@ export class WorkflowEngine {
       abortSignal: this.abortControllers.get(executionId)?.signal
     };
 
-    // 7. Execute with timeout and timing
-    const timeout = options.timeout || node.timeout || this.defaultTimeout;
+    // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)
+    const executionConfig = node.execution || {};
+    const timeout =
+      executionConfig.timeout || options.timeout || node.timeout || this.defaultTimeout;
     let result;
     const startTime = Date.now();
 
@@ -721,8 +839,8 @@ export class WorkflowEngine {
     });
 
     // Determine if we should fail the entire workflow
-    // For MVP, any node failure fails the workflow
-    // TODO: Add error handling configuration (retry, skip, fallback)
+    // Retries are handled in _runExecutionLoop before this method is called.
+    // If we reach here, all retries have been exhausted.
     const shouldFailWorkflow = true;
 
     if (shouldFailWorkflow) {
@@ -731,9 +849,12 @@ export class WorkflowEngine {
         completedAt: new Date().toISOString()
       });
 
+      // Persist failed state to disk
+      await this.stateManager.checkpoint(executionId, 'workflow_failed');
+
       // Update execution registry
       const registry = getExecutionRegistry();
-      registry.updateStatus(executionId, WorkflowStatus.FAILED);
+      registry.updateStatus(executionId, WorkflowStatus.FAILED, { currentNode: null });
 
       this._emitEvent('workflow.failed', {
         executionId,
@@ -770,9 +891,12 @@ export class WorkflowEngine {
       completedAt: new Date().toISOString()
     });
 
+    // Persist final completed state to disk so other engine instances can load it
+    await this.stateManager.checkpoint(executionId, 'workflow_complete');
+
     // Update execution registry
     const registry = getExecutionRegistry();
-    registry.updateStatus(executionId, finalStatus);
+    registry.updateStatus(executionId, finalStatus, { currentNode: null });
 
     // Extract output from state.data using end node's outputVariables config
     const workflow = state.data._workflowDefinition;
@@ -797,7 +921,7 @@ export class WorkflowEngine {
     this._emitEvent('workflow.complete', {
       executionId,
       status: finalStatus,
-      output: this._sanitizeForEvent(output)
+      output
     });
   }
 
@@ -974,9 +1098,12 @@ export class WorkflowEngine {
       completedAt: new Date().toISOString()
     });
 
+    // Persist cancelled state to disk
+    await this.stateManager.checkpoint(executionId, 'workflow_cancelled');
+
     // Update execution registry
     const registry = getExecutionRegistry();
-    registry.updateStatus(executionId, WorkflowStatus.CANCELLED);
+    registry.updateStatus(executionId, WorkflowStatus.CANCELLED, { currentNode: null });
 
     // Record cancellation reason
     await this.stateManager.addStep(executionId, {

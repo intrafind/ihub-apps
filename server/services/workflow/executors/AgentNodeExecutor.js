@@ -21,6 +21,11 @@ import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
 import { estimateTokens } from '../../../usageTracker.js';
+import SourceResolutionService from '../../SourceResolutionService.js';
+import { createSourceManager } from '../../../sources/index.js';
+import config from '../../../config.js';
+import { getRootDir } from '../../../pathUtils.js';
+import path from 'path';
 
 /**
  * Agent node configuration
@@ -100,6 +105,16 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     });
 
     try {
+      // Resolve and load sources (node-level overrides workflow-level)
+      const { content: sourceContent, cacheUpdates } = await this.loadSourceContent(
+        config,
+        state,
+        context
+      );
+      if (sourceContent) {
+        context = { ...context, sourceContent };
+      }
+
       // Build messages from config and state
       const messages = this.buildMessages(config, state, context);
 
@@ -141,8 +156,12 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         model: model.id
       });
 
-      // Build state updates
-      const stateUpdates = config.outputVariable ? { [config.outputVariable]: output } : undefined;
+      // Build state updates (include source cache if sources were loaded)
+      const stateUpdates = {
+        ...(config.outputVariable ? { [config.outputVariable]: output } : {}),
+        ...(cacheUpdates ? { _sourceContent: cacheUpdates } : {})
+      };
+      const hasStateUpdates = Object.keys(stateUpdates).length > 0;
 
       // Build result with model info and token usage for UI display
       const result = this.createSuccessResult(
@@ -153,7 +172,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
           iterations: response.iterations,
           tokens: response.tokens
         },
-        { stateUpdates }
+        { stateUpdates: hasStateUpdates ? stateUpdates : undefined }
       );
 
       // Include tokens at result level for metrics aggregation
@@ -185,6 +204,11 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
   /**
    * Build LLM messages from config and state.
    *
+   * Supports file data via the `inputFiles` config option. When specified,
+   * referenced state variables containing file data objects are processed:
+   * - Text files (PDF, DOCX, etc.): prepended as `[File: name (type)]\n\ncontent`
+   * - Images: added as multimodal content parts with base64 data
+   *
    * @param {Object} config - Agent configuration
    * @param {Object} state - Workflow state
    * @param {Object} context - Execution context
@@ -198,7 +222,24 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     // Add system message if configured
     if (config.system) {
       const systemTemplate = this.getLocalizedValue(config.system, language);
-      const systemContent = this.resolveTemplateVariables(systemTemplate, state);
+      let systemContent = this.resolveTemplateVariables(systemTemplate, state);
+
+      // Inject source content into system prompt if available
+      if (context.sourceContent) {
+        const hasSourcesPlaceholder = systemContent.includes('{{sources}}');
+        const hasSourcePlaceholder = systemContent.includes('{{source}}');
+
+        if (hasSourcesPlaceholder) {
+          systemContent = systemContent.replace('{{sources}}', context.sourceContent);
+        }
+        if (hasSourcePlaceholder) {
+          systemContent = systemContent.replace('{{source}}', context.sourceContent);
+        }
+        if (!hasSourcesPlaceholder && !hasSourcePlaceholder) {
+          systemContent += `\n\nSources:\n<sources>${context.sourceContent}</sources>`;
+        }
+      }
+
       messages.push({
         role: 'system',
         content: systemContent
@@ -219,6 +260,47 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       userContent = state.data.input;
     } else if (state.data?.message) {
       userContent = state.data.message;
+    }
+
+    // Process inputFiles: inject file data from state into the user message
+    if (config.inputFiles && Array.isArray(config.inputFiles) && userContent) {
+      const fileParts = [];
+      const imageParts = [];
+
+      for (const varName of config.inputFiles) {
+        const fileData = state.data?.[varName];
+        if (!fileData) continue;
+
+        if (fileData.type === 'image' && fileData.base64) {
+          // Image file: build multimodal content part
+          imageParts.push({
+            type: 'image_url',
+            image_url: { url: fileData.base64 }
+          });
+        } else if (fileData.content) {
+          // Text-based file (PDF, DOCX, etc.): prepend as text
+          const fileName = fileData.fileName || varName;
+          const fileType = fileData.displayType || fileData.fileType || 'unknown';
+          fileParts.push(`[File: ${fileName} (${fileType})]\n\n${fileData.content}\n`);
+        }
+      }
+
+      if (imageParts.length > 0) {
+        // Build multimodal content array for images
+        const contentParts = [];
+        if (fileParts.length > 0) {
+          contentParts.push({ type: 'text', text: fileParts.join('\n') + '\n' + userContent });
+        } else {
+          contentParts.push({ type: 'text', text: userContent });
+        }
+        contentParts.push(...imageParts);
+
+        messages.push({ role: 'user', content: contentParts });
+        return messages;
+      } else if (fileParts.length > 0) {
+        // Text files only: prepend file content to user message
+        userContent = fileParts.join('\n') + '\n' + userContent;
+      }
     }
 
     if (userContent) {
@@ -514,8 +596,9 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
    * Priority order:
    * 1. Model specified in node config (config.modelId)
    * 2. Model override from initial data (_modelOverride)
-   * 3. Model from execution context
-   * 4. Default model
+   * 3. Workflow-level defaultModelId from workflow config
+   * 4. Model from execution context
+   * 5. Default model
    *
    * @param {string} modelId - Model ID from node config or null
    * @param {Object} context - Execution context
@@ -543,12 +626,21 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       }
     }
 
-    // 3. Use context model if available
+    // 3. Check workflow-level defaultModelId
+    const workflowDefaultModelId = context.workflow?.config?.defaultModelId;
+    if (workflowDefaultModelId) {
+      const workflowModel = models.find(m => m.id === workflowDefaultModelId);
+      if (workflowModel) {
+        return workflowModel;
+      }
+    }
+
+    // 4. Use context model if available
     if (context.modelId) {
       return models.find(m => m.id === context.modelId);
     }
 
-    // 4. Fall back to default model
+    // 5. Fall back to default model
     return models.find(m => m.default) || models[0];
   }
 
@@ -575,6 +667,91 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     };
 
     return await getToolsForApp(appConfig, language, toolContext);
+  }
+
+  /**
+   * Load source content for this agent node.
+   *
+   * Sources can be defined at node level (config.sources) or workflow level
+   * (context.workflow.sources). Node-level sources take precedence.
+   * Content is cached in state.data._sourceContent to avoid redundant loading
+   * when multiple agent nodes reference the same sources.
+   *
+   * @param {Object} nodeConfig - Agent node configuration
+   * @param {Object} state - Workflow state
+   * @param {Object} context - Execution context
+   * @returns {Promise<{content: string|null, cacheUpdates: Object|null}>} Source content and cache updates
+   * @private
+   */
+  async loadSourceContent(nodeConfig, state, context) {
+    // Determine which sources to load (node-level overrides workflow-level)
+    const sourceIds = nodeConfig.sources || context.workflow?.sources;
+    if (!sourceIds || !Array.isArray(sourceIds) || sourceIds.length === 0) {
+      return { content: null, cacheUpdates: null };
+    }
+
+    // Check cache in state first (keyed by sorted source IDs)
+    const cacheKey = [...sourceIds].sort().join(',');
+    const cachedContent = state.data?._sourceContent?.[cacheKey];
+    if (cachedContent) {
+      this.logger.debug({
+        component: 'AgentNodeExecutor',
+        message: 'Using cached source content',
+        sourceIds
+      });
+      return { content: cachedContent, cacheUpdates: null };
+    }
+
+    try {
+      // Resolve source references to configurations
+      const sourceResolutionService = new SourceResolutionService();
+      const fakeApp = { id: context.workflow?.id || 'workflow', sources: sourceIds };
+      const sourceContext = {
+        user: context.user,
+        chatId: context.executionId,
+        language: context.language
+      };
+
+      const resolvedSources = await sourceResolutionService.resolveAppSources(
+        fakeApp,
+        sourceContext
+      );
+
+      if (resolvedSources.length === 0) {
+        return { content: null, cacheUpdates: null };
+      }
+
+      // Load content from resolved sources
+      const sourceManager = createSourceManager({
+        filesystem: {
+          basePath: path.resolve(getRootDir(), config.CONTENTS_DIR)
+        }
+      });
+
+      const result = await sourceManager.loadSources(resolvedSources, sourceContext);
+
+      if (result.metadata.errors.length > 0) {
+        this.logger.warn({
+          component: 'AgentNodeExecutor',
+          message: 'Source loading errors',
+          errors: result.metadata.errors
+        });
+      }
+
+      // Return content and cache updates for state persistence
+      const existingCache = state.data?._sourceContent || {};
+      const cacheUpdates = result.content ? { ...existingCache, [cacheKey]: result.content } : null;
+
+      return { content: result.content || null, cacheUpdates };
+    } catch (error) {
+      this.logger.error({
+        component: 'AgentNodeExecutor',
+        message: 'Failed to load sources',
+        sourceIds,
+        error: error.message
+      });
+      return { content: null, cacheUpdates: null };
+    }
   }
 
   /**

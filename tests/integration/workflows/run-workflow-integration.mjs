@@ -11,6 +11,12 @@ dotenv.config({ path: '.env' });
 import configCache from '../../../server/configCache.js';
 import { WorkflowEngine } from '../../../server/services/workflow/WorkflowEngine.js';
 import { StateManager } from '../../../server/services/workflow/StateManager.js';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const projectRoot = path.resolve(__dirname, '../../..');
 
 // Test workflows
 const simpleLinearWorkflow = {
@@ -285,6 +291,25 @@ async function main() {
     );
   } else {
     console.log('\n⏭️  Skipping tool test (missing LLM or BRAVE_SEARCH_API_KEY)');
+  }
+
+  // Test 4: Load research-assistant.json from file (needs LLM key + Brave search API)
+  if (hasLLMKey && hasBraveKey) {
+    const workflowPath = path.join(projectRoot, 'contents/workflows/research-assistant.json');
+    const researchWorkflow = JSON.parse(fs.readFileSync(workflowPath, 'utf-8'));
+    results.push(
+      await runTest(
+        'Research Assistant (from JSON file)',
+        researchWorkflow,
+        { query: 'What are the latest web development trends?' },
+        engine,
+        120000
+      )
+    );
+  } else {
+    console.log(
+      '\n⏭️  Skipping research-assistant.json test (missing LLM or BRAVE_SEARCH_API_KEY)'
+    );
   }
 
   // Summary
