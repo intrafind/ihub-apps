@@ -9,6 +9,7 @@
 ## What Was Fixed
 
 ### Before (Broken in Firefox)
+
 ```javascript
 // Dynamic import - fails in Firefox with Vite build
 const [enCoreTranslations, deCoreTranslations] = await Promise.all([
@@ -19,6 +20,7 @@ i18n.addResourceBundle('en', 'translation', enCoreTranslations.default, true, tr
 ```
 
 ### After (Works in All Browsers)
+
 ```javascript
 // Static import - works in all browsers
 import enCoreTranslations from '../../../shared/i18n/en.json';
@@ -110,6 +112,7 @@ Test in Safari and Edge to ensure complete cross-browser compatibility:
 ### Console Output
 
 **Before Fix (Firefox - Broken):**
+
 ```
 Failed to initialize i18n service asynchronously: TypeError: error loading dynamically imported module
 API Error: Request aborted { status: 500, url: "/session/start" }
@@ -117,6 +120,7 @@ Failed to log session start: Error: Request timed out
 ```
 
 **After Fix (Firefox - Working):**
+
 ```
 Application loaded with session ID: [session-id]
 (No errors related to i18n or session management)
@@ -152,12 +156,15 @@ Expected load time improvement due to fewer HTTP requests:
 ### Common Issues
 
 **Issue:** Old cached version still loading
+
 - **Solution:** Clear browser cache, try incognito/private mode
 
 **Issue:** Build errors
+
 - **Solution:** Run `npm run clean && npm run install:all` then rebuild
 
 **Issue:** Translation keys showing instead of text
+
 - **Solution:** Check that translation files exist in `shared/i18n/`
 
 ## Rollback Plan
@@ -180,6 +187,7 @@ Then investigate the specific issue and apply a different fix.
 ## Contact
 
 If you encounter issues during testing:
+
 1. Document the exact error message
 2. Include browser version and OS
 3. Include DevTools console output
