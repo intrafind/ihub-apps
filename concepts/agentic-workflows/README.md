@@ -49,20 +49,65 @@ Add a comprehensive agentic workflow system to iHub Apps that enables multi-step
 | Header Navigation | ✅ Done | `contents/config/ui.json` |
 | Example Approval Workflow | ✅ Done | `contents/workflows/approval-workflow.json` |
 
+### Phase 2.5: Admin Management, Chat Integration & Hardening - ✅ COMPLETE
+
+| Component | Status | Files |
+|-----------|--------|-------|
+| AdminWorkflowsPage | ✅ Done | `client/src/features/admin/pages/AdminWorkflowsPage.jsx` |
+| AdminWorkflowEditPage | ✅ Done | `client/src/features/admin/pages/AdminWorkflowEditPage.jsx` |
+| AdminWorkflowExecutionsPage | ✅ Done | `client/src/features/admin/pages/AdminWorkflowExecutionsPage.jsx` |
+| Admin API functions | ✅ Done | `client/src/api/adminApi.js` (7 new functions) |
+| Admin Navigation | ✅ Done | `client/src/features/admin/components/AdminNavigation.jsx` |
+| Chat @workflow Mentions | ✅ Done | `client/src/features/chat/components/WorkflowMentionSearch.jsx` |
+| Inline Step Indicator | ✅ Done | `client/src/features/chat/components/WorkflowStepIndicator.jsx` |
+| Chat Integration Hook | ✅ Done | `client/src/features/chat/hooks/useAppChat.js` |
+| workflowRunner Tool | ✅ Done | `server/tools/workflowRunner.js` |
+| App Selection Modal | ✅ Done | `client/src/features/workflows/components/AppSelectionModal.jsx` |
+| ExecutionProgress (enhanced) | ✅ Done | `client/src/features/workflows/components/ExecutionProgress.jsx` |
+| Execution Registry Persistence | ✅ Done | `server/services/workflow/ExecutionRegistry.js` |
+| Startup Recovery | ✅ Done | `server/routes/workflow/workflowRoutes.js` (loadFromDisk + mark stale) |
+| currentNode Tracking | ✅ Done | `server/services/workflow/WorkflowEngine.js` |
+| StateManager Simplification | ✅ Done | Only writes `latest.json` per execution (no per-checkpoint files) |
+| Cache Refresh on Mutations | ✅ Done | `configCache.refreshWorkflowsCache()` after CRUD |
+| Workflow Authoring Guide | ✅ Done | `concepts/workflow-authoring-guide.md` |
+| Integration Tests | ✅ Done | `tests/integration/workflows/` |
+
 ### Phase 3: Advanced Execution Features - 🔜 NEXT
 
-| Component | Status | Priority |
-|-----------|--------|----------|
-| Parallel/Join Nodes | 🔜 Planned | High |
-| LLM-based Routing | 🔜 Planned | Medium |
-| Configurable Error Handling | ⚠️ Partial | Medium |
+| Component | Status | Priority | Notes |
+|-----------|--------|----------|-------|
+| Parallel/Join Nodes | 🔜 Planned | High | DAGScheduler already supports parallel paths; needs ParallelNodeExecutor + JoinNodeExecutor |
+| LLM-based Routing | 🔜 Planned | Medium | DecisionNode with `type: "llm"` to let the model choose the branch |
+| Configurable Error Handling | ⚠️ Partial | Medium | Retry works; needs fallback nodes, LLM-recovery |
+| Transform Node | 🔜 Planned | Medium | Data manipulation without LLM call (map, filter, format) |
 
-### Phase 4-6: Future
+### Phase 4: Visual Workflow Designer - 🔜 PLANNED
+
+| Component | Status | Priority | Notes |
+|-----------|--------|----------|-------|
+| React Flow Canvas | 🔜 Planned | High | Replace JSON editor with drag-and-drop node canvas |
+| Node Palette | 🔜 Planned | High | Sidebar with draggable node types (agent, tool, decision, human, etc.) |
+| Edge Conditions Editor | 🔜 Planned | High | Visual condition builder for edge routing |
+| Node Config Panel | 🔜 Planned | High | Side panel for editing node properties (prompt, tools, model, etc.) |
+| Live Preview | 🔜 Planned | Medium | Run workflow from designer with inline progress visualization |
+| Undo/Redo | 🔜 Planned | Medium | History stack for canvas operations |
+| Import/Export | ✅ Done | - | Already works via JSON (AdminWorkflowEditPage upload/download) |
+| Template Gallery | 🔜 Planned | Low | Pre-built workflow patterns users can clone and customize |
+
+**Designer Architecture Notes:**
+- Use `@xyflow/react` (React Flow) for the canvas - industry standard, MIT licensed
+- Node positions already stored in workflow JSON (`position: { x, y }`) - designed for this
+- Designer replaces the JSON textarea in `AdminWorkflowEditPage.jsx`
+- Keep JSON editor as an "advanced" toggle for power users
+- Each node type gets a custom React Flow node component with type-specific UI
+- Edge labels show conditions; click to edit
+- Validation runs on save using existing `workflowConfigSchema.js` (Zod)
+
+### Phase 5-6: Future
 
 | Phase | Components | Status |
 |-------|------------|--------|
-| Phase 4 | Memory System, Cost Tracking, Execution Replay | 🔜 Planned |
-| Phase 5 | Visual Editor (React Flow), NL Generation | 🔜 Planned |
+| Phase 5 | Memory System, Cost Tracking, Execution Replay, NL Generation | 🔜 Planned |
 | Phase 6 | Subworkflows, Dynamic Branching, Sandboxing | 🔜 Planned |
 
 ---
@@ -423,7 +468,11 @@ server/
 ├── validators/
 │   └── workflowConfigSchema.js    ✅ (440 lines)
 ├── workflowsLoader.js             ✅ (51 lines)
-├── configCache.js                 ✅ (extended)
+├── configCache.js                 ✅ (extended with refreshWorkflowsCache)
+├── toolLoader.js                  ✅ (extended - workflow tool registration)
+├── tools/workflowRunner.js        ✅ (Phase 2.5) - Chat-invocable workflow tool
+├── actionTracker.js               ✅ (extended - workflow SSE events)
+├── sse.js                         ✅ (extended - workflow event types)
 └── server.js                      ✅ (routes registered)
 
 client/src/features/workflows/
@@ -431,18 +480,28 @@ client/src/features/workflows/
 │   ├── WorkflowsPage.jsx          ✅ (Phase 2) - Main page with tabs
 │   ├── WorkflowListTab.jsx        ✅ (Phase 2) - Available workflows grid
 │   ├── MyExecutionsTab.jsx        ✅ (Phase 2) - User's executions list
-│   └── WorkflowExecutionPage.jsx  ✅ (Phase 2) - Single execution view
+│   └── WorkflowExecutionPage.jsx  ✅ (Phase 2+) - Single execution view (enhanced)
 ├── components/
 │   ├── WorkflowCard.jsx           ✅ (Phase 2) - Workflow definition card
 │   ├── ExecutionCard.jsx          ✅ (Phase 2) - Execution status card
-│   ├── ExecutionProgress.jsx      ✅ (Phase 2) - Timeline visualization
+│   ├── ExecutionProgress.jsx      ✅ (Phase 2+) - Timeline visualization (enhanced)
 │   ├── HumanCheckpoint.jsx        ✅ (Phase 2) - Approval/input UI
-│   └── StartWorkflowModal.jsx     ✅ (Phase 2) - Configure and start
+│   ├── StartWorkflowModal.jsx     ✅ (Phase 2+) - Configure and start (enhanced)
+│   └── AppSelectionModal.jsx      ✅ (Phase 2.5) - Workflow app picker
 ├── hooks/
 │   ├── useWorkflowList.js         ✅ (Phase 2) - Fetch available workflows
 │   ├── useMyExecutions.js         ✅ (Phase 2) - Fetch user's executions
-│   └── useWorkflowExecution.js    ✅ (Phase 2) - SSE + state management
+│   └── useWorkflowExecution.js    ✅ (Phase 2+) - SSE + state management (enhanced)
 └── index.js                       ✅ (Phase 2) - Feature exports
+
+client/src/features/admin/pages/
+├── AdminWorkflowsPage.jsx         ✅ (Phase 2.5) - Workflow list management
+├── AdminWorkflowEditPage.jsx      ✅ (Phase 2.5) - Workflow edit/create
+└── AdminWorkflowExecutionsPage.jsx ✅ (Phase 2.5) - All executions monitoring
+
+client/src/features/chat/components/
+├── WorkflowMentionSearch.jsx      ✅ (Phase 2.5) - @workflow mention dropdown
+└── WorkflowStepIndicator.jsx      ✅ (Phase 2.5) - Inline workflow progress
 
 contents/
 ├── workflows/                     📁 (create your workflows here)
@@ -499,21 +558,27 @@ contents/
 ### Immediate (Phase 3)
 
 1. **Parallel/Join Nodes** - Enable concurrent execution of independent branches
-2. **Integration Tests** - End-to-end test suite for workflow system
-3. **Timeout Handling** - Configurable timeouts for human checkpoints
-4. **Workflow Templates** - Pre-built workflow patterns
+2. **Transform Node** - Data manipulation without LLM calls (map, filter, format, aggregate)
+3. **LLM-based Routing** - Decision nodes that use an LLM to choose branches
+4. **Configurable Error Handling** - Fallback nodes, LLM-recovery strategies
 
-### Short-term (Phase 4)
+### Short-term (Phase 4 — Visual Designer)
 
-1. **Memory System** - Short-term, session, and long-term memory
-2. **Cost Tracking** - Token counting per node
-3. **Execution Replay** - Debug and audit workflow runs
+1. **React Flow Canvas** - Drag-and-drop workflow designer replacing JSON editor
+2. **Node Palette & Config Panel** - Visual node creation and property editing
+3. **Edge Condition Editor** - Visual builder for routing conditions
+4. **Live Preview** - Run workflows directly from the designer
+5. **Template Gallery** - Pre-built workflow patterns for common use cases
 
-### Medium-term (Phase 5)
+### Medium-term (Phase 5-6)
 
-1. **Visual Editor** - React Flow-based drag-and-drop editor
-2. **NL Generation** - Natural language to workflow conversion
-3. **Subworkflows** - Nested workflow execution
+1. **Memory System** - Short-term, session, and long-term agent memory
+2. **Cost Tracking** - Token counting and cost attribution per node
+3. **Execution Replay** - Debug and audit completed workflow runs
+4. **NL Generation** - Natural language to workflow conversion
+5. **Subworkflows** - Nested workflow execution
+6. **Dynamic Branching** - Runtime-determined parallel paths
+7. **Sandboxing** - Isolated execution environments for untrusted tools
 
 ---
 
@@ -530,6 +595,11 @@ contents/
 | **Navigation** | Header link (Phase 2) | 'Workflows' link in main header navigation. |
 | **API URL Patterns** | No /api/ prefix in client | `apiClient` and `buildApiUrl` already include base paths. |
 | **Cycle Support** | Allowed by default | Workflows can contain intentional cycles for revision loops. Per-node iteration limits prevent infinite loops (`maxIterations` config, default 10). |
+| **Checkpoint Files** | Single `latest.json` per execution | Individual per-checkpoint files were never read back; only `latest.json` is used. Reduces I/O by 50%. |
+| **Execution Recovery** | Mark stale as failed on startup | If server restarts, previously-running executions are marked failed (can't resume mid-LLM-call). |
+| **Admin UI Pattern** | Mirror AdminToolsPage patterns | Admin workflow pages follow exact same conventions as existing admin pages for consistency. |
+| **Chat Integration** | Workflows as tools | `workflowRunner.js` registers workflows as callable tools so the LLM can invoke them. |
+| **Visual Designer** | React Flow (Phase 4) | Node positions already stored in JSON. Designer will replace JSON editor in AdminWorkflowEditPage. |
 
 ---
 
