@@ -157,7 +157,9 @@ export const useFileUploadHandler = () => {
             'application/javascript',
             'application/pdf'
           ]
-        : []
+        : [],
+      // Cloud storage upload settings
+      cloudStorageUpload: uploadConfig?.cloudStorageUpload || { enabled: false }
     };
   };
 

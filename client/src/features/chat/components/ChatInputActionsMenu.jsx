@@ -57,6 +57,19 @@ const ChatInputActionsMenu = ({
       ? cloudStorage.providers.filter(p => p.enabled)
       : [];
 
+  // Debug logging for cloud storage
+  useEffect(() => {
+    if (cloudStorage.enabled || isCloudStorageEnabledForApp) {
+      console.log('ChatInputActionsMenu: Cloud storage debug', {
+        globalEnabled: cloudStorage.enabled,
+        appLevelEnabled: isCloudStorageEnabledForApp,
+        providers: cloudStorage.providers,
+        enabledProviders: enabledCloudProviders,
+        uploadConfig
+      });
+    }
+  }, [cloudStorage.enabled, isCloudStorageEnabledForApp, cloudStorage.providers, enabledCloudProviders, uploadConfig]);
+
   // Tool grouping configuration
   const TOOL_GROUPS = {
     webSearch: {
