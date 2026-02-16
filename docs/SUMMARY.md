@@ -13,6 +13,7 @@
     - [Prompts Database](prompts.md)
     - [Content Management](content-management.md)
     - [Sources System](sources.md)
+    - [Mimetype Configuration](mimetypes.md)
     - [Configuration Validation](configuration-validation.md)
     - [Localization](localization.md)
   - [Authentication & Security]()

@@ -1,0 +1,270 @@
+{
+  "categories": {
+    "images": {
+      "name": {
+        "en": "Images",
+        "de": "Bilder"
+      },
+      "description": {
+        "en": "Image file formats",
+        "de": "Bilddateiformate"
+      },
+      "mimeTypes": [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/tiff",
+        "image/tif"
+      ]
+    },
+    "audio": {
+      "name": {
+        "en": "Audio",
+        "de": "Audio"
+      },
+      "description": {
+        "en": "Audio file formats",
+        "de": "Audiodateiformate"
+      },
+      "mimeTypes": ["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg"]
+    },
+    "video": {
+      "name": {
+        "en": "Video",
+        "de": "Video"
+      },
+      "description": {
+        "en": "Video file formats",
+        "de": "Videodateiformate"
+      },
+      "mimeTypes": ["video/mp4", "video/mpeg", "video/webm", "video/ogg", "video/quicktime"]
+    },
+    "documents": {
+      "name": {
+        "en": "Documents",
+        "de": "Dokumente"
+      },
+      "description": {
+        "en": "Document and text file formats (PDF, Word, text files, code, etc.)",
+        "de": "Dokument- und Textdateiformate (PDF, Word, Textdateien, Code usw.)"
+      },
+      "mimeTypes": [
+        "text/plain",
+        "text/markdown",
+        "text/csv",
+        "application/json",
+        "text/html",
+        "text/css",
+        "text/javascript",
+        "application/javascript",
+        "text/xml",
+        "message/rfc822",
+        "application/pdf",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.ms-outlook",
+        "application/x-msg",
+        "application/vnd.oasis.opendocument.text",
+        "application/vnd.oasis.opendocument.spreadsheet",
+        "application/vnd.oasis.opendocument.presentation"
+      ]
+    }
+  },
+  "mimeTypes": {
+    "image/jpeg": {
+      "extensions": [".jpeg", ".jpg"],
+      "displayName": "JPEG",
+      "category": "images"
+    },
+    "image/jpg": {
+      "extensions": [".jpg"],
+      "displayName": "JPEG",
+      "category": "images"
+    },
+    "image/png": {
+      "extensions": [".png"],
+      "displayName": "PNG",
+      "category": "images"
+    },
+    "image/gif": {
+      "extensions": [".gif"],
+      "displayName": "GIF",
+      "category": "images"
+    },
+    "image/webp": {
+      "extensions": [".webp"],
+      "displayName": "WEBP",
+      "category": "images"
+    },
+    "image/tiff": {
+      "extensions": [".tiff", ".tif"],
+      "displayName": "TIFF",
+      "category": "images"
+    },
+    "image/tif": {
+      "extensions": [".tif"],
+      "displayName": "TIFF",
+      "category": "images"
+    },
+    "audio/mpeg": {
+      "extensions": [".mp3"],
+      "displayName": "MP3",
+      "category": "audio"
+    },
+    "audio/mp3": {
+      "extensions": [".mp3"],
+      "displayName": "MP3",
+      "category": "audio"
+    },
+    "audio/wav": {
+      "extensions": [".wav"],
+      "displayName": "WAV",
+      "category": "audio"
+    },
+    "audio/flac": {
+      "extensions": [".flac"],
+      "displayName": "FLAC",
+      "category": "audio"
+    },
+    "audio/ogg": {
+      "extensions": [".ogg"],
+      "displayName": "OGG",
+      "category": "audio"
+    },
+    "video/mp4": {
+      "extensions": [".mp4"],
+      "displayName": "MP4",
+      "category": "video"
+    },
+    "video/mpeg": {
+      "extensions": [".mpeg", ".mpg"],
+      "displayName": "MPEG",
+      "category": "video"
+    },
+    "video/webm": {
+      "extensions": [".webm"],
+      "displayName": "WEBM",
+      "category": "video"
+    },
+    "video/ogg": {
+      "extensions": [".ogv"],
+      "displayName": "OGG",
+      "category": "video"
+    },
+    "video/quicktime": {
+      "extensions": [".mov"],
+      "displayName": "MOV",
+      "category": "video"
+    },
+    "text/plain": {
+      "extensions": [".txt"],
+      "displayName": "TXT",
+      "category": "documents"
+    },
+    "text/markdown": {
+      "extensions": [".md"],
+      "displayName": "MD",
+      "category": "documents"
+    },
+    "text/csv": {
+      "extensions": [".csv"],
+      "displayName": "CSV",
+      "category": "documents"
+    },
+    "application/json": {
+      "extensions": [".json"],
+      "displayName": "JSON",
+      "category": "documents"
+    },
+    "text/html": {
+      "extensions": [".html"],
+      "displayName": "HTML",
+      "category": "documents"
+    },
+    "text/css": {
+      "extensions": [".css"],
+      "displayName": "CSS",
+      "category": "documents"
+    },
+    "text/javascript": {
+      "extensions": [".js"],
+      "displayName": "JS",
+      "category": "documents"
+    },
+    "application/javascript": {
+      "extensions": [".js"],
+      "displayName": "JS",
+      "category": "documents"
+    },
+    "text/xml": {
+      "extensions": [".xml"],
+      "displayName": "XML",
+      "category": "documents"
+    },
+    "message/rfc822": {
+      "extensions": [".eml"],
+      "displayName": "EML",
+      "category": "documents"
+    },
+    "application/pdf": {
+      "extensions": [".pdf"],
+      "displayName": "PDF",
+      "category": "documents"
+    },
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": {
+      "extensions": [".docx"],
+      "displayName": "DOCX",
+      "category": "documents"
+    },
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {
+      "extensions": [".xlsx"],
+      "displayName": "XLSX",
+      "category": "documents"
+    },
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation": {
+      "extensions": [".pptx"],
+      "displayName": "PPTX",
+      "category": "documents"
+    },
+    "application/vnd.ms-excel": {
+      "extensions": [".xls"],
+      "displayName": "XLS",
+      "category": "documents"
+    },
+    "application/vnd.ms-powerpoint": {
+      "extensions": [".ppt"],
+      "displayName": "PPT",
+      "category": "documents"
+    },
+    "application/vnd.ms-outlook": {
+      "extensions": [".msg"],
+      "displayName": "MSG",
+      "category": "documents"
+    },
+    "application/x-msg": {
+      "extensions": [".msg"],
+      "displayName": "MSG",
+      "category": "documents"
+    },
+    "application/vnd.oasis.opendocument.text": {
+      "extensions": [".odt"],
+      "displayName": "ODT",
+      "category": "documents"
+    },
+    "application/vnd.oasis.opendocument.spreadsheet": {
+      "extensions": [".ods"],
+      "displayName": "ODS",
+      "category": "documents"
+    },
+    "application/vnd.oasis.opendocument.presentation": {
+      "extensions": [".odp"],
+      "displayName": "ODP",
+      "category": "documents"
+    }
+  }
+}
