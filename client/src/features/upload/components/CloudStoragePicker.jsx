@@ -7,10 +7,10 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
  * Cloud Storage Picker component
  * Allows users to select files from configured cloud storage providers (SharePoint, Google Drive)
  */
-const CloudStoragePicker = ({ onFileSelect, onClose }) => {
+const CloudStoragePicker = ({ onFileSelect, onClose, preSelectedProvider = null }) => {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
-  const [selectedProvider, setSelectedProvider] = useState(null);
+  const [selectedProvider, setSelectedProvider] = useState(preSelectedProvider);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -21,11 +21,15 @@ const CloudStoragePicker = ({ onFileSelect, onClose }) => {
     : [];
 
   useEffect(() => {
-    // Auto-select first provider if only one is available
+    // Auto-select first provider if only one is available and no pre-selected provider
     if (enabledProviders.length === 1 && !selectedProvider) {
       setSelectedProvider(enabledProviders[0]);
     }
-  }, [enabledProviders, selectedProvider]);
+    // If pre-selected provider is provided, use it
+    if (preSelectedProvider) {
+      setSelectedProvider(preSelectedProvider);
+    }
+  }, [enabledProviders, selectedProvider, preSelectedProvider]);
 
   const handleProviderSelect = provider => {
     setSelectedProvider(provider);

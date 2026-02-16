@@ -61,6 +61,7 @@ const ChatInput = ({
   const actualInputRef = inputRef || localInputRef;
   const [internalShowUploader, setInternalShowUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const [selectedCloudProvider, setSelectedCloudProvider] = useState(null);
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
 
@@ -193,6 +194,18 @@ const ChatInput = ({
       // Otherwise use the internal state
       setInternalShowUploader(prev => !prev);
     }
+    // Clear selected cloud provider when toggling uploader normally
+    setSelectedCloudProvider(null);
+  };
+
+  const handleCloudProviderSelect = provider => {
+    // Open uploader with specific cloud provider selected
+    setSelectedCloudProvider(provider);
+    if (onToggleUploader) {
+      onToggleUploader();
+    } else {
+      setInternalShowUploader(true);
+    }
   };
 
   // Handle key events for the textarea
@@ -247,6 +260,7 @@ const ChatInput = ({
           disabled={isInputDisabled || isProcessing}
           fileData={selectedFile}
           config={uploadConfig}
+          selectedCloudProvider={selectedCloudProvider}
         />
       )}
 
@@ -318,6 +332,7 @@ const ChatInput = ({
             imageQuality={imageQuality}
             onImageAspectRatioChange={onImageAspectRatioChange}
             onImageQualityChange={onImageQualityChange}
+            onCloudProviderSelect={handleCloudProviderSelect}
           />
 
           {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
