@@ -4,7 +4,6 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import SSLConfig from '../components/SSLConfig';
-import CloudStorageConfig from '../components/CloudStorageConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
@@ -922,9 +921,6 @@ const AdminSystemPage = () => {
 
             {/* SSL Configuration Section */}
             <SSLConfig />
-
-            {/* Cloud Storage Configuration Section */}
-            <CloudStorageConfig />
           </div>
         </div>
       </div>

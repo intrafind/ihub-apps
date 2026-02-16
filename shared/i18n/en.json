@@ -297,6 +297,7 @@
       "category": {
         "llm": "LLM Providers",
         "websearch": "Web Search Providers",
+        "cloudstorage": "Cloud Storage Providers",
         "custom": "Custom / Generic API Keys"
       },
       "table": {

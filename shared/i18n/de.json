@@ -443,6 +443,7 @@
       "category": {
         "llm": "LLM-Anbieter",
         "websearch": "Websuchanbieter",
+        "cloudstorage": "Cloud-Speicher-Anbieter",
         "custom": "Benutzerdefinierte / Generische API-Schlüssel"
       },
       "table": {

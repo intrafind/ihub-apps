@@ -48,7 +48,7 @@ const CloudStorageConfig = () => {
   const handleAddProvider = () => {
     setEditingProvider({
       id: '',
-      name: '',
+      name: '', // This will be same as id for cloud storage providers
       displayName: '',
       type: 'sharepoint',
       enabled: true,
@@ -84,7 +84,7 @@ const CloudStorageConfig = () => {
 
   const handleSaveProvider = () => {
     // Validate required fields
-    if (!editingProvider.id || !editingProvider.name || !editingProvider.displayName) {
+    if (!editingProvider.id || !editingProvider.displayName) {
       setMessage({
         type: 'error',
         text: t('admin.cloudStorage.validation.nameRequired')
@@ -92,11 +92,17 @@ const CloudStorageConfig = () => {
       return;
     }
 
-    if (editingProvider.type === 'sharepoint') {
+    // Set name to be same as id if not provided (for cloud storage providers)
+    const providerToSave = {
+      ...editingProvider,
+      name: editingProvider.name || editingProvider.id
+    };
+
+    if (providerToSave.type === 'sharepoint') {
       if (
-        !editingProvider.tenantId ||
-        !editingProvider.clientId ||
-        !editingProvider.clientSecret
+        !providerToSave.tenantId ||
+        !providerToSave.clientId ||
+        !providerToSave.clientSecret
       ) {
         setMessage({
           type: 'error',
@@ -107,15 +113,15 @@ const CloudStorageConfig = () => {
     }
 
     let updatedProviders;
-    const existingIndex = config.providers.findIndex(p => p.id === editingProvider.id);
+    const existingIndex = config.providers.findIndex(p => p.id === providerToSave.id);
 
     if (existingIndex >= 0) {
       // Update existing provider
       updatedProviders = [...config.providers];
-      updatedProviders[existingIndex] = editingProvider;
+      updatedProviders[existingIndex] = providerToSave;
     } else {
       // Add new provider
-      updatedProviders = [...config.providers, editingProvider];
+      updatedProviders = [...config.providers, providerToSave];
     }
 
     const updatedConfig = {
@@ -317,7 +323,11 @@ const CloudStorageConfig = () => {
                         type="text"
                         value={editingProvider.id}
                         onChange={e =>
-                          setEditingProvider({ ...editingProvider, id: e.target.value })
+                          setEditingProvider({ 
+                            ...editingProvider, 
+                            id: e.target.value,
+                            name: e.target.value // Keep name in sync with id
+                          })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                         placeholder="sharepoint-main"
