@@ -395,7 +395,12 @@
   "disclaimer": {
     "title": "Haftungsausschluss",
     "accept": "Ich verstehe",
-    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
+    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}",
+    "aiDisclaimer": {
+      "shortText": "iHub nutzt KI und kann Fehler machen. Bitte überprüfe die Ergebnisse sorgfältig.",
+      "fullTitle": "KI-Haftungsausschluss",
+      "fullText": "iHub nutzt künstliche Intelligenz (KI), um Antworten zu generieren. Obwohl wir uns um Genauigkeit bemühen, können KI-generierte Inhalte Fehler, Ungenauigkeiten oder unvollständige Informationen enthalten. Bitte überprüfen und verifizieren Sie alle Ergebnisse sorgfältig, bevor Sie Entscheidungen auf deren Grundlage treffen. Die Nutzung von KI-generierten Inhalten erfolgt auf eigenes Risiko."
+    }
   },
   "canvas": {
     "toolbox": {
