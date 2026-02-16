@@ -339,7 +339,11 @@
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
-    "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden"
+    "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
+    "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
+    "noCompatibleModels": "Keine kompatiblen KI-Modelle für diese Anwendung gefunden. Die Anwendung erfordert spezifische Modellfunktionen, die nicht verfügbar sind. Bitte wenden Sie sich an Ihren Administrator.",
+    "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
+    "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern."
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -581,6 +585,27 @@
       },
       "sections": {
         "imageGeneration": "Bilderzeugungseinstellungen"
+      }
+    },
+    "chat": {
+      "title": "Chat",
+      "send": "Senden",
+      "sendMessage": "Nachricht senden",
+      "newConversation": "Neue Konversation",
+      "regenerate": "Neu generieren",
+      "stopGeneration": "Generierung stoppen",
+      "deleteMessage": "Nachricht löschen",
+      "deleteConversation": "Konversation löschen",
+      "exportConversation": "Konversation exportieren",
+      "thinking": "Denkt nach...",
+      "responseComplete": "Antwort vollständig",
+      "placeholder": "Gib deine Nachricht hier ein...",
+      "conversationHistory": "Konversationsverlauf",
+      "modelSelector": {
+        "label": "Modell",
+        "choose": "Modell wählen",
+        "noModels": "Keine Modelle verfügbar",
+        "loading": "Modelle werden geladen..."
       }
     },
     "auth": {
@@ -922,6 +947,12 @@
     "home": {
       "sections": {
         "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren"
+      }
+    },
+    "apps": {
+      "edit": {
+        "autoStart": "Konversation automatisch starten",
+        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird"
       }
     }
   },

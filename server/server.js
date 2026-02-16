@@ -144,13 +144,14 @@ if (cluster.isPrimary && workerCount > 1) {
   const { logVersionInfo } = await import('./utils/versionHelper.js');
   logVersionInfo();
 
-  // Initialize encryption key for secure storage of API keys and tokens
+  // Initialize encryption key and JWT secret for secure storage and token signing
   try {
     const tokenStorageService = (await import('./services/TokenStorageService.js')).default;
     await tokenStorageService.initializeEncryptionKey();
+    await tokenStorageService.initializeJwtSecret();
   } catch (err) {
-    console.error('Failed to initialize encryption key:', err);
-    console.warn('Encrypted API keys and tokens may not work properly');
+    console.error('Failed to initialize encryption key or JWT secret:', err);
+    console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
   }
 
   // Ensure default providers are present (migration for existing installations)

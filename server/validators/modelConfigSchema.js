@@ -85,6 +85,8 @@ export const modelConfigSchema = z
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),
+    supportsVision: z.boolean().optional(),
+    supportsAudio: z.boolean().optional(),
     supportsStructuredOutput: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().default(false),
     imageGeneration: imageGenerationSchema.optional(),

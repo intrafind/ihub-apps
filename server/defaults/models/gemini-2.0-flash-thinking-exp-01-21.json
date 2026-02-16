@@ -1,0 +1,19 @@
+{
+  "id": "gemini-2.0-flash-thinking-exp-01-21",
+  "modelId": "gemini-2.0-flash-thinking-exp-01-21",
+  "name": {
+    "en": "Gemini 2.0 Flash Thinking (Experimental)",
+    "de": "Gemini 2.0 Flash Thinking (Experimentell)"
+  },
+  "description": {
+    "en": "Google's experimental Gemini 2.0 model with extended thinking capabilities and multimodal support including audio",
+    "de": "Googles experimentelles Gemini 2.0 Modell mit erweiterten Denkfähigkeiten und multimodaler Unterstützung inklusive Audio"
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-thinking-exp-01-21:streamGenerateContent",
+  "provider": "google",
+  "tokenLimit": 32768,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsAudio": true,
+  "enabled": true
+}

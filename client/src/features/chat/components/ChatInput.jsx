@@ -410,6 +410,14 @@ const ChatInput = ({
 
             <div className="flex-1"></div>
 
+            {/* Warning when no models are available */}
+            {showModelSelector && (!models || models.length === 0) && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <Icon name="exclamationTriangle" size="sm" />
+                <span>{t('chat.modelSelector.noModels', 'No models available')}</span>
+              </div>
+            )}
+
             {/* Model Selector */}
             {showModelSelector && models && models.length > 0 && onModelChange && (
               <ModelSelector

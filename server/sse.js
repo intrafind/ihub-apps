@@ -17,7 +17,7 @@ actionTracker.on('fire-sse', step => {
     try {
       sendSSE(clientEntry.response, event, step);
     } catch (err) {
-      logger.error('Error sending SSE action event:', err);
+      logger.error('Error sending SSE action event:', { component: 'SSE', error: err });
     }
   }
 });

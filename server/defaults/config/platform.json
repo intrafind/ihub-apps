@@ -39,15 +39,10 @@
     "salt": 1,
     "lastUpdated": "2025-07-08T17:00:38.743Z"
   },
-  "admin": {
-    "secret": "platform-secret",
-    "encrypted": false
-  },
   "auth": {
     "mode": "local",
     "authenticatedGroup": "authenticated",
-    "sessionTimeoutMinutes": 480,
-    "jwtSecret": "${JWT_SECRET}"
+    "sessionTimeoutMinutes": 480
   },
   "oauth": {
     "enabled": false,

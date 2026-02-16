@@ -1,0 +1,101 @@
+{
+  "id": "audio-transcription",
+  "order": 11,
+  "name": {
+    "en": "Audio Transcription",
+    "de": "Audio-Transkription"
+  },
+  "description": {
+    "en": "Upload audio files for transcription and analysis",
+    "de": "Laden Sie Audiodateien zur Transkription und Analyse hoch"
+  },
+  "color": "#8B5CF6",
+  "icon": "microphone",
+  "system": {
+    "en": "You are an AI audio transcription and analysis assistant. Your role is to transcribe audio files that users upload and provide detailed analysis. Include:\n- Full transcription of the audio\n- Speaker identification if multiple speakers\n- Key topics and themes discussed\n- Sentiment and tone analysis\n- Any notable timestamps or sections\n\nBe accurate, detailed, and helpful.",
+    "de": "Du bist ein KI-Audio-Transkriptions- und Analyseassistent. Deine Aufgabe ist es, von Benutzern hochgeladene Audiodateien zu transkribieren und eine detaillierte Analyse bereitzustellen. Beinhalte:\n- Vollständige Transkription des Audios\n- Sprecheridentifikation bei mehreren Sprechern\n- Wichtige besprochene Themen\n- Sentiment- und Tonanalyse\n- Bemerkenswerte Zeitstempel oder Abschnitte\n\nSei genau, detailliert und hilfreich."
+  },
+  "tokenLimit": 8192,
+  "preferredModel": "gemini-2.0-flash-exp",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "detailed",
+  "preferredTemperature": 0.3,
+  "upload": {
+    "enabled": true,
+    "audioUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 20,
+      "supportedFormats": ["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg"]
+    }
+  },
+  "allowedModels": ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp-01-21"],
+  "greeting": {
+    "en": {
+      "title": "👋 Welcome to Audio Transcription!",
+      "subtitle": "Upload an audio file (MP3, WAV, FLAC, or OGG) and I'll transcribe and analyze it for you."
+    },
+    "de": {
+      "title": "👋 Willkommen bei der Audio-Transkription!",
+      "subtitle": "Laden Sie eine Audiodatei (MP3, WAV, FLAC oder OGG) hoch und ich transkribiere und analysiere sie für Sie."
+    }
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Transcribe this audio file",
+        "de": "Transkribiere diese Audiodatei"
+      },
+      "description": {
+        "en": "Full transcription of the audio content",
+        "de": "Vollständige Transkription des Audioinhalts"
+      },
+      "message": {
+        "en": "Transcribe this audio file",
+        "de": "Transkribiere diese Audiodatei"
+      }
+    },
+    {
+      "title": {
+        "en": "Summarize the main points",
+        "de": "Fasse die Hauptpunkte zusammen"
+      },
+      "description": {
+        "en": "Summary of the key points from this audio",
+        "de": "Zusammenfassung der wichtigsten Punkte aus diesem Audio"
+      },
+      "message": {
+        "en": "Summarize the main points from this audio",
+        "de": "Fasse die Hauptpunkte aus diesem Audio zusammen"
+      }
+    },
+    {
+      "title": {
+        "en": "Identify the speakers",
+        "de": "Identifiziere die Sprecher"
+      },
+      "description": {
+        "en": "Identify and label different speakers in this recording",
+        "de": "Identifiziere und benenne verschiedene Sprecher in dieser Aufnahme"
+      },
+      "message": {
+        "en": "Identify the speakers in this recording",
+        "de": "Identifiziere die Sprecher in dieser Aufnahme"
+      }
+    },
+    {
+      "title": {
+        "en": "Sentiment analysis",
+        "de": "Sentimentanalyse"
+      },
+      "description": {
+        "en": "Analyze the sentiment and tone of the audio",
+        "de": "Analysiere die Stimmung und den Ton des Audios"
+      },
+      "message": {
+        "en": "What is the sentiment and tone of this audio?",
+        "de": "Was ist die Stimmung und der Ton dieses Audios?"
+      }
+    }
+  ],
+  "enabled": true
+}

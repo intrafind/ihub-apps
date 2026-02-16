@@ -1,6 +1,5 @@
 import jwt from 'jsonwebtoken';
-import config from '../config.js';
-import configCache from '../configCache.js';
+import { resolveJwtSecret } from './tokenService.js';
 import logger from './logger.js';
 
 /**
@@ -26,10 +25,9 @@ export function generateOAuthToken(client, options = {}) {
     throw new Error('Client object with clientId is required for OAuth token generation');
   }
 
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
+  const jwtSecret = resolveJwtSecret();
 
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
+  if (!jwtSecret) {
     throw new Error('JWT secret not configured for OAuth authentication');
   }
 
@@ -90,10 +88,9 @@ export function generateOAuthToken(client, options = {}) {
  */
 export function verifyOAuthToken(token) {
   try {
-    const platform = configCache.getPlatform() || {};
-    const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
+    const jwtSecret = resolveJwtSecret();
 
-    if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
+    if (!jwtSecret) {
       logger.warn('[OAuth] JWT secret not configured for token verification');
       return null;
     }
@@ -186,10 +183,9 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     throw new Error('Client object with clientId is required for API key generation');
   }
 
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
+  const jwtSecret = resolveJwtSecret();
 
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
+  if (!jwtSecret) {
     throw new Error('JWT secret not configured for API key generation');
   }
 

@@ -21,3 +21,15 @@ export const fetchPlatformConfig = async (options = {}) => {
 
   return handleApiResponse(() => apiClient.get('/config'), cacheKey, DEFAULT_CACHE_TTL.LONG);
 };
+
+// Mimetypes Configuration
+export const fetchMimetypesConfig = async (options = {}) => {
+  const { skipCache = false } = options;
+  const cacheKey = skipCache ? null : buildCacheKey(CACHE_KEYS.MIMETYPES_CONFIG);
+
+  return handleApiResponse(
+    () => apiClient.get('/configs/mimetypes'),
+    cacheKey,
+    DEFAULT_CACHE_TTL.LONG
+  );
+};

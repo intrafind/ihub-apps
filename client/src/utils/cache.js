@@ -219,7 +219,8 @@ export const CACHE_KEYS = {
   PROMPTS: 'prompts',
   UI_CONFIG: 'ui-config',
   PLATFORM_CONFIG: 'platform-config',
-  AUTH_STATUS: 'auth-status'
+  AUTH_STATUS: 'auth-status',
+  MIMETYPES_CONFIG: 'mimetypes-config'
 };
 
 /**

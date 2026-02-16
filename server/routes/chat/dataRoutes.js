@@ -843,6 +843,71 @@ export default function registerDataRoutes(app, deps = {}) {
 
   /**
    * @swagger
+   * /api/configs/mimetypes:
+   *   get:
+   *     summary: Get mimetypes configuration
+   *     description: |
+   *       Retrieves MIME type mappings and display names for file uploads.
+   *       This endpoint provides configuration for supported file formats, extensions, and display names.
+   *     tags:
+   *       - Configuration
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *       - anonymousAuth: []
+   *     responses:
+   *       200:
+   *         description: Mimetypes configuration retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 supportedTextFormats:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                   description: Array of supported MIME types for text/document uploads
+   *                 mimeToExtension:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: string
+   *                   description: Mapping from MIME type to file extension(s)
+   *                 typeDisplayNames:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: string
+   *                   description: Mapping from MIME type to display name
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/DataError'
+   */
+  app.get(buildServerPath('/api/configs/mimetypes'), async (req, res) => {
+    try {
+      const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
+
+      if (!mimetypesConfig) {
+        return res.status(500).json({ error: 'Failed to load mimetypes configuration' });
+      }
+
+      res.setHeader('ETag', mimetypesEtag);
+      res.json(mimetypesConfig);
+    } catch (error) {
+      logger.error({
+        component: 'DataRoutes',
+        message: 'Error fetching mimetypes configuration',
+        error: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * @swagger
    * /api/configs/platform:
    *   get:
    *     summary: Get public platform configuration

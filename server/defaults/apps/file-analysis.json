@@ -26,7 +26,15 @@
       "enabled": true,
       "resizeImages": true,
       "maxFileSizeMB": 10,
-      "supportedFormats": ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp"]
+      "supportedFormats": [
+        "image/jpeg",
+        "image/jpg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "image/tiff",
+        "image/tif"
+      ]
     },
     "fileUpload": {
       "enabled": true,

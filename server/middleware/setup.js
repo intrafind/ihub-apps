@@ -12,6 +12,7 @@ import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import config from '../config.js';
+import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -181,7 +182,8 @@ function setupSessionMiddleware(app, platformConfig) {
     app.use(
       '/api/auth/oidc',
       session({
-        secret: config.JWT_SECRET || 'fallback-session-secret',
+        secret:
+          config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
         resave: false,
         saveUninitialized: false, // Only create session when needed for OIDC
         name: 'oidc.session',
@@ -208,7 +210,8 @@ function setupSessionMiddleware(app, platformConfig) {
     app.use(
       '/api/integrations',
       session({
-        secret: config.JWT_SECRET || 'fallback-session-secret',
+        secret:
+          config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
         resave: false,
         saveUninitialized: true, // Required for OAuth2 PKCE state persistence
         name: 'integration.session',
@@ -233,7 +236,8 @@ function setupSessionMiddleware(app, platformConfig) {
       });
       app.use(
         session({
-          secret: config.JWT_SECRET || 'fallback-session-secret',
+          secret:
+            config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
           resave: false,
           saveUninitialized: false,
           name: 'app.session',

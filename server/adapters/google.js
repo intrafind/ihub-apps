@@ -180,9 +180,9 @@ class GoogleAdapterClass extends BaseAdapter {
 
           const textContent = message.content;
 
-          // Check if this message contains image data
-          if (this.hasImageData(message)) {
-            // For image messages, we need to create a parts array with both text and image
+          // Check if this message contains image or audio data
+          if (this.hasImageData(message) || this.hasAudioData(message)) {
+            // For multimedia messages, we need to create a parts array with text and media
             const parts = [];
 
             // Add text part if content exists (possibly including file content)
@@ -190,26 +190,54 @@ class GoogleAdapterClass extends BaseAdapter {
               parts.push({ text: textContent });
             }
 
-            // Handle multiple images
-            if (Array.isArray(message.imageData)) {
-              message.imageData
-                .filter(img => img && img.base64)
-                .forEach(img => {
-                  parts.push({
-                    inlineData: {
-                      mimeType: img.fileType || 'image/jpeg',
-                      data: this.cleanBase64Data(img.base64)
-                    }
+            // Handle image data
+            if (this.hasImageData(message)) {
+              // Handle multiple images
+              if (Array.isArray(message.imageData)) {
+                message.imageData
+                  .filter(img => img && img.base64)
+                  .forEach(img => {
+                    parts.push({
+                      inlineData: {
+                        mimeType: img.fileType || 'image/jpeg',
+                        data: this.cleanBase64Data(img.base64)
+                      }
+                    });
                   });
+              } else {
+                // Handle single image (legacy behavior)
+                parts.push({
+                  inlineData: {
+                    mimeType: message.imageData.fileType || 'image/jpeg',
+                    data: this.cleanBase64Data(message.imageData.base64)
+                  }
                 });
-            } else {
-              // Handle single image (legacy behavior)
-              parts.push({
-                inlineData: {
-                  mimeType: message.imageData.fileType || 'image/jpeg',
-                  data: this.cleanBase64Data(message.imageData.base64)
-                }
-              });
+              }
+            }
+
+            // Handle audio data
+            if (this.hasAudioData(message)) {
+              // Handle multiple audio files
+              if (Array.isArray(message.audioData)) {
+                message.audioData
+                  .filter(audio => audio && audio.base64)
+                  .forEach(audio => {
+                    parts.push({
+                      inlineData: {
+                        mimeType: audio.fileType || 'audio/mpeg',
+                        data: this.cleanBase64Data(audio.base64)
+                      }
+                    });
+                  });
+              } else {
+                // Handle single audio file
+                parts.push({
+                  inlineData: {
+                    mimeType: message.audioData.fileType || 'audio/mpeg',
+                    data: this.cleanBase64Data(message.audioData.base64)
+                  }
+                });
+              }
             }
 
             geminiContents.push({ role: geminiRole, parts });

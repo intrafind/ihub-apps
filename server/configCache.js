@@ -126,7 +126,8 @@ class ConfigCache {
       'config/groups.json',
       'config/users.json',
       'config/sources.json',
-      'config/providers.json'
+      'config/providers.json',
+      'config/mimetypes.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -726,6 +727,13 @@ class ConfigCache {
    */
   getUI() {
     return this.get('config/ui.json');
+  }
+
+  /**
+   * Get mimetypes configuration
+   */
+  getMimetypes() {
+    return this.get('config/mimetypes.json');
   }
 
   /**

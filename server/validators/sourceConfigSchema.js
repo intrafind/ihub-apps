@@ -172,7 +172,7 @@ export function validateSourceConfig(source) {
 
     return { success: true, data: validated };
   } catch (error) {
-    logger.error('Source validation error:', error);
+    logger.error('Source validation error:', { component: 'ConfigLoader', error });
     return {
       success: false,
       errors: error.errors || [{ message: error.message }]
@@ -199,7 +199,7 @@ export function validateSourcesArray(sources) {
 
     return { success: true, data: validated };
   } catch (error) {
-    logger.error('Sources array validation error:', error);
+    logger.error('Sources array validation error:', { component: 'ConfigLoader', error });
     return {
       success: false,
       errors: error.errors || [{ message: error.message }]

@@ -18,7 +18,7 @@ export function sendErrorResponse(res, statusCode, message, options = {}) {
   const { error, logPrefix, details } = options;
 
   if (error && logPrefix) {
-    logger.error(`${logPrefix}:`, error);
+    logger.error(`${logPrefix}:`, { component: 'Utils', error });
   }
 
   const response = { error: message };

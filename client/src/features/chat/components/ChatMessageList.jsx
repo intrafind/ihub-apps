@@ -104,9 +104,19 @@ const ChatMessageList = ({
     return null;
   }
 
+  // Filter out empty user messages (used for auto-start feature)
+  const displayedMessages = messages.filter(
+    message => !(message.role === 'user' && (!message.content || message.content.trim() === ''))
+  );
+
+  // Don't render anything if all messages were filtered out
+  if (displayedMessages.length === 0) {
+    return null;
+  }
+
   return (
     <div ref={chatContainerRef} className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg">
-      {messages.map((message, index) => (
+      {displayedMessages.map((message, index) => (
         <div key={message.id}>
           <div
             className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
@@ -147,7 +157,7 @@ const ChatMessageList = ({
           </div>
 
           {/* Show integration auth prompts after the last assistant message if auth is required */}
-          {index === messages.length - 1 &&
+          {index === displayedMessages.length - 1 &&
             message.role === 'assistant' &&
             requiredIntegrations.length > 0 && (
               <div className="mt-4 ml-12">

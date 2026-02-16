@@ -5,6 +5,7 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SourcePicker from './SourcePicker';
 import Icon from '../../../shared/components/Icon';
 import IconPicker from '../../../shared/components/IconPicker';
+import MimeTypeSelector from './MimeTypeSelector';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   validateWithSchema,
@@ -522,6 +523,29 @@ const AppFormEditor = ({
                   </label>
                 </div>
               </div>
+
+              {/* Auto-start - Only for chat apps */}
+              {(app.type === 'chat' || !app.type) && (
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.autoStart === true}
+                      onChange={e => handleInputChange('autoStart', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
+                    </label>
+                  </div>
+                  <p className="mt-1 ml-6 text-xs text-gray-500">
+                    {t(
+                      'admin.apps.edit.autoStartHelp',
+                      'When enabled, the app will automatically start the conversation when the chat is opened or reset'
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1226,50 +1250,34 @@ const AppFormEditor = ({
                                   'Supported Image Formats'
                                 )}
                               </label>
-                              <div className="mt-1 space-y-1">
-                                {[
+                              <MimeTypeSelector
+                                categoryType="images"
+                                selectedFormats={
+                                  app.upload?.imageUpload?.supportedFormats || [
+                                    'image/jpeg',
+                                    'image/jpg',
+                                    'image/png',
+                                    'image/gif',
+                                    'image/webp'
+                                  ]
+                                }
+                                onChange={newFormats =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    imageUpload: {
+                                      ...app.upload.imageUpload,
+                                      supportedFormats: newFormats
+                                    }
+                                  })
+                                }
+                                defaultFormats={[
                                   'image/jpeg',
                                   'image/jpg',
                                   'image/png',
                                   'image/gif',
                                   'image/webp'
-                                ].map(format => (
-                                  <div key={format} className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        app.upload?.imageUpload?.supportedFormats?.includes(
-                                          format
-                                        ) !== false
-                                      }
-                                      onChange={e => {
-                                        const currentFormats = app.upload?.imageUpload
-                                          ?.supportedFormats || [
-                                          'image/jpeg',
-                                          'image/jpg',
-                                          'image/png',
-                                          'image/gif',
-                                          'image/webp'
-                                        ];
-                                        const newFormats = e.target.checked
-                                          ? [...currentFormats.filter(f => f !== format), format]
-                                          : currentFormats.filter(f => f !== format);
-                                        handleInputChange('upload', {
-                                          ...app.upload,
-                                          imageUpload: {
-                                            ...app.upload.imageUpload,
-                                            supportedFormats: newFormats
-                                          }
-                                        });
-                                      }}
-                                      className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 block text-xs text-gray-700">
-                                      {format.replace('image/', '').toUpperCase()}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
+                                ]}
+                              />
                             </div>
                           </div>
                         )}
@@ -1319,83 +1327,119 @@ const AppFormEditor = ({
                               <label className="block text-xs font-medium text-gray-700">
                                 {t('admin.apps.edit.supportedFormats', 'Supported File Formats')}
                               </label>
-                              <div className="mt-1 space-y-1">
-                                {[
-                                  { mime: 'text/plain', label: 'TXT' },
-                                  { mime: 'text/markdown', label: 'MD' },
-                                  { mime: 'text/csv', label: 'CSV' },
-                                  { mime: 'application/json', label: 'JSON' },
-                                  { mime: 'text/html', label: 'HTML' },
-                                  { mime: 'text/css', label: 'CSS' },
-                                  { mime: 'text/javascript', label: 'JS' },
-                                  { mime: 'application/javascript', label: 'JS' },
-                                  { mime: 'text/xml', label: 'XML' },
-                                  { mime: 'message/rfc822', label: 'EML' },
-                                  { mime: 'application/pdf', label: 'PDF' },
-                                  {
-                                    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                    label: 'DOCX'
-                                  },
-                                  { mime: 'application/vnd.ms-outlook', label: 'MSG' },
-                                  {
-                                    mime: 'application/vnd.oasis.opendocument.text',
-                                    label: 'ODT'
-                                  },
-                                  {
-                                    mime: 'application/vnd.oasis.opendocument.spreadsheet',
-                                    label: 'ODS'
-                                  },
-                                  {
-                                    mime: 'application/vnd.oasis.opendocument.presentation',
-                                    label: 'ODP'
-                                  }
-                                ].map(({ mime, label }) => (
-                                  <div key={mime} className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        app.upload?.fileUpload?.supportedFormats?.includes(mime) !==
-                                        false
-                                      }
-                                      onChange={e => {
-                                        const currentFormats = app.upload?.fileUpload
-                                          ?.supportedFormats || [
-                                          'text/plain',
-                                          'text/markdown',
-                                          'text/csv',
-                                          'application/json',
-                                          'text/html',
-                                          'text/css',
-                                          'text/javascript',
-                                          'application/javascript',
-                                          'text/xml',
-                                          'message/rfc822',
-                                          'application/pdf',
-                                          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                          'application/vnd.ms-outlook',
-                                          'application/vnd.oasis.opendocument.text',
-                                          'application/vnd.oasis.opendocument.spreadsheet',
-                                          'application/vnd.oasis.opendocument.presentation'
-                                        ];
-                                        const newFormats = e.target.checked
-                                          ? [...currentFormats.filter(f => f !== mime), mime]
-                                          : currentFormats.filter(f => f !== mime);
-                                        handleInputChange('upload', {
-                                          ...app.upload,
-                                          fileUpload: {
-                                            ...app.upload.fileUpload,
-                                            supportedFormats: newFormats
-                                          }
-                                        });
-                                      }}
-                                      className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 block text-xs text-gray-700">
-                                      {label}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
+                              <MimeTypeSelector
+                                categoryType="documents"
+                                selectedFormats={
+                                  app.upload?.fileUpload?.supportedFormats || [
+                                    'text/plain',
+                                    'text/markdown',
+                                    'text/csv',
+                                    'application/json',
+                                    'application/pdf',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                  ]
+                                }
+                                onChange={newFormats =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    fileUpload: {
+                                      ...app.upload.fileUpload,
+                                      supportedFormats: newFormats
+                                    }
+                                  })
+                                }
+                                defaultFormats={[
+                                  'text/plain',
+                                  'text/markdown',
+                                  'text/csv',
+                                  'application/json',
+                                  'application/pdf',
+                                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                ]}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            checked={app.upload?.audioUpload?.enabled || false}
+                            onChange={e =>
+                              handleInputChange('upload', {
+                                ...app.upload,
+                                audioUpload: {
+                                  ...app.upload.audioUpload,
+                                  enabled: e.target.checked
+                                }
+                              })
+                            }
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-2 block text-sm font-medium text-gray-900">
+                            {t('admin.apps.edit.enableAudioUpload', 'Enable Audio Upload')}
+                          </label>
+                        </div>
+                        {app.upload?.audioUpload?.enabled && (
+                          <div className="ml-6 space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700">
+                                {t('admin.apps.edit.maxAudioSize', 'Max Audio File Size (MB)')}
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={app.upload?.audioUpload?.maxFileSizeMB || 20}
+                                onChange={e =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    audioUpload: {
+                                      ...app.upload.audioUpload,
+                                      maxFileSizeMB: parseInt(e.target.value)
+                                    }
+                                  })
+                                }
+                                className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-2">
+                                {t(
+                                  'admin.apps.edit.supportedAudioFormats',
+                                  'Supported Audio Formats'
+                                )}
+                              </label>
+                              <MimeTypeSelector
+                                categoryType="audio"
+                                selectedFormats={
+                                  app.upload?.audioUpload?.supportedFormats || [
+                                    'audio/mpeg',
+                                    'audio/mp3',
+                                    'audio/wav',
+                                    'audio/flac',
+                                    'audio/ogg'
+                                  ]
+                                }
+                                onChange={newFormats =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    audioUpload: {
+                                      ...app.upload.audioUpload,
+                                      supportedFormats: newFormats
+                                    }
+                                  })
+                                }
+                                defaultFormats={[
+                                  'audio/mpeg',
+                                  'audio/mp3',
+                                  'audio/wav',
+                                  'audio/flac',
+                                  'audio/ogg'
+                                ]}
+                              />
                             </div>
                           </div>
                         )}
