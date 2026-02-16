@@ -1032,9 +1032,7 @@
     "accept": "I understand",
     "versionInfo": "Version {{version}}, Last updated: {{date}}",
     "aiDisclaimer": {
-      "shortText": "iHub uses AI and can make mistakes. Please verify results carefully.",
-      "fullTitle": "AI Disclaimer",
-      "fullText": "iHub uses artificial intelligence (AI) to generate responses. While we strive for accuracy, AI-generated content may contain errors, inaccuracies, or incomplete information. Please carefully review and verify all results before making decisions based on them. The use of AI-generated content is at your own risk."
+      "shortText": "iHub uses AI and can make mistakes. Please verify results carefully."
     }
   },
   "canvas": {

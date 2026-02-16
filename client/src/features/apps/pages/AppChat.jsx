@@ -23,7 +23,6 @@ import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
-import AIDisclaimerModal from '../../chat/components/AIDisclaimerModal';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 
@@ -113,7 +112,6 @@ const AppChat = ({ preloadedApp = null }) => {
   const [variables, setVariables] = useState({});
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
-  const [showDisclaimerModal, setShowDisclaimerModal] = useState(false);
   const [, setMaxTokens] = useState(4096);
   const shareEnabled = app?.features?.shortLinks !== false;
 
@@ -1265,9 +1263,7 @@ const AppChat = ({ preloadedApp = null }) => {
           }
         />
         {/* Show AI disclaimer after user has submitted at least one message */}
-        {messages.length > 0 && (
-          <AIDisclaimerBanner onOpenDisclaimer={() => setShowDisclaimerModal(true)} />
-        )}
+        {messages.length > 0 && <AIDisclaimerBanner />}
       </>
     );
   };
@@ -1552,10 +1548,6 @@ const AppChat = ({ preloadedApp = null }) => {
           onClose={() => setShowShare(false)}
         />
       )}
-      <AIDisclaimerModal
-        isOpen={showDisclaimerModal}
-        onClose={() => setShowDisclaimerModal(false)}
-      />
     </div>
   );
 };
