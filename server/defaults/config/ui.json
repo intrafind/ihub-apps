@@ -99,7 +99,11 @@
     },
     "version": "1.0",
     "updated": "2025-08-01",
-    "link": "/pages/terms"
+    "link": "/pages/terms",
+    "hint": {
+      "en": "iHub uses AI and can make mistakes. Please verify results carefully.",
+      "de": "iHub nutzt KI und kann Fehler machen. Bitte überprüfe die Ergebnisse sorgfältig."
+    }
   },
   "appsList": {
     "title": {

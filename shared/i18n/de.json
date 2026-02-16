@@ -395,10 +395,7 @@
   "disclaimer": {
     "title": "Haftungsausschluss",
     "accept": "Ich verstehe",
-    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}",
-    "aiDisclaimer": {
-      "shortText": "iHub nutzt KI und kann Fehler machen. Bitte überprüfe die Ergebnisse sorgfältig."
-    }
+    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
   },
   "canvas": {
     "toolbox": {

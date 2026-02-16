@@ -1,17 +1,20 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /**
  * AI Disclaimer Banner Component
  * Displays a short disclaimer below the chat input that links to full disclaimer
  */
 const AIDisclaimerBanner = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
+  const currentLanguage = i18n.language;
 
-  // Get the disclaimer link from ui config
+  // Get the disclaimer link and hint from ui config
   const disclaimerLink = uiConfig?.disclaimer?.link;
+  const disclaimerHint = getLocalizedContent(uiConfig?.disclaimer?.hint, currentLanguage);
 
   const handleClick = () => {
     if (disclaimerLink) {
@@ -28,10 +31,7 @@ const AIDisclaimerBanner = () => {
       >
         <Icon name="informationCircle" size="sm" className="flex-shrink-0" />
         <span>
-          {t(
-            'disclaimer.aiDisclaimer.shortText',
-            'iHub uses AI and can make mistakes. Please verify results carefully.'
-          )}
+          {disclaimerHint || 'iHub uses AI and can make mistakes. Please verify results carefully.'}
         </span>
       </button>
     </div>
