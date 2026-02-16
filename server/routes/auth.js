@@ -542,7 +542,9 @@ export default function registerAuthRoutes(app, basePath = '') {
           domain: ntlmAuthConfig.domain,
           type: ntlmAuthConfig.type || 'ntlm'
         }
-      }
+      },
+      // Add cloud storage configuration
+      cloudStorage: platform.cloudStorage || { enabled: false, providers: [] }
     };
 
     res.json(status);
