@@ -26,6 +26,7 @@ import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import jiraRoutes from './routes/integrations/jira.js';
+import sharepointRoutes from './routes/integrations/sharepoint.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -259,6 +260,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
   app.use('/api/integrations/jira', jiraRoutes);
+  app.use('/api/integrations/sharepoint', sharepointRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 
