@@ -22,6 +22,7 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import SharedAppHeader from '../components/SharedAppHeader';
+import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 
@@ -1250,16 +1251,20 @@ const AppChat = ({ preloadedApp = null }) => {
 
     // Always use ChatInput (which now has the NextGen design with model selector)
     return (
-      <ChatInput
-        {...commonProps}
-        models={models}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        currentLanguage={currentLanguage}
-        showModelSelector={
-          app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
-        }
-      />
+      <>
+        <ChatInput
+          {...commonProps}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          currentLanguage={currentLanguage}
+          showModelSelector={
+            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+          }
+        />
+        {/* Show AI disclaimer after user has submitted at least one message */}
+        {messages.length > 0 && <AIDisclaimerBanner />}
+      </>
     );
   };
 
