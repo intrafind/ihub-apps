@@ -126,11 +126,6 @@ const AdminProvidersPage = () => {
             </div>
           )}
 
-          {/* Cloud Storage Configuration Section */}
-          <div className="mb-8">
-            <CloudStorageConfig />
-          </div>
-
           {/* Search and Actions Bar */}
           <div className="mb-6 flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
@@ -309,6 +304,11 @@ const AdminProvidersPage = () => {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Cloud Storage Configuration Section */}
+          <div className="mt-8">
+            <CloudStorageConfig />
           </div>
         </div>
       </div>

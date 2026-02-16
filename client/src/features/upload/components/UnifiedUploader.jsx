@@ -26,8 +26,19 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
 
   // Check if cloud storage is enabled
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
+  
+  // Cloud storage upload configuration - check both global and app-level settings
+  const cloudStorageConfig = config.cloudStorageUpload || {};
+  const isCloudStorageEnabledForApp = cloudStorageConfig.enabled !== false;
+  
+  // Cloud storage is available if:
+  // 1. It's enabled globally in platform config
+  // 2. There are enabled providers
+  // 3. It's enabled for this specific app (or not explicitly disabled)
   const hasCloudStorageEnabled =
-    cloudStorage.enabled && cloudStorage.providers.some(p => p.enabled);
+    cloudStorage.enabled && 
+    cloudStorage.providers.some(p => p.enabled) &&
+    isCloudStorageEnabledForApp;
 
   // Image upload configuration
   const imageConfig = config.imageUpload || {};
