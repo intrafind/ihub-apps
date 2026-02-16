@@ -885,9 +885,9 @@ export default function registerDataRoutes(app, deps = {}) {
    *             schema:
    *               $ref: '#/components/schemas/DataError'
    */
-  app.get(buildServerPath('/api/configs/mimetypes', basePath), async (req, res) => {
-    try {
-      const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
+  app.get(buildServerPath('/api/configs/mimetypes'), async (req, res) => {
+   try {
+     const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
 
       if (!mimetypesConfig) {
         return res.status(500).json({ error: 'Failed to load mimetypes configuration' });
