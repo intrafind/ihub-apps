@@ -17,16 +17,19 @@ const buildDefaultConfig = () => {
         name: { en: 'Audio', de: 'Audio' },
         mimeTypes: ['audio/mpeg', 'audio/wav']
       },
+      video: {
+        name: { en: 'Video', de: 'Video' },
+        mimeTypes: ['video/mp4', 'video/webm']
+      },
       documents: {
         name: { en: 'Documents', de: 'Dokumente' },
         mimeTypes: [
+          'text/plain',
+          'text/markdown',
+          'application/json',
           'application/pdf',
           'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
         ]
-      },
-      text: {
-        name: { en: 'Text Files', de: 'Textdateien' },
-        mimeTypes: ['text/plain', 'text/markdown', 'application/json']
       }
     },
     mimeTypes: {
@@ -36,15 +39,17 @@ const buildDefaultConfig = () => {
       'image/webp': { extensions: ['.webp'], displayName: 'WEBP', category: 'images' },
       'audio/mpeg': { extensions: ['.mp3'], displayName: 'MP3', category: 'audio' },
       'audio/wav': { extensions: ['.wav'], displayName: 'WAV', category: 'audio' },
+      'video/mp4': { extensions: ['.mp4'], displayName: 'MP4', category: 'video' },
+      'video/webm': { extensions: ['.webm'], displayName: 'WEBM', category: 'video' },
       'application/pdf': { extensions: ['.pdf'], displayName: 'PDF', category: 'documents' },
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
         extensions: ['.docx'],
         displayName: 'DOCX',
         category: 'documents'
       },
-      'text/plain': { extensions: ['.txt'], displayName: 'TXT', category: 'text' },
-      'text/markdown': { extensions: ['.md'], displayName: 'MD', category: 'text' },
-      'application/json': { extensions: ['.json'], displayName: 'JSON', category: 'text' }
+      'text/plain': { extensions: ['.txt'], displayName: 'TXT', category: 'documents' },
+      'text/markdown': { extensions: ['.md'], displayName: 'MD', category: 'documents' },
+      'application/json': { extensions: ['.json'], displayName: 'JSON', category: 'documents' }
     }
   };
 };
@@ -115,8 +120,8 @@ export const getMimeTypesByCategories = categories => {
   return [...new Set(mimeTypes)]; // Remove duplicates
 };
 
-// Legacy export for backward compatibility - returns all text/document MIME types
-export const SUPPORTED_TEXT_FORMATS = getMimeTypesByCategories(['text', 'documents']);
+// Legacy export for backward compatibility - returns all document MIME types (text merged into documents)
+export const SUPPORTED_TEXT_FORMATS = getMimeTypesByCategories(['documents']);
 
 // Legacy MIME_TO_EXTENSION for backward compatibility - empty for now, use getMimeTypeDetails
 export const MIME_TO_EXTENSION = {};
