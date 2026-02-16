@@ -9,26 +9,61 @@ function preprocessMessagesWithFileData(messages) {
   return messages.map(msg => {
     // Handle array of files (multiple file upload)
     if (Array.isArray(msg.fileData)) {
-      const filesInfo = msg.fileData
-        .map(file => {
-          if (file.content) {
-            return `[File: ${file.fileName} (${file.displayType || file.fileType})]\n\n${file.content}\n\n`;
-          }
-          return '';
-        })
-        .filter(Boolean)
-        .join('');
+      const textParts = [];
+      const imageParts = [];
 
+      for (const file of msg.fileData) {
+        if (file.content) {
+          textParts.push(
+            `[File: ${file.fileName} (${file.displayType || file.fileType})]\n\n${file.content}\n\n`
+          );
+        } else if (Array.isArray(file.pageImages) && file.pageImages.length > 0) {
+          textParts.push(
+            `[File: ${file.fileName} (${file.displayType || file.fileType})] - ${file.pageImages.length} page(s) rendered as images:\n\n`
+          );
+          for (const img of file.pageImages) {
+            imageParts.push({ base64: img, fileType: 'image/jpeg' });
+          }
+        }
+      }
+
+      if (imageParts.length > 0) {
+        // Use imageData property so adapters handle provider-specific formatting
+        return {
+          ...msg,
+          content: textParts.join('') + (msg.content || ''),
+          imageData: imageParts
+        };
+      }
+
+      const filesInfo = textParts.join('');
       if (filesInfo) {
         return { ...msg, content: filesInfo + (msg.content || '') };
       }
       return msg;
     }
 
-    // Handle single file (legacy behavior)
+    // Handle single file with text content
     if (msg.fileData && msg.fileData.content) {
       const fileInfo = `[File: ${msg.fileData.fileName || msg.fileData.name} (${msg.fileData.displayType || msg.fileData.fileType || msg.fileData.type})]\n\n${msg.fileData.content}\n\n`;
       return { ...msg, content: fileInfo + (msg.content || '') };
+    }
+
+    // Handle single file with page images (image-based PDF)
+    if (
+      msg.fileData &&
+      !msg.fileData.content &&
+      Array.isArray(msg.fileData.pageImages) &&
+      msg.fileData.pageImages.length > 0
+    ) {
+      const textContent =
+        `[File: ${msg.fileData.fileName} (${msg.fileData.displayType || msg.fileData.fileType})]\n\n` +
+        (msg.content || '');
+      const imageData = msg.fileData.pageImages.map(img => ({
+        base64: img,
+        fileType: 'image/jpeg'
+      }));
+      return { ...msg, content: textContent, imageData };
     }
 
     return msg;

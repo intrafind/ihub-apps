@@ -274,23 +274,35 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       for (const varName of config.inputFiles) {
         const raw = state.data?.[varName] || state.data?._fileData;
-        console.log(`[AgentNodeExecutor] inputFiles lookup: varName="${varName}", raw type="${typeof raw}", isObject=${raw && typeof raw === 'object'}, hasContent=${!!(raw && raw.content)}, hasFileName=${!!(raw && raw.fileName)}, stateDataKeys=${Object.keys(state.data || {}).join(', ')}`);
+        console.log(
+          `[AgentNodeExecutor] inputFiles lookup: varName="${varName}", raw type="${typeof raw}", isObject=${raw && typeof raw === 'object'}, hasContent=${!!(raw && raw.content)}, hasPageImages=${!!(raw && Array.isArray(raw.pageImages) && raw.pageImages.length > 0)}, pageImagesCount=${raw?.pageImages?.length || 0}, hasFileName=${!!(raw && raw.fileName)}, stateDataKeys=${Object.keys(state.data || {}).join(', ')}`
+        );
         if (!raw || typeof raw !== 'object') continue;
 
         // Ensure we have a file data object (not a plain string from text mapping)
         const fileData = raw;
 
         if (fileData.type === 'image' && fileData.base64) {
-          // Image file: build multimodal content part
+          // Image file: add to imageData array (adapters handle provider-specific formatting)
           imageParts.push({
-            type: 'image_url',
-            image_url: { url: fileData.base64 }
+            base64: fileData.base64,
+            fileType: fileData.fileType || 'image/jpeg'
           });
         } else if (fileData.content) {
           // Text-based file (PDF, DOCX, etc.): prepend as text
           const fileName = fileData.fileName || varName;
           const fileType = fileData.displayType || fileData.fileType || 'unknown';
           fileParts.push(`[File: ${fileName} (${fileType})]\n\n${fileData.content}\n`);
+        } else if (Array.isArray(fileData.pageImages) && fileData.pageImages.length > 0) {
+          // Image-based PDF with rendered page images
+          const fileName = fileData.fileName || varName;
+          const fileType = fileData.displayType || fileData.fileType || 'unknown';
+          fileParts.push(
+            `[File: ${fileName} (${fileType})] - ${fileData.pageImages.length} page(s) rendered as images:\n`
+          );
+          for (const img of fileData.pageImages) {
+            imageParts.push({ base64: img, fileType: 'image/jpeg' });
+          }
         } else if (fileData.fileName) {
           // File uploaded but content extraction failed (e.g., scanned/image-based PDF)
           const fileName = fileData.fileName || varName;
@@ -302,16 +314,15 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       }
 
       if (imageParts.length > 0) {
-        // Build multimodal content array for images
-        const contentParts = [];
-        if (fileParts.length > 0) {
-          contentParts.push({ type: 'text', text: fileParts.join('\n') + '\n' + userContent });
-        } else {
-          contentParts.push({ type: 'text', text: userContent });
-        }
-        contentParts.push(...imageParts);
+        // Build message with imageData property (adapters handle provider-specific formatting)
+        const textContent =
+          fileParts.length > 0 ? fileParts.join('\n') + '\n' + userContent : userContent;
 
-        messages.push({ role: 'user', content: contentParts });
+        messages.push({
+          role: 'user',
+          content: textContent,
+          imageData: imageParts
+        });
         return messages;
       } else if (fileParts.length > 0) {
         // Text files only: prepend file content to user message

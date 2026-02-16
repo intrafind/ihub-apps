@@ -78,8 +78,7 @@ const ChatInputActionsMenu = ({
             if (Array.isArray(workflows)) {
               const lang = t('common.language', 'en');
               for (const wf of workflows) {
-                const wfName =
-                  typeof wf.name === 'object' ? wf.name[lang] || wf.name.en : wf.name;
+                const wfName = typeof wf.name === 'object' ? wf.name[lang] || wf.name.en : wf.name;
                 const wfDesc =
                   typeof wf.description === 'object'
                     ? wf.description[lang] || wf.description.en
