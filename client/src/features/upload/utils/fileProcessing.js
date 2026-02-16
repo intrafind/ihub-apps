@@ -419,8 +419,7 @@ export const processDocumentFile = async file => {
     fileExtension === '.tiff'
   ) {
     content = await processTiffFile(file);
-  } 
-  else if (
+  } else if (
     file.type === 'application/vnd.oasis.opendocument.text' ||
     file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
     file.type === 'application/vnd.oasis.opendocument.presentation' ||

@@ -28,13 +28,7 @@
         "en": "Audio file formats",
         "de": "Audiodateiformate"
       },
-      "mimeTypes": [
-        "audio/mpeg",
-        "audio/mp3",
-        "audio/wav",
-        "audio/flac",
-        "audio/ogg"
-      ]
+      "mimeTypes": ["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg"]
     },
     "video": {
       "name": {
@@ -45,13 +39,7 @@
         "en": "Video file formats",
         "de": "Videodateiformate"
       },
-      "mimeTypes": [
-        "video/mp4",
-        "video/mpeg",
-        "video/webm",
-        "video/ogg",
-        "video/quicktime"
-      ]
+      "mimeTypes": ["video/mp4", "video/mpeg", "video/webm", "video/ogg", "video/quicktime"]
     },
     "documents": {
       "name": {
