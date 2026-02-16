@@ -118,6 +118,12 @@
       "toggleImageUpload": "Toggle image upload",
       "toggleFileUpload": "Toggle file upload",
       "toggleUpload": "Toggle file upload",
+      "uploadFromCloud": "Upload from cloud",
+      "uploadFromDevice": "Upload from device",
+      "selectCloudProvider": "Select cloud storage provider",
+      "selectFilesFromCloud": "Select files from {{provider}}",
+      "noCloudProviders": "No cloud storage providers configured",
+      "cloudStorageNotEnabled": "Cloud storage is not enabled",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
@@ -512,6 +518,65 @@
           "tokenExpirationInvalid": "Token expiration must be between 1 and {{max}} minutes",
           "expirationDaysInvalid": "Expiration must be between 1 and 3650 days"
         }
+      }
+    },
+    "cloudStorage": {
+      "title": "Cloud Storage Integration",
+      "subtitle": "Configure cloud storage providers for file uploads",
+      "enabled": "Cloud Storage Enabled",
+      "disabled": "Cloud Storage Disabled",
+      "noProviders": "No cloud storage providers configured",
+      "addProvider": "Add Provider",
+      "providers": "Providers",
+      "providerType": "Provider Type",
+      "selectType": "Select provider type",
+      "sharepoint": "Microsoft SharePoint",
+      "googledrive": "Google Drive",
+      "editProvider": "Edit Provider",
+      "deleteProvider": "Delete Provider",
+      "deleteConfirm": "Are you sure you want to delete this cloud storage provider?",
+      "name": "Name",
+      "displayName": "Display Name",
+      "tenantId": "Tenant ID",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "siteUrl": "Site URL (Optional)",
+      "driveId": "Drive ID (Optional)",
+      "redirectUri": "Redirect URI (Optional)",
+      "providerEnabled": "Provider Enabled",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "saveSuccess": "Cloud storage configuration saved successfully",
+      "saveError": "Failed to save cloud storage configuration",
+      "deleteSuccess": "Provider deleted successfully",
+      "deleteError": "Failed to delete provider",
+      "validation": {
+        "nameRequired": "Name is required",
+        "displayNameRequired": "Display name is required",
+        "tenantIdRequired": "Tenant ID is required",
+        "clientIdRequired": "Client ID is required",
+        "clientSecretRequired": "Client secret is required"
+      },
+      "info": {
+        "title": "About Cloud Storage Integration",
+        "description": "Connect to cloud storage providers like SharePoint and Google Drive to allow users to select files directly from their cloud storage during file uploads."
+      },
+      "sharepointInfo": {
+        "title": "SharePoint Configuration",
+        "description": "To configure SharePoint integration, you need to register an application in Azure AD and obtain the Tenant ID, Client ID, and Client Secret.",
+        "step1": "Register an app in Azure AD",
+        "step2": "Configure API permissions (Files.Read, Sites.Read.All)",
+        "step3": "Create a client secret",
+        "step4": "Copy the Tenant ID, Client ID, and Client Secret here"
+      },
+      "googleDriveInfo": {
+        "title": "Google Drive Configuration",
+        "description": "To configure Google Drive integration, you need to create a project in Google Cloud Console and enable the Google Drive API.",
+        "step1": "Create a project in Google Cloud Console",
+        "step2": "Enable Google Drive API",
+        "step3": "Create OAuth 2.0 credentials",
+        "step4": "Copy the Client ID and Client Secret here"
       }
     },
     "system": {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { cloudStorageConfigSchema } from './cloudStorageSchema.js';
 
 const jwtProviderSchema = z.object({
   name: z.string(),
@@ -164,7 +165,8 @@ export const platformConfigSchema = z
             'List of domains/patterns for which SSL certificate validation should be ignored. Supports wildcards (*.example.com) and exact domains (api.example.com)'
           )
       })
-      .default({})
+      .default({}),
+    cloudStorage: cloudStorageConfigSchema.default({})
   })
   .passthrough();
 
