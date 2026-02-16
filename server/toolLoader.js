@@ -9,7 +9,7 @@ import logger from './utils/logger.js';
  * @param {Object} workflow - Workflow definition
  * @returns {Object} JSON Schema parameters object
  */
-function buildWorkflowToolParams(workflow) {
+function buildWorkflowToolParams(workflow, language = 'en') {
   const properties = {
     input: {
       type: 'string',
@@ -29,10 +29,50 @@ function buildWorkflowToolParams(workflow) {
           properties[varDef] = { type: 'string', description: varDef };
         }
       } else if (varDef && varDef.name && varDef.name !== 'input') {
-        properties[varDef.name] = {
-          type: varDef.type || 'string',
-          description: varDef.description || varDef.name
+        // Skip file/image variables — they are injected via _fileData/inputFiles,
+        // not passed as tool parameters by the LLM
+        if (varDef.type === 'file' || varDef.type === 'image') {
+          continue;
+        }
+
+        const VALID_JSON_SCHEMA_TYPES = new Set([
+          'string',
+          'number',
+          'integer',
+          'boolean',
+          'array',
+          'object'
+        ]);
+        const CUSTOM_TYPE_MAP = {
+          file: 'string',
+          select: 'string',
+          multiselect: 'array',
+          date: 'string',
+          textarea: 'string'
         };
+
+        const rawType = varDef.type || 'string';
+        const schemaType = VALID_JSON_SCHEMA_TYPES.has(rawType)
+          ? rawType
+          : CUSTOM_TYPE_MAP[rawType] || 'string';
+
+        const descriptionRaw = varDef.description || varDef.name;
+        const prop = {
+          type: schemaType,
+          description:
+            typeof descriptionRaw === 'string'
+              ? descriptionRaw
+              : extractLanguageValue(descriptionRaw, language)
+        };
+
+        // Enrich select types with enum values so the LLM knows valid choices
+        if (varDef.type === 'select' && Array.isArray(varDef.options)) {
+          prop.enum = varDef.options
+            .map(o => (typeof o === 'string' ? o : o.value))
+            .filter(Boolean);
+        }
+
+        properties[varDef.name] = prop;
         if (varDef.required) {
           required.push(varDef.name);
         }
@@ -275,11 +315,22 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const wf = configCache.getWorkflowById(wfId);
         if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
 
-        const toolDescription = extractLanguageValue(
+        let toolDescription = extractLanguageValue(
           wf.chatIntegration?.toolDescription || wf.description,
           language || 'en'
         );
         const toolName = extractLanguageValue(wf.name, language || 'en');
+
+        // If the workflow has file/image input variables, hint that attached files
+        // are passed automatically so the LLM knows to call this tool
+        const startNode = (wf.nodes || []).find(n => n.type === 'start');
+        const hasFileInputs = (startNode?.config?.inputVariables || []).some(
+          v => v.type === 'file' || v.type === 'image'
+        );
+        if (hasFileInputs) {
+          toolDescription +=
+            ' Any files attached to the user message are passed to this tool automatically.';
+        }
 
         appTools.push({
           id: `workflow_${wfId}`,
@@ -289,7 +340,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
           isWorkflowTool: true,
           workflowId: wfId,
           passthrough: true,
-          parameters: buildWorkflowToolParams(wf)
+          parameters: buildWorkflowToolParams(wf, language || 'en')
         });
       } catch (error) {
         logger.error(`Error generating workflow tool for ${ref}:`, error);

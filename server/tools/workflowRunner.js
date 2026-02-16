@@ -157,6 +157,17 @@ export default async function workflowRunner(params = {}) {
     initialData._userHint = input;
   }
 
+  logger.info({
+    component: 'workflowRunner',
+    message: 'Workflow runner invoked',
+    workflowId,
+    hasFileData: !!_fileData,
+    fileDataFileName: _fileData?.fileName || 'none',
+    hasInput: !!input,
+    extraInputVarKeys: Object.keys(extraInputVars).join(', '),
+    paramKeys: Object.keys(params).join(', ')
+  });
+
   if (_chatHistory) {
     initialData._chatHistory = _chatHistory;
   }

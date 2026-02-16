@@ -121,9 +121,7 @@
           "en": "[Step {{_currentStep}}/{{_totalNodes}}] Analyze the uploaded document.\n\nAnalysis type: {{analysisType}}\n\nAdapt your analysis based on the requested type:\n- \"legal\": Focus on contractual terms, obligations, liabilities, warranties, indemnification, compliance requirements, governing law, termination conditions. Flag ambiguous or missing legal provisions.\n- \"technical\": Focus on technical specifications, system architecture, APIs, data models, performance requirements, dependencies, security considerations, scalability. Identify technical gaps or risks.\n- \"summary\": Provide only a concise executive overview. Focus on key takeaways, critical decisions needed, and action items. Skip minor details and keep the rawAnalysis brief.\n- \"general\" or empty: Comprehensive balanced analysis covering purpose, key content, important details, entities involved, timeline, and any notable concerns.\n- Any other value: Interpret it as the user's specific instruction for what aspect to focus on.\n\nExtract and return as JSON:\n{\n  \"documentType\": \"type of document (contract, report, article, specification, etc.)\",\n  \"keyFindings\": [\"finding 1 with direct citation from the document\", \"finding 2 with citation\"],\n  \"importantDates\": [\"date and its significance\"],\n  \"entities\": [\"people, organizations, or products mentioned\"],\n  \"risks\": [\"potential risks or concerns identified\"],\n  \"rawAnalysis\": \"detailed analysis focusing on the requested type\"\n}",
           "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Analysieren Sie das hochgeladene Dokument.\n\nAnalysetyp: {{analysisType}}\n\nPassen Sie Ihre Analyse an den angeforderten Typ an:\n- \"legal\": Fokus auf Vertragsbedingungen, Pflichten, Haftung, Garantien, Freistellung, Compliance-Anforderungen, geltendes Recht, Kündigungsbedingungen. Markieren Sie mehrdeutige oder fehlende Bestimmungen.\n- \"technical\": Fokus auf technische Spezifikationen, Systemarchitektur, APIs, Datenmodelle, Leistungsanforderungen, Abhängigkeiten, Sicherheitsaspekte, Skalierbarkeit. Identifizieren Sie technische Lücken oder Risiken.\n- \"summary\": Nur eine knappe Zusammenfassung. Fokus auf Kernaussagen, wichtige Entscheidungen und Handlungsempfehlungen. Details überspringen, rawAnalysis kurz halten.\n- \"general\" oder leer: Umfassende, ausgewogene Analyse aller Aspekte — Zweck, Kerninhalt, wichtige Details, beteiligte Entitäten, Zeitrahmen und auffällige Punkte.\n- Jeder andere Wert: Als spezifische Anweisung des Nutzers interpretieren, worauf der Fokus liegen soll.\n\nExtrahieren und als JSON zurückgeben:\n{\n  \"documentType\": \"Art des Dokuments (Vertrag, Bericht, Artikel, Spezifikation, etc.)\",\n  \"keyFindings\": [\"Ergebnis 1 mit direktem Zitat aus dem Dokument\", \"Ergebnis 2 mit Zitat\"],\n  \"importantDates\": [\"Datum und seine Bedeutung\"],\n  \"entities\": [\"Erwähnte Personen, Organisationen oder Produkte\"],\n  \"risks\": [\"Identifizierte potenzielle Risiken oder Bedenken\"],\n  \"rawAnalysis\": \"Detaillierte Analyse mit Fokus auf den angeforderten Typ\"\n}"
         },
-        "inputFiles": [
-          "document"
-        ],
+        "inputFiles": ["document"],
         "outputVariable": "insights",
         "outputSchema": {
           "type": "object",
@@ -159,11 +157,7 @@
               "type": "string"
             }
           },
-          "required": [
-            "documentType",
-            "keyFindings",
-            "rawAnalysis"
-          ]
+          "required": ["documentType", "keyFindings", "rawAnalysis"]
         }
       },
       "execution": {
@@ -212,11 +206,7 @@
         "y": 600
       },
       "config": {
-        "outputVariables": [
-          "insights",
-          "finalReport",
-          "analysisType"
-        ]
+        "outputVariables": ["insights", "finalReport", "analysisType"]
       }
     }
   ],

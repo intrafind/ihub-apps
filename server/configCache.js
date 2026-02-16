@@ -127,7 +127,8 @@ class ConfigCache {
       'config/users.json',
       'config/sources.json',
       'config/providers.json',
-      'config/mimetypes.json'
+      'config/mimetypes.json',
+      'config/features.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -734,6 +735,14 @@ class ConfigCache {
    */
   getMimetypes() {
     return this.get('config/mimetypes.json');
+  }
+
+  /**
+   * Get features configuration
+   */
+  getFeatures() {
+    const result = this.get('config/features.json');
+    return result?.data || {};
   }
 
   /**

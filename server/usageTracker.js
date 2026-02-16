@@ -2,7 +2,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
-import { loadJson } from './configLoader.js';
+
 import { recordTokenUsage } from './telemetry.js';
 import logger from './utils/logger.js';
 
@@ -55,8 +55,9 @@ function createDefaultUsage() {
 async function loadConfig() {
   if (configLoaded) return;
   try {
-    const cfg = await loadJson('config/platform.json');
-    trackingEnabled = cfg?.features?.usageTracking !== false;
+    const { isFeatureEnabled } = await import('./featureRegistry.js');
+    const configCache = (await import('./configCache.js')).default;
+    trackingEnabled = isFeatureEnabled('usageTracking', configCache.getFeatures());
   } catch {
     trackingEnabled = true;
   }

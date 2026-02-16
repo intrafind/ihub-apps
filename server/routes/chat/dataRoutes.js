@@ -7,6 +7,7 @@ import {
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
 
@@ -365,80 +366,85 @@ export default function registerDataRoutes(app, deps = {}) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/prompts', basePath), authRequired, async (req, res) => {
-    try {
-      const platformConfig = req.app.get('platform') || {};
+  app.get(
+    buildServerPath('/api/prompts', basePath),
+    requireFeature('promptsLibrary'),
+    authRequired,
+    async (req, res) => {
+      try {
+        const platformConfig = req.app.get('platform') || {};
 
-      // Get prompts with ETag from cache
-      let { data: prompts, etag } = configCache.getPrompts();
+        // Get prompts with ETag from cache
+        let { data: prompts, etag } = configCache.getPrompts();
 
-      if (!prompts) {
-        return res.status(500).json({ error: 'Failed to load prompts configuration' });
-      }
-
-      // Force permission enhancement if not already done
-      if (req.user && !req.user.permissions) {
-        const authConfig = platformConfig.auth || {};
-        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-      }
-
-      // Create anonymous user if none exists and anonymous access is allowed
-      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const authConfig = platformConfig.auth || {};
-        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-      }
-
-      // Apply group-based filtering if user is authenticated
-      if (req.user && req.user.permissions) {
-        const allowedPrompts = req.user.permissions.prompts || new Set();
-        prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
-      } else if (isAnonymousAccessAllowed(platformConfig)) {
-        // For anonymous users, filter to only anonymous-allowed prompts
-        const allowedPrompts = new Set(); // No default prompts for anonymous
-        prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
-      }
-
-      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
-      let userSpecificEtag = etag;
-
-      // Create ETag based on the actual filtered prompts content
-      // This ensures users with the same permissions share cache, but different permissions get different ETags
-      const originalPromptsCount = configCache.getPrompts().data?.length || 0;
-      if (prompts.length < originalPromptsCount) {
-        // Prompts were filtered - create content-based ETag from filtered prompt IDs
-        const promptIds = prompts.map(prompt => prompt.id).sort();
-        const contentHash = crypto
-          .createHash('md5')
-          .update(JSON.stringify(promptIds))
-          .digest('hex')
-          .substring(0, 8);
-
-        userSpecificEtag = `${etag}-${contentHash}`;
-      }
-      // If prompts.length === originalPromptsCount, user sees all prompts, use original ETag
-
-      // Set ETag header
-      if (userSpecificEtag) {
-        res.setHeader('ETag', userSpecificEtag);
-
-        // Check if client has the same ETag
-        const clientETag = req.headers['if-none-match'];
-        if (clientETag && clientETag === userSpecificEtag) {
-          return res.status(304).end();
+        if (!prompts) {
+          return res.status(500).json({ error: 'Failed to load prompts configuration' });
         }
-      }
 
-      res.json(prompts);
-    } catch (error) {
-      logger.error({
-        component: 'DataRoutes',
-        message: 'Error fetching prompts',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+        // Force permission enhancement if not already done
+        if (req.user && !req.user.permissions) {
+          const authConfig = platformConfig.auth || {};
+          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+        }
+
+        // Create anonymous user if none exists and anonymous access is allowed
+        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+          const authConfig = platformConfig.auth || {};
+          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+        }
+
+        // Apply group-based filtering if user is authenticated
+        if (req.user && req.user.permissions) {
+          const allowedPrompts = req.user.permissions.prompts || new Set();
+          prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
+        } else if (isAnonymousAccessAllowed(platformConfig)) {
+          // For anonymous users, filter to only anonymous-allowed prompts
+          const allowedPrompts = new Set(); // No default prompts for anonymous
+          prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
+        }
+
+        // Generate user-specific ETag to prevent cache poisoning between users with different permissions
+        let userSpecificEtag = etag;
+
+        // Create ETag based on the actual filtered prompts content
+        // This ensures users with the same permissions share cache, but different permissions get different ETags
+        const originalPromptsCount = configCache.getPrompts().data?.length || 0;
+        if (prompts.length < originalPromptsCount) {
+          // Prompts were filtered - create content-based ETag from filtered prompt IDs
+          const promptIds = prompts.map(prompt => prompt.id).sort();
+          const contentHash = crypto
+            .createHash('md5')
+            .update(JSON.stringify(promptIds))
+            .digest('hex')
+            .substring(0, 8);
+
+          userSpecificEtag = `${etag}-${contentHash}`;
+        }
+        // If prompts.length === originalPromptsCount, user sees all prompts, use original ETag
+
+        // Set ETag header
+        if (userSpecificEtag) {
+          res.setHeader('ETag', userSpecificEtag);
+
+          // Check if client has the same ETag
+          const clientETag = req.headers['if-none-match'];
+          if (clientETag && clientETag === userSpecificEtag) {
+            return res.status(304).end();
+          }
+        }
+
+        res.json(prompts);
+      } catch (error) {
+        logger.error({
+          component: 'DataRoutes',
+          message: 'Error fetching prompts',
+          error: error.message,
+          stack: error.stack
+        });
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -957,7 +963,7 @@ export default function registerDataRoutes(app, deps = {}) {
       // Note: Auth configuration is available via /api/auth/status endpoint
       const sanitizedConfig = {
         defaultLanguage: platform.defaultLanguage,
-        features: platform.features,
+        features: resolveFeatures(configCache.getFeatures()),
         requestBodyLimitMB: platform.requestBodyLimitMB,
         requestConcurrency: platform.requestConcurrency,
         pdfExport: platform.pdfExport,

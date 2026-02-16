@@ -15,6 +15,7 @@ import {
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { requireFeature } from '../../featureRegistry.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
@@ -478,15 +479,20 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get(buildServerPath('/api/admin/sources', basePath), adminAuth, async (req, res) => {
-    try {
-      const { data: sources, etag } = configCache.getSources(true);
-      res.setHeader('ETag', etag);
-      res.json(sources);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch sources', error);
+  app.get(
+    buildServerPath('/api/admin/sources', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { data: sources, etag } = configCache.getSources(true);
+        res.setHeader('ETag', etag);
+        res.json(sources);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch sources', error);
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -538,32 +544,37 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
+  app.get(
+    buildServerPath('/api/admin/sources/:id', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
 
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
+
+        const { data: sources } = configCache.getSources(true);
+        const source = sources.find(s => s.id === id);
+
+        if (!source) {
+          return sendNotFound(res, 'Source');
+        }
+
+        res.json(source);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch source', error);
       }
-
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
-
-      const { data: sources } = configCache.getSources(true);
-      const source = sources.find(s => s.id === id);
-
-      if (!source) {
-        return sendNotFound(res, 'Source');
-      }
-
-      res.json(source);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch source', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -658,57 +669,62 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post(buildServerPath('/api/admin/sources', basePath), adminAuth, async (req, res) => {
-    try {
-      const sourceData = req.body;
+  app.post(
+    buildServerPath('/api/admin/sources', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const sourceData = req.body;
 
-      // Validate source ID for security
-      if (sourceData.id && !validateIdForPath(sourceData.id, 'source', res)) {
-        return;
-      }
-
-      // Validate source configuration
-      const validation = validateSourceConfig(sourceData);
-      if (!validation.success) {
-        return sendBadRequest(res, 'Invalid source configuration', validation.errors);
-      }
-
-      const newSource = validation.data;
-
-      // Additional validation for filesystem sources
-      // Filesystem sources must have content uploaded separately after creation
-      // The client should indicate this by providing a path
-      // An empty path means no content will be provided, which is invalid
-      if (newSource.type === 'filesystem') {
-        if (!newSource.config?.path || newSource.config.path.trim() === '') {
-          return sendBadRequest(
-            res,
-            'Filesystem sources require content. Please upload a file or enter content before creating the source.'
-          );
+        // Validate source ID for security
+        if (sourceData.id && !validateIdForPath(sourceData.id, 'source', res)) {
+          return;
         }
+
+        // Validate source configuration
+        const validation = validateSourceConfig(sourceData);
+        if (!validation.success) {
+          return sendBadRequest(res, 'Invalid source configuration', validation.errors);
+        }
+
+        const newSource = validation.data;
+
+        // Additional validation for filesystem sources
+        // Filesystem sources must have content uploaded separately after creation
+        // The client should indicate this by providing a path
+        // An empty path means no content will be provided, which is invalid
+        if (newSource.type === 'filesystem') {
+          if (!newSource.config?.path || newSource.config.path.trim() === '') {
+            return sendBadRequest(
+              res,
+              'Filesystem sources require content. Please upload a file or enter content before creating the source.'
+            );
+          }
+        }
+
+        // Check for duplicate ID
+        const { data: existingSources } = configCache.getSources(true);
+        if (existingSources.some(s => s.id === newSource.id)) {
+          return sendBadRequest(res, 'Source ID already exists');
+        }
+
+        // Add creation timestamp
+        newSource.created = new Date().toISOString();
+
+        // Update sources file
+        const updatedSources = [...existingSources, newSource];
+        await saveSourcesConfig(updatedSources);
+
+        // Refresh cache
+        await configCache.refreshSourcesCache();
+
+        res.json({ message: 'Source created successfully', source: newSource });
+      } catch (error) {
+        sendFailedOperationError(res, 'create source', error);
       }
-
-      // Check for duplicate ID
-      const { data: existingSources } = configCache.getSources(true);
-      if (existingSources.some(s => s.id === newSource.id)) {
-        return sendBadRequest(res, 'Source ID already exists');
-      }
-
-      // Add creation timestamp
-      newSource.created = new Date().toISOString();
-
-      // Update sources file
-      const updatedSources = [...existingSources, newSource];
-      await saveSourcesConfig(updatedSources);
-
-      // Refresh cache
-      await configCache.refreshSourcesCache();
-
-      res.json({ message: 'Source created successfully', source: newSource });
-    } catch (error) {
-      sendFailedOperationError(res, 'create source', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -787,58 +803,63 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.put(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
+  app.put(
+    buildServerPath('/api/admin/sources/:id', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
 
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
+
+        const sourceData = req.body;
+
+        // Ensure ID matches
+        if (sourceData.id !== id) {
+          return sendBadRequest(res, 'Source ID mismatch');
+        }
+
+        // Validate source configuration
+        const validation = validateSourceConfig(sourceData);
+        if (!validation.success) {
+          return sendBadRequest(res, 'Invalid source configuration', validation.errors);
+        }
+
+        const updatedSource = validation.data;
+
+        // Find existing source
+        const { data: sources } = configCache.getSources(true);
+        const existingIndex = sources.findIndex(s => s.id === id);
+
+        if (existingIndex === -1) {
+          return sendNotFound(res, 'Source');
+        }
+
+        // Preserve creation timestamp
+        updatedSource.created = sources[existingIndex].created;
+
+        // Update sources array
+        const updatedSources = [...sources];
+        updatedSources[existingIndex] = updatedSource;
+
+        await saveSourcesConfig(updatedSources);
+        await configCache.refreshSourcesCache();
+
+        res.json({ message: 'Source updated successfully', source: updatedSource });
+      } catch (error) {
+        sendFailedOperationError(res, 'update source', error);
       }
-
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
-
-      const sourceData = req.body;
-
-      // Ensure ID matches
-      if (sourceData.id !== id) {
-        return sendBadRequest(res, 'Source ID mismatch');
-      }
-
-      // Validate source configuration
-      const validation = validateSourceConfig(sourceData);
-      if (!validation.success) {
-        return sendBadRequest(res, 'Invalid source configuration', validation.errors);
-      }
-
-      const updatedSource = validation.data;
-
-      // Find existing source
-      const { data: sources } = configCache.getSources(true);
-      const existingIndex = sources.findIndex(s => s.id === id);
-
-      if (existingIndex === -1) {
-        return sendNotFound(res, 'Source');
-      }
-
-      // Preserve creation timestamp
-      updatedSource.created = sources[existingIndex].created;
-
-      // Update sources array
-      const updatedSources = [...sources];
-      updatedSources[existingIndex] = updatedSource;
-
-      await saveSourcesConfig(updatedSources);
-      await configCache.refreshSourcesCache();
-
-      res.json({ message: 'Source updated successfully', source: updatedSource });
-    } catch (error) {
-      sendFailedOperationError(res, 'update source', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -914,44 +935,49 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.delete(buildServerPath('/api/admin/sources/:id', basePath), adminAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
+  app.delete(
+    buildServerPath('/api/admin/sources/:id', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
 
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
+
+        // Validate id for security
+        if (!validateIdForPath(id, 'source', res)) {
+          return;
+        }
+        const { data: sources } = configCache.getSources(true);
+        const sourceIndex = sources.findIndex(s => s.id === id);
+
+        if (sourceIndex === -1) {
+          return sendNotFound(res, 'Source');
+        }
+
+        // Check for dependencies (apps using this source)
+        const dependencies = await findSourceDependencies(id);
+        if (dependencies.length > 0) {
+          return sendBadRequest(res, 'Cannot delete source with dependencies', {
+            dependencies: dependencies.map(dep => ({ appId: dep.id, appName: dep.name }))
+          });
+        }
+
+        // Remove source
+        const updatedSources = sources.filter(s => s.id !== id);
+        await saveSourcesConfig(updatedSources);
+        await configCache.refreshSourcesCache();
+
+        res.json({ message: 'Source deleted successfully' });
+      } catch (error) {
+        sendFailedOperationError(res, 'delete source', error);
       }
-
-      // Validate id for security
-      if (!validateIdForPath(id, 'source', res)) {
-        return;
-      }
-      const { data: sources } = configCache.getSources(true);
-      const sourceIndex = sources.findIndex(s => s.id === id);
-
-      if (sourceIndex === -1) {
-        return sendNotFound(res, 'Source');
-      }
-
-      // Check for dependencies (apps using this source)
-      const dependencies = await findSourceDependencies(id);
-      if (dependencies.length > 0) {
-        return sendBadRequest(res, 'Cannot delete source with dependencies', {
-          dependencies: dependencies.map(dep => ({ appId: dep.id, appName: dep.name }))
-        });
-      }
-
-      // Remove source
-      const updatedSources = sources.filter(s => s.id !== id);
-      await saveSourcesConfig(updatedSources);
-      await configCache.refreshSourcesCache();
-
-      res.json({ message: 'Source deleted successfully' });
-    } catch (error) {
-      sendFailedOperationError(res, 'delete source', error);
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1011,6 +1037,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/sources/:id/test', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1124,6 +1151,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/sources/:id/preview', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1223,33 +1251,38 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.post(buildServerPath('/api/admin/sources/_toggle', basePath), adminAuth, async (req, res) => {
-    try {
-      const { sourceIds, enabled } = req.body;
+  app.post(
+    buildServerPath('/api/admin/sources/_toggle', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { sourceIds, enabled } = req.body;
 
-      if (!Array.isArray(sourceIds) || typeof enabled !== 'boolean') {
-        return sendBadRequest(res, 'Invalid request format');
-      }
-
-      const { data: sources } = configCache.getSources(true);
-      let updatedCount = 0;
-
-      const updatedSources = sources.map(source => {
-        if (sourceIds.includes(source.id)) {
-          updatedCount++;
-          return { ...source, enabled, updated: new Date().toISOString() };
+        if (!Array.isArray(sourceIds) || typeof enabled !== 'boolean') {
+          return sendBadRequest(res, 'Invalid request format');
         }
-        return source;
-      });
 
-      await saveSourcesConfig(updatedSources);
-      await configCache.refreshSourcesCache();
+        const { data: sources } = configCache.getSources(true);
+        let updatedCount = 0;
 
-      res.json({ message: `${updatedCount} sources ${enabled ? 'enabled' : 'disabled'}` });
-    } catch (error) {
-      sendFailedOperationError(res, 'toggle sources', error);
+        const updatedSources = sources.map(source => {
+          if (sourceIds.includes(source.id)) {
+            updatedCount++;
+            return { ...source, enabled, updated: new Date().toISOString() };
+          }
+          return source;
+        });
+
+        await saveSourcesConfig(updatedSources);
+        await configCache.refreshSourcesCache();
+
+        res.json({ message: `${updatedCount} sources ${enabled ? 'enabled' : 'disabled'}` });
+      } catch (error) {
+        sendFailedOperationError(res, 'toggle sources', error);
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1287,30 +1320,35 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get(buildServerPath('/api/admin/sources/_stats', basePath), adminAuth, async (req, res) => {
-    try {
-      const { data: sources } = configCache.getSources(true);
+  app.get(
+    buildServerPath('/api/admin/sources/_stats', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { data: sources } = configCache.getSources(true);
 
-      const stats = {
-        total: sources.length,
-        enabled: sources.filter(s => s.enabled !== false).length,
-        disabled: sources.filter(s => s.enabled === false).length,
-        byType: {
-          filesystem: sources.filter(s => s.type === 'filesystem').length,
-          url: sources.filter(s => s.type === 'url').length,
-          ifinder: sources.filter(s => s.type === 'ifinder').length
-        },
-        byExposeAs: {
-          prompt: sources.filter(s => s.exposeAs === 'prompt').length,
-          tool: sources.filter(s => s.exposeAs === 'tool').length
-        }
-      };
+        const stats = {
+          total: sources.length,
+          enabled: sources.filter(s => s.enabled !== false).length,
+          disabled: sources.filter(s => s.enabled === false).length,
+          byType: {
+            filesystem: sources.filter(s => s.type === 'filesystem').length,
+            url: sources.filter(s => s.type === 'url').length,
+            ifinder: sources.filter(s => s.type === 'ifinder').length
+          },
+          byExposeAs: {
+            prompt: sources.filter(s => s.exposeAs === 'prompt').length,
+            tool: sources.filter(s => s.exposeAs === 'tool').length
+          }
+        };
 
-      res.json(stats);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch source statistics', error);
+        res.json(stats);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch source statistics', error);
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1350,23 +1388,28 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *             schema:
    *               $ref: '#/components/schemas/ErrorResponse'
    */
-  app.get(buildServerPath('/api/admin/sources/_types', basePath), adminAuth, async (req, res) => {
-    try {
-      const manager = getSourceManager();
-      const handlerTypes = manager.getHandlerTypes();
+  app.get(
+    buildServerPath('/api/admin/sources/_types', basePath),
+    requireFeature('sources'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const manager = getSourceManager();
+        const handlerTypes = manager.getHandlerTypes();
 
-      const types = handlerTypes.map(type => ({
-        id: type,
-        name: type.charAt(0).toUpperCase() + type.slice(1),
-        description: getTypeDescription(type),
-        defaultConfig: getDefaultSourceConfig(type)
-      }));
+        const types = handlerTypes.map(type => ({
+          id: type,
+          name: type.charAt(0).toUpperCase() + type.slice(1),
+          description: getTypeDescription(type),
+          defaultConfig: getDefaultSourceConfig(type)
+        }));
 
-      res.json(types);
-    } catch (error) {
-      sendFailedOperationError(res, 'fetch source types', error);
+        res.json(types);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch source types', error);
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1414,6 +1457,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.get(
     buildServerPath('/api/admin/sources/_dependencies/:id', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1506,6 +1550,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.get(
     buildServerPath('/api/admin/sources/:id/files', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1616,6 +1661,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.get(
     buildServerPath('/api/admin/sources/:id/files/content', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1732,6 +1778,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.post(
     buildServerPath('/api/admin/sources/:id/files', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1844,6 +1891,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    */
   app.delete(
     buildServerPath('/api/admin/sources/:id/files', basePath),
+    requireFeature('sources'),
     adminAuth,
     async (req, res) => {
       try {

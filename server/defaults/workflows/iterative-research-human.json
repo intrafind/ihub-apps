@@ -150,9 +150,7 @@
       },
       "position": { "x": 100, "y": 370 },
       "config": {
-        "operations": [
-          { "set": "allFindings", "value": [] }
-        ]
+        "operations": [{ "set": "allFindings", "value": [] }]
       }
     },
     {
@@ -245,9 +243,7 @@
       },
       "position": { "x": 100, "y": 610 },
       "config": {
-        "operations": [
-          { "push": "currentResearch", "to": "allFindings" }
-        ]
+        "operations": [{ "push": "currentResearch", "to": "allFindings" }]
       }
     },
     {
@@ -262,8 +258,17 @@
         "operations": [
           { "push": "researchState.currentTopic", "to": "researchState.completedTopics" },
           { "increment": "researchState.currentIndex", "by": 1 },
-          { "condition": "researchState.currentIndex >= researchState.total", "to": "researchState.allComplete", "then": true, "else": false },
-          { "arrayGet": "researchPlan.topics", "index": "researchState.currentIndex", "to": "researchState.currentTopic" }
+          {
+            "condition": "researchState.currentIndex >= researchState.total",
+            "to": "researchState.allComplete",
+            "then": true,
+            "else": false
+          },
+          {
+            "arrayGet": "researchPlan.topics",
+            "index": "researchState.currentIndex",
+            "to": "researchState.currentTopic"
+          }
         ]
       }
     },

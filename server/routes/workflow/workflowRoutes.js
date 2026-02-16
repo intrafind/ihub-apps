@@ -30,25 +30,9 @@ import {
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import { requireFeature } from '../../featureRegistry.js';
 
-/**
- * Middleware to check if the experimental workflows feature is enabled.
- * Returns 403 if the feature is disabled.
- *
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next function
- */
-function checkWorkflowsFeature(req, res, next) {
-  const platform = configCache.getPlatform();
-  if (platform?.features?.experimentalWorkflows !== true) {
-    return res.status(403).json({
-      error: 'Experimental workflows feature is not enabled',
-      code: 'FEATURE_DISABLED'
-    });
-  }
-  next();
-}
+const checkWorkflowsFeature = requireFeature('experimentalWorkflows');
 
 /**
  * SSE clients map for workflow execution streaming

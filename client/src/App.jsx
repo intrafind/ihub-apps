@@ -67,6 +67,7 @@ const AdminUICustomization = React.lazy(
   () => import('./features/admin/pages/AdminUICustomization')
 );
 const AdminLoggingPage = React.lazy(() => import('./features/admin/pages/AdminLoggingPage'));
+const AdminFeaturesPage = React.lazy(() => import('./features/admin/pages/AdminFeaturesPage'));
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
@@ -180,9 +181,10 @@ function App() {
                   {/* Regular application routes */}
                   <Route path="/" element={<Layout />}>
                     <Route index element={<SafeAppsList />} />
-                    {uiConfig?.promptsList?.enabled !== false && (
-                      <Route path="prompts" element={<SafePromptsList />} />
-                    )}
+                    {uiConfig?.promptsList?.enabled !== false &&
+                      platformConfig?.featuresMap?.promptsLibrary !== false && (
+                        <Route path="prompts" element={<SafePromptsList />} />
+                      )}
                     {/* Workflow routes - feature flag is enforced by server API (returns 403 if disabled) */}
                     <Route
                       path="workflows"
@@ -390,6 +392,12 @@ function App() {
                       <Route
                         path="admin/ui"
                         element={<LazyAdminRoute component={AdminUICustomization} />}
+                      />
+                    )}
+                    {showAdminPage('features') && (
+                      <Route
+                        path="admin/features"
+                        element={<LazyAdminRoute component={AdminFeaturesPage} />}
                       />
                     )}
                     <Route

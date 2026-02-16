@@ -10,6 +10,7 @@ import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/inte
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import { usePlatformConfig } from '../contexts/PlatformConfigContext';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 
@@ -21,6 +22,10 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
+  const { platformConfig } = usePlatformConfig();
+
+  // Map navigation URLs to feature IDs for gating
+  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'experimentalWorkflows' };
 
   // Update integration settings from URL parameters and retrieve current settings
   const { showHeader, showFooter, language } = updateSettingsFromUrl(searchParams);
@@ -116,11 +121,12 @@ const Layout = () => {
               <nav className="hidden md:flex items-center space-x-6">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(
-                      link =>
-                        !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false) &&
-                        canAccessLink(link)
-                    )
+                    .filter(link => {
+                      const featureId = featureRoutes[link.url];
+                      if (featureId && platformConfig?.featuresMap?.[featureId] === false)
+                        return false;
+                      return canAccessLink(link);
+                    })
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -155,11 +161,12 @@ const Layout = () => {
               <nav className="container mx-auto px-4 py-3 flex flex-col">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(
-                      link =>
-                        !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false) &&
-                        canAccessLink(link)
-                    )
+                    .filter(link => {
+                      const featureId = featureRoutes[link.url];
+                      if (featureId && platformConfig?.featuresMap?.[featureId] === false)
+                        return false;
+                      return canAccessLink(link);
+                    })
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -202,7 +209,12 @@ const Layout = () => {
               <div className="flex flex-wrap justify-center gap-4 md:gap-6">
                 {uiConfig?.footer?.links &&
                   uiConfig.footer.links
-                    .filter(link => canAccessLink(link))
+                    .filter(link => {
+                      const featureId = featureRoutes[link.url];
+                      if (featureId && platformConfig?.featuresMap?.[featureId] === false)
+                        return false;
+                      return canAccessLink(link);
+                    })
                     .map((link, index) => (
                       <Link
                         key={index}

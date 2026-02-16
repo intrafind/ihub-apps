@@ -274,6 +274,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       for (const varName of config.inputFiles) {
         const raw = state.data?.[varName] || state.data?._fileData;
+        console.log(`[AgentNodeExecutor] inputFiles lookup: varName="${varName}", raw type="${typeof raw}", isObject=${raw && typeof raw === 'object'}, hasContent=${!!(raw && raw.content)}, hasFileName=${!!(raw && raw.fileName)}, stateDataKeys=${Object.keys(state.data || {}).join(', ')}`);
         if (!raw || typeof raw !== 'object') continue;
 
         // Ensure we have a file data object (not a plain string from text mapping)

@@ -245,6 +245,22 @@ class RequestBuilder {
         chatId,
         modelName
       );
+      // Extract raw file/image data from the last user message before preprocessing
+      // flattens it into the content string. This is needed so workflow tools
+      // can receive the structured file object for their inputFiles mechanism.
+      const lastUserMsg = [...llmMessages].reverse().find(m => m.role === 'user');
+      const userFileData = lastUserMsg?.fileData || lastUserMsg?.imageData || null;
+
+      logger.info({
+        component: 'RequestBuilder',
+        message: 'File data extraction from messages',
+        hasLastUserMsg: !!lastUserMsg,
+        hasFileData: !!lastUserMsg?.fileData,
+        hasImageData: !!lastUserMsg?.imageData,
+        userFileDataFileName: userFileData?.fileName || 'none',
+        messageKeys: lastUserMsg ? Object.keys(lastUserMsg).join(', ') : 'none'
+      });
+
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
       logger.info({
@@ -339,7 +355,8 @@ class RequestBuilder {
           tools,
           apiKey: apiKeyResult.apiKey,
           temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
-          maxTokens: finalTokens
+          maxTokens: finalTokens,
+          userFileData
         }
       };
     } catch (error) {
