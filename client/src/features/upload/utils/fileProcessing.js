@@ -156,6 +156,104 @@ export const loadJSZip = async () => {
   return JSZip.default;
 };
 
+// Lazy load UTIF only when needed for TIFF processing
+export const loadUTIF = async () => {
+  const UTIF = await import('utif2');
+  return UTIF.default;
+};
+
+/**
+ * Process TIFF file and convert to PNG/JPEG
+ * Handles multipage TIFF by converting each page
+ * @param {File} file - The TIFF file to process
+ * @param {Object} options - Processing options
+ * @param {number} options.maxDimension - Maximum dimension for resizing
+ * @param {boolean} options.resize - Whether to resize images
+ * @returns {Promise<Array>} Array of processed image data (one per page)
+ */
+export const processTiffFile = async (file, options = {}) => {
+  const { maxDimension = 1024, resize = true } = options;
+
+  try {
+    // Load UTIF library
+    const UTIF = await loadUTIF();
+
+    // Read file as ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+
+    // Decode TIFF
+    const ifds = UTIF.decode(arrayBuffer);
+
+    // Process each page
+    const pages = [];
+
+    for (let i = 0; i < ifds.length; i++) {
+      const ifd = ifds[i];
+      UTIF.decodeImage(arrayBuffer, ifd);
+
+      // Get RGBA data
+      const rgba = UTIF.toRGBA8(ifd);
+
+      // Create canvas
+      const canvas = document.createElement('canvas');
+      let width = ifd.width;
+      let height = ifd.height;
+
+      // Resize if needed
+      if (resize) {
+        if (width > height && width > maxDimension) {
+          height = Math.round((height * maxDimension) / width);
+          width = maxDimension;
+        } else if (height > maxDimension) {
+          width = Math.round((width * maxDimension) / height);
+          height = maxDimension;
+        }
+      }
+
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+
+      // Create ImageData from RGBA
+      const imageData = ctx.createImageData(ifd.width, ifd.height);
+      imageData.data.set(rgba);
+
+      // Draw to canvas (with resize if needed)
+      if (width !== ifd.width || height !== ifd.height) {
+        // Create temp canvas for original size
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = ifd.width;
+        tempCanvas.height = ifd.height;
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCtx.putImageData(imageData, 0, 0);
+
+        // Draw resized to main canvas
+        ctx.drawImage(tempCanvas, 0, 0, width, height);
+      } else {
+        ctx.putImageData(imageData, 0, 0);
+      }
+
+      // Convert to base64
+      const base64 = canvas.toDataURL('image/png', 0.9);
+
+      pages.push({
+        base64,
+        width,
+        height,
+        originalWidth: ifd.width,
+        originalHeight: ifd.height,
+        pageNumber: i + 1,
+        totalPages: ifds.length
+      });
+    }
+
+    return pages;
+  } catch (error) {
+    console.error('Error processing TIFF file:', error);
+    throw new Error('tiff-processing-error');
+  }
+};
+
 // Convert MIME types array to accept string with both MIME types and extensions
 export const formatAcceptAttribute = mimeTypes => {
   const config = getConfig();
@@ -315,6 +413,14 @@ export const processDocumentFile = async file => {
   ) {
     content = await processMsgFile(file);
   } else if (
+    file.type === 'image/tif' ||
+    file.type === 'image/tiff' ||
+    fileExtension === '.tif' ||
+    fileExtension === '.tiff'
+  ) {
+    content = await processTiffFile(file);
+  } 
+  else if (
     file.type === 'application/vnd.oasis.opendocument.text' ||
     file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
     file.type === 'application/vnd.oasis.opendocument.presentation' ||

@@ -1,8 +1,8 @@
 import jwt from 'jsonwebtoken';
-import config from '../config.js';
-import configCache from '../configCache.js';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
+import { resolveJwtSecret } from '../utils/tokenService.js';
+import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -34,13 +34,14 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next(); // No token, continue as anonymous
   }
 
-  const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
+  const jwtSecret = resolveJwtSecret();
 
   if (!jwtSecret) {
     logger.warn('🔐 JWT Auth: No JWT secret configured');
     return next(); // No JWT secret configured
   }
+
+  const platform = configCache.getPlatform() || {};
 
   try {
     const decoded = jwt.verify(token, jwtSecret, {

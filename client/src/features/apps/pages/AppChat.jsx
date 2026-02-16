@@ -22,6 +22,7 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import SharedAppHeader from '../components/SharedAppHeader';
+import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 
@@ -238,6 +239,8 @@ const AppChat = ({ preloadedApp = null }) => {
   const inputRef = useRef(null);
   const formRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
+  // Ref to store variables for resend operations to avoid race condition with state updates
+  const pendingVariablesRef = useRef(null);
 
   // Restore existing chat ID when the appId changes
   useEffect(() => {
@@ -769,6 +772,9 @@ const AppChat = ({ preloadedApp = null }) => {
     // Restore variables if they exist
     if (variablesToRestore) {
       setVariables(variablesToRestore);
+      // Store variables in ref to ensure they're available for validation
+      // This avoids race condition with async state updates
+      pendingVariablesRef.current = variablesToRestore;
     }
 
     // Clear any existing selected files first
@@ -939,10 +945,14 @@ const AppChat = ({ preloadedApp = null }) => {
       return;
     }
 
+    // Use pending variables from ref if available (for resend operations),
+    // otherwise use the state variables. This avoids race condition with async state updates.
+    const currentVariables = pendingVariablesRef.current || variables;
+
     if (app?.variables) {
       const missingRequiredVars = app.variables
         .filter(v => v.required)
-        .filter(v => !variables[v.name] || variables[v.name].trim() === '');
+        .filter(v => !currentVariables[v.name] || currentVariables[v.name].trim() === '');
       if (missingRequiredVars.length > 0) {
         const errorMessage =
           t('error.missingRequiredFields', 'Please fill in all required fields:') +
@@ -952,6 +962,8 @@ const AppChat = ({ preloadedApp = null }) => {
         if (window.innerWidth < 768 && !showParameters) {
           toggleParameters();
         }
+        // Clear pending variables ref on validation failure
+        pendingVariablesRef.current = null;
         return;
       }
     }
@@ -1050,7 +1062,7 @@ const AppChat = ({ preloadedApp = null }) => {
     const validatedVariables = {};
     if (app?.variables && app.variables.length > 0) {
       app.variables.forEach(varConfig => {
-        const currentValue = variables[varConfig.name];
+        const currentValue = currentVariables[varConfig.name];
         const isEmptyOrWhitespace =
           currentValue === undefined ||
           currentValue === null ||
@@ -1140,6 +1152,8 @@ const AppChat = ({ preloadedApp = null }) => {
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();
+    // Clear pending variables ref after successful submission
+    pendingVariablesRef.current = null;
   };
 
   // Function to reload the current app
@@ -1250,16 +1264,20 @@ const AppChat = ({ preloadedApp = null }) => {
 
     // Always use ChatInput (which now has the NextGen design with model selector)
     return (
-      <ChatInput
-        {...commonProps}
-        models={models}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        currentLanguage={currentLanguage}
-        showModelSelector={
-          app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
-        }
-      />
+      <>
+        <ChatInput
+          {...commonProps}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          currentLanguage={currentLanguage}
+          showModelSelector={
+            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+          }
+        />
+        {/* Show AI disclaimer after user has submitted at least one message */}
+        {messages.length > 0 && <AIDisclaimerBanner />}
+      </>
     );
   };
 

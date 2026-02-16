@@ -15,6 +15,7 @@ const Uploader = ({
   children
 }) => {
   const [preview, setPreview] = useState(null);
+  const [fileData, setFileData] = useState(null); // Track file data separately
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -24,6 +25,7 @@ const Uploader = ({
   useEffect(() => {
     if (data === null && preview !== null) {
       setPreview(null);
+      setFileData(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
@@ -87,23 +89,44 @@ const Uploader = ({
         for (const file of files) {
           const result = await onProcessFile(file);
           if (result && typeof result === 'object') {
-            results.push(result);
+            // Check if this is a multipage TIFF that returned multiple results
+            if (result.multipleResults && Array.isArray(result.multipleResults)) {
+              // Add all pages from multipage TIFF
+              results.push(...result.multipleResults);
+            } else {
+              results.push(result);
+            }
           }
         }
 
         if (results.length > 0) {
-          setPreview(results.map(r => r.preview || null));
+          const previews = results.map(r => r.preview || null);
+          const dataArray = results.map(r => r.data);
+          setPreview(previews);
+          setFileData(dataArray);
           if (onSelect) {
-            onSelect(results.map(r => r.data));
+            onSelect(dataArray);
           }
         }
       } else {
         // Process single file (legacy behavior)
         const result = await onProcessFile(files[0]);
         if (result && typeof result === 'object') {
-          setPreview(result.preview || null);
-          if (onSelect) {
-            onSelect(result.data);
+          // Check if this is a multipage TIFF that returned multiple results
+          if (result.multipleResults && Array.isArray(result.multipleResults)) {
+            // For single file mode with multipage TIFF, use only the first page
+            const firstResult = result.multipleResults[0];
+            setPreview(firstResult.preview || null);
+            setFileData(firstResult.data);
+            if (onSelect) {
+              onSelect(firstResult.data);
+            }
+          } else {
+            setPreview(result.preview || null);
+            setFileData(result.data);
+            if (onSelect) {
+              onSelect(result.data);
+            }
           }
         }
       }
@@ -128,6 +151,7 @@ const Uploader = ({
 
   const handleClear = () => {
     setPreview(null);
+    setFileData(null);
     setError(null);
     setIsProcessing(false);
     if (fileInputRef.current) {
@@ -135,6 +159,26 @@ const Uploader = ({
     }
     if (onSelect) {
       onSelect(null);
+    }
+  };
+
+  const handleRemoveItem = index => {
+    if (Array.isArray(preview) && Array.isArray(fileData)) {
+      const newPreview = preview.filter((_, i) => i !== index);
+      const newData = fileData.filter((_, i) => i !== index);
+
+      setPreview(newPreview.length > 0 ? newPreview : null);
+      setFileData(newData.length > 0 ? newData : null);
+
+      // Update the onSelect callback with filtered data
+      if (onSelect) {
+        onSelect(newData.length > 0 ? newData : null);
+      }
+
+      // Clear file input if no files left
+      if (newPreview.length === 0 && fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -188,6 +232,7 @@ const Uploader = ({
     isDragging,
     handleButtonClick,
     handleClear,
+    handleRemoveItem,
     handleDragEnter,
     handleDragLeave,
     handleDragOver,
