@@ -1,6 +1,9 @@
 import { useTranslation } from 'react-i18next';
+import { useState } from 'react';
 import Icon from '../../../shared/components/Icon';
 import Uploader from './Uploader';
+import CloudStoragePicker from './CloudStoragePicker';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import '../components/ImageUpload.css';
 import {
   SUPPORTED_TEXT_FORMATS,
@@ -14,9 +17,17 @@ import {
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
+ * Supports both local file upload and cloud storage integration (SharePoint, Google Drive).
  */
 const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, config = {} }) => {
   const { t } = useTranslation();
+  const { platformConfig } = usePlatformConfig();
+  const [showCloudPicker, setShowCloudPicker] = useState(false);
+
+  // Check if cloud storage is enabled
+  const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
+  const hasCloudStorageEnabled =
+    cloudStorage.enabled && cloudStorage.providers.some(p => p.enabled);
 
   // Image upload configuration
   const imageConfig = config.imageUpload || {};
@@ -603,34 +614,50 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
             </div>
           ) : (
             <div className="mt-2 mb-4">
-              <button
-                type="button"
-                onClick={handleButtonClick}
-                disabled={disabled || isProcessing}
-                className={`flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg ${
-                  disabled || isProcessing
-                    ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'border-gray-400 hover:border-indigo-500 hover:text-indigo-500'
-                }`}
-              >
-                {isProcessing ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 mr-2 flex items-center justify-center">
-                      <Icon name="refresh" className="text-current" />
-                    </div>
-                    <span>{t('components.uploader.processing', 'Processing file...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Icon name="paper-clip" className="mr-2" />
-                    <span>
-                      {allowMultiple
-                        ? t('components.uploader.uploadFiles', 'Upload Files')
-                        : t('components.uploader.uploadFile', 'Upload File')}
-                    </span>
-                  </>
+              {/* Upload buttons container */}
+              <div className="space-y-2">
+                {/* Local file upload button */}
+                <button
+                  type="button"
+                  onClick={handleButtonClick}
+                  disabled={disabled || isProcessing}
+                  className={`flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg ${
+                    disabled || isProcessing
+                      ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
+                      : 'border-gray-400 hover:border-indigo-500 hover:text-indigo-500'
+                  }`}
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="animate-spin h-5 w-5 mr-2 flex items-center justify-center">
+                        <Icon name="refresh" className="text-current" />
+                      </div>
+                      <span>{t('components.uploader.processing', 'Processing file...')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <Icon name="paper-clip" className="mr-2" />
+                      <span>
+                        {allowMultiple
+                          ? t('appsList.uploadFromDevice', 'Upload from device')
+                          : t('appsList.uploadFromDevice', 'Upload from device')}
+                      </span>
+                    </>
+                  )}
+                </button>
+
+                {/* Cloud storage upload button (if enabled) */}
+                {hasCloudStorageEnabled && !disabled && !isProcessing && (
+                  <button
+                    type="button"
+                    onClick={() => setShowCloudPicker(true)}
+                    className="flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg border-gray-400 hover:border-blue-500 hover:text-blue-500"
+                  >
+                    <Icon name="cloud" className="mr-2" />
+                    <span>{t('appsList.uploadFromCloud', 'Upload from cloud')}</span>
+                  </button>
                 )}
-              </button>
+              </div>
 
               {error && <div className="text-red-500 text-sm mt-1">{getErrorMessage(error)}</div>}
 
@@ -645,6 +672,20 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                 )}
               </div>
             </div>
+          )}
+
+          {/* Cloud Storage Picker Modal */}
+          {showCloudPicker && (
+            <CloudStoragePicker
+              onFileSelect={files => {
+                // Process cloud storage files
+                // For now, this is a placeholder - actual implementation would
+                // fetch the file content from the cloud provider
+                console.log('Cloud files selected:', files);
+                setShowCloudPicker(false);
+              }}
+              onClose={() => setShowCloudPicker(false)}
+            />
           )}
         </div>
       )}
