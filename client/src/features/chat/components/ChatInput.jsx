@@ -61,7 +61,6 @@ const ChatInput = ({
   const actualInputRef = inputRef || localInputRef;
   const [internalShowUploader, setInternalShowUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
-  const [selectedCloudProvider, setSelectedCloudProvider] = useState(null);
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
 
@@ -199,13 +198,17 @@ const ChatInput = ({
   };
 
   const handleCloudProviderSelect = provider => {
-    // Open uploader with specific cloud provider selected
-    setSelectedCloudProvider(provider);
-    if (onToggleUploader) {
-      onToggleUploader();
-    } else {
-      setInternalShowUploader(true);
-    }
+    // Redirect to OAuth flow for the selected provider
+    // The provider type determines the OAuth endpoint
+    const providerType = provider.type; // 'sharepoint' or 'googledrive'
+    const authUrl = `/api/integrations/${providerType}/auth?providerId=${encodeURIComponent(provider.id)}`;
+    
+    // Store the current app context so we can return after OAuth
+    sessionStorage.setItem('cloudStorage_returnApp', app?.id || '');
+    sessionStorage.setItem('cloudStorage_returnUrl', window.location.pathname);
+    
+    // Redirect to OAuth endpoint
+    window.location.href = authUrl;
   };
 
   // Handle key events for the textarea
@@ -260,7 +263,6 @@ const ChatInput = ({
           disabled={isInputDisabled || isProcessing}
           fileData={selectedFile}
           config={uploadConfig}
-          selectedCloudProvider={selectedCloudProvider}
         />
       )}
 

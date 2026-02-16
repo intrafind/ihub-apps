@@ -1,9 +1,6 @@
 import { useTranslation } from 'react-i18next';
-import { useState, useEffect } from 'react';
 import Icon from '../../../shared/components/Icon';
 import Uploader from './Uploader';
-import CloudStoragePicker from './CloudStoragePicker';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import '../components/ImageUpload.css';
 import {
   SUPPORTED_TEXT_FORMATS,
@@ -17,41 +14,14 @@ import {
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
- * Supports both local file upload and cloud storage integration (SharePoint, Google Drive).
  */
 const UnifiedUploader = ({
   onFileSelect,
   disabled = false,
   fileData = null,
-  config = {},
-  selectedCloudProvider = null
+  config = {}
 }) => {
   const { t } = useTranslation();
-  const { platformConfig } = usePlatformConfig();
-  const [showCloudPicker, setShowCloudPicker] = useState(false);
-
-  // Auto-open cloud picker when a provider is selected
-  useEffect(() => {
-    if (selectedCloudProvider) {
-      setShowCloudPicker(true);
-    }
-  }, [selectedCloudProvider]);
-
-  // Check if cloud storage is enabled
-  const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
-  
-  // Cloud storage upload configuration - check both global and app-level settings
-  const cloudStorageConfig = config.cloudStorageUpload || {};
-  const isCloudStorageEnabledForApp = cloudStorageConfig.enabled === true;
-  
-  // Cloud storage is available if:
-  // 1. It's enabled globally in platform config
-  // 2. There are enabled providers
-  // 3. It's enabled for this specific app
-  const hasCloudStorageEnabled =
-    cloudStorage.enabled && 
-    cloudStorage.providers.some(p => p.enabled) &&
-    isCloudStorageEnabledForApp;
 
   // Image upload configuration
   const imageConfig = config.imageUpload || {};
@@ -681,21 +651,6 @@ const UnifiedUploader = ({
                 )}
               </div>
             </div>
-          )}
-
-          {/* Cloud Storage Picker Modal */}
-          {showCloudPicker && (
-            <CloudStoragePicker
-              preSelectedProvider={selectedCloudProvider}
-              onFileSelect={files => {
-                // Process cloud storage files
-                // For now, this is a placeholder - actual implementation would
-                // fetch the file content from the cloud provider
-                console.log('Cloud files selected:', files);
-                setShowCloudPicker(false);
-              }}
-              onClose={() => setShowCloudPicker(false)}
-            />
           )}
         </div>
       )}
