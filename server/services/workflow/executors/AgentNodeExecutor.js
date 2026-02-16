@@ -262,14 +262,22 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       userContent = state.data.message;
     }
 
+    // Append user hint from chat (e.g., "@document-analysis take care" → "take care")
+    if (state.data?._userHint && userContent) {
+      userContent += `\n\nUser instruction: ${state.data._userHint}`;
+    }
+
     // Process inputFiles: inject file data from state into the user message
     if (config.inputFiles && Array.isArray(config.inputFiles) && userContent) {
       const fileParts = [];
       const imageParts = [];
 
       for (const varName of config.inputFiles) {
-        const fileData = state.data?.[varName];
-        if (!fileData) continue;
+        const raw = state.data?.[varName] || state.data?._fileData;
+        if (!raw || typeof raw !== 'object') continue;
+
+        // Ensure we have a file data object (not a plain string from text mapping)
+        const fileData = raw;
 
         if (fileData.type === 'image' && fileData.base64) {
           // Image file: build multimodal content part
@@ -282,6 +290,13 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
           const fileName = fileData.fileName || varName;
           const fileType = fileData.displayType || fileData.fileType || 'unknown';
           fileParts.push(`[File: ${fileName} (${fileType})]\n\n${fileData.content}\n`);
+        } else if (fileData.fileName) {
+          // File uploaded but content extraction failed (e.g., scanned/image-based PDF)
+          const fileName = fileData.fileName || varName;
+          const fileType = fileData.displayType || fileData.fileType || 'unknown';
+          fileParts.push(
+            `[File: ${fileName} (${fileType})]\n\nNote: No text content could be extracted from this file. It may be a scanned document or image-based PDF.\n`
+          );
         }
       }
 

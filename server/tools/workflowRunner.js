@@ -144,20 +144,31 @@ export default async function workflowRunner(params = {}) {
     initialData._modelOverride = modelId;
   }
 
-  // Map generic 'input' to the workflow's primary input variable name
+  // Map generic 'input' to the workflow's primary text input variable name
+  // (skip file/image variables — those are mapped from _fileData below)
   const startNode = (workflow.nodes || []).find(n => n.type === 'start');
   const inputVars = startNode?.config?.inputVariables;
   if (inputVars?.length > 0 && input) {
-    const primaryVarName = inputVars[0].name;
-    if (primaryVarName !== 'input' && !initialData[primaryVarName]) {
-      initialData[primaryVarName] = input;
+    const textVar = inputVars.find(v => v.type !== 'file' && v.type !== 'image');
+    if (textVar && textVar.name !== 'input' && !initialData[textVar.name]) {
+      initialData[textVar.name] = input;
     }
+    // Store user text as a hint for agent context (e.g., infer analysisType)
+    initialData._userHint = input;
   }
 
   if (_chatHistory) {
     initialData._chatHistory = _chatHistory;
   }
   if (_fileData) {
+    // Map file data to the workflow's declared file/image input variable
+    if (inputVars?.length > 0) {
+      const fileVar = inputVars.find(v => v.type === 'file' || v.type === 'image');
+      if (fileVar) {
+        initialData[fileVar.name] = _fileData;
+      }
+    }
+    // Also keep under _fileData for backward compatibility
     initialData._fileData = _fileData;
   }
 
