@@ -109,7 +109,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/auth/login', basePath), async (req, res) => {
+  app.post(buildServerPath('/api/auth/login'), async (req, res) => {
     try {
       const platform = app.get('platform') || {};
       const localAuthConfig = platform.localAuth || {};
@@ -234,7 +234,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    * NTLM authentication initiation (GET) - triggers NTLM authentication flow
    * Used when multiple auth providers are available and user explicitly selects NTLM
    */
-  app.get(buildServerPath('/api/auth/ntlm/login', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
       const platform = app.get('platform') || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
@@ -313,7 +313,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * NTLM authentication login (POST - for API usage)
    */
-  app.post(buildServerPath('/api/auth/ntlm/login', basePath), async (req, res) => {
+  app.post(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
       const platform = app.get('platform') || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
@@ -363,7 +363,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * Get current user information
    */
-  app.get(buildServerPath('/api/auth/user', basePath), (req, res) => {
+  app.get(buildServerPath('/api/auth/user'), (req, res) => {
     if (!req.user || req.user.id === 'anonymous') {
       return res.status(401).json({ error: 'Not authenticated' });
     }
@@ -386,7 +386,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * Logout (clear cookies and track logout)
    */
-  app.post(buildServerPath('/api/auth/logout', basePath), (req, res) => {
+  app.post(buildServerPath('/api/auth/logout'), (req, res) => {
     // Clear the authentication cookie
     res.clearCookie('authToken', {
       httpOnly: true,
@@ -422,7 +422,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    * Create new user (admin only)
    */
   app.post(
-    buildServerPath('/api/auth/users', basePath),
+    buildServerPath('/api/auth/users'),
     createAuthorizationMiddleware({ requireAdmin: true }),
     async (req, res) => {
       try {
@@ -455,7 +455,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * Get authentication status and configuration
    */
-  app.get(buildServerPath('/api/auth/status', basePath), (req, res) => {
+  app.get(buildServerPath('/api/auth/status'), (req, res) => {
     const platform = configCache.getPlatform() || {};
     const authConfig = platform.auth || {};
     const proxyAuthConfig = platform.proxyAuth || {};
@@ -551,7 +551,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * OIDC provider authentication routes
    */
-  app.get(buildServerPath('/api/auth/oidc/providers', basePath), (req, res) => {
+  app.get(buildServerPath('/api/auth/oidc/providers'), (req, res) => {
     const providers = getConfiguredProviders();
     res.json({
       success: true,
@@ -562,7 +562,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * LDAP provider list
    */
-  app.get(buildServerPath('/api/auth/ldap/providers', basePath), (req, res) => {
+  app.get(buildServerPath('/api/auth/ldap/providers'), (req, res) => {
     const providers = getConfiguredLdapProviders();
     res.json({
       success: true,
@@ -573,7 +573,7 @@ export default function registerAuthRoutes(app, basePath = '') {
   /**
    * NTLM authentication status
    */
-  app.get(buildServerPath('/api/auth/ntlm/status', basePath), (req, res) => {
+  app.get(buildServerPath('/api/auth/ntlm/status'), (req, res) => {
     const ntlmConfig = getNtlmConfig();
     res.json({
       success: true,
@@ -595,7 +595,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    * OIDC authentication initiation
    * GET /api/auth/oidc/:provider
    */
-  app.get(buildServerPath('/api/auth/oidc/:provider', basePath), (req, res, next) => {
+  app.get(buildServerPath('/api/auth/oidc/:provider'), (req, res, next) => {
     const providerName = req.params.provider;
     const handler = createOidcAuthHandler(providerName);
     handler(req, res, next);
@@ -605,7 +605,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    * OIDC authentication callback
    * GET /api/auth/oidc/:provider/callback
    */
-  app.get(buildServerPath('/api/auth/oidc/:provider/callback', basePath), (req, res, next) => {
+  app.get(buildServerPath('/api/auth/oidc/:provider/callback'), (req, res, next) => {
     const providerName = req.params.provider;
     const handler = createOidcCallbackHandler(providerName);
     handler(req, res, next);
@@ -615,11 +615,11 @@ export default function registerAuthRoutes(app, basePath = '') {
    * Teams SSO token exchange
    * POST /api/auth/teams/exchange
    */
-  app.post(buildServerPath('/api/auth/teams/exchange', basePath), teamsTokenExchange);
+  app.post(buildServerPath('/api/auth/teams/exchange'), teamsTokenExchange);
 
   /**
    * Teams tab configuration save
    * POST /api/auth/teams/config
    */
-  app.post(buildServerPath('/api/auth/teams/config', basePath), teamsTabConfigSave);
+  app.post(buildServerPath('/api/auth/teams/config'), teamsTabConfigSave);
 }

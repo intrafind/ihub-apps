@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { UnifiedUploader } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
+import WorkflowMentionSearch from './WorkflowMentionSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
@@ -59,10 +60,16 @@ const ChatInput = ({
   const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
+  const workflowSearchRef = useRef(null);
   const [internalShowUploader, setInternalShowUploader] = useState(false);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  const workflowMentionsEnabled = app?.tools?.some(t => t.startsWith('workflow:'));
+
+  // Derive the @mention query from the current input value
+  const mentionQuery = showWorkflowSearch ? value.match(/@([\w.-]*)$/)?.[1] || '' : '';
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
@@ -195,6 +202,22 @@ const ChatInput = ({
     }
   };
 
+  // Wrap onChange to detect @mention patterns in the input value
+  const handleInputChange = e => {
+    onChange(e);
+
+    if (workflowMentionsEnabled) {
+      const newVal = e.target.value;
+      // Check if the value ends with @<word-chars> (active mention)
+      const match = newVal.match(/@([\w.-]*)$/);
+      if (match) {
+        if (!showWorkflowSearch) setShowWorkflowSearch(true);
+      } else {
+        if (showWorkflowSearch) setShowWorkflowSearch(false);
+      }
+    }
+  };
+
   // Handle key events for the textarea
   const handleKeyDown = e => {
     if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '') {
@@ -207,6 +230,11 @@ const ChatInput = ({
       if (e.key === 'Escape') {
         setShowPromptSearch(false);
       }
+      return;
+    }
+
+    // Forward keyboard events to the workflow mention dropdown when open
+    if (showWorkflowSearch && workflowSearchRef.current?.handleKeyDown(e)) {
       return;
     }
 
@@ -250,159 +278,177 @@ const ChatInput = ({
         />
       )}
 
-      <form
-        ref={formRef}
-        onSubmit={handleSubmit}
-        autoComplete="off"
-        className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
-      >
-        {/* Top line: User input */}
-        <div className="relative flex-1">
-          <textarea
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore="true"
-            type="text"
-            value={value}
-            onChange={onChange}
-            onKeyDown={handleKeyDown}
-            disabled={isInputDisabled || isProcessing}
-            className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
-            placeholder={defaultPlaceholder}
-            ref={actualInputRef}
-            style={{
-              minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-              maxHeight: multilineMode ? 'calc(11 * 1.5em + 1.5rem)' : undefined,
-              overflowY: multilineMode ? 'auto' : 'hidden',
-              height: multilineMode ? 'auto' : undefined
-            }}
-            title={
-              multilineMode
-                ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
-                : t('input.singlelineTooltip', 'Press Enter to send')
-            }
-          />
-          {value && (
-            <button
-              type="button"
-              className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              onClick={handleClearInput}
-              title={t('common.clear', 'Clear')}
-            >
-              <Icon name="clearCircle" size="sm" />
-            </button>
-          )}
-        </div>
-
-        {/* Bottom line: Actions menu, model selector, send/stop button */}
-        <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
-          {/* Chat Input Actions Menu */}
-          <ChatInputActionsMenu
+      <div className="relative">
+        {workflowMentionsEnabled && (
+          <WorkflowMentionSearch
+            ref={workflowSearchRef}
+            isOpen={showWorkflowSearch}
+            query={mentionQuery}
             app={app}
-            enabledTools={enabledTools}
-            onEnabledToolsChange={onEnabledToolsChange}
-            uploadConfig={uploadConfig}
-            onToggleUploader={onToggleUploader || toggleUploader}
-            disabled={isInputDisabled}
-            isProcessing={isProcessing}
-            magicPromptEnabled={magicPromptEnabled}
-            onMagicPrompt={onMagicPrompt}
-            showUndoMagicPrompt={showUndoMagicPrompt}
-            onUndoMagicPrompt={onUndoMagicPrompt}
-            magicPromptLoading={magicPromptLoading}
-            onVoiceInput={onVoiceInput}
-            onVoiceCommand={onVoiceCommand}
-            inputRef={actualInputRef}
-            model={model}
-            imageAspectRatio={imageAspectRatio}
-            imageQuality={imageQuality}
-            onImageAspectRatioChange={onImageAspectRatioChange}
-            onImageQualityChange={onImageQualityChange}
+            onClose={() => setShowWorkflowSearch(false)}
+            onSelect={workflowId => {
+              // Replace the @partial at the end of value with @workflowId
+              const newValue = value.replace(/@[\w.-]*$/, `@${workflowId} `);
+              onChange({ target: { value: newValue } });
+              setShowWorkflowSearch(false);
+              setTimeout(() => focusInputAtEnd(), 0);
+            }}
           />
+        )}
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          autoComplete="off"
+          className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
+        >
+          {/* Top line: User input */}
+          <div className="relative flex-1">
+            <textarea
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              type="text"
+              value={value}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              disabled={isInputDisabled || isProcessing}
+              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
+              placeholder={defaultPlaceholder}
+              ref={actualInputRef}
+              style={{
+                minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
+                maxHeight: multilineMode ? 'calc(11 * 1.5em + 1.5rem)' : undefined,
+                overflowY: multilineMode ? 'auto' : 'hidden',
+                height: multilineMode ? 'auto' : undefined
+              }}
+              title={
+                multilineMode
+                  ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
+                  : t('input.singlelineTooltip', 'Press Enter to send')
+              }
+            />
+            {value && (
+              <button
+                type="button"
+                className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                onClick={handleClearInput}
+                title={t('common.clear', 'Clear')}
+              >
+                <Icon name="clearCircle" size="sm" />
+              </button>
+            )}
+          </div>
 
-          {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
-          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
-          {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+          {/* Bottom line: Actions menu, model selector, send/stop button */}
+          <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
+            {/* Chat Input Actions Menu */}
+            <ChatInputActionsMenu
+              app={app}
+              enabledTools={enabledTools}
+              onEnabledToolsChange={onEnabledToolsChange}
+              uploadConfig={uploadConfig}
+              onToggleUploader={onToggleUploader || toggleUploader}
+              disabled={isInputDisabled}
+              isProcessing={isProcessing}
+              magicPromptEnabled={magicPromptEnabled}
+              onMagicPrompt={onMagicPrompt}
+              showUndoMagicPrompt={showUndoMagicPrompt}
+              onUndoMagicPrompt={onUndoMagicPrompt}
+              magicPromptLoading={magicPromptLoading}
+              onVoiceInput={onVoiceInput}
+              onVoiceCommand={onVoiceCommand}
+              inputRef={actualInputRef}
+              model={model}
+              imageAspectRatio={imageAspectRatio}
+              imageQuality={imageQuality}
+              onImageAspectRatioChange={onImageAspectRatioChange}
+              onImageQualityChange={onImageQualityChange}
+            />
+
+            {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
+            {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+            {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+              <button
+                type="button"
+                onClick={onToggleUploader || toggleUploader}
+                disabled={isInputDisabled || isProcessing}
+                title={t('chatActions.attachFile', 'Attach File')}
+                className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                <Icon name="paper-clip" size="md" />
+              </button>
+            )}
+
+            {/* Microphone icon - show directly on desktop if enabled and NOT in single-action mode */}
+            {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+            {onVoiceInput && !isSingleActionOptimization && (
+              <div className="hidden md:flex">
+                <VoiceInputComponent
+                  app={app}
+                  onSpeechResult={onVoiceInput}
+                  inputRef={actualInputRef}
+                  disabled={isInputDisabled || isProcessing}
+                  onCommand={onVoiceCommand}
+                />
+              </div>
+            )}
+
+            {/* Image Generation Controls - Show on desktop only if model supports it */}
+            {model?.supportsImageGeneration && (
+              <div className="hidden md:flex gap-2">
+                <ImageGenerationControls
+                  app={app}
+                  model={model}
+                  imageAspectRatio={imageAspectRatio}
+                  imageQuality={imageQuality}
+                  onImageAspectRatioChange={onImageAspectRatioChange}
+                  onImageQualityChange={onImageQualityChange}
+                  inline={true}
+                />
+              </div>
+            )}
+
+            <div className="flex-1"></div>
+
+            {/* Warning when no models are available */}
+            {showModelSelector && (!models || models.length === 0) && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <Icon name="exclamationTriangle" size="sm" />
+                <span>{t('chat.modelSelector.noModels', 'No models available')}</span>
+              </div>
+            )}
+
+            {/* Model Selector */}
+            {showModelSelector && models && models.length > 0 && onModelChange && (
+              <ModelSelector
+                app={app}
+                models={models}
+                selectedModel={selectedModel}
+                onModelChange={onModelChange}
+                currentLanguage={currentLanguage}
+                disabled={isInputDisabled || isProcessing}
+              />
+            )}
+
+            {/* Send/Stop Button */}
             <button
               type="button"
-              onClick={onToggleUploader || toggleUploader}
-              disabled={isInputDisabled || isProcessing}
-              title={t('chatActions.attachFile', 'Attach File')}
-              className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              onClick={isProcessing ? handleCancel : handleSubmit}
+              disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
+              className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+                disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                  : isProcessing
+                    ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
+                    : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
+              }`}
+              title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
             >
-              <Icon name="paper-clip" size="md" />
+              {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}
             </button>
-          )}
-
-          {/* Microphone icon - show directly on desktop if enabled and NOT in single-action mode */}
-          {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
-          {onVoiceInput && !isSingleActionOptimization && (
-            <div className="hidden md:flex">
-              <VoiceInputComponent
-                app={app}
-                onSpeechResult={onVoiceInput}
-                inputRef={actualInputRef}
-                disabled={isInputDisabled || isProcessing}
-                onCommand={onVoiceCommand}
-              />
-            </div>
-          )}
-
-          {/* Image Generation Controls - Show on desktop only if model supports it */}
-          {model?.supportsImageGeneration && (
-            <div className="hidden md:flex gap-2">
-              <ImageGenerationControls
-                app={app}
-                model={model}
-                imageAspectRatio={imageAspectRatio}
-                imageQuality={imageQuality}
-                onImageAspectRatioChange={onImageAspectRatioChange}
-                onImageQualityChange={onImageQualityChange}
-                inline={true}
-              />
-            </div>
-          )}
-
-          <div className="flex-1"></div>
-
-          {/* Warning when no models are available */}
-          {showModelSelector && (!models || models.length === 0) && (
-            <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
-              <Icon name="exclamationTriangle" size="sm" />
-              <span>{t('chat.modelSelector.noModels', 'No models available')}</span>
-            </div>
-          )}
-
-          {/* Model Selector */}
-          {showModelSelector && models && models.length > 0 && onModelChange && (
-            <ModelSelector
-              app={app}
-              models={models}
-              selectedModel={selectedModel}
-              onModelChange={onModelChange}
-              currentLanguage={currentLanguage}
-              disabled={isInputDisabled || isProcessing}
-            />
-          )}
-
-          {/* Send/Stop Button */}
-          <button
-            type="button"
-            onClick={isProcessing ? handleCancel : handleSubmit}
-            disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
-            className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
-              disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-                ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
-                : isProcessing
-                  ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
-                  : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
-            }`}
-            title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
-          >
-            {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}
-          </button>
-        </div>
-      </form>
+          </div>
+        </form>
+      </div>
     </div>
   );
 };

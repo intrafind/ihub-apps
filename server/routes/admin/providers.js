@@ -29,7 +29,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/providers', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/providers'), adminAuth, async (req, res) => {
     try {
       const { data: providers, etag: providersEtag } = configCache.getProviders(true);
 
@@ -56,139 +56,129 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
     }
   });
 
-  app.get(
-    buildServerPath('/api/admin/providers/:providerId', basePath),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { providerId } = req.params;
+  app.get(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
 
-        // Validate providerId for security
-        if (!validateIdForPath(providerId, 'provider', res)) {
-          return;
-        }
-
-        const { data: providers, etag: providersEtag } = configCache.getProviders(true);
-        const provider = providers.find(p => p.id === providerId);
-        if (!provider) {
-          return res.status(404).json({ error: 'Provider not found' });
-        }
-
-        // Mask API key in the response for security
-        const maskedProvider = { ...provider };
-        if (maskedProvider.apiKey) {
-          // Show masked value to indicate a key is set
-          maskedProvider.apiKeyMasked = '••••••••';
-          maskedProvider.apiKeySet = true;
-          // Remove the actual encrypted key from response
-          delete maskedProvider.apiKey;
-        } else {
-          maskedProvider.apiKeySet = false;
-        }
-
-        res.setHeader('ETag', providersEtag);
-        res.json(maskedProvider);
-      } catch (error) {
-        logger.error('Error fetching provider:', error);
-        res.status(500).json({ error: 'Failed to fetch provider' });
+      // Validate providerId for security
+      if (!validateIdForPath(providerId, 'provider', res)) {
+        return;
       }
+
+      const { data: providers, etag: providersEtag } = configCache.getProviders(true);
+      const provider = providers.find(p => p.id === providerId);
+      if (!provider) {
+        return res.status(404).json({ error: 'Provider not found' });
+      }
+
+      // Mask API key in the response for security
+      const maskedProvider = { ...provider };
+      if (maskedProvider.apiKey) {
+        // Show masked value to indicate a key is set
+        maskedProvider.apiKeyMasked = '••••••••';
+        maskedProvider.apiKeySet = true;
+        // Remove the actual encrypted key from response
+        delete maskedProvider.apiKey;
+      } else {
+        maskedProvider.apiKeySet = false;
+      }
+
+      res.setHeader('ETag', providersEtag);
+      res.json(maskedProvider);
+    } catch (error) {
+      logger.error('Error fetching provider:', error);
+      res.status(500).json({ error: 'Failed to fetch provider' });
     }
-  );
+  });
 
-  app.put(
-    buildServerPath('/api/admin/providers/:providerId', basePath),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { providerId } = req.params;
-        const updatedProvider = req.body;
+  app.put(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
+    try {
+      const { providerId } = req.params;
+      const updatedProvider = req.body;
 
-        // Validate providerId for security
-        if (!validateIdForPath(providerId, 'provider', res)) {
-          return;
-        }
+      // Validate providerId for security
+      if (!validateIdForPath(providerId, 'provider', res)) {
+        return;
+      }
 
-        if (updatedProvider.id !== providerId) {
-          return res.status(400).json({ error: 'Provider ID cannot be changed' });
-        }
+      if (updatedProvider.id !== providerId) {
+        return res.status(400).json({ error: 'Provider ID cannot be changed' });
+      }
 
-        // Define paths once at the top
-        const rootDir = getRootDir();
-        const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
-        const providersDir = join(rootDir, 'contents', 'config');
+      // Define paths once at the top
+      const rootDir = getRootDir();
+      const providersPath = join(rootDir, 'contents', 'config', 'providers.json');
+      const providersDir = join(rootDir, 'contents', 'config');
 
-        // Handle API key encryption
-        if (updatedProvider.apiKey) {
-          // Check if this is a new key or unchanged masked value
-          if (updatedProvider.apiKey !== '••••••••') {
-            // New key provided - encrypt it
-            try {
-              updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
-            } catch (error) {
-              logger.error('Error encrypting API key:', error);
-              return res.status(500).json({ error: 'Failed to encrypt API key' });
-            }
-          } else {
-            // Masked value - need to preserve existing key
-            // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
-            // The cache might not have the apiKey due to TTL expiration or race conditions
-            try {
-              if (existsSync(providersPath)) {
-                const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
-                const existingProvider = providersFromDisk.providers?.find(
-                  p => p.id === providerId
-                );
-                if (existingProvider && existingProvider.apiKey) {
-                  // Preserve the existing encrypted API key from disk
-                  updatedProvider.apiKey = existingProvider.apiKey;
-                } else {
-                  // No existing key on disk, remove the masked placeholder
-                  delete updatedProvider.apiKey;
-                }
+      // Handle API key encryption
+      if (updatedProvider.apiKey) {
+        // Check if this is a new key or unchanged masked value
+        if (updatedProvider.apiKey !== '••••••••') {
+          // New key provided - encrypt it
+          try {
+            updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
+          } catch (error) {
+            logger.error('Error encrypting API key:', error);
+            return res.status(500).json({ error: 'Failed to encrypt API key' });
+          }
+        } else {
+          // Masked value - need to preserve existing key
+          // CRITICAL FIX: Read from disk, not cache, to ensure we have the apiKey field
+          // The cache might not have the apiKey due to TTL expiration or race conditions
+          try {
+            if (existsSync(providersPath)) {
+              const providersFromDisk = JSON.parse(await fs.readFile(providersPath, 'utf8'));
+              const existingProvider = providersFromDisk.providers?.find(p => p.id === providerId);
+              if (existingProvider && existingProvider.apiKey) {
+                // Preserve the existing encrypted API key from disk
+                updatedProvider.apiKey = existingProvider.apiKey;
               } else {
-                // File doesn't exist yet, remove the masked placeholder
+                // No existing key on disk, remove the masked placeholder
                 delete updatedProvider.apiKey;
               }
-            } catch (error) {
-              logger.error('Error reading existing providers from disk:', error);
-              // Fallback to removing the masked placeholder
+            } else {
+              // File doesn't exist yet, remove the masked placeholder
               delete updatedProvider.apiKey;
             }
+          } catch (error) {
+            logger.error('Error reading existing providers from disk:', error);
+            // Fallback to removing the masked placeholder
+            delete updatedProvider.apiKey;
           }
         }
-
-        // Remove client-side helper fields
-        delete updatedProvider.apiKeySet;
-        delete updatedProvider.apiKeyMasked;
-
-        // Load current providers and create a deep copy to avoid cache mutation
-        const { data: cachedProviders } = configCache.getProviders(true);
-
-        // Create a deep copy of the providers array to avoid mutating the cache
-        const providers = cachedProviders.map(p => ({ ...p }));
-
-        // Find and update the provider
-        const index = providers.findIndex(p => p.id === providerId);
-        if (index === -1) {
-          return res.status(404).json({ error: 'Provider not found' });
-        }
-
-        providers[index] = updatedProvider;
-
-        // Ensure the directory exists before writing
-        await fs.mkdir(providersDir, { recursive: true });
-
-        // Save updated providers
-        await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
-        await configCache.refreshProvidersCache();
-
-        res.json({ message: 'Provider updated successfully', provider: updatedProvider });
-      } catch (error) {
-        logger.error('Error updating provider:', error);
-        res.status(500).json({ error: 'Failed to update provider' });
       }
+
+      // Remove client-side helper fields
+      delete updatedProvider.apiKeySet;
+      delete updatedProvider.apiKeyMasked;
+
+      // Load current providers and create a deep copy to avoid cache mutation
+      const { data: cachedProviders } = configCache.getProviders(true);
+
+      // Create a deep copy of the providers array to avoid mutating the cache
+      const providers = cachedProviders.map(p => ({ ...p }));
+
+      // Find and update the provider
+      const index = providers.findIndex(p => p.id === providerId);
+      if (index === -1) {
+        return res.status(404).json({ error: 'Provider not found' });
+      }
+
+      providers[index] = updatedProvider;
+
+      // Ensure the directory exists before writing
+      await fs.mkdir(providersDir, { recursive: true });
+
+      // Save updated providers
+      await fs.writeFile(providersPath, JSON.stringify({ providers }, null, 2));
+      await configCache.refreshProvidersCache();
+
+      res.json({ message: 'Provider updated successfully', provider: updatedProvider });
+    } catch (error) {
+      logger.error('Error updating provider:', error);
+      res.status(500).json({ error: 'Failed to update provider' });
     }
-  );
+  });
 
   /**
    * @swagger

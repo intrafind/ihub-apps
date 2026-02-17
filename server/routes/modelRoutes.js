@@ -71,7 +71,7 @@ export default function registerModelRoutes(app, { getLocalizedError, basePath =
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/models', basePath), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/models'), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
@@ -112,7 +112,7 @@ export default function registerModelRoutes(app, { getLocalizedError, basePath =
   });
 
   app.get(
-    buildServerPath('/api/models/:modelId', basePath),
+    buildServerPath('/api/models/:modelId'),
     authRequired,
     modelAccessRequired,
     async (req, res) => {

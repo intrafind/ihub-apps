@@ -25,6 +25,7 @@ import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 /**
  * Initialize variables with default values from app configuration
@@ -103,6 +104,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { platformConfig } = usePlatformConfig();
   const prefillMessage = searchParams.get('prefill') || '';
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
@@ -113,7 +115,8 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
-  const shareEnabled = app?.features?.shortLinks !== false;
+  const shareEnabled =
+    app?.features?.shortLinks !== false && platformConfig?.featuresMap?.shortLinks !== false;
 
   // Shared app settings hook
   const {
@@ -143,6 +146,10 @@ const AppChat = ({ preloadedApp = null }) => {
     setImageQuality,
     modelsLoading
   } = useAppSettings(appId, app);
+
+  // When tools feature is disabled platform-wide, hide tool UI entirely
+  const toolsFeatureEnabled = platformConfig?.featuresMap?.tools !== false;
+  const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
 
   // Apply settings and variables from URL parameters once app data is loaded
   useEffect(() => {
@@ -390,7 +397,9 @@ const AppChat = ({ preloadedApp = null }) => {
           ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
           ...(thinkingBudget !== null ? { thinkingBudget } : {}),
           ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-          ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+          ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+            ? { enabledTools: effectiveEnabledTools }
+            : {}),
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {})
         };
@@ -458,7 +467,7 @@ const AppChat = ({ preloadedApp = null }) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
-    enabledTools,
+    effectiveEnabledTools,
     imageAspectRatio,
     imageQuality,
     sendChatMessage,
@@ -1050,7 +1059,9 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+      ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+        ? { enabledTools: effectiveEnabledTools }
+        : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {})
     };
@@ -1250,8 +1261,8 @@ const AppChat = ({ preloadedApp = null }) => {
       showUndoMagicPrompt: magicPromptHandler.showUndoMagicPrompt,
       onUndoMagicPrompt: handleUndoMagicPrompt,
       magicPromptLoading: magicPromptHandler.magicLoading,
-      enabledTools,
-      onEnabledToolsChange: setEnabledTools,
+      enabledTools: effectiveEnabledTools,
+      onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       // Image generation props
       model: currentModel,
       imageAspectRatio,
@@ -1324,7 +1335,7 @@ const AppChat = ({ preloadedApp = null }) => {
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
         thinkingThoughts={thinkingThoughts}
-        enabledTools={enabledTools}
+        enabledTools={effectiveEnabledTools}
         imageAspectRatio={imageAspectRatio}
         imageQuality={imageQuality}
         onModelChange={setSelectedModel}

@@ -84,6 +84,24 @@ export class ActionTracker extends EventEmitter {
   trackClarification(chatId, data = {}) {
     this.emit('fire-sse', { event: UnifiedEvents.CLARIFICATION, chatId, ...data });
   }
+
+  /**
+   * Track a workflow step progress event on the chat's SSE channel
+   * @param {string} chatId - The chat session ID (not the workflow executionId)
+   * @param {Object} data - Step data: { nodeName, nodeType, status: 'running'|'completed'|'error', workflowName }
+   */
+  trackWorkflowStep(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.WORKFLOW_STEP, chatId, ...data });
+  }
+
+  /**
+   * Track a workflow result event on the chat's SSE channel
+   * @param {string} chatId - The chat session ID (not the workflow executionId)
+   * @param {Object} data - Result data: { status: 'completed'|'failed', output, executionId, workflowName }
+   */
+  trackWorkflowResult(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.WORKFLOW_RESULT, chatId, ...data });
+  }
 }
 
 export const actionTracker = new ActionTracker();

@@ -6,7 +6,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminTranslateRoute(app, basePath = '') {
-  app.post(buildServerPath('/api/admin/translate', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/translate'), adminAuth, async (req, res) => {
     try {
       const { text, from = 'en', to } = req.body || {};
       if (!text || !to) {

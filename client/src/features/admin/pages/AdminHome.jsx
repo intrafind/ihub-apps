@@ -95,6 +95,16 @@ const AdminHome = () => {
       href: '/admin/logging',
       //icon: 'adjustments',
       color: 'bg-yellow-500'
+    },
+    {
+      key: 'features',
+      title: t('admin.nav.features', 'Features'),
+      description: t(
+        'admin.home.sections.featuresDesc',
+        'Enable or disable platform features like workflows, prompts library, and more'
+      ),
+      href: '/admin/features',
+      color: 'bg-cyan-500'
     }
   ];
 

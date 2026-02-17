@@ -118,7 +118,7 @@ export default function registerOAuthRoutes(app, basePath = '') {
    *       403:
    *         description: Client suspended
    */
-  app.post(buildServerPath('/api/oauth/token', basePath), async (req, res) => {
+  app.post(buildServerPath('/api/oauth/token'), async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
@@ -260,7 +260,7 @@ export default function registerOAuthRoutes(app, basePath = '') {
    *       400:
    *         description: Invalid request
    */
-  app.post(buildServerPath('/api/oauth/introspect', basePath), async (req, res) => {
+  app.post(buildServerPath('/api/oauth/introspect'), async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};

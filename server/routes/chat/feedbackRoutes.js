@@ -11,7 +11,7 @@ import logger from '../../utils/logger.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError, basePath = '' }) {
   app.post(
-    buildServerPath('/api/feedback', basePath),
+    buildServerPath('/api/feedback'),
     authRequired,
     validate(feedbackSchema),
     async (req, res) => {

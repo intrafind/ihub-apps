@@ -295,9 +295,10 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     }
 
     // Handle text/document files using shared utility
-    const processedContent = await processDocumentFile(file);
+    const { content: processedContent, pageImages } = await processDocumentFile(file);
+    const displayContent = processedContent || '';
     const previewContent =
-      processedContent.length > 200 ? processedContent.substring(0, 200) + '...' : processedContent;
+      displayContent.length > 200 ? displayContent.substring(0, 200) + '...' : displayContent;
 
     return {
       preview: {
@@ -309,6 +310,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       data: {
         type: 'document',
         content: processedContent,
+        pageImages,
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,

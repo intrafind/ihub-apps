@@ -310,6 +310,26 @@ export const processPdfFile = async file => {
   return textContent.trim();
 };
 
+// Render PDF pages to images when text extraction yields nothing
+export const renderPdfPagesToImages = async (file, maxPages = 5, scale = 1.5) => {
+  const arrayBuffer = await file.arrayBuffer();
+  const pdfjsLib = await loadPdfjs();
+  const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+  const pages = Math.min(pdf.numPages, maxPages);
+  const images = [];
+  for (let i = 1; i <= pages; i++) {
+    const page = await pdf.getPage(i);
+    const viewport = page.getViewport({ scale });
+    const canvas = document.createElement('canvas');
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
+    const ctx = canvas.getContext('2d');
+    await page.render({ canvasContext: ctx, viewport }).promise;
+    images.push(canvas.toDataURL('image/jpeg', 0.8));
+  }
+  return images;
+};
+
 // Process DOCX file
 export const processDocxFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
@@ -392,8 +412,10 @@ export const processOpenOfficeFile = async file => {
 };
 
 // Main document processing function
+// Returns { content, pageImages } where pageImages is set for image-based PDFs
 export const processDocumentFile = async file => {
   let content = '';
+  let pageImages;
 
   // Get file extension as fallback for MIME type detection
   const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
@@ -401,6 +423,20 @@ export const processDocumentFile = async file => {
   // Determine processing method based on MIME type or file extension
   if (file.type === 'application/pdf' || fileExtension === '.pdf') {
     content = await processPdfFile(file);
+    // If text extraction yields empty/minimal content, render pages as images
+    if (!content || content.trim().length < 50) {
+      console.log(
+        `[fileProcessing] PDF text extraction yielded ${content ? content.trim().length : 0} chars, attempting page-to-image rendering`
+      );
+      try {
+        pageImages = await renderPdfPagesToImages(file, 5);
+        console.log(
+          `[fileProcessing] Rendered ${pageImages.length} PDF page(s) as images (${pageImages.reduce((sum, img) => sum + img.length, 0)} bytes total base64)`
+        );
+      } catch (e) {
+        console.warn('PDF page rendering failed:', e);
+      }
+    }
   } else if (
     file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
     fileExtension === '.docx'
@@ -433,5 +469,5 @@ export const processDocumentFile = async file => {
     content = await readTextFile(file);
   }
 
-  return content;
+  return { content, pageImages };
 };

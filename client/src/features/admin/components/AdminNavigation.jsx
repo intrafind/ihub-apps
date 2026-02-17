@@ -105,6 +105,13 @@ const AdminNavigation = () => {
           href: '/admin/shortlinks',
           // icon: 'link',
           current: location.pathname.startsWith('/admin/shortlinks')
+        },
+        {
+          key: 'workflows',
+          name: t('admin.nav.workflows', 'Workflows'),
+          href: '/admin/workflows',
+          // icon: 'arrows-right-left',
+          current: location.pathname.startsWith('/admin/workflows')
         }
       ]
     },
@@ -173,6 +180,12 @@ const AdminNavigation = () => {
           href: '/admin/ui',
           // icon: 'cog',
           current: location.pathname === '/admin/ui'
+        },
+        {
+          key: 'features',
+          name: t('admin.nav.features', 'Features'),
+          href: '/admin/features',
+          current: location.pathname === '/admin/features'
         },
         {
           key: 'logging',

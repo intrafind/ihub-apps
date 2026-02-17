@@ -13,5 +13,7 @@ export const UnifiedEvents = {
   SAFETY_WARNING: 'safety.warning',
   THINKING: 'thinking',
   IMAGE: 'image',
-  CLARIFICATION: 'clarification'
+  CLARIFICATION: 'clarification',
+  WORKFLOW_STEP: 'workflow.step',
+  WORKFLOW_RESULT: 'workflow.result'
 };
