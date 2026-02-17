@@ -796,12 +796,18 @@
   "components": {
     "uploader": {
       "imageSelected": "Image selected",
+      "audioSelected": "Audio file selected",
+      "videoSelected": "Video file selected",
       "fileSelected": "File selected and processed",
       "filesSelected": "{{count}} file(s) selected",
       "processing": "Processing file...",
       "uploadFile": "Upload File",
       "uploadFiles": "Upload Files",
-      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)"
+      "supportedFormats": "Supported: {{formats}} (max {{maxSize}}MB)",
+      "dropZoneActive": "Drop zone active. Release to upload files.",
+      "dropFileHere": "Drop file here",
+      "duration": "Duration",
+      "audioExtractedFromVideo": "Audio extracted from video"
     }
   },
   "feedback": {
@@ -821,6 +827,9 @@
     "sendFailed": "Failed to send message",
     "configSaveFailed": "Failed to save configuration",
     "imageUploadDisabled": "Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.",
+    "audioUploadDisabled": "Audio upload is not supported by the selected model. Please choose a different model.",
+    "videoUploadDisabled": "Video upload is not supported by the selected model. Please choose a different model.",
+    "audioExtractionError": "Failed to extract audio from video. The video may not contain audio or may be in an unsupported format.",
     "fileUploadDisabled": "File upload is disabled for this application.",
     "notFound": {
       "title": "Page Not Found",

@@ -8,8 +8,10 @@ import {
   formatMimeTypesToDisplay,
   processDocumentFile,
   formatAcceptAttribute,
-  processTiffFile
+  processTiffFile,
+  getMimeTypesByCategory
 } from '../utils/fileProcessing';
+import { extractAudioFromVideo, videoLikelyHasAudio } from '../utils/audioExtraction';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
@@ -26,6 +28,10 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const audioConfig = config.audioUpload || {};
   const isAudioUploadEnabled = audioConfig.enabled !== false && config.audioUploadEnabled !== false;
 
+  // Video upload configuration
+  const videoConfig = config.videoUpload || {};
+  const isVideoUploadEnabled = videoConfig.enabled !== false && config.videoUploadEnabled !== false;
+
   // File upload configuration
   const fileConfig = config.fileUpload || {};
   const isFileUploadEnabled = fileConfig.enabled !== false && config.fileUploadEnabled !== false;
@@ -39,6 +45,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     Math.max(
       imageConfig.maxFileSizeMB || 0,
       audioConfig.maxFileSizeMB || 0,
+      videoConfig.maxFileSizeMB || 0,
       fileConfig.maxFileSizeMB || 0
     ) ||
     10;
@@ -60,14 +67,18 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   // Audio-specific configuration
   const AUDIO_FORMATS = isAudioUploadEnabled
     ? audioConfig.supportedFormats ||
-      config.supportedAudioFormats || [
-        'audio/mpeg',
-        'audio/mp3',
-        'audio/wav',
-        'audio/flac',
-        'audio/ogg'
-      ]
+      config.supportedAudioFormats ||
+      getMimeTypesByCategory('audio')
     : [];
+
+  // Video-specific configuration
+  const VIDEO_FORMATS = isVideoUploadEnabled
+    ? videoConfig.supportedFormats ||
+      config.supportedVideoFormats ||
+      getMimeTypesByCategory('video')
+    : [];
+  const EXTRACT_AUDIO_FROM_VIDEO =
+    videoConfig.extractAudio !== false && config.extractAudioFromVideo !== false;
 
   // File-specific configuration
   const TEXT_FORMATS = isFileUploadEnabled
@@ -75,10 +86,16 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     : [];
 
   // All supported formats combined - include both MIME types and file extensions for better OS compatibility
-  const ALL_FORMATS = formatAcceptAttribute([...IMAGE_FORMATS, ...AUDIO_FORMATS, ...TEXT_FORMATS]);
+  const ALL_FORMATS = formatAcceptAttribute([
+    ...IMAGE_FORMATS,
+    ...AUDIO_FORMATS,
+    ...VIDEO_FORMATS,
+    ...TEXT_FORMATS
+  ]);
 
   const isImageFile = type => IMAGE_FORMATS.includes(type);
   const isAudioFile = type => AUDIO_FORMATS.includes(type);
+  const isVideoFile = type => VIDEO_FORMATS.includes(type);
 
   const getFileTypeDisplay = mimeType => {
     // Image types
@@ -89,6 +106,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     // Audio types
     if (isAudioFile(mimeType)) {
       return mimeType.replace('audio/', '').toUpperCase();
+    }
+
+    // Video types
+    if (isVideoFile(mimeType)) {
+      return mimeType.replace('video/', '').toUpperCase();
     }
 
     // Use shared utility for document types
@@ -268,6 +290,70 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     });
   };
 
+  const processVideo = async file => {
+    // Check if audio extraction is enabled for videos
+    if (EXTRACT_AUDIO_FROM_VIDEO && videoLikelyHasAudio(file)) {
+      try {
+        // Extract audio from video
+        const audioData = await extractAudioFromVideo(file);
+
+        // Return as audio file with original video filename info
+        return {
+          preview: {
+            type: 'audio',
+            fileName: file.name.replace(/\.[^/.]+$/, '.wav'), // Replace extension with .wav
+            fileType: 'WAV (extracted)',
+            fileSize: audioData.fileSize,
+            duration: audioData.duration,
+            extractedFromVideo: true
+          },
+          data: {
+            type: 'audio',
+            base64: audioData.base64,
+            fileName: file.name.replace(/\.[^/.]+$/, '.wav'),
+            fileSize: audioData.fileSize,
+            fileType: audioData.mimeType,
+            duration: audioData.duration,
+            sampleRate: audioData.sampleRate,
+            numberOfChannels: audioData.numberOfChannels,
+            extractedFromVideo: true,
+            originalVideoFile: file.name,
+            originalVideoType: file.type
+          }
+        };
+      } catch (error) {
+        console.error('Error extracting audio from video:', error);
+        throw new Error('audio-extraction-error');
+      }
+    }
+
+    // If audio extraction is disabled or not applicable, just read video as-is
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = e => {
+        resolve({
+          preview: {
+            type: 'video',
+            fileName: file.name,
+            fileType: getFileTypeDisplay(file.type),
+            fileSize: file.size
+          },
+          data: {
+            type: 'video',
+            base64: e.target.result,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type
+          }
+        });
+      };
+
+      reader.onerror = () => reject(new Error('read-error'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processFile = async file => {
     // Check if image files are disabled
     if (!isImageUploadEnabled && IMAGE_FORMATS.some(format => format === file.type)) {
@@ -277,6 +363,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     // Check if audio files are disabled
     if (!isAudioUploadEnabled && AUDIO_FORMATS.some(format => format === file.type)) {
       throw new Error('audio-upload-disabled');
+    }
+
+    // Check if video files are disabled
+    if (!isVideoUploadEnabled && VIDEO_FORMATS.some(format => format === file.type)) {
+      throw new Error('video-upload-disabled');
     }
 
     // Check if file upload is disabled
@@ -292,6 +383,11 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     // Handle audio files
     if (isAudioFile(file.type)) {
       return await processAudio(file);
+    }
+
+    // Handle video files
+    if (isVideoFile(file.type)) {
+      return await processVideo(file);
     }
 
     // Handle text/document files using shared utility
@@ -322,10 +418,12 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
     const audioFormats = AUDIO_FORMATS.map(format => format.replace('audio/', '').toUpperCase());
+    const videoFormats = VIDEO_FORMATS.map(format => format.replace('video/', '').toUpperCase());
     const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
     const allFormats = [
       ...imageFormats,
       ...audioFormats,
+      ...videoFormats,
       textFormatsDisplay.length > 0 ? textFormatsDisplay : null
     ]
       .filter(Boolean)
@@ -363,6 +461,16 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         return t(
           'errors.audioUploadDisabled',
           'Audio upload is not supported by the selected model. Please choose a different model.'
+        );
+      case 'video-upload-disabled':
+        return t(
+          'errors.videoUploadDisabled',
+          'Video upload is not supported by the selected model. Please choose a different model.'
+        );
+      case 'audio-extraction-error':
+        return t(
+          'errors.audioExtractionError',
+          'Failed to extract audio from video. The video may not contain audio or may be in an unsupported format.'
         );
       case 'file-upload-disabled':
         return t('errors.fileUploadDisabled', 'File upload is disabled for this application.');
@@ -554,6 +662,21 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
                           {preview.fileName}
                         </div>
                         <div className="text-xs text-gray-500 mb-2">{preview.fileType}</div>
+                        {preview.duration && (
+                          <div className="text-xs text-gray-500">
+                            {t('components.uploader.duration', 'Duration')}:{' '}
+                            {preview.duration.toFixed(1)}s
+                          </div>
+                        )}
+                        {preview.extractedFromVideo && (
+                          <div className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                            <Icon name="check-circle" className="w-3 h-3" />
+                            {t(
+                              'components.uploader.audioExtractedFromVideo',
+                              'Audio extracted from video'
+                            )}
+                          </div>
+                        )}
                       </div>
                       <button
                         type="button"

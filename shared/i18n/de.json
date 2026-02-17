@@ -314,7 +314,15 @@
     "compilationError": "Kompilierungsfehler",
     "noComponentToRender": "Keine Komponente zum Rendern",
     "pageNotFound": "Seite nicht gefunden",
-    "signIn": "Anmelden"
+    "signIn": "Anmelden",
+    "fetchFailed": "Fehler beim Abrufen von Daten",
+    "sendFailed": "Fehler beim Senden der Nachricht",
+    "configSaveFailed": "Fehler beim Speichern der Konfiguration",
+    "imageUploadDisabled": "Bild-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell oder laden Sie stattdessen eine Textdatei hoch.",
+    "audioUploadDisabled": "Audio-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
+    "videoUploadDisabled": "Video-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
+    "audioExtractionError": "Fehler beim Extrahieren von Audio aus dem Video. Das Video enthält möglicherweise kein Audio oder ist in einem nicht unterstützten Format.",
+    "fileUploadDisabled": "Datei-Upload ist für diese Anwendung deaktiviert."
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -959,12 +967,18 @@
   "components": {
     "uploader": {
       "imageSelected": "Bild ausgewählt",
+      "audioSelected": "Audiodatei ausgewählt",
+      "videoSelected": "Videodatei ausgewählt",
       "fileSelected": "Datei ausgewählt und verarbeitet",
       "filesSelected": "{{count}} Datei(en) ausgewählt",
       "processing": "Datei wird verarbeitet...",
       "uploadFile": "Datei hochladen",
       "uploadFiles": "Dateien hochladen",
-      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)"
+      "supportedFormats": "Unterstützt: {{formats}} (max {{maxSize}}MB)",
+      "dropZoneActive": "Ablagebereich aktiv. Loslassen, um Dateien hochzuladen.",
+      "dropFileHere": "Datei hier ablegen",
+      "duration": "Dauer",
+      "audioExtractedFromVideo": "Audio aus Video extrahiert"
     }
   },
   "feedback": {
