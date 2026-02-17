@@ -161,7 +161,8 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       authenticated: true,
       authMethod: 'ldap',
       provider: ldapConfig.name || 'ldap',
-      raw: user // Keep raw LDAP data for debugging
+      raw: user, // Keep raw LDAP data for debugging
+      extractedGroups: groups // Store extracted LDAP group names (strings) for user persistence
     };
 
     return normalizedUser;
@@ -201,7 +202,7 @@ export async function loginLdapUser(username, password, ldapConfig) {
   user = enhanceUserGroups(user, authConfig, ldapConfig);
 
   // Persist LDAP user in users.json (similar to OIDC/Proxy/NTLM)
-  // Store the raw LDAP groups as externalGroups for proper mapping
+  // Store the extracted LDAP groups (strings) as externalGroups for proper mapping
   const externalUser = {
     id: user.id,
     name: user.name,
@@ -209,7 +210,7 @@ export async function loginLdapUser(username, password, ldapConfig) {
     authMethod: 'ldap',
     provider: ldapConfig.name || 'ldap',
     groups: user.groups, // Enhanced groups (with authenticated, defaults)
-    externalGroups: user.raw?.groups || [], // Raw LDAP groups for mapping
+    externalGroups: user.extractedGroups || [], // Extracted LDAP group names (strings)
     ldapData: {
       subject: user.id,
       provider: ldapConfig.name || 'ldap',
