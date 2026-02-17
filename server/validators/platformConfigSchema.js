@@ -136,6 +136,7 @@ export const platformConfigSchema = z
     ldapAuth: z
       .object({
         enabled: z.boolean().default(false),
+        allowSelfSignup: z.boolean().default(true),
         providers: z.array(ldapProviderSchema).default([])
       })
       .default({}),

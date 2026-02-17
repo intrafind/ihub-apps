@@ -2,6 +2,7 @@ import { authenticate } from 'ldap-authentication';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -167,24 +168,47 @@ export async function loginLdapUser(username, password, ldapConfig) {
 
   user = enhanceUserGroups(user, authConfig, ldapConfig);
 
+  // Persist LDAP user in users.json (similar to OIDC/Proxy/NTLM)
+  // Store the raw LDAP groups as externalGroups for proper mapping
+  const externalUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    authMethod: 'ldap',
+    provider: ldapConfig.name || 'ldap',
+    groups: user.groups, // Enhanced groups (with authenticated, defaults)
+    externalGroups: user.raw?.groups || [], // Raw LDAP groups for mapping
+    ldapData: {
+      subject: user.id,
+      provider: ldapConfig.name || 'ldap',
+      lastProvider: ldapConfig.name || 'ldap',
+      username: username
+    }
+  };
+
+  // Validate and persist user in users.json
+  const persistedUser = await validateAndPersistExternalUser(externalUser, platform);
+
+  logger.info(`[LDAP Auth] User persisted in users.json: ${persistedUser.id}`);
+
   // Generate JWT token using centralized token service
   const sessionTimeout =
     ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
-  const { token, expiresIn } = generateJwt(user, {
+  const { token, expiresIn } = generateJwt(persistedUser, {
     authMode: 'ldap',
-    authProvider: user.provider,
+    authProvider: persistedUser.provider,
     expiresInMinutes: sessionTimeout
   });
 
   return {
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      groups: user.groups,
-      authenticated: user.authenticated,
-      authMethod: user.authMethod,
-      provider: user.provider
+      id: persistedUser.id,
+      name: persistedUser.name,
+      email: persistedUser.email,
+      groups: persistedUser.groups,
+      authenticated: true,
+      authMethod: 'ldap',
+      provider: persistedUser.provider
     },
     token,
     expiresIn
