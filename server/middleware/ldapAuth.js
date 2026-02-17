@@ -128,8 +128,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
     // Log extracted LDAP groups for troubleshooting
     if (groups.length > 0) {
       logger.info(
-        `[LDAP Auth] Extracted ${groups.length} LDAP groups for user ${username}:`,
-        groups
+        `[LDAP Auth] Extracted ${groups.length} LDAP groups for user ${username}: ${groups.join(', ')}`
       );
     } else {
       logger.warn(`[LDAP Auth] No groups found in LDAP response for user ${username}`);
@@ -138,8 +137,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
     // Apply group mapping using centralized function
     const mappedGroups = mapExternalGroups(groups);
     logger.info(
-      `[LDAP Auth] Mapped ${groups.length} LDAP groups to ${mappedGroups.length} internal groups for user ${username}:`,
-      mappedGroups
+      `[LDAP Auth] Mapped ${groups.length} LDAP groups to ${mappedGroups.length} internal groups for user ${username}: ${mappedGroups.join(', ')}`
     );
 
     // Add default groups if configured
@@ -202,20 +200,23 @@ export async function loginLdapUser(username, password, ldapConfig) {
   user = enhanceUserGroups(user, authConfig, ldapConfig);
 
   // Persist LDAP user in users.json (similar to OIDC/Proxy/NTLM)
-  // Store the extracted LDAP groups (strings) as externalGroups for proper mapping
+  // Note: We don't pass externalGroups here because LDAP groups are already mapped
+  // in authenticateLdapUser(). Passing externalGroups would cause duplicate mapping.
   const externalUser = {
     id: user.id,
     name: user.name,
     email: user.email,
     authMethod: 'ldap',
     provider: ldapConfig.name || 'ldap',
-    groups: user.groups, // Enhanced groups (with authenticated, defaults)
-    externalGroups: user.extractedGroups || [], // Extracted LDAP group names (strings)
+    groups: user.groups, // Already mapped groups (with authenticated, defaults)
+    // Don't pass externalGroups - would cause duplicate mapExternalGroups() call
     ldapData: {
       subject: user.id,
       provider: ldapConfig.name || 'ldap',
       lastProvider: ldapConfig.name || 'ldap',
-      username: username
+      username: username,
+      // Store extracted LDAP groups for reference/debugging
+      ldapGroups: user.extractedGroups || []
     }
   };
 
