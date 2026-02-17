@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Video Audio Extraction Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .upload-area:hover {
+            border-color: #4F46E5;
+            background: #f9fafb;
+        }
+        .upload-area.dragging {
+            border-color: #4F46E5;
+            background: #EEF2FF;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 6px;
+            display: none;
+        }
+        .status.processing {
+            display: block;
+            background: #FEF3C7;
+            color: #92400E;
+            border: 1px solid #FCD34D;
+        }
+        .status.success {
+            display: block;
+            background: #D1FAE5;
+            color: #065F46;
+            border: 1px solid #34D399;
+        }
+        .status.error {
+            display: block;
+            background: #FEE2E2;
+            color: #991B1B;
+            border: 1px solid #F87171;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #F9FAFB;
+            border-radius: 6px;
+            display: none;
+        }
+        .results.show {
+            display: block;
+        }
+        .results h3 {
+            margin-top: 0;
+            color: #374151;
+        }
+        .result-item {
+            padding: 8px 0;
+            border-bottom: 1px solid #E5E7EB;
+        }
+        .result-item:last-child {
+            border-bottom: none;
+        }
+        .result-label {
+            font-weight: 600;
+            color: #6B7280;
+            display: inline-block;
+            width: 150px;
+        }
+        .result-value {
+            color: #111827;
+        }
+        .audio-player {
+            margin-top: 15px;
+            width: 100%;
+        }
+        .button {
+            margin-top: 20px;
+            padding: 10px 20px;
+            background: #4F46E5;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .button:hover {
+            background: #4338CA;
+        }
+        .button:disabled {
+            background: #9CA3AF;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎥 Video Audio Extraction Test</h1>
+        <p>Upload a video file to extract and test audio extraction using Web Audio API.</p>
+        
+        <div class="upload-area" id="uploadArea">
+            <p>📎 Click to select a video file or drag and drop here</p>
+            <p style="font-size: 12px; color: #6B7280;">Supported: MP4, WebM, MOV, OGG</p>
+            <input type="file" id="fileInput" accept="video/mp4,video/webm,video/quicktime,video/ogg">
+        </div>
+
+        <div class="status" id="status"></div>
+
+        <div class="results" id="results">
+            <h3>Extraction Results</h3>
+            <div class="result-item">
+                <span class="result-label">Original File:</span>
+                <span class="result-value" id="originalFile"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Extracted Filename:</span>
+                <span class="result-value" id="extractedFile"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Duration:</span>
+                <span class="result-value" id="duration"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Sample Rate:</span>
+                <span class="result-value" id="sampleRate"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Channels:</span>
+                <span class="result-value" id="channels"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">File Size:</span>
+                <span class="result-value" id="fileSize"></span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Format:</span>
+                <span class="result-value" id="format"></span>
+            </div>
+            
+            <h3>Audio Preview</h3>
+            <audio class="audio-player" id="audioPlayer" controls></audio>
+            
+            <button class="button" id="downloadBtn">Download Extracted Audio (WAV)</button>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const status = document.getElementById('status');
+        const results = document.getElementById('results');
+        
+        let extractedAudioBlob = null;
+        let originalFileName = '';
+
+        // Upload area interactions
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragging');
+        });
+        
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragging');
+        });
+        
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragging');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) {
+                processVideoFile(file);
+            }
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                processVideoFile(file);
+            }
+        });
+
+        async function processVideoFile(file) {
+            originalFileName = file.name;
+            showStatus('processing', `Processing ${file.name}...`);
+            results.classList.remove('show');
+            
+            try {
+                const audioData = await extractAudioFromVideo(file);
+                showStatus('success', 'Audio extracted successfully! ✓');
+                displayResults(file, audioData);
+            } catch (error) {
+                console.error('Extraction error:', error);
+                showStatus('error', `Error: ${error.message}`);
+            }
+        }
+
+        async function extractAudioFromVideo(file) {
+            // Create audio context
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            const audioContext = new AudioContextClass();
+
+            // Read file as ArrayBuffer
+            const arrayBuffer = await file.arrayBuffer();
+
+            // Decode the video file to get the raw audio data
+            const audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+
+            // Use an OfflineAudioContext to "render" the audio to a new buffer
+            const offlineContext = new OfflineAudioContext(
+                audioBuffer.numberOfChannels,
+                audioBuffer.length,
+                audioBuffer.sampleRate
+            );
+
+            const source = offlineContext.createBufferSource();
+            source.buffer = audioBuffer;
+            source.connect(offlineContext.destination);
+            source.start();
+
+            const renderedBuffer = await offlineContext.startRendering();
+
+            // Convert to WAV format
+            const wavBlob = audioBufferToWav(renderedBuffer);
+            
+            return {
+                blob: wavBlob,
+                duration: renderedBuffer.duration,
+                sampleRate: renderedBuffer.sampleRate,
+                numberOfChannels: renderedBuffer.numberOfChannels,
+                fileSize: wavBlob.size
+            };
+        }
+
+        function audioBufferToWav(audioBuffer) {
+            const numberOfChannels = audioBuffer.numberOfChannels;
+            const sampleRate = audioBuffer.sampleRate;
+            const format = 1; // PCM
+            const bitDepth = 16;
+
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numberOfChannels * bytesPerSample;
+
+            const data = [];
+            for (let i = 0; i < numberOfChannels; i++) {
+                data.push(audioBuffer.getChannelData(i));
+            }
+
+            const interleaved = interleave(data);
+            const dataLength = interleaved.length * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(buffer);
+
+            // Write WAV header
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(view, 8, 'WAVE');
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, format, true);
+            view.setUint16(22, numberOfChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitDepth, true);
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataLength, true);
+
+            // Write audio data
+            const volume = 0.8;
+            let index = 44;
+            for (let i = 0; i < interleaved.length; i++) {
+                const sample = Math.max(-1, Math.min(1, interleaved[i]));
+                view.setInt16(index, sample < 0 ? sample * 0x8000 : sample * 0x7fff * volume, true);
+                index += 2;
+            }
+
+            return new Blob([buffer], { type: 'audio/wav' });
+        }
+
+        function interleave(channels) {
+            const length = channels[0].length;
+            const numberOfChannels = channels.length;
+            const result = new Float32Array(length * numberOfChannels);
+
+            let inputIndex = 0;
+            for (let i = 0; i < length; i++) {
+                for (let channel = 0; channel < numberOfChannels; channel++) {
+                    result[inputIndex++] = channels[channel][i];
+                }
+            }
+
+            return result;
+        }
+
+        function writeString(view, offset, string) {
+            for (let i = 0; i < string.length; i++) {
+                view.setUint8(offset + i, string.charCodeAt(i));
+            }
+        }
+
+        function showStatus(type, message) {
+            status.className = `status ${type}`;
+            status.textContent = message;
+        }
+
+        function displayResults(originalFile, audioData) {
+            extractedAudioBlob = audioData.blob;
+            
+            document.getElementById('originalFile').textContent = originalFile.name;
+            document.getElementById('extractedFile').textContent = originalFile.name.replace(/\.[^/.]+$/, '.wav');
+            document.getElementById('duration').textContent = `${audioData.duration.toFixed(2)} seconds`;
+            document.getElementById('sampleRate').textContent = `${audioData.sampleRate} Hz`;
+            document.getElementById('channels').textContent = audioData.numberOfChannels === 1 ? 'Mono' : 'Stereo';
+            document.getElementById('fileSize').textContent = formatFileSize(audioData.fileSize);
+            document.getElementById('format').textContent = 'WAV (PCM 16-bit)';
+            
+            // Create audio preview
+            const audioUrl = URL.createObjectURL(audioData.blob);
+            const audioPlayer = document.getElementById('audioPlayer');
+            audioPlayer.src = audioUrl;
+            
+            results.classList.add('show');
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(2) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(2) + ' MB';
+        }
+
+        document.getElementById('downloadBtn').addEventListener('click', () => {
+            if (!extractedAudioBlob) return;
+            
+            const url = URL.createObjectURL(extractedAudioBlob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = originalFileName.replace(/\.[^/.]+$/, '.wav');
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        });
+    </script>
+</body>
+</html>
