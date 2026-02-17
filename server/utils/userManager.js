@@ -157,7 +157,7 @@ export async function saveUsers(usersConfig, usersFilePath) {
  * Find user by various identifiers (username, email, oidcSubject)
  * @param {Object} usersConfig - Users configuration
  * @param {string} identifier - Username, email, or OIDC subject ID
- * @param {string} authMethod - Authentication method ('local', 'oidc', 'proxy')
+ * @param {string} authMethod - Authentication method ('local', 'oidc', 'proxy', 'ldap', 'ntlm')
  * @returns {Object|null} User object or null if not found
  */
 export function findUserByIdentifier(usersConfig, identifier, authMethod = null) {
@@ -178,7 +178,8 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
       (user.oidcData && user.oidcData.subject === identifier) ||
       (user.proxyData && user.proxyData.subject === identifier) ||
       (user.teamsData && user.teamsData.subject === identifier) ||
-      (user.ntlmData && user.ntlmData.subject === identifier)
+      (user.ntlmData && user.ntlmData.subject === identifier) ||
+      (user.ldapData && user.ldapData.subject === identifier)
     ) {
       return { ...user, id: userId };
     }
@@ -198,13 +199,15 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
   // Determine auth method based on provider
   const authMethod =
-    externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
-      ? 'ntlm'
-      : externalUser.provider === 'proxy'
-        ? 'proxy'
-        : externalUser.provider === 'teams'
-          ? 'teams'
-          : 'oidc';
+    externalUser.authMethod === 'ldap'
+      ? 'ldap'
+      : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+        ? 'ntlm'
+        : externalUser.provider === 'proxy'
+          ? 'proxy'
+          : externalUser.provider === 'teams'
+            ? 'teams'
+            : 'oidc';
 
   // Try to find existing user by email or external subject
   let existingUser =
@@ -258,6 +261,14 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
         domain: externalUser.domain,
         workstation: externalUser.workstation,
         ...user.ntlmData
+      };
+    } else if (authMethod === 'ldap') {
+      user.ldapData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        username: externalUser.ldapData?.username,
+        ...user.ldapData
       };
     }
 
@@ -323,6 +334,13 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
         domain: externalUser.domain,
         workstation: externalUser.workstation
       };
+    } else if (authMethod === 'ldap') {
+      newUser.ldapData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        username: externalUser.ldapData?.username
+      };
     }
 
     usersConfig.users[userId] = newUser;
@@ -383,24 +401,28 @@ export function mergeUserGroups(externalGroups = [], internalGroups = []) {
 
 /**
  * Validate and persist external user based on platform configuration
- * Consolidates the validation logic from proxyAuth.js, oidcAuth.js, and ntlmAuth.js
- * @param {Object} externalUser - External user data (OIDC/Proxy/Teams/NTLM)
+ * Consolidates the validation logic from proxyAuth.js, oidcAuth.js, ntlmAuth.js, and ldapAuth.js
+ * @param {Object} externalUser - External user data (OIDC/Proxy/Teams/NTLM/LDAP)
  * @param {Object} platformConfig - Platform configuration
  * @returns {Object} Validated and persisted user object
  */
 export async function validateAndPersistExternalUser(externalUser, platformConfig) {
   const authMethod =
-    externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
-      ? 'ntlm'
-      : externalUser.provider === 'proxy'
-        ? 'proxy'
-        : externalUser.provider === 'teams'
-          ? 'teams'
-          : 'oidc';
+    externalUser.authMethod === 'ldap'
+      ? 'ldap'
+      : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+        ? 'ntlm'
+        : externalUser.provider === 'proxy'
+          ? 'proxy'
+          : externalUser.provider === 'teams'
+            ? 'teams'
+            : 'oidc';
 
   // Get the appropriate auth config based on auth method
   let authConfig;
-  if (authMethod === 'proxy') {
+  if (authMethod === 'ldap') {
+    authConfig = platformConfig.ldapAuth || {};
+  } else if (authMethod === 'proxy') {
     authConfig = platformConfig.proxyAuth || {};
   } else if (authMethod === 'teams') {
     authConfig = platformConfig.teamsAuth || {};
@@ -470,9 +492,9 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   }
 
   // User doesn't exist - check self-signup settings
-  // For NTLM, default to allowing self-signup since users are already authenticated by domain controller
+  // For NTLM and LDAP, default to allowing self-signup since users are already authenticated by domain controller/LDAP server
   const allowSelfSignup =
-    authConfig.allowSelfSignup ?? (authMethod === 'ntlm' || authMethod === 'proxy');
+    authConfig.allowSelfSignup ?? (authMethod === 'ntlm' || authMethod === 'proxy' || authMethod === 'ldap');
   if (!allowSelfSignup) {
     throw new Error(
       `New user registration is not allowed. User ID: ${externalUser.id}, Email: ${externalUser.email}. Please contact your administrator.`
