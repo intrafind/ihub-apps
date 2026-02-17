@@ -7,6 +7,7 @@ import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
@@ -37,13 +38,25 @@ const ChatInputActionsMenu = ({
   imageAspectRatio,
   imageQuality,
   onImageAspectRatioChange,
-  onImageQualityChange
+  onImageQualityChange,
+  // Cloud storage props
+  onCloudProviderSelect
 }) => {
   const { t } = useTranslation();
+  const { platformConfig } = usePlatformConfig();
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Get enabled cloud storage providers
+  const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
+  const cloudStorageConfig = uploadConfig?.cloudStorageUpload || {};
+  const isCloudStorageEnabledForApp = cloudStorageConfig.enabled === true;
+  const enabledCloudProviders =
+    cloudStorage.enabled && isCloudStorageEnabledForApp
+      ? cloudStorage.providers.filter(p => p.enabled)
+      : [];
 
   // Tool grouping configuration
   const TOOL_GROUPS = {
@@ -359,6 +372,48 @@ const ChatInputActionsMenu = ({
                 onImageAspectRatioChange={onImageAspectRatioChange}
                 onImageQualityChange={onImageQualityChange}
               />
+            </div>
+          )}
+
+          {/* Cloud Storage Providers Section */}
+          {enabledCloudProviders.length > 0 && (
+            <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                {t('cloudStorage.providers', 'Cloud Storage')}
+              </h3>
+              <div className="space-y-2">
+                {enabledCloudProviders.map(provider => (
+                  <button
+                    key={provider.id}
+                    type="button"
+                    onClick={() => {
+                      onCloudProviderSelect?.(provider);
+                      setIsOpen(false);
+                    }}
+                    disabled={disabled || isProcessing}
+                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 transition-colors text-left"
+                  >
+                    <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
+                      <Icon name="cloud" size="md" className="text-blue-600 dark:text-blue-300" />
+                    </div>
+                    <div className="ml-3 flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {provider.displayName || provider.name}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {provider.type === 'office365'
+                          ? t('cloudStorage.office365', 'Microsoft Office 365')
+                          : t('cloudStorage.googleDrive', 'Google Drive')}
+                      </div>
+                    </div>
+                    <Icon
+                      name="chevronRight"
+                      size="sm"
+                      className="text-gray-400 dark:text-gray-500 ml-2"
+                    />
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 

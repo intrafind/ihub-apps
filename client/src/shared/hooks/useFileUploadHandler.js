@@ -8,7 +8,7 @@ import { useState } from 'react';
  * @returns {boolean} returns.showUploader - Whether uploader UI is visible
  * @returns {Function} returns.handleFileSelect - Handle file selection (fileData) => void
  * @returns {Function} returns.toggleUploader - Toggle uploader visibility () => void
- * @returns {Function} returns.createUploadConfig - Create upload config from app settings (app, selectedModel) => Object
+ * @returns {Function} returns.createUploadConfig - Create upload config from app settings (app, modelObject) => Object
  * @returns {Function} returns.clearSelectedFile - Clear the selected file () => void
  * @returns {Function} returns.hideUploader - Hide the uploader UI () => void
  * @returns {Function} returns.setSelectedFile - Direct state setter for selected file
@@ -51,20 +51,23 @@ export const useFileUploadHandler = () => {
     }
 
     // Determine if image upload should be disabled based on model capabilities
-    // Models that don't support vision: check if model name suggests it lacks vision
+    // Use model metadata (supportsVision/supportsImages) if available, fallback to name heuristics
+    const modelId = selectedModel?.id || '';
     const isVisionModel =
-      selectedModel &&
-      (selectedModel.includes('vision') ||
-        selectedModel.includes('gpt-4') ||
-        selectedModel.includes('claude-3') ||
-        selectedModel.includes('gemini') ||
-        selectedModel.includes('4o'));
+      selectedModel?.supportsVision ??
+      selectedModel?.supportsImages ??
+      (modelId &&
+        (modelId.includes('vision') ||
+          modelId.includes('gpt-4') ||
+          modelId.includes('claude-3') ||
+          modelId.includes('gemini') ||
+          modelId.includes('4o')));
 
     // Determine if audio upload should be disabled based on model capabilities
-    // Currently, Gemini 2.0+ models support audio
-    // TODO: Check model.supportsAudio field when model metadata is available in client
+    // Use model metadata (supportsAudio) if available, fallback to name heuristics
     const isAudioModel =
-      selectedModel && (selectedModel.includes('gemini-2') || selectedModel.includes('gemini-3'));
+      selectedModel?.supportsAudio ??
+      (modelId && (modelId.includes('gemini-2') || modelId.includes('gemini-3')));
 
     const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
     const audioUploadEnabled = audioConfig?.enabled !== false && isAudioModel;
@@ -157,7 +160,9 @@ export const useFileUploadHandler = () => {
             'application/javascript',
             'application/pdf'
           ]
-        : []
+        : [],
+      // Cloud storage upload settings
+      cloudStorageUpload: uploadConfig?.cloudStorageUpload || { enabled: false }
     };
   };
 

@@ -5,6 +5,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import CloudStorageConfig from '../components/CloudStorageConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 const AdminProvidersPage = () => {
@@ -86,10 +87,11 @@ const AdminProvidersPage = () => {
     return acc;
   }, {});
 
-  const categoryOrder = ['llm', 'websearch', 'custom'];
+  const categoryOrder = ['llm', 'websearch', 'cloudstorage', 'custom'];
   const categoryLabels = {
     llm: t('admin.providers.category.llm', 'LLM Providers'),
     websearch: t('admin.providers.category.websearch', 'Web Search Providers'),
+    cloudstorage: t('admin.providers.category.cloudstorage', 'Cloud Storage Providers'),
     custom: t('admin.providers.category.custom', 'Custom / Generic API Keys')
   };
 
@@ -302,6 +304,11 @@ const AdminProvidersPage = () => {
                 </p>
               </div>
             </div>
+          </div>
+
+          {/* Cloud Storage Configuration Section */}
+          <div className="mt-8">
+            <CloudStorageConfig />
           </div>
         </div>
       </div>

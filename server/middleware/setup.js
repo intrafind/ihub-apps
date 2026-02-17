@@ -168,11 +168,16 @@ function setupSessionMiddleware(app, platformConfig) {
 
   // Check for OAuth-based external integrations that need sessions
   const jiraEnabled = process.env.JIRA_BASE_URL && process.env.JIRA_OAUTH_CLIENT_ID;
+  const cloudStorageEnabled =
+    platformConfig?.cloudStorage?.enabled &&
+    platformConfig?.cloudStorage?.providers?.some(
+      p => p.type === 'office365' && p.enabled !== false
+    );
   // Future integrations can be added here:
   // const microsoftEnabled = process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET;
   // const googleEnabled = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
 
-  const needsIntegrationSessions = jiraEnabled; // || microsoftEnabled || googleEnabled;
+  const needsIntegrationSessions = jiraEnabled || cloudStorageEnabled; // || microsoftEnabled || googleEnabled;
 
   // Setup OIDC user authentication sessions
   if (needsOidcSessions) {
@@ -202,6 +207,7 @@ function setupSessionMiddleware(app, platformConfig) {
   if (needsIntegrationSessions) {
     const enabledIntegrations = [];
     if (jiraEnabled) enabledIntegrations.push('JIRA');
+    if (cloudStorageEnabled) enabledIntegrations.push('Office 365');
 
     logger.info(
       `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`,

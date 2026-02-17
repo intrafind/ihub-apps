@@ -605,7 +605,20 @@ export default function registerAuthRoutes(app, basePath = '') {
           domain: ntlmAuthConfig.domain,
           type: ntlmAuthConfig.type || 'ntlm'
         }
-      }
+      },
+      // Add cloud storage configuration (sanitize sensitive fields)
+      cloudStorage: platform.cloudStorage
+        ? {
+            enabled: platform.cloudStorage.enabled,
+            providers: (platform.cloudStorage.providers || []).map(p => ({
+              id: p.id,
+              name: p.name,
+              displayName: p.displayName,
+              type: p.type,
+              enabled: p.enabled
+            }))
+          }
+        : { enabled: false, providers: [] }
     };
 
     res.json(status);

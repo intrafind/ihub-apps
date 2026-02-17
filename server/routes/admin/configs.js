@@ -259,6 +259,19 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
+      // Sanitize cloud storage provider secrets
+      if (sanitizedConfig.cloudStorage?.providers) {
+        sanitizedConfig.cloudStorage = {
+          ...sanitizedConfig.cloudStorage,
+          providers: sanitizedConfig.cloudStorage.providers.map(provider => ({
+            ...provider,
+            clientSecret: sanitizeSecret(provider.clientSecret),
+            tenantId:
+              provider.type === 'office365' ? sanitizeSecret(provider.tenantId) : provider.tenantId
+          }))
+        };
+      }
+
       res.json(sanitizedConfig);
     } catch (error) {
       logger.error('Error getting platform configuration:', error);
@@ -301,7 +314,8 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
         ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
         authorization: newConfig.authorization || existingConfig.authorization,
-        oauth: newConfig.oauth || existingConfig.oauth
+        oauth: newConfig.oauth || existingConfig.oauth,
+        cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage
       };
 
       // Restore secrets that were redacted in the client
@@ -361,6 +375,27 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
             )
           };
         });
+      }
+
+      // Restore cloud storage provider secrets
+      if (newConfig.cloudStorage?.providers && existingConfig.cloudStorage?.providers) {
+        if (!mergedConfig.cloudStorage) mergedConfig.cloudStorage = {};
+        mergedConfig.cloudStorage.providers = newConfig.cloudStorage.providers.map(
+          (provider, index) => {
+            const existingProvider = existingConfig.cloudStorage?.providers?.[index];
+            return {
+              ...provider,
+              clientSecret: restoreSecretIfRedacted(
+                provider.clientSecret,
+                existingProvider?.clientSecret
+              ),
+              tenantId:
+                provider.type === 'office365'
+                  ? restoreSecretIfRedacted(provider.tenantId, existingProvider?.tenantId)
+                  : provider.tenantId
+            };
+          }
+        );
       }
 
       // Save to file

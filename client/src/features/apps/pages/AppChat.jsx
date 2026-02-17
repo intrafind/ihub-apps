@@ -1249,7 +1249,7 @@ const AppChat = ({ preloadedApp = null }) => {
           ? handleVoiceCommand
           : undefined,
       onFileSelect: fileUploadHandler.handleFileSelect,
-      uploadConfig: fileUploadHandler.createUploadConfig(app, selectedModel),
+      uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
       allowEmptySubmit: app?.allowEmptyContent || fileUploadHandler.selectedFile !== null,
       inputRef,
       formRef,

@@ -1,4 +1,11 @@
 {
+  "attachedFiles": {
+    "removeAll": "Alle entfernen",
+    "filesCount": "{{count}} Datei(en) angehängt",
+    "remove": "Datei entfernen",
+    "sourceLocal": "Lokale Datei",
+    "sourceCloud": "Cloud-Datei"
+  },
   "app": {
     "title": "iHub Apps",
     "loading": "Wird geladen...",
@@ -117,6 +124,12 @@
       "favorite": "Zu Favoriten hinzufügen",
       "unfavorite": "Aus Favoriten entfernen",
       "recent": "Zuletzt verwendet",
+      "uploadFromCloud": "Aus Cloud hochladen",
+      "uploadFromDevice": "Vom Gerät hochladen",
+      "selectCloudProvider": "Cloud-Speicher-Anbieter auswählen",
+      "selectFilesFromCloud": "Dateien aus {{provider}} auswählen",
+      "noCloudProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
+      "cloudStorageNotEnabled": "Cloud-Speicher ist nicht aktiviert",
       "favorites": "Favoriten",
       "clearFilters": "Filter zurücksetzen",
       "loadMore": "Mehr laden",
@@ -437,6 +450,7 @@
       "category": {
         "llm": "LLM-Anbieter",
         "websearch": "Websuchanbieter",
+        "cloudstorage": "Cloud-Speicher-Anbieter",
         "custom": "Benutzerdefinierte / Generische API-Schlüssel"
       },
       "table": {
@@ -679,6 +693,67 @@
           "tokenExpirationInvalid": "Token-Ablauf muss zwischen 1 und {{max}} Minuten liegen",
           "expirationDaysInvalid": "Ablauf muss zwischen 1 und 3650 Tagen liegen"
         }
+      }
+    },
+    "cloudStorage": {
+      "title": "Cloud-Speicher-Integration",
+      "subtitle": "Cloud-Speicher-Anbieter für Datei-Uploads konfigurieren",
+      "enabled": "Cloud-Speicher aktiviert",
+      "disabled": "Cloud-Speicher deaktiviert",
+      "noProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
+      "addProvider": "Anbieter hinzufügen",
+      "providers": "Cloud-Speicher",
+      "providerType": "Anbietertyp",
+      "selectType": "Anbietertyp auswählen",
+      "sharepoint": "SharePoint",
+      "office365": "Microsoft Office 365",
+      "googledrive": "Google Drive",
+      "googleDrive": "Google Drive",
+      "editProvider": "Anbieter bearbeiten",
+      "deleteProvider": "Anbieter löschen",
+      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Cloud-Speicher-Anbieter löschen möchten?",
+      "name": "Name",
+      "displayName": "Anzeigename",
+      "tenantId": "Mandanten-ID",
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "siteUrl": "Website-URL (Optional)",
+      "driveId": "Laufwerk-ID (Optional)",
+      "redirectUri": "Weiterleitungs-URI (Optional)",
+      "providerEnabled": "Anbieter aktiviert",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "saving": "Speichern...",
+      "saveSuccess": "Cloud-Speicher-Konfiguration erfolgreich gespeichert",
+      "saveError": "Fehler beim Speichern der Cloud-Speicher-Konfiguration",
+      "deleteSuccess": "Anbieter erfolgreich gelöscht",
+      "deleteError": "Fehler beim Löschen des Anbieters",
+      "validation": {
+        "nameRequired": "Name ist erforderlich",
+        "displayNameRequired": "Anzeigename ist erforderlich",
+        "tenantIdRequired": "Mandanten-ID ist erforderlich",
+        "clientIdRequired": "Client-ID ist erforderlich",
+        "clientSecretRequired": "Client-Secret ist erforderlich"
+      },
+      "info": {
+        "title": "Über Cloud-Speicher-Integration",
+        "description": "Verbinden Sie sich mit Cloud-Speicher-Anbietern wie Office 365 und Google Drive, um Benutzern die direkte Auswahl von Dateien aus ihrem Cloud-Speicher während Datei-Uploads zu ermöglichen."
+      },
+      "office365Info": {
+        "title": "Office 365-Konfiguration",
+        "description": "Um die Office 365-Integration zu konfigurieren, müssen Sie eine Anwendung in Azure AD registrieren und die Mandanten-ID, Client-ID und das Client-Secret abrufen.",
+        "step1": "App in Azure AD registrieren",
+        "step2": "API-Berechtigungen konfigurieren (Files.Read, Sites.Read.All)",
+        "step3": "Client-Secret erstellen",
+        "step4": "Mandanten-ID, Client-ID und Client-Secret hier kopieren"
+      },
+      "googleDriveInfo": {
+        "title": "Google Drive-Konfiguration",
+        "description": "Um die Google Drive-Integration zu konfigurieren, müssen Sie ein Projekt in der Google Cloud Console erstellen und die Google Drive-API aktivieren.",
+        "step1": "Projekt in Google Cloud Console erstellen",
+        "step2": "Google Drive-API aktivieren",
+        "step3": "OAuth 2.0-Anmeldedaten erstellen",
+        "step4": "Client-ID und Client-Secret hier kopieren"
       }
     },
     "system": {

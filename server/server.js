@@ -27,6 +27,7 @@ import registerOAuthRoutes from './routes/oauth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import jiraRoutes from './routes/integrations/jira.js';
+import office365Routes from './routes/integrations/office365.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -261,6 +262,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
   app.use('/api/integrations/jira', jiraRoutes);
+  app.use('/api/integrations/office365', office365Routes);
 
   // --- Session Management handled in sessionRoutes ---
 

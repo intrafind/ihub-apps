@@ -19,6 +19,7 @@ const Uploader = ({
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
+  const [_dragCounter, setDragCounter] = useState(0);
   const fileInputRef = useRef(null);
 
   // Reset preview when parent clears the data
@@ -29,6 +30,49 @@ const Uploader = ({
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  }, [data, preview]);
+
+  // Sync preview from externally-provided data (e.g., cloud file downloads)
+  useEffect(() => {
+    if (data !== null && data !== undefined && preview === null) {
+      // Data was set externally (cloud upload) — derive preview from it
+      if (Array.isArray(data)) {
+        const previews = data.map(item => {
+          if (item.type === 'image') {
+            return {
+              type: 'image',
+              url: item.base64,
+              fileName: item.fileName,
+              fileType: item.fileType
+            };
+          }
+          return {
+            type: item.type,
+            fileName: item.fileName,
+            fileType: item.fileType,
+            content: item.content
+          };
+        });
+        setPreview(previews);
+      } else {
+        if (data.type === 'image') {
+          setPreview({
+            type: 'image',
+            url: data.base64,
+            fileName: data.fileName,
+            fileType: data.fileType
+          });
+        } else {
+          setPreview({
+            type: data.type,
+            fileName: data.fileName,
+            fileType: data.fileType,
+            content: data.content
+          });
+        }
+      }
+      setFileData(data);
     }
   }, [data, preview]);
 
@@ -100,12 +144,20 @@ const Uploader = ({
         }
 
         if (results.length > 0) {
-          const previews = results.map(r => r.preview || null);
-          const dataArray = results.map(r => r.data);
-          setPreview(previews);
-          setFileData(dataArray);
+          const newPreviews = results.map(r => r.preview || null);
+          const newDataArray = results.map(r => r.data);
+
+          // Merge with existing data if present
+          const existingPreviews = Array.isArray(preview) ? preview : preview ? [preview] : [];
+          const existingData = Array.isArray(fileData) ? fileData : fileData ? [fileData] : [];
+
+          const mergedPreviews = [...existingPreviews, ...newPreviews];
+          const mergedData = [...existingData, ...newDataArray];
+
+          setPreview(mergedPreviews);
+          setFileData(mergedData);
           if (onSelect) {
-            onSelect(dataArray);
+            onSelect(mergedData);
           }
         }
       } else {
