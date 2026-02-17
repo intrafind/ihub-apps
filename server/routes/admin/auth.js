@@ -581,6 +581,11 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
         return;
       }
 
+      // Additional hardening: explicitly block prototype-polluting keys
+      if (userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+
       const { email, name, password, internalGroups, active } = req.body;
 
       const rootDir = getRootDir();
