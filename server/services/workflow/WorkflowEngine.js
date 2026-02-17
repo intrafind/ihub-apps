@@ -13,6 +13,18 @@ import logger from '../../utils/logger.js';
 const DEFAULT_NODE_TIMEOUT = 5 * 60 * 1000;
 
 /**
+ * Minimum allowed timeout for node execution in milliseconds
+ * @constant {number}
+ */
+const MIN_NODE_TIMEOUT = 1000; // 1 second
+
+/**
+ * Maximum allowed timeout for node execution in milliseconds (30 minutes)
+ * @constant {number}
+ */
+const MAX_NODE_TIMEOUT = 30 * 60 * 1000;
+
+/**
  * Maximum number of execution iterations to prevent infinite loops
  * @constant {number}
  */
@@ -725,8 +737,11 @@ export class WorkflowEngine {
 
     // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)
     const executionConfig = node.execution || {};
-    const timeout =
-      executionConfig.timeout || options.timeout || node.timeout || this.defaultTimeout;
+    const timeout = this._normalizeTimeout(
+      executionConfig.timeout,
+      options.timeout,
+      node.timeout
+    );
     let result;
     const startTime = Date.now();
 
@@ -1164,6 +1179,41 @@ export class WorkflowEngine {
         reject(error);
       }
     });
+  }
+
+  /**
+   * Normalizes and bounds timeout values to prevent resource exhaustion
+   * @param {...(number|undefined)} timeoutCandidates - Candidate timeout values in ms
+   * @returns {number} A safe timeout value in milliseconds
+   * @private
+   */
+  _normalizeTimeout(...timeoutCandidates) {
+    for (const candidate of timeoutCandidates) {
+      if (candidate === undefined || candidate === null) {
+        continue;
+      }
+      const value = Number(candidate);
+      if (!Number.isFinite(value) || value <= 0) {
+        continue;
+      }
+      if (value < MIN_NODE_TIMEOUT) {
+        return MIN_NODE_TIMEOUT;
+      }
+      if (value > MAX_NODE_TIMEOUT) {
+        return MAX_NODE_TIMEOUT;
+      }
+      return value;
+    }
+
+    // Fall back to the engine's default timeout, bounded as well
+    const defaultValue = Number(this.defaultTimeout) || DEFAULT_NODE_TIMEOUT;
+    if (defaultValue < MIN_NODE_TIMEOUT) {
+      return MIN_NODE_TIMEOUT;
+    }
+    if (defaultValue > MAX_NODE_TIMEOUT) {
+      return MAX_NODE_TIMEOUT;
+    }
+    return defaultValue;
   }
 
   /**
