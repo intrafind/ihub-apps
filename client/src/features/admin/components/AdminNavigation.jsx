@@ -10,7 +10,16 @@ const AdminNavigation = () => {
   const { platformConfig } = usePlatformConfig();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const pageConfig = platformConfig?.admin?.pages || {};
-  const isEnabled = useCallback(key => pageConfig[key] !== false, [pageConfig]);
+  const isEnabled = useCallback(
+    key => {
+      // Check if feature is disabled - prompts requires promptsLibrary feature
+      if (key === 'prompts' && platformConfig?.featuresMap?.promptsLibrary === false) {
+        return false;
+      }
+      return pageConfig[key] !== false;
+    },
+    [pageConfig, platformConfig?.featuresMap?.promptsLibrary]
+  );
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const desktopMoreMenuRef = useRef(null);
