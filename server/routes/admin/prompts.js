@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, resolve } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -999,11 +999,21 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       }
 
       const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-      if (!existsSync(promptFilePath)) {
+      const promptsDir = join(rootDir, 'contents', 'prompts');
+      const candidatePath = join(promptsDir, `${promptId}.json`);
+      const normalizedPromptsDir = resolve(promptsDir);
+      const normalizedPromptFilePath = resolve(candidatePath);
+
+      // Ensure the resolved path is within the prompts directory
+      if (!normalizedPromptFilePath.startsWith(normalizedPromptsDir + path.sep) &&
+          normalizedPromptFilePath !== normalizedPromptsDir) {
+        return res.status(400).json({ error: 'Invalid prompt path' });
+      }
+
+      if (!existsSync(normalizedPromptFilePath)) {
         return res.status(404).json({ error: 'Prompt file not found' });
       }
-      await fs.unlink(promptFilePath);
+      await fs.unlink(normalizedPromptFilePath);
       await configCache.refreshPromptsCache();
       res.json({ message: 'Prompt deleted successfully' });
     } catch (error) {
