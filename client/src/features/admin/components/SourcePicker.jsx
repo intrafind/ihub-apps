@@ -32,6 +32,7 @@ function SourcePicker({
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [featureDisabled, setFeatureDisabled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [selectedIds, setSelectedIds] = useState(new Set(value || []));
@@ -53,6 +54,7 @@ function SourcePicker({
     try {
       setLoading(true);
       setError(null);
+      setFeatureDisabled(false);
 
       const sources = await adminApi.getSources();
 
@@ -63,7 +65,15 @@ function SourcePicker({
       console.log(`Loaded ${enabledSources.length} enabled sources for picker`);
     } catch (err) {
       console.error('Failed to load sources:', err);
-      setError('Failed to load available sources. Please try again.');
+
+      // Check if this is a feature disabled error (403 with FEATURE_DISABLED code)
+      if (err.response?.status === 403 && err.response?.data?.code === 'FEATURE_DISABLED') {
+        console.log('Sources feature is disabled');
+        setFeatureDisabled(true);
+        setError(null); // Don't show error, just hide the component
+      } else {
+        setError('Failed to load available sources. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -187,6 +197,11 @@ function SourcePicker({
   };
 
   const filteredSources = getFilteredSources();
+
+  // If feature is disabled, show nothing (section should be hidden by parent)
+  if (featureDisabled) {
+    return null;
+  }
 
   return (
     <div className={`source-picker ${className}`}>
