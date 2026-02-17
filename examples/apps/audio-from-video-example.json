@@ -1,0 +1,43 @@
+{
+  "id": "audio-from-video-example",
+  "name": {
+    "en": "Audio Analysis (from Video)",
+    "de": "Audioanalyse (aus Video)"
+  },
+  "description": {
+    "en": "Upload a video file to extract and analyze the audio content. The system automatically extracts the audio track from your video.",
+    "de": "Laden Sie eine Videodatei hoch, um den Audioinhalt zu extrahieren und zu analysieren. Das System extrahiert automatisch die Audiospur aus Ihrem Video."
+  },
+  "color": "#8B5CF6",
+  "icon": "MusicalNoteIcon",
+  "system": {
+    "en": "You are an audio analysis assistant. The user will provide audio extracted from a video file. Analyze the audio content, transcribe speech if present, identify sounds, music, or other audio characteristics. Provide insights about the audio quality, content, and any notable features.",
+    "de": "Sie sind ein Audioanalyse-Assistent. Der Benutzer stellt Audio bereit, das aus einer Videodatei extrahiert wurde. Analysieren Sie den Audioinhalt, transkribieren Sie Sprache falls vorhanden, identifizieren Sie Geräusche, Musik oder andere Audiomerkmale. Geben Sie Einblicke in die Audioqualität, den Inhalt und alle bemerkenswerten Merkmale."
+  },
+  "tokenLimit": 128000,
+  "preferredModel": "gemini-2.0-flash",
+  "sendChatHistory": true,
+  "upload": {
+    "videoUpload": {
+      "enabled": true,
+      "extractAudio": true,
+      "supportedFormats": ["video/mp4", "video/webm", "video/quicktime"],
+      "maxFileSizeMB": 50
+    },
+    "audioUpload": {
+      "enabled": true,
+      "supportedFormats": ["audio/mpeg", "audio/wav", "audio/mp3"],
+      "maxFileSizeMB": 25
+    }
+  },
+  "messagePlaceholder": {
+    "en": "Upload a video file to extract and analyze its audio...",
+    "de": "Laden Sie eine Videodatei hoch, um deren Audio zu extrahieren und zu analysieren..."
+  },
+  "greeting": {
+    "en": "Hello! I can help you analyze audio from video files. Simply upload a video (MP4, WebM, or MOV), and I'll extract the audio and provide a detailed analysis.",
+    "de": "Hallo! Ich kann Ihnen helfen, Audio aus Videodateien zu analysieren. Laden Sie einfach ein Video (MP4, WebM oder MOV) hoch, und ich extrahiere das Audio und erstelle eine detaillierte Analyse."
+  },
+  "enabled": true,
+  "category": "media"
+}
