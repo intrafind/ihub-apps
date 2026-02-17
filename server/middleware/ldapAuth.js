@@ -38,14 +38,24 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       usernameAttribute: ldapConfig.usernameAttribute || 'uid',
       username: username,
       // Group search configuration (optional)
+      // Note: ldap-authentication library uses 'groupsSearchBase' (with 's')
       ...(ldapConfig.groupSearchBase && {
-        groupSearchBase: ldapConfig.groupSearchBase,
-        groupClass: ldapConfig.groupClass || 'groupOfNames'
+        groupsSearchBase: ldapConfig.groupSearchBase, // Library expects 'groupsSearchBase'
+        groupClass: ldapConfig.groupClass || 'groupOfNames',
+        groupMemberAttribute: ldapConfig.groupMemberAttribute || 'member',
+        groupMemberUserAttribute: ldapConfig.groupMemberUserAttribute || 'dn'
       })
     };
 
     logger.info(`[LDAP Auth] Attempting authentication for user: ${username}`);
     logger.info(`[LDAP Auth] LDAP server: ${ldapConfig.url}`);
+    if (ldapConfig.groupSearchBase) {
+      logger.info(
+        `[LDAP Auth] Group search enabled - groupSearchBase: ${ldapConfig.groupSearchBase}, groupClass: ${ldapConfig.groupClass || 'groupOfNames'}`
+      );
+    } else {
+      logger.warn(`[LDAP Auth] Group search not configured - groupSearchBase is missing`);
+    }
 
     // Perform LDAP authentication
     const user = await authenticate(options);
@@ -56,6 +66,16 @@ async function authenticateLdapUser(username, password, ldapConfig) {
     }
 
     logger.info(`[LDAP Auth] Authentication successful for user: ${username}`);
+
+    // Log raw user object for debugging (before group extraction)
+    logger.debug(`[LDAP Auth] Raw LDAP user object:`, {
+      hasGroups: !!user.groups,
+      groupsType: user.groups ? typeof user.groups : 'undefined',
+      groupsIsArray: Array.isArray(user.groups),
+      groupsLength: user.groups ? user.groups.length : 0,
+      userKeys: Object.keys(user),
+      sampleGroup: user.groups && user.groups.length > 0 ? user.groups[0] : 'none'
+    });
 
     // Extract groups from LDAP response
     let groups = [];
