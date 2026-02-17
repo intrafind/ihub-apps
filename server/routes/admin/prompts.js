@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join, resolve } from 'path';
+import path from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
@@ -1005,10 +1006,8 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       const normalizedPromptFilePath = resolve(candidatePath);
 
       // Ensure the resolved path is within the prompts directory
-      if (
-        !normalizedPromptFilePath.startsWith(normalizedPromptsDir + path.sep) &&
-        normalizedPromptFilePath !== normalizedPromptsDir
-      ) {
+      const relativePath = path.relative(normalizedPromptsDir, normalizedPromptFilePath);
+      if (relativePath.startsWith('..') || path.isAbsolute(relativePath) || !relativePath) {
         return res.status(400).json({ error: 'Invalid prompt path' });
       }
 
