@@ -10,10 +10,12 @@ Audio and image files could not be selected in the file upload dialog even when 
 ### Root Cause
 
 The `createUploadConfig()` function used hardcoded name patterns to determine vision/audio support:
+
 - Vision models: checked for `'gpt-4'`, `'claude-3'`, `'gemini'`, `'4o'` in model name
 - Audio models: checked for `'gemini-2'`, `'gemini-3'` in model name
 
 This caused issues with:
+
 - Models with non-standard names (e.g., `claude-4`, `mistral`, custom models)
 - Models that support vision/audio but don't match the name patterns
 - App configurations being ignored when model names didn't match
@@ -27,6 +29,7 @@ Replaced fragile name heuristics with proper model metadata checks while maintai
 #### 1. `client/src/shared/hooks/useFileUploadHandler.js`
 
 **Before** (lines 53-70):
+
 ```javascript
 const isVisionModel =
   selectedModel &&
@@ -41,6 +44,7 @@ const isAudioModel =
 ```
 
 **After**:
+
 ```javascript
 const modelId = selectedModel?.id || '';
 const isVisionModel =
@@ -59,6 +63,7 @@ const isAudioModel =
 ```
 
 **Key improvements**:
+
 - Uses `??` (nullish coalescing) so explicit `supportsVision: true/false` takes priority
 - Falls back to old name heuristics only when fields are `undefined`
 - Checks both `supportsVision` and `supportsImages` (two field names in use)
@@ -67,11 +72,13 @@ const isAudioModel =
 #### 2. `client/src/features/apps/pages/AppChat.jsx`
 
 **Before** (line 1227):
+
 ```javascript
 uploadConfig: fileUploadHandler.createUploadConfig(app, selectedModel),
 ```
 
 **After**:
+
 ```javascript
 uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
 ```
@@ -93,13 +100,14 @@ Models can declare their capabilities in their JSON config files:
 ```json
 {
   "id": "model-id",
-  "supportsVision": true,    // Enables image upload
-  "supportsImages": true,    // Alternative field name
-  "supportsAudio": true      // Enables audio upload
+  "supportsVision": true, // Enables image upload
+  "supportsImages": true, // Alternative field name
+  "supportsAudio": true // Enables audio upload
 }
 ```
 
 These fields are:
+
 - Already defined in `server/validators/modelConfigSchema.js` (lines 87-89)
 - Served to the frontend via `/api/models` endpoint
 - Used by several default model configs (e.g., `gemini-2.0-flash-exp.json`)
