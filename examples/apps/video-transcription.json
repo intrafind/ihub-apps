@@ -1,0 +1,102 @@
+{
+  "id": "video-transcription",
+  "order": 12,
+  "name": {
+    "en": "Video Transcription",
+    "de": "Video-Transkription"
+  },
+  "description": {
+    "en": "Upload video files to extract and transcribe audio automatically",
+    "de": "Laden Sie Videodateien hoch, um automatisch Audio zu extrahieren und zu transkribieren"
+  },
+  "color": "#EF4444",
+  "icon": "video-camera",
+  "system": {
+    "en": "You are an AI video transcription assistant. Your role is to transcribe audio extracted from video files that users upload and provide detailed analysis. The audio is automatically extracted from the video in the browser. Include:\n- Full transcription of the audio\n- Speaker identification if multiple speakers\n- Key topics and themes discussed\n- Sentiment and tone analysis\n- Any notable timestamps or sections\n\nBe accurate, detailed, and helpful.",
+    "de": "Du bist ein KI-Video-Transkriptionsassistent. Deine Aufgabe ist es, aus hochgeladenen Videodateien extrahiertes Audio zu transkribieren und eine detaillierte Analyse bereitzustellen. Das Audio wird automatisch im Browser aus dem Video extrahiert. Beinhalte:\n- Vollständige Transkription des Audios\n- Sprecheridentifikation bei mehreren Sprechern\n- Wichtige besprochene Themen\n- Sentiment- und Tonanalyse\n- Bemerkenswerte Zeitstempel oder Abschnitte\n\nSei genau, detailliert und hilfreich."
+  },
+  "tokenLimit": 8192,
+  "preferredModel": "gemini-2.0-flash-exp",
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "detailed",
+  "preferredTemperature": 0.3,
+  "upload": {
+    "enabled": true,
+    "videoUpload": {
+      "enabled": true,
+      "extractAudio": true,
+      "maxFileSizeMB": 50,
+      "supportedFormats": ["video/mp4", "video/webm", "video/quicktime"]
+    }
+  },
+  "allowedModels": ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp-01-21"],
+  "greeting": {
+    "en": {
+      "title": "👋 Welcome to Video Transcription!",
+      "subtitle": "Upload a video file (MP4, WebM, or MOV) and I'll automatically extract the audio, then transcribe and analyze it for you."
+    },
+    "de": {
+      "title": "👋 Willkommen bei der Video-Transkription!",
+      "subtitle": "Laden Sie eine Videodatei (MP4, WebM oder MOV) hoch und ich extrahiere automatisch das Audio, transkribiere und analysiere es für Sie."
+    }
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Transcribe this video's audio",
+        "de": "Transkribiere das Audio dieses Videos"
+      },
+      "description": {
+        "en": "Full transcription of the audio content",
+        "de": "Vollständige Transkription des Audioinhalts"
+      },
+      "message": {
+        "en": "Transcribe the audio from this video",
+        "de": "Transkribiere das Audio aus diesem Video"
+      }
+    },
+    {
+      "title": {
+        "en": "Summarize the video content",
+        "de": "Fasse den Videoinhalt zusammen"
+      },
+      "description": {
+        "en": "Summary of the key points from this video",
+        "de": "Zusammenfassung der wichtigsten Punkte aus diesem Video"
+      },
+      "message": {
+        "en": "Summarize the main points from this video",
+        "de": "Fasse die Hauptpunkte aus diesem Video zusammen"
+      }
+    },
+    {
+      "title": {
+        "en": "Identify the speakers",
+        "de": "Identifiziere die Sprecher"
+      },
+      "description": {
+        "en": "Identify and label different speakers in this video",
+        "de": "Identifiziere und benenne verschiedene Sprecher in diesem Video"
+      },
+      "message": {
+        "en": "Identify the different speakers in this video and label what each person says",
+        "de": "Identifiziere die verschiedenen Sprecher in diesem Video und beschrifte, was jede Person sagt"
+      }
+    },
+    {
+      "title": {
+        "en": "Extract action items",
+        "de": "Extrahiere Aktionspunkte"
+      },
+      "description": {
+        "en": "Extract action items and decisions from this video",
+        "de": "Extrahiere Aktionspunkte und Entscheidungen aus diesem Video"
+      },
+      "message": {
+        "en": "Extract all action items and decisions from this video",
+        "de": "Extrahiere alle Aktionspunkte und Entscheidungen aus diesem Video"
+      }
+    }
+  ],
+  "enabled": true
+}
