@@ -917,7 +917,17 @@
       "message": "Something went wrong on our end.",
       "subtitle": "Please try again later.",
       "retry": "Retry"
-    }
+    },
+    "audioUploadDisabled": "Audio upload is not supported by the selected model. Please choose a different model.",
+    "videoUploadDisabled": "Video upload is not supported by the selected model. Please choose a different model.",
+    "audioDecodeError": "Could not decode audio from video. The video format or codec may not be supported by your browser.",
+    "videoAudioExtractionError": "Error extracting audio from video. Please ensure the video contains an audio track.",
+    "fileTooLarge": "File too large. Maximum size is {{maxSize}}MB.",
+    "unsupportedFormat": "Unsupported file format. Please use: {{formats}}",
+    "invalidImage": "Invalid image file",
+    "tiffProcessingError": "Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.",
+    "readError": "Error reading file",
+    "fileProcessingError": "Error processing file. Please try again."
   },
   "toolbar": {
     "bold": "Bold",

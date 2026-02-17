@@ -169,6 +169,7 @@ class PromptService {
         const processedMsg = { role: 'user', content: processedContent };
         if (msg.imageData) processedMsg.imageData = msg.imageData;
         if (msg.fileData) processedMsg.fileData = msg.fileData;
+        if (msg.audioData) processedMsg.audioData = msg.audioData;
         return processedMsg;
       }
       // Apply global prompt variables to normal prompts as well
@@ -189,6 +190,7 @@ class PromptService {
       const processedMsg = { role: msg.role, content: processedContent };
       if (msg.imageData) processedMsg.imageData = msg.imageData;
       if (msg.fileData) processedMsg.fileData = msg.fileData;
+      if (msg.audioData) processedMsg.audioData = msg.audioData;
       return processedMsg;
     });
 

@@ -37,6 +37,7 @@ export const useFileUploadHandler = () => {
     // Get upload config from unified structure only
     const imageConfig = uploadConfig?.imageUpload || {};
     const audioConfig = uploadConfig?.audioUpload || {};
+    const videoConfig = uploadConfig?.videoUpload || {};
     const fileConfig = uploadConfig?.fileUpload || {};
 
     // Check if upload is enabled at all
@@ -44,6 +45,7 @@ export const useFileUploadHandler = () => {
       uploadConfig?.enabled !== false &&
       (imageConfig?.enabled === true ||
         audioConfig?.enabled === true ||
+        videoConfig?.enabled === true ||
         fileConfig?.enabled === true);
 
     if (!uploadEnabled) {
@@ -71,18 +73,21 @@ export const useFileUploadHandler = () => {
 
     const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
     const audioUploadEnabled = audioConfig?.enabled !== false && isAudioModel;
+    const videoUploadEnabled = videoConfig?.enabled !== false && isAudioModel; // Video requires audio support
     const fileUploadEnabled = fileConfig?.enabled !== false;
 
     return {
       enabled: true,
       imageUploadEnabled,
       audioUploadEnabled,
+      videoUploadEnabled,
       fileUploadEnabled,
       allowMultiple: uploadConfig?.allowMultiple || false,
       maxFileSizeMB:
         Math.max(
           imageConfig?.maxFileSizeMB || 0,
           audioConfig?.maxFileSizeMB || 0,
+          videoConfig?.maxFileSizeMB || 0,
           fileConfig?.maxFileSizeMB || 0
         ) || 10,
       // Image-specific settings
@@ -109,6 +114,17 @@ export const useFileUploadHandler = () => {
           'audio/wav',
           'audio/flac',
           'audio/ogg'
+        ]
+      },
+      // Video-specific settings
+      videoUpload: {
+        enabled: videoUploadEnabled,
+        extractAudio: videoConfig?.extractAudio !== false,
+        maxFileSizeMB: videoConfig?.maxFileSizeMB || 50,
+        supportedFormats: videoConfig?.supportedFormats || [
+          'video/mp4',
+          'video/webm',
+          'video/quicktime'
         ]
       },
       // File-specific settings
@@ -148,6 +164,10 @@ export const useFileUploadHandler = () => {
             'audio/ogg'
           ]
         : [],
+      supportedVideoFormats: videoUploadEnabled
+        ? videoConfig?.supportedFormats || ['video/mp4', 'video/webm', 'video/quicktime']
+        : [],
+      extractAudioFromVideo: videoConfig?.extractAudio !== false,
       supportedFormats: fileUploadEnabled
         ? fileConfig?.supportedFormats || [
             'text/plain',
