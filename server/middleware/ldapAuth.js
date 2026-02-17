@@ -80,17 +80,49 @@ async function authenticateLdapUser(username, password, ldapConfig) {
 
     // Extract groups from LDAP response
     let groups = [];
-    if (user.groups && Array.isArray(user.groups)) {
-      groups = user.groups.map(group => {
-        if (typeof group === 'string') {
-          return group;
-        } else if (group.cn) {
-          return group.cn;
-        } else if (group.name) {
-          return group.name;
-        }
-        return String(group);
-      });
+    if (user.groups) {
+      // Handle both array and object formats
+      const groupsArray = Array.isArray(user.groups)
+        ? user.groups
+        : Object.values(user.groups).filter(g => g && typeof g === 'object');
+
+      groups = groupsArray
+        .map(group => {
+          // Handle string groups directly
+          if (typeof group === 'string') {
+            return group;
+          }
+
+          // Handle object groups - extract group name
+          if (typeof group === 'object' && group !== null) {
+            // Try different common LDAP group name attributes
+            if (group.cn) {
+              return Array.isArray(group.cn) ? group.cn[0] : group.cn;
+            }
+            if (group.name) {
+              return Array.isArray(group.name) ? group.name[0] : group.name;
+            }
+            if (group.displayName) {
+              return Array.isArray(group.displayName) ? group.displayName[0] : group.displayName;
+            }
+            // Try to extract from DN (e.g., "CN=Developers,OU=..." -> "Developers")
+            if (group.dn) {
+              const dnString = Array.isArray(group.dn) ? group.dn[0] : group.dn;
+              const cnMatch = dnString.match(/^CN=([^,]+)/i);
+              if (cnMatch) {
+                return cnMatch[1];
+              }
+            }
+          }
+
+          // If we can't extract a meaningful name, skip this entry
+          logger.warn(
+            `[LDAP Auth] Could not extract group name from group object for user ${username}:`,
+            group
+          );
+          return null;
+        })
+        .filter(g => g !== null); // Remove null entries
     }
 
     // Log extracted LDAP groups for troubleshooting
