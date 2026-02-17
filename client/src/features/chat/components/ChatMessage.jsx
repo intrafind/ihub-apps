@@ -44,9 +44,14 @@ const ChatMessage = ({
   const isError = message.error === true;
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(
-    typeof message.content === 'string' ? message.content : message.content || ''
-  );
+
+  // Helper function to get editable content (plain text without HTML badges)
+  const getEditableContent = () => {
+    if (message.rawContent !== undefined) return message.rawContent;
+    return typeof message.content === 'string' ? message.content : message.content || '';
+  };
+
+  const [editedContent, setEditedContent] = useState(getEditableContent());
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -246,7 +251,7 @@ const ChatMessage = ({
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedContent(typeof message.content === 'string' ? message.content : message.content || '');
+    setEditedContent(getEditableContent());
   };
 
   const handleResend = (useMaxTokens = false) => {
@@ -274,7 +279,7 @@ const ChatMessage = ({
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditedContent(typeof message.content === 'string' ? message.content : message.content || '');
+    setEditedContent(getEditableContent());
   };
 
   // Handle feedback submission
@@ -352,8 +357,9 @@ const ChatMessage = ({
         (contentToRender.includes('<img') || contentToRender.includes('data:image')));
 
     const hasFileContent = !!message.fileData;
+    const hasAudioContent = !!message.audioData;
 
-    const hasHTMLContent = hasImageContent || hasFileContent;
+    const hasHTMLContent = hasImageContent || hasFileContent || hasAudioContent;
 
     if (isEditing) {
       return (

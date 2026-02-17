@@ -36,6 +36,7 @@ Several AI models (like Gemini 2.0) support audio as input, but requiring users 
 ### Files Modified
 
 #### Core Implementation
+
 1. **`client/src/features/upload/utils/fileProcessing.js`**
    - Added `extractAudioFromVideo()` - Main extraction function
    - Added `audioBufferToWav()` - WAV format encoder
@@ -49,6 +50,7 @@ Several AI models (like Gemini 2.0) support audio as input, but requiring users 
    - Updated format lists and error messages
 
 #### Internationalization
+
 3. **`shared/i18n/en.json`**
    - Added error messages for audio extraction
    - Added video upload disabled message
@@ -58,6 +60,7 @@ Several AI models (like Gemini 2.0) support audio as input, but requiring users 
    - German translations for all new messages
 
 #### Documentation & Testing
+
 5. **`docs/audio-extraction.md`**
    - Comprehensive feature documentation
    - Configuration examples
@@ -80,11 +83,11 @@ Several AI models (like Gemini 2.0) support audio as input, but requiring users 
 
 ### Browser Compatibility
 
-| Browser | MP4 (AAC) | MP4 (MP3) | WebM | Performance |
-|---------|-----------|-----------|------|-------------|
-| Chrome  | ✅ Native | ✅ Native | ✅ Native | Excellent |
-| Edge    | ✅ Native | ✅ Native | ✅ Native | Excellent |
-| Firefox | ⚠️ OS-dependent | ✅ Native | ✅ Native | Good |
+| Browser | MP4 (AAC)       | MP4 (MP3) | WebM      | Performance |
+| ------- | --------------- | --------- | --------- | ----------- |
+| Chrome  | ✅ Native       | ✅ Native | ✅ Native | Excellent   |
+| Edge    | ✅ Native       | ✅ Native | ✅ Native | Excellent   |
+| Firefox | ⚠️ OS-dependent | ✅ Native | ✅ Native | Good        |
 
 **Note**: Firefox uses OS codecs for AAC, but this works in 99% of cases.
 
@@ -137,6 +140,7 @@ Several AI models (like Gemini 2.0) support audio as input, but requiring users 
 ### Localization
 
 All error messages available in:
+
 - ✅ English (en)
 - ✅ German (de)
 
@@ -147,6 +151,7 @@ All error messages available in:
 Location: `tests/manual/test-audio-extraction.html`
 
 Features:
+
 - Drag-and-drop interface
 - Click-to-browse file selection
 - Real-time extraction progress
@@ -183,10 +188,10 @@ Features:
 Typical performance (on modern hardware):
 
 | Video Length | Processing Time | Memory Usage |
-|--------------|----------------|--------------|
-| 10 seconds   | ~1 second      | ~20 MB       |
-| 1 minute     | ~2-3 seconds   | ~50 MB       |
-| 5 minutes    | ~8-10 seconds  | ~200 MB      |
+| ------------ | --------------- | ------------ |
+| 10 seconds   | ~1 second       | ~20 MB       |
+| 1 minute     | ~2-3 seconds    | ~50 MB       |
+| 5 minutes    | ~8-10 seconds   | ~200 MB      |
 
 ### Limitations
 
@@ -222,6 +227,7 @@ Typical performance (on modern hardware):
 ### Preview
 
 Users see:
+
 - Audio player with extracted audio
 - Original video filename
 - Duration
@@ -251,12 +257,14 @@ Users see:
 Potential improvements for future versions:
 
 ### Short-Term
+
 - [ ] Progress indicator for large files
 - [ ] Support for extracting specific time ranges
 - [ ] Audio preview before sending to model
 - [ ] Cancel extraction in progress
 
 ### Long-Term
+
 - [ ] MP3 output format (smaller file size)
 - [ ] Audio preprocessing (normalization, noise reduction)
 - [ ] Support for multiple audio tracks
@@ -270,6 +278,7 @@ Potential improvements for future versions:
 See `examples/apps/audio-from-video-example.json` for a complete example.
 
 Key configuration:
+
 ```json
 {
   "upload": {
@@ -287,6 +296,7 @@ Key configuration:
 ### Model Compatibility
 
 Works with any AI model that supports audio input:
+
 - ✅ Gemini 2.0 Flash (recommended)
 - ✅ Gemini 1.5 Pro
 - ✅ Claude (with audio support)
@@ -318,6 +328,7 @@ None identified. Feature working as expected across all target browsers.
 ### Documentation
 
 Full documentation available at:
+
 - `docs/audio-extraction.md` - Complete feature guide
 - `tests/manual/test-audio-extraction.html` - Interactive test page
 

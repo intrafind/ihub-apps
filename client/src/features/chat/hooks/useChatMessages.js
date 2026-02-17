@@ -183,14 +183,15 @@ function useChatMessages(chatId = 'default') {
    * @returns {string} The ID of the created message
    */
   const addUserMessage = useCallback((content, metadata = {}) => {
-    const { rawContent, imageData, fileData, ...rest } = metadata;
+    const { rawContent, imageData, fileData, audioData, ...rest } = metadata;
     const id = `user-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const userMessage = {
       id,
       role: 'user',
       content,
-      imageData, // Add this
-      fileData, // Add this
+      imageData,
+      fileData,
+      audioData,
       ...rest
     };
 

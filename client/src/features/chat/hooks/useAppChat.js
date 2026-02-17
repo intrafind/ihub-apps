@@ -314,7 +314,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         addUserMessage(contentToAdd, {
           ...(displayMessage?.meta || {}),
           imageData: apiMessage.imageData,
-          fileData: apiMessage.fileData
+          fileData: apiMessage.fileData,
+          audioData: apiMessage.audioData
         });
         addAssistantMessage(exchangeId);
 
@@ -325,7 +326,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           variables: apiMessage.variables || {},
           messageId: exchangeId,
           imageData: apiMessage.imageData,
-          fileData: apiMessage.fileData
+          fileData: apiMessage.fileData,
+          audioData: apiMessage.audioData
         });
 
         pendingMessageDataRef.current = {
@@ -368,23 +370,26 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     (messageId, editedContent) => {
       const messageToResend = messages.find(m => m.id === messageId);
       if (!messageToResend)
-        return { content: '', variables: null, imageData: null, fileData: null };
+        return { content: '', variables: null, imageData: null, fileData: null, audioData: null };
 
       let contentToResend = editedContent;
       let variablesToRestore = null;
       let imageDataToRestore = null;
       let fileDataToRestore = null;
+      let audioDataToRestore = null;
 
       if (messageToResend.role === 'assistant') {
         const idx = messages.findIndex(m => m.id === messageId);
         const prevUser = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user');
-        if (!prevUser) return { content: '', variables: null, imageData: null, fileData: null };
+        if (!prevUser)
+          return { content: '', variables: null, imageData: null, fileData: null, audioData: null };
         imageDataToRestore = prevUser.imageData || null;
         fileDataToRestore = prevUser.fileData || null;
-        // If there's file data, use rawContent to avoid including file HTML in the text
+        audioDataToRestore = prevUser.audioData || null;
+        // If there's file/audio data, use rawContent to avoid including file HTML in the text
         // Otherwise fall back to content for backward compatibility
         contentToResend =
-          imageDataToRestore || fileDataToRestore
+          imageDataToRestore || fileDataToRestore || audioDataToRestore
             ? prevUser.rawContent || ''
             : prevUser.rawContent || prevUser.content;
         variablesToRestore = prevUser.meta?.variables || null;
@@ -394,16 +399,18 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         if (contentToResend === undefined) {
           imageDataToRestore = messageToResend.imageData || null;
           fileDataToRestore = messageToResend.fileData || null;
-          // If there's file data, use rawContent to avoid including file HTML in the text
+          audioDataToRestore = messageToResend.audioData || null;
+          // If there's file/audio data, use rawContent to avoid including file HTML in the text
           // Otherwise fall back to content for backward compatibility
           contentToResend =
-            imageDataToRestore || fileDataToRestore
+            imageDataToRestore || fileDataToRestore || audioDataToRestore
               ? messageToResend.rawContent || ''
               : messageToResend.rawContent || messageToResend.content;
         }
         variablesToRestore = messageToResend.meta?.variables || null;
         if (!imageDataToRestore) imageDataToRestore = messageToResend.imageData || null;
         if (!fileDataToRestore) fileDataToRestore = messageToResend.fileData || null;
+        if (!audioDataToRestore) audioDataToRestore = messageToResend.audioData || null;
       }
 
       // Return content, variables, and file data
@@ -411,7 +418,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         content: contentToResend || '',
         variables: variablesToRestore,
         imageData: imageDataToRestore,
-        fileData: fileDataToRestore
+        fileData: fileDataToRestore,
+        audioData: audioDataToRestore
       };
     },
     [messages, deleteMessage]
