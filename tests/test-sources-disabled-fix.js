@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Test: Sources Feature Disabled - App Editor Should Work
- * 
+ *
  * This test validates that when the sources feature is disabled:
  * 1. The /api/admin/sources endpoint returns 403 FEATURE_DISABLED
  * 2. The SourcePicker component handles this gracefully
@@ -41,8 +41,9 @@ const checks = [
   },
   {
     name: 'Returns null when disabled',
-    test: () => sourcePickerContent.includes('if (featureDisabled)') && 
-                sourcePickerContent.includes('return null;'),
+    test: () =>
+      sourcePickerContent.includes('if (featureDisabled)') &&
+      sourcePickerContent.includes('return null;'),
     reason: 'Component should hide itself when feature is disabled'
   }
 ];
@@ -71,7 +72,7 @@ const appFormEditorContent = readFileSync(appFormEditorPath, 'utf8');
 const editorChecks = [
   {
     name: 'Imports usePlatformConfig',
-    test: () => appFormEditorContent.includes("import { usePlatformConfig }"),
+    test: () => appFormEditorContent.includes('import { usePlatformConfig }'),
     reason: 'Must import the hook to access platform config'
   },
   {

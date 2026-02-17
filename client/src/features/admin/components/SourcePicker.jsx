@@ -65,7 +65,7 @@ function SourcePicker({
       console.log(`Loaded ${enabledSources.length} enabled sources for picker`);
     } catch (err) {
       console.error('Failed to load sources:', err);
-      
+
       // Check if this is a feature disabled error (403 with FEATURE_DISABLED code)
       if (err.response?.status === 403 && err.response?.data?.code === 'FEATURE_DISABLED') {
         console.log('Sources feature is disabled');
