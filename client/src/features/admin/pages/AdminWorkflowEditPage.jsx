@@ -124,14 +124,27 @@ const AdminWorkflowEditPage = () => {
 
     // Support nested field paths like 'name.en'
     const parts = field.split('.');
+    const isUnsafeKey = key =>
+      key === '__proto__' || key === 'constructor' || key === 'prototype';
+
     let target = updated;
     for (let i = 0; i < parts.length - 1; i++) {
-      if (!target[parts[i]]) {
-        target[parts[i]] = {};
+      const segment = parts[i];
+      // Prevent prototype pollution via unsafe path segments
+      if (isUnsafeKey(segment)) {
+        return;
       }
-      target = target[parts[i]];
+      if (!Object.prototype.hasOwnProperty.call(target, segment) || target[segment] == null) {
+        target[segment] = {};
+      }
+      target = target[segment];
     }
-    target[parts[parts.length - 1]] = value;
+
+    const lastKey = parts[parts.length - 1];
+    if (isUnsafeKey(lastKey)) {
+      return;
+    }
+    target[lastKey] = value;
 
     setWorkflowData(updated);
     setJsonText(JSON.stringify(updated, null, 2));
