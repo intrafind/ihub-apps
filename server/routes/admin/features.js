@@ -26,7 +26,7 @@ export default function registerAdminFeaturesRoutes(app, basePath = '') {
    *       401:
    *         description: Admin authentication required
    */
-  app.get(buildServerPath('/api/admin/features', basePath), adminAuth, (req, res) => {
+  app.get(buildServerPath('/api/admin/features'), adminAuth, (req, res) => {
     const featureConfig = configCache.getFeatures();
     res.json({
       features: resolveFeatures(featureConfig),
@@ -63,7 +63,7 @@ export default function registerAdminFeaturesRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.put(buildServerPath('/api/admin/features', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/features'), adminAuth, async (req, res) => {
     try {
       const updates = req.body;
 

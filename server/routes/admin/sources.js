@@ -480,7 +480,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources', basePath),
+    buildServerPath('/api/admin/sources'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -545,7 +545,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources/:id', basePath),
+    buildServerPath('/api/admin/sources/:id'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -670,7 +670,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.post(
-    buildServerPath('/api/admin/sources', basePath),
+    buildServerPath('/api/admin/sources'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -804,7 +804,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.put(
-    buildServerPath('/api/admin/sources/:id', basePath),
+    buildServerPath('/api/admin/sources/:id'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -936,7 +936,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.delete(
-    buildServerPath('/api/admin/sources/:id', basePath),
+    buildServerPath('/api/admin/sources/:id'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1036,7 +1036,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.post(
-    buildServerPath('/api/admin/sources/:id/test', basePath),
+    buildServerPath('/api/admin/sources/:id/test'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1150,7 +1150,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.post(
-    buildServerPath('/api/admin/sources/:id/preview', basePath),
+    buildServerPath('/api/admin/sources/:id/preview'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1252,7 +1252,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.post(
-    buildServerPath('/api/admin/sources/_toggle', basePath),
+    buildServerPath('/api/admin/sources/_toggle'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1321,7 +1321,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources/_stats', basePath),
+    buildServerPath('/api/admin/sources/_stats'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1389,7 +1389,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources/_types', basePath),
+    buildServerPath('/api/admin/sources/_types'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1456,7 +1456,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources/_dependencies/:id', basePath),
+    buildServerPath('/api/admin/sources/_dependencies/:id'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1549,7 +1549,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources/:id/files', basePath),
+    buildServerPath('/api/admin/sources/:id/files'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1660,7 +1660,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.get(
-    buildServerPath('/api/admin/sources/:id/files/content', basePath),
+    buildServerPath('/api/admin/sources/:id/files/content'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1777,7 +1777,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.post(
-    buildServerPath('/api/admin/sources/:id/files', basePath),
+    buildServerPath('/api/admin/sources/:id/files'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {
@@ -1890,7 +1890,7 @@ export default function registerAdminSourcesRoutes(app, basePath = '') {
    *               $ref: '#/components/schemas/ErrorResponse'
    */
   app.delete(
-    buildServerPath('/api/admin/sources/:id/files', basePath),
+    buildServerPath('/api/admin/sources/:id/files'),
     requireFeature('sources'),
     adminAuth,
     async (req, res) => {

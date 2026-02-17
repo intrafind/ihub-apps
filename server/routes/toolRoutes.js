@@ -11,7 +11,7 @@ import logger from '../utils/logger.js';
 
 export default function registerToolRoutes(app, basePath = '') {
   app.get(
-    buildServerPath('/api/tools', basePath),
+    buildServerPath('/api/tools'),
     requireFeature('tools'),
     authRequired,
     async (req, res) => {
@@ -50,7 +50,7 @@ export default function registerToolRoutes(app, basePath = '') {
   );
 
   app.all(
-    buildServerPath('/api/tools/:toolId', basePath),
+    buildServerPath('/api/tools/:toolId'),
     requireFeature('tools'),
     authRequired,
     validate(runToolSchema),

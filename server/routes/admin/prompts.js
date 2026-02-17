@@ -284,7 +284,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to load prompts configuration"
    */
-  app.get(buildServerPath('/api/admin/prompts', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/prompts'), adminAuth, async (req, res) => {
     try {
       const { data: prompts, etag } = configCache.getPrompts(true);
       if (!prompts) {
@@ -382,7 +382,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *               error: "Failed to fetch prompt"
    */
   app.get(
-    buildServerPath('/api/admin/prompts/:promptId', basePath),
+    buildServerPath('/api/admin/prompts/:promptId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -511,7 +511,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *               error: "Failed to update prompt"
    */
   app.put(
-    buildServerPath('/api/admin/prompts/:promptId', basePath),
+    buildServerPath('/api/admin/prompts/:promptId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -638,7 +638,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to create prompt"
    */
-  app.post(buildServerPath('/api/admin/prompts', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/prompts'), adminAuth, async (req, res) => {
     try {
       const newPrompt = req.body;
       if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
@@ -744,7 +744,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *               error: "Failed to toggle prompt"
    */
   app.post(
-    buildServerPath('/api/admin/prompts/:promptId/toggle', basePath),
+    buildServerPath('/api/admin/prompts/:promptId/toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -884,7 +884,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *               error: "Failed to toggle prompts"
    */
   app.post(
-    buildServerPath('/api/admin/prompts/:promptIds/_toggle', basePath),
+    buildServerPath('/api/admin/prompts/:promptIds/_toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1002,7 +1002,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *               error: "Failed to delete prompt"
    */
   app.delete(
-    buildServerPath('/api/admin/prompts/:promptId', basePath),
+    buildServerPath('/api/admin/prompts/:promptId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -1129,7 +1129,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *               error: "Failed to generate completion"
    *               details: "API rate limit exceeded"
    */
-  app.post(buildServerPath('/api/completions', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/completions'), adminAuth, async (req, res) => {
     try {
       const {
         model,
@@ -1278,7 +1278,7 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *                   error: "Internal server error"
    */
   app.get(
-    buildServerPath('/api/admin/prompts/app-generator', basePath),
+    buildServerPath('/api/admin/prompts/app-generator'),
     adminAuth,
     async (req, res) => {
       try {

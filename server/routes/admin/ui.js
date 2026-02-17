@@ -64,7 +64,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
    * Upload asset file (logo, icon, favicon, etc.)
    */
   app.post(
-    buildServerPath('/api/admin/ui/upload-asset', basePath),
+    buildServerPath('/api/admin/ui/upload-asset'),
     authRequired,
     adminAuth,
     upload.single('asset'),
@@ -116,7 +116,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
    * List uploaded assets
    */
   app.get(
-    buildServerPath('/api/admin/ui/assets', basePath),
+    buildServerPath('/api/admin/ui/assets'),
     authRequired,
     adminAuth,
     (req, res) => {
@@ -180,7 +180,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
    * Delete asset
    */
   app.delete(
-    buildServerPath('/api/admin/ui/assets/:id', basePath),
+    buildServerPath('/api/admin/ui/assets/:id'),
     authRequired,
     adminAuth,
     (req, res) => {
@@ -216,7 +216,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
    * Get UI configuration
    */
   app.get(
-    buildServerPath('/api/admin/ui/config', basePath),
+    buildServerPath('/api/admin/ui/config'),
     authRequired,
     adminAuth,
     (req, res) => {
@@ -242,7 +242,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
    * Update UI configuration
    */
   app.post(
-    buildServerPath('/api/admin/ui/config', basePath),
+    buildServerPath('/api/admin/ui/config'),
     authRequired,
     adminAuth,
     async (req, res) => {
@@ -287,7 +287,7 @@ export default function registerAdminUIRoutes(app, basePath = '') {
    * Backup UI configuration
    */
   app.post(
-    buildServerPath('/api/admin/ui/backup', basePath),
+    buildServerPath('/api/admin/ui/backup'),
     authRequired,
     adminAuth,
     async (req, res) => {

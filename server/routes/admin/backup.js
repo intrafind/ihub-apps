@@ -352,7 +352,7 @@ export default async function registerBackupRoutes(app, basePath = '') {
 
   // Import configuration
   app.post(
-    buildServerPath('/api/admin/backup/import', basePath),
+    buildServerPath('/api/admin/backup/import'),
     adminAuth,
     upload.single('backup'),
     importConfig

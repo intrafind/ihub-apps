@@ -152,7 +152,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/configs/platform', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -270,7 +270,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
    * Update platform configuration
    */
   app.post(
-    buildServerPath('/api/admin/configs/platform', basePath),
+    buildServerPath('/api/admin/configs/platform'),
     adminAuth,
     async (req, res) => {
       try {

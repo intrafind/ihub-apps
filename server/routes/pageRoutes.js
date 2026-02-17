@@ -4,7 +4,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
 export default function registerPageRoutes(app, basePath = '') {
-  app.get(buildServerPath('/api/pages/:pageId', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/pages/:pageId'), async (req, res) => {
     const { pageId } = req.params;
     const lang = req.query.lang || 'en';
     try {

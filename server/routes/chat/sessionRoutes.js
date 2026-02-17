@@ -61,7 +61,7 @@ export default function registerSessionRoutes(
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/models/:modelId/chat/test', basePath),
+    buildServerPath('/api/models/:modelId/chat/test'),
     authRequired,
     modelAccessRequired,
     validate(chatTestSchema),
@@ -148,7 +148,7 @@ export default function registerSessionRoutes(
   );
 
   app.get(
-    buildServerPath('/api/apps/:appId/chat/:chatId', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
     validate(chatConnectSchema),
     async (req, res) => {
@@ -266,7 +266,7 @@ export default function registerSessionRoutes(
   }
 
   app.post(
-    buildServerPath('/api/apps/:appId/chat/:chatId', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
     validate(chatPostSchema),
     async (req, res) => {
@@ -514,7 +514,7 @@ export default function registerSessionRoutes(
   );
 
   app.post(
-    buildServerPath('/api/apps/:appId/chat/:chatId/stop', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId/stop'),
     chatAuthRequired,
     async (req, res) => {
       const { chatId } = req.params;
@@ -555,7 +555,7 @@ export default function registerSessionRoutes(
   );
 
   app.get(
-    buildServerPath('/api/apps/:appId/chat/:chatId/status', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId/status'),
     chatAuthRequired,
     (req, res) => {
       const { chatId } = req.params;

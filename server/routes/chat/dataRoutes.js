@@ -237,7 +237,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/styles', basePath), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/styles'), authRequired, async (req, res) => {
     try {
       // Try to get styles from cache first
       let { data: styles = [] } = configCache.getStyles();
@@ -367,7 +367,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *                   error: "Internal server error"
    */
   app.get(
-    buildServerPath('/api/prompts', basePath),
+    buildServerPath('/api/prompts'),
     requireFeature('promptsLibrary'),
     authRequired,
     async (req, res) => {
@@ -533,7 +533,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *                   error: "Internal server error"
    *                   requestId: "1640995200000-xyz789abc"
    */
-  app.get(buildServerPath('/api/translations/:lang', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/translations/:lang'), async (req, res) => {
     const originalLang = req.params.lang;
     let requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
@@ -795,7 +795,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/configs/ui', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/configs/ui'), async (req, res) => {
     try {
       // Try to get UI config from cache first
       let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
@@ -950,7 +950,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *             example:
    *               error: "Failed to load platform configuration"
    */
-  app.get(buildServerPath('/api/configs/platform', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/configs/platform'), async (req, res) => {
     try {
       // Get platform config from cache
       const platform = configCache.getPlatform();

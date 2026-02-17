@@ -314,7 +314,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to fetch apps"
    */
-  app.get(buildServerPath('/api/admin/apps', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/apps'), adminAuth, async (req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       res.setHeader('ETag', appsEtag);
@@ -371,7 +371,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/apps/templates', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/apps/templates'), adminAuth, async (req, res) => {
     try {
       const { data: apps, etag: appsEtag } = configCache.getApps(true);
       const templates = apps.filter(app => app.allowInheritance !== false && app.enabled);
@@ -447,7 +447,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/admin/apps/:appId/inheritance', basePath),
+    buildServerPath('/api/admin/apps/:appId/inheritance'),
     adminAuth,
     async (req, res) => {
       try {
@@ -482,7 +482,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
     }
   );
 
-  app.get(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
 
@@ -585,7 +585,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.put(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
       const updatedApp = req.body;
@@ -697,7 +697,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/admin/apps', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/apps'), adminAuth, async (req, res) => {
     try {
       const newApp = req.body;
       if (!newApp.id || !newApp.name || !newApp.description) {
@@ -781,7 +781,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/admin/apps/:appId/toggle', basePath),
+    buildServerPath('/api/admin/apps/:appId/toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -892,7 +892,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/admin/apps/:appIds/_toggle', basePath),
+    buildServerPath('/api/admin/apps/:appIds/_toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -998,7 +998,7 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to delete app"
    */
-  app.delete(buildServerPath('/api/admin/apps/:appId', basePath), adminAuth, async (req, res) => {
+  app.delete(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
     try {
       const { appId } = req.params;
 

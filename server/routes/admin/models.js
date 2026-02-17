@@ -45,7 +45,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/models', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
     try {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
 
@@ -77,7 +77,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     }
   });
 
-  app.get(buildServerPath('/api/admin/models/:modelId', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
 
@@ -118,7 +118,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     }
   });
 
-  app.put(buildServerPath('/api/admin/models/:modelId', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
     try {
       const { modelId } = req.params;
       const updatedModel = req.body;
@@ -213,7 +213,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     }
   });
 
-  app.post(buildServerPath('/api/admin/models', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/models'), adminAuth, async (req, res) => {
     try {
       const newModel = req.body;
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
@@ -283,7 +283,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
   });
 
   app.post(
-    buildServerPath('/api/admin/models/:modelId/toggle', basePath),
+    buildServerPath('/api/admin/models/:modelId/toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -332,7 +332,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
   );
 
   app.post(
-    buildServerPath('/api/admin/models/:modelIds/_toggle', basePath),
+    buildServerPath('/api/admin/models/:modelIds/_toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -385,7 +385,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
   );
 
   app.delete(
-    buildServerPath('/api/admin/models/:modelId', basePath),
+    buildServerPath('/api/admin/models/:modelId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -430,7 +430,7 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
   );
 
   app.post(
-    buildServerPath('/api/admin/models/:modelId/test', basePath),
+    buildServerPath('/api/admin/models/:modelId/test'),
     adminAuth,
     async (req, res) => {
       try {

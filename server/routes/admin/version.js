@@ -16,7 +16,7 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
    *
    * All components (app, client, server) share the same version number.
    */
-  app.get(buildServerPath('/api/admin/version', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/version'), adminAuth, async (req, res) => {
     try {
       const version = getAppVersion();
 
@@ -44,7 +44,7 @@ export default function registerAdminVersionRoutes(app, basePath = '') {
    * - error: string (if check failed)
    */
   app.get(
-    buildServerPath('/api/admin/version/check-update', basePath),
+    buildServerPath('/api/admin/version/check-update'),
     adminAuth,
     async (req, res) => {
       try {

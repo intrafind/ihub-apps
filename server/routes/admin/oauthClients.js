@@ -48,7 +48,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       401:
    *         description: Unauthorized
    */
-  app.get(buildServerPath('/api/admin/oauth/clients', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/oauth/clients'), adminAuth, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
@@ -100,7 +100,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Client not found
    */
   app.get(
-    buildServerPath('/api/admin/oauth/clients/:clientId', basePath),
+    buildServerPath('/api/admin/oauth/clients/:clientId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -191,7 +191,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       400:
    *         description: Invalid request
    */
-  app.post(buildServerPath('/api/admin/oauth/clients', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/oauth/clients'), adminAuth, async (req, res) => {
     try {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
@@ -304,7 +304,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Client not found
    */
   app.put(
-    buildServerPath('/api/admin/oauth/clients/:clientId', basePath),
+    buildServerPath('/api/admin/oauth/clients/:clientId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -391,7 +391,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Client not found
    */
   app.delete(
-    buildServerPath('/api/admin/oauth/clients/:clientId', basePath),
+    buildServerPath('/api/admin/oauth/clients/:clientId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -459,7 +459,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Client not found
    */
   app.post(
-    buildServerPath('/api/admin/oauth/clients/:clientId/rotate-secret', basePath),
+    buildServerPath('/api/admin/oauth/clients/:clientId/rotate-secret'),
     adminAuth,
     async (req, res) => {
       try {
@@ -540,7 +540,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Client not found
    */
   app.post(
-    buildServerPath('/api/admin/oauth/clients/:clientId/generate-token', basePath),
+    buildServerPath('/api/admin/oauth/clients/:clientId/generate-token'),
     adminAuth,
     async (req, res) => {
       try {
@@ -637,7 +637,7 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *         description: Token introspection result
    */
   app.post(
-    buildServerPath('/api/admin/oauth/clients/:clientId/introspect-token', basePath),
+    buildServerPath('/api/admin/oauth/clients/:clientId/introspect-token'),
     adminAuth,
     async (req, res) => {
       try {

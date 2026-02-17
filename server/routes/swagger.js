@@ -34,7 +34,7 @@ function createSwaggerConfig(title, description, version, paths, basePath = '') 
       },
       servers: [
         {
-          url: buildServerPath('/api', basePath),
+          url: buildServerPath('/api'),
           description: 'API Server'
         }
       ],
@@ -174,15 +174,15 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     swaggerOptions: {
       urls: [
         {
-          url: buildServerPath('/api/docs/normal/swagger.json', basePath),
+          url: buildServerPath('/api/docs/normal/swagger.json'),
           name: 'Chat & General APIs'
         },
         {
-          url: buildServerPath('/api/docs/admin/swagger.json', basePath),
+          url: buildServerPath('/api/docs/admin/swagger.json'),
           name: 'Admin APIs'
         },
         {
-          url: buildServerPath('/api/docs/openai/swagger.json', basePath),
+          url: buildServerPath('/api/docs/openai/swagger.json'),
           name: 'OpenAI Compatible APIs'
         }
       ]
@@ -190,28 +190,28 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   };
 
   // Main Swagger UI route - shows all API categories
-  app.use(buildServerPath('/api/docs', basePath), ...middleware, swaggerUi.serve);
+  app.use(buildServerPath('/api/docs'), ...middleware, swaggerUi.serve);
   app.get(
-    buildServerPath('/api/docs', basePath),
+    buildServerPath('/api/docs'),
     ...middleware,
     swaggerUi.setup(null, swaggerOptions)
   );
 
   // Individual API documentation routes (JSON only)
-  app.get(buildServerPath('/api/docs/normal/swagger.json', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/normal/swagger.json'), ...middleware, (req, res) => {
     res.json(normalApiSpec);
   });
 
-  app.get(buildServerPath('/api/docs/admin/swagger.json', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/admin/swagger.json'), ...middleware, (req, res) => {
     res.json(adminApiSpec);
   });
 
-  app.get(buildServerPath('/api/docs/openai/swagger.json', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/openai/swagger.json'), ...middleware, (req, res) => {
     res.json(openaiApiSpec);
   });
 
   // Create specific UI for each API set using query parameters
-  app.get(buildServerPath('/api/docs/normal', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/normal'), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - Chat & General APIs',
@@ -222,7 +222,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(normalApiSpec, customOptions));
   });
 
-  app.get(buildServerPath('/api/docs/admin', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/admin'), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - Admin APIs',
@@ -233,7 +233,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(adminApiSpec, customOptions));
   });
 
-  app.get(buildServerPath('/api/docs/openai', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/openai'), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - OpenAI Compatible APIs',

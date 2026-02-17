@@ -194,7 +194,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/tools', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/tools'), adminAuth, async (req, res) => {
     try {
       // Load raw (unexpanded) tools for admin interface
       const { tools, needsCleanup, filePath } = loadRawTools();
@@ -289,7 +289,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/tools/:toolId', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/tools/:toolId'), adminAuth, async (req, res) => {
     try {
       const { toolId } = req.params;
 
@@ -364,7 +364,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.put(buildServerPath('/api/admin/tools/:toolId', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/tools/:toolId'), adminAuth, async (req, res) => {
     try {
       const { toolId } = req.params;
       const updatedTool = req.body;
@@ -455,7 +455,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/admin/tools', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/tools'), adminAuth, async (req, res) => {
     try {
       const newTool = req.body;
 
@@ -551,7 +551,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.delete(buildServerPath('/api/admin/tools/:toolId', basePath), adminAuth, async (req, res) => {
+  app.delete(buildServerPath('/api/admin/tools/:toolId'), adminAuth, async (req, res) => {
     try {
       const { toolId } = req.params;
 
@@ -660,7 +660,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/admin/tools/:toolId/toggle', basePath),
+    buildServerPath('/api/admin/tools/:toolId/toggle'),
     adminAuth,
     async (req, res) => {
       try {
@@ -745,7 +745,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/admin/tools/:toolId/script', basePath),
+    buildServerPath('/api/admin/tools/:toolId/script'),
     adminAuth,
     async (req, res) => {
       try {
@@ -852,7 +852,7 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *         description: Internal server error
    */
   app.put(
-    buildServerPath('/api/admin/tools/:toolId/script', basePath),
+    buildServerPath('/api/admin/tools/:toolId/script'),
     adminAuth,
     async (req, res) => {
       try {

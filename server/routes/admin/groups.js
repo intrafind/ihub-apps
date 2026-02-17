@@ -211,7 +211,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to load groups configuration
    */
-  app.get(buildServerPath('/api/admin/groups', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
@@ -284,7 +284,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to load resources
    */
-  app.get(buildServerPath('/api/admin/groups/resources', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/groups/resources'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
 
@@ -487,7 +487,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to create group
    */
-  app.post(buildServerPath('/api/admin/groups', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
       const { id, name, description, permissions, mappings = [] } = req.body;
 
@@ -627,7 +627,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to update group
    */
-  app.put(buildServerPath('/api/admin/groups/:groupId', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/groups/:groupId'), adminAuth, async (req, res) => {
     try {
       const { groupId } = req.params;
 
@@ -766,7 +766,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *         description: Failed to delete group
    */
   app.delete(
-    buildServerPath('/api/admin/groups/:groupId', basePath),
+    buildServerPath('/api/admin/groups/:groupId'),
     adminAuth,
     async (req, res) => {
       try {

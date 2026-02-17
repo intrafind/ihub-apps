@@ -279,7 +279,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/workflows', basePath),
+    buildServerPath('/api/workflows'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -336,7 +336,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/workflows/my-executions', basePath),
+    buildServerPath('/api/workflows/my-executions'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -391,7 +391,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/workflows/:id', basePath),
+    buildServerPath('/api/workflows/:id'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -461,7 +461,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows', basePath),
+    buildServerPath('/api/workflows'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
@@ -556,7 +556,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.put(
-    buildServerPath('/api/workflows/:id', basePath),
+    buildServerPath('/api/workflows/:id'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
@@ -646,7 +646,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.delete(
-    buildServerPath('/api/workflows/:id', basePath),
+    buildServerPath('/api/workflows/:id'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
@@ -760,7 +760,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows/:id/execute', basePath),
+    buildServerPath('/api/workflows/:id/execute'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -867,7 +867,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/workflows/executions/:executionId', basePath),
+    buildServerPath('/api/workflows/executions/:executionId'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -977,7 +977,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/resume', basePath),
+    buildServerPath('/api/workflows/executions/:executionId/resume'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1082,7 +1082,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/cancel', basePath),
+    buildServerPath('/api/workflows/executions/:executionId/cancel'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1158,7 +1158,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/workflows/executions/:executionId/export', basePath),
+    buildServerPath('/api/workflows/executions/:executionId/export'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1477,7 +1477,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/workflows/executions/:executionId/respond', basePath),
+    buildServerPath('/api/workflows/executions/:executionId/respond'),
     checkWorkflowsFeature,
     authRequired,
     async (req, res) => {
@@ -1658,7 +1658,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/admin/workflows', basePath),
+    buildServerPath('/api/admin/workflows'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
@@ -1703,7 +1703,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.post(
-    buildServerPath('/api/admin/workflows/:id/toggle', basePath),
+    buildServerPath('/api/admin/workflows/:id/toggle'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {
@@ -1808,7 +1808,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/admin/workflows/executions', basePath),
+    buildServerPath('/api/admin/workflows/executions'),
     checkWorkflowsFeature,
     adminAuth,
     async (req, res) => {

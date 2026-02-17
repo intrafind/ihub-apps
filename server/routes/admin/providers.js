@@ -29,7 +29,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(buildServerPath('/api/admin/providers', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/providers'), adminAuth, async (req, res) => {
     try {
       const { data: providers, etag: providersEtag } = configCache.getProviders(true);
 
@@ -57,7 +57,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
   });
 
   app.get(
-    buildServerPath('/api/admin/providers/:providerId', basePath),
+    buildServerPath('/api/admin/providers/:providerId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -96,7 +96,7 @@ export default function registerAdminProvidersRoutes(app, basePath = '') {
   );
 
   app.put(
-    buildServerPath('/api/admin/providers/:providerId', basePath),
+    buildServerPath('/api/admin/providers/:providerId'),
     adminAuth,
     async (req, res) => {
       try {

@@ -158,7 +158,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to check authentication status
    */
-  app.get(buildServerPath('/api/admin/auth/status', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/admin/auth/status'), async (req, res) => {
     try {
       // Check if admin auth is required considering current user authentication
       // req.user is populated by the global auth middleware (proxyAuth, localAuth)
@@ -208,7 +208,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to test authentication
    */
-  app.get(buildServerPath('/api/admin/auth/test', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/auth/test'), adminAuth, async (req, res) => {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
@@ -271,7 +271,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *         description: Failed to change password
    */
   app.post(
-    buildServerPath('/api/admin/auth/change-password', basePath),
+    buildServerPath('/api/admin/auth/change-password'),
     adminAuth,
     async (req, res) => {
       try {
@@ -326,7 +326,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to get users
    */
-  app.get(buildServerPath('/api/admin/auth/users', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/auth/users'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const usersFilePath = join(rootDir, 'contents', 'config', 'users.json');
@@ -417,7 +417,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to create user
    */
-  app.post(buildServerPath('/api/admin/auth/users', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/auth/users'), adminAuth, async (req, res) => {
     try {
       const {
         username,
@@ -577,7 +577,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *         description: Failed to update user
    */
   app.put(
-    buildServerPath('/api/admin/auth/users/:userId', basePath),
+    buildServerPath('/api/admin/auth/users/:userId'),
     adminAuth,
     async (req, res) => {
       try {
@@ -689,7 +689,7 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
    *         description: Failed to delete user
    */
   app.delete(
-    buildServerPath('/api/admin/auth/users/:userId', basePath),
+    buildServerPath('/api/admin/auth/users/:userId'),
     adminAuth,
     async (req, res) => {
       try {

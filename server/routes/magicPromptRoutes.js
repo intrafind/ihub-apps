@@ -11,7 +11,7 @@ import logger from '../utils/logger.js';
 export default function registerMagicPromptRoutes(app, deps = {}) {
   const { basePath = '' } = deps;
   app.post(
-    buildServerPath('/api/magic-prompt', basePath),
+    buildServerPath('/api/magic-prompt'),
     authRequired,
     validate(magicPromptSchema),
     async (req, res) => {

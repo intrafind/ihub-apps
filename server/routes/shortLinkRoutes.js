@@ -19,7 +19,7 @@ import logger from '../utils/logger.js';
 
 export default function registerShortLinkRoutes(app, basePath = '') {
   app.post(
-    buildServerPath('/api/shortlinks', basePath),
+    buildServerPath('/api/shortlinks'),
     requireFeature('shortLinks'),
     authRequired,
     async (req, res) => {
@@ -49,7 +49,7 @@ export default function registerShortLinkRoutes(app, basePath = '') {
   );
 
   app.get(
-    buildServerPath('/api/shortlinks', basePath),
+    buildServerPath('/api/shortlinks'),
     requireFeature('shortLinks'),
     authRequired,
     async (req, res) => {
@@ -64,7 +64,7 @@ export default function registerShortLinkRoutes(app, basePath = '') {
   );
 
   app.get(
-    buildServerPath('/api/shortlinks/:code', basePath),
+    buildServerPath('/api/shortlinks/:code'),
     requireFeature('shortLinks'),
     authRequired,
     async (req, res) => {
@@ -79,7 +79,7 @@ export default function registerShortLinkRoutes(app, basePath = '') {
   );
 
   app.put(
-    buildServerPath('/api/shortlinks/:code', basePath),
+    buildServerPath('/api/shortlinks/:code'),
     requireFeature('shortLinks'),
     authRequired,
     async (req, res) => {
@@ -94,7 +94,7 @@ export default function registerShortLinkRoutes(app, basePath = '') {
   );
 
   app.delete(
-    buildServerPath('/api/shortlinks/:code', basePath),
+    buildServerPath('/api/shortlinks/:code'),
     requireFeature('shortLinks'),
     authRequired,
     async (req, res) => {
@@ -108,7 +108,7 @@ export default function registerShortLinkRoutes(app, basePath = '') {
     }
   );
 
-  app.get(buildServerPath('/s/:code', basePath), requireFeature('shortLinks'), async (req, res) => {
+  app.get(buildServerPath('/s/:code'), requireFeature('shortLinks'), async (req, res) => {
     try {
       const link = await recordUsage(req.params.code);
       if (!link) return res.status(404).send('Not found');
