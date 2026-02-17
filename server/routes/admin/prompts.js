@@ -1005,8 +1005,10 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
       const normalizedPromptFilePath = resolve(candidatePath);
 
       // Ensure the resolved path is within the prompts directory
-      if (!normalizedPromptFilePath.startsWith(normalizedPromptsDir + path.sep) &&
-          normalizedPromptFilePath !== normalizedPromptsDir) {
+      if (
+        !normalizedPromptFilePath.startsWith(normalizedPromptsDir + path.sep) &&
+        normalizedPromptFilePath !== normalizedPromptsDir
+      ) {
         return res.status(400).json({ error: 'Invalid prompt path' });
       }
 
