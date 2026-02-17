@@ -22,8 +22,10 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import SharedAppHeader from '../components/SharedAppHeader';
+import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 /**
  * Initialize variables with default values from app configuration
@@ -102,6 +104,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { platformConfig } = usePlatformConfig();
   const prefillMessage = searchParams.get('prefill') || '';
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
@@ -112,7 +115,8 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
-  const shareEnabled = app?.features?.shortLinks !== false;
+  const shareEnabled =
+    app?.features?.shortLinks !== false && platformConfig?.featuresMap?.shortLinks !== false;
 
   // Shared app settings hook
   const {
@@ -142,6 +146,10 @@ const AppChat = ({ preloadedApp = null }) => {
     setImageQuality,
     modelsLoading
   } = useAppSettings(appId, app);
+
+  // When tools feature is disabled platform-wide, hide tool UI entirely
+  const toolsFeatureEnabled = platformConfig?.featuresMap?.tools !== false;
+  const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
 
   // Apply settings and variables from URL parameters once app data is loaded
   useEffect(() => {
@@ -238,6 +246,8 @@ const AppChat = ({ preloadedApp = null }) => {
   const inputRef = useRef(null);
   const formRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
+  // Ref to store variables for resend operations to avoid race condition with state updates
+  const pendingVariablesRef = useRef(null);
 
   // Restore existing chat ID when the appId changes
   useEffect(() => {
@@ -387,7 +397,9 @@ const AppChat = ({ preloadedApp = null }) => {
           ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
           ...(thinkingBudget !== null ? { thinkingBudget } : {}),
           ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-          ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+          ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+            ? { enabledTools: effectiveEnabledTools }
+            : {}),
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {})
         };
@@ -455,7 +467,7 @@ const AppChat = ({ preloadedApp = null }) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
-    enabledTools,
+    effectiveEnabledTools,
     imageAspectRatio,
     imageQuality,
     sendChatMessage,
@@ -769,6 +781,9 @@ const AppChat = ({ preloadedApp = null }) => {
     // Restore variables if they exist
     if (variablesToRestore) {
       setVariables(variablesToRestore);
+      // Store variables in ref to ensure they're available for validation
+      // This avoids race condition with async state updates
+      pendingVariablesRef.current = variablesToRestore;
     }
 
     // Clear any existing selected files first
@@ -939,10 +954,14 @@ const AppChat = ({ preloadedApp = null }) => {
       return;
     }
 
+    // Use pending variables from ref if available (for resend operations),
+    // otherwise use the state variables. This avoids race condition with async state updates.
+    const currentVariables = pendingVariablesRef.current || variables;
+
     if (app?.variables) {
       const missingRequiredVars = app.variables
         .filter(v => v.required)
-        .filter(v => !variables[v.name] || variables[v.name].trim() === '');
+        .filter(v => !currentVariables[v.name] || currentVariables[v.name].trim() === '');
       if (missingRequiredVars.length > 0) {
         const errorMessage =
           t('error.missingRequiredFields', 'Please fill in all required fields:') +
@@ -952,6 +971,8 @@ const AppChat = ({ preloadedApp = null }) => {
         if (window.innerWidth < 768 && !showParameters) {
           toggleParameters();
         }
+        // Clear pending variables ref on validation failure
+        pendingVariablesRef.current = null;
         return;
       }
     }
@@ -1038,7 +1059,9 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
       ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
-      ...(enabledTools !== null && enabledTools !== undefined ? { enabledTools } : {}),
+      ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+        ? { enabledTools: effectiveEnabledTools }
+        : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {})
     };
@@ -1050,7 +1073,7 @@ const AppChat = ({ preloadedApp = null }) => {
     const validatedVariables = {};
     if (app?.variables && app.variables.length > 0) {
       app.variables.forEach(varConfig => {
-        const currentValue = variables[varConfig.name];
+        const currentValue = currentVariables[varConfig.name];
         const isEmptyOrWhitespace =
           currentValue === undefined ||
           currentValue === null ||
@@ -1140,6 +1163,8 @@ const AppChat = ({ preloadedApp = null }) => {
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();
+    // Clear pending variables ref after successful submission
+    pendingVariablesRef.current = null;
   };
 
   // Function to reload the current app
@@ -1236,8 +1261,8 @@ const AppChat = ({ preloadedApp = null }) => {
       showUndoMagicPrompt: magicPromptHandler.showUndoMagicPrompt,
       onUndoMagicPrompt: handleUndoMagicPrompt,
       magicPromptLoading: magicPromptHandler.magicLoading,
-      enabledTools,
-      onEnabledToolsChange: setEnabledTools,
+      enabledTools: effectiveEnabledTools,
+      onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
       // Image generation props
       model: currentModel,
       imageAspectRatio,
@@ -1250,16 +1275,20 @@ const AppChat = ({ preloadedApp = null }) => {
 
     // Always use ChatInput (which now has the NextGen design with model selector)
     return (
-      <ChatInput
-        {...commonProps}
-        models={models}
-        selectedModel={selectedModel}
-        onModelChange={setSelectedModel}
-        currentLanguage={currentLanguage}
-        showModelSelector={
-          app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
-        }
-      />
+      <>
+        <ChatInput
+          {...commonProps}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          currentLanguage={currentLanguage}
+          showModelSelector={
+            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+          }
+        />
+        {/* Show AI disclaimer after user has submitted at least one message */}
+        {messages.length > 0 && <AIDisclaimerBanner />}
+      </>
     );
   };
 
@@ -1306,7 +1335,7 @@ const AppChat = ({ preloadedApp = null }) => {
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
         thinkingThoughts={thinkingThoughts}
-        enabledTools={enabledTools}
+        enabledTools={effectiveEnabledTools}
         imageAspectRatio={imageAspectRatio}
         imageQuality={imageQuality}
         onModelChange={setSelectedModel}

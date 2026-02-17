@@ -309,7 +309,7 @@ class ToolExecutor {
     };
   }
 
-  async executeToolCall(toolCall, tools, chatId, buildLogData, user, app) {
+  async executeToolCall(toolCall, tools, chatId, buildLogData, user, app, userFileData = null) {
     const toolId =
       tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id ||
       toolCall.function.name;
@@ -345,6 +345,16 @@ class ToolExecutor {
       });
     }
 
+    logger.info({
+      component: 'ToolExecutor',
+      message: 'executeToolCall invoked',
+      chatId,
+      toolId,
+      isWorkflow: toolId.startsWith('workflow_'),
+      hasUserFileData: !!userFileData,
+      argKeys: Object.keys(args).join(', ')
+    });
+
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
     try {
@@ -370,7 +380,8 @@ class ToolExecutor {
           chatId,
           buildLogData,
           user,
-          app
+          app,
+          userFileData
         );
       }
 
@@ -500,17 +511,34 @@ class ToolExecutor {
    * Execute a passthrough tool and return result as assistant message
    * Passthrough tools stream their responses directly to the client
    */
-  async executePassthroughTool(toolCall, toolId, args, chatId, buildLogData, user, app) {
+  async executePassthroughTool(
+    toolCall,
+    toolId,
+    args,
+    chatId,
+    buildLogData,
+    user,
+    app,
+    userFileData = null
+  ) {
     try {
       // Call the tool with streaming/passthrough enabled
       // The tool should return a streaming response object when passthrough is true
-      const streamingResponse = await runTool(toolId, {
+      const toolParams = {
         ...args,
         chatId,
         user,
         passthrough: true, // Signal to the tool to return streaming response
         appConfig: app
-      });
+      };
+
+      // For workflow tools, pass file/image data so the workflow's inputFiles
+      // mechanism can inject file content into agent node messages
+      if (toolId.startsWith('workflow_') && userFileData) {
+        toolParams._fileData = userFileData;
+      }
+
+      const streamingResponse = await runTool(toolId, toolParams);
 
       let fullContent = '';
 
@@ -668,8 +696,22 @@ class ToolExecutor {
       maxTokens,
       responseFormat,
       responseSchema,
-      app
+      app,
+      userFileData
     } = prep;
+
+    // Debug: Log available tools and file data for workflow debugging
+    logger.info({
+      component: 'ToolExecutor',
+      message: 'processChatWithTools called',
+      chatId,
+      toolCount: tools?.length,
+      toolNames: tools?.map(t => t.id).join(', '),
+      hasUserFileData: !!userFileData,
+      userFileDataType: userFileData ? typeof userFileData : 'none',
+      userFileDataFileName: userFileData?.fileName || 'none'
+    });
+
     const controller = new AbortController();
 
     if (activeRequests.has(chatId)) {
@@ -930,7 +972,15 @@ class ToolExecutor {
       let hasStreamingTools = false;
       let hasClarificationRequest = false;
       for (const call of validToolCalls) {
-        const toolResult = await this.executeToolCall(call, tools, chatId, buildLogData, user, app);
+        const toolResult = await this.executeToolCall(
+          call,
+          tools,
+          chatId,
+          buildLogData,
+          user,
+          app,
+          userFileData
+        );
 
         if (toolResult.clarification) {
           // For clarification tools, stop processing and wait for user response
@@ -1006,7 +1056,8 @@ class ToolExecutor {
         getLocalizedError,
         clientLanguage,
         user,
-        app
+        app,
+        userFileData
       });
     } catch (error) {
       clearTimeout(timeoutId);
@@ -1052,7 +1103,8 @@ class ToolExecutor {
     getLocalizedError,
     clientLanguage,
     user,
-    app
+    app,
+    userFileData = null
   }) {
     const maxIterations = 10; // Prevent infinite loops
     let iteration = 0;
@@ -1277,7 +1329,8 @@ class ToolExecutor {
             chatId,
             buildLogData,
             user,
-            app
+            app,
+            userFileData
           );
 
           if (toolResult.clarification) {

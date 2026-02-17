@@ -1,0 +1,278 @@
+{
+  "id": "iterative-research-auto",
+  "name": {
+    "en": "Iterative Research (Autonomous)",
+    "de": "Iterative Recherche (Autonom)"
+  },
+  "chatIntegration": {
+    "enabled": true,
+    "primaryOutput": "finalReport",
+    "outputFormat": "markdown"
+  },
+  "description": {
+    "en": "Adaptive research workflow where each research cycle informs the next. The system discovers topics as it researches, accumulates findings, and generates a comprehensive report grounded in actual search results.",
+    "de": "Adaptiver Recherche-Workflow, bei dem jeder Recherchezyklus den nächsten beeinflusst. Das System entdeckt Themen während der Recherche, sammelt Ergebnisse und erstellt einen umfassenden Bericht basierend auf tatsächlichen Suchergebnissen."
+  },
+  "version": "3.0.0",
+  "enabled": true,
+  "config": {
+    "maxIterations": 30,
+    "allowCycles": true,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "allowedGroups": [],
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Start",
+        "de": "Start"
+      },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "task",
+            "type": "string",
+            "required": true,
+            "description": {
+              "en": "Research task or question to investigate",
+              "de": "Recherche-Aufgabe oder zu untersuchende Frage"
+            }
+          }
+        ],
+        "defaults": {
+          "findings": [],
+          "researchState": {
+            "iteration": 0,
+            "currentFocus": "",
+            "isComplete": false
+          }
+        }
+      }
+    },
+    {
+      "id": "thinker",
+      "type": "agent",
+      "name": {
+        "en": "Research Strategist",
+        "de": "Recherche-Stratege"
+      },
+      "position": { "x": 100, "y": 150 },
+      "config": {
+        "system": {
+          "en": "You are a research strategist specialized in building comprehensive profiles. Based on the original task and what has already been discovered, decide what to investigate next.\n\nFor PERSON SEARCHES, research these aspects systematically:\n1. Professional background & current role (company, title, responsibilities)\n2. Career history & timeline (previous positions, companies, dates)\n3. Education & qualifications (degrees, certifications, institutions)\n4. Notable achievements & projects (awards, publications, patents, open source)\n5. Company backgrounds (what the companies do, size, industry)\n6. Public presence (LinkedIn, GitHub, Twitter, speaking engagements, interviews)\n7. Professional network & affiliations (organizations, boards, communities)\n\nIMPORTANT RULES:\n1. If this is iteration 0, start with the person's current role and identity verification.\n2. Each iteration should focus on ONE specific aspect to get deep, quality information.\n3. You must set isComplete=false for iterations 0-2 (minimum 3 research cycles for thorough profiling).\n4. After iteration 2, you MAY set isComplete=true if you have a comprehensive picture.\n5. Maximum 5 iterations - you MUST complete by iteration 5.\n\nReturn your decision as valid JSON.",
+          "de": "Sie sind ein Recherche-Stratege, spezialisiert auf umfassende Profile. Basierend auf der ursprünglichen Aufgabe und dem, was bereits entdeckt wurde, entscheiden Sie, was als nächstes untersucht werden soll.\n\nFür PERSONENSUCHEN recherchieren Sie diese Aspekte systematisch:\n1. Beruflicher Hintergrund & aktuelle Rolle\n2. Karriereverlauf & Timeline (frühere Positionen, Unternehmen, Daten)\n3. Ausbildung & Qualifikationen\n4. Bemerkenswerte Erfolge & Projekte\n5. Unternehmenshintergründe\n6. Öffentliche Präsenz (LinkedIn, GitHub, Twitter, Vorträge)\n7. Berufliches Netzwerk & Mitgliedschaften\n\nWICHTIGE REGELN:\n1. Bei Iteration 0 beginnen Sie mit der aktuellen Rolle und Identitätsverifizierung.\n2. Jede Iteration sollte sich auf EINEN Aspekt konzentrieren.\n3. Sie müssen isComplete=false für Iterationen 0-2 setzen (mindestens 3 Zyklen).\n4. Nach Iteration 2 KÖNNEN Sie isComplete=true setzen.\n5. Maximum 5 Iterationen."
+        },
+        "prompt": {
+          "en": "ORIGINAL TASK: {{task}}\n\nCURRENT ITERATION: {{researchState.iteration}} (max 5)\n\nFINDINGS SO FAR:\n{{findings}}\n\nFor PERSON PROFILES, ensure you cover these aspects (in order of priority):\n1. Identity & Current Role - Who is this person? What do they do now?\n2. Career History - Where have they worked? What roles? When?\n3. Company Backgrounds - What do these companies do? Context matters.\n4. Achievements & Projects - What have they built, published, or accomplished?\n5. Education & Credentials - Formal qualifications\n6. Public Presence - Online profiles, speaking, publications\n\nAnalyze what aspects are already covered vs. missing. Choose the NEXT uncovered aspect.\n\n{{#compare researchState.iteration \"<\" 3}}NOTE: Minimum 3 research cycles required for comprehensive profiling. You MUST set isComplete to false.{{/compare}}\n{{#compare researchState.iteration \">=\" 4}}NOTE: This is iteration {{researchState.iteration}}. Wrap up with any remaining critical gaps.{{/compare}}\n\nReturn JSON:\n{\n  \"nextFocus\": \"specific aspect to research (e.g., 'Career history and timeline at previous companies')\",\n  \"reasoning\": \"What's missing from our profile and why this matters\",\n  \"isComplete\": false\n}",
+          "de": "URSPRÜNGLICHE AUFGABE: {{task}}\n\nAKTUELLE ITERATION: {{researchState.iteration}} (max 5)\n\nBISHERIGE ERGEBNISSE:\n{{findings}}\n\nFür PERSONENPROFILE stellen Sie sicher, dass Sie diese Aspekte abdecken:\n1. Identität & Aktuelle Rolle - Wer ist diese Person? Was macht sie jetzt?\n2. Karriereverlauf - Wo hat sie gearbeitet? Welche Rollen? Wann?\n3. Unternehmenshintergründe - Was machen diese Firmen?\n4. Erfolge & Projekte - Was hat sie gebaut, publiziert, erreicht?\n5. Ausbildung & Qualifikationen\n6. Öffentliche Präsenz - Online-Profile, Vorträge\n\nAnalysieren Sie, welche Aspekte bereits abgedeckt sind vs. fehlen.\n\n{{#compare researchState.iteration \"<\" 3}}HINWEIS: Mindestens 3 Zyklen für umfassendes Profiling. isComplete MUSS false sein.{{/compare}}\n\nJSON zurückgeben:\n{\n  \"nextFocus\": \"spezifischer Aspekt (z.B. 'Karriereverlauf bei früheren Firmen')\",\n  \"reasoning\": \"Was fehlt und warum ist das wichtig\",\n  \"isComplete\": false\n}"
+        },
+        "outputVariable": "thinking",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "nextFocus": { "type": "string" },
+            "reasoning": { "type": "string" },
+            "isComplete": { "type": "boolean" }
+          },
+          "required": ["nextFocus", "reasoning", "isComplete"]
+        }
+      }
+    },
+    {
+      "id": "update-focus",
+      "type": "transform",
+      "name": {
+        "en": "Update Research Focus",
+        "de": "Recherche-Fokus aktualisieren"
+      },
+      "position": { "x": 100, "y": 250 },
+      "config": {
+        "operations": [
+          { "copy": "thinking.nextFocus", "to": "researchState.currentFocus" },
+          { "copy": "thinking.isComplete", "to": "researchState.isComplete" }
+        ]
+      }
+    },
+    {
+      "id": "check-complete",
+      "type": "decision",
+      "name": {
+        "en": "Research Complete?",
+        "de": "Recherche abgeschlossen?"
+      },
+      "position": { "x": 100, "y": 350 },
+      "config": {
+        "type": "expression",
+        "expression": "$.data.researchState.iteration >= 3 && $.data.researchState.isComplete === true"
+      }
+    },
+    {
+      "id": "researcher",
+      "type": "agent",
+      "name": {
+        "en": "Web Researcher",
+        "de": "Web-Rechercheur"
+      },
+      "position": { "x": 100, "y": 450 },
+      "config": {
+        "system": {
+          "en": "You are an expert investigative researcher specialized in building comprehensive person and topic profiles. Use googleSearch extensively to gather REAL, VERIFIED information. DO NOT hallucinate or make up facts.\n\nRESEARCH STRATEGY:\n1. Use multiple targeted searches (3-5 per topic) with different angles\n2. For people: search \"[name] [company]\", \"[name] LinkedIn\", \"[name] interview\", \"[name] speaker\"\n3. For companies: search \"[company] about\", \"[company] founded\", \"[company] what they do\"\n4. Look for dates, timelines, and specific facts that can be verified\n\nINFORMATION TO EXTRACT:\n- For PEOPLE: Full name, current title, company, previous roles with dates, education, notable projects, public profiles, speaking engagements, publications, contributions\n- For COMPANIES: What they do, industry, founding date, size, location, notable products/services, key people\n- ALWAYS include specific dates, numbers, and verifiable facts\n- ALWAYS include source URLs for every piece of information\n\nCRITICAL RULES:\n1. You MUST use the googleSearch tool multiple times. Do not make up facts.\n2. Base your response ONLY on actual search results. Do not hallucinate.\n3. Be specific: \"Founded in 2015\" not \"Founded several years ago\"\n4. List actual URLs from your search results as sources.\n5. If search returns no useful results, state that clearly.",
+          "de": "Sie sind ein erfahrener investigativer Rechercheur, spezialisiert auf umfassende Personen- und Themenprofile. Verwenden Sie googleSearch um ECHTE, VERIFIZIERTE Informationen zu sammeln.\n\nRECHERCHE-STRATEGIE:\n1. Verwenden Sie mehrere gezielte Suchen (3-5 pro Thema) mit verschiedenen Blickwinkeln\n2. Für Personen: suchen Sie \"[Name] [Firma]\", \"[Name] LinkedIn\", \"[Name] Interview\"\n3. Für Unternehmen: suchen Sie \"[Firma] über\", \"[Firma] gegründet\"\n4. Suchen Sie nach Daten, Zeitachsen und spezifischen verifizierbaren Fakten\n\nZU EXTRAHIERENDE INFORMATIONEN:\n- Für PERSONEN: Name, Titel, Firma, frühere Rollen mit Daten, Ausbildung, Projekte, Profile\n- Für UNTERNEHMEN: Was sie tun, Branche, Gründungsdatum, Größe, Standort\n- IMMER spezifische Daten, Zahlen und verifizierbare Fakten\n- IMMER Quellen-URLs für jede Information\n\nWICHTIGE REGELN:\n1. Sie MÜSSEN googleSearch mehrfach verwenden.\n2. Basieren Sie Antworten NUR auf Suchergebnissen.\n3. Seien Sie spezifisch: \"Gegründet 2015\" nicht \"vor einigen Jahren gegründet\"\n4. Listen Sie echte URLs auf."
+        },
+        "prompt": {
+          "en": "BUILD A COMPREHENSIVE PROFILE\n\nTASK: {{task}}\nCURRENT RESEARCH FOCUS: {{researchState.currentFocus}}\n\nPREVIOUS FINDINGS (for context - avoid duplicating, build upon this):\n{{findings}}\n\nINSTRUCTIONS:\n1. Perform 3-5 targeted searches using googleSearch with different angles\n2. For person searches, try variations like:\n   - \"[name] [known company]\" for work context\n   - \"[name] LinkedIn profile\" for professional background\n   - \"[name] GitHub\" or \"[name] speaker\" for technical/public presence\n   - \"[name] interview\" or \"[name] podcast\" for quotes and insights\n3. For each piece of information, note the source URL\n4. Be specific with dates, numbers, and facts\n\nEXTRACT THESE DETAILS (when relevant to focus):\n- Current position: exact title, company, start date, responsibilities\n- Previous positions: company names, titles, dates (month/year if available)\n- Companies: what they do, industry, size, founding date, location\n- Education: institutions, degrees, graduation years\n- Projects/achievements: specific names, dates, impact\n- Public presence: profile URLs, speaking engagements, publications\n\nReturn JSON:\n{\n  \"topic\": \"{{researchState.currentFocus}}\",\n  \"summary\": \"Detailed 3-4 paragraph summary with specific facts and dates\",\n  \"keyFacts\": [\n    \"Specific verifiable fact 1 (source: URL)\",\n    \"Specific verifiable fact 2 (source: URL)\",\n    \"Include at least 5-8 key facts with sources\"\n  ],\n  \"details\": {\n    \"currentRole\": \"Current title at Company since Date\",\n    \"careerTimeline\": \"Chronological career history with dates\",\n    \"companies\": \"Background on companies mentioned\",\n    \"education\": \"Education background if found\",\n    \"achievements\": \"Notable projects, awards, contributions\",\n    \"publicPresence\": \"LinkedIn, GitHub, Twitter, speaking, publications\"\n  },\n  \"sources\": [\"url1\", \"url2\", \"url3\"],\n  \"limitations\": \"What couldn't be verified or found\"\n}",
+          "de": "ERSTELLEN SIE EIN UMFASSENDES PROFIL\n\nAUFGABE: {{task}}\nAKTUELLER RECHERCHE-FOKUS: {{researchState.currentFocus}}\n\nBISHERIGE ERGEBNISSE (als Kontext - vermeiden Sie Duplikate, bauen Sie darauf auf):\n{{findings}}\n\nANWEISUNGEN:\n1. Führen Sie 3-5 gezielte Suchen mit googleSearch durch\n2. Für Personensuchen, versuchen Sie Variationen wie:\n   - \"[Name] [bekannte Firma]\" für Arbeitskontext\n   - \"[Name] LinkedIn\" für beruflichen Hintergrund\n   - \"[Name] GitHub\" oder \"[Name] Vortrag\" für technische Präsenz\n3. Notieren Sie für jede Information die Quellen-URL\n4. Seien Sie spezifisch mit Daten, Zahlen und Fakten\n\nEXTRAHIEREN SIE DIESE DETAILS:\n- Aktuelle Position: Titel, Firma, Startdatum, Verantwortlichkeiten\n- Frühere Positionen: Firmennamen, Titel, Daten\n- Unternehmen: Was sie tun, Branche, Größe, Gründung\n- Ausbildung: Institutionen, Abschlüsse, Jahre\n- Projekte/Erfolge: Namen, Daten, Auswirkungen\n- Öffentliche Präsenz: Profil-URLs, Vorträge, Publikationen\n\nJSON zurückgeben:\n{\n  \"topic\": \"{{researchState.currentFocus}}\",\n  \"summary\": \"Detaillierte 3-4 Absatz Zusammenfassung mit Fakten und Daten\",\n  \"keyFacts\": [\"Mindestens 5-8 Fakten mit Quellen\"],\n  \"details\": {\n    \"currentRole\": \"Aktueller Titel bei Firma seit Datum\",\n    \"careerTimeline\": \"Chronologischer Karriereverlauf\",\n    \"companies\": \"Hintergrund zu Firmen\",\n    \"education\": \"Ausbildung\",\n    \"achievements\": \"Projekte, Auszeichnungen\",\n    \"publicPresence\": \"LinkedIn, GitHub, Vorträge\"\n  },\n  \"sources\": [\"url1\", \"url2\", \"url3\"],\n  \"limitations\": \"Was nicht gefunden wurde\"\n}"
+        },
+        "outputVariable": "currentResearch",
+        "tools": ["googleSearch"],
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "topic": { "type": "string" },
+            "summary": { "type": "string" },
+            "keyFacts": { "type": "array", "items": { "type": "string" } },
+            "details": { "type": "object" },
+            "sources": { "type": "array", "items": { "type": "string" } },
+            "limitations": { "type": "string" }
+          },
+          "required": ["topic", "summary", "keyFacts", "sources"]
+        }
+      }
+    },
+    {
+      "id": "accumulate-and-increment",
+      "type": "transform",
+      "name": {
+        "en": "Accumulate & Increment",
+        "de": "Sammeln & Erhöhen"
+      },
+      "position": { "x": 100, "y": 550 },
+      "config": {
+        "operations": [
+          { "push": "currentResearch", "to": "findings" },
+          { "increment": "researchState.iteration", "by": 1 }
+        ]
+      }
+    },
+    {
+      "id": "max-iterations-check",
+      "type": "decision",
+      "name": {
+        "en": "Max Iterations?",
+        "de": "Max. Iterationen?"
+      },
+      "position": { "x": 100, "y": 650 },
+      "config": {
+        "type": "expression",
+        "expression": "$.data.researchState.iteration >= 5"
+      }
+    },
+    {
+      "id": "report-generator",
+      "type": "agent",
+      "name": {
+        "en": "Report Generator",
+        "de": "Bericht-Generator"
+      },
+      "position": { "x": 100, "y": 750 },
+      "config": {
+        "system": {
+          "en": "You are an expert report writer. Create comprehensive, well-structured research reports.\n\nCRITICAL RULES:\n1. Base your report ONLY on the research findings provided. Do NOT add information that isn't in the findings.\n2. Cite specific facts and sources from the findings.\n3. If findings are limited, acknowledge the limitations rather than making up information.\n4. Use markdown formatting for structure and readability.\n5. Include all sources referenced in the findings.",
+          "de": "Sie sind ein erfahrener Berichtschreiber. Erstellen Sie umfassende, gut strukturierte Recherche-Berichte.\n\nWICHTIGE REGELN:\n1. Basieren Sie Ihren Bericht NUR auf den bereitgestellten Rechercheergebnissen.\n2. Zitieren Sie spezifische Fakten und Quellen.\n3. Bei begrenzten Ergebnissen erkennen Sie die Einschränkungen an.\n4. Verwenden Sie Markdown-Formatierung.\n5. Fügen Sie alle referenzierten Quellen ein."
+        },
+        "prompt": {
+          "en": "[Final step {{_currentStep}}/{{_totalNodes}}] Create a comprehensive research report.\n\nORIGINAL TASK: {{task}}\n\nRESEARCH FINDINGS (JSON array with all collected research - use ONLY this information):\n{{findings}}\n\nWrite a well-structured markdown report synthesizing all the findings above.\n\nCITATION REQUIREMENTS:\n- Number all sources [1], [2], [3], etc. in the order they appear\n- Cite sources inline where information is used, e.g., \"According to research [1], ...\"\n- Include a numbered References section at the end matching the inline citations\n\nInclude these sections:\n1. **Executive Summary** - Brief overview with key citations\n2. **Introduction** - Context and research scope\n3. **Findings** - Detailed synthesis organized thematically (combine related topics, cite sources inline)\n4. **Key Insights** - Important patterns and conclusions with supporting citations\n5. **Limitations** - What wasn't covered or couldn't be verified\n6. **References** - Numbered list matching inline citations:\n   [1] Source URL or description\n   [2] Source URL or description\n   ...\n\nIMPORTANT: Only include information from the findings JSON. Do not add external knowledge.",
+          "de": "[Letzter Schritt {{_currentStep}}/{{_totalNodes}}] Erstellen Sie einen umfassenden Recherche-Bericht.\n\nURSPRÜNGLICHE AUFGABE: {{task}}\n\nRECHERCHEERGEBNISSE (JSON-Array mit allen gesammelten Recherchen - verwenden Sie NUR diese Informationen):\n{{findings}}\n\nSchreiben Sie einen gut strukturierten Markdown-Bericht, der alle obigen Ergebnisse zusammenfasst.\n\nZITIER-ANFORDERUNGEN:\n- Nummerieren Sie alle Quellen [1], [2], [3], usw. in der Reihenfolge ihres Erscheinens\n- Zitieren Sie Quellen inline, z.B. \"Laut Recherche [1], ...\"\n- Fügen Sie am Ende eine nummerierte Referenzliste ein, die den Inline-Zitaten entspricht\n\nEnthalten Sie diese Abschnitte:\n1. **Zusammenfassung** - Kurzer Überblick mit wichtigen Zitaten\n2. **Einführung** - Kontext und Recherche-Umfang\n3. **Ergebnisse** - Detaillierte Synthese thematisch geordnet (Quellen inline zitieren)\n4. **Wichtige Erkenntnisse** - Muster und Schlussfolgerungen mit Quellenangaben\n5. **Einschränkungen** - Was nicht abgedeckt werden konnte\n6. **Referenzen** - Nummerierte Liste:\n   [1] Quellen-URL oder Beschreibung\n   [2] Quellen-URL oder Beschreibung\n   ...\n\nWICHTIG: Nur Informationen aus dem Findings-JSON verwenden."
+        },
+        "outputVariable": "finalReport"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Complete",
+        "de": "Abgeschlossen"
+      },
+      "position": { "x": 100, "y": 850 },
+      "config": {
+        "outputVariables": ["task", "findings", "finalReport", "researchState"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-thinker",
+      "source": "start",
+      "target": "thinker"
+    },
+    {
+      "id": "edge-thinker-update",
+      "source": "thinker",
+      "target": "update-focus"
+    },
+    {
+      "id": "edge-update-check",
+      "source": "update-focus",
+      "target": "check-complete"
+    },
+    {
+      "id": "edge-check-complete-yes",
+      "source": "check-complete",
+      "target": "report-generator",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "true"
+      }
+    },
+    {
+      "id": "edge-check-complete-no",
+      "source": "check-complete",
+      "target": "researcher",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "false"
+      }
+    },
+    {
+      "id": "edge-researcher-accumulate",
+      "source": "researcher",
+      "target": "accumulate-and-increment"
+    },
+    {
+      "id": "edge-accumulate-maxcheck",
+      "source": "accumulate-and-increment",
+      "target": "max-iterations-check"
+    },
+    {
+      "id": "edge-maxcheck-yes",
+      "source": "max-iterations-check",
+      "target": "report-generator",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "true"
+      }
+    },
+    {
+      "id": "edge-maxcheck-no",
+      "source": "max-iterations-check",
+      "target": "thinker",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "false"
+      }
+    },
+    {
+      "id": "edge-report-end",
+      "source": "report-generator",
+      "target": "end"
+    }
+  ]
+}

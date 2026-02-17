@@ -1,0 +1,423 @@
+{
+  "id": "iterative-research-human",
+  "name": {
+    "en": "Iterative Research (Human Review)",
+    "de": "Iterative Recherche (Manuelle Prüfung)"
+  },
+  "description": {
+    "en": "Multi-step research with human checkpoints for plan and research approval. You control when to proceed at each stage.",
+    "de": "Mehrstufige Recherche mit manuellen Prüfpunkten für Plan- und Recherche-Genehmigung. Sie kontrollieren jeden Schritt."
+  },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "maxIterations": 30,
+    "allowCycles": true,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "allowedGroups": [],
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Start",
+        "de": "Start"
+      },
+      "position": { "x": 100, "y": 50 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "task",
+            "type": "string",
+            "required": true,
+            "description": {
+              "en": "Research task or question to investigate",
+              "de": "Recherche-Aufgabe oder zu untersuchende Frage"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "planner",
+      "type": "agent",
+      "name": {
+        "en": "Research Planner",
+        "de": "Recherche-Planer"
+      },
+      "position": { "x": 100, "y": 130 },
+      "config": {
+        "system": {
+          "en": "You are a research planner. Break down research tasks into 3-5 specific, focused topics. Each topic should be concrete enough for a single research session. Return your plan as valid JSON with 'topics' array and 'approach' string.",
+          "de": "Sie sind ein Recherche-Planer. Teilen Sie Recherche-Aufgaben in 3-5 spezifische, fokussierte Themen auf. Jedes Thema sollte konkret genug für eine einzelne Recherchesitzung sein. Geben Sie Ihren Plan als gültiges JSON mit 'topics'-Array und 'approach'-String zurück."
+        },
+        "prompt": {
+          "en": "Create a research plan for: {{task}}\n\n{{#if humanResponse_plan_checkpoint.data.feedback}}Feedback from your review: {{humanResponse_plan_checkpoint.data.feedback}}\nPlease address this feedback in your revised plan.{{/if}}\n\nReturn JSON format:\n{\n  \"topics\": [\"topic 1\", \"topic 2\", \"topic 3\"],\n  \"approach\": \"description of research approach\"\n}",
+          "de": "Erstellen Sie einen Recherche-Plan für: {{task}}\n\n{{#if humanResponse_plan_checkpoint.data.feedback}}Feedback aus Ihrer Prüfung: {{humanResponse_plan_checkpoint.data.feedback}}\nBitte berücksichtigen Sie dieses Feedback in Ihrem überarbeiteten Plan.{{/if}}\n\nJSON-Format zurückgeben:\n{\n  \"topics\": [\"Thema 1\", \"Thema 2\", \"Thema 3\"],\n  \"approach\": \"Beschreibung des Recherche-Ansatzes\"\n}"
+        },
+        "outputVariable": "researchPlan",
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "topics": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "approach": {
+              "type": "string"
+            }
+          },
+          "required": ["topics", "approach"]
+        }
+      }
+    },
+    {
+      "id": "plan-checkpoint",
+      "type": "human",
+      "name": {
+        "en": "Review Plan",
+        "de": "Plan prüfen"
+      },
+      "position": { "x": 100, "y": 210 },
+      "config": {
+        "message": {
+          "en": "Review the research plan below. Is it comprehensive and well-structured for the task?",
+          "de": "Prüfen Sie den Recherche-Plan unten. Ist er umfassend und gut strukturiert für die Aufgabe?"
+        },
+        "options": [
+          {
+            "value": "approve",
+            "label": {
+              "en": "Approve & Start Research",
+              "de": "Genehmigen & Recherche starten"
+            },
+            "style": "primary"
+          },
+          {
+            "value": "revise",
+            "label": {
+              "en": "Request Revision",
+              "de": "Überarbeitung anfordern"
+            },
+            "style": "secondary"
+          }
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "feedback": {
+              "type": "string",
+              "title": "Feedback (optional)",
+              "description": "Provide feedback for revisions"
+            }
+          }
+        },
+        "showData": ["$.data.researchPlan"]
+      }
+    },
+    {
+      "id": "research-init",
+      "type": "transform",
+      "name": {
+        "en": "Initialize Research",
+        "de": "Recherche initialisieren"
+      },
+      "position": { "x": 100, "y": 290 },
+      "config": {
+        "operations": [
+          { "lengthOf": "researchPlan.topics", "to": "_topicsCount" },
+          { "arrayGet": "researchPlan.topics", "index": 0, "to": "_firstTopic" },
+          {
+            "set": "researchState",
+            "value": {
+              "currentIndex": 0,
+              "allComplete": false,
+              "completedTopics": []
+            }
+          },
+          { "copy": "_topicsCount", "to": "researchState.total" },
+          { "copy": "_firstTopic", "to": "researchState.currentTopic" }
+        ]
+      }
+    },
+    {
+      "id": "init-findings",
+      "type": "transform",
+      "name": {
+        "en": "Initialize Findings",
+        "de": "Ergebnisse initialisieren"
+      },
+      "position": { "x": 100, "y": 370 },
+      "config": {
+        "operations": [{ "set": "allFindings", "value": [] }]
+      }
+    },
+    {
+      "id": "researcher",
+      "type": "agent",
+      "name": {
+        "en": "Topic Researcher",
+        "de": "Themen-Rechercheur"
+      },
+      "position": { "x": 100, "y": 450 },
+      "config": {
+        "system": {
+          "en": "You are a thorough researcher. Research ONE specific topic using web search. Provide detailed findings with key facts and sources. Return your findings as valid JSON.",
+          "de": "Sie sind ein gründlicher Rechercheur. Recherchieren Sie EIN spezifisches Thema mit Websuche. Liefern Sie detaillierte Ergebnisse mit Fakten und Quellen. Geben Sie Ihre Ergebnisse als gültiges JSON zurück."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}, iteration {{_currentNodeIteration}}] Research this topic: {{researchState.currentTopic}}\n\nContext - Overall task: {{task}}\nResearch approach: {{researchPlan.approach}}\n\n{{#if humanResponse_research_checkpoint.data.feedback}}Feedback from your review: {{humanResponse_research_checkpoint.data.feedback}}\nPlease address this feedback and improve your research.{{/if}}\n\nUse web search to find current, reliable information.\n\nReturn JSON:\n{\n  \"topic\": \"{{researchState.currentTopic}}\",\n  \"summary\": \"comprehensive summary of findings\",\n  \"keyFacts\": [\"fact 1\", \"fact 2\", \"fact 3\"],\n  \"sources\": [\"source 1\", \"source 2\"]\n}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}, Iteration {{_currentNodeIteration}}] Recherchieren Sie dieses Thema: {{researchState.currentTopic}}\n\nKontext - Gesamtaufgabe: {{task}}\nRecherche-Ansatz: {{researchPlan.approach}}\n\n{{#if humanResponse_research_checkpoint.data.feedback}}Feedback aus Ihrer Prüfung: {{humanResponse_research_checkpoint.data.feedback}}\nBitte berücksichtigen Sie dieses Feedback.{{/if}}\n\nVerwenden Sie Websuche für aktuelle, zuverlässige Informationen.\n\nJSON zurückgeben:\n{\n  \"topic\": \"{{researchState.currentTopic}}\",\n  \"summary\": \"umfassende Zusammenfassung\",\n  \"keyFacts\": [\"Fakt 1\", \"Fakt 2\", \"Fakt 3\"],\n  \"sources\": [\"Quelle 1\", \"Quelle 2\"]\n}"
+        },
+        "outputVariable": "currentResearch",
+        "tools": ["googleSearch"],
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "topic": { "type": "string" },
+            "summary": { "type": "string" },
+            "keyFacts": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "sources": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          },
+          "required": ["topic", "summary", "keyFacts", "sources"]
+        }
+      }
+    },
+    {
+      "id": "research-checkpoint",
+      "type": "human",
+      "name": {
+        "en": "Review Research",
+        "de": "Recherche prüfen"
+      },
+      "position": { "x": 100, "y": 530 },
+      "config": {
+        "message": {
+          "en": "Review the research for this topic. Is it thorough enough to include in the final report?",
+          "de": "Prüfen Sie die Recherche für dieses Thema. Ist sie gründlich genug für den Abschlussbericht?"
+        },
+        "options": [
+          {
+            "value": "approve",
+            "label": {
+              "en": "Approve & Continue",
+              "de": "Genehmigen & Fortfahren"
+            },
+            "style": "primary"
+          },
+          {
+            "value": "revise",
+            "label": {
+              "en": "Request More Research",
+              "de": "Weitere Recherche anfordern"
+            },
+            "style": "secondary"
+          }
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "feedback": {
+              "type": "string",
+              "title": "Feedback (optional)",
+              "description": "Provide feedback for the researcher"
+            }
+          }
+        },
+        "showData": ["$.data.currentResearch", "$.data.researchState"]
+      }
+    },
+    {
+      "id": "accumulator",
+      "type": "transform",
+      "name": {
+        "en": "Accumulate Findings",
+        "de": "Ergebnisse sammeln"
+      },
+      "position": { "x": 100, "y": 610 },
+      "config": {
+        "operations": [{ "push": "currentResearch", "to": "allFindings" }]
+      }
+    },
+    {
+      "id": "topic-controller",
+      "type": "transform",
+      "name": {
+        "en": "Topic Controller",
+        "de": "Themen-Controller"
+      },
+      "position": { "x": 100, "y": 690 },
+      "config": {
+        "operations": [
+          { "push": "researchState.currentTopic", "to": "researchState.completedTopics" },
+          { "increment": "researchState.currentIndex", "by": 1 },
+          {
+            "condition": "researchState.currentIndex >= researchState.total",
+            "to": "researchState.allComplete",
+            "then": true,
+            "else": false
+          },
+          {
+            "arrayGet": "researchPlan.topics",
+            "index": "researchState.currentIndex",
+            "to": "researchState.currentTopic"
+          }
+        ]
+      }
+    },
+    {
+      "id": "topics-decision",
+      "type": "decision",
+      "name": {
+        "en": "All Topics Complete?",
+        "de": "Alle Themen abgeschlossen?"
+      },
+      "position": { "x": 100, "y": 770 },
+      "config": {
+        "type": "expression",
+        "expression": "$.data.researchState.allComplete === true"
+      }
+    },
+    {
+      "id": "report-generator",
+      "type": "agent",
+      "name": {
+        "en": "Report Generator",
+        "de": "Bericht-Generator"
+      },
+      "position": { "x": 100, "y": 850 },
+      "config": {
+        "system": {
+          "en": "You are an expert report writer. Create comprehensive, well-structured research reports that synthesize all findings into a cohesive narrative. Use markdown formatting for the report.",
+          "de": "Sie sind ein erfahrener Berichtschreiber. Erstellen Sie umfassende, gut strukturierte Recherche-Berichte, die alle Ergebnisse zu einer zusammenhängenden Darstellung verbinden. Verwenden Sie Markdown-Formatierung."
+        },
+        "prompt": {
+          "en": "[Final step {{_currentStep}}/{{_totalNodes}}] Create a comprehensive research report based on:\n\nOriginal Task: {{task}}\n\nResearch Approach: {{researchPlan.approach}}\n\nResearch Findings (JSON array):\n{{allFindings}}\n\nWrite a well-structured markdown report synthesizing all the findings above.\n\nCITATION REQUIREMENTS:\n- Number all sources [1], [2], [3], etc. in the order they appear\n- Cite sources inline where information is used, e.g., \"According to research [1], ...\"\n- Include a numbered References section at the end matching the inline citations\n\nInclude these sections:\n1. **Executive Summary** - Brief overview with key citations\n2. **Introduction** - Context and research scope\n3. **Detailed Findings** - Organized thematically with inline source citations\n4. **Key Insights & Patterns** - Conclusions with supporting citations\n5. **Limitations** - What wasn't covered\n6. **References** - Numbered list:\n   [1] Source URL or description\n   [2] Source URL or description\n   ...\n\nIMPORTANT: Only include information from the findings. Do not add external knowledge.",
+          "de": "[Letzter Schritt {{_currentStep}}/{{_totalNodes}}] Erstellen Sie einen umfassenden Recherche-Bericht basierend auf:\n\nUrsprüngliche Aufgabe: {{task}}\n\nRecherche-Ansatz: {{researchPlan.approach}}\n\nRechercheergebnisse (JSON-Array):\n{{allFindings}}\n\nSchreiben Sie einen gut strukturierten Markdown-Bericht, der alle obigen Ergebnisse zusammenfasst.\n\nZITIER-ANFORDERUNGEN:\n- Nummerieren Sie alle Quellen [1], [2], [3], usw.\n- Zitieren Sie Quellen inline, z.B. \"Laut Recherche [1], ...\"\n- Fügen Sie am Ende eine nummerierte Referenzliste ein\n\nEnthalten Sie diese Abschnitte:\n1. **Zusammenfassung** - Kurzer Überblick mit Zitaten\n2. **Einführung** - Kontext und Umfang\n3. **Detaillierte Ergebnisse** - Thematisch geordnet mit Inline-Zitaten\n4. **Wichtige Erkenntnisse & Muster** - Schlussfolgerungen mit Quellenangaben\n5. **Einschränkungen** - Was nicht abgedeckt wurde\n6. **Referenzen** - Nummerierte Liste:\n   [1] Quellen-URL\n   [2] Quellen-URL\n   ...\n\nWICHTIG: Nur Informationen aus den Ergebnissen verwenden."
+        },
+        "outputVariable": "finalReport"
+      }
+    },
+    {
+      "id": "end",
+      "type": "end",
+      "name": {
+        "en": "Complete",
+        "de": "Abgeschlossen"
+      },
+      "position": { "x": 100, "y": 930 },
+      "config": {
+        "outputVariables": ["task", "researchPlan", "allFindings", "finalReport"]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-planner",
+      "source": "start",
+      "target": "planner"
+    },
+    {
+      "id": "edge-planner-checkpoint",
+      "source": "planner",
+      "target": "plan-checkpoint"
+    },
+    {
+      "id": "edge-plan-revise",
+      "source": "plan-checkpoint",
+      "target": "planner",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "revise"
+      }
+    },
+    {
+      "id": "edge-plan-approve",
+      "source": "plan-checkpoint",
+      "target": "research-init",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "approve"
+      }
+    },
+    {
+      "id": "edge-init-findings",
+      "source": "research-init",
+      "target": "init-findings"
+    },
+    {
+      "id": "edge-findings-researcher",
+      "source": "init-findings",
+      "target": "researcher"
+    },
+    {
+      "id": "edge-researcher-checkpoint",
+      "source": "researcher",
+      "target": "research-checkpoint"
+    },
+    {
+      "id": "edge-research-revise",
+      "source": "research-checkpoint",
+      "target": "researcher",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "revise"
+      }
+    },
+    {
+      "id": "edge-research-approve",
+      "source": "research-checkpoint",
+      "target": "accumulator",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "approve"
+      }
+    },
+    {
+      "id": "edge-accumulator-controller",
+      "source": "accumulator",
+      "target": "topic-controller"
+    },
+    {
+      "id": "edge-controller-decision",
+      "source": "topic-controller",
+      "target": "topics-decision"
+    },
+    {
+      "id": "edge-topics-more",
+      "source": "topics-decision",
+      "target": "researcher",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "false"
+      }
+    },
+    {
+      "id": "edge-topics-complete",
+      "source": "topics-decision",
+      "target": "report-generator",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "true"
+      }
+    },
+    {
+      "id": "edge-report-end",
+      "source": "report-generator",
+      "target": "end"
+    }
+  ]
+}

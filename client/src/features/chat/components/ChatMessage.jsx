@@ -9,6 +9,7 @@ import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
+import WorkflowStepIndicator from './WorkflowStepIndicator';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -460,12 +461,14 @@ const ChatMessage = ({
       );
     }
 
-    if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+    // Check effective format: message-level metadata overrides app-level prop
+    const effectiveFormat = outputFormatFromMessage || outputFormat;
+    if (!isUser && (effectiveFormat === 'markdown' || effectiveFormat === 'json')) {
       let mdContent = contentToRender;
 
       // Check if we should use custom renderer (prioritize message metadata over app prop)
       const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
-      const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
+      const effectiveOutputFormat = effectiveFormat;
 
       // For JSON output with custom renderer, wait until message is complete
       if (effectiveOutputFormat === 'json' && customRendererName) {
@@ -537,6 +540,15 @@ const ChatMessage = ({
             : 'w-full'
         }
       >
+        {/* Unified workflow step progress indicator */}
+        {!isUser && message.workflowSteps?.length > 0 && (
+          <WorkflowStepIndicator
+            steps={message.workflowSteps}
+            currentStep={message.workflowStep}
+            result={message.workflowResult}
+            loading={message.loading}
+          />
+        )}
         {/* Show just the question for answered clarifications (at top of bubble) */}
         {!isUser && message.clarification && message.clarificationAnswered && (
           <div className="flex items-start gap-2">
@@ -691,6 +703,8 @@ const ChatMessage = ({
             onSkip={onClarificationSkip}
           />
         )}
+
+        {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
       </div>
 
       {/* Info about finish reason and retry options */}

@@ -1,0 +1,207 @@
+{
+  "id": "approval-workflow",
+  "name": {
+    "en": "Research with Approval",
+    "de": "Recherche mit Genehmigung"
+  },
+  "description": {
+    "en": "Demonstrates a workflow with human checkpoint. The workflow researches a topic, then pauses for your approval before summarizing.",
+    "de": "Demonstriert einen Workflow mit menschlicher Prüfung. Der Workflow recherchiert ein Thema und wartet auf Ihre Genehmigung, bevor er zusammenfasst."
+  },
+  "version": "1.2.0",
+  "enabled": true,
+  "config": {
+    "maxIterations": 5,
+    "allowCycles": true,
+    "defaultModelId": "gemini-3.0-flash"
+  },
+  "allowedGroups": [],
+  "nodes": [
+    {
+      "id": "start",
+      "type": "start",
+      "name": {
+        "en": "Start",
+        "de": "Start"
+      },
+      "position": { "x": 100, "y": 100 },
+      "config": {
+        "inputVariables": [
+          {
+            "name": "topic",
+            "type": "string",
+            "required": true,
+            "description": {
+              "en": "Topic to research",
+              "de": "Zu recherchierendes Thema"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "id": "research",
+      "type": "agent",
+      "name": {
+        "en": "Research Topic",
+        "de": "Thema recherchieren"
+      },
+      "position": { "x": 100, "y": 200 },
+      "config": {
+        "system": {
+          "en": "You are a research assistant. Research the given topic and provide key findings. If you have received feedback from a previous revision, incorporate it into your research.",
+          "de": "Sie sind ein Recherche-Assistent. Recherchieren Sie das gegebene Thema und liefern Sie die wichtigsten Erkenntnisse. Wenn Sie Feedback aus einer vorherigen Überarbeitung erhalten haben, beziehen Sie es in Ihre Recherche ein."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}, iteration {{_currentNodeIteration}}] Research the following topic and provide 3-5 key points: {{topic}}\n\n{{#if humanResponse_approval.data.feedback}}Previous feedback to address: {{humanResponse_approval.data.feedback}}{{/if}}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}, Iteration {{_currentNodeIteration}}] Recherchieren Sie das folgende Thema und liefern Sie 3-5 Kernpunkte: {{topic}}\n\n{{#if humanResponse_approval.data.feedback}}Vorheriges Feedback zu berücksichtigen: {{humanResponse_approval.data.feedback}}{{/if}}"
+        },
+        "outputVariable": "research_results",
+        "tools": ["googleSearch"]
+      }
+    },
+    {
+      "id": "approval",
+      "type": "human",
+      "name": {
+        "en": "Review Research",
+        "de": "Recherche prüfen"
+      },
+      "position": { "x": 100, "y": 300 },
+      "config": {
+        "message": {
+          "en": "Please review the research results below and decide how to proceed.",
+          "de": "Bitte prüfen Sie die Rechercheergebnisse unten und entscheiden Sie, wie fortgefahren werden soll."
+        },
+        "options": [
+          {
+            "value": "approve",
+            "label": {
+              "en": "Approve & Summarize",
+              "de": "Genehmigen & Zusammenfassen"
+            },
+            "style": "primary"
+          },
+          {
+            "value": "reject",
+            "label": {
+              "en": "Reject",
+              "de": "Ablehnen"
+            },
+            "style": "danger"
+          },
+          {
+            "value": "revise",
+            "label": {
+              "en": "Request Revision",
+              "de": "Überarbeitung anfordern"
+            },
+            "style": "secondary"
+          }
+        ],
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "feedback": {
+              "type": "string",
+              "title": "Feedback (optional)"
+            }
+          }
+        },
+        "showData": ["$.data.research_results"]
+      }
+    },
+    {
+      "id": "summarize",
+      "type": "agent",
+      "name": {
+        "en": "Create Summary",
+        "de": "Zusammenfassung erstellen"
+      },
+      "position": { "x": 100, "y": 450 },
+      "config": {
+        "system": {
+          "en": "You are a writing assistant. Create a concise summary from the research.",
+          "de": "Sie sind ein Schreibassistent. Erstellen Sie eine prägnante Zusammenfassung aus der Recherche."
+        },
+        "prompt": {
+          "en": "[Step {{_currentStep}}/{{_totalNodes}}] Create a concise summary of the following research:\n\n{{research_results}}\n\nUser feedback: {{humanResponse_approval.data.feedback}}",
+          "de": "[Schritt {{_currentStep}}/{{_totalNodes}}] Erstellen Sie eine prägnante Zusammenfassung der folgenden Recherche:\n\n{{research_results}}\n\nBenutzer-Feedback: {{humanResponse_approval.data.feedback}}"
+        },
+        "outputVariable": "summary"
+      }
+    },
+    {
+      "id": "end-approved",
+      "type": "end",
+      "name": {
+        "en": "Completed",
+        "de": "Abgeschlossen"
+      },
+      "position": { "x": 100, "y": 550 },
+      "config": {
+        "outputVariables": ["topic", "research_results", "summary"]
+      }
+    },
+    {
+      "id": "end-rejected",
+      "type": "end",
+      "name": {
+        "en": "Rejected",
+        "de": "Abgelehnt"
+      },
+      "position": { "x": 300, "y": 450 },
+      "config": {
+        "outputVariables": ["topic", "research_results"],
+        "status": "rejected"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "edge-start-research",
+      "source": "start",
+      "target": "research"
+    },
+    {
+      "id": "edge-research-approval",
+      "source": "research",
+      "target": "approval"
+    },
+    {
+      "id": "edge-approval-approve",
+      "source": "approval",
+      "target": "summarize",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "approve"
+      }
+    },
+    {
+      "id": "edge-approval-reject",
+      "source": "approval",
+      "target": "end-rejected",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "reject"
+      }
+    },
+    {
+      "id": "edge-approval-revise",
+      "source": "approval",
+      "target": "research",
+      "condition": {
+        "type": "equals",
+        "field": "result.branch",
+        "value": "revise"
+      }
+    },
+    {
+      "id": "edge-summarize-end",
+      "source": "summarize",
+      "target": "end-approved"
+    }
+  ]
+}

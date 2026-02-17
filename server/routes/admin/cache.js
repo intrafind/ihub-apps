@@ -9,7 +9,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminCacheRoutes(app, basePath = '') {
-  app.get(buildServerPath('/api/admin/usage', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/usage'), adminAuth, async (req, res) => {
     try {
       const data = await getUsage();
       res.json(data);
@@ -19,7 +19,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
     }
   });
 
-  app.get(buildServerPath('/api/admin/cache/stats', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/cache/stats'), adminAuth, async (req, res) => {
     try {
       const stats = configCache.getStats();
       res.json(stats);
@@ -29,7 +29,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
     }
   });
 
-  app.post(buildServerPath('/api/admin/cache/_refresh', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/cache/_refresh'), adminAuth, async (req, res) => {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
@@ -39,12 +39,12 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
     }
   });
 
-  app.get(buildServerPath('/api/admin/cache/_refresh', basePath), adminAuth, (req, res, next) => {
+  app.get(buildServerPath('/api/admin/cache/_refresh'), adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
-  app.post(buildServerPath('/api/admin/cache/_clear', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/cache/_clear'), adminAuth, async (req, res) => {
     try {
       configCache.clear();
       await configCache.initialize();
@@ -55,12 +55,12 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
     }
   });
 
-  app.get(buildServerPath('/api/admin/cache/_clear', basePath), adminAuth, (req, res, next) => {
+  app.get(buildServerPath('/api/admin/cache/_clear'), adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });
 
-  app.post(buildServerPath('/api/admin/client/_refresh', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/client/_refresh'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
@@ -86,7 +86,7 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
     }
   });
 
-  app.get(buildServerPath('/api/admin/client/_refresh', basePath), adminAuth, (req, res, next) => {
+  app.get(buildServerPath('/api/admin/client/_refresh'), adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
   });

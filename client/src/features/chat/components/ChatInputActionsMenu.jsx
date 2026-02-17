@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchToolsBasic } from '../../../api/api';
+import { apiClient } from '../../../api/client';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
@@ -70,7 +71,7 @@ const ChatInputActionsMenu = ({
     }
   };
 
-  // Load tools when component mounts
+  // Load tools and workflow metadata when component mounts
   useEffect(() => {
     const loadTools = async () => {
       if (!app?.tools || app.tools.length === 0) return;
@@ -78,7 +79,37 @@ const ChatInputActionsMenu = ({
       try {
         setToolsLoading(true);
         const tools = await fetchToolsBasic();
-        setAvailableTools(tools || []);
+        const allTools = [...(tools || [])];
+
+        // Fetch workflow metadata for workflow tool entries
+        const hasWorkflowTools = app.tools.some(
+          t => typeof t === 'string' && t.startsWith('workflow:')
+        );
+        if (hasWorkflowTools) {
+          try {
+            const { data: workflows } = await apiClient.get('/workflows');
+            if (Array.isArray(workflows)) {
+              const lang = t('common.language', 'en');
+              for (const wf of workflows) {
+                const wfName = typeof wf.name === 'object' ? wf.name[lang] || wf.name.en : wf.name;
+                const wfDesc =
+                  typeof wf.description === 'object'
+                    ? wf.description[lang] || wf.description.en
+                    : wf.description;
+                // Register under both the app.tools key and the runtime tool ID
+                allTools.push({
+                  id: `workflow:${wf.id}`,
+                  name: wfName || wf.id,
+                  description: wfDesc
+                });
+              }
+            }
+          } catch {
+            // Workflows endpoint may not be available — fall back to raw IDs
+          }
+        }
+
+        setAvailableTools(allTools);
       } catch (error) {
         console.error('Failed to fetch tools:', error);
         setAvailableTools([]);
@@ -88,7 +119,7 @@ const ChatInputActionsMenu = ({
     };
 
     loadTools();
-  }, [app?.tools]);
+  }, [app?.tools, t]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -164,7 +195,7 @@ const ChatInputActionsMenu = ({
     }
   };
 
-  const hasTools = app?.tools && app.tools.length > 0;
+  const hasTools = app?.tools && app.tools.length > 0 && enabledTools !== null;
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
 

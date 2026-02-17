@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { fetchAuthStatus, fetchUIConfig } from '../../api/api';
+import { fetchAuthStatus, fetchUIConfig, fetchPlatformConfig } from '../../api/api';
 
 const PlatformConfigContext = createContext({
   platformConfig: null,
@@ -17,10 +17,16 @@ export const PlatformConfigProvider = ({ children }) => {
     try {
       setIsLoading(true);
 
-      // Fetch both auth status and UI config in parallel
-      const [authStatus, uiConfig] = await Promise.all([fetchAuthStatus(), fetchUIConfig()]);
+      // Fetch auth status, UI config, and platform config in parallel
+      // On refresh (not initial load), skip cache to get fresh data
+      const skipCache = platformConfig !== null;
+      const [authStatus, uiConfig, platformCfg] = await Promise.all([
+        fetchAuthStatus({ skipCache }),
+        fetchUIConfig({ skipCache }),
+        fetchPlatformConfig({ skipCache })
+      ]);
 
-      // Combine both configs into a single object that matches the previous platform config structure
+      // Combine all configs into a single object that matches the previous platform config structure
       const combinedConfig = {
         // Auth-related fields from auth status
         auth: {
@@ -41,6 +47,16 @@ export const PlatformConfigProvider = ({ children }) => {
         version: uiConfig.version,
         computedRefreshSalt: uiConfig.computedRefreshSalt,
         defaultLanguage: uiConfig.defaultLanguage,
+
+        // Platform features and settings
+        features: platformCfg.features,
+        // Build a boolean lookup map from the resolved features array
+        featuresMap: Array.isArray(platformCfg.features)
+          ? platformCfg.features.reduce((map, f) => {
+              map[f.id] = f.enabled;
+              return map;
+            }, {})
+          : platformCfg.features || {},
 
         // Additional auth status fields
         authenticated: authStatus.authenticated,

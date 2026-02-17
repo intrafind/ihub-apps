@@ -98,7 +98,12 @@
       "de": "Haftungsausschluss: Diese Anwendung verwendet künstliche Intelligenz-Sprachmodelle, die Inhalte basierend auf ihren Trainingsdaten und den bereitgestellten Eingaben generieren. Die Antworten sind möglicherweise nicht immer korrekt, angemessen oder vollständig. Die KI hat keine Kenntnis von Ereignissen nach ihrem Trainingsstichtag und greift nicht auf Echtzeit-Informationen zu. Benutzer sollten wichtige Informationen überprüfen und kritisches Urteilsvermögen bei der Nutzung von KI-generierten Inhalten anwenden. Diese Anwendung protokolliert Benutzerinteraktionen zur Verbesserung des Dienstes und zu Analysezwecken."
     },
     "version": "1.0",
-    "updated": "2025-08-01"
+    "updated": "2025-08-01",
+    "link": "/pages/terms",
+    "hint": {
+      "en": "iHub uses AI and can make mistakes. Please verify results carefully.",
+      "de": "iHub nutzt KI und kann Fehler machen. Bitte überprüfe die Ergebnisse sorgfältig."
+    }
   },
   "appsList": {
     "title": {

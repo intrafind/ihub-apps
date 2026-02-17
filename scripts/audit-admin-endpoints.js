@@ -28,7 +28,7 @@ function extractRoutes(filePath, fileName) {
   const content = readFileSync(filePath, 'utf-8');
   const routes = [];
 
-  // Match route definitions: app.METHOD(buildServerPath('PATH', basePath), ...)
+  // Match route definitions: app.METHOD(buildServerPath('PATH'), ...)
   const routeRegex = /app\.(get|post|put|delete|patch)\(\s*buildServerPath\(['"]([^'"]+)['"]/g;
   // Alternative pattern: app.METHOD(`${basePath}/PATH`, ...)
   const altRouteRegex = /app\.(get|post|put|delete|patch)\(\s*`\$\{basePath\}([^`]+)`/g;

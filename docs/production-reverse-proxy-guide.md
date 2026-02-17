@@ -194,14 +194,16 @@ http {
             # CRITICAL: Tell backend about the stripped prefix
             proxy_set_header X-Forwarded-Prefix /ihub;
             
-            # Timeouts for long-running LLM requests
-            proxy_connect_timeout 60s;
-            proxy_send_timeout 300s;
-            proxy_read_timeout 300s;
-            
-            # Buffer settings for streaming responses
+            # CRITICAL: Disable buffering for Server-Sent Events (SSE)
+            # This ensures streaming responses are sent directly to clients without buffering
             proxy_buffering off;
             proxy_request_buffering off;
+            
+            # Timeouts for long-running LLM streaming requests (15 minutes)
+            # Prevents connection closure during extended chat sessions
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 900s;
+            proxy_read_timeout 900s;
             
             # Disable redirect following
             proxy_redirect off;
@@ -222,10 +224,15 @@ http {
             proxy_set_header Cache-Control 'no-cache';
             proxy_set_header X-Accel-Buffering 'no';
             
-            # Keep connection alive for streaming
-            proxy_read_timeout 86400s;
+            # CRITICAL: Disable buffering for Server-Sent Events
+            # This ensures streaming responses are sent directly to clients
             proxy_buffering off;
+            proxy_request_buffering off;
             chunked_transfer_encoding off;
+            
+            # Keep connection alive for streaming (15 minutes)
+            proxy_read_timeout 900s;
+            proxy_send_timeout 900s;
             
             # Standard headers
             proxy_set_header Host $host;
@@ -289,9 +296,13 @@ http {
             proxy_cache_bypass $http_upgrade;
             proxy_redirect off;
             
-            # Timeouts for LLM requests
-            proxy_read_timeout 300s;
-            proxy_send_timeout 300s;
+            # CRITICAL: Disable buffering for Server-Sent Events (SSE)
+            proxy_buffering off;
+            proxy_request_buffering off;
+            
+            # Timeouts for LLM streaming requests (15 minutes)
+            proxy_read_timeout 900s;
+            proxy_send_timeout 900s;
         }
 
         # Redirect /ihub to /ihub/
@@ -349,8 +360,12 @@ For Apache reverse proxy:
     RequestHeader set X-Forwarded-Prefix "/ihub"
     RequestHeader set X-Forwarded-Proto "https"
     
-    # Timeout for long-running requests
-    ProxyTimeout 300
+    # CRITICAL: Timeout for long-running streaming requests (15 minutes)
+    # Apache measures timeout in seconds
+    ProxyTimeout 900
+    
+    # Optional: Disable buffering for better streaming performance
+    # SetEnv proxy-sendcl 0
 </VirtualHost>
 ```
 

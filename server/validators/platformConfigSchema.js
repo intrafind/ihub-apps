@@ -50,6 +50,8 @@ const ldapProviderSchema = z.object({
   userDn: z.string().optional(),
   groupSearchBase: z.string().optional(),
   groupClass: z.string().optional(),
+  groupMemberAttribute: z.string().optional(),
+  groupMemberUserAttribute: z.string().optional(),
   defaultGroups: z.array(z.string()).default([]),
   sessionTimeoutMinutes: z.number().min(1).default(480),
   tlsOptions: z.record(z.any()).optional()
@@ -135,6 +137,7 @@ export const platformConfigSchema = z
     ldapAuth: z
       .object({
         enabled: z.boolean().default(false),
+        allowSelfSignup: z.boolean().default(true),
         providers: z.array(ldapProviderSchema).default([])
       })
       .default({}),

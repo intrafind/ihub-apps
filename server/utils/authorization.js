@@ -61,6 +61,7 @@ export function resolveGroupInheritance(groupsConfig) {
         apps: new Set(),
         prompts: new Set(),
         models: new Set(),
+        workflows: new Set(),
         adminAccess: false
       };
 
@@ -83,6 +84,11 @@ export function resolveGroupInheritance(groupsConfig) {
           parentPerms.models.forEach(model => mergedPermissions.models.add(model));
         }
 
+        // Merge workflows
+        if (Array.isArray(parentPerms.workflows)) {
+          parentPerms.workflows.forEach(workflow => mergedPermissions.workflows.add(workflow));
+        }
+
         // Admin access: if any parent has admin access, inherit it
         if (parentPerms.adminAccess === true) {
           mergedPermissions.adminAccess = true;
@@ -100,6 +106,9 @@ export function resolveGroupInheritance(groupsConfig) {
       if (Array.isArray(ownPerms.models)) {
         ownPerms.models.forEach(model => mergedPermissions.models.add(model));
       }
+      if (Array.isArray(ownPerms.workflows)) {
+        ownPerms.workflows.forEach(workflow => mergedPermissions.workflows.add(workflow));
+      }
       if (ownPerms.adminAccess === true) {
         mergedPermissions.adminAccess = true;
       }
@@ -111,6 +120,7 @@ export function resolveGroupInheritance(groupsConfig) {
           apps: Array.from(mergedPermissions.apps),
           prompts: Array.from(mergedPermissions.prompts),
           models: Array.from(mergedPermissions.models),
+          workflows: Array.from(mergedPermissions.workflows),
           adminAccess: mergedPermissions.adminAccess
         }
       };
@@ -176,6 +186,7 @@ export function loadGroupPermissions() {
       apps: group.permissions?.apps || [],
       prompts: group.permissions?.prompts || [],
       models: group.permissions?.models || [],
+      workflows: group.permissions?.workflows || [],
       adminAccess: group.permissions?.adminAccess || false,
       description: group.description || ''
     };
@@ -221,13 +232,32 @@ export function mapExternalGroups(externalGroups) {
   logger.debug('[Authorization] Mapping external groups:', externalGroups);
   const groupMapping = loadGroupMapping();
   const internalGroups = new Set();
+  const unmappedGroups = [];
 
   for (const externalGroup of externalGroups) {
     const mappedGroups = groupMapping[externalGroup];
     if (Array.isArray(mappedGroups)) {
+      logger.debug(
+        `[Authorization] External group "${externalGroup}" mapped to internal groups:`,
+        mappedGroups
+      );
       mappedGroups.forEach(group => internalGroups.add(group));
     } else {
+      logger.warn(
+        `[Authorization] External group "${externalGroup}" has no mapping in groups configuration`
+      );
+      unmappedGroups.push(externalGroup);
     }
+  }
+
+  // Log unmapped groups for troubleshooting
+  if (unmappedGroups.length > 0) {
+    logger.warn(
+      `[Authorization] ${unmappedGroups.length} external groups have no mapping: ${unmappedGroups.join(', ')}`
+    );
+    logger.warn(
+      '[Authorization] To map these groups, add them to the "mappings" field in contents/config/groups.json'
+    );
   }
 
   // If no groups mapped, assign default anonymous group
@@ -237,6 +267,7 @@ export function mapExternalGroups(externalGroups) {
   }
 
   const result = Array.from(internalGroups);
+  logger.debug(`[Authorization] Final mapped internal groups (${result.length}):`, result);
   return result;
 }
 
@@ -255,6 +286,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     apps: new Set(),
     prompts: new Set(),
     models: new Set(),
+    workflows: new Set(),
     adminAccess: false
   };
 
@@ -290,6 +322,13 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       groupPerms.models.forEach(model => permissions.models.add(model));
     }
 
+    // Handle wildcards and specific permissions for workflows
+    if (groupPerms.workflows?.includes('*')) {
+      permissions.workflows.add('*');
+    } else if (Array.isArray(groupPerms.workflows)) {
+      groupPerms.workflows.forEach(workflow => permissions.workflows.add(workflow));
+    }
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
@@ -300,6 +339,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     apps: Array.from(permissions.apps),
     prompts: Array.from(permissions.prompts),
     models: Array.from(permissions.models),
+    workflows: Array.from(permissions.workflows),
     adminAccess: permissions.adminAccess
   });
 
@@ -428,6 +468,7 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       apps: new Set(user.allowedApps || []),
       prompts: new Set(), // OAuth clients don't have prompt permissions
       models: new Set(user.allowedModels || []),
+      workflows: new Set(), // OAuth clients don't have workflow permissions
       adminAccess: false // OAuth clients never have admin access
     };
   } else {

@@ -161,7 +161,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/apps', basePath), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/apps'), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
@@ -303,7 +303,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
    *                   error: "Internal server error"
    */
   // Health check endpoint with base path information
-  app.get(buildServerPath('/api/health', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/health'), async (req, res) => {
     try {
       const { getBasePathInfo } = await import('../utils/basePath.js');
       const basePathInfo = getBasePathInfo();
@@ -329,7 +329,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
   });
 
   app.get(
-    buildServerPath('/api/apps/:appId', basePath),
+    buildServerPath('/api/apps/:appId'),
     authRequired,
     appAccessRequired,
     async (req, res) => {

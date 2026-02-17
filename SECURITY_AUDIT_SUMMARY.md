@@ -135,7 +135,7 @@ Always use `adminAuth` middleware:
 ```javascript
 import { adminAuth } from '../../middleware/adminAuth.js';
 
-app.get(buildServerPath('/api/admin/my-endpoint', basePath), adminAuth, async (req, res) => {
+app.get(buildServerPath('/api/admin/my-endpoint'), adminAuth, async (req, res) => {
   // Your handler code
 });
 ```

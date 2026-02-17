@@ -10,7 +10,7 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminPagesRoutes(app, basePath = '') {
-  app.get(buildServerPath('/api/admin/pages', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/pages'), adminAuth, async (req, res) => {
     try {
       const { data: uiConfig } = configCache.getUI();
       const pages = Object.entries(uiConfig.pages || {}).map(([id, page]) => ({
@@ -27,7 +27,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
     }
   });
 
-  app.get(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {
     const { pageId } = req.params;
 
     // Validate pageId for security
@@ -65,7 +65,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
     }
   });
 
-  app.post(buildServerPath('/api/admin/pages', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/pages'), adminAuth, async (req, res) => {
     try {
       const {
         id,
@@ -109,7 +109,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
     }
   });
 
-  app.put(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
 
@@ -158,7 +158,7 @@ export default function registerAdminPagesRoutes(app, basePath = '') {
     }
   });
 
-  app.delete(buildServerPath('/api/admin/pages/:pageId', basePath), adminAuth, async (req, res) => {
+  app.delete(buildServerPath('/api/admin/pages/:pageId'), adminAuth, async (req, res) => {
     try {
       const { pageId } = req.params;
 

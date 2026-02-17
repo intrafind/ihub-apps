@@ -370,8 +370,8 @@ export function AuthProvider({ children }) {
     };
   }, [handleOidcCallback, loadAuthStatus]);
 
-  // Login with username/password (local auth or LDAP)
-  const login = async (username, password, provider = null) => {
+  // Login with username/password using local authentication only
+  const loginLocal = async (username, password) => {
     try {
       dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
 
@@ -380,12 +380,7 @@ export function AuthProvider({ children }) {
         password
       };
 
-      // Add provider if specified (for LDAP provider selection)
-      if (provider) {
-        requestBody.provider = provider;
-      }
-
-      const response = await apiClient.post('/auth/login', requestBody);
+      const response = await apiClient.post('/auth/local/login', requestBody);
 
       const data = response.data;
 
@@ -423,8 +418,68 @@ export function AuthProvider({ children }) {
         return { success: false, error };
       }
     } catch (error) {
-      console.error('Login error:', error);
-      const errorMessage = error.message || 'Login failed';
+      console.error('Local login error:', error);
+      const errorMessage = error.message || 'Local login failed';
+      dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
+      return { success: false, error: errorMessage };
+    }
+  };
+
+  // Login with username/password using LDAP authentication only
+  const loginLdap = async (username, password, provider = null) => {
+    try {
+      dispatch({ type: AUTH_ACTIONS.SET_LOADING, payload: true });
+
+      const requestBody = {
+        username,
+        password
+      };
+
+      // Add provider if specified (for LDAP provider selection)
+      if (provider) {
+        requestBody.provider = provider;
+      }
+
+      const response = await apiClient.post('/auth/ldap/login', requestBody);
+
+      const data = response.data;
+
+      if (data.success && data.token) {
+        // Store token
+        localStorage.setItem('authToken', data.token);
+
+        // Clear any existing cached data to prevent permission leakage
+        try {
+          const { clearApiCache } = await import('../../api/utils/cache');
+          clearApiCache();
+        } catch (error) {
+          // Cache clearing is optional, don't fail login
+          console.warn('Could not clear API cache on login:', error);
+        }
+
+        // Set user
+        dispatch({ type: AUTH_ACTIONS.SET_USER, payload: data.user });
+
+        // Refresh auth status to ensure all components are updated
+        await loadAuthStatus();
+
+        // Check for stored return URL and redirect
+        const returnUrl = sessionStorage.getItem('authReturnUrl');
+        if (returnUrl && returnUrl !== window.location.href) {
+          console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
+          sessionStorage.removeItem('authReturnUrl');
+          window.location.href = returnUrl;
+        }
+
+        return { success: true };
+      } else {
+        const error = data.error || 'Login failed';
+        dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error });
+        return { success: false, error };
+      }
+    } catch (error) {
+      console.error('LDAP login error:', error);
+      const errorMessage = error.message || 'LDAP login failed';
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
@@ -603,7 +658,8 @@ export function AuthProvider({ children }) {
     ...state,
 
     // Actions
-    login,
+    loginLocal,
+    loginLdap,
     loginWithToken,
     loginWithOidc,
     handleOidcCallback,

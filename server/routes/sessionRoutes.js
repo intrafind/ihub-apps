@@ -8,7 +8,7 @@ import logger from '../utils/logger.js';
 
 export default function registerSessionRoutes(app, basePath = '') {
   app.post(
-    buildServerPath('/api/session/start', basePath),
+    buildServerPath('/api/session/start'),
     authOptional,
     validate(startSessionSchema),
     async (req, res) => {

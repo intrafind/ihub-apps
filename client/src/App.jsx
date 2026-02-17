@@ -6,6 +6,11 @@ import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
+// Lazy load workflow components
+const WorkflowsPage = React.lazy(() => import('./features/workflows/pages/WorkflowsPage'));
+const WorkflowExecutionPage = React.lazy(
+  () => import('./features/workflows/pages/WorkflowExecutionPage')
+);
 import AppCanvas from './features/canvas/pages/AppCanvas';
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -35,6 +40,13 @@ const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPr
 const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
 const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
 const AdminToolEditPage = React.lazy(() => import('./features/admin/pages/AdminToolEditPage'));
+const AdminWorkflowsPage = React.lazy(() => import('./features/admin/pages/AdminWorkflowsPage'));
+const AdminWorkflowEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminWorkflowEditPage')
+);
+const AdminWorkflowExecutionsPage = React.lazy(
+  () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
+);
 const AdminSourcesPage = React.lazy(() => import('./features/admin/pages/AdminSourcesPage'));
 const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/AdminSourceEditPage'));
 const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
@@ -55,6 +67,7 @@ const AdminUICustomization = React.lazy(
   () => import('./features/admin/pages/AdminUICustomization')
 );
 const AdminLoggingPage = React.lazy(() => import('./features/admin/pages/AdminLoggingPage'));
+const AdminFeaturesPage = React.lazy(() => import('./features/admin/pages/AdminFeaturesPage'));
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
@@ -168,9 +181,19 @@ function App() {
                   {/* Regular application routes */}
                   <Route path="/" element={<Layout />}>
                     <Route index element={<SafeAppsList />} />
-                    {uiConfig?.promptsList?.enabled !== false && (
-                      <Route path="prompts" element={<SafePromptsList />} />
-                    )}
+                    {uiConfig?.promptsList?.enabled !== false &&
+                      platformConfig?.featuresMap?.promptsLibrary !== false && (
+                        <Route path="prompts" element={<SafePromptsList />} />
+                      )}
+                    {/* Workflow routes - feature flag is enforced by server API (returns 403 if disabled) */}
+                    <Route
+                      path="workflows"
+                      element={<LazyAdminRoute component={WorkflowsPage} />}
+                    />
+                    <Route
+                      path="workflows/executions/:executionId"
+                      element={<LazyAdminRoute component={WorkflowExecutionPage} />}
+                    />
                     <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
                     <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
@@ -285,6 +308,30 @@ function App() {
                         element={<LazyAdminRoute component={AdminToolEditPage} />}
                       />
                     )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows"
+                        element={<LazyAdminRoute component={AdminWorkflowsPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/new"
+                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/executions"
+                        element={<LazyAdminRoute component={AdminWorkflowExecutionsPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/:id"
+                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+                      />
+                    )}
                     {showAdminPage('sources') && (
                       <Route
                         path="admin/sources"
@@ -345,6 +392,12 @@ function App() {
                       <Route
                         path="admin/ui"
                         element={<LazyAdminRoute component={AdminUICustomization} />}
+                      />
+                    )}
+                    {showAdminPage('features') && (
+                      <Route
+                        path="admin/features"
+                        element={<LazyAdminRoute component={AdminFeaturesPage} />}
                       />
                     )}
                     <Route
