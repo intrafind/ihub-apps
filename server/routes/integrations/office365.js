@@ -102,9 +102,8 @@ router.get('/callback', authOptional, async (req, res) => {
         component: 'Office 365',
         error: oauthError
       });
-      return res.redirect(
-        `/settings/integrations?office365_error=${encodeURIComponent(oauthError)}`
-      );
+      // Redirect with a generic error code to avoid exposing raw error details in the URL
+      return res.redirect('/settings/integrations?office365_error=oauth_failed');
     }
 
     // Check if session is available
