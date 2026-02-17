@@ -30,13 +30,12 @@
 #     - github/gh-aw/.github/agents/technical-doc-writer.agent.md@94662b1dee8ce96c876ba9f33b3ab8be32de82a4
 #     - github/gh-aw/skills/documentation/SKILL.md@94662b1dee8ce96c876ba9f33b3ab8be32de82a4
 #
-# frontmatter-hash: 2858b1817ebbe36a6a4da9abf130c2f9911489c7f65ebaf4d6e08b871dbf5514
+# frontmatter-hash: 360f9064405fc6c7bf6220537c98e2ea55b54fd6987ea325cf7bd6307a0f9d20
 
 name: "Glossary Maintainer"
 "on":
   schedule:
   - cron: "0 10 * * 1-5"
-    # Friendly format: daily (scattered)
   workflow_dispatch:
 
 permissions: {}

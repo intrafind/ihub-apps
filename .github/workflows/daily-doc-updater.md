@@ -38,7 +38,7 @@ tools:
   - grep -r '*' docs
   - git
   cache-memory: true
-  edit: null
+  edit: {}
   github:
     toolsets:
     - default
