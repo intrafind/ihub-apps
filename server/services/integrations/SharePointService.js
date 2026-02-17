@@ -27,6 +27,10 @@ class SharePointService {
    * @returns {Object} Provider configuration
    */
   _getProviderConfig(providerId) {
+    if (!configCache || typeof configCache.get !== 'function') {
+      throw new Error('Platform configuration cache is not initialized');
+    }
+
     const platformConfig = configCache.get('platform');
     const cloudStorage = platformConfig?.cloudStorage;
 
