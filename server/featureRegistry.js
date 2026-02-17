@@ -52,10 +52,10 @@ export const featureRegistry = [
   },
   {
     id: 'sources',
-    name: { en: 'Knowledge Sources (RAG)', de: 'Wissensquellen (RAG)' },
+    name: { en: 'Sources', de: 'Quellen' },
     description: {
-      en: 'Retrieval-augmented generation with custom knowledge bases',
-      de: 'Retrieval-augmentierte Generierung mit benutzerdefinierten Wissensbasen'
+      en: 'Add custom knowledge sources directly to prompts',
+      de: 'Benutzerdefinierte Wissensquellen direkt zu Prompts hinzufügen'
     },
     category: 'ai',
     default: true
