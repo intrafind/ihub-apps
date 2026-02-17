@@ -659,49 +659,45 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.post(
-    buildServerPath('/api/admin/tools/:toolId/toggle'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { toolId } = req.params;
+  app.post(buildServerPath('/api/admin/tools/:toolId/toggle'), adminAuth, async (req, res) => {
+    try {
+      const { toolId } = req.params;
 
-        // Validate toolId for security
-        if (!validateIdForPath(toolId, 'tool', res)) {
-          return;
-        }
-
-        const rootDir = getRootDir();
-        const contentsDir = process.env.CONTENTS_DIR || 'contents';
-        const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
-
-        // Load existing tools (raw, unexpanded)
-        const { tools } = loadRawTools();
-        const tool = tools.find(t => t.id === toolId);
-
-        if (!tool) {
-          return res.status(404).json({ error: 'Tool not found' });
-        }
-
-        // Toggle enabled state
-        tool.enabled = !tool.enabled;
-
-        // Ensure directory exists
-        await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
-
-        // Write back to file
-        await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
-
-        // Refresh cache
-        await configCache.refreshCacheEntry('config/tools.json');
-
-        res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
-      } catch (error) {
-        logger.error('Error toggling tool:', error);
-        res.status(500).json({ error: 'Failed to toggle tool' });
+      // Validate toolId for security
+      if (!validateIdForPath(toolId, 'tool', res)) {
+        return;
       }
+
+      const rootDir = getRootDir();
+      const contentsDir = process.env.CONTENTS_DIR || 'contents';
+      const toolsFilePath = join(rootDir, contentsDir, 'config', 'tools.json');
+
+      // Load existing tools (raw, unexpanded)
+      const { tools } = loadRawTools();
+      const tool = tools.find(t => t.id === toolId);
+
+      if (!tool) {
+        return res.status(404).json({ error: 'Tool not found' });
+      }
+
+      // Toggle enabled state
+      tool.enabled = !tool.enabled;
+
+      // Ensure directory exists
+      await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
+
+      // Write back to file
+      await fs.writeFile(toolsFilePath, JSON.stringify(tools, null, 2));
+
+      // Refresh cache
+      await configCache.refreshCacheEntry('config/tools.json');
+
+      res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
+    } catch (error) {
+      logger.error('Error toggling tool:', error);
+      res.status(500).json({ error: 'Failed to toggle tool' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -744,51 +740,47 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(
-    buildServerPath('/api/admin/tools/:toolId/script'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { toolId } = req.params;
+  app.get(buildServerPath('/api/admin/tools/:toolId/script'), adminAuth, async (req, res) => {
+    try {
+      const { toolId } = req.params;
 
-        // Validate toolId for security
-        if (!validateIdForPath(toolId, 'tool', res)) {
-          return;
-        }
-
-        const { tools } = loadRawTools();
-        const tool = tools.find(t => t.id === toolId);
-
-        if (!tool) {
-          return res.status(404).json({ error: 'Tool not found' });
-        }
-
-        if (!tool.script) {
-          return res
-            .status(400)
-            .json({ error: 'Tool has no script property (may be a special tool)' });
-        }
-
-        const rootDir = getRootDir();
-        const scriptPath = join(rootDir, 'server', 'tools', tool.script);
-
-        if (!existsSync(scriptPath)) {
-          return res.status(404).json({ error: 'Script file not found' });
-        }
-
-        const content = readFileSync(scriptPath, 'utf-8');
-
-        res.json({
-          id: toolId,
-          script: tool.script,
-          content
-        });
-      } catch (error) {
-        logger.error('Error reading tool script:', error);
-        res.status(500).json({ error: 'Failed to read tool script' });
+      // Validate toolId for security
+      if (!validateIdForPath(toolId, 'tool', res)) {
+        return;
       }
+
+      const { tools } = loadRawTools();
+      const tool = tools.find(t => t.id === toolId);
+
+      if (!tool) {
+        return res.status(404).json({ error: 'Tool not found' });
+      }
+
+      if (!tool.script) {
+        return res
+          .status(400)
+          .json({ error: 'Tool has no script property (may be a special tool)' });
+      }
+
+      const rootDir = getRootDir();
+      const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+
+      if (!existsSync(scriptPath)) {
+        return res.status(404).json({ error: 'Script file not found' });
+      }
+
+      const content = readFileSync(scriptPath, 'utf-8');
+
+      res.json({
+        id: toolId,
+        script: tool.script,
+        content
+      });
+    } catch (error) {
+      logger.error('Error reading tool script:', error);
+      res.status(500).json({ error: 'Failed to read tool script' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -851,51 +843,47 @@ export default function registerAdminToolsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.put(
-    buildServerPath('/api/admin/tools/:toolId/script'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { toolId } = req.params;
-        const { content } = req.body;
+  app.put(buildServerPath('/api/admin/tools/:toolId/script'), adminAuth, async (req, res) => {
+    try {
+      const { toolId } = req.params;
+      const { content } = req.body;
 
-        if (!content) {
-          return res.status(400).json({ error: 'Missing script content' });
-        }
-
-        // Validate toolId for security
-        if (!validateIdForPath(toolId, 'tool', res)) {
-          return;
-        }
-
-        const { tools } = loadRawTools();
-        const tool = tools.find(t => t.id === toolId);
-
-        if (!tool) {
-          return res.status(404).json({ error: 'Tool not found' });
-        }
-
-        if (!tool.script) {
-          return res
-            .status(400)
-            .json({ error: 'Tool has no script property (may be a special tool)' });
-        }
-
-        const rootDir = getRootDir();
-        const scriptPath = join(rootDir, 'server', 'tools', tool.script);
-
-        if (!existsSync(scriptPath)) {
-          return res.status(404).json({ error: 'Script file not found' });
-        }
-
-        // Write the new content
-        await fs.writeFile(scriptPath, content, 'utf-8');
-
-        res.json({ message: 'Script updated successfully' });
-      } catch (error) {
-        logger.error('Error updating tool script:', error);
-        res.status(500).json({ error: 'Failed to update tool script' });
+      if (!content) {
+        return res.status(400).json({ error: 'Missing script content' });
       }
+
+      // Validate toolId for security
+      if (!validateIdForPath(toolId, 'tool', res)) {
+        return;
+      }
+
+      const { tools } = loadRawTools();
+      const tool = tools.find(t => t.id === toolId);
+
+      if (!tool) {
+        return res.status(404).json({ error: 'Tool not found' });
+      }
+
+      if (!tool.script) {
+        return res
+          .status(400)
+          .json({ error: 'Tool has no script property (may be a special tool)' });
+      }
+
+      const rootDir = getRootDir();
+      const scriptPath = join(rootDir, 'server', 'tools', tool.script);
+
+      if (!existsSync(scriptPath)) {
+        return res.status(404).json({ error: 'Script file not found' });
+      }
+
+      // Write the new content
+      await fs.writeFile(scriptPath, content, 'utf-8');
+
+      res.json({ message: 'Script updated successfully' });
+    } catch (error) {
+      logger.error('Error updating tool script:', error);
+      res.status(500).json({ error: 'Failed to update tool script' });
     }
-  );
+  });
 }

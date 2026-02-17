@@ -124,8 +124,7 @@ const AdminWorkflowEditPage = () => {
 
     // Support nested field paths like 'name.en'
     const parts = field.split('.');
-    const isUnsafeKey = key =>
-      key === '__proto__' || key === 'constructor' || key === 'prototype';
+    const isUnsafeKey = key => key === '__proto__' || key === 'constructor' || key === 'prototype';
 
     let target = updated;
     for (let i = 0; i < parts.length - 1; i++) {

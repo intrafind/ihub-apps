@@ -765,62 +765,56 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to delete group
    */
-  app.delete(
-    buildServerPath('/api/admin/groups/:groupId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { groupId } = req.params;
+  app.delete(buildServerPath('/api/admin/groups/:groupId'), adminAuth, async (req, res) => {
+    try {
+      const { groupId } = req.params;
 
-        // Validate groupId for security (prevents prototype pollution)
-        if (!validateIdForPath(groupId, 'group', res)) {
-          return;
-        }
-
-        // Prevent deletion of core system groups
-        const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
-        if (protectedGroups.includes(groupId)) {
-          return res
-            .status(400)
-            .json({ error: `Cannot delete protected system group: ${groupId}` });
-        }
-
-        const rootDir = getRootDir();
-        const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-        // Load existing groups
-        let groupsData = { groups: {}, metadata: {} };
-        try {
-          const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-          groupsData = JSON.parse(groupsFileData);
-        } catch {
-          return res.status(404).json({ error: 'Groups file not found' });
-        }
-
-        // Check if group exists
-        if (!groupsData.groups[groupId]) {
-          return res.status(404).json({ error: 'Group not found' });
-        }
-
-        const groupName = groupsData.groups[groupId].name;
-
-        // Remove group
-        delete groupsData.groups[groupId];
-        groupsData.metadata.lastModified = new Date().toISOString();
-
-        // Save to file
-        await atomicWriteJSON(groupsFilePath, groupsData);
-
-        // Refresh cache
-        await configCache.refreshCacheEntry('config/groups.json');
-
-        logger.info(`👥 Deleted group: ${groupName} (${groupId})`);
-
-        res.json({ message: 'Group deleted successfully' });
-      } catch (error) {
-        logger.error('Error deleting group:', error);
-        res.status(500).json({ error: 'Failed to delete group' });
+      // Validate groupId for security (prevents prototype pollution)
+      if (!validateIdForPath(groupId, 'group', res)) {
+        return;
       }
+
+      // Prevent deletion of core system groups
+      const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
+      if (protectedGroups.includes(groupId)) {
+        return res.status(400).json({ error: `Cannot delete protected system group: ${groupId}` });
+      }
+
+      const rootDir = getRootDir();
+      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+
+      // Load existing groups
+      let groupsData = { groups: {}, metadata: {} };
+      try {
+        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
+        groupsData = JSON.parse(groupsFileData);
+      } catch {
+        return res.status(404).json({ error: 'Groups file not found' });
+      }
+
+      // Check if group exists
+      if (!groupsData.groups[groupId]) {
+        return res.status(404).json({ error: 'Group not found' });
+      }
+
+      const groupName = groupsData.groups[groupId].name;
+
+      // Remove group
+      delete groupsData.groups[groupId];
+      groupsData.metadata.lastModified = new Date().toISOString();
+
+      // Save to file
+      await atomicWriteJSON(groupsFilePath, groupsData);
+
+      // Refresh cache
+      await configCache.refreshCacheEntry('config/groups.json');
+
+      logger.info(`👥 Deleted group: ${groupName} (${groupId})`);
+
+      res.json({ message: 'Group deleted successfully' });
+    } catch (error) {
+      logger.error('Error deleting group:', error);
+      res.status(500).json({ error: 'Failed to delete group' });
     }
-  );
+  });
 }

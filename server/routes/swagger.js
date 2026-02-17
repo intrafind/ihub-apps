@@ -191,11 +191,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
 
   // Main Swagger UI route - shows all API categories
   app.use(buildServerPath('/api/docs'), ...middleware, swaggerUi.serve);
-  app.get(
-    buildServerPath('/api/docs'),
-    ...middleware,
-    swaggerUi.setup(null, swaggerOptions)
-  );
+  app.get(buildServerPath('/api/docs'), ...middleware, swaggerUi.setup(null, swaggerOptions));
 
   // Individual API documentation routes (JSON only)
   app.get(buildServerPath('/api/docs/normal/swagger.json'), ...middleware, (req, res) => {

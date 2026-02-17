@@ -381,30 +381,26 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to fetch prompt"
    */
-  app.get(
-    buildServerPath('/api/admin/prompts/:promptId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { promptId } = req.params;
+  app.get(buildServerPath('/api/admin/prompts/:promptId'), adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
 
-        // Validate promptId for security
-        if (!validateIdForPath(promptId, 'prompt', res)) {
-          return;
-        }
-
-        const { data: prompts } = configCache.getPrompts(true);
-        const prompt = prompts.find(p => p.id === promptId);
-        if (!prompt) {
-          return res.status(404).json({ error: 'Prompt not found' });
-        }
-        res.json(prompt);
-      } catch (error) {
-        logger.error('Error fetching prompt:', error);
-        res.status(500).json({ error: 'Failed to fetch prompt' });
+      // Validate promptId for security
+      if (!validateIdForPath(promptId, 'prompt', res)) {
+        return;
       }
+
+      const { data: prompts } = configCache.getPrompts(true);
+      const prompt = prompts.find(p => p.id === promptId);
+      if (!prompt) {
+        return res.status(404).json({ error: 'Prompt not found' });
+      }
+      res.json(prompt);
+    } catch (error) {
+      logger.error('Error fetching prompt:', error);
+      res.status(500).json({ error: 'Failed to fetch prompt' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -510,36 +506,32 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to update prompt"
    */
-  app.put(
-    buildServerPath('/api/admin/prompts/:promptId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { promptId } = req.params;
-        const updatedPrompt = req.body;
+  app.put(buildServerPath('/api/admin/prompts/:promptId'), adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
+      const updatedPrompt = req.body;
 
-        // Validate promptId for security
-        if (!validateIdForPath(promptId, 'prompt', res)) {
-          return;
-        }
-
-        if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
-          return res.status(400).json({ error: 'Missing required fields' });
-        }
-        if (updatedPrompt.id !== promptId) {
-          return res.status(400).json({ error: 'Prompt ID cannot be changed' });
-        }
-        const rootDir = getRootDir();
-        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-        await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
-        await configCache.refreshPromptsCache();
-        res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
-      } catch (error) {
-        logger.error('Error updating prompt:', error);
-        res.status(500).json({ error: 'Failed to update prompt' });
+      // Validate promptId for security
+      if (!validateIdForPath(promptId, 'prompt', res)) {
+        return;
       }
+
+      if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+      if (updatedPrompt.id !== promptId) {
+        return res.status(400).json({ error: 'Prompt ID cannot be changed' });
+      }
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
+      await configCache.refreshPromptsCache();
+      res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
+    } catch (error) {
+      logger.error('Error updating prompt:', error);
+      res.status(500).json({ error: 'Failed to update prompt' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -743,40 +735,36 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to toggle prompt"
    */
-  app.post(
-    buildServerPath('/api/admin/prompts/:promptId/toggle'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { promptId } = req.params;
+  app.post(buildServerPath('/api/admin/prompts/:promptId/toggle'), adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
 
-        // Validate promptId for security
-        if (!validateIdForPath(promptId, 'prompt', res)) {
-          return;
-        }
-
-        const { data: prompts } = configCache.getPrompts(true);
-        const prompt = prompts.find(p => p.id === promptId);
-        if (!prompt) {
-          return res.status(404).json({ error: 'Prompt not found' });
-        }
-        const newEnabledState = !prompt.enabled;
-        prompt.enabled = newEnabledState;
-        const rootDir = getRootDir();
-        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-        await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
-        await configCache.refreshPromptsCache();
-        res.json({
-          message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-          prompt: prompt,
-          enabled: newEnabledState
-        });
-      } catch (error) {
-        logger.error('Error toggling prompt:', error);
-        res.status(500).json({ error: 'Failed to toggle prompt' });
+      // Validate promptId for security
+      if (!validateIdForPath(promptId, 'prompt', res)) {
+        return;
       }
+
+      const { data: prompts } = configCache.getPrompts(true);
+      const prompt = prompts.find(p => p.id === promptId);
+      if (!prompt) {
+        return res.status(404).json({ error: 'Prompt not found' });
+      }
+      const newEnabledState = !prompt.enabled;
+      prompt.enabled = newEnabledState;
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+      await configCache.refreshPromptsCache();
+      res.json({
+        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        prompt: prompt,
+        enabled: newEnabledState
+      });
+    } catch (error) {
+      logger.error('Error toggling prompt:', error);
+      res.status(500).json({ error: 'Failed to toggle prompt' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -1001,32 +989,28 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *             example:
    *               error: "Failed to delete prompt"
    */
-  app.delete(
-    buildServerPath('/api/admin/prompts/:promptId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { promptId } = req.params;
+  app.delete(buildServerPath('/api/admin/prompts/:promptId'), adminAuth, async (req, res) => {
+    try {
+      const { promptId } = req.params;
 
-        // Validate promptId for security
-        if (!validateIdForPath(promptId, 'prompt', res)) {
-          return;
-        }
-
-        const rootDir = getRootDir();
-        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-        if (!existsSync(promptFilePath)) {
-          return res.status(404).json({ error: 'Prompt file not found' });
-        }
-        await fs.unlink(promptFilePath);
-        await configCache.refreshPromptsCache();
-        res.json({ message: 'Prompt deleted successfully' });
-      } catch (error) {
-        logger.error('Error deleting prompt:', error);
-        res.status(500).json({ error: 'Failed to delete prompt' });
+      // Validate promptId for security
+      if (!validateIdForPath(promptId, 'prompt', res)) {
+        return;
       }
+
+      const rootDir = getRootDir();
+      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+      if (!existsSync(promptFilePath)) {
+        return res.status(404).json({ error: 'Prompt file not found' });
+      }
+      await fs.unlink(promptFilePath);
+      await configCache.refreshPromptsCache();
+      res.json({ message: 'Prompt deleted successfully' });
+    } catch (error) {
+      logger.error('Error deleting prompt:', error);
+      res.status(500).json({ error: 'Failed to delete prompt' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -1277,29 +1261,25 @@ export default function registerAdminPromptsRoutes(app, basePath = '') {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(
-    buildServerPath('/api/admin/prompts/app-generator'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platformConfig = configCache.getPlatform();
-        const defaultLanguage = platformConfig?.defaultLanguage || 'en';
-        const { lang = defaultLanguage } = req.query;
-        const { data: prompts } = configCache.getPrompts(true);
-        if (!prompts) {
-          return res.status(500).json({ error: 'Failed to load prompts configuration' });
-        }
-        const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
-        if (!appGeneratorPrompt) {
-          return res.status(404).json({ error: 'App-generator prompt not found' });
-        }
-        const promptText =
-          appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
-        res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
-      } catch (error) {
-        logger.error('Error fetching app-generator prompt:', error);
-        res.status(500).json({ error: 'Internal server error' });
+  app.get(buildServerPath('/api/admin/prompts/app-generator'), adminAuth, async (req, res) => {
+    try {
+      const platformConfig = configCache.getPlatform();
+      const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+      const { lang = defaultLanguage } = req.query;
+      const { data: prompts } = configCache.getPrompts(true);
+      if (!prompts) {
+        return res.status(500).json({ error: 'Failed to load prompts configuration' });
       }
+      const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+      if (!appGeneratorPrompt) {
+        return res.status(404).json({ error: 'App-generator prompt not found' });
+      }
+      const promptText =
+        appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+      res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
+    } catch (error) {
+      logger.error('Error fetching app-generator prompt:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
-  );
+  });
 }

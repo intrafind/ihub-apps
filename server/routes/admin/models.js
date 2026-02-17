@@ -282,250 +282,233 @@ export default function registerAdminModelsRoutes(app, basePath = '') {
     }
   });
 
-  app.post(
-    buildServerPath('/api/admin/models/:modelId/toggle'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { modelId } = req.params;
+  app.post(buildServerPath('/api/admin/models/:modelId/toggle'), adminAuth, async (req, res) => {
+    try {
+      const { modelId } = req.params;
 
-        // Validate modelId for security
-        if (!validateIdForPath(modelId, 'model', res)) {
-          return;
-        }
+      // Validate modelId for security
+      if (!validateIdForPath(modelId, 'model', res)) {
+        return;
+      }
 
-        const { data: models } = configCache.getModels(true);
-        const model = models.find(m => m.id === modelId);
-        if (!model) {
-          return res.status(404).json({ error: 'Model not found' });
+      const { data: models } = configCache.getModels(true);
+      const model = models.find(m => m.id === modelId);
+      if (!model) {
+        return res.status(404).json({ error: 'Model not found' });
+      }
+      const newEnabledState = !model.enabled;
+      model.enabled = newEnabledState;
+      if (!newEnabledState && model.default === true) {
+        const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
+        if (enabledModels.length > 0) {
+          enabledModels[0].default = true;
+          const newDefaultPath = join(
+            getRootDir(),
+            'contents',
+            'models',
+            `${enabledModels[0].id}.json`
+          );
+          await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
         }
-        const newEnabledState = !model.enabled;
-        model.enabled = newEnabledState;
-        if (!newEnabledState && model.default === true) {
-          const enabledModels = models.filter(m => m.id !== modelId && m.enabled === true);
-          if (enabledModels.length > 0) {
-            enabledModels[0].default = true;
-            const newDefaultPath = join(
-              getRootDir(),
-              'contents',
-              'models',
-              `${enabledModels[0].id}.json`
-            );
-            await fs.writeFile(newDefaultPath, JSON.stringify(enabledModels[0], null, 2));
-          }
+        model.default = false;
+      }
+      const rootDir = getRootDir();
+      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
+      await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
+      await configCache.refreshModelsCache();
+      res.json({
+        message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        model: model,
+        enabled: newEnabledState
+      });
+    } catch (error) {
+      logger.error('Error toggling model:', error);
+      res.status(500).json({ error: 'Failed to toggle model' });
+    }
+  });
+
+  app.post(buildServerPath('/api/admin/models/:modelIds/_toggle'), adminAuth, async (req, res) => {
+    try {
+      const { modelIds } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Missing enabled flag' });
+      }
+
+      // Validate modelIds for security
+      const ids = validateIdsForPath(modelIds, 'model', res);
+      if (!ids) {
+        return;
+      }
+
+      const { data: models } = configCache.getModels(true);
+      const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
+      const rootDir = getRootDir();
+
+      for (const id of resolvedIds) {
+        const model = models.find(m => m.id === id);
+        if (!model) continue;
+        model.enabled = enabled;
+        if (!enabled) {
           model.default = false;
         }
-        const rootDir = getRootDir();
-        const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
+        const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
         await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
-        await configCache.refreshModelsCache();
-        res.json({
-          message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-          model: model,
-          enabled: newEnabledState
+      }
+
+      // ensure at least one enabled model has default=true
+      const enabledModels = models.filter(m => m.enabled);
+      if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
+        enabledModels[0].default = true;
+        const defaultPath = join(rootDir, 'contents', 'models', `${enabledModels[0].id}.json`);
+        await fs.writeFile(defaultPath, JSON.stringify(enabledModels[0], null, 2));
+      }
+
+      await configCache.refreshModelsCache();
+      res.json({
+        message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
+        enabled,
+        ids: resolvedIds
+      });
+    } catch (error) {
+      logger.error('Error toggling models:', error);
+      res.status(500).json({ error: 'Failed to toggle models' });
+    }
+  });
+
+  app.delete(buildServerPath('/api/admin/models/:modelId'), adminAuth, async (req, res) => {
+    try {
+      const { modelId } = req.params;
+
+      // Validate modelId for security
+      if (!validateIdForPath(modelId, 'model', res)) {
+        return;
+      }
+
+      const { data: models } = configCache.getModels(true);
+      const model = models.find(m => m.id === modelId);
+      if (!model) {
+        return res.status(404).json({ error: 'Model not found' });
+      }
+      if (model.default === true) {
+        const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
+        if (otherModels.length > 0) {
+          otherModels[0].default = true;
+          const newDefaultPath = join(
+            getRootDir(),
+            'contents',
+            'models',
+            `${otherModels[0].id}.json`
+          );
+          await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
+        }
+      }
+      const rootDir = getRootDir();
+      const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
+      if (!existsSync(modelFilePath)) {
+        return res.status(404).json({ error: 'Model file not found' });
+      }
+      await fs.unlink(modelFilePath);
+      await configCache.refreshModelsCache();
+      res.json({ message: 'Model deleted successfully' });
+    } catch (error) {
+      logger.error('Error deleting model:', error);
+      res.status(500).json({ error: 'Failed to delete model' });
+    }
+  });
+
+  app.post(buildServerPath('/api/admin/models/:modelId/test'), adminAuth, async (req, res) => {
+    try {
+      const { modelId } = req.params;
+
+      // Validate modelId for security
+      if (!validateIdForPath(modelId, 'model', res)) {
+        return;
+      }
+
+      const { data: models } = configCache.getModels(true);
+      const model = models.find(m => m.id === modelId);
+      if (!model) {
+        return res.status(404).json({ error: 'Model not found' });
+      }
+      const testMessage = 'Hello, can you respond with a simple "Test successful" message?';
+      const { simpleCompletion } = await import('../../utils.js');
+      const { verifyApiKey } = await import('../../serverHelpers.js');
+      const apiKey = await verifyApiKey(model, res);
+      if (!apiKey) {
+        return;
+      }
+      try {
+        const result = await simpleCompletion(testMessage, {
+          modelId: model.id,
+          apiKey: apiKey
         });
-      } catch (error) {
-        logger.error('Error toggling model:', error);
-        res.status(500).json({ error: 'Failed to toggle model' });
-      }
-    }
-  );
-
-  app.post(
-    buildServerPath('/api/admin/models/:modelIds/_toggle'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { modelIds } = req.params;
-        const { enabled } = req.body;
-        if (typeof enabled !== 'boolean') {
-          return res.status(400).json({ error: 'Missing enabled flag' });
-        }
-
-        // Validate modelIds for security
-        const ids = validateIdsForPath(modelIds, 'model', res);
-        if (!ids) {
-          return;
-        }
-
-        const { data: models } = configCache.getModels(true);
-        const resolvedIds = ids.includes('*') ? models.map(m => m.id) : ids;
-        const rootDir = getRootDir();
-
-        for (const id of resolvedIds) {
-          const model = models.find(m => m.id === id);
-          if (!model) continue;
-          model.enabled = enabled;
-          if (!enabled) {
-            model.default = false;
-          }
-          const modelFilePath = join(rootDir, 'contents', 'models', `${id}.json`);
-          await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
-        }
-
-        // ensure at least one enabled model has default=true
-        const enabledModels = models.filter(m => m.enabled);
-        if (enabledModels.length > 0 && !enabledModels.some(m => m.default)) {
-          enabledModels[0].default = true;
-          const defaultPath = join(rootDir, 'contents', 'models', `${enabledModels[0].id}.json`);
-          await fs.writeFile(defaultPath, JSON.stringify(enabledModels[0], null, 2));
-        }
-
-        await configCache.refreshModelsCache();
         res.json({
-          message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
-          enabled,
-          ids: resolvedIds
+          success: true,
+          message: 'Model test successful',
+          response: result.content,
+          model: model
         });
-      } catch (error) {
-        logger.error('Error toggling models:', error);
-        res.status(500).json({ error: 'Failed to toggle models' });
-      }
-    }
-  );
-
-  app.delete(
-    buildServerPath('/api/admin/models/:modelId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { modelId } = req.params;
-
-        // Validate modelId for security
-        if (!validateIdForPath(modelId, 'model', res)) {
-          return;
-        }
-
-        const { data: models } = configCache.getModels(true);
-        const model = models.find(m => m.id === modelId);
-        if (!model) {
-          return res.status(404).json({ error: 'Model not found' });
-        }
-        if (model.default === true) {
-          const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
-          if (otherModels.length > 0) {
-            otherModels[0].default = true;
-            const newDefaultPath = join(
-              getRootDir(),
-              'contents',
-              'models',
-              `${otherModels[0].id}.json`
-            );
-            await fs.writeFile(newDefaultPath, JSON.stringify(otherModels[0], null, 2));
-          }
-        }
-        const rootDir = getRootDir();
-        const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
-        if (!existsSync(modelFilePath)) {
-          return res.status(404).json({ error: 'Model file not found' });
-        }
-        await fs.unlink(modelFilePath);
-        await configCache.refreshModelsCache();
-        res.json({ message: 'Model deleted successfully' });
-      } catch (error) {
-        logger.error('Error deleting model:', error);
-        res.status(500).json({ error: 'Failed to delete model' });
-      }
-    }
-  );
-
-  app.post(
-    buildServerPath('/api/admin/models/:modelId/test'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { modelId } = req.params;
-
-        // Validate modelId for security
-        if (!validateIdForPath(modelId, 'model', res)) {
-          return;
-        }
-
-        const { data: models } = configCache.getModels(true);
-        const model = models.find(m => m.id === modelId);
-        if (!model) {
-          return res.status(404).json({ error: 'Model not found' });
-        }
-        const testMessage = 'Hello, can you respond with a simple "Test successful" message?';
-        const { simpleCompletion } = await import('../../utils.js');
-        const { verifyApiKey } = await import('../../serverHelpers.js');
-        const apiKey = await verifyApiKey(model, res);
-        if (!apiKey) {
-          return;
-        }
-        try {
-          const result = await simpleCompletion(testMessage, {
-            modelId: model.id,
-            apiKey: apiKey
-          });
-          res.json({
-            success: true,
-            message: 'Model test successful',
-            response: result.content,
-            model: model
-          });
-        } catch (testError) {
-          logger.error('Model test failed:', testError);
-          let errorMessage = 'Unknown error occurred';
-          let userMessage = 'Model test failed';
-          if (testError.message.includes('fetch failed')) {
-            if (testError.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
-              userMessage = 'Connection timeout';
-              errorMessage =
-                'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.';
-            } else if (testError.cause?.code === 'ECONNREFUSED') {
-              userMessage = 'Connection refused';
-              errorMessage =
-                'Unable to connect to the model service. Please verify the URL and ensure the service is running.';
-            } else if (testError.cause?.code === 'ENOTFOUND') {
-              userMessage = 'Service not found';
-              errorMessage =
-                'The model service hostname could not be resolved. Please check the URL configuration.';
-            } else {
-              userMessage = 'Network error';
-              errorMessage = `Network connection failed: ${testError.cause?.message || testError.message}`;
-            }
-          } else if (testError.message.includes('timeout')) {
-            userMessage = 'Request timeout';
+      } catch (testError) {
+        logger.error('Model test failed:', testError);
+        let errorMessage = 'Unknown error occurred';
+        let userMessage = 'Model test failed';
+        if (testError.message.includes('fetch failed')) {
+          if (testError.cause?.code === 'UND_ERR_CONNECT_TIMEOUT') {
+            userMessage = 'Connection timeout';
             errorMessage =
-              'The model service took too long to respond. Please try again or check the service status.';
-          } else if (testError.message.includes('401')) {
-            userMessage = 'Authentication failed';
+              'The model service did not respond within the timeout period. Please check if the model URL is correct and the service is running.';
+          } else if (testError.cause?.code === 'ECONNREFUSED') {
+            userMessage = 'Connection refused';
             errorMessage =
-              'Invalid API key or authentication credentials. Please check your model configuration.';
-          } else if (testError.message.includes('403')) {
-            userMessage = 'Access denied';
+              'Unable to connect to the model service. Please verify the URL and ensure the service is running.';
+          } else if (testError.cause?.code === 'ENOTFOUND') {
+            userMessage = 'Service not found';
             errorMessage =
-              'Access denied by the model service. Please check your API key permissions.';
-          } else if (testError.message.includes('404')) {
-            userMessage = 'Model not found';
-            errorMessage =
-              'The specified model was not found on the service. Please check the model ID configuration.';
-          } else if (testError.message.includes('429')) {
-            userMessage = 'Rate limit exceeded';
-            errorMessage = 'Too many requests to the model service. Please try again later.';
-          } else if (testError.message.includes('500')) {
-            userMessage = 'Server error';
-            errorMessage =
-              'The model service encountered an internal error. Please try again later.';
+              'The model service hostname could not be resolved. Please check the URL configuration.';
           } else {
-            errorMessage = testError.message;
+            userMessage = 'Network error';
+            errorMessage = `Network connection failed: ${testError.cause?.message || testError.message}`;
           }
-          res.status(500).json({
-            success: false,
-            message: userMessage,
-            error: errorMessage,
-            model: model
-          });
+        } else if (testError.message.includes('timeout')) {
+          userMessage = 'Request timeout';
+          errorMessage =
+            'The model service took too long to respond. Please try again or check the service status.';
+        } else if (testError.message.includes('401')) {
+          userMessage = 'Authentication failed';
+          errorMessage =
+            'Invalid API key or authentication credentials. Please check your model configuration.';
+        } else if (testError.message.includes('403')) {
+          userMessage = 'Access denied';
+          errorMessage =
+            'Access denied by the model service. Please check your API key permissions.';
+        } else if (testError.message.includes('404')) {
+          userMessage = 'Model not found';
+          errorMessage =
+            'The specified model was not found on the service. Please check the model ID configuration.';
+        } else if (testError.message.includes('429')) {
+          userMessage = 'Rate limit exceeded';
+          errorMessage = 'Too many requests to the model service. Please try again later.';
+        } else if (testError.message.includes('500')) {
+          userMessage = 'Server error';
+          errorMessage = 'The model service encountered an internal error. Please try again later.';
+        } else {
+          errorMessage = testError.message;
         }
-      } catch (error) {
-        logger.error('Error testing model:', error);
         res.status(500).json({
           success: false,
-          message: 'System error',
-          error: 'Failed to test model due to a system error. Please try again.'
+          message: userMessage,
+          error: errorMessage,
+          model: model
         });
       }
+    } catch (error) {
+      logger.error('Error testing model:', error);
+      res.status(500).json({
+        success: false,
+        message: 'System error',
+        error: 'Failed to test model due to a system error. Please try again.'
+      });
     }
-  );
+  });
 }

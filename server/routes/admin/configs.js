@@ -269,136 +269,132 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
   /**
    * Update platform configuration
    */
-  app.post(
-    buildServerPath('/api/admin/configs/platform'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const newConfig = req.body;
+  app.post(buildServerPath('/api/admin/configs/platform'), adminAuth, async (req, res) => {
+    try {
+      const newConfig = req.body;
 
-        if (!newConfig || typeof newConfig !== 'object') {
-          return res.status(400).json({ error: 'Invalid configuration data' });
-        }
-
-        const rootDir = getRootDir();
-        const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-
-        // Load existing config to preserve other fields and track changes
-        let existingConfig = {};
-        try {
-          const existingConfigData = await fs.readFile(platformConfigPath, 'utf8');
-          existingConfig = JSON.parse(existingConfigData);
-        } catch {
-          // File doesn't exist, start with empty config
-          logger.info('Creating new platform config file');
-        }
-
-        // Merge the authentication-related config with existing config
-        const mergedConfig = {
-          ...existingConfig,
-          auth: newConfig.auth || existingConfig.auth,
-          anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
-          proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
-          localAuth: newConfig.localAuth || existingConfig.localAuth,
-          oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
-          ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
-          ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
-          authorization: newConfig.authorization || existingConfig.authorization,
-          oauth: newConfig.oauth || existingConfig.oauth
-        };
-
-        // Restore secrets that were redacted in the client
-        // This prevents environment variable placeholders from being overwritten with ***REDACTED***
-
-        // Restore JWT secrets
-        if (newConfig.auth?.jwtSecret) {
-          if (!mergedConfig.auth) mergedConfig.auth = {};
-          mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
-            newConfig.auth.jwtSecret,
-            existingConfig.auth?.jwtSecret
-          );
-        }
-
-        if (newConfig.localAuth?.jwtSecret) {
-          if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
-          mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
-            newConfig.localAuth.jwtSecret,
-            existingConfig.localAuth?.jwtSecret
-          );
-        }
-
-        // Restore admin secret
-        if (newConfig.admin?.secret) {
-          if (!mergedConfig.admin) mergedConfig.admin = {};
-          mergedConfig.admin.secret = restoreSecretIfRedacted(
-            newConfig.admin.secret,
-            existingConfig.admin?.secret
-          );
-        }
-
-        // Restore OIDC provider client secrets
-        if (newConfig.oidcAuth?.providers && existingConfig.oidcAuth?.providers) {
-          if (!mergedConfig.oidcAuth) mergedConfig.oidcAuth = {};
-          mergedConfig.oidcAuth.providers = newConfig.oidcAuth.providers.map((provider, index) => {
-            const existingProvider = existingConfig.oidcAuth?.providers?.[index];
-            return {
-              ...provider,
-              clientSecret: restoreSecretIfRedacted(
-                provider.clientSecret,
-                existingProvider?.clientSecret
-              )
-            };
-          });
-        }
-
-        // Restore LDAP provider admin passwords
-        if (newConfig.ldapAuth?.providers && existingConfig.ldapAuth?.providers) {
-          if (!mergedConfig.ldapAuth) mergedConfig.ldapAuth = {};
-          mergedConfig.ldapAuth.providers = newConfig.ldapAuth.providers.map((provider, index) => {
-            const existingProvider = existingConfig.ldapAuth?.providers?.[index];
-            return {
-              ...provider,
-              adminPassword: restoreSecretIfRedacted(
-                provider.adminPassword,
-                existingProvider?.adminPassword
-              )
-            };
-          });
-        }
-
-        // Save to file
-        await atomicWriteJSON(platformConfigPath, mergedConfig);
-
-        // Refresh cache
-        await configCache.refreshCacheEntry('config/platform.json');
-
-        // Reconfigure authentication methods dynamically where possible
-        const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
-
-        // Log results
-        if (reconfigResults.reconfigured.length > 0) {
-          logger.info(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
-        }
-        if (reconfigResults.requiresRestart.length > 0) {
-          logger.info(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
-        }
-        reconfigResults.notes.forEach(note => logger.info(`ℹ️  ${note}`));
-
-        logger.info('🔧 Platform authentication configuration updated');
-
-        res.json({
-          message: 'Platform configuration updated successfully',
-          config: mergedConfig,
-          reconfiguration: {
-            reconfigured: reconfigResults.reconfigured,
-            requiresRestart: reconfigResults.requiresRestart,
-            notes: reconfigResults.notes
-          }
-        });
-      } catch (error) {
-        logger.error('Error updating platform configuration:', error);
-        res.status(500).json({ error: 'Failed to update platform configuration' });
+      if (!newConfig || typeof newConfig !== 'object') {
+        return res.status(400).json({ error: 'Invalid configuration data' });
       }
+
+      const rootDir = getRootDir();
+      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+
+      // Load existing config to preserve other fields and track changes
+      let existingConfig = {};
+      try {
+        const existingConfigData = await fs.readFile(platformConfigPath, 'utf8');
+        existingConfig = JSON.parse(existingConfigData);
+      } catch {
+        // File doesn't exist, start with empty config
+        logger.info('Creating new platform config file');
+      }
+
+      // Merge the authentication-related config with existing config
+      const mergedConfig = {
+        ...existingConfig,
+        auth: newConfig.auth || existingConfig.auth,
+        anonymousAuth: newConfig.anonymousAuth || existingConfig.anonymousAuth,
+        proxyAuth: newConfig.proxyAuth || existingConfig.proxyAuth,
+        localAuth: newConfig.localAuth || existingConfig.localAuth,
+        oidcAuth: newConfig.oidcAuth || existingConfig.oidcAuth,
+        ldapAuth: newConfig.ldapAuth || existingConfig.ldapAuth,
+        ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
+        authorization: newConfig.authorization || existingConfig.authorization,
+        oauth: newConfig.oauth || existingConfig.oauth
+      };
+
+      // Restore secrets that were redacted in the client
+      // This prevents environment variable placeholders from being overwritten with ***REDACTED***
+
+      // Restore JWT secrets
+      if (newConfig.auth?.jwtSecret) {
+        if (!mergedConfig.auth) mergedConfig.auth = {};
+        mergedConfig.auth.jwtSecret = restoreSecretIfRedacted(
+          newConfig.auth.jwtSecret,
+          existingConfig.auth?.jwtSecret
+        );
+      }
+
+      if (newConfig.localAuth?.jwtSecret) {
+        if (!mergedConfig.localAuth) mergedConfig.localAuth = {};
+        mergedConfig.localAuth.jwtSecret = restoreSecretIfRedacted(
+          newConfig.localAuth.jwtSecret,
+          existingConfig.localAuth?.jwtSecret
+        );
+      }
+
+      // Restore admin secret
+      if (newConfig.admin?.secret) {
+        if (!mergedConfig.admin) mergedConfig.admin = {};
+        mergedConfig.admin.secret = restoreSecretIfRedacted(
+          newConfig.admin.secret,
+          existingConfig.admin?.secret
+        );
+      }
+
+      // Restore OIDC provider client secrets
+      if (newConfig.oidcAuth?.providers && existingConfig.oidcAuth?.providers) {
+        if (!mergedConfig.oidcAuth) mergedConfig.oidcAuth = {};
+        mergedConfig.oidcAuth.providers = newConfig.oidcAuth.providers.map((provider, index) => {
+          const existingProvider = existingConfig.oidcAuth?.providers?.[index];
+          return {
+            ...provider,
+            clientSecret: restoreSecretIfRedacted(
+              provider.clientSecret,
+              existingProvider?.clientSecret
+            )
+          };
+        });
+      }
+
+      // Restore LDAP provider admin passwords
+      if (newConfig.ldapAuth?.providers && existingConfig.ldapAuth?.providers) {
+        if (!mergedConfig.ldapAuth) mergedConfig.ldapAuth = {};
+        mergedConfig.ldapAuth.providers = newConfig.ldapAuth.providers.map((provider, index) => {
+          const existingProvider = existingConfig.ldapAuth?.providers?.[index];
+          return {
+            ...provider,
+            adminPassword: restoreSecretIfRedacted(
+              provider.adminPassword,
+              existingProvider?.adminPassword
+            )
+          };
+        });
+      }
+
+      // Save to file
+      await atomicWriteJSON(platformConfigPath, mergedConfig);
+
+      // Refresh cache
+      await configCache.refreshCacheEntry('config/platform.json');
+
+      // Reconfigure authentication methods dynamically where possible
+      const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
+
+      // Log results
+      if (reconfigResults.reconfigured.length > 0) {
+        logger.info(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
+      }
+      if (reconfigResults.requiresRestart.length > 0) {
+        logger.info(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
+      }
+      reconfigResults.notes.forEach(note => logger.info(`ℹ️  ${note}`));
+
+      logger.info('🔧 Platform authentication configuration updated');
+
+      res.json({
+        message: 'Platform configuration updated successfully',
+        config: mergedConfig,
+        reconfiguration: {
+          reconfigured: reconfigResults.reconfigured,
+          requiresRestart: reconfigResults.requiresRestart,
+          notes: reconfigResults.notes
+        }
+      });
+    } catch (error) {
+      logger.error('Error updating platform configuration:', error);
+      res.status(500).json({ error: 'Failed to update platform configuration' });
     }
-  );
+  });
 }

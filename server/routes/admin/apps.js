@@ -446,41 +446,37 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.get(
-    buildServerPath('/api/admin/apps/:appId/inheritance'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { appId } = req.params;
+  app.get(buildServerPath('/api/admin/apps/:appId/inheritance'), adminAuth, async (req, res) => {
+    try {
+      const { appId } = req.params;
 
-        // Validate appId for security
-        if (!validateIdForPath(appId, 'app', res)) {
-          return;
-        }
-
-        const { data: apps } = configCache.getApps(true);
-        const app = apps.find(a => a.id === appId);
-
-        if (!app) {
-          return sendNotFound(res, 'App');
-        }
-
-        const inheritance = {
-          app: app,
-          parent: null,
-          children: []
-        };
-
-        if (app.parentId) {
-          inheritance.parent = apps.find(a => a.id === app.parentId);
-        }
-        inheritance.children = apps.filter(a => a.parentId === appId);
-        res.json(inheritance);
-      } catch (error) {
-        sendFailedOperationError(res, 'fetch app inheritance', error);
+      // Validate appId for security
+      if (!validateIdForPath(appId, 'app', res)) {
+        return;
       }
+
+      const { data: apps } = configCache.getApps(true);
+      const app = apps.find(a => a.id === appId);
+
+      if (!app) {
+        return sendNotFound(res, 'App');
+      }
+
+      const inheritance = {
+        app: app,
+        parent: null,
+        children: []
+      };
+
+      if (app.parentId) {
+        inheritance.parent = apps.find(a => a.id === app.parentId);
+      }
+      inheritance.children = apps.filter(a => a.parentId === appId);
+      res.json(inheritance);
+    } catch (error) {
+      sendFailedOperationError(res, 'fetch app inheritance', error);
     }
-  );
+  });
 
   app.get(buildServerPath('/api/admin/apps/:appId'), adminAuth, async (req, res) => {
     try {
@@ -780,48 +776,44 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.post(
-    buildServerPath('/api/admin/apps/:appId/toggle'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { appId } = req.params;
+  app.post(buildServerPath('/api/admin/apps/:appId/toggle'), adminAuth, async (req, res) => {
+    try {
+      const { appId } = req.params;
 
-        // Validate appId for security
-        if (!validateIdForPath(appId, 'app', res)) {
-          return;
-        }
-
-        const { data: apps } = configCache.getApps(true);
-        const app = apps.find(a => a.id === appId);
-        if (!app) {
-          return sendNotFound(res, 'App');
-        }
-        const newEnabledState = !app.enabled;
-        app.enabled = newEnabledState;
-        const rootDir = getRootDir();
-        const appsDir = join(rootDir, 'contents', 'apps');
-        // Ensure directory exists before writing
-        await fs.mkdir(appsDir, { recursive: true });
-        // Find the actual file for this app ID (may not match ${appId}.json)
-        const filename = await findAppFile(appId, appsDir);
-        if (!filename) {
-          return res.status(404).json({ error: 'App file not found on disk' });
-        }
-        const appFilePath = join(appsDir, filename);
-        await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
-        await configCache.refreshAppsCache();
-        res.json({
-          message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-          app: app,
-          enabled: newEnabledState
-        });
-      } catch (error) {
-        logger.error('Error toggling app:', error);
-        res.status(500).json({ error: 'Failed to toggle app' });
+      // Validate appId for security
+      if (!validateIdForPath(appId, 'app', res)) {
+        return;
       }
+
+      const { data: apps } = configCache.getApps(true);
+      const app = apps.find(a => a.id === appId);
+      if (!app) {
+        return sendNotFound(res, 'App');
+      }
+      const newEnabledState = !app.enabled;
+      app.enabled = newEnabledState;
+      const rootDir = getRootDir();
+      const appsDir = join(rootDir, 'contents', 'apps');
+      // Ensure directory exists before writing
+      await fs.mkdir(appsDir, { recursive: true });
+      // Find the actual file for this app ID (may not match ${appId}.json)
+      const filename = await findAppFile(appId, appsDir);
+      if (!filename) {
+        return res.status(404).json({ error: 'App file not found on disk' });
+      }
+      const appFilePath = join(appsDir, filename);
+      await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+      await configCache.refreshAppsCache();
+      res.json({
+        message: `App ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+        app: app,
+        enabled: newEnabledState
+      });
+    } catch (error) {
+      logger.error('Error toggling app:', error);
+      res.status(500).json({ error: 'Failed to toggle app' });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -891,58 +883,54 @@ export default function registerAdminAppsRoutes(app, basePath = '') {
    *       500:
    *         description: Internal server error
    */
-  app.post(
-    buildServerPath('/api/admin/apps/:appIds/_toggle'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { appIds } = req.params;
-        const { enabled } = req.body;
-        if (typeof enabled !== 'boolean') {
-          return res.status(400).json({ error: 'Missing enabled flag' });
-        }
-
-        // Validate appIds for security
-        const ids = validateIdsForPath(appIds, 'app', res);
-        if (!ids) {
-          return;
-        }
-
-        const { data: apps } = configCache.getApps(true);
-        const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
-        const rootDir = getRootDir();
-        const appsDir = join(rootDir, 'contents', 'apps');
-        // Ensure directory exists before writing
-        await fs.mkdir(appsDir, { recursive: true });
-
-        for (const id of resolvedIds) {
-          const app = apps.find(a => a.id === id);
-          if (!app) continue;
-          if (app.enabled !== enabled) {
-            app.enabled = enabled;
-            // Find the actual file for this app ID (may not match ${id}.json)
-            const filename = await findAppFile(id, appsDir);
-            if (!filename) {
-              console.warn(`App file not found for ID: ${id}`);
-              continue;
-            }
-            const appFilePath = join(appsDir, filename);
-            await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
-          }
-        }
-
-        await configCache.refreshAppsCache();
-        res.json({
-          message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
-          enabled,
-          ids: resolvedIds
-        });
-      } catch (error) {
-        logger.error('Error toggling apps:', error);
-        res.status(500).json({ error: 'Failed to toggle apps' });
+  app.post(buildServerPath('/api/admin/apps/:appIds/_toggle'), adminAuth, async (req, res) => {
+    try {
+      const { appIds } = req.params;
+      const { enabled } = req.body;
+      if (typeof enabled !== 'boolean') {
+        return res.status(400).json({ error: 'Missing enabled flag' });
       }
+
+      // Validate appIds for security
+      const ids = validateIdsForPath(appIds, 'app', res);
+      if (!ids) {
+        return;
+      }
+
+      const { data: apps } = configCache.getApps(true);
+      const resolvedIds = ids.includes('*') ? apps.map(a => a.id) : ids;
+      const rootDir = getRootDir();
+      const appsDir = join(rootDir, 'contents', 'apps');
+      // Ensure directory exists before writing
+      await fs.mkdir(appsDir, { recursive: true });
+
+      for (const id of resolvedIds) {
+        const app = apps.find(a => a.id === id);
+        if (!app) continue;
+        if (app.enabled !== enabled) {
+          app.enabled = enabled;
+          // Find the actual file for this app ID (may not match ${id}.json)
+          const filename = await findAppFile(id, appsDir);
+          if (!filename) {
+            console.warn(`App file not found for ID: ${id}`);
+            continue;
+          }
+          const appFilePath = join(appsDir, filename);
+          await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
+        }
+      }
+
+      await configCache.refreshAppsCache();
+      res.json({
+        message: `Apps ${enabled ? 'enabled' : 'disabled'} successfully`,
+        enabled,
+        ids: resolvedIds
+      });
+    } catch (error) {
+      logger.error('Error toggling apps:', error);
+      res.status(500).json({ error: 'Failed to toggle apps' });
     }
-  );
+  });
 
   /**
    * @swagger

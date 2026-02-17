@@ -554,19 +554,15 @@ export default function registerSessionRoutes(
     }
   );
 
-  app.get(
-    buildServerPath('/api/apps/:appId/chat/:chatId/status'),
-    chatAuthRequired,
-    (req, res) => {
-      const { chatId } = req.params;
-      if (clients.has(chatId)) {
-        return res.status(200).json({
-          active: true,
-          lastActivity: clients.get(chatId).lastActivity,
-          processing: activeRequests.has(chatId)
-        });
-      }
-      return res.status(200).json({ active: false });
+  app.get(buildServerPath('/api/apps/:appId/chat/:chatId/status'), chatAuthRequired, (req, res) => {
+    const { chatId } = req.params;
+    if (clients.has(chatId)) {
+      return res.status(200).json({
+        active: true,
+        lastActivity: clients.get(chatId).lastActivity,
+        processing: activeRequests.has(chatId)
+      });
     }
-  );
+    return res.status(200).json({ active: false });
+  });
 }

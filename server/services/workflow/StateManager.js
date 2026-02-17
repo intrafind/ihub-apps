@@ -230,7 +230,7 @@ export class StateManager {
       return null;
     }
 
-   const state = this.activeStates.get(executionId);
+    const state = this.activeStates.get(executionId);
 
     if (!state) {
       // Try to load from checkpoint file if not in memory

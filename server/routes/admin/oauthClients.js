@@ -99,53 +99,49 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       404:
    *         description: Client not found
    */
-  app.get(
-    buildServerPath('/api/admin/oauth/clients/:clientId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const oauthConfig = platform.oauth || {};
+  app.get(buildServerPath('/api/admin/oauth/clients/:clientId'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth is not enabled on this server'
-          });
-        }
-
-        const { clientId } = req.params;
-
-        // Validate clientId
-        validateIdForPath(clientId, 'clientId');
-
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const clientsConfig = loadOAuthClients(clientsFilePath);
-        const client = findClientById(clientsConfig, clientId);
-
-        if (!client) {
-          return res.status(404).json({
-            success: false,
-            error: 'OAuth client not found'
-          });
-        }
-
-        // Remove secret from response
-        const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
-
-        res.json({
-          success: true,
-          client: clientWithoutSecret
-        });
-      } catch (error) {
-        logger.error('[OAuth Admin] Get client error:', error);
-        res.status(500).json({
+      if (!oauthConfig.enabled) {
+        return res.status(400).json({
           success: false,
-          error: 'Failed to get OAuth client'
+          error: 'OAuth is not enabled on this server'
         });
       }
+
+      const { clientId } = req.params;
+
+      // Validate clientId
+      validateIdForPath(clientId, 'clientId');
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const clientsConfig = loadOAuthClients(clientsFilePath);
+      const client = findClientById(clientsConfig, clientId);
+
+      if (!client) {
+        return res.status(404).json({
+          success: false,
+          error: 'OAuth client not found'
+        });
+      }
+
+      // Remove secret from response
+      const { clientSecret: _clientSecret, ...clientWithoutSecret } = client;
+
+      res.json({
+        success: true,
+        client: clientWithoutSecret
+      });
+    } catch (error) {
+      logger.error('[OAuth Admin] Get client error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to get OAuth client'
+      });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -303,69 +299,60 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       404:
    *         description: Client not found
    */
-  app.put(
-    buildServerPath('/api/admin/oauth/clients/:clientId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const oauthConfig = platform.oauth || {};
+  app.put(buildServerPath('/api/admin/oauth/clients/:clientId'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth is not enabled on this server'
-          });
-        }
-
-        const { clientId } = req.params;
-
-        // Validate clientId
-        validateIdForPath(clientId, 'clientId');
-
-        const updates = req.body;
-
-        // Validate token expiration if provided
-        if (updates.tokenExpirationMinutes) {
-          const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440;
-          if (updates.tokenExpirationMinutes > maxExpiration) {
-            return res.status(400).json({
-              success: false,
-              error: `Token expiration cannot exceed ${maxExpiration} minutes`
-            });
-          }
-        }
-
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const updatedBy = req.user?.id || 'admin';
-
-        const updatedClient = await updateOAuthClient(
-          clientId,
-          updates,
-          clientsFilePath,
-          updatedBy
-        );
-
-        res.json({
-          success: true,
-          message: 'OAuth client updated successfully',
-          client: updatedClient
-        });
-      } catch (error) {
-        if (error.message.includes('not found')) {
-          return res.status(404).json({
-            success: false,
-            error: error.message
-          });
-        }
-        logger.error('[OAuth Admin] Update client error:', error);
-        res.status(500).json({
+      if (!oauthConfig.enabled) {
+        return res.status(400).json({
           success: false,
-          error: 'Failed to update OAuth client'
+          error: 'OAuth is not enabled on this server'
         });
       }
+
+      const { clientId } = req.params;
+
+      // Validate clientId
+      validateIdForPath(clientId, 'clientId');
+
+      const updates = req.body;
+
+      // Validate token expiration if provided
+      if (updates.tokenExpirationMinutes) {
+        const maxExpiration = oauthConfig.maxTokenExpirationMinutes || 1440;
+        if (updates.tokenExpirationMinutes > maxExpiration) {
+          return res.status(400).json({
+            success: false,
+            error: `Token expiration cannot exceed ${maxExpiration} minutes`
+          });
+        }
+      }
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const updatedBy = req.user?.id || 'admin';
+
+      const updatedClient = await updateOAuthClient(clientId, updates, clientsFilePath, updatedBy);
+
+      res.json({
+        success: true,
+        message: 'OAuth client updated successfully',
+        client: updatedClient
+      });
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          error: error.message
+        });
+      }
+      logger.error('[OAuth Admin] Update client error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to update OAuth client'
+      });
     }
-  );
+  });
 
   /**
    * @swagger
@@ -390,50 +377,46 @@ export default function registerAdminOAuthRoutes(app, basePath = '') {
    *       404:
    *         description: Client not found
    */
-  app.delete(
-    buildServerPath('/api/admin/oauth/clients/:clientId'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform() || {};
-        const oauthConfig = platform.oauth || {};
+  app.delete(buildServerPath('/api/admin/oauth/clients/:clientId'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
-          return res.status(400).json({
-            success: false,
-            error: 'OAuth is not enabled on this server'
-          });
-        }
-
-        const { clientId } = req.params;
-
-        // Validate clientId
-        validateIdForPath(clientId, 'clientId');
-
-        const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const deletedBy = req.user?.id || 'admin';
-
-        await deleteOAuthClient(clientId, clientsFilePath, deletedBy);
-
-        res.json({
-          success: true,
-          message: 'OAuth client deleted successfully'
-        });
-      } catch (error) {
-        if (error.message.includes('not found')) {
-          return res.status(404).json({
-            success: false,
-            error: error.message
-          });
-        }
-        logger.error('[OAuth Admin] Delete client error:', error);
-        res.status(500).json({
+      if (!oauthConfig.enabled) {
+        return res.status(400).json({
           success: false,
-          error: 'Failed to delete OAuth client'
+          error: 'OAuth is not enabled on this server'
         });
       }
+
+      const { clientId } = req.params;
+
+      // Validate clientId
+      validateIdForPath(clientId, 'clientId');
+
+      const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      const deletedBy = req.user?.id || 'admin';
+
+      await deleteOAuthClient(clientId, clientsFilePath, deletedBy);
+
+      res.json({
+        success: true,
+        message: 'OAuth client deleted successfully'
+      });
+    } catch (error) {
+      if (error.message.includes('not found')) {
+        return res.status(404).json({
+          success: false,
+          error: error.message
+        });
+      }
+      logger.error('[OAuth Admin] Delete client error:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to delete OAuth client'
+      });
     }
-  );
+  });
 
   /**
    * @swagger

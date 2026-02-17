@@ -115,211 +115,186 @@ export default function registerAdminUIRoutes(app, basePath = '') {
   /**
    * List uploaded assets
    */
-  app.get(
-    buildServerPath('/api/admin/ui/assets'),
-    authRequired,
-    adminAuth,
-    (req, res) => {
-      try {
-        const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+  app.get(buildServerPath('/api/admin/ui/assets'), authRequired, adminAuth, (req, res) => {
+    try {
+      const assetsDir = join(getRootDir(), 'contents/uploads/assets');
 
-        // Create directory if it doesn't exist
-        if (!fs.existsSync(assetsDir)) {
-          fs.mkdirSync(assetsDir, { recursive: true });
-          return res.json({ success: true, assets: [] });
-        }
+      // Create directory if it doesn't exist
+      if (!fs.existsSync(assetsDir)) {
+        fs.mkdirSync(assetsDir, { recursive: true });
+        return res.json({ success: true, assets: [] });
+      }
 
-        const files = fs.readdirSync(assetsDir);
-        const assets = files
-          .filter(filename => {
-            // Filter out hidden files and directories
-            return !filename.startsWith('.') && filename.length > 0;
-          })
-          .map(filename => {
-            try {
-              const filepath = join(assetsDir, filename);
-              const stats = fs.statSync(filepath);
+      const files = fs.readdirSync(assetsDir);
+      const assets = files
+        .filter(filename => {
+          // Filter out hidden files and directories
+          return !filename.startsWith('.') && filename.length > 0;
+        })
+        .map(filename => {
+          try {
+            const filepath = join(assetsDir, filename);
+            const stats = fs.statSync(filepath);
 
-              // Skip directories
-              if (stats.isDirectory()) {
-                return null;
-              }
-
-              const ext = path.extname(filename).toLowerCase();
-
-              return {
-                id: filename,
-                filename,
-                publicUrl: `/uploads/assets/${filename}`,
-                size: stats.size,
-                mimetype: getMimeType(ext),
-                uploadedAt: stats.mtime.toISOString(),
-                isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
-              };
-            } catch (statError) {
-              logger.warn(`Error reading file stats for ${filename}:`, statError.message);
+            // Skip directories
+            if (stats.isDirectory()) {
               return null;
             }
-          })
-          .filter(asset => asset !== null)
-          .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
 
-        res.json({ success: true, assets });
-      } catch (error) {
-        logger.error('Error listing assets:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to load assets',
-          error: error.message
-        });
-      }
+            const ext = path.extname(filename).toLowerCase();
+
+            return {
+              id: filename,
+              filename,
+              publicUrl: `/uploads/assets/${filename}`,
+              size: stats.size,
+              mimetype: getMimeType(ext),
+              uploadedAt: stats.mtime.toISOString(),
+              isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
+            };
+          } catch (statError) {
+            logger.warn(`Error reading file stats for ${filename}:`, statError.message);
+            return null;
+          }
+        })
+        .filter(asset => asset !== null)
+        .sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt));
+
+      res.json({ success: true, assets });
+    } catch (error) {
+      logger.error('Error listing assets:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to load assets',
+        error: error.message
+      });
     }
-  );
+  });
 
   /**
    * Delete asset
    */
-  app.delete(
-    buildServerPath('/api/admin/ui/assets/:id'),
-    authRequired,
-    adminAuth,
-    (req, res) => {
-      try {
-        const { id } = req.params;
-        const filepath = join(getRootDir(), 'contents/uploads/assets', id);
+  app.delete(buildServerPath('/api/admin/ui/assets/:id'), authRequired, adminAuth, (req, res) => {
+    try {
+      const { id } = req.params;
+      const filepath = join(getRootDir(), 'contents/uploads/assets', id);
 
-        if (!fs.existsSync(filepath)) {
-          return res.status(404).json({
-            success: false,
-            message: 'Asset not found'
-          });
-        }
-
-        fs.unlinkSync(filepath);
-
-        res.json({
-          success: true,
-          message: 'Asset deleted successfully'
-        });
-      } catch (error) {
-        logger.error('Error deleting asset:', error);
-        res.status(500).json({
+      if (!fs.existsSync(filepath)) {
+        return res.status(404).json({
           success: false,
-          message: 'Failed to delete asset',
-          error: error.message
+          message: 'Asset not found'
         });
       }
+
+      fs.unlinkSync(filepath);
+
+      res.json({
+        success: true,
+        message: 'Asset deleted successfully'
+      });
+    } catch (error) {
+      logger.error('Error deleting asset:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to delete asset',
+        error: error.message
+      });
     }
-  );
+  });
 
   /**
    * Get UI configuration
    */
-  app.get(
-    buildServerPath('/api/admin/ui/config'),
-    authRequired,
-    adminAuth,
-    (req, res) => {
-      try {
-        const uiConfig = configCache.getUI();
+  app.get(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, (req, res) => {
+    try {
+      const uiConfig = configCache.getUI();
 
-        res.json({
-          success: true,
-          config: uiConfig?.data || {}
-        });
-      } catch (error) {
-        logger.error('Error getting UI config:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to get UI configuration',
-          error: error.message
-        });
-      }
+      res.json({
+        success: true,
+        config: uiConfig?.data || {}
+      });
+    } catch (error) {
+      logger.error('Error getting UI config:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get UI configuration',
+        error: error.message
+      });
     }
-  );
+  });
 
   /**
    * Update UI configuration
    */
-  app.post(
-    buildServerPath('/api/admin/ui/config'),
-    authRequired,
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { config } = req.body;
+  app.post(buildServerPath('/api/admin/ui/config'), authRequired, adminAuth, async (req, res) => {
+    try {
+      const { config } = req.body;
 
-        if (!config || typeof config !== 'object') {
-          return res.status(400).json({
-            success: false,
-            message: 'Invalid configuration data'
-          });
-        }
-
-        // Get the current config path
-        const configPath = join(getRootDir(), 'contents/config/ui.json');
-
-        // Validate the configuration structure (basic validation)
-        validateUIConfig(config);
-
-        // Write the updated configuration atomically
-        await atomicWriteJSON(configPath, config);
-
-        // Refresh the cache
-        await configCache.refreshCacheEntry('config/ui.json');
-
-        res.json({
-          success: true,
-          message: 'UI configuration updated successfully'
-        });
-      } catch (error) {
-        logger.error('Error updating UI config:', error);
-        res.status(500).json({
+      if (!config || typeof config !== 'object') {
+        return res.status(400).json({
           success: false,
-          message: 'Failed to update UI configuration',
-          error: error.message
+          message: 'Invalid configuration data'
         });
       }
+
+      // Get the current config path
+      const configPath = join(getRootDir(), 'contents/config/ui.json');
+
+      // Validate the configuration structure (basic validation)
+      validateUIConfig(config);
+
+      // Write the updated configuration atomically
+      await atomicWriteJSON(configPath, config);
+
+      // Refresh the cache
+      await configCache.refreshCacheEntry('config/ui.json');
+
+      res.json({
+        success: true,
+        message: 'UI configuration updated successfully'
+      });
+    } catch (error) {
+      logger.error('Error updating UI config:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to update UI configuration',
+        error: error.message
+      });
     }
-  );
+  });
 
   /**
    * Backup UI configuration
    */
-  app.post(
-    buildServerPath('/api/admin/ui/backup'),
-    authRequired,
-    adminAuth,
-    async (req, res) => {
-      try {
-        const uiConfig = configCache.getUI();
-        const currentConfig = uiConfig?.data || {};
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const backupDir = join(getRootDir(), 'contents/backups');
+  app.post(buildServerPath('/api/admin/ui/backup'), authRequired, adminAuth, async (req, res) => {
+    try {
+      const uiConfig = configCache.getUI();
+      const currentConfig = uiConfig?.data || {};
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupDir = join(getRootDir(), 'contents/backups');
 
-        // Create backup directory if it doesn't exist
-        if (!fs.existsSync(backupDir)) {
-          fs.mkdirSync(backupDir, { recursive: true });
-        }
-
-        const backupPath = join(backupDir, `ui-config-backup-${timestamp}.json`);
-        await atomicWriteJSON(backupPath, currentConfig);
-
-        res.json({
-          success: true,
-          message: 'Configuration backed up successfully',
-          backupPath: `backups/ui-config-backup-${timestamp}.json`
-        });
-      } catch (error) {
-        logger.error('Error backing up UI config:', error);
-        res.status(500).json({
-          success: false,
-          message: 'Failed to backup UI configuration',
-          error: error.message
-        });
+      // Create backup directory if it doesn't exist
+      if (!fs.existsSync(backupDir)) {
+        fs.mkdirSync(backupDir, { recursive: true });
       }
+
+      const backupPath = join(backupDir, `ui-config-backup-${timestamp}.json`);
+      await atomicWriteJSON(backupPath, currentConfig);
+
+      res.json({
+        success: true,
+        message: 'Configuration backed up successfully',
+        backupPath: `backups/ui-config-backup-${timestamp}.json`
+      });
+    } catch (error) {
+      logger.error('Error backing up UI config:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to backup UI configuration',
+        error: error.message
+      });
     }
-  );
+  });
 
   // Helper functions (defined within the scope of registerAdminUIRoutes)
   function getMimeType(ext) {

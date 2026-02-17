@@ -737,11 +737,7 @@ export class WorkflowEngine {
 
     // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)
     const executionConfig = node.execution || {};
-    const timeout = this._normalizeTimeout(
-      executionConfig.timeout,
-      options.timeout,
-      node.timeout
-    );
+    const timeout = this._normalizeTimeout(executionConfig.timeout, options.timeout, node.timeout);
     let result;
     const startTime = Date.now();
 
