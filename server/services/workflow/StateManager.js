@@ -6,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import logger from '../../utils/logger.js';
 import { getRootDir } from '../../pathUtils.js';
 import config from '../../config.js';
+import { validateIdForPath } from '../../utils/pathSecurity.js';
 
 /**
  * Default directory for workflow state persistence
@@ -219,7 +220,17 @@ export class StateManager {
    * }
    */
   async get(executionId) {
-    const state = this.activeStates.get(executionId);
+    // Validate executionId before using it in filesystem paths
+    if (!validateIdForPath(executionId, 'executionId')) {
+      logger.warn({
+        component: 'StateManager',
+        message: 'Invalid executionId for state lookup',
+        executionId
+      });
+      return null;
+    }
+
+   const state = this.activeStates.get(executionId);
 
     if (!state) {
       // Try to load from checkpoint file if not in memory

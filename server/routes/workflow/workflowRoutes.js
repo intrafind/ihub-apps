@@ -874,6 +874,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       try {
         const { executionId } = req.params;
 
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+
         const state = await workflowEngine.getState(executionId);
 
         if (!state) {
@@ -981,6 +985,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { executionId } = req.params;
         const { humanResponse, checkpointId, ...additionalData } = req.body || {};
 
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+
         // Build resume data
         const resumeData = {
           ...additionalData
@@ -1082,6 +1090,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const { executionId } = req.params;
         const { reason = 'user_cancelled' } = req.body || {};
 
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+
         const state = await workflowEngine.cancel(executionId, reason);
 
         logger.info({
@@ -1152,6 +1164,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     async (req, res) => {
       try {
         const { executionId } = req.params;
+
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
 
         const state = await workflowEngine.getState(executionId);
 
@@ -1468,6 +1484,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       try {
         const { executionId } = req.params;
         const { checkpointId, response, data } = req.body || {};
+
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
 
         // Validate required fields
         if (!checkpointId) {
