@@ -218,6 +218,21 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
                   </button>
                 )}
 
+                {/* Integrations */}
+                {platformConfig?.cloudStorage?.enabled && (
+                  <Link
+                    to="/settings/integrations"
+                    className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    onClick={() => {
+                      setShowDropdown(false);
+                      setShowAllGroups(false);
+                    }}
+                  >
+                    <Icon name="link" size="sm" className="mr-3 text-gray-400" />
+                    {t('auth.menu.integrations', 'Integrations')}
+                  </Link>
+                )}
+
                 {/* Admin Panel */}
                 {isAdmin && (
                   <Link

@@ -32,7 +32,7 @@ export const PlatformConfigProvider = ({ children }) => {
         oidcAuth: authStatus.authMethods?.oidc,
         ldapAuth: authStatus.authMethods?.ldap,
         ntlmAuth: authStatus.authMethods?.ntlm,
-        
+
         // Cloud storage configuration from auth status
         cloudStorage: authStatus.cloudStorage,
 

@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import Icon from '../../../shared/components/Icon';
 import Uploader from './Uploader';
 import '../components/ImageUpload.css';
 import {
@@ -14,12 +13,15 @@ import {
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
+ * Wraps children with drag-drop handlers to make any area a drop zone.
  */
 const UnifiedUploader = ({
   onFileSelect,
   disabled = false,
   fileData = null,
-  config = {}
+  config = {},
+  openDialogRef = null,
+  children
 }) => {
   const { t } = useTranslation();
 
@@ -133,6 +135,7 @@ const UnifiedUploader = ({
               preview: { type: 'image', url: previewUrl },
               data: {
                 type: 'image',
+                source: 'local',
                 base64: page.base64,
                 fileName: fileName,
                 fileSize: blob.size,
@@ -163,6 +166,7 @@ const UnifiedUploader = ({
           preview: { type: 'image', url: previewUrl },
           data: {
             type: 'image',
+            source: 'local',
             base64: firstPage.base64,
             fileName: file.name.replace(/\.tiff?$/i, '.png'), // Change extension to PNG
             fileSize: blob.size,
@@ -194,6 +198,7 @@ const UnifiedUploader = ({
               preview: { type: 'image', url: previewUrl },
               data: {
                 type: 'image',
+                source: 'local',
                 base64: e.target.result,
                 fileName: file.name,
                 fileSize: file.size,
@@ -226,6 +231,7 @@ const UnifiedUploader = ({
             preview: { type: 'image', url: previewUrl },
             data: {
               type: 'image',
+              source: 'local',
               base64,
               fileName: file.name,
               fileSize: file.size,
@@ -260,6 +266,7 @@ const UnifiedUploader = ({
           },
           data: {
             type: 'audio',
+            source: 'local',
             base64: e.target.result,
             fileName: file.name,
             fileSize: file.size,
@@ -313,6 +320,7 @@ const UnifiedUploader = ({
       },
       data: {
         type: 'document',
+        source: 'local',
         content: processedContent,
         fileName: file.name,
         fileSize: file.size,
@@ -385,275 +393,64 @@ const UnifiedUploader = ({
       allowMultiple={allowMultiple}
     >
       {({
-        preview,
         error,
-        isProcessing,
+        isProcessing: _isProcessing,
         isDragging,
         handleButtonClick,
-        handleClear,
-        handleRemoveItem,
         handleDragEnter,
         handleDragLeave,
         handleDragOver,
         handleDrop,
         inputProps
-      }) => (
-        <div
-          className="unified-uploader"
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          <input {...inputProps} />
-          {isDragging && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none"
-              role="alert"
-              aria-live="polite"
-              aria-label={t(
-                'components.uploader.dropZoneActive',
-                'Drop zone active. Release to upload files.'
-              )}
-            >
-              <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">📎</div>
-                  <p className="text-xl font-semibold text-blue-600">
-                    {t('components.uploader.dropFileHere', 'Drop file here')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          {preview ? (
-            <div className="relative mt-2 mb-4">
-              {Array.isArray(preview) ? (
-                // Multiple files preview - horizontal scrolling grid
-                <div className="space-y-2">
-                  <div className="overflow-x-auto overflow-y-hidden">
-                    <div className="flex gap-2 pb-2" style={{ minHeight: '180px' }}>
-                      {preview.map((item, index) => (
-                        <div
-                          key={index}
-                          className="flex-shrink-0 relative group"
-                          style={{ width: '160px' }}
-                        >
-                          {item.type === 'image' ? (
-                            // Image preview in grid
-                            <div className="relative rounded-lg overflow-hidden border border-gray-300 bg-white h-40 flex items-center justify-center">
-                              <img
-                                src={item.url}
-                                alt={t('common.preview', 'Preview')}
-                                className="max-w-full max-h-full object-contain"
-                              />
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(index)}
-                                className="absolute top-1 right-1 bg-red-600 bg-opacity-90 text-white rounded-full p-1 hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title={t('common.remove', 'Remove')}
-                              >
-                                <Icon name="x" className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ) : item.type === 'audio' ? (
-                            // Audio preview in grid
-                            <div className="relative rounded-lg overflow-hidden border border-gray-300 p-2 bg-gray-50 h-40 flex flex-col justify-center">
-                              <Icon
-                                name="musical-note"
-                                className="w-8 h-8 text-purple-500 mx-auto mb-2"
-                              />
-                              <div className="text-xs text-gray-900 truncate text-center px-1">
-                                {item.fileName}
-                              </div>
-                              <div className="text-xs text-gray-500 truncate text-center">
-                                {item.fileType}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(index)}
-                                className="absolute top-1 right-1 bg-red-600 bg-opacity-90 text-white rounded-full p-1 hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title={t('common.remove', 'Remove')}
-                              >
-                                <Icon name="x" className="w-3 h-3" />
-                              </button>
-                            </div>
-                          ) : (
-                            // Document preview in grid
-                            <div className="relative rounded-lg overflow-hidden border border-gray-300 p-2 bg-gray-50 h-40 flex flex-col justify-center">
-                              <Icon
-                                name="document-text"
-                                className="w-8 h-8 text-blue-500 mx-auto mb-2"
-                              />
-                              <div className="text-xs text-gray-900 truncate text-center px-1">
-                                {item.fileName}
-                              </div>
-                              <div className="text-xs text-gray-500 truncate text-center">
-                                {item.fileType}
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveItem(index)}
-                                className="absolute top-1 right-1 bg-red-600 bg-opacity-90 text-white rounded-full p-1 hover:bg-red-700 opacity-0 group-hover:opacity-100 transition-opacity"
-                                title={t('common.remove', 'Remove')}
-                              >
-                                <Icon name="x" className="w-3 h-3" />
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <div className="text-xs text-gray-500">
-                      {t('components.uploader.filesSelected', '{{count}} file(s) selected', {
-                        count: preview.length
-                      })}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={handleClear}
-                      className="px-3 py-1 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-xs"
-                      title={t('common.remove', 'Remove all files')}
-                    >
-                      {t('common.removeAll', 'Remove All')}
-                    </button>
-                  </div>
-                </div>
-              ) : preview.type === 'image' ? (
-                // Single image preview
-                <div>
-                  <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                    <img
-                      src={preview.url}
-                      alt={t('common.preview', 'Preview')}
-                      className="max-w-full max-h-60 mx-auto"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleClear}
-                      className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90"
-                      title={t('common.remove', 'Remove file')}
-                    >
-                      <Icon name="x" className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.imageSelected', 'Image selected')}
-                  </div>
-                </div>
-              ) : preview.type === 'audio' ? (
-                // Single audio preview
-                <div>
-                  <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                    <div className="flex items-start gap-3">
-                      <Icon
-                        name="musical-note"
-                        className="w-8 h-8 text-purple-500 flex-shrink-0 mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-900 truncate">
-                          {preview.fileName}
-                        </div>
-                        <div className="text-xs text-gray-500 mb-2">{preview.fileType}</div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleClear}
-                        className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
-                        title={t('common.remove', 'Remove file')}
-                      >
-                        <Icon name="x" className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.audioSelected', 'Audio file selected')}
-                  </div>
-                </div>
-              ) : (
-                // Single document preview
-                <div>
-                  <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                    <div className="flex items-start gap-3">
-                      <Icon
-                        name="document-text"
-                        className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-900 truncate">
-                          {preview.fileName}
-                        </div>
-                        <div className="text-xs text-gray-500 mb-2">{preview.fileType} file</div>
-                        <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
-                          {preview.content}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleClear}
-                        className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
-                        title={t('common.remove', 'Remove file')}
-                      >
-                        <Icon name="x" className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.fileSelected', 'File selected and processed')}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-2 mb-4">
-              {/* Local file upload button */}
-              <button
-                type="button"
-                onClick={handleButtonClick}
-                disabled={disabled || isProcessing}
-                className={`flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg ${
-                  disabled || isProcessing
-                    ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'border-gray-400 hover:border-indigo-500 hover:text-indigo-500'
-                }`}
+      }) => {
+        // Expose file dialog opener to parent via ref
+        if (openDialogRef) {
+          openDialogRef.current = handleButtonClick;
+        }
+
+        return (
+          <div
+            className="unified-uploader"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {/* Hidden file input */}
+            <input {...inputProps} />
+
+            {/* Drag overlay */}
+            {isDragging && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none"
+                role="alert"
+                aria-live="polite"
+                aria-label={t(
+                  'components.uploader.dropZoneActive',
+                  'Drop zone active. Release to upload files.'
+                )}
               >
-                {isProcessing ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 mr-2 flex items-center justify-center">
-                      <Icon name="refresh" className="text-current" />
-                    </div>
-                    <span>{t('components.uploader.processing', 'Processing file...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Icon name="paper-clip" className="mr-2" />
-                    <span>
-                      {allowMultiple
-                        ? t('components.uploader.uploadFiles', 'Upload Files')
-                        : t('components.uploader.uploadFile', 'Upload File')}
-                    </span>
-                  </>
-                )}
-              </button>
-
-              {error && <div className="text-red-500 text-sm mt-1">{getErrorMessage(error)}</div>}
-
-              <div className="text-xs text-gray-500 mt-1 text-center">
-                {t(
-                  'components.uploader.supportedFormats',
-                  'Supported: {{formats}} (max {{maxSize}}MB)',
-                  {
-                    formats: formatList,
-                    maxSize: MAX_FILE_SIZE_MB
-                  }
-                )}
+                <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
+                  <div className="text-center">
+                    <div className="text-6xl mb-4">📎</div>
+                    <p className="text-xl font-semibold text-blue-600">
+                      {t('components.uploader.dropFileHere', 'Drop file here')}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+
+            {/* Error message */}
+            {error && (
+              <div className="text-red-500 text-sm mb-2 px-2">{getErrorMessage(error)}</div>
+            )}
+
+            {/* Wrapped children (form + file list) */}
+            {children}
+          </div>
+        );
+      }}
     </Uploader>
   );
 };

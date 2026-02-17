@@ -4,25 +4,25 @@ import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
-import { configCache } from '../../configCache.js';
+import configCache from '../../configCache.js';
 
 /**
- * SharePoint Service for Microsoft 365 file access integration
+ * Office 365 Service for Microsoft 365 file access integration
  * Provides OAuth 2.0 authentication with PKCE, secure token storage, and Microsoft Graph API access
  */
-class SharePointService {
+class Office365Service {
   constructor() {
-    this.serviceName = 'sharepoint';
+    this.serviceName = 'office365';
 
     // Microsoft Identity Platform endpoints
     this.authBaseUrl = 'https://login.microsoftonline.com';
     this.graphApiUrl = 'https://graph.microsoft.com/v1.0';
 
-    logger.info('🔵 SharePointService initialized', { component: 'SharePoint' });
+    logger.info('🔵 Office365Service initialized', { component: 'Office 365' });
   }
 
   /**
-   * Get SharePoint provider configuration
+   * Get Office 365 provider configuration
    * @param {string} providerId - The provider ID from cloud storage config
    * @returns {Object} Provider configuration
    */
@@ -31,7 +31,7 @@ class SharePointService {
       throw new Error('Platform configuration cache is not initialized');
     }
 
-    const platformConfig = configCache.get('platform');
+    const platformConfig = configCache.getPlatform();
     const cloudStorage = platformConfig?.cloudStorage;
 
     if (!cloudStorage?.enabled) {
@@ -39,16 +39,16 @@ class SharePointService {
     }
 
     const provider = cloudStorage.providers?.find(
-      p => p.id === providerId && p.type === 'sharepoint' && p.enabled !== false
+      p => p.id === providerId && p.type === 'office365' && p.enabled !== false
     );
 
     if (!provider) {
-      throw new Error(`SharePoint provider '${providerId}' not found or not enabled`);
+      throw new Error(`Office 365 provider '${providerId}' not found or not enabled`);
     }
 
     if (!provider.tenantId || !provider.clientId || !provider.clientSecret) {
       throw new Error(
-        `SharePoint provider '${providerId}' missing required configuration (tenantId, clientId, clientSecret)`
+        `Office 365 provider '${providerId}' missing required configuration (tenantId, clientId, clientSecret)`
       );
     }
 
@@ -69,8 +69,8 @@ class SharePointService {
     // Use the provider's redirect URI or fallback to default
     const redirectUri =
       provider.redirectUri ||
-      process.env.SHAREPOINT_OAUTH_REDIRECT_URI ||
-      `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/sharepoint/callback`;
+      process.env.OFFICE365_OAUTH_REDIRECT_URI ||
+      `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/callback`;
 
     const authUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/authorize`;
 
@@ -79,6 +79,9 @@ class SharePointService {
       'User.Read', // Basic user info
       'Files.Read.All', // Read files in all site collections
       'Sites.Read.All', // Read items in all site collections
+      'Team.ReadBasic.All', // Read Teams information
+      'Channel.ReadBasic.All', // Read Teams channel information
+      'Group.Read.All', // Read group/team membership
       'offline_access' // Refresh token
     ].join(' ');
 
@@ -111,8 +114,8 @@ class SharePointService {
 
       const redirectUri =
         provider.redirectUri ||
-        process.env.SHAREPOINT_OAUTH_REDIRECT_URI ||
-        `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/sharepoint/callback`;
+        process.env.OFFICE365_OAUTH_REDIRECT_URI ||
+        `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/callback`;
 
       const tokenData = new URLSearchParams({
         client_id: provider.clientId,
@@ -140,7 +143,7 @@ class SharePointService {
 
       if (!tokens.refresh_token) {
         logger.warn('⚠️ WARNING: No refresh token received from Microsoft OAuth', {
-          component: 'SharePoint'
+          component: 'Office 365'
         });
       }
 
@@ -153,7 +156,7 @@ class SharePointService {
       };
     } catch (error) {
       logger.error('❌ Error exchanging authorization code:', {
-        component: 'SharePoint',
+        component: 'Office 365',
         error: error.response?.data || error.message
       });
       throw new Error('Failed to exchange authorization code for tokens');
@@ -168,8 +171,8 @@ class SharePointService {
    */
   async refreshAccessToken(providerId, refreshToken) {
     try {
-      logger.info('🔄 Attempting to refresh SharePoint access token...', {
-        component: 'SharePoint'
+      logger.info('🔄 Attempting to refresh Office 365 access token...', {
+        component: 'Office 365'
       });
 
       const provider = this._getProviderConfig(providerId);
@@ -180,7 +183,8 @@ class SharePointService {
         client_secret: provider.clientSecret,
         refresh_token: refreshToken,
         grant_type: 'refresh_token',
-        scope: 'User.Read Files.Read.All Sites.Read.All offline_access'
+        scope:
+          'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All Group.Read.All offline_access'
       });
 
       const response = await axios.post(
@@ -197,7 +201,7 @@ class SharePointService {
       );
 
       const tokens = response.data;
-      logger.info('✅ SharePoint token refresh successful', { component: 'SharePoint' });
+      logger.info('✅ Office 365 token refresh successful', { component: 'Office 365' });
 
       return {
         accessToken: tokens.access_token,
@@ -208,8 +212,8 @@ class SharePointService {
       };
     } catch (error) {
       const errorDetails = error.response?.data || error.message;
-      logger.error('❌ Error refreshing SharePoint access token:', {
-        component: 'SharePoint',
+      logger.error('❌ Error refreshing Office 365 access token:', {
+        component: 'Office 365',
         error: errorDetails
       });
 
@@ -218,9 +222,7 @@ class SharePointService {
         if (errorData.error === 'invalid_grant') {
           throw new Error('Refresh token expired or invalid - user needs to reconnect');
         }
-        throw new Error(
-          `Token refresh failed: ${errorData.error_description || errorData.error}`
-        );
+        throw new Error(`Token refresh failed: ${errorData.error_description || errorData.error}`);
       }
 
       throw new Error(`Failed to refresh access token: ${error.message}`);
@@ -237,19 +239,19 @@ class SharePointService {
       if (!tokens.refreshToken) {
         logger.warn(
           '⚠️ WARNING: No refresh token - user will need to reconnect when access token expires',
-          { component: 'SharePoint' }
+          { component: 'Office 365' }
         );
       }
 
       await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
-      logger.info(`✅ SharePoint tokens stored for user ${userId}`, {
-        component: 'SharePoint',
+      logger.info(`✅ Office 365 tokens stored for user ${userId}`, {
+        component: 'Office 365',
         providerId: tokens.providerId
       });
       return true;
     } catch (error) {
       logger.error('❌ Error storing user tokens:', {
-        component: 'SharePoint',
+        component: 'Office 365',
         error: error.message
       });
       throw new Error('Failed to store user tokens');
@@ -268,7 +270,7 @@ class SharePointService {
 
       if (expired) {
         logger.info(`🔄 Tokens expired for user ${userId}, attempting refresh...`, {
-          component: 'SharePoint'
+          component: 'Office 365'
         });
 
         try {
@@ -276,11 +278,11 @@ class SharePointService {
 
           if (!expiredTokens.refreshToken) {
             logger.error('❌ No refresh token available for user:', {
-              component: 'SharePoint',
+              component: 'Office 365',
               userId
             });
             throw new Error(
-              'No refresh token available - user needs to reconnect SharePoint account'
+              'No refresh token available - user needs to reconnect Office 365 account'
             );
           }
 
@@ -291,30 +293,30 @@ class SharePointService {
 
           // Store the refreshed tokens
           await this.storeUserTokens(userId, refreshedTokens);
-          logger.info(`✅ Successfully refreshed and stored SharePoint tokens for user ${userId}`, {
-            component: 'SharePoint'
+          logger.info(`✅ Successfully refreshed and stored Office 365 tokens for user ${userId}`, {
+            component: 'Office 365'
           });
           return refreshedTokens;
         } catch (refreshError) {
           logger.error(`❌ Failed to refresh tokens for user ${userId}:`, {
-            component: 'SharePoint',
+            component: 'Office 365',
             error: refreshError.message
           });
 
           // If refresh fails, delete the invalid tokens so user can reconnect
           await this.deleteUserTokens(userId);
 
-          throw new Error('SharePoint authentication expired. Please reconnect your account.');
+          throw new Error('Office 365 authentication expired. Please reconnect your account.');
         }
       }
 
       return await tokenStorage.getUserTokens(userId, this.serviceName);
     } catch (error) {
       if (error.message.includes('not authenticated')) {
-        throw new Error('User not authenticated with SharePoint');
+        throw new Error('User not authenticated with Office 365');
       }
       logger.error('❌ Error retrieving user tokens:', {
-        component: 'SharePoint',
+        component: 'Office 365',
         error: error.message
       });
       throw new Error('Failed to retrieve user tokens');
@@ -330,14 +332,14 @@ class SharePointService {
     try {
       const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
       if (result) {
-        logger.info(`✅ SharePoint tokens deleted for user ${userId}`, {
-          component: 'SharePoint'
+        logger.info(`✅ Office 365 tokens deleted for user ${userId}`, {
+          component: 'Office 365'
         });
       }
       return result;
     } catch (error) {
       logger.error('❌ Error deleting user tokens:', {
-        component: 'SharePoint',
+        component: 'Office 365',
         error: error.message
       });
       return false;
@@ -382,7 +384,7 @@ class SharePointService {
       if (error.response?.status === 401 && retryCount < maxRetries) {
         logger.info(
           `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
-          { component: 'SharePoint' }
+          { component: 'Office 365' }
         );
 
         try {
@@ -401,35 +403,58 @@ class SharePointService {
           await this.storeUserTokens(userId, refreshedTokens);
 
           logger.info(`✅ Forced token refresh successful for user ${userId}`, {
-            component: 'SharePoint'
+            component: 'Office 365'
           });
 
           // Retry the request with fresh tokens
           return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
         } catch (refreshError) {
           logger.error(`❌ Forced token refresh failed:`, {
-            component: 'SharePoint',
+            component: 'Office 365',
             error: refreshError.message
           });
 
           // Clean up invalid tokens
           await this.deleteUserTokens(userId);
-          throw new Error('SharePoint authentication expired. Please reconnect your account.');
+          throw new Error('Office 365 authentication expired. Please reconnect your account.');
         }
       } else if (error.response?.status === 401) {
-        throw new Error('SharePoint authentication required. Please reconnect your account.');
+        throw new Error('Office 365 authentication required. Please reconnect your account.');
+      } else if (error.response?.status === 429) {
+        // Rate limit exceeded - log and throw
+        const retryAfter = error.response?.headers?.['retry-after'] || 'unknown';
+        logger.warn(`⏱️ Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
+          component: 'Office 365',
+          endpoint
+        });
+        throw new Error('Office 365 API rate limit exceeded. Please try again in a moment.');
       }
 
-      logger.error('❌ SharePoint API request failed:', {
-        component: 'SharePoint',
+      // Log 404 errors as debug (expected for Teams without SharePoint sites, etc.)
+      if (error.response?.status === 404) {
+        logger.debug('Office 365 API returned 404 (not found):', {
+          component: 'Office 365',
+          endpoint,
+          error: error.response?.data?.error?.message || 'Resource not found'
+        });
+        throw new Error(
+          `Office 365 API error: ${error.response?.data?.error?.message || error.message}`
+        );
+      }
+
+      // Log other errors as error
+      logger.error('❌ Office 365 API request failed:', {
+        component: 'Office 365',
         error: error.response?.data || error.message
       });
-      throw new Error(`SharePoint API error: ${error.response?.data?.error?.message || error.message}`);
+      throw new Error(
+        `Office 365 API error: ${error.response?.data?.error?.message || error.message}`
+      );
     }
   }
 
   /**
-   * Check if user has valid SharePoint authentication
+   * Check if user has valid Office 365 authentication
    * @param {string} userId - User ID
    * @returns {Promise<boolean>} Authentication status
    */
@@ -441,13 +466,13 @@ class SharePointService {
       // Double-check by trying to make a lightweight API call
       await this.makeApiRequest('/me', 'GET', null, userId);
 
-      logger.info(`✅ User ${userId} has valid SharePoint authentication`, {
-        component: 'SharePoint'
+      logger.info(`✅ User ${userId} has valid Office 365 authentication`, {
+        component: 'Office 365'
       });
       return true;
     } catch (error) {
       logger.info(`❌ User ${userId} authentication failed:`, {
-        component: 'SharePoint',
+        component: 'Office 365',
         error: error.message
       });
       return false;
@@ -472,8 +497,8 @@ class SharePointService {
         officeLocation: data.officeLocation
       };
     } catch (error) {
-      logger.error('❌ Error getting SharePoint user info:', {
-        component: 'SharePoint',
+      logger.error('❌ Error getting Office 365 user info:', {
+        component: 'Office 365',
         error: error.message
       });
       throw error;
@@ -509,27 +534,240 @@ class SharePointService {
   }
 
   /**
-   * List available drives (OneDrive, SharePoint sites)
+   * Make batch API request to Microsoft Graph
+   * Combines multiple requests into a single HTTP call (max 20 requests per batch)
+   * @param {Array<{id: string, method: string, url: string}>} requests - Array of sub-requests
    * @param {string} userId - User ID
-   * @returns {Promise<Array>} List of drives
+   * @returns {Promise<Array>} Array of responses with {id, status, body}
+   * @private
    */
-  async listDrives(userId) {
-    try {
-      const data = await this.makeApiRequest('/me/drives', 'GET', null, userId);
+  async _makeBatchRequest(requests, userId) {
+    if (!requests || requests.length === 0) {
+      return [];
+    }
 
-      return data.value.map(drive => ({
+    if (requests.length > 20) {
+      throw new Error('Batch API supports maximum 20 requests per batch');
+    }
+
+    const batchPayload = {
+      requests: requests.map(req => ({
+        id: req.id,
+        method: req.method || 'GET',
+        url: req.url
+      }))
+    };
+
+    const response = await this.makeApiRequest('/$batch', 'POST', batchPayload, userId);
+    return response.responses || [];
+  }
+
+  /**
+   * Batch get group drives for teams
+   * @param {Array} teams - Array of team objects with id
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} Array of drive objects
+   * @private
+   */
+  async _batchGetGroupDrives(teams, userId) {
+    if (!teams || teams.length === 0) {
+      return [];
+    }
+
+    const allDrives = [];
+    const batchSize = 20;
+
+    // Process teams in batches of 20
+    for (let i = 0; i < teams.length; i += batchSize) {
+      const teamsBatch = teams.slice(i, i + batchSize);
+
+      // Create batch requests
+      const requests = teamsBatch.map(team => ({
+        id: team.id,
+        method: 'GET',
+        url: `/groups/${team.id}/drive`
+      }));
+
+      logger.info(
+        `📦 Batch request for ${requests.length} team drives (batch ${Math.floor(i / batchSize) + 1})`,
+        {
+          component: 'Office 365'
+        }
+      );
+
+      // Execute batch
+      const responses = await this._makeBatchRequest(requests, userId);
+
+      // Process responses
+      for (const response of responses) {
+        if (response.status === 200 && response.body) {
+          const drive = response.body;
+          const team = teamsBatch.find(t => t.id === response.id);
+
+          allDrives.push({
+            id: drive.id,
+            name: team.displayName,
+            description: team.description || team.displayName,
+            driveType: 'documentLibrary',
+            source: 'teams',
+            teamName: team.displayName
+          });
+        } else if (response.status === 404) {
+          // Team doesn't have a SharePoint site - this is normal, skip silently
+          logger.debug(`Team ${response.id} has no SharePoint site (404), skipping`, {
+            component: 'Office 365'
+          });
+        } else {
+          // Log other errors
+          logger.warn(`Failed to get drive for team ${response.id}: ${response.status}`, {
+            component: 'Office 365',
+            error: response.body
+          });
+        }
+      }
+    }
+
+    logger.info(`✅ Batch processing complete - ${allDrives.length} team drives retrieved`, {
+      component: 'Office 365'
+    });
+
+    return allDrives;
+  }
+
+  /**
+   * Fetch all pages from a paginated Microsoft Graph API endpoint
+   * @param {string} endpoint - API endpoint
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} All values from all pages
+   * @private
+   */
+  async _fetchAllPages(endpoint, userId) {
+    const allValues = [];
+    let url = endpoint;
+
+    while (url) {
+      const data = await this.makeApiRequest(url, 'GET', null, userId);
+      if (data.value) {
+        allValues.push(...data.value);
+      }
+      url = data['@odata.nextLink'] || null;
+    }
+
+    return allValues;
+  }
+
+  /**
+   * List Teams drives using batch API
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} List of Teams drives
+   */
+  async listTeamsDrives(userId) {
+    try {
+      // Get all joined teams
+      const teams = await this._fetchAllPages('/me/joinedTeams', userId);
+      logger.info(`👥 Loading ${teams.length} Microsoft Teams drives...`, {
+        component: 'Office 365'
+      });
+
+      if (teams.length === 0) {
+        return [];
+      }
+
+      // Use batch API to get team drives (no per-team limit needed)
+      const teamsDrives = await this._batchGetGroupDrives(teams, userId);
+
+      logger.info(`✅ Loaded ${teamsDrives.length} Teams drives`, {
+        component: 'Office 365'
+      });
+
+      return teamsDrives;
+    } catch (error) {
+      logger.error('❌ Error listing Teams drives:', {
+        component: 'Office 365',
+        error: error.message
+      });
+      return []; // Return empty array on error to not block other drives
+    }
+  }
+
+  /**
+   * List personal OneDrive drives
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} List of personal drives
+   */
+  async listPersonalDrives(userId) {
+    try {
+      logger.info('📁 Loading personal OneDrive drives...', { component: 'Office 365' });
+      const personalDrives = await this._fetchAllPages('/me/drives', userId);
+
+      const drives = personalDrives.map(drive => ({
         id: drive.id,
         name: drive.name,
         description: drive.description,
         driveType: drive.driveType,
-        owner: drive.owner
+        owner: drive.owner,
+        source: 'personal'
       }));
+
+      logger.info(`✅ Loaded ${drives.length} personal drives`, {
+        component: 'Office 365'
+      });
+
+      return drives;
     } catch (error) {
-      logger.error('❌ Error listing drives:', {
-        component: 'SharePoint',
+      logger.error('❌ Error listing personal drives:', {
+        component: 'Office 365',
         error: error.message
       });
-      throw error;
+      return []; // Return empty array on error
+    }
+  }
+
+  /**
+   * List SharePoint site drives
+   * @param {string} userId - User ID
+   * @returns {Promise<Array>} List of SharePoint drives
+   */
+  async listSharePointDrives(userId) {
+    try {
+      logger.info('🌐 Loading followed SharePoint sites...', { component: 'Office 365' });
+      const allDrives = [];
+
+      const sites = await this._fetchAllPages('/me/followedSites', userId);
+      logger.info(`📋 Found ${sites.length} followed sites`, { component: 'Office 365' });
+
+      for (const site of sites) {
+        try {
+          const siteDrives = await this._fetchAllPages(`/sites/${site.id}/drives`, userId);
+          for (const drive of siteDrives) {
+            allDrives.push({
+              id: drive.id,
+              name: `${site.displayName} - ${drive.name}`,
+              description: site.displayName,
+              driveType: 'sharepoint',
+              owner: drive.owner,
+              source: 'sharepoint',
+              siteName: site.displayName
+            });
+          }
+        } catch (e) {
+          logger.warn(`Could not load drives for site ${site.displayName}:`, {
+            error: e.message
+          });
+        }
+      }
+
+      logger.info(`✅ Loaded ${allDrives.length} SharePoint drives`, {
+        component: 'Office 365'
+      });
+
+      return allDrives;
+    } catch (error) {
+      logger.error('❌ Error listing SharePoint drives:', {
+        component: 'Office 365',
+        error: error.message
+      });
+      return []; // Return empty array on error
     }
   }
 
@@ -553,9 +791,9 @@ class SharePointService {
         endpoint = '/me/drive/root/children';
       }
 
-      const data = await this.makeApiRequest(endpoint, 'GET', null, userId);
+      const items = await this._fetchAllPages(endpoint, userId);
 
-      return data.value.map(item => ({
+      return items.map(item => ({
         id: item.id,
         name: item.name,
         size: item.size,
@@ -569,7 +807,44 @@ class SharePointService {
       }));
     } catch (error) {
       logger.error('❌ Error listing items:', {
-        component: 'SharePoint',
+        component: 'Office 365',
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Search for items in a drive
+   * @param {string} userId - User ID
+   * @param {string} driveId - Drive ID
+   * @param {string} query - Search query
+   * @returns {Promise<Array>} List of matching items
+   */
+  async searchItems(userId, driveId, query) {
+    try {
+      if (!query || query.trim().length === 0) {
+        return [];
+      }
+
+      const endpoint = `/drives/${driveId}/root/search(q='${encodeURIComponent(query)}')`;
+      const items = await this._fetchAllPages(endpoint, userId);
+
+      return items.map(item => ({
+        id: item.id,
+        name: item.name,
+        size: item.size,
+        createdDateTime: item.createdDateTime,
+        lastModifiedDateTime: item.lastModifiedDateTime,
+        webUrl: item.webUrl,
+        isFolder: !!item.folder,
+        isFile: !!item.file,
+        mimeType: item.file?.mimeType,
+        downloadUrl: item['@microsoft.graph.downloadUrl']
+      }));
+    } catch (error) {
+      logger.error('❌ Error searching items:', {
+        component: 'Office 365',
         error: error.message
       });
       throw error;
@@ -623,7 +898,7 @@ class SharePointService {
       };
     } catch (error) {
       logger.error('❌ Error downloading file:', {
-        component: 'SharePoint',
+        component: 'Office 365',
         error: error.message
       });
       throw error;
@@ -632,4 +907,4 @@ class SharePointService {
 }
 
 // Export singleton instance
-export default new SharePointService();
+export default new Office365Service();

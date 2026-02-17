@@ -1540,7 +1540,10 @@ const AppFormEditor = ({
                             className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
                           />
                           <label className="ml-2 block text-sm font-medium text-gray-900">
-                            {t('admin.apps.edit.enableCloudStorageUpload', 'Enable Cloud Storage Upload')}
+                            {t(
+                              'admin.apps.edit.enableCloudStorageUpload',
+                              'Enable Cloud Storage Upload'
+                            )}
                           </label>
                         </div>
                         {app.upload?.cloudStorageUpload?.enabled && (
@@ -1548,7 +1551,7 @@ const AppFormEditor = ({
                             <p className="text-xs text-gray-500">
                               {t(
                                 'admin.apps.edit.cloudStorageUploadDesc',
-                                'Allow users to select files from configured cloud storage providers (SharePoint, Google Drive). Global cloud storage must be enabled in Providers settings.'
+                                'Allow users to select files from configured cloud storage providers (Office 365, Google Drive). Global cloud storage must be enabled in Providers settings.'
                               )}
                             </p>
                           </div>

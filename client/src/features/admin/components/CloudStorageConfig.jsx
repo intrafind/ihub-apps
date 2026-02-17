@@ -50,14 +50,19 @@ const CloudStorageConfig = () => {
       id: '',
       name: '', // This will be same as id for cloud storage providers
       displayName: '',
-      type: 'sharepoint',
+      type: 'office365',
       enabled: true,
       tenantId: '',
       clientId: '',
       clientSecret: '',
       siteUrl: '',
       driveId: '',
-      redirectUri: ''
+      redirectUri: '',
+      sources: {
+        personalDrive: true,
+        followedSites: true,
+        teams: true
+      }
     });
     setShowAddProvider(true);
   };
@@ -98,12 +103,8 @@ const CloudStorageConfig = () => {
       name: editingProvider.name || editingProvider.id
     };
 
-    if (providerToSave.type === 'sharepoint') {
-      if (
-        !providerToSave.tenantId ||
-        !providerToSave.clientId ||
-        !providerToSave.clientSecret
-      ) {
+    if (providerToSave.type === 'office365') {
+      if (!providerToSave.tenantId || !providerToSave.clientId || !providerToSave.clientSecret) {
         setMessage({
           type: 'error',
           text: t('admin.cloudStorage.validation.clientSecretRequired')
@@ -229,9 +230,7 @@ const CloudStorageConfig = () => {
               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
             />
             <label htmlFor="cloudStorageEnabled" className="ml-2 block text-sm text-gray-900">
-              {config.enabled
-                ? t('admin.cloudStorage.enabled')
-                : t('admin.cloudStorage.disabled')}
+              {config.enabled ? t('admin.cloudStorage.enabled') : t('admin.cloudStorage.disabled')}
             </label>
           </div>
 
@@ -264,15 +263,17 @@ const CloudStorageConfig = () => {
                     >
                       <div className="flex items-center space-x-3">
                         <Icon
-                          name={provider.type === 'sharepoint' ? 'cloud' : 'cloud'}
+                          name={provider.type === 'office365' ? 'cloud' : 'cloud'}
                           size="md"
                           className="text-gray-400"
                         />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">{provider.displayName}</p>
+                          <p className="text-sm font-medium text-gray-900">
+                            {provider.displayName}
+                          </p>
                           <p className="text-xs text-gray-500">
-                            {provider.type === 'sharepoint'
-                              ? t('admin.cloudStorage.sharepoint')
+                            {provider.type === 'office365'
+                              ? t('admin.cloudStorage.office365')
                               : t('admin.cloudStorage.googledrive')}
                             {' • '}
                             {provider.enabled
@@ -323,14 +324,14 @@ const CloudStorageConfig = () => {
                         type="text"
                         value={editingProvider.id}
                         onChange={e =>
-                          setEditingProvider({ 
-                            ...editingProvider, 
+                          setEditingProvider({
+                            ...editingProvider,
                             id: e.target.value,
                             name: e.target.value // Keep name in sync with id
                           })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="sharepoint-main"
+                        placeholder="office365-main"
                       />
                     </div>
 
@@ -346,7 +347,7 @@ const CloudStorageConfig = () => {
                           setEditingProvider({ ...editingProvider, displayName: e.target.value })
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                        placeholder="Company SharePoint"
+                        placeholder="Company Office 365"
                       />
                     </div>
 
@@ -362,13 +363,13 @@ const CloudStorageConfig = () => {
                         }
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                       >
-                        <option value="sharepoint">{t('admin.cloudStorage.sharepoint')}</option>
+                        <option value="office365">{t('admin.cloudStorage.office365')}</option>
                         <option value="googledrive">{t('admin.cloudStorage.googledrive')}</option>
                       </select>
                     </div>
 
-                    {/* SharePoint-specific fields */}
-                    {editingProvider.type === 'sharepoint' && (
+                    {/* Office 365-specific fields */}
+                    {editingProvider.type === 'office365' && (
                       <>
                         <div>
                           <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -429,7 +430,7 @@ const CloudStorageConfig = () => {
                               setEditingProvider({ ...editingProvider, siteUrl: e.target.value })
                             }
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                            placeholder="https://yourcompany.sharepoint.com/sites/yoursite"
+                            placeholder="https://yourcompany.sharepoint.com"
                           />
                         </div>
 
@@ -446,6 +447,75 @@ const CloudStorageConfig = () => {
                             className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
                             placeholder="drive-id"
                           />
+                        </div>
+
+                        {/* Sources configuration */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            {t('admin.cloudStorage.sources', 'Available Sources')}
+                          </label>
+                          <div className="space-y-2">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.personalDrive !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      personalDrive: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                {t('admin.cloudStorage.personalOneDrive', 'Personal OneDrive')}
+                              </span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.followedSites !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      followedSites: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                {t(
+                                  'admin.cloudStorage.followedSharePointSites',
+                                  'Followed SharePoint Sites'
+                                )}
+                              </span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.teams !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      teams: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700">
+                                {t('admin.cloudStorage.microsoftTeams', 'Microsoft Teams')}
+                              </span>
+                            </label>
+                          </div>
                         </div>
                       </>
                     )}

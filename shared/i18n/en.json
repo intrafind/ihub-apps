@@ -1,4 +1,11 @@
 {
+  "attachedFiles": {
+    "removeAll": "Remove All",
+    "filesCount": "{{count}} file(s) attached",
+    "remove": "Remove file",
+    "sourceLocal": "Local file",
+    "sourceCloud": "Cloud file"
+  },
   "app": {
     "title": "iHub Apps",
     "loading": "Loading...",
@@ -531,7 +538,8 @@
       "providers": "Cloud Storage",
       "providerType": "Provider Type",
       "selectType": "Select provider type",
-      "sharepoint": "Microsoft SharePoint",
+      "sharepoint": "SharePoint",
+      "office365": "Microsoft Office 365",
       "googledrive": "Google Drive",
       "googleDrive": "Google Drive",
       "editProvider": "Edit Provider",
@@ -562,11 +570,11 @@
       },
       "info": {
         "title": "About Cloud Storage Integration",
-        "description": "Connect to cloud storage providers like SharePoint and Google Drive to allow users to select files directly from their cloud storage during file uploads."
+        "description": "Connect to cloud storage providers like Office 365 and Google Drive to allow users to select files directly from their cloud storage during file uploads."
       },
-      "sharepointInfo": {
-        "title": "SharePoint Configuration",
-        "description": "To configure SharePoint integration, you need to register an application in Azure AD and obtain the Tenant ID, Client ID, and Client Secret.",
+      "office365Info": {
+        "title": "Office 365 Configuration",
+        "description": "To configure Office 365 integration, you need to register an application in Azure AD and obtain the Tenant ID, Client ID, and Client Secret.",
         "step1": "Register an app in Azure AD",
         "step2": "Configure API permissions (Files.Read, Sites.Read.All)",
         "step3": "Create a client secret",

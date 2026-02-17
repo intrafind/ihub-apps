@@ -57,19 +57,6 @@ const ChatInputActionsMenu = ({
       ? cloudStorage.providers.filter(p => p.enabled)
       : [];
 
-  // Debug logging for cloud storage
-  useEffect(() => {
-    if (cloudStorage.enabled || isCloudStorageEnabledForApp) {
-      console.log('ChatInputActionsMenu: Cloud storage debug', {
-        globalEnabled: cloudStorage.enabled,
-        appLevelEnabled: isCloudStorageEnabledForApp,
-        providers: cloudStorage.providers,
-        enabledProviders: enabledCloudProviders,
-        uploadConfig
-      });
-    }
-  }, [cloudStorage.enabled, isCloudStorageEnabledForApp, cloudStorage.providers, enabledCloudProviders, uploadConfig]);
-
   // Tool grouping configuration
   const TOOL_GROUPS = {
     webSearch: {
@@ -383,10 +370,16 @@ const ChatInputActionsMenu = ({
                         {provider.displayName || provider.name}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {provider.type === 'sharepoint' ? t('cloudStorage.sharepoint', 'Microsoft SharePoint') : t('cloudStorage.googleDrive', 'Google Drive')}
+                        {provider.type === 'office365'
+                          ? t('cloudStorage.office365', 'Microsoft Office 365')
+                          : t('cloudStorage.googleDrive', 'Google Drive')}
                       </div>
                     </div>
-                    <Icon name="chevronRight" size="sm" className="text-gray-400 dark:text-gray-500 ml-2" />
+                    <Icon
+                      name="chevronRight"
+                      size="sm"
+                      className="text-gray-400 dark:text-gray-500 ml-2"
+                    />
                   </button>
                 ))}
               </div>

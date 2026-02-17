@@ -1,24 +1,29 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import Office365FileBrowser from './Office365FileBrowser';
 
 /**
  * Cloud Storage Picker component
- * Allows users to select files from configured cloud storage providers (SharePoint, Google Drive)
+ * Modal for selecting files from cloud storage providers (Office 365, Google Drive)
  */
-const CloudStoragePicker = ({ onFileSelect, onClose, preSelectedProvider = null }) => {
+const CloudStoragePicker = ({
+  onFileSelect,
+  onClose,
+  preSelectedProvider = null,
+  uploadConfig = {}
+}) => {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const [selectedProvider, setSelectedProvider] = useState(preSelectedProvider);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
 
   // Get cloud storage configuration
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
-  const enabledProviders = cloudStorage.enabled
-    ? cloudStorage.providers.filter(p => p.enabled)
-    : [];
+  const enabledProviders = useMemo(
+    () => (cloudStorage.enabled ? cloudStorage.providers.filter(p => p.enabled) : []),
+    [cloudStorage.enabled, cloudStorage.providers]
+  );
 
   useEffect(() => {
     // Auto-select first provider if only one is available and no pre-selected provider
@@ -33,120 +38,38 @@ const CloudStoragePicker = ({ onFileSelect, onClose, preSelectedProvider = null 
 
   const handleProviderSelect = provider => {
     setSelectedProvider(provider);
-    setError(null);
   };
 
-  const handleFileSelection = async () => {
-    if (!selectedProvider) {
-      setError(t('appsList.noCloudProviders'));
-      return;
-    }
-
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      if (selectedProvider.type === 'sharepoint') {
-        // Open SharePoint file picker
-        await openSharePointPicker(selectedProvider);
-      } else if (selectedProvider.type === 'googledrive') {
-        // Open Google Drive file picker
-        await openGoogleDrivePicker(selectedProvider);
-      }
-    } catch (err) {
-      setError(err.message || t('errors.cloudStorageError', 'Failed to access cloud storage'));
-    } finally {
-      setIsLoading(false);
+  const handleFilesProcessed = processedData => {
+    if (processedData && processedData.length > 0) {
+      onFileSelect(processedData);
     }
   };
 
-  const openSharePointPicker = async provider => {
-    // This is a placeholder - actual implementation would use Microsoft Graph API
-    // and the OneDrive File Picker SDK
-    setError(
-      t(
-        'errors.notImplemented',
-        'SharePoint file picker is not yet implemented. Please use local file upload.'
-      )
-    );
-
-    // Future implementation would look like:
-    /*
-    const pickerOptions = {
-      clientId: provider.clientId,
-      action: 'share',
-      multiSelect: false,
-      advanced: {
-        redirectUri: provider.redirectUri || window.location.origin
-      },
-      success: (files) => {
-        // Process selected files
-        onFileSelect(files);
-        onClose();
-      },
-      cancel: () => {
-        onClose();
-      },
-      error: (error) => {
-        setError(error.message);
-      }
-    };
-    
-    // Initialize and launch picker
-    OneDrive.open(pickerOptions);
-    */
-  };
-
-  const openGoogleDrivePicker = async provider => {
-    // This is a placeholder - actual implementation would use Google Picker API
-    setError(
-      t(
-        'errors.notImplemented',
-        'Google Drive file picker is not yet implemented. Please use local file upload.'
-      )
-    );
-
-    // Future implementation would look like:
-    /*
-    const picker = new google.picker.PickerBuilder()
-      .addView(google.picker.ViewId.DOCS)
-      .setOAuthToken(oauthToken)
-      .setDeveloperKey(provider.developerKey)
-      .setCallback((data) => {
-        if (data.action === google.picker.Action.PICKED) {
-          // Process selected files
-          onFileSelect(data.docs);
-          onClose();
-        } else if (data.action === google.picker.Action.CANCEL) {
-          onClose();
-        }
-      })
-      .build();
-    picker.setVisible(true);
-    */
-  };
-
+  // No cloud storage enabled
   if (!cloudStorage.enabled || enabledProviders.length === 0) {
     return (
-      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-        <div className="bg-white rounded-lg shadow-xl max-w-md w-full m-4 p-6">
+      <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full m-4 p-6">
           <div className="flex items-start mb-4">
             <div className="flex-shrink-0">
               <Icon name="warning" size="lg" className="text-yellow-500" />
             </div>
             <div className="ml-3">
-              <h3 className="text-lg font-medium text-gray-900">
-                {t('appsList.cloudStorageNotEnabled')}
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                {t('cloudStorage.notEnabled', 'Cloud Storage Not Enabled')}
               </h3>
-              <p className="mt-2 text-sm text-gray-500">{t('appsList.noCloudProviders')}</p>
+              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                {t('cloudStorage.noProviders', 'No cloud storage providers are configured')}
+              </p>
             </div>
           </div>
           <div className="mt-4 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+              className="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 dark:bg-gray-700 dark:hover:bg-gray-600"
             >
-              {t('common.close')}
+              {t('common.close', 'Close')}
             </button>
           </div>
         </div>
@@ -155,137 +78,102 @@ const CloudStoragePicker = ({ onFileSelect, onClose, preSelectedProvider = null 
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full m-4 p-6">
-        <div className="flex justify-between items-center mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {t('appsList.uploadFromCloud')}
+    <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900 dark:bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-4xl w-full m-4 p-6 max-h-[90vh] overflow-y-auto">
+        {/* Header */}
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {t('cloudStorage.selectFiles', 'Select Files from Cloud Storage')}
           </h3>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600"
-            aria-label={t('common.close')}
+            className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+            aria-label={t('common.close', 'Close')}
           >
             <Icon name="x" size="md" />
           </button>
         </div>
 
-        {/* Provider Selection */}
-        {enabledProviders.length > 1 && (
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              {t('appsList.selectCloudProvider')}
+        {/* Provider Selection (if multiple providers) */}
+        {enabledProviders.length > 1 && !selectedProvider && (
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+              {t('cloudStorage.selectProvider', 'Select a Provider')}
             </label>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              {enabledProviders.map(provider => (
+            {enabledProviders.map(provider => (
+              <button
+                key={provider.id}
+                onClick={() => handleProviderSelect(provider)}
+                className="w-full flex items-center p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Icon
+                  name={provider.type === 'office365' ? 'cloud' : 'cloud'}
+                  size="xl"
+                  className="text-indigo-600 dark:text-indigo-400"
+                />
+                <div className="ml-4 text-left">
+                  <p className="text-base font-medium text-gray-900 dark:text-gray-100">
+                    {provider.displayName}
+                  </p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {provider.type === 'office365' ? 'Microsoft Office 365' : 'Google Drive'}
+                  </p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* File Browser for selected provider */}
+        {selectedProvider && (
+          <div>
+            {/* Show provider info if multiple providers */}
+            {enabledProviders.length > 1 && (
+              <div className="mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
                 <button
-                  key={provider.id}
-                  onClick={() => handleProviderSelect(provider)}
-                  className={`flex items-center p-4 border-2 rounded-lg transition-colors ${
-                    selectedProvider?.id === provider.id
-                      ? 'border-indigo-600 bg-indigo-50'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
-                  }`}
+                  onClick={() => setSelectedProvider(null)}
+                  className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 flex items-center"
                 >
-                  <Icon
-                    name={provider.type === 'sharepoint' ? 'cloud' : 'cloud'}
-                    size="lg"
-                    className={
-                      selectedProvider?.id === provider.id ? 'text-indigo-600' : 'text-gray-400'
-                    }
-                  />
-                  <div className="ml-3 text-left">
-                    <p className="text-sm font-medium text-gray-900">{provider.displayName}</p>
-                    <p className="text-xs text-gray-500">
-                      {provider.type === 'sharepoint'
-                        ? 'Microsoft SharePoint'
-                        : 'Google Drive'}
-                    </p>
-                  </div>
+                  <Icon name="arrowLeft" size="sm" className="mr-1" />
+                  {t('cloudStorage.changeProvider', 'Change Provider')}
                 </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Selected Provider Display (for single provider) */}
-        {enabledProviders.length === 1 && selectedProvider && (
-          <div className="mb-6">
-            <div className="flex items-center p-4 border border-gray-200 rounded-lg bg-gray-50">
-              <Icon name="cloud" size="lg" className="text-indigo-600" />
-              <div className="ml-3">
-                <p className="text-sm font-medium text-gray-900">{selectedProvider.displayName}</p>
-                <p className="text-xs text-gray-500">
-                  {selectedProvider.type === 'sharepoint'
-                    ? 'Microsoft SharePoint'
-                    : 'Google Drive'}
-                </p>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error Message */}
-        {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-md">
-            <div className="flex">
-              <Icon name="warning" size="md" className="text-red-500 mt-0.5 mr-3" />
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
-          </div>
-        )}
-
-        {/* Action Buttons */}
-        <div className="flex justify-end space-x-3">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-          >
-            {t('common.cancel')}
-          </button>
-          <button
-            onClick={handleFileSelection}
-            disabled={!selectedProvider || isLoading}
-            className={`px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-              !selectedProvider || isLoading
-                ? 'bg-gray-400 cursor-not-allowed'
-                : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-            }`}
-          >
-            {isLoading ? (
-              <>
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-4 w-4 text-white inline"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {t('common.loading')}
-              </>
-            ) : (
-              <>
-                <Icon name="cloud-arrow-down" size="md" className="inline mr-2" />
-                {t('appsList.selectFilesFromCloud', {
-                  provider: selectedProvider?.displayName || ''
-                })}
-              </>
             )}
-          </button>
-        </div>
+
+            {/* Render provider-specific browser */}
+            {selectedProvider.type === 'office365' ? (
+              <Office365FileBrowser
+                provider={selectedProvider}
+                onFilesProcessed={handleFilesProcessed}
+                onClose={onClose}
+                uploadConfig={uploadConfig}
+              />
+            ) : selectedProvider.type === 'googledrive' ? (
+              <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+                <Icon
+                  name="information-circle"
+                  size="xl"
+                  className="text-gray-400 dark:text-gray-500 mb-4"
+                />
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  {t('cloudStorage.comingSoon', 'Coming Soon')}
+                </h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
+                  {t(
+                    'cloudStorage.googleDriveNotYet',
+                    'Google Drive integration is not yet available. Please use Office 365 or local file upload.'
+                  )}
+                </p>
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
+                >
+                  {t('common.close', 'Close')}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
     </div>
   );

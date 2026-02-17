@@ -1,4 +1,11 @@
 {
+  "attachedFiles": {
+    "removeAll": "Alle entfernen",
+    "filesCount": "{{count}} Datei(en) angehängt",
+    "remove": "Datei entfernen",
+    "sourceLocal": "Lokale Datei",
+    "sourceCloud": "Cloud-Datei"
+  },
   "app": {
     "title": "iHub Apps",
     "loading": "Wird geladen...",
@@ -698,7 +705,8 @@
       "providers": "Cloud-Speicher",
       "providerType": "Anbietertyp",
       "selectType": "Anbietertyp auswählen",
-      "sharepoint": "Microsoft SharePoint",
+      "sharepoint": "SharePoint",
+      "office365": "Microsoft Office 365",
       "googledrive": "Google Drive",
       "googleDrive": "Google Drive",
       "editProvider": "Anbieter bearbeiten",
@@ -729,11 +737,11 @@
       },
       "info": {
         "title": "Über Cloud-Speicher-Integration",
-        "description": "Verbinden Sie sich mit Cloud-Speicher-Anbietern wie SharePoint und Google Drive, um Benutzern die direkte Auswahl von Dateien aus ihrem Cloud-Speicher während Datei-Uploads zu ermöglichen."
+        "description": "Verbinden Sie sich mit Cloud-Speicher-Anbietern wie Office 365 und Google Drive, um Benutzern die direkte Auswahl von Dateien aus ihrem Cloud-Speicher während Datei-Uploads zu ermöglichen."
       },
-      "sharepointInfo": {
-        "title": "SharePoint-Konfiguration",
-        "description": "Um die SharePoint-Integration zu konfigurieren, müssen Sie eine Anwendung in Azure AD registrieren und die Mandanten-ID, Client-ID und das Client-Secret abrufen.",
+      "office365Info": {
+        "title": "Office 365-Konfiguration",
+        "description": "Um die Office 365-Integration zu konfigurieren, müssen Sie eine Anwendung in Azure AD registrieren und die Mandanten-ID, Client-ID und das Client-Secret abrufen.",
         "step1": "App in Azure AD registrieren",
         "step2": "API-Berechtigungen konfigurieren (Files.Read, Sites.Read.All)",
         "step3": "Client-Secret erstellen",

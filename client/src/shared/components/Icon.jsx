@@ -11,6 +11,7 @@ import {
   CheckIcon as OutlineCheckIcon,
   CheckCircleIcon as OutlineCheckCircleIcon,
   ClipboardIcon,
+  CloudIcon,
   EyeIcon,
   EyeSlashIcon,
   PlayIcon,
@@ -55,16 +56,21 @@ import {
   PaintBrushIcon,
   ChevronDownIcon,
   ChevronUpIcon,
+  ChevronRightIcon,
   Bars3Icon,
   FaceFrownIcon as OutlineFaceFrownIcon,
   ArrowTopRightOnSquareIcon,
-  ArrowUpIcon
+  ArrowUpIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  ServerIcon
 } from '@heroicons/react/24/outline';
 
 import {
   CameraIcon as SolidCameraIcon,
   CheckIcon as SolidCheckIcon,
   CheckCircleIcon as SolidCheckCircleIcon,
+  CloudIcon as SolidCloudIcon,
   EyeIcon as SolidEyeIcon,
   EyeSlashIcon as SolidEyeSlashIcon,
   PlayIcon as SolidPlayIcon,
@@ -99,9 +105,13 @@ import {
   PaintBrushIcon as SolidPaintBrushIcon,
   ChevronDownIcon as SolidChevronDownIcon,
   ChevronUpIcon as SolidChevronUpIcon,
+  ChevronRightIcon as SolidChevronRightIcon,
   FaceFrownIcon as SolidFaceFrownIcon,
   ArrowTopRightOnSquareIcon as SolidArrowTopRightOnSquareIcon,
-  ArrowUpIcon as SolidArrowUpIcon
+  ArrowUpIcon as SolidArrowUpIcon,
+  FolderIcon as SolidFolderIcon,
+  FolderOpenIcon as SolidFolderOpenIcon,
+  ServerIcon as SolidServerIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -112,6 +122,7 @@ const iconMap = {
   camera: { outline: CameraIcon, solid: SolidCameraIcon },
   chat: { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
   check: { outline: OutlineCheckIcon, solid: SolidCheckIcon },
+  cloud: { outline: CloudIcon, solid: SolidCloudIcon },
   'check-circle': { outline: OutlineCheckCircleIcon, solid: SolidCheckCircleIcon },
   clearCircle: { outline: XCircleIcon, solid: XCircleIcon },
   close: { outline: XMarkIcon, solid: XMarkIcon },
@@ -140,6 +151,8 @@ const iconMap = {
   chevronDown: { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
   'chevron-up': { outline: ChevronUpIcon, solid: SolidChevronUpIcon },
   chevronUp: { outline: ChevronUpIcon, solid: SolidChevronUpIcon },
+  'chevron-right': { outline: ChevronRightIcon, solid: SolidChevronRightIcon },
+  chevronRight: { outline: ChevronRightIcon, solid: SolidChevronRightIcon },
   eye: { outline: EyeIcon, solid: SolidEyeIcon },
   'eye-slash': { outline: EyeSlashIcon, solid: SolidEyeSlashIcon },
   play: { outline: PlayIcon, solid: SolidPlayIcon },
@@ -190,7 +203,10 @@ const iconMap = {
   plus: { outline: PlusCircleIcon, solid: SolidPlusCircleIcon },
   warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon },
   send: { outline: ArrowUpIcon, solid: SolidArrowUpIcon },
-  'arrow-up': { outline: ArrowUpIcon, solid: SolidArrowUpIcon }
+  'arrow-up': { outline: ArrowUpIcon, solid: SolidArrowUpIcon },
+  folder: { outline: FolderIcon, solid: SolidFolderIcon },
+  'folder-open': { outline: FolderOpenIcon, solid: SolidFolderOpenIcon },
+  'hard-drive': { outline: ServerIcon, solid: SolidServerIcon }
 };
 
 const sizeClasses = {

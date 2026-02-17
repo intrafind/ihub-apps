@@ -376,6 +376,26 @@ This array is essential for:
 
 - `/apps`, `/admin`, `/auth`, `/login`, `/prompts`, `/settings`, `/teams`, `/s`
 
+### Breaking Changes & Backward Compatibility
+
+**Always ask the user before implementing backward compatibility shims.**
+
+When refactoring or replacing an API/interface:
+
+1. Clearly describe what will break (old endpoints, removed fields, changed data shapes)
+2. Ask the user whether they want backward compatibility or a clean break
+3. Let them make an informed decision before proceeding
+4. Do NOT silently add backward-compat wrappers, deprecated endpoints, or re-exports
+
+**Examples of breaking changes**:
+
+- Removing or renaming API endpoints
+- Changing response data structures
+- Removing fields from data objects
+- Changing authentication/authorization requirements
+
+When breaking changes are necessary for significant performance improvements or architectural simplifications, present the tradeoffs clearly and let the user decide.
+
 ### LLM Provider Integration
 
 #### Adding Custom LLM Providers

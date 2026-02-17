@@ -1,7 +1,7 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { UnifiedUploader } from '../../upload/components';
+import { UnifiedUploader, CloudStoragePicker, AttachedFilesList } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ImageGenerationControls from './ImageGenerationControls';
@@ -31,8 +31,8 @@ const ChatInput = ({
   disabled = false,
   uploadConfig = {},
   selectedFile = null,
-  showUploader: externalShowUploader = undefined,
-  onToggleUploader = null,
+  showUploader: _externalShowUploader = undefined,
+  onToggleUploader: _onToggleUploader = null,
   magicPromptEnabled = false,
   onMagicPrompt = null,
   showUndoMagicPrompt = false,
@@ -59,19 +59,23 @@ const ChatInput = ({
   const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
-  const [internalShowUploader, setInternalShowUploader] = useState(false);
+  const openDialogRef = useRef(null);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const [showCloudStoragePicker, setShowCloudStoragePicker] = useState(false);
+  const [cloudStorageProvider, setCloudStorageProvider] = useState(null);
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+
+  // Normalize files to always be an array for consistent rendering
+  const normalizedFiles = useMemo(() => {
+    if (!selectedFile) return [];
+    return Array.isArray(selectedFile) ? selectedFile : [selectedFile];
+  }, [selectedFile]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
   const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
   const inputRows = multilineMode ? inputMode?.rows || 2 : 1;
-
-  // Use external state if provided, otherwise use internal state
-  const showUploader =
-    externalShowUploader !== undefined ? externalShowUploader : internalShowUploader;
 
   // First check for direct placeholder prop, then app.messagePlaceholder, then default
   const customPlaceholder = app?.messagePlaceholder
@@ -178,38 +182,80 @@ const ChatInput = ({
   const handleCancel = e => {
     e.preventDefault(); // Prevent any form submission
     if (onCancel && typeof onCancel === 'function') {
-      console.log('Cancel button clicked, executing onCancel');
       onCancel();
-    } else {
-      console.warn('Cancel handler is not properly defined');
     }
   };
 
-  const toggleUploader = () => {
-    if (onToggleUploader) {
-      // Use the external toggle function if provided
-      onToggleUploader();
-    } else {
-      // Otherwise use the internal state
-      setInternalShowUploader(prev => !prev);
-    }
-    // Clear selected cloud provider when toggling uploader normally
-    setSelectedCloudProvider(null);
-  };
+  const handleAttachFile = useCallback(() => {
+    openDialogRef.current?.();
+  }, []);
 
   const handleCloudProviderSelect = provider => {
-    // Redirect to OAuth flow for the selected provider
-    // The provider type determines the OAuth endpoint
-    const providerType = provider.type; // 'sharepoint' or 'googledrive'
-    const authUrl = `/api/integrations/${providerType}/auth?providerId=${encodeURIComponent(provider.id)}`;
-    
-    // Store the current app context so we can return after OAuth
-    sessionStorage.setItem('cloudStorage_returnApp', app?.id || '');
-    sessionStorage.setItem('cloudStorage_returnUrl', window.location.pathname);
-    
-    // Redirect to OAuth endpoint
-    window.location.href = authUrl;
+    setCloudStorageProvider(provider);
+    setShowCloudStoragePicker(true);
   };
+
+  const handleLocalFileSelect = useCallback(
+    newFileData => {
+      // Uploader's merged list only contains local files.
+      // Preserve any cloud-sourced files from current selectedFile.
+      const currentFiles = Array.isArray(selectedFile)
+        ? selectedFile
+        : selectedFile
+          ? [selectedFile]
+          : [];
+      const cloudFiles = currentFiles.filter(f => f.source && f.source !== 'local');
+
+      if (cloudFiles.length > 0) {
+        const newFiles = Array.isArray(newFileData)
+          ? newFileData
+          : newFileData
+            ? [newFileData]
+            : [];
+        onFileSelect([...cloudFiles, ...newFiles]);
+      } else {
+        onFileSelect(newFileData);
+      }
+    },
+    [selectedFile, onFileSelect]
+  );
+
+  const handleCloudFileSelect = newFileData => {
+    if (!newFileData) return;
+
+    const newFiles = Array.isArray(newFileData) ? newFileData : [newFileData];
+    // Tag with source from the cloud provider
+    const taggedFiles = newFiles.map(f => ({
+      ...f,
+      source: cloudStorageProvider?.type || 'cloud'
+    }));
+
+    const existing = selectedFile;
+
+    if (existing) {
+      // Merge cloud files with existing local files
+      const existingArray = Array.isArray(existing) ? existing : [existing];
+      onFileSelect([...existingArray, ...taggedFiles]);
+    } else {
+      onFileSelect(taggedFiles.length === 1 ? taggedFiles[0] : taggedFiles);
+    }
+
+    setShowCloudStoragePicker(false);
+    setCloudStorageProvider(null);
+  };
+
+  const handleRemoveFile = useCallback(
+    index => {
+      const files = Array.isArray(selectedFile) ? selectedFile : [selectedFile];
+      const updated = files.filter((_, i) => i !== index);
+      onFileSelect(updated.length === 0 ? null : updated.length === 1 ? updated[0] : updated);
+    },
+    [selectedFile, onFileSelect]
+  );
+
+  const handleRemoveAll = useCallback(() => {
+    onFileSelect(null);
+  }, [onFileSelect]);
 
   // Handle key events for the textarea
   const handleKeyDown = e => {
@@ -241,28 +287,15 @@ const ChatInput = ({
     }
   };
 
-  return (
-    <div className="next-gen-chat-input-container">
-      {promptsListEnabled && (
-        <PromptSearch
-          isOpen={showPromptSearch}
-          appId={app?.id}
-          onClose={() => setShowPromptSearch(false)}
-          onSelect={p => {
-            onChange({ target: { value: p.prompt.replace('[content]', '') } });
-            setShowPromptSearch(false);
-            setTimeout(() => {
-              focusInputAtEnd();
-            }, 0);
-          }}
-        />
-      )}
-      {uploadConfig?.enabled === true && showUploader && (
-        <UnifiedUploader
-          onFileSelect={onFileSelect}
+  // Extract form content to avoid duplication
+  const formContent = (
+    <>
+      {normalizedFiles.length > 0 && (
+        <AttachedFilesList
+          files={normalizedFiles}
+          onRemoveFile={handleRemoveFile}
+          onRemoveAll={handleRemoveAll}
           disabled={isInputDisabled || isProcessing}
-          fileData={selectedFile}
-          config={uploadConfig}
         />
       )}
 
@@ -318,7 +351,7 @@ const ChatInput = ({
             enabledTools={enabledTools}
             onEnabledToolsChange={onEnabledToolsChange}
             uploadConfig={uploadConfig}
-            onToggleUploader={onToggleUploader || toggleUploader}
+            onToggleUploader={handleAttachFile}
             disabled={isInputDisabled}
             isProcessing={isProcessing}
             magicPromptEnabled={magicPromptEnabled}
@@ -342,7 +375,7 @@ const ChatInput = ({
           {uploadConfig?.enabled === true && !isSingleActionOptimization && (
             <button
               type="button"
-              onClick={onToggleUploader || toggleUploader}
+              onClick={handleAttachFile}
               disabled={isInputDisabled || isProcessing}
               title={t('chatActions.attachFile', 'Attach File')}
               className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
@@ -420,6 +453,50 @@ const ChatInput = ({
           </button>
         </div>
       </form>
+    </>
+  );
+
+  return (
+    <div className="next-gen-chat-input-container">
+      {promptsListEnabled && (
+        <PromptSearch
+          isOpen={showPromptSearch}
+          appId={app?.id}
+          onClose={() => setShowPromptSearch(false)}
+          onSelect={p => {
+            onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            setShowPromptSearch(false);
+            setTimeout(() => {
+              focusInputAtEnd();
+            }, 0);
+          }}
+        />
+      )}
+      {showCloudStoragePicker && (
+        <CloudStoragePicker
+          onFileSelect={handleCloudFileSelect}
+          onClose={() => {
+            setShowCloudStoragePicker(false);
+            setCloudStorageProvider(null);
+          }}
+          preSelectedProvider={cloudStorageProvider}
+          uploadConfig={uploadConfig}
+        />
+      )}
+
+      {uploadConfig?.enabled === true ? (
+        <UnifiedUploader
+          onFileSelect={handleLocalFileSelect}
+          disabled={isInputDisabled || isProcessing}
+          fileData={selectedFile}
+          config={uploadConfig}
+          openDialogRef={openDialogRef}
+        >
+          {formContent}
+        </UnifiedUploader>
+      ) : (
+        formContent
+      )}
     </div>
   );
 };
