@@ -37,7 +37,7 @@ tools:
   - git log --since='24 hours ago' --oneline
   - git log --since='7 days ago' --oneline
   cache-memory: true
-  edit: null
+  edit: {}
   github:
     toolsets:
     - default
