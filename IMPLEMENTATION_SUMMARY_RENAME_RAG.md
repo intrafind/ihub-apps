@@ -15,6 +15,7 @@ Updated the feature registry with accurate naming and descriptions in both Engli
 ## Files Changed
 
 ### Code Changes
+
 1. **server/featureRegistry.js** (lines 54-62)
    - Changed English name from "Knowledge Sources (RAG)" to "Sources"
    - Changed German name from "Wissensquellen (RAG)" to "Quellen"
@@ -22,6 +23,7 @@ Updated the feature registry with accurate naming and descriptions in both Engli
    - Updated German description to "Benutzerdefinierte Wissensquellen direkt zu Prompts hinzufügen"
 
 ### Documentation Added
+
 2. **concepts/2026-02-17 Rename RAG to Sources in Feature Registry.md**
    - Detailed explanation of the problem and solution
    - Implementation details and testing results
