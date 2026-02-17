@@ -253,8 +253,7 @@ export function mapExternalGroups(externalGroups) {
   // Log unmapped groups for troubleshooting
   if (unmappedGroups.length > 0) {
     logger.warn(
-      `[Authorization] ${unmappedGroups.length} external groups have no mapping:`,
-      unmappedGroups
+      `[Authorization] ${unmappedGroups.length} external groups have no mapping: ${unmappedGroups.join(', ')}`
     );
     logger.warn(
       '[Authorization] To map these groups, add them to the "mappings" field in contents/config/groups.json'
