@@ -256,7 +256,11 @@
       "signingIn": "Signing In...",
       "windowsAuth": "Windows Authentication",
       "ldapProvider": "LDAP Provider",
-      "selectProvider": "Auto-detect"
+      "selectProvider": "Auto-detect",
+      "selectAuthMethod": "Select authentication method:",
+      "localAuth": "Local Authentication",
+      "ldapAuth": "LDAP Authentication",
+      "backToMethodSelection": "Back to method selection"
     },
     "logout": "Sign out",
     "menu": {

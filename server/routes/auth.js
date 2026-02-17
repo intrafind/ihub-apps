@@ -52,10 +52,110 @@ function sanitizeAuthInput(value, fieldName, maxLength = 255) {
 export default function registerAuthRoutes(app, basePath = '') {
   /**
    * @swagger
-   * /auth/login:
+   * /auth/local/login:
    *   post:
-   *     summary: Universal authentication login
-   *     description: Authenticates a user with username and password using local or LDAP authentication
+   *     summary: Local authentication login (explicit)
+   *     description: Authenticates a user with username and password using only local authentication
+   *     tags:
+   *       - Authentication
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - username
+   *               - password
+   *             properties:
+   *               username:
+   *                 type: string
+   *                 description: User's username
+   *               password:
+   *                 type: string
+   *                 description: User's password
+   *     responses:
+   *       200:
+   *         description: Login successful
+   *       400:
+   *         description: Bad request or local auth not enabled
+   *       401:
+   *         description: Invalid credentials
+   *       500:
+   *         description: Internal server error
+   */
+  app.post(buildServerPath('/api/auth/local/login'), async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const localAuthConfig = platform.localAuth || {};
+
+      const { username, password } = req.body;
+
+      // Sanitize and validate inputs
+      let sanitizedUsername;
+      let sanitizedPassword;
+
+      try {
+        sanitizedUsername = sanitizeAuthInput(username, 'Username', 255);
+        sanitizedPassword = sanitizeAuthInput(password, 'Password', 1024);
+      } catch (error) {
+        return res.status(400).json({ error: error.message });
+      }
+
+      if (!sanitizedUsername || !sanitizedPassword) {
+        return res.status(400).json({ error: 'Username and password are required' });
+      }
+
+      // Check if local authentication is enabled
+      if (!localAuthConfig.enabled) {
+        return res.status(400).json({
+          error: 'Local authentication is not enabled. Please contact your administrator.'
+        });
+      }
+
+      // Try local authentication
+      let result = null;
+      try {
+        logger.info('[Auth] Attempting local authentication (explicit)');
+        result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
+        logger.info('[Auth] Local authentication succeeded');
+      } catch (error) {
+        logger.warn('[Auth] Local authentication failed:', { error: error.message });
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid credentials'
+        });
+      }
+
+      // Set HTTP-only cookie for authentication
+      res.cookie('authToken', result.token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        maxAge: result.expiresIn * 1000
+      });
+
+      res.json({
+        success: true,
+        user: result.user,
+        token: result.token,
+        expiresIn: result.expiresIn
+      });
+    } catch (error) {
+      logger.error('Local login error:', error);
+      res.status(401).json({
+        success: false,
+        error: error.message || 'Authentication failed'
+      });
+    }
+  });
+
+  /**
+   * @swagger
+   * /auth/ldap/login:
+   *   post:
+   *     summary: LDAP authentication login (explicit)
+   *     description: Authenticates a user with username and password using only LDAP authentication
    *     tags:
    *       - Authentication
    *     requestBody:
@@ -80,39 +180,16 @@ export default function registerAuthRoutes(app, basePath = '') {
    *     responses:
    *       200:
    *         description: Login successful
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 user:
-   *                   type: object
-   *                   properties:
-   *                     id:
-   *                       type: string
-   *                     username:
-   *                       type: string
-   *                     groups:
-   *                       type: array
-   *                       items:
-   *                         type: string
-   *                 token:
-   *                   type: string
-   *                   description: JWT authentication token
-   *                 expiresIn:
-   *                   type: number
-   *                   description: Token expiration time in seconds
    *       400:
-   *         description: Bad request (missing credentials or no auth methods enabled)
+   *         description: Bad request or LDAP auth not enabled
    *       401:
    *         description: Invalid credentials
    *       500:
    *         description: Internal server error
    */
-  app.post(buildServerPath('/api/auth/login'), async (req, res) => {
+  app.post(buildServerPath('/api/auth/ldap/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
-      const localAuthConfig = platform.localAuth || {};
+      const platform = configCache.getPlatform() || {};
       const ldapAuthConfig = platform.ldapAuth || {};
 
       const { username, password, provider } = req.body;
@@ -134,95 +211,81 @@ export default function registerAuthRoutes(app, basePath = '') {
         return res.status(400).json({ error: 'Username and password are required' });
       }
 
-      // Check if any authentication method is enabled before attempting authentication
-      if (!localAuthConfig.enabled && !ldapAuthConfig.enabled) {
+      // Check if LDAP authentication is enabled
+      if (!ldapAuthConfig.enabled || !ldapAuthConfig.providers?.length) {
         return res.status(400).json({
-          error: 'No authentication methods are enabled. Please contact your administrator.'
+          error: 'LDAP authentication is not enabled. Please contact your administrator.'
         });
       }
 
       let result = null;
 
-      // Try local authentication first if enabled
-      if (localAuthConfig.enabled) {
-        try {
-          logger.info('[Auth] Attempting local authentication');
-          result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
-          logger.info('[Auth] Local authentication succeeded');
-        } catch (error) {
-          logger.warn('[Auth] Local authentication failed:', { error: error.message });
-          // Continue to try LDAP if enabled
+      // If a specific provider was requested, use it
+      if (sanitizedProvider) {
+        const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
+        if (!ldapProvider) {
+          return res.status(400).json({ error: `LDAP provider '${sanitizedProvider}' not found` });
         }
-      }
 
-      // Try LDAP authentication if local auth failed or is disabled
-      if (!result && ldapAuthConfig.enabled && ldapAuthConfig.providers?.length > 0) {
-        logger.info('[Auth] Attempting LDAP authentication');
-
-        // If a specific provider was requested, use it
-        if (sanitizedProvider) {
-          const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
-          if (!ldapProvider) {
-            return res
-              .status(400)
-              .json({ error: `LDAP provider '${sanitizedProvider}' not found` });
-          }
-
+        try {
+          logger.info(
+            `[Auth] Attempting LDAP authentication (explicit) with provider: ${sanitizedProvider}`
+          );
+          result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
+          logger.info('[Auth] LDAP authentication succeeded');
+        } catch (error) {
+          logger.warn(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}':`, {
+            error: error.message
+          });
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid credentials'
+          });
+        }
+      } else {
+        // Try each LDAP provider until one succeeds
+        for (const ldapProvider of ldapAuthConfig.providers) {
           try {
+            logger.info(`[Auth] Trying LDAP provider (explicit): ${ldapProvider.name}`);
             result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-            logger.info('[Auth] LDAP authentication succeeded');
+            if (result) {
+              logger.info(
+                `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
+              );
+              break;
+            }
           } catch (error) {
-            logger.warn(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}':`, {
+            logger.warn(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, {
               error: error.message
             });
-          }
-        } else {
-          // Try each LDAP provider until one succeeds
-          for (const ldapProvider of ldapAuthConfig.providers) {
-            try {
-              logger.info(`[Auth] Trying LDAP provider: ${ldapProvider.name}`);
-              result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-              if (result) {
-                logger.info(
-                  `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
-                );
-                break;
-              }
-            } catch (error) {
-              logger.warn(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, {
-                error: error.message
-              });
-              // Continue to next provider
-            }
+            // Continue to next provider
           }
         }
-      }
 
-      // If no authentication method succeeded
-      if (!result) {
-        // Return a generic error message to avoid information disclosure
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid credentials'
-        });
+        if (!result) {
+          return res.status(401).json({
+            success: false,
+            error: 'Invalid credentials'
+          });
+        }
       }
 
       // Set HTTP-only cookie for authentication
       res.cookie('authToken', result.token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use HTTPS in production
+        secure: process.env.NODE_ENV === 'production',
         sameSite: 'lax',
-        maxAge: result.expiresIn * 1000 // Convert seconds to milliseconds
+        maxAge: result.expiresIn * 1000
       });
 
       res.json({
         success: true,
         user: result.user,
-        token: result.token, // Still return token for backward compatibility
+        token: result.token,
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('Login error:', error);
+      logger.error('LDAP login error:', error);
       res.status(401).json({
         success: false,
         error: error.message || 'Authentication failed'
@@ -236,7 +299,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    */
   app.get(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
+      const platform = configCache.getPlatform() || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
 
       if (!ntlmAuthConfig.enabled) {
@@ -315,7 +378,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    */
   app.post(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
+      const platform = configCache.getPlatform() || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
 
       if (!ntlmAuthConfig.enabled) {
@@ -426,7 +489,7 @@ export default function registerAuthRoutes(app, basePath = '') {
     createAuthorizationMiddleware({ requireAdmin: true }),
     async (req, res) => {
       try {
-        const platform = app.get('platform') || {};
+        const platform = configCache.getPlatform() || {};
         const localAuthConfig = platform.localAuth || {};
 
         if (!localAuthConfig.enabled) {

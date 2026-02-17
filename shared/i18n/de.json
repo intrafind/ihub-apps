@@ -989,7 +989,11 @@
       "signingIn": "Anmeldung läuft...",
       "windowsAuth": "Windows-Authentifizierung",
       "ldapProvider": "LDAP-Anbieter",
-      "selectProvider": "Automatische Erkennung"
+      "selectProvider": "Automatische Erkennung",
+      "selectAuthMethod": "Authentifizierungsmethode wählen:",
+      "localAuth": "Lokale Authentifizierung",
+      "ldapAuth": "LDAP-Authentifizierung",
+      "backToMethodSelection": "Zurück zur Methodenauswahl"
     },
     "logout": "Abmelden",
     "menu": {

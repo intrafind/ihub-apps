@@ -494,7 +494,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   // User doesn't exist - check self-signup settings
   // For NTLM and LDAP, default to allowing self-signup since users are already authenticated by domain controller/LDAP server
   const allowSelfSignup =
-    authConfig.allowSelfSignup ?? (authMethod === 'ntlm' || authMethod === 'proxy' || authMethod === 'ldap');
+    authConfig.allowSelfSignup ??
+    (authMethod === 'ntlm' || authMethod === 'proxy' || authMethod === 'ldap');
   if (!allowSelfSignup) {
     throw new Error(
       `New user registration is not allowed. User ID: ${externalUser.id}, Email: ${externalUser.email}. Please contact your administrator.`
