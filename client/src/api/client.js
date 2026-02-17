@@ -79,15 +79,25 @@ const addResponseInterceptor = client => {
 
       // Handle authentication errors
       if (error.response?.status === 401) {
-        // Token expired or invalid - clear localStorage token for backward compatibility
-        const currentToken = localStorage.getItem('authToken');
-        if (currentToken) {
-          console.log('Authentication token expired or invalid, clearing localStorage token');
-          localStorage.removeItem('authToken');
-        }
+        // Check if this is a login request - don't trigger token expiration for failed login attempts
+        const isLoginRequest =
+          originalRequest.url?.includes('/auth/login') ||
+          originalRequest.url?.includes('/auth/oidc/') ||
+          originalRequest.url?.includes('/auth/ntlm/');
 
-        // Dispatch custom event for auth context to handle (will handle cookie clearing via logout API)
-        window.dispatchEvent(new CustomEvent('authTokenExpired'));
+        // Only dispatch authTokenExpired event for authenticated requests, not login attempts
+        // This prevents infinite loops when login fails with 401
+        if (!isLoginRequest) {
+          // Token expired or invalid - clear localStorage token for backward compatibility
+          const currentToken = localStorage.getItem('authToken');
+          if (currentToken) {
+            console.log('Authentication token expired or invalid, clearing localStorage token');
+            localStorage.removeItem('authToken');
+          }
+
+          // Dispatch custom event for auth context to handle (will handle cookie clearing via logout API)
+          window.dispatchEvent(new CustomEvent('authTokenExpired'));
+        }
 
         // Don't retry auth requests to avoid infinite loops
         return Promise.reject(error);
