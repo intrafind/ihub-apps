@@ -36,6 +36,7 @@ tools:
     toolsets: [default]
   edit:
   bash:
+    - "git"
     - "find docs -name '*.md' -o -name '*.mdx'"
     - "find docs -maxdepth 1 -ls"
     - "find docs -name '*.md' -exec cat {} +"
