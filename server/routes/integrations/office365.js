@@ -6,14 +6,23 @@ import crypto from 'crypto';
 import Office365Service from '../../services/integrations/Office365Service.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import logger from '../../utils/logger.js';
+import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
+
+// Rate limiter for Office 365 OAuth initiation to prevent abuse/DoS
+const office365AuthLimiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // limit each IP to 10 auth initiation requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false
+});
 
 /**
  * Initiate Office 365 OAuth2 flow for Microsoft 365
  * GET /api/integrations/office365/auth?providerId=xxx
  */
-router.get('/auth', authRequired, async (req, res) => {
+router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
   try {
     const { providerId } = req.query;
 
