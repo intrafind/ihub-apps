@@ -86,7 +86,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    */
   app.post(buildServerPath('/api/auth/local/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
+      const platform = configCache.getPlatform() || {};
       const localAuthConfig = platform.localAuth || {};
 
       const { username, password } = req.body;
@@ -189,7 +189,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    */
   app.post(buildServerPath('/api/auth/ldap/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
+      const platform = configCache.getPlatform() || {};
       const ldapAuthConfig = platform.ldapAuth || {};
 
       const { username, password, provider } = req.body;
@@ -299,7 +299,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    */
   app.get(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
+      const platform = configCache.getPlatform() || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
 
       if (!ntlmAuthConfig.enabled) {
@@ -378,7 +378,7 @@ export default function registerAuthRoutes(app, basePath = '') {
    */
   app.post(buildServerPath('/api/auth/ntlm/login'), async (req, res) => {
     try {
-      const platform = app.get('platform') || {};
+      const platform = configCache.getPlatform() || {};
       const ntlmAuthConfig = platform.ntlmAuth || {};
 
       if (!ntlmAuthConfig.enabled) {
@@ -489,7 +489,7 @@ export default function registerAuthRoutes(app, basePath = '') {
     createAuthorizationMiddleware({ requireAdmin: true }),
     async (req, res) => {
       try {
-        const platform = app.get('platform') || {};
+        const platform = configCache.getPlatform() || {};
         const localAuthConfig = platform.localAuth || {};
 
         if (!localAuthConfig.enabled) {
