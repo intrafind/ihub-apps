@@ -6,7 +6,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
 
 const LoginForm = ({ onSuccess, onCancel }) => {
   const { t } = useTranslation();
-  const { login, loginWithOidc, isLoading, error, authConfig } = useAuth();
+  const { login, loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const [formData, setFormData] = useState({
     username: '',
@@ -14,6 +14,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
     provider: '' // For LDAP provider selection
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedAuthMethod, setSelectedAuthMethod] = useState(null); // 'local' or 'ldap'
 
   const handleInputChange = e => {
     const { name, value } = e.target;
@@ -33,8 +34,17 @@ const LoginForm = ({ onSuccess, onCancel }) => {
     setIsSubmitting(true);
 
     try {
-      // Pass provider to login if LDAP is being used
-      const result = await login(formData.username, formData.password, formData.provider);
+      let result;
+
+      // If a specific auth method was selected, use it
+      if (selectedAuthMethod === 'local') {
+        result = await loginLocal(formData.username, formData.password);
+      } else if (selectedAuthMethod === 'ldap') {
+        result = await loginLdap(formData.username, formData.password, formData.provider);
+      } else {
+        // Fallback to the generic login (tries both methods)
+        result = await login(formData.username, formData.password, formData.provider);
+      }
 
       if (result.success) {
         onSuccess?.();
@@ -44,6 +54,15 @@ const LoginForm = ({ onSuccess, onCancel }) => {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const handleAuthMethodSelect = method => {
+    setSelectedAuthMethod(method);
+  };
+
+  const handleBackToMethodSelection = () => {
+    setSelectedAuthMethod(null);
+    setFormData({ username: '', password: '', provider: '' });
   };
 
   const handleOidcLogin = providerName => {
@@ -75,6 +94,9 @@ const LoginForm = ({ onSuccess, onCancel }) => {
   // Show username/password form if either local or LDAP auth is enabled
   const hasUsernamePasswordAuth = hasLocalAuth || hasLdapAuth;
   const showDemoAccounts = platformConfig?.localAuth?.showDemoAccounts === true;
+
+  // Determine if we should show method selection (both local and LDAP enabled)
+  const showAuthMethodSelection = hasLocalAuth && hasLdapAuth && !selectedAuthMethod;
 
   // Count total number of auth methods for proper separator logic
   const totalAuthMethods =
@@ -172,103 +194,156 @@ const LoginForm = ({ onSuccess, onCancel }) => {
 
       {/* Username/Password Form - show if local auth OR LDAP auth is enabled */}
       {hasUsernamePasswordAuth && (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* LDAP Provider Selection - only show if multiple LDAP providers */}
-          {hasLdapAuth && ldapProviders.length > 1 && (
-            <div>
-              <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
-                {t('auth.login.ldapProvider', 'LDAP Provider')}
-              </label>
-              <select
-                id="provider"
-                name="provider"
-                value={formData.provider}
-                onChange={handleInputChange}
-                disabled={isFormLoading}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-              >
-                <option value="">{t('auth.login.selectProvider', 'Auto-detect')}</option>
-                {ldapProviders.map(provider => (
-                  <option key={provider.name} value={provider.name}>
-                    {provider.displayName || provider.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
+        <>
+          {/* Show auth method selection if both local and LDAP are enabled */}
+          {showAuthMethodSelection ? (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-600 text-center mb-3">
+                {t('auth.login.selectAuthMethod', 'Select authentication method:')}
+              </div>
 
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-              {t('auth.login.username', 'Username or Email')}
-            </label>
-            <input
-              type="text"
-              id="username"
-              name="username"
-              value={formData.username}
-              onChange={handleInputChange}
-              required
-              disabled={isFormLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-              placeholder={t('auth.login.usernamePlaceholder', 'Enter your username or email')}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-              {t('auth.login.password', 'Password')}
-            </label>
-            <input
-              type="password"
-              id="password"
-              name="password"
-              value={formData.password}
-              onChange={handleInputChange}
-              required
-              disabled={isFormLoading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-              placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
-            />
-          </div>
-
-          <div className="flex gap-3 pt-4">
-            <button
-              type="submit"
-              disabled={isFormLoading || !formData.username || !formData.password}
-              className="flex-1 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-            >
-              {isFormLoading ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  {t('auth.login.signingIn', 'Signing In...')}
-                </>
-              ) : (
-                t('auth.menu.signIn', 'Sign In')
+              {hasLocalAuth && (
+                <button
+                  type="button"
+                  onClick={() => handleAuthMethodSelect('local')}
+                  disabled={isFormLoading}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <span className="mr-2">🔑</span>
+                  {t('auth.login.localAuth', 'Local Authentication')}
+                </button>
               )}
-            </button>
 
-            {onCancel && (
-              <button
-                type="button"
-                onClick={onCancel}
-                disabled={isFormLoading}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                Cancel
-              </button>
-            )}
+              {hasLdapAuth && (
+                <button
+                  type="button"
+                  onClick={() => handleAuthMethodSelect('ldap')}
+                  disabled={isFormLoading}
+                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                >
+                  <span className="mr-2">🏢</span>
+                  {t('auth.login.ldapAuth', 'LDAP Authentication')}
+                </button>
+              )}
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Show back button if we came from method selection */}
+              {selectedAuthMethod && (
+                <button
+                  type="button"
+                  onClick={handleBackToMethodSelection}
+                  disabled={isFormLoading}
+                  className="mb-2 text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                >
+                  <span className="mr-1">←</span>
+                  {t('auth.login.backToMethodSelection', 'Back to method selection')}
+                </button>
+              )}
+
+              {/* LDAP Provider Selection - only show if LDAP method selected and multiple providers */}
+              {selectedAuthMethod === 'ldap' && ldapProviders.length > 1 && (
+                <div>
+                  <label
+                    htmlFor="provider"
+                    className="block text-sm font-medium text-gray-700 mb-1"
+                  >
+                    {t('auth.login.ldapProvider', 'LDAP Provider')}
+                  </label>
+                  <select
+                    id="provider"
+                    name="provider"
+                    value={formData.provider}
+                    onChange={handleInputChange}
+                    disabled={isFormLoading}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+                  >
+                    <option value="">{t('auth.login.selectProvider', 'Auto-detect')}</option>
+                    {ldapProviders.map(provider => (
+                      <option key={provider.name} value={provider.name}>
+                        {provider.displayName || provider.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              <div>
+                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('auth.login.username', 'Username or Email')}
+                </label>
+                <input
+                  type="text"
+                  id="username"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  required
+                  disabled={isFormLoading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+                  placeholder={t('auth.login.usernamePlaceholder', 'Enter your username or email')}
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+                  {t('auth.login.password', 'Password')}
+                </label>
+                <input
+                  type="password"
+                  id="password"
+                  name="password"
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  required
+                  disabled={isFormLoading}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+                  placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
+                />
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  type="submit"
+                  disabled={isFormLoading || !formData.username || !formData.password}
+                  className="flex-1 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {isFormLoading ? (
+                    <>
+                      <LoadingSpinner size="sm" className="mr-2" />
+                      {t('auth.login.signingIn', 'Signing In...')}
+                    </>
+                  ) : (
+                    t('auth.menu.signIn', 'Sign In')
+                  )}
+                </button>
+
+                {onCancel && (
+                  <button
+                    type="button"
+                    onClick={onCancel}
+                    disabled={isFormLoading}
+                    className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                  >
+                    Cancel
+                  </button>
+                )}
+              </div>
+            </form>
+          )}
+        </>
+      )}
+
+      {/* Show demo accounts only if local auth is enabled and configured to show and selected */}
+      {hasLocalAuth &&
+        showDemoAccounts &&
+        (!showAuthMethodSelection || selectedAuthMethod === 'local') && (
+          <div className="mt-6 text-xs text-gray-500 text-center">
+            <p>Demo accounts:</p>
+            <p>Admin: admin / password123</p>
+            <p>User: user / password123</p>
           </div>
-        </form>
-      )}
-
-      {/* Show demo accounts only if local auth is enabled and configured to show */}
-      {hasLocalAuth && showDemoAccounts && (
-        <div className="mt-6 text-xs text-gray-500 text-center">
-          <p>Demo accounts:</p>
-          <p>Admin: admin / password123</p>
-          <p>User: user / password123</p>
-        </div>
-      )}
+        )}
 
       {/* Show message if no auth methods are available */}
       {!hasUsernamePasswordAuth && !hasOidcProviders && !hasNtlmAuth && (
