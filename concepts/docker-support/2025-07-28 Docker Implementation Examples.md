@@ -497,9 +497,9 @@ http {
             proxy_buffering off;
             proxy_request_buffering off;
             
-            # Timeouts for long-running streaming requests (24 hours)
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
+            # Timeouts for long-running streaming requests (15 minutes)
+            proxy_read_timeout 900s;
+            proxy_send_timeout 900s;
         }
 
         # Upload endpoints with stricter rate limiting

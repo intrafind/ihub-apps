@@ -103,17 +103,17 @@ The nginx configuration includes critical settings for streaming LLM responses:
 proxy_buffering off;
 proxy_request_buffering off;
 
-# Long timeout for streaming requests (24 hours)
-proxy_read_timeout 86400s;
-proxy_send_timeout 86400s;
+# Long timeout for streaming requests (15 minutes)
+proxy_read_timeout 900s;
+proxy_send_timeout 900s;
 ```
 
 **Why these settings are critical:**
 
 - **`proxy_buffering off`**: Without this, nginx buffers the entire response before sending it to the client. This defeats the purpose of streaming and causes the UI to freeze until the entire LLM response is complete.
 - **`proxy_request_buffering off`**: Prevents buffering of request bodies, useful for large file uploads.
-- **`proxy_read_timeout 86400s`**: Sets a 24-hour timeout for reading responses. This prevents nginx from closing connections during long-running chat sessions.
-- **`proxy_send_timeout 86400s`**: Sets a 24-hour timeout for sending data to the backend.
+- **`proxy_read_timeout 900s`**: Sets a 15-minute timeout for reading responses. This prevents nginx from closing connections during long-running chat sessions.
+- **`proxy_send_timeout 900s`**: Sets a 15-minute timeout for sending data to the backend.
 
 **Without these settings:**
 - Chat responses appear all at once instead of streaming word-by-word

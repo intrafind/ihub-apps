@@ -199,11 +199,11 @@ http {
             proxy_buffering off;
             proxy_request_buffering off;
             
-            # Timeouts for long-running LLM streaming requests (24 hours)
+            # Timeouts for long-running LLM streaming requests (15 minutes)
             # Prevents connection closure during extended chat sessions
             proxy_connect_timeout 60s;
-            proxy_send_timeout 86400s;
-            proxy_read_timeout 86400s;
+            proxy_send_timeout 900s;
+            proxy_read_timeout 900s;
             
             # Disable redirect following
             proxy_redirect off;
@@ -230,9 +230,9 @@ http {
             proxy_request_buffering off;
             chunked_transfer_encoding off;
             
-            # Keep connection alive for streaming (24 hours)
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
+            # Keep connection alive for streaming (15 minutes)
+            proxy_read_timeout 900s;
+            proxy_send_timeout 900s;
             
             # Standard headers
             proxy_set_header Host $host;
@@ -300,9 +300,9 @@ http {
             proxy_buffering off;
             proxy_request_buffering off;
             
-            # Timeouts for LLM streaming requests (24 hours)
-            proxy_read_timeout 86400s;
-            proxy_send_timeout 86400s;
+            # Timeouts for LLM streaming requests (15 minutes)
+            proxy_read_timeout 900s;
+            proxy_send_timeout 900s;
         }
 
         # Redirect /ihub to /ihub/
@@ -360,9 +360,9 @@ For Apache reverse proxy:
     RequestHeader set X-Forwarded-Prefix "/ihub"
     RequestHeader set X-Forwarded-Proto "https"
     
-    # CRITICAL: Timeout for long-running streaming requests (24 hours)
+    # CRITICAL: Timeout for long-running streaming requests (15 minutes)
     # Apache measures timeout in seconds
-    ProxyTimeout 86400
+    ProxyTimeout 900
     
     # Optional: Disable buffering for better streaming performance
     # SetEnv proxy-sendcl 0

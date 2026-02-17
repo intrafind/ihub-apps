@@ -38,18 +38,18 @@ proxy_request_buffering off;
 #### 2. Set Long Timeouts
 
 ```nginx
-# Timeouts for long-running streaming requests (24 hours)
+# Timeouts for long-running streaming requests (15 minutes)
 proxy_connect_timeout 60s;
-proxy_send_timeout 86400s;
-proxy_read_timeout 86400s;
+proxy_send_timeout 900s;
+proxy_read_timeout 900s;
 ```
 
 **Why these timeouts are necessary:**
 - **`proxy_connect_timeout 60s`**: Time allowed for establishing connection to backend (kept at 60s as this should be fast)
-- **`proxy_send_timeout 86400s`**: 24-hour timeout for sending data to the backend, preventing premature connection closure
-- **`proxy_read_timeout 86400s`**: 24-hour timeout for reading responses from backend, allowing for extended chat sessions without interruption
+- **`proxy_send_timeout 900s`**: 15-minute timeout for sending data to the backend, preventing premature connection closure
+- **`proxy_read_timeout 900s`**: 15-minute timeout for reading responses from backend, allowing for extended chat sessions without interruption
 
-**Note:** 86400 seconds = 24 hours, which accommodates even the longest chat sessions.
+**Note:** 900 seconds = 15 minutes, which accommodates long-running chat sessions while preventing indefinite connections.
 
 ## Files Modified
 
@@ -115,11 +115,11 @@ location /ihub/ {
     proxy_buffering off;
     proxy_request_buffering off;
     
-    # Timeouts for long-running LLM streaming requests (24 hours)
+    # Timeouts for long-running LLM streaming requests (15 minutes)
     # Prevents connection closure during extended chat sessions
     proxy_connect_timeout 60s;
-    proxy_send_timeout 86400s;
-    proxy_read_timeout 86400s;
+    proxy_send_timeout 900s;
+    proxy_read_timeout 900s;
     
     # Disable redirect following
     proxy_redirect off;
@@ -154,7 +154,7 @@ When `proxy_buffering off` is set:
 2. Nginx **immediately forwards** each chunk to the client
 3. Client receives real-time updates as they are generated
 
-### Why 24-Hour Timeouts?
+### Why 15-Minute Timeouts?
 
 The default nginx timeout values are typically 60 seconds, which is far too short for:
 
@@ -162,7 +162,7 @@ The default nginx timeout values are typically 60 seconds, which is far too shor
 - **Complex queries**: Some LLM responses can take several minutes to generate
 - **Slow network conditions**: Network delays should not cause premature disconnection
 
-A 24-hour timeout (`86400s`) ensures that even the longest sessions remain connected without interruption.
+A 15-minute timeout (`900s`) ensures that long-running sessions remain connected without interruption, while preventing indefinite connections.
 
 ## Impact on User Experience
 
@@ -184,8 +184,8 @@ When deploying iHub Apps behind nginx, ensure:
 
 - [ ] `proxy_buffering off` is set in all proxy locations
 - [ ] `proxy_request_buffering off` is set in all proxy locations
-- [ ] `proxy_read_timeout` is set to 86400s (24 hours) for streaming endpoints
-- [ ] `proxy_send_timeout` is set to 86400s (24 hours) for streaming endpoints
+- [ ] `proxy_read_timeout` is set to 900s (15 minutes) for streaming endpoints
+- [ ] `proxy_send_timeout` is set to 900s (15 minutes) for streaming endpoints
 - [ ] `proxy_connect_timeout` is set to at least 60s
 - [ ] Configuration is tested with actual LLM streaming responses
 - [ ] Long-running chat sessions are tested (verify no timeouts)

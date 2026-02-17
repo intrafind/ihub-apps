@@ -95,10 +95,10 @@ http {
             proxy_buffering off;
             proxy_request_buffering off;
             
-            # Timeouts for long-running streaming requests (24 hours)
+            # Timeouts for long-running streaming requests (15 minutes)
             proxy_connect_timeout 60s;
-            proxy_send_timeout 86400s;
-            proxy_read_timeout 86400s;
+            proxy_send_timeout 900s;
+            proxy_read_timeout 900s;
         }
 
         # Serve other company content at root
@@ -849,8 +849,8 @@ location /ai-hub/ {
     
     # Connection timeouts
     proxy_connect_timeout 60s;
-    proxy_send_timeout 86400s;
-    proxy_read_timeout 86400s;
+    proxy_send_timeout 900s;
+    proxy_read_timeout 900s;
     
     # CRITICAL: Disable buffering for Server-Sent Events (SSE)
     # Only enable buffering for static assets, not for streaming endpoints
