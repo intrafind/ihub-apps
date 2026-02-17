@@ -232,13 +232,33 @@ export function mapExternalGroups(externalGroups) {
   logger.debug('[Authorization] Mapping external groups:', externalGroups);
   const groupMapping = loadGroupMapping();
   const internalGroups = new Set();
+  const unmappedGroups = [];
 
   for (const externalGroup of externalGroups) {
     const mappedGroups = groupMapping[externalGroup];
     if (Array.isArray(mappedGroups)) {
+      logger.debug(
+        `[Authorization] External group "${externalGroup}" mapped to internal groups:`,
+        mappedGroups
+      );
       mappedGroups.forEach(group => internalGroups.add(group));
     } else {
+      logger.warn(
+        `[Authorization] External group "${externalGroup}" has no mapping in groups configuration`
+      );
+      unmappedGroups.push(externalGroup);
     }
+  }
+
+  // Log unmapped groups for troubleshooting
+  if (unmappedGroups.length > 0) {
+    logger.warn(
+      `[Authorization] ${unmappedGroups.length} external groups have no mapping:`,
+      unmappedGroups
+    );
+    logger.warn(
+      '[Authorization] To map these groups, add them to the "mappings" field in contents/config/groups.json'
+    );
   }
 
   // If no groups mapped, assign default anonymous group
@@ -248,6 +268,7 @@ export function mapExternalGroups(externalGroups) {
   }
 
   const result = Array.from(internalGroups);
+  logger.debug(`[Authorization] Final mapped internal groups (${result.length}):`, result);
   return result;
 }
 

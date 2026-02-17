@@ -72,8 +72,22 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       });
     }
 
+    // Log extracted LDAP groups for troubleshooting
+    if (groups.length > 0) {
+      logger.info(
+        `[LDAP Auth] Extracted ${groups.length} LDAP groups for user ${username}:`,
+        groups
+      );
+    } else {
+      logger.warn(`[LDAP Auth] No groups found in LDAP response for user ${username}`);
+    }
+
     // Apply group mapping using centralized function
     const mappedGroups = mapExternalGroups(groups);
+    logger.info(
+      `[LDAP Auth] Mapped ${groups.length} LDAP groups to ${mappedGroups.length} internal groups for user ${username}:`,
+      mappedGroups
+    );
 
     // Add default groups if configured
     if (ldapConfig.defaultGroups && Array.isArray(ldapConfig.defaultGroups)) {

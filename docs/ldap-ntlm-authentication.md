@@ -204,15 +204,86 @@ The system includes predefined groups for LDAP and NTLM users:
 
 ### Group Mapping
 
-Both LDAP and NTLM support automatic group mapping. Groups from the authentication provider are mapped to internal groups using the `mappings` field:
+Both LDAP and NTLM support automatic group mapping. Groups from the authentication provider are mapped to internal groups using the `mappings` field in `contents/config/groups.json`.
+
+#### How Group Mapping Works
+
+1. **LDAP groups are extracted** during authentication from the `memberOf` attribute
+2. **External groups are mapped** to internal groups using the `mappings` configuration
+3. **Permissions are assigned** based on the user's internal groups
+4. **Admin access is granted** if the user is in a group with `adminAccess: true`
+
+#### Configuration Example
+
+To map LDAP groups to the admin role, edit `contents/config/groups.json`:
 
 ```json
 {
-  "ad-users": {
-    "mappings": ["Domain Users", "Employees", "Staff"]
+  "groups": {
+    "admins": {
+      "id": "admins",
+      "name": "Admins",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["IT-Admin", "IT-Admins", "Domain Admins", "Administrators"]
+    },
+    "users": {
+      "id": "users",
+      "name": "Users",
+      "description": "Standard user access",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": false
+      },
+      "mappings": ["Domain Users", "Employees", "Staff"]
+    }
   }
 }
 ```
+
+**Important Notes**:
+- Group names are **case-sensitive** - "IT-Admin" ≠ "it-admin"
+- Multiple LDAP groups can map to the same internal group
+- One LDAP group can map to multiple internal groups
+- The `mappings` array should contain exact LDAP group names
+
+#### Assigning Admin Role via LDAP
+
+To give admin access to users based on their LDAP group membership:
+
+1. Add their LDAP group name to the `admins` group's `mappings` array
+2. Ensure `"adminAccess": true` is set in the admins group permissions
+3. Users in those LDAP groups will automatically get admin access
+
+#### Troubleshooting Group Mapping
+
+If group mapping isn't working:
+
+1. **Check server logs** for group extraction and mapping information:
+   ```
+   [LDAP Auth] Extracted N LDAP groups for user: ["Group1", "Group2", ...]
+   [LDAP Auth] Mapped N LDAP groups to M internal groups: ["admins", "users", ...]
+   ```
+
+2. **Verify LDAP groups are retrieved**:
+   - Configure `groupSearchBase` in your LDAP provider
+   - Set correct `groupClass` (e.g., `groupOfNames` for OpenLDAP, `group` for AD)
+
+3. **Check for unmapped groups** in logs:
+   ```
+   [Authorization] External group "GroupName" has no mapping in groups configuration
+   ```
+
+4. **Ensure exact case match** - LDAP group names must match exactly in `mappings`
+
+For detailed troubleshooting, see [LDAP Group Mapping Troubleshooting Guide](LDAP-GROUP-MAPPING-TROUBLESHOOTING.md).
 
 ## API Endpoints
 
