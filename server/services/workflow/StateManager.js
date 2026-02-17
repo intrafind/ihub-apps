@@ -260,6 +260,16 @@ export class StateManager {
    * console.log('Checkpoint saved:', checkpoint.checkpointId);
    */
   async checkpoint(executionId, reason = 'auto') {
+    // Validate executionId before using it in filesystem paths
+    if (!validateIdForPath(executionId, 'executionId')) {
+      logger.warn({
+        component: 'StateManager',
+        message: 'Invalid executionId for checkpoint',
+        executionId
+      });
+      throw new Error('Invalid executionId for checkpoint');
+    }
+
     const state = this.activeStates.get(executionId);
 
     if (!state) {
