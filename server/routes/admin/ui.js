@@ -177,7 +177,20 @@ export default function registerAdminUIRoutes(app, basePath = '') {
   app.delete(buildServerPath('/api/admin/ui/assets/:id'), authRequired, adminAuth, (req, res) => {
     try {
       const { id } = req.params;
-      const filepath = join(getRootDir(), 'contents/uploads/assets', id);
+      const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+      const assetsDirResolved = path.resolve(assetsDir);
+      const assetsDirWithSep = assetsDirResolved.endsWith(path.sep)
+        ? assetsDirResolved
+        : assetsDirResolved + path.sep;
+      const filepath = path.resolve(assetsDirResolved, id);
+
+      // Ensure the resolved path is within the assets directory
+      if (!filepath.startsWith(assetsDirWithSep)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid asset id'
+        });
+      }
 
       if (!fs.existsSync(filepath)) {
         return res.status(404).json({
