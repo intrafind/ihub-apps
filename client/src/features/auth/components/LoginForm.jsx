@@ -6,7 +6,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
 
 const LoginForm = ({ onSuccess, onCancel }) => {
   const { t } = useTranslation();
-  const { login, loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
+  const { loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const [formData, setFormData] = useState({
     username: '',
@@ -36,14 +36,14 @@ const LoginForm = ({ onSuccess, onCancel }) => {
     try {
       let result;
 
-      // If a specific auth method was selected, use it
-      if (selectedAuthMethod === 'local') {
+      // Determine which auth method to use
+      const authMethod = selectedAuthMethod || (hasLocalAuth ? 'local' : 'ldap');
+
+      // Use the appropriate authentication method
+      if (authMethod === 'local') {
         result = await loginLocal(formData.username, formData.password);
-      } else if (selectedAuthMethod === 'ldap') {
+      } else if (authMethod === 'ldap') {
         result = await loginLdap(formData.username, formData.password, formData.provider);
-      } else {
-        // Fallback to the generic login (tries both methods)
-        result = await login(formData.username, formData.password, formData.provider);
       }
 
       if (result.success) {
