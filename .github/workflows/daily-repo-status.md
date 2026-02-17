@@ -14,7 +14,12 @@ permissions:
   issues: read
   pull-requests: read
 
-network: defaults
+strict: false
+
+network:
+  allowed:
+    - defaults
+    - telemetry.business.githubcopilot.com
 
 tools:
   github:
