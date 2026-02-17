@@ -360,8 +360,12 @@ For Apache reverse proxy:
     RequestHeader set X-Forwarded-Prefix "/ihub"
     RequestHeader set X-Forwarded-Proto "https"
     
-    # Timeout for long-running requests
-    ProxyTimeout 300
+    # CRITICAL: Timeout for long-running streaming requests (24 hours)
+    # Apache measures timeout in seconds
+    ProxyTimeout 86400
+    
+    # Optional: Disable buffering for better streaming performance
+    # SetEnv proxy-sendcl 0
 </VirtualHost>
 ```
 
