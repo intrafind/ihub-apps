@@ -91,10 +91,14 @@ http {
             proxy_set_header Upgrade $http_upgrade;
             proxy_set_header Connection "upgrade";
             
-            # Timeouts
-            proxy_connect_timeout 30s;
-            proxy_send_timeout 30s;
-            proxy_read_timeout 30s;
+            # CRITICAL: Disable buffering for Server-Sent Events (SSE)
+            proxy_buffering off;
+            proxy_request_buffering off;
+            
+            # Timeouts for long-running streaming requests (15 minutes)
+            proxy_connect_timeout 60s;
+            proxy_send_timeout 900s;
+            proxy_read_timeout 900s;
         }
 
         # Serve other company content at root
@@ -839,15 +843,19 @@ grep timeout /etc/nginx/nginx.conf
 
 #### Solutions
 ```nginx
-# 1. Optimize proxy timeouts
+# 1. Optimize proxy timeouts and buffering
 location /ai-hub/ {
     proxy_pass http://backend/;
-    proxy_connect_timeout 30s;
-    proxy_send_timeout 30s;
-    proxy_read_timeout 30s;
-    proxy_buffering on;
-    proxy_buffer_size 4k;
-    proxy_buffers 8 4k;
+    
+    # Connection timeouts
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 900s;
+    proxy_read_timeout 900s;
+    
+    # CRITICAL: Disable buffering for Server-Sent Events (SSE)
+    # Only enable buffering for static assets, not for streaming endpoints
+    proxy_buffering off;
+    proxy_request_buffering off;
 }
 ```
 
