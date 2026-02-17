@@ -327,7 +327,17 @@
     "compilationError": "Kompilierungsfehler",
     "noComponentToRender": "Keine Komponente zum Rendern",
     "pageNotFound": "Seite nicht gefunden",
-    "signIn": "Anmelden"
+    "signIn": "Anmelden",
+    "audioUploadDisabled": "Audio-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
+    "videoUploadDisabled": "Video-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
+    "audioDecodeError": "Audio konnte nicht aus dem Video dekodiert werden. Das Videoformat oder der Codec wird möglicherweise von Ihrem Browser nicht unterstützt.",
+    "videoAudioExtractionError": "Fehler beim Extrahieren von Audio aus dem Video. Bitte stellen Sie sicher, dass das Video eine Audiospur enthält.",
+    "fileTooLarge": "Datei zu groß. Maximale Größe beträgt {{maxSize}}MB.",
+    "unsupportedFormat": "Nicht unterstütztes Dateiformat. Bitte verwenden Sie: {{formats}}",
+    "invalidImage": "Ungültige Bilddatei",
+    "tiffProcessingError": "Fehler beim Verarbeiten der TIFF-Datei. Die Datei ist möglicherweise beschädigt oder in einem nicht unterstützten TIFF-Format.",
+    "readError": "Fehler beim Lesen der Datei",
+    "fileProcessingError": "Fehler beim Verarbeiten der Datei. Bitte versuchen Sie es erneut."
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",

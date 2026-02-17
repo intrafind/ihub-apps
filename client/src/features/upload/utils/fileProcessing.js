@@ -254,6 +254,153 @@ export const processTiffFile = async (file, options = {}) => {
   }
 };
 
+/**
+ * Extract audio from a video file using Web Audio API
+ * @param {File} file - The video file to extract audio from
+ * @param {Object} options - Processing options
+ * @param {string} options.format - Output format: 'wav' (default) or 'mp3'
+ * @returns {Promise<Object>} Object with audioBuffer and metadata
+ */
+export const extractAudioFromVideo = async (file, options = {}) => {
+  const { format = 'wav' } = options;
+
+  try {
+    // Create audio context
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+
+    // Read video file as ArrayBuffer
+    const arrayBuffer = await file.arrayBuffer();
+
+    // Decode audio from video file
+    let audioBuffer;
+    try {
+      audioBuffer = await audioContext.decodeAudioData(arrayBuffer);
+    } catch (decodeError) {
+      console.error('Audio decode error:', decodeError);
+      throw new Error('audio-decode-error');
+    }
+
+    // Use OfflineAudioContext to render the audio
+    const offlineContext = new OfflineAudioContext(
+      audioBuffer.numberOfChannels,
+      audioBuffer.length,
+      audioBuffer.sampleRate
+    );
+
+    const source = offlineContext.createBufferSource();
+    source.buffer = audioBuffer;
+    source.connect(offlineContext.destination);
+    source.start();
+
+    const renderedBuffer = await offlineContext.startRendering();
+
+    // Convert to WAV format
+    const wavBlob = audioBufferToWav(renderedBuffer);
+    const wavBase64 = await blobToBase64(wavBlob);
+
+    // Get duration in seconds
+    const duration = renderedBuffer.duration;
+
+    // Clean up
+    await audioContext.close();
+
+    return {
+      audioBuffer: renderedBuffer,
+      base64: wavBase64,
+      blob: wavBlob,
+      format: 'audio/wav',
+      sampleRate: renderedBuffer.sampleRate,
+      channels: renderedBuffer.numberOfChannels,
+      duration,
+      size: wavBlob.size
+    };
+  } catch (error) {
+    console.error('Error extracting audio from video:', error);
+    if (error.message === 'audio-decode-error') {
+      throw error;
+    }
+    throw new Error('video-audio-extraction-error');
+  }
+};
+
+/**
+ * Convert AudioBuffer to WAV Blob
+ * @param {AudioBuffer} audioBuffer - The audio buffer to convert
+ * @returns {Blob} WAV file blob
+ */
+const audioBufferToWav = audioBuffer => {
+  const numberOfChannels = audioBuffer.numberOfChannels;
+  const sampleRate = audioBuffer.sampleRate;
+  const format = 1; // PCM
+  const bitDepth = 16;
+
+  const bytesPerSample = bitDepth / 8;
+  const blockAlign = numberOfChannels * bytesPerSample;
+
+  const data = [];
+  for (let i = 0; i < numberOfChannels; i++) {
+    data.push(audioBuffer.getChannelData(i));
+  }
+
+  const dataLength = audioBuffer.length * numberOfChannels * bytesPerSample;
+  const buffer = new ArrayBuffer(44 + dataLength);
+  const view = new DataView(buffer);
+
+  // WAV header
+  writeString(view, 0, 'RIFF');
+  view.setUint32(4, 36 + dataLength, true);
+  writeString(view, 8, 'WAVE');
+  writeString(view, 12, 'fmt ');
+  view.setUint32(16, 16, true); // fmt chunk size
+  view.setUint16(20, format, true);
+  view.setUint16(22, numberOfChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * blockAlign, true); // byte rate
+  view.setUint16(32, blockAlign, true);
+  view.setUint16(34, bitDepth, true);
+  writeString(view, 36, 'data');
+  view.setUint32(40, dataLength, true);
+
+  // Write audio data
+  let offset = 44;
+  for (let i = 0; i < audioBuffer.length; i++) {
+    for (let channel = 0; channel < numberOfChannels; channel++) {
+      const sample = Math.max(-1, Math.min(1, data[channel][i]));
+      const int16 = sample < 0 ? sample * 0x8000 : sample * 0x7fff;
+      view.setInt16(offset, int16, true);
+      offset += 2;
+    }
+  }
+
+  return new Blob([buffer], { type: 'audio/wav' });
+};
+
+/**
+ * Write string to DataView
+ * @param {DataView} view - The DataView to write to
+ * @param {number} offset - Offset position
+ * @param {string} string - String to write
+ */
+const writeString = (view, offset, string) => {
+  for (let i = 0; i < string.length; i++) {
+    view.setUint8(offset + i, string.charCodeAt(i));
+  }
+};
+
+/**
+ * Convert Blob to base64 string
+ * @param {Blob} blob - The blob to convert
+ * @returns {Promise<string>} Base64 data URL
+ */
+const blobToBase64 = blob => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+};
+
 // Convert MIME types array to accept string with both MIME types and extensions
 export const formatAcceptAttribute = mimeTypes => {
   const config = getConfig();
