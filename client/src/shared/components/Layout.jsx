@@ -13,7 +13,6 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
-import useFeatureFlags from '../hooks/useFeatureFlags';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();

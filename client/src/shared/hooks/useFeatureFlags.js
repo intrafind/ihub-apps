@@ -1,5 +1,5 @@
-import { useContext, useMemo } from 'react';
-import { PlatformConfigContext } from '../contexts/PlatformConfigContext';
+import { useMemo } from 'react';
+import { usePlatformConfig } from '../contexts/PlatformConfigContext';
 import { FeatureFlags } from '../../../../shared/featureFlags.js';
 
 /**
@@ -25,7 +25,7 @@ import { FeatureFlags } from '../../../../shared/featureFlags.js';
  * }
  */
 export function useFeatureFlags() {
-  const { platformConfig } = useContext(PlatformConfigContext);
+  const { platformConfig } = usePlatformConfig();
 
   // Memoize the FeatureFlags instance to avoid recreating on every render
   const featureFlags = useMemo(() => new FeatureFlags(platformConfig), [platformConfig]);
