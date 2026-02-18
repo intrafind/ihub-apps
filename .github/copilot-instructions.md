@@ -182,6 +182,7 @@ npm run test:coverage
 - **API key placeholders** - Use `YOUR_API_KEY_HERE` in examples and documentation
 - **Input validation** - Validate all user input on both client and server
 - **Authentication** - Use `authRequired` middleware on protected routes
+- **Secret encryption at rest** - Integration secrets in `platform.json` are encrypted using `TokenStorageService` (AES-256-GCM, format: `ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]`). When encrypting, skip empty values, env var placeholders (`${VAR}`), and already-encrypted values. Key files: `server/services/TokenStorageService.js`, `server/routes/admin/configs.js`, `server/configCache.js`
 
 ## Repository Structure Deep Dive
 

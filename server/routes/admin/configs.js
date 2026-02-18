@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -48,6 +49,128 @@ function restoreSecretIfRedacted(newValue, existingValue) {
   }
   // Otherwise use the new value (could be a new secret or env var placeholder)
   return newValue;
+}
+
+/**
+ * Decrypt a value if it is encrypted (ENC[...] format)
+ * Used to decrypt secrets read from disk before sanitization or runtime use
+ * @param {string} value - Value to check and potentially decrypt
+ * @returns {string} - Decrypted value, or original if not encrypted
+ */
+function decryptIfNeeded(value) {
+  if (!value || typeof value !== 'string') return value;
+  if (tokenStorageService.isEncrypted(value)) {
+    return tokenStorageService.decryptString(value);
+  }
+  return value;
+}
+
+/**
+ * Encrypt a value if it's not empty, not an env var placeholder, and not already encrypted
+ * @param {string} value - Value to potentially encrypt
+ * @returns {string} - Encrypted value, or original if skipped
+ */
+function encryptIfNeeded(value) {
+  if (!value || typeof value !== 'string') return value;
+  if (isEnvVarPlaceholder(value)) return value;
+  if (tokenStorageService.isEncrypted(value)) return value;
+  return tokenStorageService.encryptString(value);
+}
+
+/**
+ * Decrypt all known secret fields in platform config (in-place mutation)
+ * @param {Object} config - Platform config object
+ */
+function decryptPlatformSecrets(config) {
+  // Jira
+  if (config.jira?.clientSecret) {
+    config.jira.clientSecret = decryptIfNeeded(config.jira.clientSecret);
+  }
+
+  // Cloud storage providers
+  if (config.cloudStorage?.providers) {
+    for (const provider of config.cloudStorage.providers) {
+      if (provider.clientSecret) {
+        provider.clientSecret = decryptIfNeeded(provider.clientSecret);
+      }
+      if (provider.type === 'office365' && provider.tenantId) {
+        provider.tenantId = decryptIfNeeded(provider.tenantId);
+      }
+    }
+  }
+
+  // OIDC providers
+  if (config.oidcAuth?.providers) {
+    for (const provider of config.oidcAuth.providers) {
+      if (provider.clientSecret) {
+        provider.clientSecret = decryptIfNeeded(provider.clientSecret);
+      }
+    }
+  }
+
+  // LDAP providers
+  if (config.ldapAuth?.providers) {
+    for (const provider of config.ldapAuth.providers) {
+      if (provider.adminPassword) {
+        provider.adminPassword = decryptIfNeeded(provider.adminPassword);
+      }
+    }
+  }
+
+  // NTLM
+  if (config.ntlmAuth?.domainControllerPassword) {
+    config.ntlmAuth.domainControllerPassword = decryptIfNeeded(
+      config.ntlmAuth.domainControllerPassword
+    );
+  }
+}
+
+/**
+ * Encrypt all known secret fields in platform config (in-place mutation)
+ * @param {Object} config - Platform config object
+ */
+function encryptPlatformSecrets(config) {
+  // Jira
+  if (config.jira?.clientSecret) {
+    config.jira.clientSecret = encryptIfNeeded(config.jira.clientSecret);
+  }
+
+  // Cloud storage providers
+  if (config.cloudStorage?.providers) {
+    for (const provider of config.cloudStorage.providers) {
+      if (provider.clientSecret) {
+        provider.clientSecret = encryptIfNeeded(provider.clientSecret);
+      }
+      if (provider.type === 'office365' && provider.tenantId) {
+        provider.tenantId = encryptIfNeeded(provider.tenantId);
+      }
+    }
+  }
+
+  // OIDC providers
+  if (config.oidcAuth?.providers) {
+    for (const provider of config.oidcAuth.providers) {
+      if (provider.clientSecret) {
+        provider.clientSecret = encryptIfNeeded(provider.clientSecret);
+      }
+    }
+  }
+
+  // LDAP providers
+  if (config.ldapAuth?.providers) {
+    for (const provider of config.ldapAuth.providers) {
+      if (provider.adminPassword) {
+        provider.adminPassword = encryptIfNeeded(provider.adminPassword);
+      }
+    }
+  }
+
+  // NTLM
+  if (config.ntlmAuth?.domainControllerPassword) {
+    config.ntlmAuth.domainControllerPassword = encryptIfNeeded(
+      config.ntlmAuth.domainControllerPassword
+    );
+  }
 }
 
 /**
@@ -195,6 +318,9 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
+      // Decrypt any encrypted secrets so sanitization sees plaintext (not ENC[...])
+      decryptPlatformSecrets(platformConfig);
+
       // Sanitize sensitive fields even for admin endpoint
       // Preserve environment variable placeholders but redact actual secrets
       const sanitizedConfig = { ...platformConfig };
@@ -267,6 +393,16 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
+      // Sanitize NTLM domain controller password
+      if (sanitizedConfig.ntlmAuth?.domainControllerPassword) {
+        sanitizedConfig.ntlmAuth = {
+          ...sanitizedConfig.ntlmAuth,
+          domainControllerPassword: sanitizeSecret(
+            sanitizedConfig.ntlmAuth.domainControllerPassword
+          )
+        };
+      }
+
       // Sanitize cloud storage provider secrets
       if (sanitizedConfig.cloudStorage?.providers) {
         sanitizedConfig.cloudStorage = {
@@ -310,6 +446,9 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         // File doesn't exist, start with empty config
         logger.info('Creating new platform config file');
       }
+
+      // Decrypt existing secrets so restoreSecretIfRedacted compares against plaintext
+      decryptPlatformSecrets(existingConfig);
 
       // Merge the authentication-related config with existing config
       const mergedConfig = {
@@ -416,6 +555,18 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         );
       }
 
+      // Restore NTLM domain controller password
+      if (newConfig.ntlmAuth?.domainControllerPassword) {
+        if (!mergedConfig.ntlmAuth) mergedConfig.ntlmAuth = {};
+        mergedConfig.ntlmAuth.domainControllerPassword = restoreSecretIfRedacted(
+          newConfig.ntlmAuth.domainControllerPassword,
+          existingConfig.ntlmAuth?.domainControllerPassword
+        );
+      }
+
+      // Encrypt secrets before writing to disk
+      encryptPlatformSecrets(mergedConfig);
+
       // Save to file
       await atomicWriteJSON(platformConfigPath, mergedConfig);
 
@@ -436,9 +587,51 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
 
       logger.info('🔧 Platform authentication configuration updated');
 
+      // Decrypt for sanitization before sending response (mergedConfig has encrypted values on disk)
+      const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
+      decryptPlatformSecrets(responseConfig);
+
+      // Sanitize secrets in response — admin UI should see ***REDACTED***, not raw values
+      if (responseConfig.jira?.clientSecret) {
+        responseConfig.jira.clientSecret = sanitizeSecret(responseConfig.jira.clientSecret);
+      }
+      if (responseConfig.oidcAuth?.providers) {
+        responseConfig.oidcAuth.providers = responseConfig.oidcAuth.providers.map(p => ({
+          ...p,
+          clientSecret: sanitizeSecret(p.clientSecret)
+        }));
+      }
+      if (responseConfig.ldapAuth?.providers) {
+        responseConfig.ldapAuth.providers = responseConfig.ldapAuth.providers.map(p => ({
+          ...p,
+          adminPassword: sanitizeSecret(p.adminPassword)
+        }));
+      }
+      if (responseConfig.ntlmAuth?.domainControllerPassword) {
+        responseConfig.ntlmAuth.domainControllerPassword = sanitizeSecret(
+          responseConfig.ntlmAuth.domainControllerPassword
+        );
+      }
+      if (responseConfig.cloudStorage?.providers) {
+        responseConfig.cloudStorage.providers = responseConfig.cloudStorage.providers.map(p => ({
+          ...p,
+          clientSecret: sanitizeSecret(p.clientSecret),
+          tenantId: p.type === 'office365' ? sanitizeSecret(p.tenantId) : p.tenantId
+        }));
+      }
+      if (responseConfig.auth?.jwtSecret) {
+        responseConfig.auth.jwtSecret = sanitizeSecret(responseConfig.auth.jwtSecret);
+      }
+      if (responseConfig.localAuth?.jwtSecret) {
+        responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
+      }
+      if (responseConfig.admin?.secret) {
+        responseConfig.admin.secret = sanitizeSecret(responseConfig.admin.secret);
+      }
+
       res.json({
         message: 'Platform configuration updated successfully',
-        config: mergedConfig,
+        config: responseConfig,
         reconfiguration: {
           reconfigured: reconfigResults.reconfigured,
           requiresRestart: reconfigResults.requiresRestart,

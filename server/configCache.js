@@ -12,6 +12,7 @@ import { loadTools, localizeTools } from './toolLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
+import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
 
 /**
@@ -54,6 +55,76 @@ function resolveEnvVarsInObject(obj) {
     }
   }
   return resolved;
+}
+
+/**
+ * Decrypt a single value if it has the ENC[...] format
+ */
+function decryptIfEncrypted(value) {
+  if (!value || typeof value !== 'string') return value;
+  if (tokenStorageService.isEncrypted(value)) {
+    try {
+      return tokenStorageService.decryptString(value);
+    } catch (error) {
+      logger.error(`Failed to decrypt config secret: ${error.message}`, {
+        component: 'ConfigCache'
+      });
+      return value; // Return encrypted value as-is on failure
+    }
+  }
+  return value;
+}
+
+/**
+ * Decrypt known secret fields in platform configuration so runtime consumers
+ * (OIDC middleware, LDAP auth, JiraService, etc.) receive plaintext secrets
+ */
+function decryptPlatformSecrets(config) {
+  if (!config || typeof config !== 'object') return config;
+
+  // Jira
+  if (config.jira?.clientSecret) {
+    config.jira.clientSecret = decryptIfEncrypted(config.jira.clientSecret);
+  }
+
+  // Cloud storage providers
+  if (config.cloudStorage?.providers) {
+    for (const provider of config.cloudStorage.providers) {
+      if (provider.clientSecret) {
+        provider.clientSecret = decryptIfEncrypted(provider.clientSecret);
+      }
+      if (provider.type === 'office365' && provider.tenantId) {
+        provider.tenantId = decryptIfEncrypted(provider.tenantId);
+      }
+    }
+  }
+
+  // OIDC providers
+  if (config.oidcAuth?.providers) {
+    for (const provider of config.oidcAuth.providers) {
+      if (provider.clientSecret) {
+        provider.clientSecret = decryptIfEncrypted(provider.clientSecret);
+      }
+    }
+  }
+
+  // LDAP providers
+  if (config.ldapAuth?.providers) {
+    for (const provider of config.ldapAuth.providers) {
+      if (provider.adminPassword) {
+        provider.adminPassword = decryptIfEncrypted(provider.adminPassword);
+      }
+    }
+  }
+
+  // NTLM
+  if (config.ntlmAuth?.domainControllerPassword) {
+    config.ntlmAuth.domainControllerPassword = decryptIfEncrypted(
+      config.ntlmAuth.domainControllerPassword
+    );
+  }
+
+  return config;
 }
 
 function expandToolFunctions(tools = []) {
@@ -198,6 +269,19 @@ class ConfigCache {
               `✓ Cached: ${configPath} (${Object.keys(resolvedConfig.groups || {}).length} groups with resolved inheritance)`,
               { component: 'ConfigCache' }
             );
+          } else {
+            logger.warn(`⚠️  Failed to load: ${configPath}`, { component: 'ConfigCache' });
+          }
+          return;
+        }
+
+        // Special handling for platform.json - decrypt secrets after loading
+        if (configPath === 'config/platform.json') {
+          const platformData = await loadJson(configPath);
+          if (platformData !== null) {
+            decryptPlatformSecrets(platformData);
+            this.setCacheEntry(configPath, platformData);
+            logger.info(`✓ Cached: ${configPath}`, { component: 'ConfigCache' });
           } else {
             logger.warn(`⚠️  Failed to load: ${configPath}`, { component: 'ConfigCache' });
           }
@@ -397,6 +481,20 @@ class ConfigCache {
               `✓ Cached: config/groups.json (${Object.keys(resolvedConfig.groups || {}).length} groups with resolved inheritance)`,
               { component: 'ConfigCache' }
             );
+          }
+        }
+        return;
+      }
+
+      // Special handling for platform.json - decrypt secrets after loading
+      if (key === 'config/platform.json') {
+        const platformData = await loadJson(key, { useCache: false });
+        if (platformData !== null) {
+          decryptPlatformSecrets(platformData);
+          const newEtag = this.generateETag(platformData);
+          const existing = this.cache.get(key);
+          if (!existing || existing.etag !== newEtag) {
+            this.setCacheEntry(key, platformData);
           }
         }
         return;
