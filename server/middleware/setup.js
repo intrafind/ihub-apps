@@ -218,8 +218,7 @@ function setupSessionMiddleware(app, platformConfig) {
   app.use(
     '/api/integrations',
     session({
-      secret:
-        config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
+      secret: config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
       resave: false,
       saveUninitialized: true, // Required for OAuth2 PKCE state persistence
       name: 'integration.session',
