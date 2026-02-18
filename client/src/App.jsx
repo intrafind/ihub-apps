@@ -78,6 +78,7 @@ import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
+import useFeatureFlags from './shared/hooks/useFeatureFlags';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = React.lazy(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = React.lazy(() => import('./features/teams/TeamsAuthStart'));
@@ -110,6 +111,7 @@ function App() {
   useSessionManagement();
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
 
@@ -182,7 +184,7 @@ function App() {
                   <Route path="/" element={<Layout />}>
                     <Route index element={<SafeAppsList />} />
                     {uiConfig?.promptsList?.enabled !== false &&
-                      platformConfig?.featuresMap?.promptsLibrary !== false && (
+                      featureFlags.isEnabled('promptsLibrary', true) && (
                         <Route path="prompts" element={<SafePromptsList />} />
                       )}
                     {/* Workflow routes - feature flag is enforced by server API (returns 403 if disabled) */}

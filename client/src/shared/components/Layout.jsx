@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import { usePlatformConfig } from '../contexts/PlatformConfigContext';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
+import useFeatureFlags from '../hooks/useFeatureFlags';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -22,7 +23,7 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
-  const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
 
   // Map navigation URLs to feature IDs for gating
   const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'experimentalWorkflows' };
@@ -123,8 +124,7 @@ const Layout = () => {
                   uiConfig.header.links
                     .filter(link => {
                       const featureId = featureRoutes[link.url];
-                      if (featureId && platformConfig?.featuresMap?.[featureId] === false)
-                        return false;
+                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
                       return canAccessLink(link);
                     })
                     .map((link, index) => (
@@ -163,8 +163,7 @@ const Layout = () => {
                   uiConfig.header.links
                     .filter(link => {
                       const featureId = featureRoutes[link.url];
-                      if (featureId && platformConfig?.featuresMap?.[featureId] === false)
-                        return false;
+                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
                       return canAccessLink(link);
                     })
                     .map((link, index) => (
@@ -211,8 +210,7 @@ const Layout = () => {
                   uiConfig.footer.links
                     .filter(link => {
                       const featureId = featureRoutes[link.url];
-                      if (featureId && platformConfig?.featuresMap?.[featureId] === false)
-                        return false;
+                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
                       return canAccessLink(link);
                     })
                     .map((link, index) => (

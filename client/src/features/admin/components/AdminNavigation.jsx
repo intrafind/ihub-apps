@@ -3,22 +3,24 @@ import { Link, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const AdminNavigation = () => {
   const { t } = useTranslation();
   const location = useLocation();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = useCallback(
     key => {
       // Check if feature is disabled - prompts requires promptsLibrary feature
-      if (key === 'prompts' && platformConfig?.featuresMap?.promptsLibrary === false) {
+      if (key === 'prompts' && !featureFlags.isEnabled('promptsLibrary', true)) {
         return false;
       }
       return pageConfig[key] !== false;
     },
-    [pageConfig, platformConfig?.featuresMap?.promptsLibrary]
+    [pageConfig, featureFlags]
   );
 
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -115,7 +117,7 @@ const AdminNavigation = () => {
           // icon: 'link',
           current: location.pathname.startsWith('/admin/shortlinks')
         },
-        ...(platformConfig?.featuresMap?.experimentalWorkflows !== false
+        ...(featureFlags.isEnabled('experimentalWorkflows', false)
           ? [
               {
                 key: 'workflows',

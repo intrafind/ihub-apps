@@ -4,14 +4,16 @@ import AdminNavigation from '../components/AdminNavigation';
 import QuickActions from '../components/QuickActions';
 import AdminSectionCard from '../components/AdminSectionCard';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const AdminHome = () => {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = key => {
     // Check if feature is disabled - prompts requires promptsLibrary feature
-    if (key === 'prompts' && platformConfig?.featuresMap?.promptsLibrary === false) {
+    if (key === 'prompts' && !featureFlags.isEnabled('promptsLibrary', true)) {
       return false;
     }
     return pageConfig[key] !== false;
