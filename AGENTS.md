@@ -152,6 +152,22 @@ Follow the instructions in [LLM_GUIDELINES.md](LLM_GUIDELINES.md):
 
 Always consult the documentation in `docs/` for additional details about configuration files and features.
 
+### Secret Encryption at Rest
+
+Platform config secrets are encrypted on disk in `platform.json` using `TokenStorageService` (AES-256-GCM). The encryption key is at `contents/.encryption-key`.
+
+**Encrypted format:** `ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]`
+
+**Encrypted fields:** `jira.clientSecret`, `cloudStorage.providers[].clientSecret`, `cloudStorage.providers[].tenantId` (office365), `oidcAuth.providers[].clientSecret`, `ldapAuth.providers[].adminPassword`, `ntlmAuth.domainControllerPassword`
+
+**Guard pattern:** When encrypting, always skip empty values, env var placeholders (`${VAR}`), and already-encrypted values (`ENC[...]`).
+
+**Key files:**
+
+- `server/services/TokenStorageService.js` — `encryptString()`, `decryptString()`, `isEncrypted()`
+- `server/routes/admin/configs.js` — encrypt on save, decrypt on read
+- `server/configCache.js` — decrypt at runtime for all consumers
+
 ## Internationalization (i18n)
 
 - Every user-facing string or configuration key must be internationalized.

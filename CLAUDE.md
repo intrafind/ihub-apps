@@ -489,6 +489,48 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 - **Request validation**: Input validation on all API endpoints
 - **Authentication bypass prevention**: `authRequired` middleware on protected routes
 - **CORS Support**: Cross-Origin Resource Sharing configured for web app integration
+- **Secret encryption at rest**: Integration secrets encrypted in `platform.json` using AES-256-GCM
+
+#### Secret Encryption at Rest
+
+Platform config secrets (Jira, OIDC, LDAP, NTLM, Cloud Storage) are encrypted on disk using `TokenStorageService` (AES-256-GCM). The encryption key is stored at `contents/.encryption-key`.
+
+**Encrypted format:** `ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]`
+
+**Which secrets are encrypted:**
+
+| Config Path                | Field                                  |
+| -------------------------- | -------------------------------------- |
+| `jira`                     | `clientSecret`                         |
+| `cloudStorage.providers[]` | `clientSecret`, `tenantId` (office365) |
+| `oidcAuth.providers[]`     | `clientSecret`                         |
+| `ldapAuth.providers[]`     | `adminPassword`                        |
+| `ntlmAuth`                 | `domainControllerPassword`             |
+
+**How it works:**
+
+- **On admin save** (`POST /api/admin/configs/platform`): Secrets are encrypted before writing to `platform.json`
+- **On admin read** (`GET /api/admin/configs/platform`): Secrets are decrypted, then sanitized to `***REDACTED***`
+- **At runtime** (`configCache.js`): Secrets are decrypted when platform config is loaded into cache, so all consumers receive plaintext
+
+**Guard pattern when encrypting:**
+
+```js
+function encryptIfNeeded(value) {
+  if (!value || typeof value !== 'string') return value;
+  if (/^\$\{[^}]+\}$/.test(value)) return value; // skip env var placeholders
+  if (tokenStorageService.isEncrypted(value)) return value; // skip already encrypted
+  return tokenStorageService.encryptString(value);
+}
+```
+
+**Backward compatibility:** Plaintext secrets pass through unchanged on read. They get encrypted automatically on the next admin save (lazy migration). No migration script needed.
+
+**Key files:**
+
+- `server/services/TokenStorageService.js` — `encryptString()`, `decryptString()`, `isEncrypted()`
+- `server/routes/admin/configs.js` — `encryptPlatformSecrets()`, `decryptPlatformSecrets()`, `encryptIfNeeded()`, `decryptIfNeeded()`
+- `server/configCache.js` — `decryptPlatformSecrets()` applied during platform config loading
 
 #### CORS Configuration
 
