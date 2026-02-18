@@ -22,6 +22,26 @@ class Office365Service {
   }
 
   /**
+   * Build callback URL from request
+   * @param {Object} req - Express request object
+   * @returns {string} Full callback URL
+   */
+  _buildCallbackUrl(req) {
+    // Get protocol - consider X-Forwarded-Proto for reverse proxy setups
+    const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
+
+    // Get host - consider X-Forwarded-Host for reverse proxy setups
+    const host = req.get('x-forwarded-host') || req.get('host');
+
+    if (!host) {
+      throw new Error('Unable to determine host for callback URL');
+    }
+
+    // Build full callback URL
+    return `${protocol}://${host}/api/integrations/office365/callback`;
+  }
+
+  /**
    * Get Office 365 provider configuration
    * @param {string} providerId - The provider ID from cloud storage config
    * @returns {Object} Provider configuration
@@ -60,17 +80,33 @@ class Office365Service {
    * @param {string} providerId - The provider ID
    * @param {string} state - CSRF protection state
    * @param {string} codeVerifier - PKCE code verifier
+   * @param {Object} req - Express request object (optional, for auto-detecting callback URL)
    * @returns {string} Authorization URL
    */
-  generateAuthUrl(providerId, state, codeVerifier) {
+  generateAuthUrl(providerId, state, codeVerifier, req = null) {
     const provider = this._getProviderConfig(providerId);
     const codeChallenge = crypto.createHash('sha256').update(codeVerifier).digest('base64url');
 
-    // Use the provider's redirect URI or fallback to default
-    const redirectUri =
-      provider.redirectUri ||
-      process.env.OFFICE365_OAUTH_REDIRECT_URI ||
-      `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/callback`;
+    // Use the provider's redirect URI, environment variable, auto-detected URL, or fallback to localhost
+    let redirectUri = provider.redirectUri || process.env.OFFICE365_OAUTH_REDIRECT_URI;
+
+    if (!redirectUri && req) {
+      // Auto-detect from request if not configured
+      redirectUri = this._buildCallbackUrl(req);
+      logger.info('🔗 Auto-detected Office 365 callback URL from request', {
+        component: 'Office 365',
+        redirectUri
+      });
+    }
+
+    if (!redirectUri) {
+      // Final fallback to localhost (development)
+      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/callback`;
+      logger.warn('⚠️ Using fallback localhost URL for Office 365 callback', {
+        component: 'Office 365',
+        redirectUri
+      });
+    }
 
     const authUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/authorize`;
 
@@ -105,17 +141,34 @@ class Office365Service {
    * @param {string} providerId - The provider ID
    * @param {string} authCode - Authorization code from OAuth callback
    * @param {string} codeVerifier - PKCE code verifier
+   * @param {Object} req - Express request object (optional, for auto-detecting callback URL)
    * @returns {Promise<Object>} Tokens object
    */
-  async exchangeCodeForTokens(providerId, authCode, codeVerifier) {
+  async exchangeCodeForTokens(providerId, authCode, codeVerifier, req = null) {
     try {
       const provider = this._getProviderConfig(providerId);
       const tokenUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/token`;
 
-      const redirectUri =
-        provider.redirectUri ||
-        process.env.OFFICE365_OAUTH_REDIRECT_URI ||
-        `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/callback`;
+      // Use the provider's redirect URI, environment variable, auto-detected URL, or fallback to localhost
+      let redirectUri = provider.redirectUri || process.env.OFFICE365_OAUTH_REDIRECT_URI;
+
+      if (!redirectUri && req) {
+        // Auto-detect from request if not configured
+        redirectUri = this._buildCallbackUrl(req);
+        logger.info('🔗 Auto-detected Office 365 callback URL from request for token exchange', {
+          component: 'Office 365',
+          redirectUri
+        });
+      }
+
+      if (!redirectUri) {
+        // Final fallback to localhost (development)
+        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/callback`;
+        logger.warn('⚠️ Using fallback localhost URL for Office 365 token exchange', {
+          component: 'Office 365',
+          redirectUri
+        });
+      }
 
       const tokenData = new URLSearchParams({
         client_id: provider.clientId,

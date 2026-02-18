@@ -72,8 +72,8 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       timestamp: Date.now()
     };
 
-    // Generate authorization URL
-    const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier);
+    // Generate authorization URL (pass request for auto-detection)
+    const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier, req);
 
     logger.info(
       `🔗 Initiating Office 365 OAuth for user ${req.user?.id} - Provider: ${providerId}`,
@@ -158,11 +158,12 @@ router.get('/callback', authOptional, async (req, res) => {
       return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
     }
 
-    // Exchange authorization code for tokens
+    // Exchange authorization code for tokens (pass request for auto-detection)
     const tokens = await Office365Service.exchangeCodeForTokens(
       storedAuth.providerId,
       code,
-      storedAuth.codeVerifier
+      storedAuth.codeVerifier,
+      req
     );
 
     // Verify we received a refresh token
