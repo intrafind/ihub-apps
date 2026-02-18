@@ -1,8 +1,8 @@
-import 'dotenv/config';
 import axios from 'axios';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
+import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -11,15 +11,7 @@ import logger from '../../utils/logger.js';
  */
 class JiraService {
   constructor() {
-    this.jiraSiteUrl = process.env.JIRA_BASE_URL; // Your site URL (for reference only)
-    this.clientId = process.env.JIRA_OAUTH_CLIENT_ID;
-    this.clientSecret = process.env.JIRA_OAUTH_CLIENT_SECRET;
-    this.redirectUri = process.env.JIRA_OAUTH_REDIRECT_URI;
     this.serviceName = 'jira';
-
-    if (!this.jiraSiteUrl || !this.clientId || !this.clientSecret || !this.redirectUri) {
-      logger.warn('⚠️ JIRA OAuth configuration incomplete. Some JIRA features may not work.');
-    }
 
     // Use Atlassian Cloud OAuth endpoints (NOT your site URL)
     this.tokenUrl = 'https://auth.atlassian.com/oauth/token';
@@ -31,15 +23,34 @@ class JiraService {
   }
 
   /**
+   * Get the current Jira configuration from platform config.
+   * @returns {Object} Jira config with baseUrl, clientId, clientSecret, redirectUri, enabled
+   */
+  getConfig() {
+    const platform = configCache.getPlatform() || {};
+    return platform.jira || {};
+  }
+
+  /**
+   * Check if Jira is fully configured and enabled.
+   * @returns {boolean} True if enabled and has required OAuth credentials
+   */
+  isConfigured() {
+    const jiraConfig = this.getConfig();
+    return Boolean(jiraConfig.enabled && jiraConfig.clientId && jiraConfig.clientSecret);
+  }
+
+  /**
    * Generate OAuth2 authorization URL for Atlassian Cloud
    * Note: PKCE may not be fully supported by Atlassian Cloud, but we'll try
    */
   generateAuthUrl(state, codeVerifier = null) {
+    const jiraConfig = this.getConfig();
     const params = new URLSearchParams({
       audience: 'api.atlassian.com', // Required for Atlassian Cloud
-      client_id: this.clientId,
+      client_id: jiraConfig.clientId,
       scope: 'read:jira-user read:jira-work write:jira-work offline_access', // offline_access is REQUIRED for refresh tokens
-      redirect_uri: this.redirectUri,
+      redirect_uri: jiraConfig.redirectUri,
       state: state,
       response_type: 'code',
       access_type: 'offline', // Explicitly request offline access for refresh tokens
@@ -61,12 +72,13 @@ class JiraService {
    */
   async exchangeCodeForTokens(authCode, codeVerifier = null) {
     try {
+      const jiraConfig = this.getConfig();
       const tokenData = new URLSearchParams({
         grant_type: 'authorization_code',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
+        client_id: jiraConfig.clientId,
+        client_secret: jiraConfig.clientSecret,
         code: authCode,
-        redirect_uri: this.redirectUri
+        redirect_uri: jiraConfig.redirectUri
       });
 
       // Add code_verifier only if provided (PKCE may not be supported)
@@ -171,10 +183,11 @@ class JiraService {
     try {
       logger.info('🔄 Attempting to refresh JIRA access token...');
 
+      const jiraConfig = this.getConfig();
       const tokenData = new URLSearchParams({
         grant_type: 'refresh_token',
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
+        client_id: jiraConfig.clientId,
+        client_secret: jiraConfig.clientSecret,
         refresh_token: refreshToken
       });
 

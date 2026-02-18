@@ -42,6 +42,9 @@ export const PlatformConfigProvider = ({ children }) => {
         // Cloud storage configuration from auth status
         cloudStorage: authStatus.cloudStorage,
 
+        // Jira integration status from auth status
+        jira: authStatus.jira,
+
         // UI-related fields from UI config
         admin: uiConfig.admin,
         version: uiConfig.version,

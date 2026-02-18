@@ -618,7 +618,13 @@ export default function registerAuthRoutes(app, basePath = '') {
               enabled: p.enabled
             }))
           }
-        : { enabled: false, providers: [] }
+        : { enabled: false, providers: [] },
+      // Expose Jira integration status (no secrets)
+      jira: {
+        enabled: Boolean(
+          platform.jira?.enabled && platform.jira?.clientId && platform.jira?.clientSecret
+        )
+      }
     };
 
     res.json(status);

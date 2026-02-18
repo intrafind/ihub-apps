@@ -79,6 +79,16 @@ export const featureRegistry = [
     },
     category: 'content',
     default: true
+  },
+  {
+    id: 'integrations',
+    name: { en: 'Integrations', de: 'Integrationen' },
+    description: {
+      en: 'External service integrations (Jira, Cloud Storage)',
+      de: 'Externe Dienst-Integrationen (Jira, Cloud Storage)'
+    },
+    category: 'content',
+    default: true
   }
 ];
 

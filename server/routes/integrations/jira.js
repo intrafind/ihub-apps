@@ -5,9 +5,13 @@ import express from 'express';
 import crypto from 'crypto';
 import JiraService from '../../services/integrations/JiraService.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 
 const router = express.Router();
+
+// Gate all Jira routes behind the integrations feature flag
+router.use(requireFeature('integrations'));
 
 /**
  * Initiate JIRA OAuth2 flow for Atlassian Cloud

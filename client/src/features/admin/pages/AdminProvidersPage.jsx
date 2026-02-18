@@ -6,12 +6,15 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import CloudStorageConfig from '../components/CloudStorageConfig';
+import JiraConfig from '../components/JiraConfig';
+import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 const AdminProvidersPage = () => {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
+  const featureFlags = useFeatureFlags();
   const [providers, setProviders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -306,10 +309,13 @@ const AdminProvidersPage = () => {
             </div>
           </div>
 
-          {/* Cloud Storage Configuration Section */}
-          <div className="mt-8">
-            <CloudStorageConfig />
-          </div>
+          {/* Integration Configuration Sections — gated by integrations feature flag */}
+          {featureFlags.isEnabled('integrations', true) && (
+            <div className="mt-8 space-y-6">
+              <CloudStorageConfig />
+              <JiraConfig />
+            </div>
+          )}
         </div>
       </div>
     </AdminAuth>

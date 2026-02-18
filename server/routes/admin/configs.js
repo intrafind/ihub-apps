@@ -259,6 +259,14 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
+      // Sanitize Jira client secret
+      if (sanitizedConfig.jira?.clientSecret) {
+        sanitizedConfig.jira = {
+          ...sanitizedConfig.jira,
+          clientSecret: sanitizeSecret(sanitizedConfig.jira.clientSecret)
+        };
+      }
+
       // Sanitize cloud storage provider secrets
       if (sanitizedConfig.cloudStorage?.providers) {
         sanitizedConfig.cloudStorage = {
@@ -315,6 +323,7 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         ntlmAuth: newConfig.ntlmAuth || existingConfig.ntlmAuth,
         authorization: newConfig.authorization || existingConfig.authorization,
         oauth: newConfig.oauth || existingConfig.oauth,
+        jira: newConfig.jira || existingConfig.jira,
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage
       };
 
@@ -375,6 +384,15 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
             )
           };
         });
+      }
+
+      // Restore Jira client secret
+      if (newConfig.jira?.clientSecret) {
+        if (!mergedConfig.jira) mergedConfig.jira = {};
+        mergedConfig.jira.clientSecret = restoreSecretIfRedacted(
+          newConfig.jira.clientSecret,
+          existingConfig.jira?.clientSecret
+        );
       }
 
       // Restore cloud storage provider secrets

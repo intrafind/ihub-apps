@@ -5,10 +5,14 @@ import express from 'express';
 import crypto from 'crypto';
 import Office365Service from '../../services/integrations/Office365Service.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
+
+// Gate all Office 365 routes behind the integrations feature flag
+router.use(requireFeature('integrations'));
 
 // Rate limiter for Office 365 OAuth initiation to prevent abuse/DoS
 const office365AuthLimiter = rateLimit({

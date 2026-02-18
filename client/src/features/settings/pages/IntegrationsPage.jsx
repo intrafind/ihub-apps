@@ -64,6 +64,9 @@ const IntegrationsPage = () => {
     });
   }, [location.search, navigate, cloudProviders]);
 
+  // Derive Jira enabled state from platform config
+  const jiraEnabled = platformConfig?.jira?.enabled;
+
   // Load integration status
   useEffect(() => {
     const loadIntegrations = async () => {
@@ -71,16 +74,18 @@ const IntegrationsPage = () => {
 
       setLoading(true);
       try {
-        // Check JIRA status
-        const jiraResponse = await fetch('/api/integrations/jira/status', {
-          credentials: 'include'
-        });
-        const jiraData = await jiraResponse.json();
+        // Check JIRA status only if configured on the server
+        if (jiraEnabled) {
+          const jiraResponse = await fetch('/api/integrations/jira/status', {
+            credentials: 'include'
+          });
+          const jiraData = await jiraResponse.json();
 
-        setIntegrations(prev => ({
-          ...prev,
-          jira: jiraData
-        }));
+          setIntegrations(prev => ({
+            ...prev,
+            jira: jiraData
+          }));
+        }
 
         // Check cloud storage provider status dynamically
         for (const provider of cloudProviders) {
@@ -106,7 +111,7 @@ const IntegrationsPage = () => {
     };
 
     loadIntegrations();
-  }, [user?.id, cloudProviders]);
+  }, [user?.id, cloudProviders, jiraEnabled]);
 
   const handleConnect = async integration => {
     if (integration === 'jira') {
@@ -312,120 +317,122 @@ const IntegrationsPage = () => {
               </div>
             ) : (
               <div className="space-y-6">
-                {/* JIRA Integration */}
-                <div className="border border-gray-200 rounded-lg p-6">
-                  <div className="flex items-start space-x-4">
-                    <div className="flex-shrink-0">
-                      <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <Icon name="ticket" className="w-7 h-7 text-white" />
-                      </div>
-                    </div>
-
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">JIRA</h3>
-                          <p className="text-gray-600 text-sm">
-                            Atlassian JIRA integration for ticket management and project insights
-                          </p>
-                        </div>
-
-                        <div className="flex items-center">
-                          <span
-                            className={`px-3 py-1 text-xs font-medium rounded-full ${
-                              integrations.jira?.connected
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-800'
-                            }`}
-                          >
-                            {integrations.jira?.connected ? 'Connected' : 'Not Connected'}
-                          </span>
+                {/* JIRA Integration — only shown when Jira is configured server-side */}
+                {jiraEnabled && (
+                  <div className="border border-gray-200 rounded-lg p-6">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                          <Icon name="ticket" className="w-7 h-7 text-white" />
                         </div>
                       </div>
 
-                      {integrations.jira?.connected && integrations.jira.userInfo && (
-                        <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                          <div className="flex items-center text-sm text-gray-700">
-                            <Icon name="user" className="w-4 h-4 mr-2" />
-                            <span className="font-medium">
-                              {integrations.jira.userInfo.displayName}
-                            </span>
-                            <span className="ml-2 text-gray-500">
-                              ({integrations.jira.userInfo.emailAddress})
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900">JIRA</h3>
+                            <p className="text-gray-600 text-sm">
+                              Atlassian JIRA integration for ticket management and project insights
+                            </p>
+                          </div>
+
+                          <div className="flex items-center">
+                            <span
+                              className={`px-3 py-1 text-xs font-medium rounded-full ${
+                                integrations.jira?.connected
+                                  ? 'bg-green-100 text-green-800'
+                                  : 'bg-gray-100 text-gray-800'
+                              }`}
+                            >
+                              {integrations.jira?.connected ? 'Connected' : 'Not Connected'}
                             </span>
                           </div>
                         </div>
-                      )}
 
-                      <div className="mt-4 flex items-center space-x-3">
-                        {integrations.jira?.connected ? (
-                          <>
+                        {integrations.jira?.connected && integrations.jira.userInfo && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                            <div className="flex items-center text-sm text-gray-700">
+                              <Icon name="user" className="w-4 h-4 mr-2" />
+                              <span className="font-medium">
+                                {integrations.jira.userInfo.displayName}
+                              </span>
+                              <span className="ml-2 text-gray-500">
+                                ({integrations.jira.userInfo.emailAddress})
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="mt-4 flex items-center space-x-3">
+                          {integrations.jira?.connected ? (
+                            <>
+                              <button
+                                onClick={() => handleTest('jira')}
+                                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+                              >
+                                <Icon name="check-circle" className="w-4 h-4 mr-2" />
+                                Test Connection
+                              </button>
+                              <button
+                                onClick={() => handleDisconnect('jira')}
+                                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
+                              >
+                                <Icon name="x-circle" className="w-4 h-4 mr-2" />
+                                Disconnect
+                              </button>
+                            </>
+                          ) : (
                             <button
-                              onClick={() => handleTest('jira')}
+                              onClick={() => handleConnect('jira')}
                               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
                             >
-                              <Icon name="check-circle" className="w-4 h-4 mr-2" />
-                              Test Connection
+                              <Icon name="link" className="w-4 h-4 mr-2" />
+                              Connect JIRA Account
                             </button>
-                            <button
-                              onClick={() => handleDisconnect('jira')}
-                              className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
-                            >
-                              <Icon name="x-circle" className="w-4 h-4 mr-2" />
-                              Disconnect
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={() => handleConnect('jira')}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md font-medium transition-colors flex items-center"
-                          >
-                            <Icon name="link" className="w-4 h-4 mr-2" />
-                            Connect JIRA Account
-                          </button>
+                          )}
+                        </div>
+
+                        {integrations.jira?.connected && (
+                          <div className="mt-3">
+                            <h4 className="text-sm font-medium text-gray-900 mb-2">
+                              Available Features:
+                            </h4>
+                            <ul className="text-sm text-gray-700 space-y-1">
+                              <li className="flex items-center">
+                                <Icon
+                                  name="check"
+                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
+                                />
+                                Search and retrieve JIRA tickets
+                              </li>
+                              <li className="flex items-center">
+                                <Icon
+                                  name="check"
+                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
+                                />
+                                Create new tickets and issues
+                              </li>
+                              <li className="flex items-center">
+                                <Icon
+                                  name="check"
+                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
+                                />
+                                Update existing tickets
+                              </li>
+                              <li className="flex items-center">
+                                <Icon
+                                  name="check"
+                                  className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
+                                />
+                                Get project and user information
+                              </li>
+                            </ul>
+                          </div>
                         )}
                       </div>
-
-                      {integrations.jira?.connected && (
-                        <div className="mt-3">
-                          <h4 className="text-sm font-medium text-gray-900 mb-2">
-                            Available Features:
-                          </h4>
-                          <ul className="text-sm text-gray-700 space-y-1">
-                            <li className="flex items-center">
-                              <Icon
-                                name="check"
-                                className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                              />
-                              Search and retrieve JIRA tickets
-                            </li>
-                            <li className="flex items-center">
-                              <Icon
-                                name="check"
-                                className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                              />
-                              Create new tickets and issues
-                            </li>
-                            <li className="flex items-center">
-                              <Icon
-                                name="check"
-                                className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                              />
-                              Update existing tickets
-                            </li>
-                            <li className="flex items-center">
-                              <Icon
-                                name="check"
-                                className="w-4 h-4 text-green-500 mr-2 flex-shrink-0"
-                              />
-                              Get project and user information
-                            </li>
-                          </ul>
-                        </div>
-                      )}
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Cloud Storage Integrations */}
                 {cloudProviders.map(provider => (
@@ -544,16 +551,31 @@ const IntegrationsPage = () => {
                   </div>
                 ))}
 
+                {/* Empty state when no integrations are configured */}
+                {!jiraEnabled && cloudProviders.length === 0 && (
+                  <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <h3 className="text-lg font-medium text-gray-500 mb-1">
+                      No Integrations Configured
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      Contact your administrator to enable external integrations.
+                    </p>
+                  </div>
+                )}
+
                 {/* Placeholder for future integrations */}
-                <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
-                  <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                  <h3 className="text-lg font-medium text-gray-500 mb-1">
-                    More Integrations Coming Soon
-                  </h3>
-                  <p className="text-gray-400 text-sm">
-                    We're working on adding more integrations to enhance your AI applications
-                  </p>
-                </div>
+                {(jiraEnabled || cloudProviders.length > 0) && (
+                  <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                    <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
+                    <h3 className="text-lg font-medium text-gray-500 mb-1">
+                      More Integrations Coming Soon
+                    </h3>
+                    <p className="text-gray-400 text-sm">
+                      We're working on adding more integrations to enhance your AI applications
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </div>

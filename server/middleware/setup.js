@@ -167,7 +167,7 @@ function setupSessionMiddleware(app, platformConfig) {
   const needsOidcSessions = oidcConfig.enabled;
 
   // Check for OAuth-based external integrations that need sessions
-  const jiraEnabled = process.env.JIRA_BASE_URL && process.env.JIRA_OAUTH_CLIENT_ID;
+  const jiraEnabled = platformConfig?.jira?.enabled && platformConfig?.jira?.clientId;
   const cloudStorageEnabled =
     platformConfig?.cloudStorage?.enabled &&
     platformConfig?.cloudStorage?.providers?.some(
