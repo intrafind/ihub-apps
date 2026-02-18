@@ -26,7 +26,6 @@ import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
 /**
  * Initialize variables with default values from app configuration

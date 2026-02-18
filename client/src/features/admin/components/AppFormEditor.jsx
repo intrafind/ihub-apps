@@ -12,7 +12,6 @@ import {
   errorsToFieldErrors,
   isFieldRequired
 } from '../../../utils/schemaValidation';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**

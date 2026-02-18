@@ -10,7 +10,7 @@ import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/inte
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import { useAuth } from '../contexts/AuthContext.jsx';
-import { usePlatformConfig } from '../contexts/PlatformConfigContext';
+import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import useFeatureFlags from '../hooks/useFeatureFlags';
