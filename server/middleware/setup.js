@@ -203,34 +203,35 @@ function setupSessionMiddleware(app, platformConfig) {
     );
   }
 
-  // Setup external integration OAuth sessions (separate from user auth)
-  if (needsIntegrationSessions) {
-    const enabledIntegrations = [];
-    if (jiraEnabled) enabledIntegrations.push('JIRA');
-    if (cloudStorageEnabled) enabledIntegrations.push('Office 365');
+  // Always register integration session middleware — integrations can be enabled
+  // dynamically via admin UI, and routes are always registered with requireFeature guards
+  const enabledIntegrations = [];
+  if (jiraEnabled) enabledIntegrations.push('JIRA');
+  if (cloudStorageEnabled) enabledIntegrations.push('Office 365');
 
-    logger.info(
-      `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`,
-      { component: 'Middleware' }
-    );
-    app.use(
-      '/api/integrations',
-      session({
-        secret:
-          config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
-        resave: false,
-        saveUninitialized: true, // Required for OAuth2 PKCE state persistence
-        name: 'integration.session',
-        cookie: {
-          secure: config.USE_HTTPS === 'true',
-          httpOnly: true,
-          maxAge: 15 * 60 * 1000, // 15 minutes for OAuth flows
-          sameSite: 'lax',
-          path: '/api/integrations'
-        }
-      })
-    );
-  }
+  logger.info(
+    enabledIntegrations.length > 0
+      ? `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`
+      : '🔗 Enabling session middleware for OAuth integrations (ready for dynamic configuration)',
+    { component: 'Middleware' }
+  );
+  app.use(
+    '/api/integrations',
+    session({
+      secret:
+        config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
+      resave: false,
+      saveUninitialized: true, // Required for OAuth2 PKCE state persistence
+      name: 'integration.session',
+      cookie: {
+        secure: config.USE_HTTPS === 'true',
+        httpOnly: true,
+        maxAge: 15 * 60 * 1000, // 15 minutes for OAuth flows
+        sameSite: 'lax',
+        path: '/api/integrations'
+      }
+    })
+  );
 
   // If no specific session middleware is needed, but we still have some auth method,
   // we might need basic session support for other features
