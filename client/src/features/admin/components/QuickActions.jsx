@@ -1,7 +1,6 @@
 import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const QuickActions = ({ isEnabled }) => {

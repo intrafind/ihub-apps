@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 

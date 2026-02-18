@@ -11,19 +11,19 @@ import useFeatureFlags from '../shared/hooks/useFeatureFlags';
 
 function MyComponent({ app }) {
   const featureFlags = useFeatureFlags();
-  
+
   // Check platform-level feature
   const toolsEnabled = featureFlags.isEnabled('tools', true);
-  
+
   // Check app-level feature
   const magicEnabled = featureFlags.isAppFeatureEnabled(app, 'magicPrompt.enabled', false);
-  
+
   // Check both levels
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
-  
+
   // Get feature value
   const magicModel = featureFlags.getAppFeatureValue(app, 'magicPrompt.model', null);
-  
+
   return <div>{/* Your component */}</div>;
 }
 ```
@@ -47,12 +47,14 @@ const toolsEnabled = featureFlags.isEnabled('tools', true);
 Check if a platform-level feature is enabled.
 
 **Parameters:**
+
 - `featureId` (string): The feature identifier (e.g., 'shortLinks', 'tools', 'promptsLibrary')
 - `defaultValue` (boolean): Value to return if feature flag is not explicitly set (default: `true`)
 
 **Returns:** `boolean`
 
 **Example:**
+
 ```javascript
 const toolsEnabled = featureFlags.isEnabled('tools', true);
 const promptsEnabled = featureFlags.isEnabled('promptsLibrary', true);
@@ -66,6 +68,7 @@ const workflowsEnabled = featureFlags.isEnabled('experimentalWorkflows', false);
 Check if an app-level feature is enabled.
 
 **Parameters:**
+
 - `app` (Object): The app configuration object
 - `featurePath` (string): Dot-notation path to the feature (e.g., 'magicPrompt.enabled', 'shortLinks')
 - `defaultValue` (boolean): Value to return if feature flag is not explicitly set (default: `false`)
@@ -73,6 +76,7 @@ Check if an app-level feature is enabled.
 **Returns:** `boolean`
 
 **Example:**
+
 ```javascript
 const magicEnabled = featureFlags.isAppFeatureEnabled(app, 'magicPrompt.enabled', false);
 const canvasEnabled = featureFlags.isAppFeatureEnabled(app, 'canvas', false);
@@ -85,6 +89,7 @@ const canvasEnabled = featureFlags.isAppFeatureEnabled(app, 'canvas', false);
 Check if a feature is enabled at both platform and app levels. Both must be enabled for this to return `true`.
 
 **Parameters:**
+
 - `app` (Object): The app configuration object
 - `featureId` (string): The feature identifier (must exist at both levels)
 - `defaultValue` (boolean): Value to return if feature flag is not explicitly set (default: `true`)
@@ -92,6 +97,7 @@ Check if a feature is enabled at both platform and app levels. Both must be enab
 **Returns:** `boolean`
 
 **Example:**
+
 ```javascript
 const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 // Returns true only if BOTH platform and app have shortLinks enabled
@@ -104,6 +110,7 @@ const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 Get a nested app feature value (not just enabled/disabled). Useful for retrieving configuration values.
 
 **Parameters:**
+
 - `app` (Object): The app configuration object
 - `featurePath` (string): Dot-notation path to the feature value (e.g., 'magicPrompt.model', 'magicPrompt.prompt')
 - `defaultValue` (any): Value to return if the path doesn't exist (default: `null`)
@@ -111,6 +118,7 @@ Get a nested app feature value (not just enabled/disabled). Useful for retrievin
 **Returns:** `any` - The feature value or default
 
 **Example:**
+
 ```javascript
 const magicModel = featureFlags.getAppFeatureValue(app, 'magicPrompt.model', null);
 const magicPrompt = featureFlags.getAppFeatureValue(app, 'magicPrompt.prompt', '');
@@ -142,43 +150,47 @@ Common app-level features:
 ## Default Value Strategy
 
 **Platform features (isEnabled):**
+
 - Default to `true` - Features are enabled by default unless explicitly disabled
 - Rationale: New features should be available unless turned off
 
 **App features (isAppFeatureEnabled):**
+
 - Default to `false` - App-specific features are opt-in
 - Rationale: Apps should explicitly enable special features
 
 **Feature values (getAppFeatureValue):**
+
 - Default to `null` or custom value - Depends on use case
 - Rationale: Allows flexible handling of missing values
 
 ## Migration Examples
 
 ### Before: Complex conditional checks
+
 ```javascript
 const AppChat = ({ app }) => {
   const { platformConfig } = usePlatformConfig();
-  
+
   // Check multiple levels with complex logic
-  const shareEnabled = 
-    app?.features?.shortLinks !== false && 
-    platformConfig?.featuresMap?.shortLinks !== false;
-  
+  const shareEnabled =
+    app?.features?.shortLinks !== false && platformConfig?.featuresMap?.shortLinks !== false;
+
   const toolsFeatureEnabled = platformConfig?.featuresMap?.tools !== false;
-  
+
   const magicPromptEnabled = app?.features?.magicPrompt?.enabled === true;
-  
+
   const magicModel = app?.features?.magicPrompt?.model;
   const magicPrompt = app?.features?.magicPrompt?.prompt;
 };
 ```
 
 ### After: Clean utility methods
+
 ```javascript
 const AppChat = ({ app }) => {
   const featureFlags = useFeatureFlags();
-  
+
   // Clean, readable checks
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
@@ -201,6 +213,7 @@ const AppChat = ({ app }) => {
 ## Performance
 
 The utility has minimal performance overhead:
+
 - Same number of property accesses as before
 - React hook memoizes the instance
 - No external dependencies
@@ -218,7 +231,7 @@ describe('FeatureFlags', () => {
       promptsLibrary: false
     }
   };
-  
+
   const app = {
     features: {
       magicPrompt: {
@@ -229,18 +242,18 @@ describe('FeatureFlags', () => {
       shortLinks: true
     }
   };
-  
+
   it('should check platform feature', () => {
     const flags = new FeatureFlags(platformConfig);
     expect(flags.isEnabled('tools', true)).toBe(true);
     expect(flags.isEnabled('promptsLibrary', true)).toBe(false);
   });
-  
+
   it('should check app feature', () => {
     const flags = new FeatureFlags(platformConfig);
     expect(flags.isAppFeatureEnabled(app, 'magicPrompt.enabled', false)).toBe(true);
   });
-  
+
   it('should get app feature value', () => {
     const flags = new FeatureFlags(platformConfig);
     expect(flags.getAppFeatureValue(app, 'magicPrompt.model', null)).toBe('gpt-4');
