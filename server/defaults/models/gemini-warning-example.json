@@ -1,0 +1,25 @@
+{
+  "id": "gemini-warning-example",
+  "modelId": "gemini-pro",
+  "name": {
+    "en": "Gemini Pro (Warning Example)",
+    "de": "Gemini Pro (Warnung Beispiel)"
+  },
+  "description": {
+    "en": "Example model demonstrating hint feature at 'warning' level",
+    "de": "Beispiel-Modell zur Demonstration der Hinweis-Funktion auf Ebene 'Warnung'"
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent",
+  "provider": "google",
+  "tokenLimit": 32760,
+  "supportsTools": false,
+  "enabled": false,
+  "hint": {
+    "message": {
+      "en": "This model is being deprecated and will be removed in the next release. Please migrate to Gemini 2.0 Flash.",
+      "de": "Dieses Modell wird eingestellt und in der nächsten Version entfernt. Bitte migrieren Sie zu Gemini 2.0 Flash."
+    },
+    "level": "warning",
+    "dismissible": false
+  }
+}

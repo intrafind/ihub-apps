@@ -29,6 +29,15 @@ const imageGenerationSchema = z
   })
   .strict();
 
+// Hint configuration schema for displaying important messages when model is selected
+const hintSchema = z
+  .object({
+    message: localizedStringSchema, // Internationalized hint message
+    level: z.enum(['hint', 'info', 'warning', 'alert']), // Severity levels
+    dismissible: z.boolean().optional().default(true) // Whether user can dismiss (only for hint/info)
+  })
+  .strict();
+
 export const modelConfigSchema = z
   .object({
     // Required fields
@@ -91,6 +100,9 @@ export const modelConfigSchema = z
     supportsImageGeneration: z.boolean().optional().default(false),
     imageGeneration: imageGenerationSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
+
+    // Hint configuration - display important messages when model is selected
+    hint: hintSchema.optional(),
 
     // API Key configuration - stored encrypted on server
     apiKey: z.string().optional() // Encrypted API key for this model

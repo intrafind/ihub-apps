@@ -7,6 +7,7 @@ import WorkflowMentionSearch from './WorkflowMentionSearch';
 import ChatInputActionsMenu from './ChatInputActionsMenu';
 import ImageGenerationControls from './ImageGenerationControls';
 import ModelSelector from './ModelSelector';
+import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -66,6 +67,7 @@ const ChatInput = ({
   const [cloudStorageProvider, setCloudStorageProvider] = useState(null);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
   const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
+  const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
@@ -73,6 +75,16 @@ const ChatInput = ({
 
   // Derive the @mention query from the current input value
   const mentionQuery = showWorkflowSearch ? value.match(/@([\w.-]*)$/)?.[1] || '' : '';
+
+  // Get selected model data for hint display
+  const selectedModelData = useMemo(() => {
+    return models?.find(m => m.id === selectedModel);
+  }, [models, selectedModel]);
+
+  // Reset alert acknowledgment when model changes
+  useEffect(() => {
+    setModelAlertAcknowledged(false);
+  }, [selectedModel]);
 
   // Normalize files to always be an array for consistent rendering
   const normalizedFiles = useMemo(() => {
@@ -110,8 +122,10 @@ const ChatInput = ({
     defaultPlaceholder = t('pages.appChat.messagePlaceholder', 'Type here...');
   }
 
-  // Disable input when clarification is pending
-  const isInputDisabled = disabled || clarificationPending;
+  // Disable input when clarification is pending or when model requires alert acknowledgment
+  const requiresAlertAcknowledgment =
+    selectedModelData?.hint?.level === 'alert' && !modelAlertAcknowledged;
+  const isInputDisabled = disabled || clarificationPending || requiresAlertAcknowledgment;
 
   const focusInputAtEnd = useCallback(() => {
     if (actualInputRef.current) {
@@ -327,6 +341,18 @@ const ChatInput = ({
             }}
           />
         )}
+
+        {/* Model hint banner - shown when selected model has a hint */}
+        {selectedModelData?.hint && (
+          <div className="mb-2">
+            <ModelHintBanner
+              hint={selectedModelData.hint}
+              currentLanguage={currentLanguage}
+              onAcknowledge={() => setModelAlertAcknowledged(true)}
+            />
+          </div>
+        )}
+
         <form
           ref={formRef}
           onSubmit={handleSubmit}
