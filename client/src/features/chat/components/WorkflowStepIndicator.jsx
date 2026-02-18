@@ -96,9 +96,25 @@ const WorkflowStepIndicator = ({ steps = [], currentStep, result, loading }) => 
     );
   }
 
-  // -- COMPLETED / FAILED STATE --
+  // -- COMPLETED / FAILED / CANCELLED STATE --
   if (result) {
     const isFailed = result.status === 'failed';
+    const isCancelled = result.status === 'cancelled';
+
+    // Determine icon, color, and message based on status
+    let iconName = 'cog';
+    let iconColor = '';
+    let statusText = t('workflow.generated', 'Generated');
+
+    if (isFailed) {
+      iconName = 'exclamation-circle';
+      iconColor = 'text-red-500';
+      statusText = t('workflow.failed', 'Failed');
+    } else if (isCancelled) {
+      iconName = 'x-circle';
+      iconColor = 'text-orange-500';
+      statusText = t('workflow.cancelled', 'Cancelled');
+    }
 
     return (
       <div className="mt-2 border border-gray-200 dark:border-gray-700 rounded-lg px-3 py-2 text-xs text-gray-500 dark:text-gray-400">
@@ -106,13 +122,9 @@ const WorkflowStepIndicator = ({ steps = [], currentStep, result, loading }) => 
           onClick={() => setExpanded(!expanded)}
           className="flex items-center gap-1.5 w-full text-left"
         >
-          <Icon
-            name={isFailed ? 'exclamation-circle' : 'cog'}
-            size="xs"
-            className={`flex-shrink-0 ${isFailed ? 'text-red-500' : ''}`}
-          />
+          <Icon name={iconName} size="xs" className={`flex-shrink-0 ${iconColor}`} />
           <span className="font-medium">
-            {isFailed ? t('workflow.failed', 'Failed') : t('workflow.generated', 'Generated')}
+            {statusText}
             {' via '}
             <span className="text-gray-700 dark:text-gray-300">{workflowName || 'workflow'}</span>
           </span>
