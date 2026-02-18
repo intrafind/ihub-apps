@@ -28,7 +28,7 @@ const office365AuthLimiter = rateLimit({
  */
 router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
   try {
-    const { providerId } = req.query;
+    const { providerId, returnUrl } = req.query;
 
     if (!providerId) {
       return res.status(400).json({
@@ -42,6 +42,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       hasUser: !!req.user,
       userId: req.user?.id,
       providerId,
+      returnUrl,
       hasSession: !!req.session
     });
 
@@ -65,6 +66,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       codeVerifier,
       providerId,
       userId: req.user?.id || 'fallback-user',
+      returnUrl: returnUrl || '/settings/integrations',
       timestamp: Date.now()
     };
 
@@ -100,6 +102,10 @@ router.get('/callback', authOptional, async (req, res) => {
   try {
     const { code, state, error: oauthError } = req.query;
 
+    // Get return URL early for error redirects
+    const returnUrl = req.session?.office365Auth?.returnUrl || '/settings/integrations';
+    const separator = returnUrl.includes('?') ? '&' : '?';
+
     // Check for OAuth errors
     if (oauthError) {
       logger.error('❌ Office 365 OAuth error:', {
@@ -107,7 +113,7 @@ router.get('/callback', authOptional, async (req, res) => {
         error: oauthError
       });
       // Redirect with a generic error code to avoid exposing raw error details in the URL
-      return res.redirect('/settings/integrations?office365_error=oauth_failed');
+      return res.redirect(`${returnUrl}${separator}office365_error=oauth_failed`);
     }
 
     // Check if session is available
@@ -115,7 +121,7 @@ router.get('/callback', authOptional, async (req, res) => {
       logger.error('❌ No session available for Office 365 OAuth callback', {
         component: 'Office 365'
       });
-      return res.redirect('/settings/integrations?office365_error=no_session');
+      return res.redirect(`${returnUrl}${separator}office365_error=no_session`);
     }
 
     // Validate state parameter
@@ -124,7 +130,7 @@ router.get('/callback', authOptional, async (req, res) => {
       logger.error('❌ Invalid Office 365 OAuth state parameter', {
         component: 'Office 365'
       });
-      return res.redirect('/settings/integrations?office365_error=invalid_state');
+      return res.redirect(`${returnUrl}${separator}office365_error=invalid_state`);
     }
 
     // Check session timeout (15 minutes)
@@ -132,7 +138,7 @@ router.get('/callback', authOptional, async (req, res) => {
       logger.error('❌ Office 365 OAuth session expired', {
         component: 'Office 365'
       });
-      return res.redirect('/settings/integrations?office365_error=session_expired');
+      return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
     }
 
     // Exchange authorization code for tokens
@@ -156,28 +162,37 @@ router.get('/callback', authOptional, async (req, res) => {
     // Store encrypted tokens for user
     await Office365Service.storeUserTokens(storedAuth.userId, tokens);
 
+    // Get return URL from session (default to /settings/integrations)
+    const returnUrl = storedAuth.returnUrl || '/settings/integrations';
+
     // Clear session data
     delete req.session.office365Auth;
 
     logger.info(`✅ Office 365 OAuth completed for user ${storedAuth.userId}`, {
       component: 'Office 365',
-      providerId: storedAuth.providerId
+      providerId: storedAuth.providerId,
+      returnUrl
     });
 
-    // Redirect back to settings with success
-    res.redirect('/settings/integrations?office365_connected=true');
+    // Redirect back to the original page with success
+    const separator = returnUrl.includes('?') ? '&' : '?';
+    res.redirect(`${returnUrl}${separator}office365_connected=true`);
   } catch (error) {
     logger.error('❌ Error handling Office 365 OAuth callback:', {
       component: 'Office 365',
       error: error.message
     });
 
+    // Get return URL from session (default to /settings/integrations)
+    const returnUrl = req.session?.office365Auth?.returnUrl || '/settings/integrations';
+
     // Clear session data on error
     if (req.session) {
       delete req.session.office365Auth;
     }
 
-    res.redirect(`/settings/integrations?office365_error=${encodeURIComponent(error.message)}`);
+    const separator = returnUrl.includes('?') ? '&' : '?';
+    res.redirect(`${returnUrl}${separator}office365_error=${encodeURIComponent(error.message)}`);
   }
 });
 

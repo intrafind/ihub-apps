@@ -127,9 +127,9 @@ const Office365FileBrowser = ({ provider, onFilesProcessed, onClose, uploadConfi
 
   // Handle connect button
   const handleConnect = () => {
-    const authUrl = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}`;
-    // Store return URL
-    sessionStorage.setItem('cloudStorage_returnUrl', window.location.pathname);
+    // Get current page path as return URL
+    const returnUrl = window.location.pathname + window.location.search;
+    const authUrl = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
     window.location.href = authUrl;
   };
 
