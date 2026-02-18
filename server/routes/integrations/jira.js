@@ -130,9 +130,6 @@ router.get('/callback', authOptional, async (req, res) => {
     // Store encrypted tokens for user
     await JiraService.storeUserTokens(storedAuth.userId, tokens);
 
-    // Get return URL from session (default to /settings/integrations)
-    const returnUrl = storedAuth.returnUrl || '/settings/integrations';
-
     // Clear session data
     delete req.session.jiraAuth;
 
@@ -141,7 +138,6 @@ router.get('/callback', authOptional, async (req, res) => {
     });
 
     // Redirect back to the original page with success
-    const separator = returnUrl.includes('?') ? '&' : '?';
     res.redirect(`${returnUrl}${separator}jira_connected=true`);
   } catch (error) {
     logger.error('❌ Error handling JIRA OAuth callback:', error.message);
