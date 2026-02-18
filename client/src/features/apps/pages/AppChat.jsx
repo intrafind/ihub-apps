@@ -15,6 +15,7 @@ import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
@@ -104,7 +105,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
@@ -115,8 +116,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
-  const shareEnabled =
-    app?.features?.shortLinks !== false && platformConfig?.featuresMap?.shortLinks !== false;
+  const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 
   // Shared app settings hook
   const {
@@ -148,7 +148,7 @@ const AppChat = ({ preloadedApp = null }) => {
   } = useAppSettings(appId, app);
 
   // When tools feature is disabled platform-wide, hide tool UI entirely
-  const toolsFeatureEnabled = platformConfig?.featuresMap?.tools !== false;
+  const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
   const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
 
   // Apply settings and variables from URL parameters once app data is loaded
@@ -1256,7 +1256,7 @@ const AppChat = ({ preloadedApp = null }) => {
       selectedFile: fileUploadHandler.selectedFile,
       showUploader: fileUploadHandler.showUploader,
       onToggleUploader: fileUploadHandler.toggleUploader,
-      magicPromptEnabled: app?.features?.magicPrompt?.enabled === true,
+      magicPromptEnabled: featureFlags.isAppFeatureEnabled(app, 'magicPrompt.enabled', false),
       onMagicPrompt: handleMagicPrompt,
       showUndoMagicPrompt: magicPromptHandler.showUndoMagicPrompt,
       onUndoMagicPrompt: handleUndoMagicPrompt,

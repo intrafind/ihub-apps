@@ -5,13 +5,14 @@ import { exportChatToFormat } from '../../../api/endpoints/apps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, chatId }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
-  const pdfExportEnabled = platformConfig?.featuresMap?.pdfExport !== false;
+  const pdfExportEnabled = featureFlags.isEnabled('pdfExport', true);
   const [showPdfOptions, setShowPdfOptions] = useState(false);
   const [pdfConfig, setPdfConfig] = useState({
     template: 'default',

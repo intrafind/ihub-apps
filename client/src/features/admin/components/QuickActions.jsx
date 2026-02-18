@@ -2,14 +2,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const QuickActions = ({ isEnabled }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
 
   // Check if prompts feature is enabled
-  const promptsFeatureEnabled = platformConfig?.featuresMap?.promptsLibrary !== false;
+  const promptsFeatureEnabled = featureFlags.isEnabled('promptsLibrary', true);
 
   return (
     <div className="mb-12 bg-white rounded-lg shadow-sm border border-gray-200 p-6">

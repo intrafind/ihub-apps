@@ -13,6 +13,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * AppFormEditor - Form-based editor for app configuration
@@ -39,10 +40,10 @@ const AppFormEditor = ({
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [validationErrors, setValidationErrors] = useState({});
-  const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
 
   // Check if sources feature is enabled
-  const isSourcesEnabled = platformConfig?.featuresMap?.sources ?? true;
+  const isSourcesEnabled = featureFlags.isEnabled('sources', true);
 
   // Validation function
   const validateApp = appData => {
