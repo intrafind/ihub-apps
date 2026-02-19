@@ -117,10 +117,15 @@ const IntegrationsPage = () => {
     if (integration === 'jira') {
       // Use fetch to initiate the OAuth flow so credentials are included
       try {
-        const response = await fetch('/api/integrations/jira/auth', {
-          credentials: 'include',
-          redirect: 'manual' // Don't automatically follow redirects
-        });
+        // Get current page path as return URL
+        const returnUrl = window.location.pathname + window.location.search;
+        const response = await fetch(
+          `/api/integrations/jira/auth?returnUrl=${encodeURIComponent(returnUrl)}`,
+          {
+            credentials: 'include',
+            redirect: 'manual' // Don't automatically follow redirects
+          }
+        );
 
         if (
           response.type === 'opaqueredirect' ||
@@ -128,7 +133,7 @@ const IntegrationsPage = () => {
           response.status === 301
         ) {
           // The server is redirecting to JIRA OAuth, follow the redirect manually
-          window.location.href = '/api/integrations/jira/auth';
+          window.location.href = `/api/integrations/jira/auth?returnUrl=${encodeURIComponent(returnUrl)}`;
         } else if (!response.ok) {
           const errorData = await response.json().catch(() => ({ message: 'Unknown error' }));
           setMessage({
@@ -147,7 +152,9 @@ const IntegrationsPage = () => {
 
   // Handle cloud provider connection
   const handleCloudConnect = provider => {
-    window.location.href = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}`;
+    // Get current page path as return URL
+    const returnUrl = window.location.pathname + window.location.search;
+    window.location.href = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
   };
 
   const handleDisconnect = async integration => {

@@ -19,10 +19,13 @@ router.use(requireFeature('integrations'));
  */
 router.get('/auth', authRequired, async (req, res) => {
   try {
+    const { returnUrl } = req.query;
+
     logger.debug('🔍 JIRA Auth Debug:', {
       hasUser: !!req.user,
       userId: req.user?.id,
       userGroups: req.user?.groups,
+      returnUrl,
       hasSession: !!req.session,
       cookies: Object.keys(req.cookies || {}),
       authHeader: req.headers.authorization ? 'present' : 'missing'
@@ -42,11 +45,14 @@ router.get('/auth', authRequired, async (req, res) => {
     // Generate PKCE parameters (may be ignored by Atlassian Cloud)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
-    // Store OAuth parameters in session
-    req.session.jiraAuth = {
+    // Store OAuth parameters in session with a consistent key
+    // Using oauth_jira key for consistency with Office 365 pattern
+    const sessionKey = 'oauth_jira';
+    req.session[sessionKey] = {
       state,
       codeVerifier,
       userId: req.user?.id || 'fallback-user',
+      returnUrl: returnUrl || '/settings/integrations',
       timestamp: Date.now()
     };
 
@@ -74,29 +80,36 @@ router.get('/callback', authOptional, async (req, res) => {
   try {
     const { code, state, error } = req.query;
 
+    // Use consistent session key
+    const sessionKey = 'oauth_jira';
+    const storedAuth = req.session?.[sessionKey];
+
+    // Get return URL early for error redirects
+    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
+    const separator = returnUrl.includes('?') ? '&' : '?';
+
     // Check for OAuth errors
     if (error) {
       logger.error('❌ JIRA OAuth error:', error);
-      return res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error)}`);
+      return res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error)}`);
     }
 
     // Check if session is available
     if (!req.session) {
       logger.error('❌ No session available for JIRA OAuth callback');
-      return res.redirect('/settings/integrations?jira_error=no_session');
+      return res.redirect(`${returnUrl}${separator}jira_error=no_session`);
     }
 
     // Validate state parameter
-    const storedAuth = req.session.jiraAuth;
     if (!storedAuth || storedAuth.state !== state) {
       logger.error('❌ Invalid JIRA OAuth state parameter');
-      return res.redirect('/settings/integrations?jira_error=invalid_state');
+      return res.redirect(`${returnUrl}${separator}jira_error=invalid_state`);
     }
 
     // Check session timeout (15 minutes)
     if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
       logger.error('❌ JIRA OAuth session expired');
-      return res.redirect('/settings/integrations?jira_error=session_expired');
+      return res.redirect(`${returnUrl}${separator}jira_error=session_expired`);
     }
 
     // Exchange authorization code for tokens
@@ -122,22 +135,29 @@ router.get('/callback', authOptional, async (req, res) => {
     // Store encrypted tokens for user
     await JiraService.storeUserTokens(storedAuth.userId, tokens);
 
-    // Clear session data
-    delete req.session.jiraAuth;
+    // Clear session data using the consistent key
+    delete req.session[sessionKey];
 
-    logger.info(`✅ JIRA OAuth completed for user ${storedAuth.userId}`);
+    logger.info(`✅ JIRA OAuth completed for user ${storedAuth.userId}`, {
+      returnUrl
+    });
 
-    // Redirect back to settings with success
-    res.redirect('/settings/integrations?jira_connected=true');
+    // Redirect back to the original page with success
+    res.redirect(`${returnUrl}${separator}jira_connected=true`);
   } catch (error) {
     logger.error('❌ Error handling JIRA OAuth callback:', error.message);
 
+    // Get return URL from session (default to /settings/integrations)
+    const sessionKey = 'oauth_jira';
+    const returnUrl = req.session?.[sessionKey]?.returnUrl || '/settings/integrations';
+
     // Clear session data on error
-    if (req.session) {
-      delete req.session.jiraAuth;
+    if (req.session && req.session[sessionKey]) {
+      delete req.session[sessionKey];
     }
 
-    res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error.message)}`);
+    const separator = returnUrl.includes('?') ? '&' : '?';
+    res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error.message)}`);
   }
 });
 

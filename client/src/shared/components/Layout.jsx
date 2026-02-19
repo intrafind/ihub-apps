@@ -13,6 +13,7 @@ import { useAuth } from '../contexts/AuthContext.jsx';
 import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
+import { useOAuthCallbackCleanup } from '../hooks/useOAuthCallbackCleanup';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -23,6 +24,9 @@ const Layout = () => {
   const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
   const featureFlags = useFeatureFlags();
+
+  // Clean up OAuth callback query parameters globally
+  useOAuthCallbackCleanup();
 
   // Map navigation URLs to feature IDs for gating
   const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
