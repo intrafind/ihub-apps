@@ -109,17 +109,41 @@ These guidelines may be superseded by explicit instructions, but should be follo
 
 ## Documentation Organization
 
-### Concept Documents
+### Feature Documentation
 
-Document all significant features, bug fixes, and changes in the `concepts/` folder:
+All feature documentation should be added to the `docs/` folder:
+
+**When to Update Existing Documentation:**
+- **Always check first** if documentation already exists in `docs/` for the area you're working on
+- Update existing files rather than creating new ones when the feature fits within an existing document
+- For example, new model features should be added to `docs/models.md`, new UI features to `docs/ui.md`, etc.
+
+**When to Create New Documentation:**
+- Only create new documentation files when the feature doesn't fit into any existing document
+- Use descriptive, lowercase filenames with hyphens: `feature-name.md`
+- Add the new file to `docs/SUMMARY.md` for inclusion in the documentation site
+
+**Documentation Structure:**
+- `docs/` - User-facing feature documentation, guides, and references
+  - Updated as features are added or modified
+  - Organized by topic (models, authentication, configuration, etc.)
+  - Rendered on the documentation site
+
+**Example Workflow:**
+1. Check if `docs/models.md`, `docs/ui.md`, or other relevant file exists
+2. If exists, add your feature documentation to the appropriate section
+3. If doesn't exist, create new file and add to `docs/SUMMARY.md`
+4. Use clear headings, code examples, and use cases
+
+### Concept Documents (Design & Planning)
+
+The `concepts/` folder is for design documents, RFC-style proposals, and technical planning:
 
 **Single Document Features:**
-
 - Format: `concepts/YYYY-MM-DD {title}.md`
 - Example: `2026-02-02 Provider API Key Persistence Fix.md`
 
 **Multi-Document Features (3+ related documents):**
-
 - Create subfolder: `concepts/{feature-name}/`
 - Include `README.md` with overview
 - Place all related documents in subfolder
@@ -128,7 +152,6 @@ Document all significant features, bug fixes, and changes in the `concepts/` fol
   concepts/websearch-provider-api-keys/
   ├── README.md
   ├── 2026-02-03 Websearch Provider API Key Configuration.md
-  ├── 2026-02-03 Websearch Provider UI Screenshots.md
   └── IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md
   ```
 

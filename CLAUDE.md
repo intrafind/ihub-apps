@@ -709,9 +709,35 @@ This architecture supports enterprise-grade AI applications with flexible authen
 
 ## Documentation Organization
 
-### Concept Documents
+### Feature Documentation
 
-Every significant feature, bug fix, or change should be documented in the `concepts/` folder following these guidelines:
+All feature documentation should be added to the `docs/` folder:
+
+**When to Update Existing Documentation:**
+- **Always check first** if documentation already exists in `docs/` for the area you're working on
+- Update existing files rather than creating new ones when the feature fits within an existing document
+- For example, new model features should be added to `docs/models.md`, new UI features to `docs/ui.md`, etc.
+
+**When to Create New Documentation:**
+- Only create new documentation files when the feature doesn't fit into any existing document
+- Use descriptive, lowercase filenames with hyphens: `feature-name.md`
+- Add the new file to `docs/SUMMARY.md` for inclusion in the documentation site
+
+**Documentation Structure:**
+- `docs/` - User-facing feature documentation, guides, and references
+  - Updated as features are added or modified
+  - Organized by topic (models, authentication, configuration, etc.)
+  - Rendered on the documentation site
+
+**Example Workflow:**
+1. Check if `docs/models.md`, `docs/ui.md`, or other relevant file exists
+2. If exists, add your feature documentation to the appropriate section
+3. If doesn't exist, create new file and add to `docs/SUMMARY.md`
+4. Use clear headings, code examples, and use cases
+
+### Concept Documents (Design & Planning)
+
+The `concepts/` folder is for design documents, RFC-style proposals, and technical planning:
 
 **Single Document Features:**
 
