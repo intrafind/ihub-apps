@@ -12,6 +12,7 @@ import {
   createGenericStreamingResponse,
   normalizeFinishReason
 } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Sanitize JSON Schema for vLLM compatibility
@@ -55,15 +56,36 @@ function sanitizeSchemaForVLLM(schema) {
 
 /**
  * Convert generic tools to vLLM format (OpenAI-compatible with restrictions)
+ * Filters out provider-specific special tools (googleSearch, webSearch, etc.)
  * @param {import('./GenericToolCalling.js').GenericTool[]} genericTools - Generic tools
- * @param {*} toolChoice - Original tool choice for adjustment
- * @returns {Object} Object containing tools and adjusted tool choice
+ * @returns {Object[]} vLLM formatted tools (OpenAI-compatible)
  */
 export function convertGenericToolsToVLLM(genericTools = []) {
-  return genericTools.map(tool => ({
+  const filteredTools = genericTools.filter(tool => {
+    // If tool specifies this provider, always include it
+    if (tool.provider === 'local') {
+      return true;
+    }
+    // If tool specifies a different provider, exclude it
+    if (tool.provider) {
+      logger.info(
+        `[vLLM Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
+      );
+      return false;
+    }
+    // If tool is marked as special but has no matching provider, exclude it
+    if (tool.isSpecialTool) {
+      logger.info(`[vLLM Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      return false;
+    }
+    // Universal tool - include it
+    return true;
+  });
+
+  return filteredTools.map(tool => ({
     type: 'function',
     function: {
-      name: tool.name,
+      name: tool.id,
       description: tool.description,
       parameters: sanitizeSchemaForVLLM(tool.parameters)
     }
@@ -80,7 +102,7 @@ export function convertVLLMToolsToGeneric(vllmTools = []) {
     // Handle both nested function format and flat format
     if (tool.type === 'function' && tool.function) {
       return createGenericTool(
-        tool.function.name, // Use name as ID
+        tool.function.id,
         tool.function.name,
         tool.function.description || '',
         tool.function.parameters || { type: 'object', properties: {} },
@@ -90,7 +112,7 @@ export function convertVLLMToolsToGeneric(vllmTools = []) {
 
     // Handle flat format (legacy or simplified)
     return createGenericTool(
-      tool.name || tool.id || `tool_${index}`,
+      tool.id || tool.name || `tool_${index}`,
       tool.name || `tool_${index}`,
       tool.description || '',
       tool.parameters || { type: 'object', properties: {} },
@@ -122,7 +144,7 @@ export function convertGenericToolCallsToVLLM(genericToolCalls = []) {
       index: toolCall.index || 0,
       id: toolCall.id,
       function: {
-        name: toolCall.name,
+        name: toolCall.id,
         arguments: args
       }
     };
@@ -159,7 +181,7 @@ export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
                 ? parsed
                 : { __raw_arguments: argsStr };
           } catch (error) {
-            console.warn('Failed to parse vLLM tool call arguments:', error.message);
+            logger.warn('Failed to parse vLLM tool call arguments:', error.message);
             args = { __raw_arguments: argsStr };
           }
         } else {
@@ -198,8 +220,8 @@ export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
     })
     .filter(toolCall => {
       return (
-        toolCall.name ||
         toolCall.id ||
+        toolCall.name ||
         (toolCall.metadata?.rawArguments && toolCall.metadata.rawArguments.length > 0) ||
         toolCall.arguments?.__raw_arguments !== undefined
       );
@@ -232,9 +254,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
 
     // Finalize any pending tool calls when stream ends without explicit finish reason
     if (state.pendingToolCalls.size > 0) {
-      console.log(
-        `[vLLM Converter] Stream ended with [DONE], finalizing ${state.pendingToolCalls.size} pending tool calls`
-      );
       for (const [index, pending] of state.pendingToolCalls.entries()) {
         if (pending.id && pending.name) {
           let parsedArgs = {};
@@ -243,14 +262,10 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
               parsedArgs = JSON.parse(pending.arguments);
             }
           } catch (e) {
-            console.warn('Failed to parse accumulated vLLM tool arguments on [DONE]:', e);
+            logger.warn('Failed to parse accumulated vLLM tool arguments on [DONE]:', e);
             parsedArgs = { __raw_arguments: pending.arguments };
           }
 
-          console.log(
-            `[vLLM Converter] Adding tool call on [DONE]: ${pending.name} with args:`,
-            parsedArgs
-          );
           result.tool_calls.push(
             createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
               originalFormat: 'vllm',
@@ -276,7 +291,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
       result.error = true;
       result.errorMessage = parsed.error.message || 'Unknown error';
       result.complete = true;
-      console.log(`[vLLM Converter] Detected error response: ${result.errorMessage}`);
       return result;
     }
 
@@ -327,12 +341,6 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
             pending.arguments += toolCall.function.arguments;
           }
         }
-
-        // Log accumulation progress for debugging
-        console.log(
-          `[vLLM Converter] Accumulated tool calls:`,
-          Array.from(state.pendingToolCalls.values())
-        );
       }
     }
 
@@ -342,16 +350,9 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'vllm');
       result.finishReason = state.finishReason;
 
-      console.log(
-        `[vLLM Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`
-      );
-
       // For vLLM, we need to finalize tool calls on any finish reason if we have pending calls
       // vLLM might use "stop" instead of "tool_calls" as finish reason
       if (state.pendingToolCalls.size > 0) {
-        console.log(
-          `[vLLM Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`
-        );
         for (const [index, pending] of state.pendingToolCalls.entries()) {
           if (pending.id && pending.name) {
             let parsedArgs = {};
@@ -360,14 +361,10 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
                 parsedArgs = JSON.parse(pending.arguments);
               }
             } catch (e) {
-              console.warn('Failed to parse accumulated vLLM tool arguments:', e);
+              logger.warn('Failed to parse accumulated vLLM tool arguments:', e);
               parsedArgs = { __raw_arguments: pending.arguments };
             }
 
-            console.log(
-              `[vLLM Converter] Adding tool call: ${pending.name} with args:`,
-              parsedArgs
-            );
             result.tool_calls.push(
               createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
                 originalFormat: 'vllm',
@@ -384,7 +381,7 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (error) {
-    console.error('Error parsing vLLM response chunk:', error);
+    logger.error('Error parsing vLLM response chunk:', error);
     result.error = true;
     result.errorMessage = `Error parsing vLLM response: ${error.message}`;
   }

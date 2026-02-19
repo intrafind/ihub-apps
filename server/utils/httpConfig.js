@@ -7,34 +7,122 @@ import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
 import config from '../config.js';
+import logger from './logger.js';
 
 /**
  * Get SSL configuration from platform config
- * @returns {Object} SSL configuration object
+ * @returns {Object} SSL configuration object with ignoreInvalidCertificates and domainWhitelist
  */
 export function getSSLConfig() {
   const platformConfig = configCache.getPlatform() || {};
   const sslConfig = {
-    ignoreInvalidCertificates: platformConfig.ssl?.ignoreInvalidCertificates || false
+    ignoreInvalidCertificates: platformConfig.ssl?.ignoreInvalidCertificates || false,
+    domainWhitelist: platformConfig.ssl?.domainWhitelist || []
   };
+
   // Log SSL config on first access for debugging
   if (!getSSLConfig._logged) {
-    console.log(
-      `🔒 SSL Configuration: ignoreInvalidCertificates = ${sslConfig.ignoreInvalidCertificates}`
+    logger.info(
+      `🔒 SSL Configuration: ignoreInvalidCertificates = ${sslConfig.ignoreInvalidCertificates}, domainWhitelist = [${sslConfig.domainWhitelist.join(', ')}]`
     );
 
-    // Set NODE_TLS_REJECT_UNAUTHORIZED environment variable if SSL verification should be ignored
-    // This is necessary for proxy agents (https-proxy-agent v7+) to properly ignore SSL errors
-    if (sslConfig.ignoreInvalidCertificates) {
-      process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-      console.log(
-        '⚠️  NODE_TLS_REJECT_UNAUTHORIZED=0 set globally (SSL certificate verification disabled)'
+    // Only set NODE_TLS_REJECT_UNAUTHORIZED globally if ignoreInvalidCertificates is true AND whitelist is empty
+    // NEW BEHAVIOR: Empty whitelist means NO SSL bypass (security improvement)
+    if (sslConfig.ignoreInvalidCertificates && sslConfig.domainWhitelist.length === 0) {
+      logger.info(
+        '⚠️  SSL validation is enabled but no domains are whitelisted. SSL certificates will be validated for ALL connections.'
+      );
+    } else if (sslConfig.ignoreInvalidCertificates && sslConfig.domainWhitelist.length > 0) {
+      logger.info(
+        `⚠️  SSL certificate verification will be disabled ONLY for whitelisted domains: [${sslConfig.domainWhitelist.join(', ')}]`
       );
     }
 
     getSSLConfig._logged = true;
   }
   return sslConfig;
+}
+
+/**
+ * Check if a domain matches any pattern in the whitelist
+ * Supports wildcards (*.example.com) and exact matches (api.example.com)
+ * @param {string} hostname - The hostname to check
+ * @param {Array<string>} whitelist - Array of domain patterns
+ * @returns {boolean} True if hostname matches any whitelist pattern
+ */
+export function isDomainWhitelisted(hostname, whitelist) {
+  if (!hostname || !whitelist || whitelist.length === 0) {
+    return false;
+  }
+
+  const lowerHostname = hostname.toLowerCase();
+
+  for (const pattern of whitelist) {
+    const lowerPattern = pattern.toLowerCase().trim();
+    if (!lowerPattern) continue;
+
+    // Wildcard pattern: *.example.com matches api.example.com, sub.example.com, etc.
+    // but NOT example.com itself
+    if (lowerPattern.startsWith('*.')) {
+      const domain = lowerPattern.slice(2); // Remove *.
+      // Validate that domain is not empty after removing wildcard
+      if (domain && lowerHostname.endsWith('.' + domain)) {
+        return true;
+      }
+    }
+    // Exact match
+    else if (lowerHostname === lowerPattern) {
+      return true;
+    }
+    // Subdomain pattern: .example.com matches sub.example.com but not example.com
+    else if (lowerPattern.startsWith('.')) {
+      const domain = lowerPattern.slice(1); // Remove leading .
+      // Validate that domain is not empty after removing leading dot
+      if (domain && lowerHostname.endsWith(lowerPattern)) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Determine if SSL certificate validation should be ignored for a specific URL
+ * @param {string} url - The URL to check
+ * @param {Object} sslConfig - SSL configuration object
+ * @returns {boolean} True if SSL validation should be ignored for this URL
+ */
+export function shouldIgnoreSSLForURL(url, sslConfig = null) {
+  const config = sslConfig || getSSLConfig();
+
+  // If ignoreInvalidCertificates is false, always validate SSL
+  if (!config.ignoreInvalidCertificates) {
+    return false;
+  }
+
+  // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting)
+  if (!config.domainWhitelist || config.domainWhitelist.length === 0) {
+    return false;
+  }
+
+  // Extract hostname from URL
+  try {
+    const urlObj = new URL(url);
+    const hostname = urlObj.hostname;
+
+    // Check if hostname is in whitelist
+    const isWhitelisted = isDomainWhitelisted(hostname, config.domainWhitelist);
+
+    if (isWhitelisted) {
+      logger.debug(`SSL validation will be ignored for whitelisted domain: ${hostname}`);
+    }
+
+    return isWhitelisted;
+  } catch (error) {
+    logger.warn(`Error parsing URL for SSL whitelist check: ${error.message}`);
+    return false;
+  }
 }
 
 /**
@@ -93,7 +181,7 @@ export function shouldBypassProxy(url, noProxy) {
       // CIDR notation and IP ranges are not fully supported here for simplicity
     }
   } catch (error) {
-    console.warn(`Error parsing URL for proxy bypass: ${error.message}`);
+    logger.warn(`Error parsing URL for proxy bypass: ${error.message}`);
   }
 
   return false;
@@ -116,7 +204,7 @@ export function matchesProxyPattern(url, patterns) {
       }
     }
   } catch (error) {
-    console.warn(`Error matching proxy pattern: ${error.message}`);
+    logger.warn(`Error matching proxy pattern: ${error.message}`);
   }
 
   return false;
@@ -129,16 +217,24 @@ export function matchesProxyPattern(url, patterns) {
  * @returns {http.Agent|https.Agent|HttpProxyAgent|HttpsProxyAgent|undefined} Agent with appropriate configuration
  */
 export function createAgent(url = '', forceIgnoreSSL = null) {
-  const shouldIgnoreSSL =
-    forceIgnoreSSL !== null ? forceIgnoreSSL : getSSLConfig().ignoreInvalidCertificates;
+  // Always call getSSLConfig() to ensure configuration is loaded
+  const sslConfig = getSSLConfig();
   const proxyConfig = getProxyConfig();
 
   const isHttps = url.startsWith('https://');
   const isHttp = url.startsWith('http://');
 
+  // Determine if SSL should be ignored for this specific URL
+  let shouldIgnoreSSL;
+  if (forceIgnoreSSL !== null) {
+    shouldIgnoreSSL = forceIgnoreSSL;
+  } else {
+    shouldIgnoreSSL = shouldIgnoreSSLForURL(url, sslConfig);
+  }
+
   // Check if proxy should be bypassed for this URL
   if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
-    console.log(`Bypassing proxy for URL: ${url}`);
+    logger.info(`Bypassing proxy for URL: ${url}`);
     // Return standard agent with SSL configuration if needed
     if (isHttps && shouldIgnoreSSL) {
       return new https.Agent({ rejectUnauthorized: false });
@@ -153,7 +249,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     proxyConfig.urlPatterns.length > 0 &&
     !matchesProxyPattern(url, proxyConfig.urlPatterns)
   ) {
-    console.log(`URL does not match proxy patterns: ${url}`);
+    logger.info(`URL does not match proxy patterns: ${url}`);
     // Return standard agent with SSL configuration if needed
     if (isHttps && shouldIgnoreSSL) {
       return new https.Agent({ rejectUnauthorized: false });
@@ -164,14 +260,13 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
   // Apply proxy configuration
   if (proxyConfig.enabled && ((isHttps && proxyConfig.https) || (isHttp && proxyConfig.http))) {
     const proxyUrl = isHttps ? proxyConfig.https : proxyConfig.http;
-    console.log(`Using proxy ${proxyUrl} for URL: ${url}`);
+    logger.info(`Using proxy ${proxyUrl} for URL: ${url}`);
     if (shouldIgnoreSSL) {
-      console.log(`SSL certificate verification disabled (rejectUnauthorized: false)`);
+      logger.info(`SSL certificate verification disabled (rejectUnauthorized: false)`);
     }
 
     try {
       // For HttpsProxyAgent v7+, rejectUnauthorized is passed as a top-level option
-      // Combined with NODE_TLS_REJECT_UNAUTHORIZED=0 set globally when config is enabled
       const agentOptions = shouldIgnoreSSL ? { rejectUnauthorized: false } : {};
 
       if (isHttps) {
@@ -180,7 +275,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
     } catch (error) {
-      console.error(`Failed to create proxy agent: ${error.message}`);
+      logger.error(`Failed to create proxy agent: ${error.message}`);
     }
   }
 

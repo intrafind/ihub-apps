@@ -14,6 +14,7 @@ import ChatService from '../../services/chat/ChatService.js';
 import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerSessionRoutes(
   app,
@@ -60,7 +61,7 @@ export default function registerSessionRoutes(
    *         description: Internal server error
    */
   app.get(
-    buildServerPath('/api/models/:modelId/chat/test', basePath),
+    buildServerPath('/api/models/:modelId/chat/test'),
     authRequired,
     modelAccessRequired,
     validate(chatTestSchema),
@@ -113,7 +114,7 @@ export default function registerSessionRoutes(
           clearTimeout(timeoutId);
           if (!llmResponse.ok) {
             const errorBody = await llmResponse.text();
-            console.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
+            logger.error(`LLM API Error (${llmResponse.status}): ${errorBody}`);
             return res.status(llmResponse.status).json({
               error: `LLM API request failed with status ${llmResponse.status}`,
               details: errorBody
@@ -140,14 +141,14 @@ export default function registerSessionRoutes(
           });
         }
       } catch (error) {
-        console.error('Error in test chat completion:', error);
+        logger.error('Error in test chat completion:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message });
       }
     }
   );
 
   app.get(
-    buildServerPath('/api/apps/:appId/chat/:chatId', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
     validate(chatConnectSchema),
     async (req, res) => {
@@ -166,17 +167,17 @@ export default function registerSessionRoutes(
                 const controller = activeRequests.get(chatId);
                 controller.abort();
                 activeRequests.delete(chatId);
-                console.log(`Aborted request for chat ID: ${chatId}`);
+                logger.info(`Aborted request for chat ID: ${chatId}`);
               } catch (e) {
-                console.error(`Error aborting request for chat ID: ${chatId}`, e);
+                logger.error(`Error aborting request for chat ID: ${chatId}`, e);
               }
             }
             clients.delete(chatId);
-            console.log(`Client disconnected: ${chatId}`);
+            logger.info(`Client disconnected: ${chatId}`);
           }
         });
       } catch (error) {
-        console.error('Error establishing SSE connection:', error);
+        logger.error('Error establishing SSE connection:', error);
         if (!res.headersSent) {
           return res.status(500).json({ error: 'Internal server error' });
         }
@@ -212,7 +213,7 @@ export default function registerSessionRoutes(
     // Handle requests with tools
     if (prep.tools && prep.tools.length > 0) {
       if (streaming) {
-        console.log(`Processing chat with tools for chat ID: ${chatId}`);
+        logger.info(`Processing chat with tools for chat ID: ${chatId}`);
         return await chatService.processChatWithTools({
           prep,
           clientRes,
@@ -265,7 +266,7 @@ export default function registerSessionRoutes(
   }
 
   app.post(
-    buildServerPath('/api/apps/:appId/chat/:chatId', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
     validate(chatPostSchema),
     async (req, res) => {
@@ -282,7 +283,10 @@ export default function registerSessionRoutes(
           bypassAppPrompts,
           thinkingEnabled,
           thinkingBudget,
-          thinkingThoughts
+          thinkingThoughts,
+          enabledTools,
+          imageAspectRatio,
+          imageQuality
         } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
@@ -292,7 +296,7 @@ export default function registerSessionRoutes(
           const lastMessage = messages[messages.length - 1];
           if (lastMessage && lastMessage.messageId) {
             messageId = lastMessage.messageId;
-            console.log(`Using client-provided messageId: ${messageId}`);
+            logger.info(`Using client-provided messageId: ${messageId}`);
           }
         }
         const userSessionId = req.headers['x-session-id'];
@@ -311,7 +315,7 @@ export default function registerSessionRoutes(
             ...extra
           };
         }
-        console.log(`Processing chat with language: ${clientLanguage}`);
+        logger.info(`Processing chat with language: ${clientLanguage}`);
         if (!messages || !Array.isArray(messages)) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
           return res.status(400).json({ error: errorMessage });
@@ -321,8 +325,80 @@ export default function registerSessionRoutes(
           sessionId: chatId,
           timestamp: new Date().toISOString()
         });
+
+        // --- @mention workflow detection ---
+        // Check if the last user message contains an @workflow-name mention
+        const lastUserMsg = messages[messages.length - 1];
+        const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : '';
+        const mentionMatch = lastUserContent.match(/@([\w.-]+)/);
+
+        if (mentionMatch) {
+          const mentionedId = mentionMatch[1];
+          const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
+
+          if (
+            mentionedWorkflow &&
+            mentionedWorkflow.enabled !== false &&
+            mentionedWorkflow.chatIntegration?.enabled
+          ) {
+            logger.info({
+              component: 'sessionRoutes',
+              message: '@mention workflow triggered',
+              workflowId: mentionedId,
+              chatId
+            });
+
+            // Strip the @mention from the input
+            const strippedInput = lastUserContent.replace(/@[\w.-]+/, '').trim();
+
+            // Collect file data from the last message
+            const fileData = lastUserMsg.fileData || null;
+            const imageData = lastUserMsg.imageData || null;
+
+            // Build chat history from all prior messages (excluding the last)
+            const chatHistory = messages.slice(0, -1).map(m => ({
+              role: m.role,
+              content: m.content
+            }));
+
+            try {
+              const workflowRunnerMod = await import('../../tools/workflowRunner.js');
+
+              // Fire-and-forget: start workflow but don't await completion.
+              // The workflowRunner bridge streams step events and final output via SSE.
+              workflowRunnerMod
+                .default({
+                  workflowId: mentionedId,
+                  chatId,
+                  user: req.user,
+                  input: strippedInput,
+                  modelId,
+                  _chatHistory: chatHistory.length > 0 ? chatHistory : undefined,
+                  _fileData: fileData || imageData || undefined,
+                  language: clientLanguage
+                })
+                .catch(error => {
+                  logger.error('Error running @mention workflow:', error);
+                  actionTracker.trackError(chatId, {
+                    message: `Workflow execution failed: ${error.message}`
+                  });
+                });
+
+              // Return immediately — the SSE channel delivers all progress + final output
+              return res.json({ status: 'streaming', chatId });
+            } catch (error) {
+              logger.error('Error loading workflow runner:', error);
+              actionTracker.trackError(chatId, {
+                message: `Workflow execution failed: ${error.message}`
+              });
+              return res.json({ status: 'error', message: error.message });
+            }
+          }
+        }
+        // --- end @mention detection ---
+
         if (!clients.has(chatId)) {
-          console.log(
+          logger.info(
             `No active SSE connection for chat ID: ${chatId}. Creating response without streaming.`
           );
           const prep = await chatService.prepareChatRequest({
@@ -338,6 +414,9 @@ export default function registerSessionRoutes(
             thinkingEnabled,
             thinkingBudget,
             thinkingThoughts,
+            enabledTools,
+            imageAspectRatio,
+            imageQuality,
             res,
             user: req.user,
             chatId
@@ -352,9 +431,14 @@ export default function registerSessionRoutes(
               .status(
                 prep.error.code === 'APP_NOT_FOUND' || prep.error.code === 'MODEL_NOT_FOUND'
                   ? 404
-                  : 500
+                  : prep.error.code === 'noModelsAvailable' ||
+                      prep.error.code === 'noCompatibleModels' ||
+                      prep.error.code === 'noModelIdProvided' ||
+                      prep.error.code === 'noModelsForUser'
+                    ? 400
+                    : 500
               )
-              .json({ error: errMsg });
+              .json({ error: errMsg, code: prep.error.code });
           }
           ({ model, llmMessages } = prep.data);
 
@@ -387,6 +471,9 @@ export default function registerSessionRoutes(
             thinkingEnabled,
             thinkingBudget,
             thinkingThoughts,
+            enabledTools,
+            imageAspectRatio,
+            imageQuality,
             clientRes,
             user: req.user,
             chatId
@@ -397,8 +484,8 @@ export default function registerSessionRoutes(
               {},
               clientLanguage
             );
-            actionTracker.trackError(chatId, { message: errMsg });
-            return res.json({ status: 'error', message: errMsg });
+            actionTracker.trackError(chatId, { message: errMsg, code: prep.error.code });
+            return res.json({ status: 'error', message: errMsg, code: prep.error.code });
           }
           model = prep.data.model;
           llmMessages = prep.data.llmMessages;
@@ -420,16 +507,16 @@ export default function registerSessionRoutes(
           return res.json({ status: 'streaming', chatId });
         }
       } catch (error) {
-        console.error('Error in app chat:', error);
+        logger.error('Error in app chat:', error);
         return res.status(500).json({ error: 'Internal server error', message: error.message });
       }
     }
   );
 
   app.post(
-    buildServerPath('/api/apps/:appId/chat/:chatId/stop', basePath),
+    buildServerPath('/api/apps/:appId/chat/:chatId/stop'),
     chatAuthRequired,
-    (req, res) => {
+    async (req, res) => {
       const { chatId } = req.params;
       if (clients.has(chatId)) {
         if (activeRequests.has(chatId)) {
@@ -437,35 +524,45 @@ export default function registerSessionRoutes(
             const controller = activeRequests.get(chatId);
             controller.abort();
             activeRequests.delete(chatId);
-            console.log(`Aborted request for chat ID: ${chatId}`);
+            logger.info(`Aborted request for chat ID: ${chatId}`);
           } catch (e) {
-            console.error(`Error aborting request for chat ID: ${chatId}`, e);
+            logger.error(`Error aborting request for chat ID: ${chatId}`, e);
           }
         }
+
+        // Also cancel any running workflow execution for this chatId
+        const { activeWorkflowExecutions } = await import('../../tools/workflowRunner.js');
+        const workflowExec = activeWorkflowExecutions.get(chatId);
+        if (workflowExec) {
+          try {
+            await workflowExec.engine.cancel(workflowExec.executionId, 'user_cancelled');
+            activeWorkflowExecutions.delete(chatId);
+            logger.info(`Cancelled workflow ${workflowExec.executionId} for chat ID: ${chatId}`);
+          } catch (e) {
+            logger.error(`Error cancelling workflow for chat ID: ${chatId}`, e);
+          }
+        }
+
         const client = clients.get(chatId);
         actionTracker.trackDisconnected(chatId, { message: 'Chat stream stopped by client' });
         client.response.end();
         clients.delete(chatId);
-        console.log(`Chat stream stopped for chat ID: ${chatId}`);
+        logger.info(`Chat stream stopped for chat ID: ${chatId}`);
         return res.status(200).json({ success: true, message: 'Chat stream stopped' });
       }
       return res.status(404).json({ success: false, message: 'Chat session not found' });
     }
   );
 
-  app.get(
-    buildServerPath('/api/apps/:appId/chat/:chatId/status', basePath),
-    chatAuthRequired,
-    (req, res) => {
-      const { chatId } = req.params;
-      if (clients.has(chatId)) {
-        return res.status(200).json({
-          active: true,
-          lastActivity: clients.get(chatId).lastActivity,
-          processing: activeRequests.has(chatId)
-        });
-      }
-      return res.status(200).json({ active: false });
+  app.get(buildServerPath('/api/apps/:appId/chat/:chatId/status'), chatAuthRequired, (req, res) => {
+    const { chatId } = req.params;
+    if (clients.has(chatId)) {
+      return res.status(200).json({
+        active: true,
+        lastActivity: clients.get(chatId).lastActivity,
+        processing: activeRequests.has(chatId)
+      });
     }
-  );
+    return res.status(200).json({ active: false });
+  });
 }

@@ -4,6 +4,7 @@ import StreamingHandler from './StreamingHandler.js';
 import ToolExecutor from './ToolExecutor.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
+import logger from '../../utils/logger.js';
 
 class ChatService {
   constructor(options = {}) {
@@ -28,6 +29,9 @@ class ChatService {
       thinkingEnabled,
       thinkingBudget,
       thinkingThoughts,
+      enabledTools,
+      imageAspectRatio,
+      imageQuality,
       res,
       clientRes,
       user,
@@ -47,6 +51,9 @@ class ChatService {
       thinkingEnabled,
       thinkingBudget,
       thinkingThoughts,
+      enabledTools,
+      imageAspectRatio,
+      imageQuality,
       processMessageTemplates,
       res,
       clientRes,
@@ -207,7 +214,12 @@ class ChatService {
         clientLanguage
       });
     } catch (error) {
-      console.error('Error in ChatService.processChat:', error);
+      logger.error({
+        component: 'ChatService',
+        message: 'Error in processChat',
+        error: error.message,
+        stack: error.stack
+      });
 
       const errorResponse = this.errorHandler.formatErrorResponse(error);
       if (res && !clientRes) {

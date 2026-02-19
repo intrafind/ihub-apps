@@ -90,6 +90,7 @@ const PromptsList = () => {
         setLoading(false);
       }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t, i18n.language]);
 
   // Open modal if id parameter is present

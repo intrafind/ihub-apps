@@ -11,6 +11,7 @@ import {
   CheckIcon as OutlineCheckIcon,
   CheckCircleIcon as OutlineCheckCircleIcon,
   ClipboardIcon,
+  CloudIcon,
   EyeIcon,
   EyeSlashIcon,
   PlayIcon,
@@ -54,15 +55,22 @@ import {
   BriefcaseIcon,
   PaintBrushIcon,
   ChevronDownIcon,
+  ChevronUpIcon,
+  ChevronRightIcon,
   Bars3Icon,
   FaceFrownIcon as OutlineFaceFrownIcon,
-  ArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon,
+  ArrowUpIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  ServerIcon
 } from '@heroicons/react/24/outline';
 
 import {
   CameraIcon as SolidCameraIcon,
   CheckIcon as SolidCheckIcon,
   CheckCircleIcon as SolidCheckCircleIcon,
+  CloudIcon as SolidCloudIcon,
   EyeIcon as SolidEyeIcon,
   EyeSlashIcon as SolidEyeSlashIcon,
   PlayIcon as SolidPlayIcon,
@@ -96,8 +104,14 @@ import {
   BriefcaseIcon as SolidBriefcaseIcon,
   PaintBrushIcon as SolidPaintBrushIcon,
   ChevronDownIcon as SolidChevronDownIcon,
+  ChevronUpIcon as SolidChevronUpIcon,
+  ChevronRightIcon as SolidChevronRightIcon,
   FaceFrownIcon as SolidFaceFrownIcon,
-  ArrowTopRightOnSquareIcon as SolidArrowTopRightOnSquareIcon
+  ArrowTopRightOnSquareIcon as SolidArrowTopRightOnSquareIcon,
+  ArrowUpIcon as SolidArrowUpIcon,
+  FolderIcon as SolidFolderIcon,
+  FolderOpenIcon as SolidFolderOpenIcon,
+  ServerIcon as SolidServerIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -108,6 +122,7 @@ const iconMap = {
   camera: { outline: CameraIcon, solid: SolidCameraIcon },
   chat: { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
   check: { outline: OutlineCheckIcon, solid: SolidCheckIcon },
+  cloud: { outline: CloudIcon, solid: SolidCloudIcon },
   'check-circle': { outline: OutlineCheckCircleIcon, solid: SolidCheckCircleIcon },
   clearCircle: { outline: XCircleIcon, solid: XCircleIcon },
   close: { outline: XMarkIcon, solid: XMarkIcon },
@@ -133,6 +148,11 @@ const iconMap = {
   list: { outline: ListBulletIcon, solid: ListBulletIcon },
   menu: { outline: Bars3Icon, solid: Bars3Icon },
   'chevron-down': { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
+  chevronDown: { outline: ChevronDownIcon, solid: SolidChevronDownIcon },
+  'chevron-up': { outline: ChevronUpIcon, solid: SolidChevronUpIcon },
+  chevronUp: { outline: ChevronUpIcon, solid: SolidChevronUpIcon },
+  'chevron-right': { outline: ChevronRightIcon, solid: SolidChevronRightIcon },
+  chevronRight: { outline: ChevronRightIcon, solid: SolidChevronRightIcon },
   eye: { outline: EyeIcon, solid: SolidEyeIcon },
   'eye-slash': { outline: EyeSlashIcon, solid: SolidEyeSlashIcon },
   play: { outline: PlayIcon, solid: SolidPlayIcon },
@@ -181,7 +201,12 @@ const iconMap = {
   // Add commonly used aliases and missing icons
   save: { outline: OutlineCheckIcon, solid: SolidCheckIcon }, // Use check icon for save
   plus: { outline: PlusCircleIcon, solid: SolidPlusCircleIcon },
-  warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon }
+  warning: { outline: OutlineExclamationTriangleIcon, solid: SolidExclamationTriangleIcon },
+  send: { outline: ArrowUpIcon, solid: SolidArrowUpIcon },
+  'arrow-up': { outline: ArrowUpIcon, solid: SolidArrowUpIcon },
+  folder: { outline: FolderIcon, solid: SolidFolderIcon },
+  'folder-open': { outline: FolderOpenIcon, solid: SolidFolderOpenIcon },
+  'hard-drive': { outline: ServerIcon, solid: SolidServerIcon }
 };
 
 const sizeClasses = {
@@ -195,7 +220,7 @@ const sizeClasses = {
 
 // Note: iconBaseUrl is now handled by buildAssetPath utility
 
-const Icon = ({ name, size = 'md', className = '', solid = false }) => {
+const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest }) => {
   const [imgError, setImgError] = useState(false);
 
   // Handle undefined, null, or empty names
@@ -206,7 +231,13 @@ const Icon = ({ name, size = 'md', className = '', solid = false }) => {
   const iconEntry = iconMap[name];
   if (iconEntry) {
     const IconComponent = solid ? iconEntry.solid : iconEntry.outline;
-    return <IconComponent className={`${sizeClasses[size] || sizeClasses.md} ${className}`} />;
+    return (
+      <IconComponent
+        className={`${sizeClasses[size] || sizeClasses.md} ${className}`}
+        title={title}
+        {...rest}
+      />
+    );
   }
 
   // Don't try to load external SVGs for undefined or invalid names
@@ -220,6 +251,8 @@ const Icon = ({ name, size = 'md', className = '', solid = false }) => {
       alt={name}
       onError={() => setImgError(true)}
       className={`${sizeClasses[size] || sizeClasses.md} ${className}`}
+      title={title}
+      {...rest}
     />
   );
 };

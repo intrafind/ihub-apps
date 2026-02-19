@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { sendAuthRequired, sendInsufficientPermissions } from './responseHelpers.js';
+import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -60,6 +61,7 @@ export function resolveGroupInheritance(groupsConfig) {
         apps: new Set(),
         prompts: new Set(),
         models: new Set(),
+        workflows: new Set(),
         adminAccess: false
       };
 
@@ -82,6 +84,11 @@ export function resolveGroupInheritance(groupsConfig) {
           parentPerms.models.forEach(model => mergedPermissions.models.add(model));
         }
 
+        // Merge workflows
+        if (Array.isArray(parentPerms.workflows)) {
+          parentPerms.workflows.forEach(workflow => mergedPermissions.workflows.add(workflow));
+        }
+
         // Admin access: if any parent has admin access, inherit it
         if (parentPerms.adminAccess === true) {
           mergedPermissions.adminAccess = true;
@@ -99,6 +106,9 @@ export function resolveGroupInheritance(groupsConfig) {
       if (Array.isArray(ownPerms.models)) {
         ownPerms.models.forEach(model => mergedPermissions.models.add(model));
       }
+      if (Array.isArray(ownPerms.workflows)) {
+        ownPerms.workflows.forEach(workflow => mergedPermissions.workflows.add(workflow));
+      }
       if (ownPerms.adminAccess === true) {
         mergedPermissions.adminAccess = true;
       }
@@ -110,6 +120,7 @@ export function resolveGroupInheritance(groupsConfig) {
           apps: Array.from(mergedPermissions.apps),
           prompts: Array.from(mergedPermissions.prompts),
           models: Array.from(mergedPermissions.models),
+          workflows: Array.from(mergedPermissions.workflows),
           adminAccess: mergedPermissions.adminAccess
         }
       };
@@ -128,7 +139,7 @@ export function resolveGroupInheritance(groupsConfig) {
     try {
       resolveGroup(groupId);
     } catch (error) {
-      console.error(`Error resolving group inheritance for ${groupId}:`, error.message);
+      logger.error(`Error resolving group inheritance for ${groupId}:`, error.message);
       throw error;
     }
   }
@@ -153,7 +164,7 @@ export function loadGroupsConfiguration() {
 
     return resolvedConfig;
   } catch (error) {
-    console.warn(
+    logger.warn(
       'Could not load groups configuration, falling back to legacy files:',
       error.message
     );
@@ -175,6 +186,7 @@ export function loadGroupPermissions() {
       apps: group.permissions?.apps || [],
       prompts: group.permissions?.prompts || [],
       models: group.permissions?.models || [],
+      workflows: group.permissions?.workflows || [],
       adminAccess: group.permissions?.adminAccess || false,
       description: group.description || ''
     };
@@ -213,32 +225,49 @@ export function loadGroupMapping() {
  */
 export function mapExternalGroups(externalGroups) {
   if (!Array.isArray(externalGroups)) {
-    console.debug('[Authorization] No external groups provided, returning anonymous');
+    logger.debug('[Authorization] No external groups provided, returning anonymous');
     return ['anonymous'];
   }
 
-  console.debug('[Authorization] Mapping external groups:', externalGroups);
+  logger.debug('[Authorization] Mapping external groups:', externalGroups);
   const groupMapping = loadGroupMapping();
   const internalGroups = new Set();
+  const unmappedGroups = [];
 
   for (const externalGroup of externalGroups) {
     const mappedGroups = groupMapping[externalGroup];
     if (Array.isArray(mappedGroups)) {
-      console.debug(`[Authorization] External group "${externalGroup}" mapped to:`, mappedGroups);
+      logger.debug(
+        `[Authorization] External group "${externalGroup}" mapped to internal groups:`,
+        mappedGroups
+      );
       mappedGroups.forEach(group => internalGroups.add(group));
     } else {
-      console.debug(`[Authorization] No mapping found for external group "${externalGroup}"`);
+      logger.warn(
+        `[Authorization] External group "${externalGroup}" has no mapping in groups configuration`
+      );
+      unmappedGroups.push(externalGroup);
     }
+  }
+
+  // Log unmapped groups for troubleshooting
+  if (unmappedGroups.length > 0) {
+    logger.warn(
+      `[Authorization] ${unmappedGroups.length} external groups have no mapping: ${unmappedGroups.join(', ')}`
+    );
+    logger.warn(
+      '[Authorization] To map these groups, add them to the "mappings" field in contents/config/groups.json'
+    );
   }
 
   // If no groups mapped, assign default anonymous group
   if (internalGroups.size === 0) {
-    console.debug('[Authorization] No groups mapped, assigning anonymous group');
+    logger.debug('[Authorization] No groups mapped, assigning anonymous group');
     internalGroups.add('anonymous');
   }
 
   const result = Array.from(internalGroups);
-  console.debug('[Authorization] Final mapped internal groups:', result);
+  logger.debug(`[Authorization] Final mapped internal groups (${result.length}):`, result);
   return result;
 }
 
@@ -257,6 +286,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     apps: new Set(),
     prompts: new Set(),
     models: new Set(),
+    workflows: new Set(),
     adminAccess: false
   };
 
@@ -264,21 +294,12 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     userGroups = ['anonymous'];
   }
 
-  console.debug('[Authorization] Getting permissions for user groups:', userGroups);
-
   for (const group of userGroups) {
     const groupPerms = groupPermissions.groups[group];
     if (!groupPerms) {
-      console.debug(`[Authorization] No permissions found for group "${group}"`);
+      logger.debug(`[Authorization] No permissions found for group "${group}"`);
       continue;
     }
-
-    console.debug(`[Authorization] Processing permissions for group "${group}":`, {
-      apps: groupPerms.apps,
-      prompts: groupPerms.prompts,
-      models: groupPerms.models,
-      adminAccess: groupPerms.adminAccess
-    });
 
     // Handle wildcards and specific permissions for apps
     if (groupPerms.apps?.includes('*')) {
@@ -301,16 +322,24 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       groupPerms.models.forEach(model => permissions.models.add(model));
     }
 
+    // Handle wildcards and specific permissions for workflows
+    if (groupPerms.workflows?.includes('*')) {
+      permissions.workflows.add('*');
+    } else if (Array.isArray(groupPerms.workflows)) {
+      groupPerms.workflows.forEach(workflow => permissions.workflows.add(workflow));
+    }
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
     }
   }
 
-  console.debug('[Authorization] Final calculated permissions:', {
+  logger.debug('[Authorization] Final calculated permissions:', {
     apps: Array.from(permissions.apps),
     prompts: Array.from(permissions.prompts),
     models: Array.from(permissions.models),
+    workflows: Array.from(permissions.workflows),
     adminAccess: permissions.adminAccess
   });
 
@@ -356,7 +385,7 @@ export function hasAdminAccess(userGroups) {
       return group?.permissions?.adminAccess === true;
     });
   } catch (error) {
-    console.error('Failed to load groups configuration for admin check:', error);
+    logger.error('Failed to load groups configuration for admin check:', error);
     throw new Error('Groups configuration required for admin access check');
   }
 }
@@ -394,18 +423,10 @@ export function getDefaultAnonymousGroups(platform) {
  * @returns {Object} Enhanced user object with permissions
  */
 export function enhanceUserWithPermissions(user, authConfig, platform) {
-  console.debug('[Authorization] Enhancing user with permissions:', {
-    userId: user?.id,
-    userName: user?.name,
-    initialGroups: user?.groups,
-    externalGroups: user?.externalGroups,
-    internalGroups: user?.internalGroups
-  });
-
   if (!user) {
     // Anonymous user
     const defaultGroups = getDefaultAnonymousGroups(platform);
-    console.debug('[Authorization] Creating anonymous user with groups:', defaultGroups);
+    logger.debug('[Authorization] Creating anonymous user with groups:', defaultGroups);
     user = {
       id: 'anonymous',
       name: 'Anonymous',
@@ -417,39 +438,54 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   // Ensure user has groups array
   if (!Array.isArray(user.groups)) {
     const defaultGroups = getDefaultAnonymousGroups(platform);
-    console.debug('[Authorization] User has no groups, assigning default groups:', defaultGroups);
+    logger.debug('[Authorization] User has no groups, assigning default groups:', defaultGroups);
     user.groups = defaultGroups;
   }
 
   // Handle external groups mapping and merging with internal groups
   if (user.externalGroups && Array.isArray(user.externalGroups)) {
-    console.debug('[Authorization] User has external groups:', user.externalGroups);
+    logger.debug('[Authorization] User has external groups:', user.externalGroups);
     // Map external groups to internal groups
     const mappedExternalGroups = mapExternalGroups(user.externalGroups);
 
     // Merge with any internal groups (from users.json)
     const internalGroups = user.internalGroups || [];
-    console.debug('[Authorization] Merging mapped external groups with internal groups:', {
+    logger.debug('[Authorization] Merging mapped external groups with internal groups:', {
       mappedExternalGroups,
       internalGroups
     });
     const allGroups = new Set([...mappedExternalGroups, ...internalGroups]);
 
     user.groups = Array.from(allGroups);
-    console.debug('[Authorization] Merged groups:', user.groups);
+    logger.debug('[Authorization] Merged groups:', user.groups);
   }
 
   // Get permissions for user
-  user.permissions = getPermissionsForUser(user.groups);
+  // For OAuth clients, use their allowedApps/allowedModels directly instead of group permissions
+  if (user.isOAuthClient) {
+    logger.debug('[Authorization] OAuth client detected, using client-specific permissions');
+    user.permissions = {
+      apps: new Set(user.allowedApps || []),
+      prompts: new Set(), // OAuth clients don't have prompt permissions
+      models: new Set(user.allowedModels || []),
+      workflows: new Set(), // OAuth clients don't have workflow permissions
+      adminAccess: false // OAuth clients never have admin access
+    };
+  } else {
+    user.permissions = getPermissionsForUser(user.groups);
+  }
 
-  // Check admin access
-  user.isAdmin = hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
+  // Check admin access (OAuth clients never have admin access)
+  user.isAdmin = user.isOAuthClient
+    ? false
+    : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
 
-  console.debug('[Authorization] User enhancement complete:', {
+  logger.debug('[Authorization] User enhancement complete:', {
     userId: user.id,
     userName: user.name,
     groups: user.groups,
     isAdmin: user.isAdmin,
+    isOAuthClient: user.isOAuthClient || false,
     hasWildcardApps: user.permissions.apps.has('*'),
     appCount: user.permissions.apps.size,
     modelCount: user.permissions.models.size
@@ -569,11 +605,11 @@ export function addProviderGroups(userGroups, providerName, providerConfig) {
  */
 export function enhanceUserGroups(user, authConfig, providerConfig = null) {
   if (!user || user.id === 'anonymous') {
-    console.debug('[Authorization] Skipping group enhancement for anonymous user');
+    logger.debug('[Authorization] Skipping group enhancement for anonymous user');
     return user; // Don't modify anonymous users
   }
 
-  console.debug('[Authorization] Enhancing user groups:', {
+  logger.debug('[Authorization] Enhancing user groups:', {
     userId: user.id,
     provider: user.provider,
     initialGroups: user.groups
@@ -584,18 +620,18 @@ export function enhanceUserGroups(user, authConfig, providerConfig = null) {
 
   // Add authenticated group to all logged-in users
   groups = addAuthenticatedGroup(groups, authConfig);
-  console.debug('[Authorization] After adding authenticated group:', groups);
+  logger.debug('[Authorization] After adding authenticated group:', groups);
 
   // Add provider-specific groups if provider config is provided
   if (providerConfig && user.provider) {
     groups = addProviderGroups(groups, user.provider, providerConfig);
-    console.debug('[Authorization] After adding provider groups:', groups);
+    logger.debug('[Authorization] After adding provider groups:', groups);
   }
 
   // Update user groups
   user.groups = groups;
 
-  console.debug('[Authorization] Group enhancement complete for user:', {
+  logger.debug('[Authorization] Group enhancement complete for user:', {
     userId: user.id,
     finalGroups: user.groups
   });

@@ -3,6 +3,7 @@ import OpenAIAdapter from '../adapters/openai.js';
 import AnthropicAdapter from '../adapters/anthropic.js';
 import GoogleAdapter from '../adapters/google.js';
 import MistralAdapter from '../adapters/mistral.js';
+import logger from '../utils/logger.js';
 import {
   formatToolsForOpenAI,
   formatToolsForAnthropic,
@@ -88,18 +89,18 @@ const multiRoundMessages = [
   { role: 'user', content: 'Now search for more details about AI breakthroughs' }
 ];
 
-console.log('🧪 Testing Tool Calling Consistency Across All Adapters\n');
+logger.info('🧪 Testing Tool Calling Consistency Across All Adapters\n');
 
 // Test 1: Tool Formatting Consistency
-console.log('📋 Test 1: Tool Formatting Consistency');
+logger.info('📋 Test 1: Tool Formatting Consistency');
 
 const openaiTools = formatToolsForOpenAI([testTool]);
 const anthropicTools = formatToolsForAnthropic([testTool]);
 const googleTools = formatToolsForGoogle([testTool]);
 
-console.log('OpenAI tool format:', JSON.stringify(openaiTools[0], null, 2));
-console.log('Anthropic tool format:', JSON.stringify(anthropicTools[0], null, 2));
-console.log('Google tool format:', JSON.stringify(googleTools[0], null, 2));
+logger.info('OpenAI tool format:', JSON.stringify(openaiTools[0], null, 2));
+logger.info('Anthropic tool format:', JSON.stringify(anthropicTools[0], null, 2));
+logger.info('Google tool format:', JSON.stringify(googleTools[0], null, 2));
 
 // Verify tool formatting
 assert.strictEqual(openaiTools[0].type, 'function');
@@ -112,10 +113,10 @@ assert.ok(anthropicTools[0].input_schema);
 assert.ok(googleTools[0].functionDeclarations);
 assert.strictEqual(googleTools[0].functionDeclarations[0].name, 'test_search');
 
-console.log('✅ Tool formatting consistency test passed\n');
+logger.info('✅ Tool formatting consistency test passed\n');
 
 // Test 2: Single Tool Call Request Generation
-console.log('📋 Test 2: Single Tool Call Request Generation');
+logger.info('📋 Test 2: Single Tool Call Request Generation');
 
 const openaiSingleReq = OpenAIAdapter.createCompletionRequest(
   models.openai,
@@ -146,24 +147,24 @@ const mistralSingleReq = MistralAdapter.createCompletionRequest(
 );
 
 // Verify single tool call requests
-console.log('OpenAI single tool call request structure:');
-console.log('- Has tools:', !!openaiSingleReq.body.tools);
-console.log('- Tool count:', openaiSingleReq.body.tools?.length || 0);
-console.log('- Tool choice:', openaiSingleReq.body.tool_choice);
+logger.info('OpenAI single tool call request structure:');
+logger.info('- Has tools:', !!openaiSingleReq.body.tools);
+logger.info('- Tool count:', openaiSingleReq.body.tools?.length || 0);
+logger.info('- Tool choice:', openaiSingleReq.body.tool_choice);
 
-console.log('Anthropic single tool call request structure:');
-console.log('- Has tools:', !!anthropicSingleReq.body.tools);
-console.log('- Tool count:', anthropicSingleReq.body.tools?.length || 0);
-console.log('- Tool choice:', anthropicSingleReq.body.tool_choice);
+logger.info('Anthropic single tool call request structure:');
+logger.info('- Has tools:', !!anthropicSingleReq.body.tools);
+logger.info('- Tool count:', anthropicSingleReq.body.tools?.length || 0);
+logger.info('- Tool choice:', anthropicSingleReq.body.tool_choice);
 
-console.log('Google single tool call request structure:');
-console.log('- Has tools:', !!googleSingleReq.body.tools);
-console.log('- Tool count:', googleSingleReq.body.tools?.[0]?.functionDeclarations?.length || 0);
+logger.info('Google single tool call request structure:');
+logger.info('- Has tools:', !!googleSingleReq.body.tools);
+logger.info('- Tool count:', googleSingleReq.body.tools?.[0]?.functionDeclarations?.length || 0);
 
-console.log('Mistral single tool call request structure:');
-console.log('- Has tools:', !!mistralSingleReq.body.tools);
-console.log('- Tool count:', mistralSingleReq.body.tools?.length || 0);
-console.log('- Tool choice:', mistralSingleReq.body.tool_choice);
+logger.info('Mistral single tool call request structure:');
+logger.info('- Has tools:', !!mistralSingleReq.body.tools);
+logger.info('- Tool count:', mistralSingleReq.body.tools?.length || 0);
+logger.info('- Tool choice:', mistralSingleReq.body.tool_choice);
 
 // Assertions for single tool call
 assert.ok(openaiSingleReq.body.tools, 'OpenAI should have tools');
@@ -171,10 +172,10 @@ assert.ok(anthropicSingleReq.body.tools, 'Anthropic should have tools');
 assert.ok(googleSingleReq.body.tools, 'Google should have tools');
 assert.ok(mistralSingleReq.body.tools, 'Mistral should have tools');
 
-console.log('✅ Single tool call request generation test passed\n');
+logger.info('✅ Single tool call request generation test passed\n');
 
 // Test 3: Multi-Round Tool Execution Request Generation
-console.log('📋 Test 3: Multi-Round Tool Execution Request Generation');
+logger.info('📋 Test 3: Multi-Round Tool Execution Request Generation');
 
 const openaiMultiReq = OpenAIAdapter.createCompletionRequest(
   models.openai,
@@ -205,54 +206,54 @@ const mistralMultiReq = MistralAdapter.createCompletionRequest(
 );
 
 // Verify multi-round message handling
-console.log('OpenAI multi-round message handling:');
-console.log('- Message count:', openaiMultiReq.body.messages?.length || 0);
-console.log(
+logger.info('OpenAI multi-round message handling:');
+logger.info('- Message count:', openaiMultiReq.body.messages?.length || 0);
+logger.info(
   '- Has tool messages:',
   openaiMultiReq.body.messages?.some(m => m.role === 'tool')
 );
-console.log(
+logger.info(
   '- Has tool_calls:',
   openaiMultiReq.body.messages?.some(m => m.tool_calls)
 );
 
-console.log('Anthropic multi-round message handling:');
-console.log('- Message count:', anthropicMultiReq.body.messages?.length || 0);
-console.log(
+logger.info('Anthropic multi-round message handling:');
+logger.info('- Message count:', anthropicMultiReq.body.messages?.length || 0);
+logger.info(
   '- Has tool_result:',
   anthropicMultiReq.body.messages?.some(
     m => Array.isArray(m.content) && m.content.some(c => c.type === 'tool_result')
   )
 );
-console.log(
+logger.info(
   '- Has tool_use:',
   anthropicMultiReq.body.messages?.some(
     m => Array.isArray(m.content) && m.content.some(c => c.type === 'tool_use')
   )
 );
 
-console.log('Google multi-round message handling:');
-console.log('- Content count:', googleMultiReq.body.contents?.length || 0);
-console.log(
+logger.info('Google multi-round message handling:');
+logger.info('- Content count:', googleMultiReq.body.contents?.length || 0);
+logger.info(
   '- Has function calls:',
   googleMultiReq.body.contents?.some(
     c => Array.isArray(c.parts) && c.parts.some(p => p.functionCall)
   )
 );
-console.log(
+logger.info(
   '- Has function responses:',
   googleMultiReq.body.contents?.some(
     c => Array.isArray(c.parts) && c.parts.some(p => p.functionResponse)
   )
 );
 
-console.log('Mistral multi-round message handling:');
-console.log('- Message count:', mistralMultiReq.body.messages?.length || 0);
-console.log(
+logger.info('Mistral multi-round message handling:');
+logger.info('- Message count:', mistralMultiReq.body.messages?.length || 0);
+logger.info(
   '- Has tool messages:',
   mistralMultiReq.body.messages?.some(m => m.role === 'tool')
 );
-console.log(
+logger.info(
   '- Has tool_calls:',
   mistralMultiReq.body.messages?.some(m => m.tool_calls)
 );
@@ -263,10 +264,10 @@ assert.ok(anthropicMultiReq.body.messages?.length > 0, 'Anthropic should have me
 assert.ok(googleMultiReq.body.contents?.length > 0, 'Google should have contents');
 assert.ok(mistralMultiReq.body.messages?.length > 0, 'Mistral should have messages');
 
-console.log('✅ Multi-round tool execution request generation test passed\n');
+logger.info('✅ Multi-round tool execution request generation test passed\n');
 
 // Test 4: Message Format Consistency
-console.log('📋 Test 4: Message Format Consistency');
+logger.info('📋 Test 4: Message Format Consistency');
 
 const testMessage = { role: 'user', content: 'Test message' };
 const openaiFormatted = OpenAIAdapter.formatMessages([testMessage]);
@@ -274,26 +275,26 @@ const anthropicFormatted = AnthropicAdapter.formatMessages([testMessage]);
 const googleFormatted = GoogleAdapter.formatMessages([testMessage]);
 const mistralFormatted = MistralAdapter.formatMessages([testMessage]);
 
-console.log('Message format consistency:');
-console.log(
+logger.info('Message format consistency:');
+logger.info(
   '- OpenAI formatted:',
   typeof openaiFormatted,
   openaiFormatted?.length || 0,
   'messages'
 );
-console.log(
+logger.info(
   '- Anthropic formatted:',
   typeof anthropicFormatted,
   anthropicFormatted?.messages?.length || 0,
   'messages'
 );
-console.log(
+logger.info(
   '- Google formatted:',
   typeof googleFormatted,
   googleFormatted?.contents?.length || 0,
   'contents'
 );
-console.log(
+logger.info(
   '- Mistral formatted:',
   typeof mistralFormatted,
   mistralFormatted?.length || 0,
@@ -312,10 +313,10 @@ assert.ok(
 );
 assert.ok(Array.isArray(mistralFormatted), 'Mistral should return array');
 
-console.log('✅ Message format consistency test passed\n');
+logger.info('✅ Message format consistency test passed\n');
 
 // Test 5: Tool Call Response Simulation
-console.log('📋 Test 5: Tool Call Response Simulation');
+logger.info('📋 Test 5: Tool Call Response Simulation');
 
 // Mock response buffers that would come from each provider
 const mockResponses = {
@@ -336,44 +337,44 @@ try {
   const googleProcessed = GoogleAdapter.processResponseBuffer(mockResponses.google);
   const mistralProcessed = MistralAdapter.processResponseBuffer(mockResponses.mistral);
 
-  console.log('Response processing results:');
-  console.log('- OpenAI processed:', !!openaiProcessed);
-  console.log('- Anthropic processed:', !!anthropicProcessed);
-  console.log('- Google processed:', !!googleProcessed);
-  console.log('- Mistral processed:', !!mistralProcessed);
+  logger.info('Response processing results:');
+  logger.info('- OpenAI processed:', !!openaiProcessed);
+  logger.info('- Anthropic processed:', !!anthropicProcessed);
+  logger.info('- Google processed:', !!googleProcessed);
+  logger.info('- Mistral processed:', !!mistralProcessed);
 
-  console.log('✅ Tool call response simulation test passed\n');
+  logger.info('✅ Tool call response simulation test passed\n');
 } catch (error) {
-  console.log(
+  logger.info(
     '⚠️ Tool call response simulation test had issues (expected for mock data):',
     error.message
   );
 }
 
-console.log('🎉 All Tool Calling Tests Completed!\n');
+logger.info('🎉 All Tool Calling Tests Completed!\n');
 
 // Summary of findings
-console.log('📊 Summary of Tool Calling Implementation Differences:');
-console.log('');
-console.log('1. Tool Format Differences:');
-console.log('   - OpenAI: Uses "function" wrapper with "type" field');
-console.log('   - Anthropic: Direct tool object with "input_schema"');
-console.log('   - Google: Uses "functionDeclarations" array wrapper');
-console.log('   - Mistral: Same as OpenAI (OpenAI-compatible)');
-console.log('');
-console.log('2. Message Structure Differences:');
-console.log('   - OpenAI/Mistral: Uses "messages" array with "role" field');
-console.log('   - Anthropic: Uses "messages" array but different tool handling');
-console.log('   - Google: Uses "contents" array with "parts" structure');
-console.log('');
-console.log('3. Tool Call Representation:');
-console.log('   - OpenAI/Mistral: "tool_calls" array with "function" objects');
-console.log('   - Anthropic: "tool_use" content blocks');
-console.log('   - Google: "functionCall" parts');
-console.log('');
-console.log('4. Tool Response Handling:');
-console.log('   - OpenAI/Mistral: "tool" role messages with "tool_call_id"');
-console.log('   - Anthropic: "tool_result" content blocks');
-console.log('   - Google: "functionResponse" parts');
-console.log('');
-console.log('✅ Tool calling consistency tests completed successfully!');
+logger.info('📊 Summary of Tool Calling Implementation Differences:');
+logger.info('');
+logger.info('1. Tool Format Differences:');
+logger.info('   - OpenAI: Uses "function" wrapper with "type" field');
+logger.info('   - Anthropic: Direct tool object with "input_schema"');
+logger.info('   - Google: Uses "functionDeclarations" array wrapper');
+logger.info('   - Mistral: Same as OpenAI (OpenAI-compatible)');
+logger.info('');
+logger.info('2. Message Structure Differences:');
+logger.info('   - OpenAI/Mistral: Uses "messages" array with "role" field');
+logger.info('   - Anthropic: Uses "messages" array but different tool handling');
+logger.info('   - Google: Uses "contents" array with "parts" structure');
+logger.info('');
+logger.info('3. Tool Call Representation:');
+logger.info('   - OpenAI/Mistral: "tool_calls" array with "function" objects');
+logger.info('   - Anthropic: "tool_use" content blocks');
+logger.info('   - Google: "functionCall" parts');
+logger.info('');
+logger.info('4. Tool Response Handling:');
+logger.info('   - OpenAI/Mistral: "tool" role messages with "tool_call_id"');
+logger.info('   - Anthropic: "tool_result" content blocks');
+logger.info('   - Google: "functionResponse" parts');
+logger.info('');
+logger.info('✅ Tool calling consistency tests completed successfully!');

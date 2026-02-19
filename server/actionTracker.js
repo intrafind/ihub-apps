@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { UnifiedEvents } from '../shared/unifiedEventSchema.js';
+import logger from './utils/logger.js';
 
 export class ActionTracker extends EventEmitter {
   constructor() {
@@ -14,7 +15,7 @@ export class ActionTracker extends EventEmitter {
 
   trackError(chatId, error = {}) {
     const stacktrace = new Error().stack;
-    console.error(`Error for chat ID ${chatId}:`, { ...error, stacktrace });
+    logger.error(`Error for chat ID ${chatId}:`, { ...error, stacktrace });
     this.emit('fire-sse', { event: 'error', chatId, ...error });
   }
 
@@ -66,8 +67,40 @@ export class ActionTracker extends EventEmitter {
     this.emit('fire-sse', { event: UnifiedEvents.THINKING, chatId, ...data });
   }
 
+  trackImage(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.IMAGE, chatId, ...data });
+  }
+
   trackToolStreamComplete(chatId, data = {}) {
     this.emit('fire-sse', { event: 'tool-stream-complete', chatId, ...data });
+  }
+
+  /**
+   * Track a clarification request from the ask_user tool
+   * Emits a clarification event to the client with the question and input configuration
+   * @param {string} chatId - The chat session ID
+   * @param {Object} data - Clarification data including question, input_type, options, etc.
+   */
+  trackClarification(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.CLARIFICATION, chatId, ...data });
+  }
+
+  /**
+   * Track a workflow step progress event on the chat's SSE channel
+   * @param {string} chatId - The chat session ID (not the workflow executionId)
+   * @param {Object} data - Step data: { nodeName, nodeType, status: 'running'|'completed'|'error', workflowName }
+   */
+  trackWorkflowStep(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.WORKFLOW_STEP, chatId, ...data });
+  }
+
+  /**
+   * Track a workflow result event on the chat's SSE channel
+   * @param {string} chatId - The chat session ID (not the workflow executionId)
+   * @param {Object} data - Result data: { status: 'completed'|'failed', output, executionId, workflowName }
+   */
+  trackWorkflowResult(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.WORKFLOW_RESULT, chatId, ...data });
   }
 }
 

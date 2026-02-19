@@ -12,6 +12,8 @@ import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import config from '../config.js';
+import tokenStorageService from '../services/TokenStorageService.js';
+import logger from '../utils/logger.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -165,20 +167,28 @@ function setupSessionMiddleware(app, platformConfig) {
   const needsOidcSessions = oidcConfig.enabled;
 
   // Check for OAuth-based external integrations that need sessions
-  const jiraEnabled = process.env.JIRA_BASE_URL && process.env.JIRA_OAUTH_CLIENT_ID;
+  const jiraEnabled = platformConfig?.jira?.enabled && platformConfig?.jira?.clientId;
+  const cloudStorageEnabled =
+    platformConfig?.cloudStorage?.enabled &&
+    platformConfig?.cloudStorage?.providers?.some(
+      p => p.type === 'office365' && p.enabled !== false
+    );
   // Future integrations can be added here:
   // const microsoftEnabled = process.env.MICROSOFT_CLIENT_ID && process.env.MICROSOFT_CLIENT_SECRET;
   // const googleEnabled = process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET;
 
-  const needsIntegrationSessions = jiraEnabled; // || microsoftEnabled || googleEnabled;
+  const needsIntegrationSessions = jiraEnabled || cloudStorageEnabled; // || microsoftEnabled || googleEnabled;
 
   // Setup OIDC user authentication sessions
   if (needsOidcSessions) {
-    console.log('🔐 Enabling session middleware for OIDC user authentication');
+    logger.info('🔐 Enabling session middleware for OIDC user authentication', {
+      component: 'Middleware'
+    });
     app.use(
       '/api/auth/oidc',
       session({
-        secret: config.JWT_SECRET || 'fallback-session-secret',
+        secret:
+          config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
         resave: false,
         saveUninitialized: false, // Only create session when needed for OIDC
         name: 'oidc.session',
@@ -193,41 +203,47 @@ function setupSessionMiddleware(app, platformConfig) {
     );
   }
 
-  // Setup external integration OAuth sessions (separate from user auth)
-  if (needsIntegrationSessions) {
-    const enabledIntegrations = [];
-    if (jiraEnabled) enabledIntegrations.push('JIRA');
+  // Always register integration session middleware — integrations can be enabled
+  // dynamically via admin UI, and routes are always registered with requireFeature guards
+  const enabledIntegrations = [];
+  if (jiraEnabled) enabledIntegrations.push('JIRA');
+  if (cloudStorageEnabled) enabledIntegrations.push('Office 365');
 
-    console.log(
-      `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`
-    );
-    app.use(
-      '/api/integrations',
-      session({
-        secret: config.JWT_SECRET || 'fallback-session-secret',
-        resave: false,
-        saveUninitialized: true, // Required for OAuth2 PKCE state persistence
-        name: 'integration.session',
-        cookie: {
-          secure: config.USE_HTTPS === 'true',
-          httpOnly: true,
-          maxAge: 15 * 60 * 1000, // 15 minutes for OAuth flows
-          sameSite: 'lax',
-          path: '/api/integrations'
-        }
-      })
-    );
-  }
+  logger.info(
+    enabledIntegrations.length > 0
+      ? `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`
+      : '🔗 Enabling session middleware for OAuth integrations (ready for dynamic configuration)',
+    { component: 'Middleware' }
+  );
+  app.use(
+    '/api/integrations',
+    session({
+      secret: config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
+      resave: false,
+      saveUninitialized: true, // Required for OAuth2 PKCE state persistence
+      name: 'integration.session',
+      cookie: {
+        secure: config.USE_HTTPS === 'true',
+        httpOnly: true,
+        maxAge: 15 * 60 * 1000, // 15 minutes for OAuth flows
+        sameSite: 'lax',
+        path: '/api/integrations'
+      }
+    })
+  );
 
   // If no specific session middleware is needed, but we still have some auth method,
   // we might need basic session support for other features
   if (!needsOidcSessions && !needsIntegrationSessions) {
     const authConfig = platformConfig.auth || {};
     if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
-      console.log('🍪 Enabling minimal session middleware for local/LDAP authentication');
+      logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication', {
+        component: 'Middleware'
+      });
       app.use(
         session({
-          secret: config.JWT_SECRET || 'fallback-session-secret',
+          secret:
+            config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
           resave: false,
           saveUninitialized: false,
           name: 'app.session',
@@ -255,7 +271,9 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)
   if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {
-      console.log(`[Debug] ${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`);
+      logger.debug(`${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`, {
+        component: 'Middleware'
+      });
       next();
     });
   }
@@ -356,7 +374,7 @@ export function setupMiddleware(app, platformConfig = {}) {
       const authConfig = platformConfig.auth || {};
       req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
 
-      // console.log('🔍 User permissions enhanced:', {
+      // logger.info('🔍 User permissions enhanced:', {
       //   userId: req.user.id,
       //   groups: req.user.groups,
       //   hasPermissions: !!req.user.permissions,

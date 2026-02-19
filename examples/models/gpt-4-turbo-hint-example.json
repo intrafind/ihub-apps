@@ -1,0 +1,25 @@
+{
+  "id": "gpt-4-turbo-hint-example",
+  "modelId": "gpt-4-turbo-preview",
+  "name": {
+    "en": "GPT-4 Turbo (Hint Example)",
+    "de": "GPT-4 Turbo (Hinweis Beispiel)"
+  },
+  "description": {
+    "en": "Example model demonstrating hint feature at 'hint' level",
+    "de": "Beispiel-Modell zur Demonstration der Hinweis-Funktion auf Ebene 'Hinweis'"
+  },
+  "url": "https://api.openai.com/v1/chat/completions",
+  "provider": "openai",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "enabled": false,
+  "hint": {
+    "message": {
+      "en": "This model is optimized for quick responses. For complex reasoning tasks, consider using GPT-5.",
+      "de": "Dieses Modell ist für schnelle Antworten optimiert. Für komplexe Denkaufgaben sollten Sie GPT-5 in Betracht ziehen."
+    },
+    "level": "hint",
+    "dismissible": true
+  }
+}

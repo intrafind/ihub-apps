@@ -75,7 +75,7 @@ iHub Apps supports multiple authentication modes that can be configured in `cont
 
 **Security Considerations:**
 - Use strong passwords (minimum 12 characters)
-- Enable password hashing with bcrypt (default)
+- Enable password hashing with bcryptjs (default)
 - Disable demo accounts in production
 - Store user credentials securely
 
@@ -219,7 +219,7 @@ const userModels = filterResourcesByPermissions(
 - Use secure cookie settings
 
 #### Password Security
-- Bcrypt hashing with salt rounds
+- Bcryptjs hashing with salt rounds
 - Password complexity requirements
 - Account lockout policies
 - Secure password reset flows

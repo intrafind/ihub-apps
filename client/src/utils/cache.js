@@ -218,7 +218,9 @@ export const CACHE_KEYS = {
   STYLES: 'styles',
   PROMPTS: 'prompts',
   UI_CONFIG: 'ui-config',
-  AUTH_STATUS: 'auth-status'
+  PLATFORM_CONFIG: 'platform-config',
+  AUTH_STATUS: 'auth-status',
+  MIMETYPES_CONFIG: 'mimetypes-config'
 };
 
 /**

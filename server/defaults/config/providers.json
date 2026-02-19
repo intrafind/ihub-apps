@@ -1,0 +1,90 @@
+{
+  "providers": [
+    {
+      "id": "openai",
+      "name": {
+        "en": "OpenAI",
+        "de": "OpenAI"
+      },
+      "description": {
+        "en": "OpenAI API for GPT models",
+        "de": "OpenAI API für GPT-Modelle"
+      },
+      "enabled": true
+    },
+    {
+      "id": "anthropic",
+      "name": {
+        "en": "Anthropic",
+        "de": "Anthropic"
+      },
+      "description": {
+        "en": "Anthropic API for Claude models",
+        "de": "Anthropic API für Claude-Modelle"
+      },
+      "enabled": true
+    },
+    {
+      "id": "google",
+      "name": {
+        "en": "Google",
+        "de": "Google"
+      },
+      "description": {
+        "en": "Google Gemini API",
+        "de": "Google Gemini API"
+      },
+      "enabled": true
+    },
+    {
+      "id": "mistral",
+      "name": {
+        "en": "Mistral AI",
+        "de": "Mistral AI"
+      },
+      "description": {
+        "en": "Mistral AI API",
+        "de": "Mistral AI API"
+      },
+      "enabled": true
+    },
+    {
+      "id": "local",
+      "name": {
+        "en": "Local LLM",
+        "de": "Lokales LLM"
+      },
+      "description": {
+        "en": "Local LLM providers (LM Studio, Jan.ai, vLLM)",
+        "de": "Lokale LLM-Anbieter (LM Studio, Jan.ai, vLLM)"
+      },
+      "enabled": true
+    },
+    {
+      "id": "tavily",
+      "name": {
+        "en": "Tavily Search",
+        "de": "Tavily Suche"
+      },
+      "description": {
+        "en": "Tavily web search API for real-time information retrieval",
+        "de": "Tavily Websuche-API für Echtzeit-Informationsabruf"
+      },
+      "enabled": true,
+      "category": "websearch"
+    },
+    {
+      "id": "brave",
+      "name": {
+        "en": "Brave Search",
+        "de": "Brave Suche"
+      },
+      "description": {
+        "en": "Brave web search API for privacy-focused search results",
+        "de": "Brave Websuche-API für datenschutzorientierte Suchergebnisse"
+      },
+      "enabled": true,
+      "category": "websearch"
+    }
+  ]
+}

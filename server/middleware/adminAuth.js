@@ -1,6 +1,7 @@
 import configCache from '../configCache.js';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { loadGroupsConfiguration } from '../utils/authorization.js';
+import logger from '../utils/logger.js';
 
 /**
  * Admin authentication middleware
@@ -69,7 +70,7 @@ export function adminAuth(req, res, next) {
       });
     }
   } catch (error) {
-    console.error('Admin authentication error:', error);
+    logger.error('Admin authentication error:', error);
     return res.status(500).json({
       error: 'Authentication system error',
       message: 'Internal server error during authentication'
@@ -139,7 +140,7 @@ export function isAdminAuthRequired(req = null) {
         return false; // Allow access for authenticated admin users
       }
     } catch (error) {
-      console.warn('Failed to load groups configuration for admin check:', error);
+      logger.warn('Failed to load groups configuration for admin check:', error);
       // Fallback to default admin groups if groups config fails
       const defaultAdminGroups = ['admin', 'admins'];
       const isAdmin = userGroups.some(group => defaultAdminGroups.includes(group));

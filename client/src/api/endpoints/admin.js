@@ -69,7 +69,7 @@ export const fetchAdminApps = async (options = {}) => {
 
 export const fetchTools = async (options = {}) => {
   const { skipCache = false, language = null } = options;
-  const cacheKey = skipCache ? null : 'tools';
+  const cacheKey = skipCache ? null : 'admin_tools';
 
   const params = {};
   if (language) {
@@ -77,7 +77,7 @@ export const fetchTools = async (options = {}) => {
   }
 
   return handleApiResponse(
-    () => apiClient.get('/tools', { params }),
+    () => apiClient.get('/admin/tools', { params }),
     cacheKey,
     DEFAULT_CACHE_TTL.SHORT
   );

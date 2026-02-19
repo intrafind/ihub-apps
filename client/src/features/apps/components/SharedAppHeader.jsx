@@ -32,6 +32,9 @@ const SharedAppHeader = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  enabledTools: _enabledTools,
+  imageAspectRatio,
+  imageQuality,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -40,6 +43,9 @@ const SharedAppHeader = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onEnabledToolsChange: _onEnabledToolsChange,
+  onImageAspectRatioChange,
+  onImageQualityChange,
 
   // Config panel state
   showConfig,
@@ -155,6 +161,8 @@ const SharedAppHeader = ({
             thinkingEnabled={thinkingEnabled}
             thinkingBudget={thinkingBudget}
             thinkingThoughts={thinkingThoughts}
+            imageAspectRatio={imageAspectRatio}
+            imageQuality={imageQuality}
             onModelChange={onModelChange}
             onStyleChange={onStyleChange}
             onOutputFormatChange={onOutputFormatChange}
@@ -163,6 +171,8 @@ const SharedAppHeader = ({
             onThinkingEnabledChange={onThinkingEnabledChange}
             onThinkingBudgetChange={onThinkingBudgetChange}
             onThinkingThoughtsChange={onThinkingThoughtsChange}
+            onImageAspectRatioChange={onImageAspectRatioChange}
+            onImageQualityChange={onImageQualityChange}
             currentLanguage={currentLanguage}
           />
         </div>

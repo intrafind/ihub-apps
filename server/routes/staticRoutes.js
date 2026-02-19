@@ -1,8 +1,8 @@
 import express from 'express';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
+import logger from '../utils/logger.js';
 import {
   buildServerPath,
   buildUploadsPath,
@@ -11,13 +11,11 @@ import {
 } from '../utils/basePath.js';
 
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath = '' }) {
-  fileURLToPath(import.meta.url);
-
   // Only serve static files in production or packaged mode
   // In development, Vite serves the frontend directly
   if (isPackaged || config.NODE_ENV === 'production') {
     const staticPath = path.join(rootDir, 'public');
-    console.log(`Serving static files from: ${staticPath}`);
+    logger.info(`Serving static files from: ${staticPath}`, { component: 'StaticRoutes' });
 
     // Serve static files at base path
     if (basePath) {
@@ -26,27 +24,33 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       app.use(express.static(staticPath));
     }
   } else {
-    console.log('Development mode: Static files served by Vite on port 5173');
+    logger.info('Development mode: Static files served by Vite on port 5173', {
+      component: 'StaticRoutes'
+    });
   }
 
   // Serve uploaded assets
   const uploadsPath = path.join(rootDir, 'contents/uploads');
-  console.log(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`);
+  logger.info(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`, {
+    component: 'StaticRoutes'
+  });
   app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');
-  console.log(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`);
+  logger.info(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`, {
+    component: 'StaticRoutes'
+  });
   app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
   // Only set up SPA routing in production or packaged mode
   // In development, Vite handles all frontend routing
   if (isPackaged || config.NODE_ENV === 'production') {
     const indexPath = path.join(rootDir, 'public/index.html');
-    console.log(`SPA will be served from: ${indexPath}`);
+    logger.info(`SPA will be served from: ${indexPath}`, { component: 'StaticRoutes' });
 
-    // Catch-all for SPA routing (but exclude API and docs paths)
-    app.get('*', (req, res, next) => {
+    // SPA routing handler
+    const spaHandler = (req, res, next) => {
       const relativePath = getRelativeRequestPath(req.path);
 
       // Don't serve SPA for API routes
@@ -66,8 +70,18 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       }
 
       res.sendFile(indexPath);
-    });
+    };
+
+    // Catch-all for SPA routing (but exclude API and docs paths)
+    // Register under basePath if configured, otherwise at root
+    if (basePath) {
+      app.get(`${basePath}/*`, spaHandler);
+    } else {
+      app.get('*', spaHandler);
+    }
   } else {
-    console.log('Development mode: SPA routing handled by Vite on port 5173');
+    logger.info('Development mode: SPA routing handled by Vite on port 5173', {
+      component: 'StaticRoutes'
+    });
   }
 }

@@ -5,6 +5,7 @@ import { loadJson } from '../configLoader.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -33,7 +34,7 @@ function createSwaggerConfig(title, description, version, paths, basePath = '') 
       },
       servers: [
         {
-          url: buildServerPath('/api', basePath),
+          url: buildServerPath('/api'),
           description: 'API Server'
         }
       ],
@@ -75,7 +76,10 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   try {
     platformConfig = (await loadJson('config/platform.json')) || {};
   } catch (error) {
-    console.warn('Could not load platform configuration for Swagger setup:', error.message);
+    logger.warn('Could not load platform configuration for Swagger setup:', {
+      component: 'Swagger',
+      error: error.message
+    });
   }
 
   const swaggerConfig = platformConfig.swagger || {};
@@ -83,11 +87,13 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   const requireAuth = swaggerConfig.requireAuth !== false; // Default to requiring auth
 
   if (!isEnabled) {
-    console.log('📚 Swagger documentation is disabled in platform configuration');
+    logger.info('📚 Swagger documentation is disabled in platform configuration', {
+      component: 'Swagger'
+    });
     return;
   }
 
-  console.log('📚 Setting up Swagger documentation routes...');
+  logger.info('📚 Setting up Swagger documentation routes...', { component: 'Swagger' });
 
   // Apply authentication middleware if required
   const middleware = requireAuth ? [authRequired] : [];
@@ -135,19 +141,31 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   const openaiApiSpec = swaggerJSDoc(openaiApiConfig);
 
   // Debug logging
-  console.log('📚 Generated API specs:');
-  console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`);
-  console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`);
-  console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`);
+  logger.info('📚 Generated API specs:', { component: 'Swagger' });
+  logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`, {
+    component: 'Swagger'
+  });
 
   if (Object.keys(normalApiSpec.paths || {}).length > 0) {
-    console.log(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`, {
+      component: 'Swagger'
+    });
   }
   if (Object.keys(adminApiSpec.paths || {}).length > 0) {
-    console.log(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`, {
+      component: 'Swagger'
+    });
   }
   if (Object.keys(openaiApiSpec.paths || {}).length > 0) {
-    console.log(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`);
+    logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`, {
+      component: 'Swagger'
+    });
   }
 
   // Swagger UI options
@@ -156,15 +174,15 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     swaggerOptions: {
       urls: [
         {
-          url: buildServerPath('/api/docs/normal/swagger.json', basePath),
+          url: buildServerPath('/api/docs/normal/swagger.json'),
           name: 'Chat & General APIs'
         },
         {
-          url: buildServerPath('/api/docs/admin/swagger.json', basePath),
+          url: buildServerPath('/api/docs/admin/swagger.json'),
           name: 'Admin APIs'
         },
         {
-          url: buildServerPath('/api/docs/openai/swagger.json', basePath),
+          url: buildServerPath('/api/docs/openai/swagger.json'),
           name: 'OpenAI Compatible APIs'
         }
       ]
@@ -172,28 +190,24 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
   };
 
   // Main Swagger UI route - shows all API categories
-  app.use(buildServerPath('/api/docs', basePath), ...middleware, swaggerUi.serve);
-  app.get(
-    buildServerPath('/api/docs', basePath),
-    ...middleware,
-    swaggerUi.setup(null, swaggerOptions)
-  );
+  app.use(buildServerPath('/api/docs'), ...middleware, swaggerUi.serve);
+  app.get(buildServerPath('/api/docs'), ...middleware, swaggerUi.setup(null, swaggerOptions));
 
   // Individual API documentation routes (JSON only)
-  app.get(buildServerPath('/api/docs/normal/swagger.json', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/normal/swagger.json'), ...middleware, (req, res) => {
     res.json(normalApiSpec);
   });
 
-  app.get(buildServerPath('/api/docs/admin/swagger.json', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/admin/swagger.json'), ...middleware, (req, res) => {
     res.json(adminApiSpec);
   });
 
-  app.get(buildServerPath('/api/docs/openai/swagger.json', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/openai/swagger.json'), ...middleware, (req, res) => {
     res.json(openaiApiSpec);
   });
 
   // Create specific UI for each API set using query parameters
-  app.get(buildServerPath('/api/docs/normal', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/normal'), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - Chat & General APIs',
@@ -204,7 +218,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(normalApiSpec, customOptions));
   });
 
-  app.get(buildServerPath('/api/docs/admin', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/admin'), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - Admin APIs',
@@ -215,7 +229,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(adminApiSpec, customOptions));
   });
 
-  app.get(buildServerPath('/api/docs/openai', basePath), ...middleware, (req, res) => {
+  app.get(buildServerPath('/api/docs/openai'), ...middleware, (req, res) => {
     const customOptions = {
       explorer: false,
       customSiteTitle: 'iHub Apps - OpenAI Compatible APIs',
@@ -226,15 +240,21 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
     res.send(swaggerUi.generateHTML(openaiApiSpec, customOptions));
   });
 
-  console.log('📚 Swagger documentation available at:');
-  console.log(`   📖 All APIs: ${buildServerPath('/api/docs', basePath)}`);
-  console.log(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`);
-  console.log(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`);
-  console.log(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`);
+  logger.info('📚 Swagger documentation available at:', { component: 'Swagger' });
+  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs')}`, { component: 'Swagger' });
+  logger.info(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`, {
+    component: 'Swagger'
+  });
+  logger.info(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`, {
+    component: 'Swagger'
+  });
 
   if (requireAuth) {
-    console.log('🔐 Authentication required for Swagger access');
+    logger.info('🔐 Authentication required for Swagger access', { component: 'Swagger' });
   } else {
-    console.log('🌐 Swagger accessible without authentication');
+    logger.info('🌐 Swagger accessible without authentication', { component: 'Swagger' });
   }
 }

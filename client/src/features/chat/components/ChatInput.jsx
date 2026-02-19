@@ -1,14 +1,21 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { VoiceInputComponent } from '../../voice/components';
 import Icon from '../../../shared/components/Icon';
-import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
-import { UnifiedUploader } from '../../upload/components';
+import { UnifiedUploader, CloudStoragePicker, AttachedFilesList } from '../../upload/components';
 import PromptSearch from '../../prompts/components/PromptSearch';
+import WorkflowMentionSearch from './WorkflowMentionSearch';
+import ChatInputActionsMenu from './ChatInputActionsMenu';
+import ImageGenerationControls from './ImageGenerationControls';
+import ModelSelector from './ModelSelector';
+import ModelHintBanner from './ModelHintBanner';
+import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 /**
- * A reusable chat input component for chat interfaces
+ * Chat input component following Claude's design
+ * Two-line layout:
+ * - Top line: User input (auto-expanding textarea)
+ * - Bottom line: Actions menu (+), model selector, send/stop button
  */
 const ChatInput = ({
   app,
@@ -25,32 +32,70 @@ const ChatInput = ({
   formRef = null,
   disabled = false,
   uploadConfig = {},
-  selectedFile = null, // Add this prop to pass from parent
-  showUploader: externalShowUploader = undefined,
-  onToggleUploader = null,
+  selectedFile = null,
+  showUploader: _externalShowUploader = undefined,
+  onToggleUploader: _onToggleUploader = null,
   magicPromptEnabled = false,
   onMagicPrompt = null,
   showUndoMagicPrompt = false,
   onUndoMagicPrompt = null,
-  magicPromptLoading = false
+  magicPromptLoading = false,
+  enabledTools = [],
+  onEnabledToolsChange = null,
+  // Model selection props
+  models = [],
+  selectedModel = null,
+  onModelChange = null,
+  currentLanguage = 'en',
+  showModelSelector = true,
+  // Image generation props
+  model = null,
+  imageAspectRatio = null,
+  imageQuality = null,
+  onImageAspectRatioChange = null,
+  onImageQualityChange = null,
+  // Clarification state
+  clarificationPending = false // When true, input is disabled waiting for clarification answer
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
-  const [internalShowUploader, setInternalShowUploader] = useState(false);
+  const workflowSearchRef = useRef(null);
+  const openDialogRef = useRef(null);
+  const [showCloudStoragePicker, setShowCloudStoragePicker] = useState(false);
+  const [cloudStorageProvider, setCloudStorageProvider] = useState(null);
   const [showPromptSearch, setShowPromptSearch] = useState(false);
+  const [showWorkflowSearch, setShowWorkflowSearch] = useState(false);
+  const [modelAlertAcknowledged, setModelAlertAcknowledged] = useState(false);
+
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  const workflowMentionsEnabled = app?.tools?.some(t => t.startsWith('workflow:'));
+
+  // Derive the @mention query from the current input value
+  const mentionQuery = showWorkflowSearch ? value.match(/@([\w.-]*)$/)?.[1] || '' : '';
+
+  // Get selected model data for hint display
+  const selectedModelData = useMemo(() => {
+    return models?.find(m => m.id === selectedModel);
+  }, [models, selectedModel]);
+
+  // Reset alert acknowledgment when model changes
+  useEffect(() => {
+    setModelAlertAcknowledged(false);
+  }, [selectedModel]);
+
+  // Normalize files to always be an array for consistent rendering
+  const normalizedFiles = useMemo(() => {
+    if (!selectedFile) return [];
+    return Array.isArray(selectedFile) ? selectedFile : [selectedFile];
+  }, [selectedFile]);
 
   // Determine input mode configuration
   const inputMode = app?.inputMode;
   const multilineMode = inputMode?.type === 'multiline' || inputMode === 'multiline';
   const inputRows = multilineMode ? inputMode?.rows || 2 : 1;
-
-  // Use external state if provided, otherwise use internal state
-  const showUploader =
-    externalShowUploader !== undefined ? externalShowUploader : internalShowUploader;
 
   // First check for direct placeholder prop, then app.messagePlaceholder, then default
   const customPlaceholder = app?.messagePlaceholder
@@ -59,13 +104,28 @@ const ChatInput = ({
       : app.messagePlaceholder
     : null;
 
-  let defaultPlaceholder = isProcessing
-    ? t('pages.appChat.thinking')
-    : customPlaceholder
-      ? customPlaceholder
-      : allowEmptySubmit
-        ? t('pages.appChat.optionalMessagePlaceholder', 'Type here (optional)...')
-        : t('pages.appChat.messagePlaceholder', 'Type here...');
+  // Determine placeholder text based on state
+  let defaultPlaceholder;
+  if (clarificationPending) {
+    // When waiting for clarification response, show a helpful message
+    defaultPlaceholder = t(
+      'pages.appChat.answerQuestionAbove',
+      'Please answer the question above to continue'
+    );
+  } else if (isProcessing) {
+    defaultPlaceholder = t('pages.appChat.thinking');
+  } else if (customPlaceholder) {
+    defaultPlaceholder = customPlaceholder;
+  } else if (allowEmptySubmit) {
+    defaultPlaceholder = t('pages.appChat.optionalMessagePlaceholder', 'Type here (optional)...');
+  } else {
+    defaultPlaceholder = t('pages.appChat.messagePlaceholder', 'Type here...');
+  }
+
+  // Disable input when clarification is pending or when model requires alert acknowledgment
+  const requiresAlertAcknowledgment =
+    selectedModelData?.hint?.level === 'alert' && !modelAlertAcknowledged;
+  const isInputDisabled = disabled || clarificationPending || requiresAlertAcknowledgment;
 
   const focusInputAtEnd = useCallback(() => {
     if (actualInputRef.current) {
@@ -76,6 +136,57 @@ const ChatInput = ({
       el.setSelectionRange(len, len);
     }
   }, [actualInputRef]);
+
+  // Calculate if single-action optimization is active in ChatInputActionsMenu
+  // This logic mirrors the calculation in ChatInputActionsMenu.jsx
+  const hasTools = app?.tools && app.tools.length > 0;
+  const quickActionCount =
+    (uploadConfig?.enabled === true ? 1 : 0) +
+    (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
+    (showUndoMagicPrompt ? 1 : 0) +
+    (onVoiceInput ? 1 : 0);
+  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const isSingleActionOptimization = totalActions === 1 && quickActionCount === 1 && !hasTools;
+
+  // Handler to trigger file upload dialog via ref
+  const handleAttachFile = useCallback(() => {
+    openDialogRef.current?.();
+  }, []);
+
+  // Handler for cloud provider selection
+  const handleCloudProviderSelect = useCallback(provider => {
+    setCloudStorageProvider(provider);
+    setShowCloudStoragePicker(true);
+  }, []);
+
+  // Handler for cloud file selection - merges with existing files
+  const handleCloudFileSelect = useCallback(
+    cloudFiles => {
+      const files = Array.isArray(selectedFile) ? selectedFile : selectedFile ? [selectedFile] : [];
+      // Tag cloud files with source information
+      const taggedCloudFiles = cloudFiles.map(file => ({
+        ...file,
+        source: cloudStorageProvider
+      }));
+      const merged = [...files, ...taggedCloudFiles];
+      onFileSelect(merged.length === 1 ? merged[0] : merged);
+      setShowCloudStoragePicker(false);
+      setCloudStorageProvider(null);
+    },
+    [selectedFile, onFileSelect, cloudStorageProvider]
+  );
+
+  // Handler for local file selection - preserves cloud-sourced files
+  const handleLocalFileSelect = useCallback(
+    localFiles => {
+      const files = Array.isArray(selectedFile) ? selectedFile : selectedFile ? [selectedFile] : [];
+      const cloudFiles = files.filter(f => f.source);
+      const localFilesArray = Array.isArray(localFiles) ? localFiles : [localFiles];
+      const merged = [...cloudFiles, ...localFilesArray];
+      onFileSelect(merged.length === 0 ? null : merged.length === 1 ? merged[0] : merged);
+    },
+    [selectedFile, onFileSelect]
+  );
 
   // When processing finishes, refocus the input field
   useEffect(() => {
@@ -133,22 +244,38 @@ const ChatInput = ({
   const handleCancel = e => {
     e.preventDefault(); // Prevent any form submission
     if (onCancel && typeof onCancel === 'function') {
-      console.log('Cancel button clicked, executing onCancel');
       onCancel();
-    } else {
-      console.warn('Cancel handler is not properly defined');
     }
   };
 
-  const toggleUploader = () => {
-    if (onToggleUploader) {
-      // Use the external toggle function if provided
-      onToggleUploader();
-    } else {
-      // Otherwise use the internal state
-      setInternalShowUploader(prev => !prev);
+  // Wrap onChange to detect @mention patterns in the input value
+  const handleInputChange = e => {
+    onChange(e);
+
+    if (workflowMentionsEnabled) {
+      const newVal = e.target.value;
+      // Check if the value ends with @<word-chars> (active mention)
+      const match = newVal.match(/@([\w.-]*)$/);
+      if (match) {
+        if (!showWorkflowSearch) setShowWorkflowSearch(true);
+      } else {
+        if (showWorkflowSearch) setShowWorkflowSearch(false);
+      }
     }
   };
+
+  const handleRemoveFile = useCallback(
+    index => {
+      const files = Array.isArray(selectedFile) ? selectedFile : [selectedFile];
+      const updated = files.filter((_, i) => i !== index);
+      onFileSelect(updated.length === 0 ? null : updated.length === 1 ? updated[0] : updated);
+    },
+    [selectedFile, onFileSelect]
+  );
+
+  const handleRemoveAll = useCallback(() => {
+    onFileSelect(null);
+  }, [onFileSelect]);
 
   // Handle key events for the textarea
   const handleKeyDown = e => {
@@ -162,6 +289,11 @@ const ChatInput = ({
       if (e.key === 'Escape') {
         setShowPromptSearch(false);
       }
+      return;
+    }
+
+    // Forward keyboard events to the workflow mention dropdown when open
+    if (showWorkflowSearch && workflowSearchRef.current?.handleKeyDown(e)) {
       return;
     }
 
@@ -180,8 +312,208 @@ const ChatInput = ({
     }
   };
 
+  // Extract form content to avoid duplication
+  const formContent = (
+    <>
+      {normalizedFiles.length > 0 && (
+        <AttachedFilesList
+          files={normalizedFiles}
+          onRemoveFile={handleRemoveFile}
+          onRemoveAll={handleRemoveAll}
+          disabled={isInputDisabled || isProcessing}
+        />
+      )}
+
+      <div className="relative">
+        {workflowMentionsEnabled && (
+          <WorkflowMentionSearch
+            ref={workflowSearchRef}
+            isOpen={showWorkflowSearch}
+            query={mentionQuery}
+            app={app}
+            onClose={() => setShowWorkflowSearch(false)}
+            onSelect={workflowId => {
+              // Replace the @partial at the end of value with @workflowId
+              const newValue = value.replace(/@[\w.-]*$/, `@${workflowId} `);
+              onChange({ target: { value: newValue } });
+              setShowWorkflowSearch(false);
+              setTimeout(() => focusInputAtEnd(), 0);
+            }}
+          />
+        )}
+
+        {/* Model hint banner - shown when selected model has a hint */}
+        {selectedModelData?.hint && (
+          <div className="mb-2">
+            <ModelHintBanner
+              key={selectedModel} // Key ensures component resets when model changes
+              hint={selectedModelData.hint}
+              currentLanguage={currentLanguage}
+              onAcknowledge={() => setModelAlertAcknowledged(true)}
+            />
+          </div>
+        )}
+
+        <form
+          ref={formRef}
+          onSubmit={handleSubmit}
+          autoComplete="off"
+          className="flex flex-col border border-gray-300 dark:border-gray-600 rounded-2xl bg-white dark:bg-gray-800 shadow-sm focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-indigo-500 mb-1"
+        >
+          {/* Top line: User input */}
+          <div className="relative flex-1">
+            <textarea
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore="true"
+              type="text"
+              value={value}
+              onChange={handleInputChange}
+              onKeyDown={handleKeyDown}
+              disabled={isInputDisabled || isProcessing}
+              className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100"
+              placeholder={defaultPlaceholder}
+              ref={actualInputRef}
+              style={{
+                minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
+                maxHeight: multilineMode ? `calc(11 * 1.5em + 1.5rem)` : undefined,
+                overflowY: multilineMode ? 'auto' : 'hidden',
+                height: multilineMode ? 'auto' : undefined
+              }}
+              title={
+                multilineMode
+                  ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
+                  : t('input.singlelineTooltip', 'Press Enter to send')
+              }
+            />
+            {value && (
+              <button
+                type="button"
+                className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                onClick={handleClearInput}
+                title={t('common.clear', 'Clear')}
+              >
+                <Icon name="clearCircle" size="sm" />
+              </button>
+            )}
+          </div>
+
+          {/* Bottom line: Actions menu, model selector, send/stop button */}
+          <div className="flex items-center gap-2 px-3 pb-2 border-t border-gray-100 dark:border-gray-700/50 pt-2">
+            {/* Chat Input Actions Menu */}
+            <ChatInputActionsMenu
+              app={app}
+              enabledTools={enabledTools}
+              onEnabledToolsChange={onEnabledToolsChange}
+              uploadConfig={uploadConfig}
+              onToggleUploader={handleAttachFile}
+              onCloudProviderSelect={handleCloudProviderSelect}
+              disabled={isInputDisabled}
+              isProcessing={isProcessing}
+              magicPromptEnabled={magicPromptEnabled}
+              onMagicPrompt={onMagicPrompt}
+              showUndoMagicPrompt={showUndoMagicPrompt}
+              onUndoMagicPrompt={onUndoMagicPrompt}
+              magicPromptLoading={magicPromptLoading}
+              onVoiceInput={onVoiceInput}
+              onVoiceCommand={onVoiceCommand}
+              inputRef={actualInputRef}
+              model={model}
+              imageAspectRatio={imageAspectRatio}
+              imageQuality={imageQuality}
+              onImageAspectRatioChange={onImageAspectRatioChange}
+              onImageQualityChange={onImageQualityChange}
+            />
+
+            {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
+            {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+            {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+              <button
+                type="button"
+                onClick={handleAttachFile}
+                disabled={isInputDisabled || isProcessing}
+                title={t('chatActions.attachFile', 'Attach File')}
+                className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                <Icon name="paper-clip" size="md" />
+              </button>
+            )}
+
+            {/* Microphone icon - show directly on desktop if enabled and NOT in single-action mode */}
+            {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
+            {onVoiceInput && !isSingleActionOptimization && (
+              <div className="hidden md:flex">
+                <VoiceInputComponent
+                  app={app}
+                  onSpeechResult={onVoiceInput}
+                  inputRef={actualInputRef}
+                  disabled={isInputDisabled || isProcessing}
+                  onCommand={onVoiceCommand}
+                />
+              </div>
+            )}
+
+            {/* Image Generation Controls - Show on desktop only if model supports it */}
+            {model?.supportsImageGeneration && (
+              <div className="hidden md:flex gap-2">
+                <ImageGenerationControls
+                  app={app}
+                  model={model}
+                  imageAspectRatio={imageAspectRatio}
+                  imageQuality={imageQuality}
+                  onImageAspectRatioChange={onImageAspectRatioChange}
+                  onImageQualityChange={onImageQualityChange}
+                  inline={true}
+                />
+              </div>
+            )}
+
+            <div className="flex-1"></div>
+
+            {/* Warning when no models are available */}
+            {showModelSelector && (!models || models.length === 0) && (
+              <div className="flex items-center gap-2 px-3 py-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 rounded-lg border border-amber-200 dark:border-amber-800">
+                <Icon name="exclamationTriangle" size="sm" />
+                <span>{t('chat.modelSelector.noModels', 'No models available')}</span>
+              </div>
+            )}
+
+            {/* Model Selector */}
+            {showModelSelector && models && models.length > 0 && onModelChange && (
+              <ModelSelector
+                app={app}
+                models={models}
+                selectedModel={selectedModel}
+                onModelChange={onModelChange}
+                currentLanguage={currentLanguage}
+                disabled={isInputDisabled || isProcessing}
+              />
+            )}
+
+            {/* Send/Stop Button */}
+            <button
+              type="button"
+              onClick={isProcessing ? handleCancel : handleSubmit}
+              disabled={isInputDisabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
+              className={`p-2.5 rounded-lg font-medium flex items-center justify-center transition-colors ${
+                disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-gray-700 dark:text-gray-500'
+                  : isProcessing
+                    ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
+                    : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
+              }`}
+              title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
+            >
+              {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}
+            </button>
+          </div>
+        </form>
+      </div>
+    </>
+  );
+
   return (
-    <div className="chat-input-container">
+    <div className="next-gen-chat-input-container">
       {promptsListEnabled && (
         <PromptSearch
           isOpen={showPromptSearch}
@@ -196,139 +528,32 @@ const ChatInput = ({
           }}
         />
       )}
-      {uploadConfig?.enabled === true && showUploader && (
-        <UnifiedUploader
-          onFileSelect={onFileSelect}
-          disabled={disabled || isProcessing}
-          fileData={selectedFile} // Pass the actual selectedFile value from parent
-          config={uploadConfig}
+
+      {showCloudStoragePicker && (
+        <CloudStoragePicker
+          onFileSelect={handleCloudFileSelect}
+          onClose={() => {
+            setShowCloudStoragePicker(false);
+            setCloudStorageProvider(null);
+          }}
+          preSelectedProvider={cloudStorageProvider}
+          uploadConfig={uploadConfig}
         />
       )}
 
-      <form
-        ref={formRef}
-        onSubmit={handleSubmit}
-        autoComplete="off"
-        className="flex space-x-2 items-center"
-      >
-        <textarea
-          autoComplete="off"
-          data-lpignore="true"
-          data-1p-ignore="true"
-          type="text"
-          value={value}
-          onChange={onChange}
-          onKeyDown={handleKeyDown}
-          disabled={disabled || isProcessing}
-          className="w-full p-3 border rounded-lg focus:ring-indigo-500 focus:border-indigo-500 pr-10"
-          placeholder={defaultPlaceholder}
-          ref={actualInputRef}
-          style={{
-            resize: multilineMode ? 'vertical' : 'none',
-            minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-            maxHeight: multilineMode ? 'calc(11 * 1.5em + 1.5rem)' : undefined,
-            overflowY: multilineMode ? 'auto' : 'hidden',
-            height: multilineMode ? 'auto' : undefined
-          }}
-          title={
-            multilineMode
-              ? t('input.multilineTooltip', 'Press Shift+Enter for new line, Cmd+Enter to send')
-              : t('input.singlelineTooltip', 'Press Enter to send')
-          }
-        />
-        <span className="sr-only"></span>
-        <div className="flex-1 relative">
-          {value && (
-            <button
-              type="button"
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 h-fit"
-              onClick={handleClearInput}
-              title={t('common.clear', 'Clear')}
-            >
-              <Icon name="clearCircle" size="sm" />
-            </button>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1 justify-start">
-          {uploadConfig?.enabled === true && (
-            <button
-              type="button"
-              onClick={toggleUploader}
-              disabled={disabled || isProcessing}
-              className={`image-upload-button ${showUploader ? 'active' : ''} h-fit`}
-              title={t('common.toggleUpload', 'Toggle file upload')}
-              aria-label={t('common.toggleUpload', 'Toggle file upload')}
-            >
-              <Icon name="paper-clip" size="md" />
-            </button>
-          )}
-
-          {magicPromptEnabled && !showUndoMagicPrompt && (
-            <button
-              type="button"
-              onClick={onMagicPrompt}
-              disabled={disabled || isProcessing}
-              className="image-upload-button h-fit"
-              title={t('common.magicPrompt', 'Magic prompt')}
-              aria-label={t('common.magicPrompt', 'Magic prompt')}
-            >
-              {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
-            </button>
-          )}
-
-          {showUndoMagicPrompt && (
-            <button
-              type="button"
-              onClick={onUndoMagicPrompt}
-              disabled={disabled || isProcessing}
-              className="image-upload-button h-fit"
-              title={t('common.undo', 'Undo')}
-              aria-label={t('common.undo', 'Undo')}
-            >
-              <Icon name="arrowLeft" size="md" />
-            </button>
-          )}
-
-          {onVoiceInput && (
-            <VoiceInputComponent
-              app={app}
-              onSpeechResult={onVoiceInput}
-              inputRef={actualInputRef}
-              disabled={disabled || isProcessing}
-              onCommand={onVoiceCommand}
-            />
-          )}
-        </div>
-
-        <button
-          type="button"
-          onClick={isProcessing ? handleCancel : handleSubmit}
-          disabled={disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)}
-          className={`px-4 py-3 rounded-lg font-medium flex items-center justify-center h-fit ${
-            disabled || (!allowEmptySubmit && !value.trim() && !isProcessing)
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : isProcessing
-                ? 'bg-red-600 text-white hover:bg-red-700'
-                : 'bg-indigo-600 text-white hover:bg-indigo-700'
-          }`}
+      {uploadConfig?.enabled === true ? (
+        <UnifiedUploader
+          onFileSelect={handleLocalFileSelect}
+          disabled={isInputDisabled || isProcessing}
+          fileData={selectedFile}
+          config={uploadConfig}
+          openDialogRef={openDialogRef}
         >
-          {isProcessing ? (
-            <>
-              <Icon name="close" size="sm" className="mr-1" />
-              <span>{t('common.cancel')}</span>
-            </>
-          ) : (
-            <>
-              <span>{t('common.send')}</span>
-              {/* Display shortcut hint */}
-              <span className="ml-1 text-xs opacity-70 hidden sm:inline">
-                {multilineMode ? '⌘↵' : '↵'}
-              </span>
-            </>
-          )}
-        </button>
-      </form>
+          {formContent}
+        </UnifiedUploader>
+      ) : (
+        formContent
+      )}
     </div>
   );
 };

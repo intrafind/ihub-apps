@@ -1,9 +1,10 @@
 import { JSDOM } from 'jsdom';
-import https from 'https';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
 import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
+import { enhanceFetchOptions } from '../utils/httpConfig.js';
 
 function createError(message, code) {
   const err = new Error(message);
@@ -14,6 +15,15 @@ function createError(message, code) {
 /**
  * Extract clean, readable content from a web page
  * Removes headers, footers, navigation, ads, and other non-content elements
+ * @param {Object} params - The extraction parameters
+ * @param {string} [params.url] - The URL to extract content from
+ * @param {string} [params.uri] - Alternative URL parameter name
+ * @param {string} [params.link] - Alternative URL parameter name
+ * @param {number} [params.maxLength=5000] - Maximum content length to return
+ * @param {boolean} [params.ignoreSSL=null] - Whether to ignore SSL certificate errors
+ * @param {string} [params.chatId] - The chat ID for action tracking
+ * @returns {Promise<{url: string, title: string, description: string, author: string, content: string, wordCount: number, extractedAt: string}>} Extracted content with metadata
+ * @throws {Error} If URL is missing, invalid, or content extraction fails
  */
 export default async function webContentExtractor({
   url,
@@ -50,22 +60,18 @@ export default async function webContentExtractor({
     throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
 
-  try {
-    // Determine SSL ignore setting: explicit parameter > global config > default false
-    const platformConfig = configCache.getPlatform() || {};
-    const shouldIgnoreSSL =
-      ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
+  // Determine SSL ignore setting: explicit parameter > global config > default false
+  const platformConfig = configCache.getPlatform() || {};
+  const shouldIgnoreSSL =
+    ignoreSSL !== null ? ignoreSSL : platformConfig.ssl?.ignoreInvalidCertificates || false;
 
+  try {
     // Fetch the webpage with appropriate headers and timeout
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
-    const dispatcher =
-      shouldIgnoreSSL && validUrl.protocol === 'https:'
-        ? new https.Agent({ rejectUnauthorized: false })
-        : undefined;
-    // Ignoring SSL certificate errors if requested or configured globally
-    const response = await throttledFetch('webContentExtractor', targetUrl, {
+    // Build base fetch options
+    const fetchOptions = {
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
@@ -75,9 +81,13 @@ export default async function webContentExtractor({
         Connection: 'keep-alive',
         'Upgrade-Insecure-Requests': '1'
       },
-      signal: controller.signal,
-      ...(dispatcher ? { dispatcher } : {})
-    });
+      signal: controller.signal
+    };
+
+    // Apply SSL and proxy configuration using the centralized httpConfig utility
+    const enhancedOptions = enhanceFetchOptions(fetchOptions, targetUrl, shouldIgnoreSSL);
+
+    const response = await throttledFetch('webContentExtractor', targetUrl, enhancedOptions);
 
     actionTracker.trackToolCallProgress(chatId, {
       toolName: 'webContentExtractor',
@@ -314,6 +324,7 @@ export default async function webContentExtractor({
     return output;
   } catch (error) {
     if (error.name === 'AbortError') {
+      throw createError('Request timed out while fetching webpage', 'TIMEOUT');
     }
     if (/certificate|SSL/i.test(error.message) && !shouldIgnoreSSL) {
       throw createError(
@@ -335,31 +346,31 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const ignoreSSLFlag = args.includes('--insecure');
 
   if (!url) {
-    console.error('Usage: node webContentExtractor.js <URL> [--insecure]');
-    console.error('The --insecure flag is for administrators to bypass certificate errors.');
-    console.error('Example: node webContentExtractor.js "https://example.com/article"');
+    logger.error('Usage: node webContentExtractor.js <URL> [--insecure]');
+    logger.error('The --insecure flag is for administrators to bypass certificate errors.');
+    logger.error('Example: node webContentExtractor.js "https://example.com/article"');
     process.exit(1);
   }
 
-  console.log(`Extracting content from: ${url}`);
+  logger.info(`Extracting content from: ${url}`);
   if (ignoreSSLFlag) {
-    console.warn('Warning: ignoring SSL certificate errors');
+    logger.warn('Warning: ignoring SSL certificate errors');
   }
 
   try {
     const result = await webContentExtractor({ url, ignoreSSL: ignoreSSLFlag });
-    console.log('\nExtracted Content:');
-    console.log('==================');
-    console.log(`Title: ${result.title}`);
-    console.log(`Description: ${result.description}`);
-    console.log(`Author: ${result.author}`);
-    console.log(`Word Count: ${result.wordCount}`);
-    console.log(`Extracted At: ${result.extractedAt}`);
-    console.log('\nContent:');
-    console.log('--------');
-    console.log(result.content);
+    logger.info('\nExtracted Content:');
+    logger.info('==================');
+    logger.info(`Title: ${result.title}`);
+    logger.info(`Description: ${result.description}`);
+    logger.info(`Author: ${result.author}`);
+    logger.info(`Word Count: ${result.wordCount}`);
+    logger.info(`Extracted At: ${result.extractedAt}`);
+    logger.info('\nContent:');
+    logger.info('--------');
+    logger.info(result.content);
   } catch (error) {
-    console.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
+    logger.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
     process.exit(1);
   }
 }

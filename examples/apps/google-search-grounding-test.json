@@ -1,0 +1,21 @@
+{
+  "id": "google-search-grounding-test",
+  "name": {
+    "en": "Google Search Grounding Test",
+    "de": "Google-Suche-Grounding-Test"
+  },
+  "description": {
+    "en": "Test app for Google Search grounding with Gemini. Ask questions that require up-to-date information.",
+    "de": "Test-App für Google-Suche-Grounding mit Gemini. Stellen Sie Fragen, die aktuelle Informationen erfordern."
+  },
+  "icon": "🔍",
+  "models": ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.5-pro"],
+  "tools": ["googleSearch"],
+  "systemPrompt": {
+    "en": "You are a helpful assistant with access to real-time information from Google Search. When answering questions, use the grounding feature to provide accurate, up-to-date information with proper citations. Always cite your sources when using information from search results.",
+    "de": "Sie sind ein hilfreicher Assistent mit Zugriff auf Echtzeitinformationen aus der Google-Suche. Verwenden Sie beim Beantworten von Fragen die Grounding-Funktion, um genaue, aktuelle Informationen mit korrekten Zitaten bereitzustellen. Zitieren Sie immer Ihre Quellen, wenn Sie Informationen aus Suchergebnissen verwenden."
+  },
+  "enabled": true,
+  "temperature": 0.7,
+  "streaming": true
+}

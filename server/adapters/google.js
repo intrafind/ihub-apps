@@ -3,8 +3,80 @@
  */
 import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
+
+/**
+ * Aspect ratio and resolution mapping table for Google Gemini image generation
+ * Based on: https://ai.google.dev/gemini-api/docs/image-generation#aspect_ratios_and_image_size
+ */
+const GOOGLE_IMAGE_RESOLUTION_TABLE = {
+  '1:1': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '2:3': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '3:2': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '3:4': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '4:3': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '4:5': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '5:4': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '9:16': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '16:9': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  },
+  '21:9': {
+    Low: '1K',
+    Medium: '2K',
+    High: '4K'
+  }
+};
 
 class GoogleAdapterClass extends BaseAdapter {
+  /**
+   * Helper to process inline image data from response parts
+   */
+  processInlineImage(part) {
+    if (part.inlineData && part.inlineData.mimeType?.startsWith('image/')) {
+      return {
+        mimeType: part.inlineData.mimeType,
+        data: part.inlineData.data,
+        thoughtSignature: part.thoughtSignature || null
+      };
+    }
+    return null;
+  }
+
   /**
    * Format messages for Google Gemini API, including handling image data
    */
@@ -49,18 +121,54 @@ class GoogleAdapterClass extends BaseAdapter {
             message.tool_calls.length > 0
           ) {
             const parts = [];
+
+            // Track which thoughtSignatures we've used (from tool_calls metadata)
+            const usedThoughtSignatures = new Set();
+
+            // Add text content if present
+            // If message has thoughtSignatures array, the first one may belong to the text part
             if (message.content) {
-              parts.push({ text: message.content });
+              const textPart = { text: message.content };
+
+              // Check if there are thoughtSignatures not in tool_calls metadata
+              if (message.thoughtSignatures && message.thoughtSignatures.length > 0) {
+                // Get thoughtSignatures from tool_calls
+                const toolCallSignatures = message.tool_calls
+                  .map(call => call.metadata?.thoughtSignature)
+                  .filter(Boolean);
+
+                // Find thoughtSignatures not in tool calls
+                const unusedSignatures = message.thoughtSignatures.filter(
+                  sig => !toolCallSignatures.includes(sig)
+                );
+
+                // If there's an unused signature, it likely belongs to the text part
+                if (unusedSignatures.length > 0) {
+                  textPart.thoughtSignature = unusedSignatures[0];
+                  usedThoughtSignatures.add(unusedSignatures[0]);
+                }
+              }
+
+              parts.push(textPart);
             }
+
             for (const call of message.tool_calls) {
               let argsObj;
               argsObj = this.safeJsonParse(call.function.arguments, {});
-              parts.push({
+              const functionCallPart = {
                 functionCall: {
                   name: normalizeToolName(call.function.name),
                   args: argsObj
                 }
-              });
+              };
+
+              // Include thoughtSignature if present in metadata (required for Gemini 3 with thinking enabled)
+              if (call.metadata && call.metadata.thoughtSignature) {
+                functionCallPart.thoughtSignature = call.metadata.thoughtSignature;
+                usedThoughtSignatures.add(call.metadata.thoughtSignature);
+              }
+
+              parts.push(functionCallPart);
             }
 
             geminiContents.push({ role: 'model', parts });
@@ -72,9 +180,9 @@ class GoogleAdapterClass extends BaseAdapter {
 
           const textContent = message.content;
 
-          // Check if this message contains image data
-          if (this.hasImageData(message)) {
-            // For image messages, we need to create a parts array with both text and image
+          // Check if this message contains image or audio data
+          if (this.hasImageData(message) || this.hasAudioData(message)) {
+            // For multimedia messages, we need to create a parts array with text and media
             const parts = [];
 
             // Add text part if content exists (possibly including file content)
@@ -82,35 +190,75 @@ class GoogleAdapterClass extends BaseAdapter {
               parts.push({ text: textContent });
             }
 
-            // Handle multiple images
-            if (Array.isArray(message.imageData)) {
-              message.imageData
-                .filter(img => img && img.base64)
-                .forEach(img => {
-                  parts.push({
-                    inlineData: {
-                      mimeType: img.fileType || 'image/jpeg',
-                      data: this.cleanBase64Data(img.base64)
-                    }
+            // Handle image data
+            if (this.hasImageData(message)) {
+              // Handle multiple images
+              if (Array.isArray(message.imageData)) {
+                message.imageData
+                  .filter(img => img && img.base64)
+                  .forEach(img => {
+                    parts.push({
+                      inlineData: {
+                        mimeType: img.fileType || 'image/jpeg',
+                        data: this.cleanBase64Data(img.base64)
+                      }
+                    });
                   });
+              } else {
+                // Handle single image (legacy behavior)
+                parts.push({
+                  inlineData: {
+                    mimeType: message.imageData.fileType || 'image/jpeg',
+                    data: this.cleanBase64Data(message.imageData.base64)
+                  }
                 });
-            } else {
-              // Handle single image (legacy behavior)
-              parts.push({
-                inlineData: {
-                  mimeType: message.imageData.fileType || 'image/jpeg',
-                  data: this.cleanBase64Data(message.imageData.base64)
-                }
-              });
+              }
+            }
+
+            // Handle audio data
+            if (this.hasAudioData(message)) {
+              // Handle multiple audio files
+              if (Array.isArray(message.audioData)) {
+                message.audioData
+                  .filter(audio => audio && audio.base64)
+                  .forEach(audio => {
+                    parts.push({
+                      inlineData: {
+                        mimeType: audio.fileType || 'audio/mpeg',
+                        data: this.cleanBase64Data(audio.base64)
+                      }
+                    });
+                  });
+              } else {
+                // Handle single audio file
+                parts.push({
+                  inlineData: {
+                    mimeType: message.audioData.fileType || 'audio/mpeg',
+                    data: this.cleanBase64Data(message.audioData.base64)
+                  }
+                });
+              }
             }
 
             geminiContents.push({ role: geminiRole, parts });
           } else {
             // Regular text message (possibly including file content)
-            geminiContents.push({
-              role: geminiRole,
-              parts: [{ text: textContent }]
-            });
+            // Skip messages with empty/null/undefined content - Google API rejects them
+            // Also ensure content is a string (not an object or other type)
+            const safeTextContent =
+              typeof textContent === 'string' ? textContent : String(textContent || '');
+            if (safeTextContent) {
+              geminiContents.push({
+                role: geminiRole,
+                parts: [{ text: safeTextContent }]
+              });
+            } else {
+              logger.warn({
+                component: 'GoogleAdapter',
+                message: 'Skipping message with empty content',
+                role: message.role
+              });
+            }
           }
         }
       }
@@ -119,7 +267,11 @@ class GoogleAdapterClass extends BaseAdapter {
 
     // Debug logs to trace message transformation
     this.debugLogMessages(messages, geminiContents, 'Google');
-    console.log('System instruction:', systemInstruction);
+    logger.info({
+      component: 'GoogleAdapter',
+      message: 'System instruction set',
+      hasSystemInstruction: !!systemInstruction
+    });
 
     // Return both regular messages and the system instruction
     return {
@@ -168,7 +320,28 @@ class GoogleAdapterClass extends BaseAdapter {
     if ((responseFormat && responseFormat === 'json') || responseSchema) {
       requestBody.generationConfig.responseMimeType = 'application/json';
       if (responseSchema) {
-        requestBody.generationConfig.response_schema = responseSchema;
+        // Deep clone incoming schema and remove additionalProperties field
+        // Google's API doesn't support the additionalProperties field
+        const schemaClone = JSON.parse(JSON.stringify(responseSchema));
+        const removeAdditionalProperties = node => {
+          if (node && typeof node === 'object') {
+            // Remove additionalProperties field if it exists
+            delete node.additionalProperties;
+
+            // Recursively process all properties
+            if (node.properties) {
+              Object.values(node.properties).forEach(removeAdditionalProperties);
+            }
+
+            // Recursively process array items
+            if (node.items) {
+              const items = Array.isArray(node.items) ? node.items : [node.items];
+              items.forEach(removeAdditionalProperties);
+            }
+          }
+        };
+        removeAdditionalProperties(schemaClone);
+        requestBody.generationConfig.response_schema = schemaClone;
       }
     }
 
@@ -188,16 +361,73 @@ class GoogleAdapterClass extends BaseAdapter {
           thinkingBudget: options.thinkingBudget ?? model.thinking.budget,
           includeThoughts: options.thinkingThoughts ?? model.thinking.thoughts
         };
-        console.log(
-          'Thinking enabled - added thinkingConfig with budget:',
-          requestBody.generationConfig.thinkingConfig.thinkingBudget
-        );
+        logger.info({
+          component: 'GoogleAdapter',
+          message: 'Thinking enabled with thinkingConfig',
+          thinkingBudget: requestBody.generationConfig.thinkingConfig.thinkingBudget
+        });
       } else {
-        console.log('Thinking disabled - not adding thinkingConfig');
+        logger.info({
+          component: 'GoogleAdapter',
+          message: 'Thinking disabled'
+        });
       }
     }
 
-    console.log('Google request body:', requestBody);
+    // Add image generation configuration if model supports it
+    if (model.supportsImageGeneration) {
+      // Enable image generation by setting responseModalities to include IMAGE
+      requestBody.generationConfig.responseModalities = ['TEXT', 'IMAGE'];
+
+      // Get image config from options or model configuration
+      const imageConfig = options.imageConfig || model.imageGeneration || {};
+
+      // Translate user-friendly parameters to Google-specific format
+      let aspectRatio = imageConfig.aspectRatio || '1:1'; // Default to square
+      let quality = imageConfig.quality || 'Medium'; // Default to medium
+
+      // Validate aspect ratio
+      if (!GOOGLE_IMAGE_RESOLUTION_TABLE[aspectRatio]) {
+        logger.warn({
+          component: 'GoogleAdapter',
+          message: 'Invalid aspect ratio, using default',
+          providedRatio: aspectRatio,
+          defaultRatio: '1:1'
+        });
+        aspectRatio = '1:1';
+      }
+
+      // Validate quality
+      if (!['Low', 'Medium', 'High'].includes(quality)) {
+        logger.warn({
+          component: 'GoogleAdapter',
+          message: 'Invalid quality level, using default',
+          providedQuality: quality,
+          defaultQuality: 'Medium'
+        });
+        quality = 'Medium';
+      }
+
+      // Translate quality to Google's imageSize format
+      const imageSize = GOOGLE_IMAGE_RESOLUTION_TABLE[aspectRatio][quality];
+
+      // Set the imageConfig
+      requestBody.generationConfig.imageConfig = {
+        aspectRatio,
+        imageSize
+      };
+
+      logger.info({
+        component: 'GoogleAdapter',
+        message: 'Image generation enabled',
+        responseModalities: requestBody.generationConfig.responseModalities,
+        imageConfig: requestBody.generationConfig.imageConfig,
+        translatedFrom: { aspectRatio: imageConfig.aspectRatio, quality: imageConfig.quality }
+      });
+    }
+
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // logger.info('Google request body:', requestBody);
 
     return {
       url,
@@ -218,6 +448,9 @@ class GoogleAdapterClass extends BaseAdapter {
         content: [],
         tool_calls: [],
         thinking: [],
+        images: [],
+        thoughtSignatures: [],
+        groundingMetadata: null,
         complete: false,
         error: false,
         errorMessage: null,
@@ -230,7 +463,7 @@ class GoogleAdapterClass extends BaseAdapter {
         const parsed = JSON.parse(data);
 
         // Debug: Log the full parsed response to see what metadata we receive
-        console.log('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
+        logger.info('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
 
         // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
         // OR if the response contains all expected fields for a complete response
@@ -248,6 +481,13 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
+            const image = this.processInlineImage(part);
+            if (image) {
+              // Skip interim "thought images" - only show the final image
+              if (part.thought !== true) {
+                result.images.push(image);
+              }
+            }
             if (part.functionCall) {
               result.tool_calls.push({
                 index: 0,
@@ -259,11 +499,17 @@ class GoogleAdapterClass extends BaseAdapter {
               });
               if (!result.finishReason) result.finishReason = 'tool_calls';
             }
+            // Collect thought signatures for multi-turn conversations
+            if (part.thoughtSignature) {
+              result.thoughtSignatures.push(part.thoughtSignature);
+            }
           }
           result.complete = true;
           const fr = parsed.candidates[0].finishReason;
           // Only set finishReason from Gemini if we don't already have tool_calls
-          if (result.finishReason !== 'tool_calls') {
+          // Check both the finishReason flag AND the actual tool_calls array
+          // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+          if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
             if (fr === 'STOP') {
               result.finishReason = 'stop';
             } else if (fr === 'MAX_TOKENS') {
@@ -286,6 +532,13 @@ class GoogleAdapterClass extends BaseAdapter {
                 result.content.push(part.text);
               }
             }
+            const image = this.processInlineImage(part);
+            if (image) {
+              // Skip interim "thought images" - only show the final image
+              if (part.thought !== true) {
+                result.images.push(image);
+              }
+            }
             if (part.functionCall) {
               result.tool_calls.push({
                 index: idx++,
@@ -297,7 +550,16 @@ class GoogleAdapterClass extends BaseAdapter {
               });
               if (!result.finishReason) result.finishReason = 'tool_calls';
             }
+            // Collect thought signatures for multi-turn conversations
+            if (part.thoughtSignature) {
+              result.thoughtSignatures.push(part.thoughtSignature);
+            }
           }
+        }
+
+        // Extract grounding metadata if present (for Google Search grounding)
+        if (parsed.groundingMetadata) {
+          result.groundingMetadata = parsed.groundingMetadata;
         }
 
         // TODO we should make use of the candidate metadata
@@ -316,7 +578,9 @@ class GoogleAdapterClass extends BaseAdapter {
           // Map Gemini finish reasons to normalized values used by the client
           // Documented reasons include STOP, MAX_TOKENS, SAFETY, RECITATION and OTHER
           // Only set finishReason from Gemini if we don't already have tool_calls
-          if (result.finishReason !== 'tool_calls') {
+          // Check both the finishReason flag AND the actual tool_calls array
+          // This is needed because Gemini 3.0 returns "STOP" even when making function calls
+          if (result.finishReason !== 'tool_calls' && result.tool_calls.length === 0) {
             if (fr === 'STOP') {
               result.finishReason = 'stop';
               result.complete = true;
@@ -335,14 +599,20 @@ class GoogleAdapterClass extends BaseAdapter {
           }
         }
       } catch (jsonError) {
-        console.error('Failed to parse Google response as JSON:', jsonError.message);
-        console.error('Raw response data that failed to parse:', data);
+        logger.error({
+          component: 'GoogleAdapter',
+          message: 'Failed to parse Google response as JSON',
+          error: jsonError.message,
+          dataPreview: data.substring(0, 200)
+        });
 
         // Check if this is an error response from Google API
         if (data.includes('callbacks') && data.includes('function')) {
-          console.error(
-            'Google API returned a callbacks-related error. This suggests an issue with the request format.'
-          );
+          logger.error({
+            component: 'GoogleAdapter',
+            message: 'Google API returned callbacks-related error',
+            errorData: data.substring(0, 500)
+          });
           result.error = true;
           result.errorMessage = data.includes('`callbacks`')
             ? data
@@ -376,9 +646,13 @@ class GoogleAdapterClass extends BaseAdapter {
 
       return result;
     } catch (error) {
-      console.error('Error processing Gemini response:', error);
-      console.error('Error stack:', error.stack);
-      console.error('Raw data that caused the error:', data);
+      logger.error({
+        component: 'GoogleAdapter',
+        message: 'Error processing Gemini response',
+        error: error.message,
+        stack: error.stack,
+        dataPreview: data.substring(0, 200)
+      });
       return {
         content: [],
         complete: true,

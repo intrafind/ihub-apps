@@ -62,10 +62,6 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
         enabled: false
       }
     },
-    // Creation method flags
-    useAI: false,
-    useTemplate: false,
-    useManual: false,
     // Inheritance tracking
     parentId: templateApp?.id || null,
     inheritanceLevel: templateApp ? (templateApp.inheritanceLevel || 0) + 1 : 0,
@@ -328,7 +324,9 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
             overriddenFields.push(key);
           }
         });
-        newData.overriddenFields = [...(prev.overriddenFields || []), ...overriddenFields];
+        // Use Set to ensure uniqueness when merging overridden fields
+        const uniqueFields = new Set([...(prev.overriddenFields || []), ...overriddenFields]);
+        newData.overriddenFields = Array.from(uniqueFields);
       }
 
       return newData;

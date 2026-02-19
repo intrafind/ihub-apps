@@ -68,6 +68,9 @@ export const chatPostSchema = {
     bypassAppPrompts: z.any().optional(),
     thinkingEnabled: z.boolean().optional(),
     thinkingBudget: z.number().optional(),
-    thinkingThoughts: z.boolean().optional()
+    thinkingThoughts: z.boolean().optional(),
+    enabledTools: z.array(z.string()).optional(),
+    imageAspectRatio: z.string().optional(),
+    imageQuality: z.string().optional()
   })
 };

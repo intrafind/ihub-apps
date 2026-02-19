@@ -22,11 +22,16 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   const chatId = initialChatId || `chat-${uuidv4()}`;
   const [processing, setProcessing] = useState(false);
 
+  // Clarification state - tracks when a clarification question is pending
+  const [clarificationPending, setClarificationPending] = useState(false);
+  const activeClarificationRef = useRef(null); // Store active clarification data
+
   // Refs to keep mutable values between renders without relying on window
   const lastMessageIdRef = useRef(null);
   const pendingMessageDataRef = useRef(null);
   const lastUserMessageRef = useRef(null);
   const isCancellingRef = useRef(false);
+  const messageMetadataRef = useRef(null); // Store metadata for the current message
 
   const {
     messages,
@@ -34,7 +39,6 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     addUserMessage,
     addAssistantMessage,
     updateAssistantMessage,
-    setMessageError,
     deleteMessage,
     editMessage,
     addSystemMessage,
@@ -99,16 +103,153 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             updateAssistantMessage(lastMessageIdRef.current, fullContent, true);
           }
           break;
+        case 'image':
+          if (lastMessageIdRef.current) {
+            // Add image to the current assistant message
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const existingImages = currentMessage?.images || [];
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              images: [
+                ...existingImages,
+                {
+                  mimeType: data?.mimeType,
+                  data: data?.data,
+                  thoughtSignature: data?.thoughtSignature
+                }
+              ]
+            });
+          }
+          break;
+        case 'thinking':
+          if (lastMessageIdRef.current) {
+            // Add thinking content to the current assistant message
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const existingThoughts = currentMessage?.thoughts || [];
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              thoughts: [...existingThoughts, data?.content]
+            });
+          }
+          break;
+        case 'clarification':
+          if (lastMessageIdRef.current && data) {
+            console.log('📝 Clarification event received:', data);
+            // Store the clarification data and set pending state
+            activeClarificationRef.current = data;
+            setClarificationPending(true);
+            // Update the assistant message with clarification data
+            // Keep loading=true since we're waiting for user input
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              clarification: {
+                questionId: data.questionId,
+                question: data.question,
+                inputType: data.inputType || 'text',
+                options: data.options || [],
+                allowOther: data.allowOther || false,
+                allowSkip: data.allowSkip || false,
+                context: data.context
+              },
+              awaitingInput: true
+            });
+          }
+          break;
+        case 'workflow.step': {
+          if (lastMessageIdRef.current && data) {
+            const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const prevSteps = currentMessage?.workflowSteps || [];
+
+            const newStep = {
+              nodeName: data.nodeName,
+              nodeType: data.nodeType,
+              status: data.status,
+              workflowName: data.workflowName,
+              chatVisible: data.chatVisible
+            };
+
+            let updatedSteps;
+            if (data.status === 'running') {
+              // Mark any previous "running" step as "completed", then add the new one
+              updatedSteps = prevSteps.map(s =>
+                s.status === 'running' ? { ...s, status: 'completed' } : s
+              );
+              updatedSteps = [...updatedSteps, newStep];
+            } else {
+              // Update existing step status (completed/error)
+              const exists = prevSteps.some(s => s.nodeName === data.nodeName);
+              updatedSteps = exists
+                ? prevSteps.map(s => (s.nodeName === data.nodeName ? newStep : s))
+                : [...prevSteps, newStep];
+            }
+
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              workflowSteps: updatedSteps,
+              workflowStep: data.status === 'running' ? newStep : null
+            });
+          }
+          break;
+        }
+        case 'workflow.result':
+          if (lastMessageIdRef.current && data) {
+            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const prevSteps = currentMsg?.workflowSteps || [];
+            // Mark any still-running steps based on workflow result status
+            const finalSteps = prevSteps.map(s => {
+              if (s.status === 'running') {
+                // If workflow failed, mark running steps as error
+                // If workflow cancelled or completed, mark as completed
+                return {
+                  ...s,
+                  status: data.status === 'failed' ? 'error' : 'completed'
+                };
+              }
+              return s;
+            });
+
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              workflowStep: null,
+              workflowSteps: finalSteps,
+              workflowResult: {
+                status: data.status,
+                executionId: data.executionId,
+                workflowName: data.workflowName
+              },
+              outputFormat: data.outputFormat || 'markdown'
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
-            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
-              finishReason: data?.finishReason
-            });
+            // Include stored metadata (customResponseRenderer, outputFormat) in the message
+            // Preserve workflow-set outputFormat — don't let app default overwrite it
+            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const metadata = {
+              finishReason: data?.finishReason,
+              ...(messageMetadataRef.current || {}),
+              ...(currentMsg?.outputFormat && { outputFormat: currentMsg.outputFormat })
+            };
+
+            // Check if this is a clarification finish reason
+            if (data?.finishReason === 'clarification') {
+              console.log('📝 Done event with clarification finish reason');
+              // Keep the message in awaiting input state, don't mark as complete
+              updateAssistantMessage(lastMessageIdRef.current, fullContent, false, {
+                ...metadata,
+                awaitingInput: true
+              });
+              // Processing stops but clarification is still pending
+              setProcessing(false);
+              // Don't call onMessageComplete yet - wait for clarification response
+              break;
+            }
+
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, false, metadata);
             if (onMessageComplete) {
               onMessageComplete(fullContent, lastUserMessageRef.current);
             }
           }
           setProcessing(false);
+          // Reset clarification state when done normally
+          setClarificationPending(false);
+          activeClarificationRef.current = null;
           break;
         case 'error':
           if (lastMessageIdRef.current && !isCancellingRef.current) {
@@ -133,14 +274,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           console.log('🔍 Unknown event type:', type, data);
       }
     },
-    [
-      pendingMessageDataRef,
-      setMessageError,
-      updateAssistantMessage,
-      onMessageComplete,
-      t,
-      messagesRef
-    ]
+    [pendingMessageDataRef, updateAssistantMessage, onMessageComplete, t, messagesRef]
   );
 
   const { initEventSource, cleanupEventSource } = useEventSource({
@@ -160,9 +294,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
    * @param {Object} apiMessage - Message payload for the API
    * @param {Object} params - Parameters for the request (model, style ...)
    * @param {boolean} sendChatHistory - Include full chat history in request
+   * @param {Object} messageMetadata - Metadata to attach to the assistant message (e.g., customResponseRenderer)
    */
   const sendMessage = useCallback(
-    ({ displayMessage, apiMessage, params, sendChatHistory = true }) => {
+    ({ displayMessage, apiMessage, params, sendChatHistory = true, messageMetadata = null }) => {
       try {
         // Reset cancellation flag when starting a new message
         isCancellingRef.current = false;
@@ -175,6 +310,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         // Store the user message content for the onMessageComplete callback
         lastUserMessageRef.current = apiMessage.content;
 
+        // Store message metadata (customResponseRenderer, outputFormat) for completion
+        messageMetadataRef.current = messageMetadata;
+
         // Ensure we extract content properly and default to empty string if needed
         const contentToAdd =
           typeof displayMessage === 'string' ? displayMessage : displayMessage?.content || '';
@@ -182,7 +320,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         addUserMessage(contentToAdd, {
           ...(displayMessage?.meta || {}),
           imageData: apiMessage.imageData,
-          fileData: apiMessage.fileData
+          fileData: apiMessage.fileData,
+          audioData: apiMessage.audioData
         });
         addAssistantMessage(exchangeId);
 
@@ -193,7 +332,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           variables: apiMessage.variables || {},
           messageId: exchangeId,
           imageData: apiMessage.imageData,
-          fileData: apiMessage.fileData
+          fileData: apiMessage.fileData,
+          audioData: apiMessage.audioData
         });
 
         pendingMessageDataRef.current = {
@@ -236,23 +376,26 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     (messageId, editedContent) => {
       const messageToResend = messages.find(m => m.id === messageId);
       if (!messageToResend)
-        return { content: '', variables: null, imageData: null, fileData: null };
+        return { content: '', variables: null, imageData: null, fileData: null, audioData: null };
 
       let contentToResend = editedContent;
       let variablesToRestore = null;
       let imageDataToRestore = null;
       let fileDataToRestore = null;
+      let audioDataToRestore = null;
 
       if (messageToResend.role === 'assistant') {
         const idx = messages.findIndex(m => m.id === messageId);
         const prevUser = [...messages.slice(0, idx)].reverse().find(m => m.role === 'user');
-        if (!prevUser) return { content: '', variables: null, imageData: null, fileData: null };
+        if (!prevUser)
+          return { content: '', variables: null, imageData: null, fileData: null, audioData: null };
         imageDataToRestore = prevUser.imageData || null;
         fileDataToRestore = prevUser.fileData || null;
-        // If there's file data, use rawContent to avoid including file HTML in the text
+        audioDataToRestore = prevUser.audioData || null;
+        // If there's file/audio data, use rawContent to avoid including file HTML in the text
         // Otherwise fall back to content for backward compatibility
         contentToResend =
-          imageDataToRestore || fileDataToRestore
+          imageDataToRestore || fileDataToRestore || audioDataToRestore
             ? prevUser.rawContent || ''
             : prevUser.rawContent || prevUser.content;
         variablesToRestore = prevUser.meta?.variables || null;
@@ -262,16 +405,18 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         if (contentToResend === undefined) {
           imageDataToRestore = messageToResend.imageData || null;
           fileDataToRestore = messageToResend.fileData || null;
-          // If there's file data, use rawContent to avoid including file HTML in the text
+          audioDataToRestore = messageToResend.audioData || null;
+          // If there's file/audio data, use rawContent to avoid including file HTML in the text
           // Otherwise fall back to content for backward compatibility
           contentToResend =
-            imageDataToRestore || fileDataToRestore
+            imageDataToRestore || fileDataToRestore || audioDataToRestore
               ? messageToResend.rawContent || ''
               : messageToResend.rawContent || messageToResend.content;
         }
         variablesToRestore = messageToResend.meta?.variables || null;
         if (!imageDataToRestore) imageDataToRestore = messageToResend.imageData || null;
         if (!fileDataToRestore) fileDataToRestore = messageToResend.fileData || null;
+        if (!audioDataToRestore) audioDataToRestore = messageToResend.audioData || null;
       }
 
       // Return content, variables, and file data
@@ -279,7 +424,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
         content: contentToResend || '',
         variables: variablesToRestore,
         imageData: imageDataToRestore,
-        fileData: fileDataToRestore
+        fileData: fileDataToRestore,
+        audioData: audioDataToRestore
       };
     },
     [messages, deleteMessage]
@@ -302,6 +448,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     }
 
     setProcessing(false);
+    setClarificationPending(false);
+    activeClarificationRef.current = null;
 
     // Reset the cancellation flag after a short delay to allow cleanup to complete
     setTimeout(() => {
@@ -309,17 +457,162 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     }, 100);
   }, [cleanupEventSource, updateAssistantMessage, t, messagesRef]);
 
+  /**
+   * Submit a response to a clarification question.
+   * Updates the current message with the response and continues the conversation.
+   *
+   * @param {Object|string} rawResponse - The clarification response (object or simple value)
+   * @param {string} rawResponse.questionId - ID of the question being answered
+   * @param {boolean} rawResponse.answered - Whether the question was answered (vs skipped)
+   * @param {boolean} rawResponse.skipped - Whether the question was skipped
+   * @param {*} rawResponse.value - The actual response value
+   * @param {string} rawResponse.displayText - Human-readable display text
+   * @param {Object} params - Parameters for the continuation request
+   */
+  const submitClarificationResponse = useCallback(
+    (rawResponse, params = {}) => {
+      console.log('📝 Submitting clarification response:', rawResponse);
+
+      if (!activeClarificationRef.current) {
+        console.warn('No active clarification to respond to');
+        return;
+      }
+
+      const clarificationData = activeClarificationRef.current;
+      const messageId = lastMessageIdRef.current;
+
+      // Normalize response - handle both object and simple value formats
+      // ClarificationCard may pass either an object or just the value depending on whether questionId was set
+      let response;
+      if (typeof rawResponse === 'object' && rawResponse !== null && 'value' in rawResponse) {
+        // Full response object
+        response = rawResponse;
+      } else {
+        // Simple value - convert to full response object
+        const value = rawResponse;
+        const displayText = Array.isArray(value) ? value.join(', ') : String(value);
+        response = {
+          questionId: clarificationData.questionId,
+          answered: true,
+          skipped: false,
+          value,
+          displayText
+        };
+      }
+
+      // Update the assistant message to mark clarification as responded
+      // Just store a flag - the answer is shown in the user message below
+      if (messageId) {
+        const currentMessage = messagesRef.current.find(m => m.id === messageId);
+        if (currentMessage) {
+          updateAssistantMessage(messageId, currentMessage.content || '', false, {
+            clarification: currentMessage.clarification,
+            clarificationAnswered: true,
+            awaitingInput: false,
+            loading: false
+          });
+        }
+      }
+
+      // Clear clarification state
+      setClarificationPending(false);
+      activeClarificationRef.current = null;
+
+      // Create user message content - just the answer (question is shown on assistant message)
+      const userMessageContent = response.skipped
+        ? t('clarification.skipped', 'Skipped')
+        : response.displayText;
+
+      // Continue the conversation with the response
+      // The response is sent as a special message that the server will process
+      try {
+        isCancellingRef.current = false;
+        cleanupEventSource();
+        setProcessing(true);
+
+        const exchangeId = `msg-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+        lastMessageIdRef.current = exchangeId;
+
+        // Add a user message with minimal clarification metadata (questionId links to the question in previous message)
+        addUserMessage(userMessageContent, {
+          clarificationResponse: {
+            questionId: response.questionId,
+            value: response.value,
+            skipped: response.skipped
+          },
+          isClarificationAnswer: true
+        });
+
+        // Add placeholder for assistant response
+        addAssistantMessage(exchangeId);
+
+        // Build the messages for API - just the answer value (question context is in chat history)
+        const messagesForAPI = getMessagesForApi(true, {
+          role: 'user',
+          content: response.skipped ? '[Skipped]' : String(response.value),
+          messageId: exchangeId,
+          clarificationResponse: {
+            questionId: response.questionId,
+            value: response.value,
+            skipped: response.skipped
+          }
+        });
+
+        pendingMessageDataRef.current = {
+          appId,
+          chatId: chatId,
+          messages: messagesForAPI,
+          params: {
+            ...params,
+            clarificationResponse: {
+              questionId: response.questionId,
+              value: response.value,
+              skipped: response.skipped
+            }
+          }
+        };
+
+        initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));
+      } catch (err) {
+        console.error('Error submitting clarification response:', err);
+        addSystemMessage(
+          `Error: ${t('error.clarificationFailed', 'Failed to submit clarification response.')} ${
+            err.message || t('error.tryAgain', 'Please try again.')
+          }`,
+          true
+        );
+        setProcessing(false);
+        setClarificationPending(false);
+      }
+    },
+    [
+      cleanupEventSource,
+      updateAssistantMessage,
+      addUserMessage,
+      addAssistantMessage,
+      getMessagesForApi,
+      initEventSource,
+      addSystemMessage,
+      messagesRef,
+      t,
+      appId,
+      chatId
+    ]
+  );
+
   return {
     chatId: chatId,
     messages,
     processing,
+    clarificationPending,
     sendMessage,
     resendMessage,
     deleteMessage,
     editMessage,
     clearMessages,
     cancelGeneration,
-    addSystemMessage
+    addSystemMessage,
+    submitClarificationResponse
   };
 }
 

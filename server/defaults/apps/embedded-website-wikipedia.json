@@ -1,0 +1,33 @@
+{
+  "id": "embedded-website-wikipedia",
+  "order": 100,
+  "name": {
+    "en": "Website Wikipedia (embedded)",
+    "de": "Website Wikipedia (eingebettet)"
+  },
+  "description": {
+    "en": "Open the wikipedia website within the application.",
+    "de": "Öffnen Sie die Wikipedia-Website innerhalb der Anwendung."
+  },
+  "type": "iframe",
+  "iframeConfig": {
+    "url": "https://de.wikipedia.org/wiki/Wikipedia:Hauptseite",
+    "allowFullscreen": true,
+    "sandbox": ["allow-scripts", "allow-same-origin", "allow-forms", "allow-popups"]
+  },
+  "color": "#8B5CF6",
+  "icon": "pencil",
+  "enabled": true,
+  "tools": [],
+  "allowEmptyContent": false,
+  "sendChatHistory": true,
+  "inputMode": {
+    "type": "singleline",
+    "rows": 5,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  }
+}

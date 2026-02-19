@@ -2,6 +2,8 @@ import { authenticate } from 'ldap-authentication';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import logger from '../utils/logger.js';
 
 /**
  * LDAP authentication configuration and utilities
@@ -37,42 +39,106 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       usernameAttribute: ldapConfig.usernameAttribute || 'uid',
       username: username,
       // Group search configuration (optional)
+      // Note: ldap-authentication library uses 'groupsSearchBase' (with 's')
       ...(ldapConfig.groupSearchBase && {
-        groupSearchBase: ldapConfig.groupSearchBase,
-        groupClass: ldapConfig.groupClass || 'groupOfNames'
+        groupsSearchBase: ldapConfig.groupSearchBase, // Library expects 'groupsSearchBase'
+        groupClass: ldapConfig.groupClass || 'groupOfNames',
+        groupMemberAttribute: ldapConfig.groupMemberAttribute || 'member',
+        groupMemberUserAttribute: ldapConfig.groupMemberUserAttribute || 'dn'
       })
     };
 
-    console.log(`[LDAP Auth] Attempting authentication for user: ${username}`);
-    console.log(`[LDAP Auth] LDAP server: ${ldapConfig.url}`);
+    logger.info(`[LDAP Auth] Attempting authentication for user: ${username}`);
+    logger.info(`[LDAP Auth] LDAP server: ${ldapConfig.url}`);
+    if (ldapConfig.groupSearchBase) {
+      logger.info(
+        `[LDAP Auth] Group search enabled - groupSearchBase: ${ldapConfig.groupSearchBase}, groupClass: ${ldapConfig.groupClass || 'groupOfNames'}`
+      );
+    } else {
+      logger.warn(`[LDAP Auth] Group search not configured - groupSearchBase is missing`);
+    }
 
     // Perform LDAP authentication
     const user = await authenticate(options);
 
     if (!user) {
-      console.warn(`[LDAP Auth] Authentication failed for user: ${username}`);
+      logger.warn(`[LDAP Auth] Authentication failed for user: ${username}`);
       return null;
     }
 
-    console.log(`[LDAP Auth] Authentication successful for user: ${username}`);
+    logger.info(`[LDAP Auth] Authentication successful for user: ${username}`);
+
+    // Log raw user object for debugging (before group extraction)
+    logger.debug(`[LDAP Auth] Raw LDAP user object:`, {
+      hasGroups: !!user.groups,
+      groupsType: user.groups ? typeof user.groups : 'undefined',
+      groupsIsArray: Array.isArray(user.groups),
+      groupsLength: user.groups ? user.groups.length : 0,
+      userKeys: Object.keys(user),
+      sampleGroup: user.groups && user.groups.length > 0 ? user.groups[0] : 'none'
+    });
 
     // Extract groups from LDAP response
     let groups = [];
-    if (user.groups && Array.isArray(user.groups)) {
-      groups = user.groups.map(group => {
-        if (typeof group === 'string') {
-          return group;
-        } else if (group.cn) {
-          return group.cn;
-        } else if (group.name) {
-          return group.name;
-        }
-        return String(group);
-      });
+    if (user.groups) {
+      // Handle both array and object formats
+      const groupsArray = Array.isArray(user.groups)
+        ? user.groups
+        : Object.values(user.groups).filter(g => g && typeof g === 'object');
+
+      groups = groupsArray
+        .map(group => {
+          // Handle string groups directly
+          if (typeof group === 'string') {
+            return group;
+          }
+
+          // Handle object groups - extract group name
+          if (typeof group === 'object' && group !== null) {
+            // Try different common LDAP group name attributes
+            if (group.cn) {
+              return Array.isArray(group.cn) ? group.cn[0] : group.cn;
+            }
+            if (group.name) {
+              return Array.isArray(group.name) ? group.name[0] : group.name;
+            }
+            if (group.displayName) {
+              return Array.isArray(group.displayName) ? group.displayName[0] : group.displayName;
+            }
+            // Try to extract from DN (e.g., "CN=Developers,OU=..." -> "Developers")
+            if (group.dn) {
+              const dnString = Array.isArray(group.dn) ? group.dn[0] : group.dn;
+              const cnMatch = dnString.match(/^CN=([^,]+)/i);
+              if (cnMatch) {
+                return cnMatch[1];
+              }
+            }
+          }
+
+          // If we can't extract a meaningful name, skip this entry
+          logger.warn(
+            `[LDAP Auth] Could not extract group name from group object for user ${username}:`,
+            group
+          );
+          return null;
+        })
+        .filter(g => g !== null); // Remove null entries
+    }
+
+    // Log extracted LDAP groups for troubleshooting
+    if (groups.length > 0) {
+      logger.info(
+        `[LDAP Auth] Extracted ${groups.length} LDAP groups for user ${username}: ${groups.join(', ')}`
+      );
+    } else {
+      logger.warn(`[LDAP Auth] No groups found in LDAP response for user ${username}`);
     }
 
     // Apply group mapping using centralized function
     const mappedGroups = mapExternalGroups(groups);
+    logger.info(
+      `[LDAP Auth] Mapped ${groups.length} LDAP groups to ${mappedGroups.length} internal groups for user ${username}: ${mappedGroups.join(', ')}`
+    );
 
     // Add default groups if configured
     if (ldapConfig.defaultGroups && Array.isArray(ldapConfig.defaultGroups)) {
@@ -93,12 +159,13 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       authenticated: true,
       authMethod: 'ldap',
       provider: ldapConfig.name || 'ldap',
-      raw: user // Keep raw LDAP data for debugging
+      raw: user, // Keep raw LDAP data for debugging
+      extractedGroups: groups // Store extracted LDAP group names (strings) for user persistence
     };
 
     return normalizedUser;
   } catch (error) {
-    console.error(`[LDAP Auth] Authentication error for user ${username}:`, error.message);
+    logger.error(`[LDAP Auth] Authentication error for user ${username}:`, error.message);
     return null;
   }
 }
@@ -132,24 +199,50 @@ export async function loginLdapUser(username, password, ldapConfig) {
 
   user = enhanceUserGroups(user, authConfig, ldapConfig);
 
+  // Persist LDAP user in users.json (similar to OIDC/Proxy/NTLM)
+  // Note: We don't pass externalGroups here because LDAP groups are already mapped
+  // in authenticateLdapUser(). Passing externalGroups would cause duplicate mapping.
+  const externalUser = {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    authMethod: 'ldap',
+    provider: ldapConfig.name || 'ldap',
+    groups: user.groups, // Already mapped groups (with authenticated, defaults)
+    // Don't pass externalGroups - would cause duplicate mapExternalGroups() call
+    ldapData: {
+      subject: user.id,
+      provider: ldapConfig.name || 'ldap',
+      lastProvider: ldapConfig.name || 'ldap',
+      username: username,
+      // Store extracted LDAP groups for reference/debugging
+      ldapGroups: user.extractedGroups || []
+    }
+  };
+
+  // Validate and persist user in users.json
+  const persistedUser = await validateAndPersistExternalUser(externalUser, platform);
+
+  logger.info(`[LDAP Auth] User persisted in users.json: ${persistedUser.id}`);
+
   // Generate JWT token using centralized token service
   const sessionTimeout =
     ldapConfig.sessionTimeoutMinutes || platform.localAuth?.sessionTimeoutMinutes || 480;
-  const { token, expiresIn } = generateJwt(user, {
+  const { token, expiresIn } = generateJwt(persistedUser, {
     authMode: 'ldap',
-    authProvider: user.provider,
+    authProvider: persistedUser.provider,
     expiresInMinutes: sessionTimeout
   });
 
   return {
     user: {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      groups: user.groups,
-      authenticated: user.authenticated,
-      authMethod: user.authMethod,
-      provider: user.provider
+      id: persistedUser.id,
+      name: persistedUser.name,
+      email: persistedUser.email,
+      groups: persistedUser.groups,
+      authenticated: true,
+      authMethod: 'ldap',
+      provider: persistedUser.provider
     },
     token,
     expiresIn

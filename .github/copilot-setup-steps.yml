@@ -1,0 +1,48 @@
+name: Setup Dependencies
+
+# This file defines the setup steps that GitHub Copilot coding agent should run
+# before starting work on tasks. Pre-installing dependencies allows Copilot to
+# build, test, and validate changes more efficiently.
+
+setup:
+  # Install Node.js dependencies for root, client, and server
+  - name: Install all dependencies
+    run: npm run install:all
+
+  # Install Playwright browsers for screenshot tools (if needed)
+  - name: Install Playwright browsers
+    run: npx playwright install chromium
+    continueOnError: true
+
+  # Copy .env.example to .env if .env doesn't exist
+  - name: Setup environment file
+    run: |
+      if [ ! -f .env ]; then
+        cp .env.example .env
+        echo "Created .env from .env.example"
+      fi
+
+  # Verify linting setup
+  - name: Verify linting configuration
+    run: npm run lint -- --version
+
+  # Verify server can be loaded (quick syntax check)
+  - name: Verify server loads
+    run: timeout 5s node server/server.js || echo "Server check completed"
+    continueOnError: true
+
+# Environment variables needed for testing (Copilot will use placeholder values)
+# Real API keys should be set in repository secrets for actual testing
+environment:
+  NODE_ENV: development
+  JWT_SECRET: copilot-test-secret-do-not-use-in-production
+  # Note: API keys need to be set for actual LLM testing
+  # OPENAI_API_KEY: will use GitHub secret if available
+  # ANTHROPIC_API_KEY: will use GitHub secret if available
+  # GOOGLE_API_KEY: will use GitHub secret if available
+
+# Additional notes for Copilot:
+# - Server runs on port 3000, client on 5173
+# - Some tests require actual API keys (use GitHub secrets)
+# - Run `npm run lint:fix` before committing changes
+# - Run `npm run format:fix` before committing changes

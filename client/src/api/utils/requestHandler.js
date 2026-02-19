@@ -111,6 +111,7 @@ export const handleApiResponse = async (
         enhancedError.isAccessDenied = error.response?.status === 403;
         enhancedError.isAuthRequired = error.response?.status === 401;
         enhancedError.isTimeout = isTimeoutError(error);
+        enhancedError.code = error.response?.data?.code; // Extract error code from server response
 
         // Add request details to error for better debugging
         enhancedError.requestDetails = {

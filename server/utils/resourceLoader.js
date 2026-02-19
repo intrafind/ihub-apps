@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { promises as fs } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
+import logger from './logger.js';
 
 /**
  * Generic Resource Loader Factory
@@ -49,8 +50,9 @@ export function createResourceLoader({
 
     if (!existsSync(resourceDir)) {
       if (verbose) {
-        console.log(
-          `📁 ${resourceName} directory not found, skipping individual ${resourceName.toLowerCase()} files`
+        logger.info(
+          `📁 ${resourceName} directory not found, skipping individual ${resourceName.toLowerCase()} files`,
+          { component: 'ResourceLoader' }
         );
       }
       return [];
@@ -61,8 +63,10 @@ export function createResourceLoader({
     const files = dirContents.filter(file => file.endsWith('.json'));
 
     if (verbose && files.length > 0) {
-      console.log(`\n━━━ Loading ${resourceName} ━━━`);
-      console.log(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`);
+      logger.info(`\n━━━ Loading ${resourceName} ━━━`, { component: 'ResourceLoader' });
+      logger.info(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`, {
+        component: 'ResourceLoader'
+      });
     }
 
     const loadedItems = [];
@@ -86,25 +90,37 @@ export function createResourceLoader({
 
         // Validate item if validator is provided
         if (validateItem) {
-          validateItem(resource, filePath);
+          resource = validateItem(resource, filePath);
         }
 
         resources.push(resource);
         if (verbose) {
           const icon = resource.enabled ? '✅' : '⏸️';
-          loadedItems.push(`   ${icon} ${resource.id}`);
+          loadedItems.push({ id: resource.id, enabled: resource.enabled !== false, icon });
         }
       } catch (error) {
-        errorItems.push(`   ❌ ${file}: ${error.message}`);
+        errorItems.push({ file, error: error.message });
       }
     }
 
-    // Log all items together for better clustering
+    // Log each item individually for better filtering
     if (verbose && loadedItems.length > 0) {
-      console.log(loadedItems.join('\n'));
+      for (const item of loadedItems) {
+        logger.info(`${item.icon} ${item.id}`, {
+          component: 'ResourceLoader',
+          resourceId: item.id,
+          enabled: item.enabled
+        });
+      }
     }
     if (errorItems.length > 0) {
-      console.log(errorItems.join('\n'));
+      for (const item of errorItems) {
+        logger.error(`❌ ${item.file}: ${item.error}`, {
+          component: 'ResourceLoader',
+          file: item.file,
+          error: item.error
+        });
+      }
     }
 
     return resources;
@@ -121,7 +137,7 @@ export function createResourceLoader({
 
     if (!existsSync(legacyFilePath)) {
       if (verbose) {
-        console.log(`📄 Legacy ${legacyPath} not found, skipping`);
+        logger.info(`📄 Legacy ${legacyPath} not found, skipping`, { component: 'ResourceLoader' });
       }
       return [];
     }
@@ -131,13 +147,14 @@ export function createResourceLoader({
       let resources = JSON.parse(fileContent);
 
       if (!Array.isArray(resources)) {
-        console.warn(`⚠️  Legacy ${legacyPath} is not an array`);
+        logger.warn(`⚠️  Legacy ${legacyPath} is not an array`, { component: 'ResourceLoader' });
         return [];
       }
 
       if (verbose) {
-        console.log(
-          `📄 Loading ${resources.length} ${resourceName.toLowerCase()}s from legacy ${legacyPath}...`
+        logger.info(
+          `📄 Loading ${resources.length} ${resourceName.toLowerCase()}s from legacy ${legacyPath}...`,
+          { component: 'ResourceLoader' }
         );
       }
 
@@ -156,7 +173,7 @@ export function createResourceLoader({
 
         // Validate item if validator is provided
         if (validateItem) {
-          validateItem(processedResource, `${legacyFilePath}[${idx}]`);
+          processedResource = validateItem(processedResource, `${legacyFilePath}[${idx}]`);
         }
 
         return processedResource;
@@ -164,7 +181,10 @@ export function createResourceLoader({
 
       return resources;
     } catch (error) {
-      console.error(`❌ Error loading legacy ${legacyPath}:`, error.message);
+      logger.error(`❌ Error loading legacy ${legacyPath}:`, {
+        component: 'ResourceLoader',
+        error: error.message
+      });
       return [];
     }
   }
@@ -238,9 +258,10 @@ export function createResourceLoader({
     if (verbose) {
       const enabledCount = allResources.filter(r => r.enabled !== false).length;
       const disabledCount = allResources.length - enabledCount;
-      console.log(
+      logger.info(
         `📊 Summary: ${allResources.length} ${resourceName.toLowerCase()}s ` +
-          `(${enabledCount} enabled, ${disabledCount} disabled)`
+          `(${enabledCount} enabled, ${disabledCount} disabled)`,
+        { component: 'ResourceLoader' }
       );
     }
 
@@ -279,14 +300,17 @@ export function createResourceLoader({
 /**
  * Helper function to create a simple validation function
  * @param {Array} requiredFields - Array of required field names
- * @returns {Function} Validation function
+ * @returns {Function} Validation function that returns the validated item
  */
 export function createValidator(requiredFields = []) {
   return function (item, source) {
     const missing = requiredFields.filter(field => !(field in item) || item[field] == null);
     if (missing.length > 0) {
-      console.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`);
+      logger.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`, {
+        component: 'ResourceLoader'
+      });
     }
+    return item;
   };
 }
 
@@ -310,28 +334,41 @@ function extractResourceType(source) {
  * Helper function to create a schema validation function
  * @param {Object} schema - Zod schema object
  * @param {Array} knownKeys - Array of known valid keys
- * @returns {Function} Schema validation function
+ * @returns {Function} Schema validation function that returns the validated/parsed item
  */
 export function createSchemaValidator(schema, knownKeys = []) {
   return function (item, source) {
     const resourceType = extractResourceType(source);
     const resourceId = item.id || 'unknown';
 
+    let validatedItem = item;
+
     // Validate with schema if provided
     if (schema) {
-      const { success, error } = schema.safeParse(item);
-      if (!success && error) {
-        const messages = error.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ');
-        console.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`);
+      const result = schema.safeParse(item);
+      if (!result.success) {
+        const messages = result.error.errors
+          .map(e => `${e.path.join('.')}: ${e.message}`)
+          .join('; ');
+        logger.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`, {
+          component: 'ResourceLoader'
+        });
+      } else {
+        // Apply the parsed data which includes Zod defaults
+        validatedItem = result.data;
       }
     }
 
     // Check for unknown keys
     if (knownKeys.length > 0) {
-      const unknown = Object.keys(item).filter(key => !knownKeys.includes(key));
+      const unknown = Object.keys(validatedItem).filter(key => !knownKeys.includes(key));
       if (unknown.length > 0) {
-        console.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`);
+        logger.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`, {
+          component: 'ResourceLoader'
+        });
       }
     }
+
+    return validatedItem;
   };
 }

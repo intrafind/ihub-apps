@@ -1,4 +1,11 @@
 {
+  "attachedFiles": {
+    "removeAll": "Alle entfernen",
+    "filesCount": "{{count}} Datei(en) angehängt",
+    "remove": "Datei entfernen",
+    "sourceLocal": "Lokale Datei",
+    "sourceCloud": "Cloud-Datei"
+  },
   "app": {
     "title": "iHub Apps",
     "loading": "Wird geladen...",
@@ -83,7 +90,22 @@
     "quote": "Zitat",
     "code": "Code",
     "link": "Link",
-    "redo": "Wiederholen"
+    "redo": "Wiederholen",
+    "language": "de",
+    "zoomIn": "Vergrößern",
+    "zoomOut": "Verkleinern",
+    "resetView": "Ansicht zurücksetzen",
+    "panZoomHint": "Ziehen zum Verschieben, Scrollen zum Zoomen",
+    "interactive": "Interaktiv",
+    "downloadSVG": "SVG herunterladen",
+    "downloadPNG": "PNG herunterladen",
+    "downloadPDF": "PDF herunterladen",
+    "viewFullscreen": "Vollbild anzeigen"
+  },
+  "chatActions": {
+    "menu": "Aktionsmenü",
+    "quickActions": "Schnellaktionen",
+    "attachFile": "Datei anhängen"
   },
   "pages": {
     "home": {
@@ -102,6 +124,12 @@
       "favorite": "Zu Favoriten hinzufügen",
       "unfavorite": "Aus Favoriten entfernen",
       "recent": "Zuletzt verwendet",
+      "uploadFromCloud": "Aus Cloud hochladen",
+      "uploadFromDevice": "Vom Gerät hochladen",
+      "selectCloudProvider": "Cloud-Speicher-Anbieter auswählen",
+      "selectFilesFromCloud": "Dateien aus {{provider}} auswählen",
+      "noCloudProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
+      "cloudStorageNotEnabled": "Cloud-Speicher ist nicht aktiviert",
       "favorites": "Favoriten",
       "clearFilters": "Filter zurücksetzen",
       "loadMore": "Mehr laden",
@@ -254,6 +282,8 @@
     "title": "Konfiguration",
     "save": "Speichern",
     "cancel": "Abbrechen",
+    "model": "Modell",
+    "selectModel": "Modell auswählen",
     "defaultModel": "Standardmodell",
     "temperature": "Temperatur",
     "temperatureDescription": "Steuert die Zufälligkeit: Niedrigere Werte sind deterministischer, höhere Werte sind kreativer.",
@@ -261,7 +291,17 @@
     "systemPromptDescription": "Anweisungen für die KI zu Beginn des Gesprächs.",
     "markdown": "Markdown",
     "plainText": "Klartext",
-    "json": "JSON"
+    "json": "JSON",
+    "toolsSettings": "Werkzeuge",
+    "toolsSettingsHelp": "Aktivieren oder deaktivieren Sie einzelne Werkzeuge für diese Sitzung",
+    "imageGeneration": "Bilderzeugungseinstellungen",
+    "imageAspectRatio": "Seitenverhältnis",
+    "imageAspectRatioHelp": "Wählen Sie das Seitenverhältnis für generierte Bilder",
+    "imageQuality": "Qualität",
+    "imageQualityHelp": "Wählen Sie die Qualitätsstufe für generierte Bilder",
+    "qualityLow": "Niedrig (1K)",
+    "qualityMedium": "Mittel (2K)",
+    "qualityHigh": "Hoch (4K)"
   },
   "chatMessage": {
     "user": "Du",
@@ -269,14 +309,35 @@
     "system": "System",
     "copy": "Kopieren",
     "copied": "Kopiert!",
-    "edit": "Bearbeiten"
+    "edit": "Bearbeiten",
+    "resend": "Erneut senden",
+    "editMessage": "Nachricht bearbeiten",
+    "resendMessage": "Nachricht erneut senden",
+    "openInCanvas": "In Canvas öffnen",
+    "generatedImage": "Generiertes Bild",
+    "downloadImage": "Bild herunterladen",
+    "saveImageWarning": "Laden Sie dieses Bild herunter, Bilder werden nicht gespeichert.",
+    "imageNotPersisted": "Bild nicht verfügbar",
+    "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar.",
+    "copyLink": "Link kopieren",
+    "linkCopied": "Link kopiert!"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
     "compilationError": "Kompilierungsfehler",
     "noComponentToRender": "Keine Komponente zum Rendern",
     "pageNotFound": "Seite nicht gefunden",
-    "signIn": "Anmelden"
+    "signIn": "Anmelden",
+    "audioUploadDisabled": "Audio-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
+    "videoUploadDisabled": "Video-Upload wird vom ausgewählten Modell nicht unterstützt. Bitte wählen Sie ein anderes Modell.",
+    "audioDecodeError": "Audio konnte nicht aus dem Video dekodiert werden. Das Videoformat oder der Codec wird möglicherweise von Ihrem Browser nicht unterstützt.",
+    "videoAudioExtractionError": "Fehler beim Extrahieren von Audio aus dem Video. Bitte stellen Sie sicher, dass das Video eine Audiospur enthält.",
+    "fileTooLarge": "Datei zu groß. Maximale Größe beträgt {{maxSize}}MB.",
+    "unsupportedFormat": "Nicht unterstütztes Dateiformat. Bitte verwenden Sie: {{formats}}",
+    "invalidImage": "Ungültige Bilddatei",
+    "tiffProcessingError": "Fehler beim Verarbeiten der TIFF-Datei. Die Datei ist möglicherweise beschädigt oder in einem nicht unterstützten TIFF-Format.",
+    "readError": "Fehler beim Lesen der Datei",
+    "fileProcessingError": "Fehler beim Verarbeiten der Datei. Bitte versuchen Sie es erneut."
   },
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
@@ -301,7 +362,11 @@
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
-    "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden"
+    "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
+    "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
+    "noCompatibleModels": "Keine kompatiblen KI-Modelle für diese Anwendung gefunden. Die Anwendung erfordert spezifische Modellfunktionen, die nicht verfügbar sind. Bitte wenden Sie sich an Ihren Administrator.",
+    "noModelIdProvided": "Kein Modell ausgewählt. Bitte wählen Sie ein KI-Modell, um fortzufahren.",
+    "noModelsForUser": "Sie haben keine Berechtigung, auf KI-Modelle zuzugreifen. Bitte wenden Sie sich an Ihren Administrator, um Zugriff anzufordern."
   },
   "toolErrors": {
     "MISSING_URL": "URL-Parameter ist erforderlich.",
@@ -378,281 +443,134 @@
     "format": "Formatieren"
   },
   "admin": {
-    "title": "Administration",
-    "nav": {
-      "home": "Startseite",
-      "apps": "Apps",
-      "models": "Modelle",
-      "prompts": "Prompts",
-      "pages": "Seiten",
-      "groups": "Gruppen",
-      "auth": "Authentifizierung",
-      "logs": "Protokolle",
-      "shortlinks": "Links",
-      "usage": "Nutzungsberichte",
-      "users": "Benutzer",
-      "system": "System"
-    },
-    "translateField": "Übersetzen",
-    "common": {
-      "enableAll": "Alle aktivieren",
-      "disableAll": "Alle deaktivieren"
-    },
-    "apps": {
-      "title": "Apps-Verwaltung",
-      "subtitle": "Verwalten Sie Ihre iHub-Anwendungen",
-      "createApp": "App erstellen",
-      "wizard": {
-        "title": "Neue App erstellen",
-        "basedOn": "Basierend auf",
-        "back": "Zurück",
-        "next": "Weiter",
-        "finish": "App fertigstellen",
-        "create": "App erstellen",
-        "creating": "Wird erstellt...",
-        "revert": "Auf übergeordnet zurücksetzen",
-        "steps": {
-          "basic": "Grundlagen",
-          "prompt": "Prompt",
-          "advanced": "Erweitert",
-          "tools": "Werkzeuge",
-          "review": "Überprüfung"
-        },
-        "navigation": {
-          "previous": "Zurück",
-          "next": "Weiter",
-          "finish": "App erstellen",
-          "saving": "Wird erstellt..."
-        },
-        "method": {
-          "title": "Erstellungsmethode",
-          "description": "Wie möchten Sie Ihre App erstellen?",
-          "instruction": "Wählen Sie, wie Sie Ihre App erstellen möchten:",
-          "ai": "KI-generiert",
-          "aiDescription": "Beschreiben Sie, was Ihre App tun soll, und die KI generiert die Konfiguration für Sie.",
-          "manual": "Manuelle Konfiguration",
-          "manualDescription": "Konfigurieren Sie Ihre App Schritt für Schritt mit vollständiger Kontrolle über alle Einstellungen.",
-          "template": "Auf Vorlage basierend",
-          "templateDescription": "Beginnen Sie mit der Konfiguration von \"{templateName}\" und passen Sie sie an."
-        },
-        "ai": {
-          "title": "KI-Generierung",
-          "description": "Beschreiben Sie, was Ihre App tun soll",
-          "language": "Sprache",
-          "prompt": "Beschreiben Sie Ihre App",
-          "promptPlaceholder": "Beispiel: Erstelle eine Meeting-Zusammenfassungsapp, die Besprechungsnotizen nimmt und wichtige Punkte, Aktionsaufgaben und Entscheidungen extrahiert...",
-          "generate": "App generieren",
-          "generating": "Wird generiert...",
-          "loadingPrompt": "Lade Prompt-Konfiguration...",
-          "success": "App-Konfiguration erfolgreich generiert! Sie können sie in den nächsten Schritten überprüfen und ändern.",
-          "error": {
-            "parse": "Generierte Konfiguration konnte nicht gelesen werden",
-            "generate": "Konfiguration konnte nicht generiert werden",
-            "network": "Netzwerkfehler bei der Generierung der App"
-          }
-        },
-        "generator": {
-          "title": "KI-App-Generator",
-          "description": "Beschreiben Sie die App, die Sie erstellen möchten, und ich generiere sie für Sie",
-          "placeholder": "Beschreiben Sie Ihre App-Idee...",
-          "generate": "App generieren",
-          "generating": "Wird generiert...",
-          "loadingPrompt": "Lade Prompt-Konfiguration...",
-          "error": {
-            "parse": "Generierte Konfiguration konnte nicht gelesen werden",
-            "generate": "Konfiguration konnte nicht generiert werden",
-            "network": "Netzwerkfehler bei der Generierung der App"
-          }
-        },
-        "basic": {
-          "title": "Grundlegende Informationen",
-          "description": "Beschreibung",
-          "language": "Sprache",
-          "appId": "App-ID",
-          "appIdPlaceholder": "z.B. meine-tolle-app",
-          "name": "App-Name",
-          "namePlaceholder": "App-Name eingeben",
-          "descriptionPlaceholder": "App-Beschreibung eingeben",
-          "color": "Farbe",
-          "icon": "Symbol",
-          "iconPlaceholder": "z.B. chat-bubbles",
-          "selectIcon": "Symbol auswählen",
-          "searchIcons": "Symbole suchen...",
-          "noIconsFound": "Keine Symbole gefunden",
-          "iconCount": "{{count}} Symbole verfügbar",
-          "iconCountFiltered": "{{filtered}} von {{total}} Symbolen",
-          "nameLabel": {
-            "label": "App-Name",
-            "placeholder": "App-Name eingeben"
-          },
-          "descriptionLabel": {
-            "label": "Beschreibung",
-            "placeholder": "Beschreiben Sie, was diese App tut"
-          },
-          "colorLabel": {
-            "label": "Themenfarbe",
-            "description": "Wählen Sie eine Farbe für das App-Theme"
-          },
-          "iconLabel": {
-            "label": "Symbol",
-            "description": "Wählen Sie ein Symbol für die App"
-          },
-          "category": {
-            "label": "Kategorie",
-            "placeholder": "Kategorie auswählen oder eingeben"
-          }
-        },
-        "system": {
-          "title": "Systemanweisungen",
-          "description": "Definieren Sie, wie sich Ihre App verhalten soll",
-          "prompt": "Systemanweisungen",
-          "promptPlaceholder": "Geben Sie Systemanweisungen ein, die definieren, wie sich die KI verhalten soll...",
-          "messagePlaceholder": "Nachricht-Platzhalter",
-          "messagePlaceholderPlaceholder": "Geben Sie Ihre Nachricht hier ein...",
-          "model": "Bevorzugtes Modell",
-          "temperature": "Temperatur"
-        },
-        "variables": {
-          "title": "Variablen",
-          "description": "Benutzerkonfigurierbare Variablen hinzufügen",
-          "instruction": "Variablen ermöglichen es Benutzern, das App-Verhalten anzupassen. Sie können in der Prompt-Vorlage mit der {{variableName}}-Syntax verwendet werden.",
-          "variable": "Variable {{index}}",
-          "name": "Name",
-          "namePlaceholder": "z.B. zielSprache",
-          "type": "Typ",
-          "label": "Bezeichnung",
-          "labelPlaceholder": "z.B. Zielsprache",
-          "required": "Erforderlich",
-          "add": "Variable hinzufügen"
-        },
-        "prompt": {
-          "title": "System-Prompt",
-          "description": "Definieren Sie, wie sich die KI verhalten soll",
-          "system": {
-            "label": "System-Prompt",
-            "placeholder": "Du bist ein hilfreicher Assistent, der...",
-            "description": "Anweisungen, die die Rolle und das Verhalten der KI definieren"
-          },
-          "variables": {
-            "title": "Variablen",
-            "description": "Variablen hinzufügen, die Benutzer konfigurieren können",
-            "add": "Variable hinzufügen",
-            "name": "Name",
-            "label": "Bezeichnung",
-            "type": "Typ",
-            "required": "Erforderlich",
-            "defaultValue": "Standardwert",
-            "options": "Optionen (kommagetrennt)",
-            "placeholder": "Platzhaltertext"
-          }
-        },
-        "advanced": {
-          "title": "Erweiterte Einstellungen",
-          "description": "Erweiterte Funktionen konfigurieren",
-          "instruction": "Konfigurieren Sie erweiterte Einstellungen für Ihre App.",
-          "allowEmptyContent": "Leeren Inhalt zulassen",
-          "sendChatHistory": "Chat-Verlauf senden",
-          "imageUpload": "Bild-Upload aktivieren",
-          "category": "Kategorie",
-          "order": "Anzeigereihenfolge",
-          "model": {
-            "label": "Bevorzugtes Modell",
-            "description": "Standardmodell für diese App"
-          },
-          "tokenLimit": {
-            "label": "Token-Limit",
-            "description": "Maximale Tokens pro Anfrage"
-          },
-          "temperature": {
-            "label": "Temperatur",
-            "description": "Steuert Kreativität vs. Konsistenz"
-          },
-          "outputFormat": {
-            "label": "Ausgabeformat",
-            "description": "Standardformat für Antworten"
-          }
-        },
-        "tools": {
-          "title": "Werkzeuge",
-          "description": "Verfügbare Werkzeuge auswählen",
-          "instruction": "Wählen Sie die Werkzeuge aus, die für Ihre App verfügbar sein sollen. Werkzeuge erweitern die Fähigkeiten des KI-Assistenten.",
-          "searchPlaceholder": "Werkzeuge suchen...",
-          "noResults": "Keine Werkzeuge entsprechen Ihrer Suche",
-          "noTools": "Keine Werkzeuge verfügbar"
-        },
-        "review": {
-          "title": "Überprüfung & Erstellen",
-          "description": "App-Konfiguration überprüfen",
-          "instruction": "Überprüfen Sie Ihre App-Konfiguration vor der Erstellung.",
-          "basedOn": "Basierend auf Vorlage: {templateName}",
-          "overridden": "Überschriebene Felder: {fields}",
-          "warning": "Nach der Erstellung können Sie die App-Konfiguration bearbeiten, aber nicht die ID ändern. Stellen Sie sicher, dass die ID eindeutig und beschreibend ist.",
-          "basicInfo": "Grundlegende Informationen",
-          "systemPrompt": "System-Prompt",
-          "settings": "Einstellungen",
-          "selectedTools": "Ausgewählte Werkzeuge",
-          "noTools": "Keine Werkzeuge ausgewählt"
-        },
-        "error": {
-          "missingFields": "Bitte füllen Sie alle erforderlichen Felder aus, bevor Sie fortfahren.",
-          "methodRequired": "Bitte wählen Sie eine Erstellungsmethode",
-          "idRequired": "App-ID ist erforderlich",
-          "nameRequired": "App-Name ist erforderlich",
-          "descriptionRequired": "App-Beschreibung ist erforderlich",
-          "colorRequired": "App-Farbe ist erforderlich",
-          "iconRequired": "App-Symbol ist erforderlich",
-          "systemRequired": "Systemanweisungen sind erforderlich",
-          "tokenLimitRequired": "Token-Limit ist erforderlich",
-          "createFailed": "Fehler beim Erstellen der App"
+    "providers": {
+      "title": "Anbieter-Zugangsdaten",
+      "description": "API-Schlüssel für LLM-Anbieter, Websuchdienste und benutzerdefinierte Integrationen verwalten. Anbieter-Level-Schlüssel werden als Fallback für Modelle verwendet, die keinen eigenen API-Schlüssel konfiguriert haben.",
+      "search": "Anbieter suchen...",
+      "noResults": "Keine Anbieter gefunden, die Ihrer Suche entsprechen.",
+      "noProviders": "Keine Anbieter konfiguriert.",
+      "configured": "Konfiguriert",
+      "notConfigured": "Nicht konfiguriert",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "configure": "Konfigurieren",
+      "delete": "Löschen",
+      "createNew": "Neuen Anbieter erstellen",
+      "backToList": "Zurück zu Anbietern",
+      "category": {
+        "llm": "LLM-Anbieter",
+        "websearch": "Websuchanbieter",
+        "cloudstorage": "Cloud-Speicher-Anbieter",
+        "custom": "Benutzerdefinierte / Generische API-Schlüssel"
+      },
+      "table": {
+        "provider": "Anbieter",
+        "description": "Beschreibung",
+        "apiKey": "API-Schlüssel",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "edit": {
+        "title": "Anbieter konfigurieren",
+        "description": "Beschreibung",
+        "saved": "Anbieter-Konfiguration erfolgreich gespeichert!",
+        "id": "Anbieter-ID",
+        "name": "Anbieter-Name",
+        "apiKey": "API-Schlüssel",
+        "apiKeyOptional": "(Optional - leer lassen, um Umgebungsvariable zu verwenden)",
+        "apiKeyPlaceholder": "Neuen API-Schlüssel eingeben oder unverändert lassen",
+        "apiKeyEnter": "API-Schlüssel eingeben",
+        "apiKeySet": "Ein API-Schlüssel ist derzeit konfiguriert",
+        "enabled": "Anbieter aktiviert",
+        "cancel": "Abbrechen",
+        "save": "Änderungen speichern",
+        "saving": "Speichern...",
+        "info": {
+          "title": "Über Anbieter-API-Schlüssel",
+          "description": "API-Schlüssel, die hier konfiguriert werden, werden als Fallback für alle Modelle dieses Anbieters verwendet, die keinen eigenen API-Schlüssel konfiguriert haben. Wenn Sie dieses Feld leer lassen, verwendet das System stattdessen die Umgebungsvariable."
         }
+      },
+      "create": {
+        "title": "Neuen Anbieter erstellen",
+        "description": "Erstellen Sie einen neuen benutzerdefinierten Anbieter zum Speichern von API-Schlüsseln",
+        "saved": "Anbieter erfolgreich erstellt!",
+        "id": "Anbieter-ID",
+        "idHelp": "Eindeutige Kennung (Kleinbuchstaben, verwenden Sie Bindestriche anstelle von Leerzeichen)",
+        "name": "Anbieter-Name",
+        "category": "Kategorie",
+        "apiKey": "API-Schlüssel",
+        "apiKeyOptional": "(Optional)",
+        "apiKeyEnter": "API-Schlüssel eingeben",
+        "enabled": "Anbieter aktiviert",
+        "cancel": "Abbrechen",
+        "save": "Anbieter erstellen",
+        "saving": "Wird erstellt..."
+      },
+      "info": {
+        "title": "API-Schlüssel-Priorität",
+        "description": "Wenn ein Modell einen API-Schlüssel anfordert, prüft das System in dieser Reihenfolge: 1) Modell-spezifischer API-Schlüssel, 2) Anbieter-Level-API-Schlüssel (hier konfiguriert), 3) Umgebungsvariable. Dies ermöglicht es Ihnen, einen Standard-API-Schlüssel für alle Modelle eines Anbieters festzulegen, während einzelne Modelle ihn überschreiben können."
       }
     },
     "models": {
       "title": "Modellverwaltung",
-      "subtitle": "AI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
-      "addNew": "Neues Modell hinzufügen",
+      "subtitle": "KI-Modelle für Ihre Anwendungen konfigurieren und verwalten",
       "loadError": "Fehler beim Laden der Modelle",
+      "addNew": "Neues Modell hinzufügen",
+      "uploadConfig": "Konfiguration hochladen",
+      "uploading": "Hochladen...",
       "searchPlaceholder": "Modelle durchsuchen...",
       "filterAll": "Alle Modelle",
       "filterEnabled": "Nur aktivierte",
       "filterDisabled": "Nur deaktivierte",
       "name": "Name",
       "provider": "Anbieter",
-      "actions": {
-        "clone": "Klonen",
-        "delete": "Löschen"
-      },
       "enabled": "Aktiviert",
       "disabled": "Deaktiviert",
-      "test": "Testen",
+      "default": "Standard",
+      "actions": "Aktionen",
+      "test": {
+        "success": "Test erfolgreich",
+        "failed": "Test fehlgeschlagen"
+      },
       "enable": "Aktivieren",
       "disable": "Deaktivieren",
       "clone": "Klonen",
+      "download": "Konfiguration herunterladen",
       "delete": "Löschen",
       "deleteConfirm": "Dieses Modell löschen?",
       "noModels": "Keine Modelle gefunden",
       "noModelsDesc": "Beginnen Sie mit der Erstellung eines neuen Modells.",
+      "table": {
+        "status": "Status"
+      },
+      "status": {
+        "enabled": "Aktiviert",
+        "disabled": "Deaktiviert"
+      },
+      "details": {
+        "messages": "Nachrichten",
+        "tokens": "Token"
+      },
       "edit": {
         "title": "Modell bearbeiten",
         "titleNew": "Neues Modell erstellen",
-        "subtitle": "Modellkonfiguration für {{name}} verwalten",
+        "subtitle": "Modell konfigurieren: {{name}}",
         "subtitleNew": "Eine neue KI-Modellkonfiguration erstellen",
         "backToModels": "Zurück zu Modellen",
-        "basicInfo": "Grundlegende Informationen",
-        "basicInfoDesc": "Grundlegende Informationen über das Modell",
-        "configuration": "Konfiguration",
-        "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell",
-        "requiredFields": "Bitte füllen Sie alle erforderlichen Felder aus",
-        "saving": "Speichern...",
-        "createModel": "Modell erstellen",
-        "saveChanges": "Änderungen speichern",
-        "usageStats": "Nutzungsstatistiken",
+        "usageStats": "Nutzungsstatistik",
         "noUsageData": "Keine Nutzungsdaten verfügbar",
         "appsUsingModel": "Apps, die dieses Modell verwenden",
         "noApps": "Derzeit verwenden keine Apps dieses Modell",
-        "success": "Modell erfolgreich {{action}}!",
+        "success": "Modell {{action}} erfolgreich!",
         "successCreated": "erstellt",
-        "successUpdated": "aktualisiert"
+        "successUpdated": "aktualisiert",
+        "saving": "Speichern...",
+        "createModel": "Modell erstellen",
+        "saveChanges": "Änderungen speichern",
+        "basicInfo": "Grundlegende Informationen",
+        "basicInfoDesc": "Grundlegende Informationen über das Modell",
+        "configuration": "Konfiguration",
+        "configurationDesc": "Erweiterte Konfigurationsoptionen für das Modell"
       },
       "fields": {
         "id": "Modell-ID",
@@ -661,160 +579,62 @@
         "provider": "Anbieter",
         "modelId": "API-Modell-ID",
         "url": "API-URL",
+        "apiKey": "API-Schlüssel",
         "tokenLimit": "Token-Limit",
         "concurrency": "Gleichzeitigkeit",
         "requestDelay": "Anfrageverzögerung (ms)",
-        "supportsTools": "Unterstützt Werkzeuge",
+        "supportsTools": "Unterstützt Tools",
         "enabled": "Aktiviert",
         "defaultModel": "Standardmodell",
-        "apiKey": "API-Schlüssel"
+        "supportsImageGeneration": "Unterstützt Bilderzeugung",
+        "aspectRatio": "Seitenverhältnis",
+        "imageSize": "Bildgröße",
+        "maxReferenceImages": "Max. Referenzbilder"
+      },
+      "hints": {
+        "modelId": "Eindeutige Kennung für das Modell (kann nach der Erstellung nicht geändert werden)",
+        "apiModelId": "Modellkennung, die von der API des Anbieters verwendet wird (z.B. gpt-4, claude-3-opus)",
+        "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System die Umgebungsvariable für den Anbieter. Schlüssel werden verschlüsselt gespeichert.",
+        "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
+        "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}",
+        "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
+        "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)"
       },
       "placeholders": {
         "selectProvider": "Anbieter auswählen",
-        "apiModelId": "z.B. gpt-4, claude-3-sonnet",
-        "apiUrl": "z.B. https://api.openai.com/v1/chat/completions",
-        "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable falls nicht gesetzt)",
-        "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen um aktuellen zu behalten)"
-      },
-      "hints": {
-        "modelId": "Eindeutige Kennung für diese Modellkonfiguration",
-        "apiModelId": "Die in API-Aufrufen an den Anbieter verwendete Modell-ID",
-        "apiKey": "API-Schlüssel für dieses Modell. Falls nicht angegeben, verwendet das System die Umgebungsvariable für den Provider. Schlüssel werden verschlüsselt gespeichert.",
-        "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert"
-      },
-      "status": {
-        "enabled": "Aktiviert",
-        "disabled": "Deaktiviert"
-      },
-      "details": {
-        "messages": "Nachrichten",
-        "tokens": "Token",
-        "editModel": "Modell bearbeiten"
-      },
-      "table": {
-        "status": "Status"
-      }
-    },
-    "prompts": {
-      "variableTypes": {
-        "string": "Zeichenkette",
-        "number": "Zahl",
-        "boolean": "Boolean"
-      }
-    },
-    "pages": {
-      "title": "Seitenverwaltung",
-      "subtitle": "Statische Seiten der Anwendung verwalten",
-      "create": "Seite erstellen",
-      "actions": "Aktionen",
-      "access": "Zugriff",
-      "fields": {
-        "id": "Seiten-ID",
-        "pageTitle": "Titel",
-        "content": "Inhalt",
-        "idRequired": "ID ist erforderlich",
-        "authRequired": "Authentifizierung erforderlich",
-        "allowedGroups": "Erlaubte Gruppen (kommagetrennt, '*' = alle)"
-      },
-      "confirmDelete": "Möchten Sie diese Seite wirklich löschen?",
-      "contentTypes": {
-        "markdown": "Markdown (.md)",
-        "reactComponent": "React-Komponente (.jsx)",
-        "jsxDescription": "Schreiben Sie JSX-Code, der als React-Komponente kompiliert und gerendert wird",
-        "markdownDescription": "Schreiben Sie Standard-Markdown-Inhalte mit Syntaxhervorhebung"
-      }
-    },
-    "shortlinks": {
-      "title": "Shortlink-Verwaltung",
-      "subtitle": "Shortlinks für Ihre Anwendungen verwalten und überwachen",
-      "addNew": "Neuen Link hinzufügen",
-      "loadError": "Fehler beim Laden der Shortlinks",
-      "filterByAppId": "Nach App-ID filtern",
-      "filterByUser": "Nach Benutzer filtern",
-      "filter": "Filtern",
-      "code": "Code",
-      "appId": "App-ID",
-      "userId": "Benutzer-ID",
-      "usage": "Verwendung",
-      "createdAt": "Erstellt",
-      "expiresAt": "Läuft ab",
-      "actions": "Aktionen",
-      "copyLink": "Link kopieren",
-      "testLink": "Link testen",
-      "delete": "Löschen",
-      "deleteConfirm": "Diesen Link löschen?",
-      "noLinks": "Keine Shortlinks gefunden",
-      "noLinksDesc": "Shortlinks werden hier angezeigt, wenn sie von Benutzern erstellt werden."
-    },
-    "dashboard": {
-      "topUsersByMessages": "Top-Benutzer nach Nachrichten",
-      "topUsersByTokens": "Top-Benutzer nach Token",
-      "topUsersByMagicPrompts": "Top-Benutzer nach Magic Prompts",
-      "userFeedback": "Benutzerfeedback",
-      "totalInvocations": "Gesamtaufrufe",
-      "inputTokens": "Eingabe-Token",
-      "outputTokens": "Ausgabe-Token",
-      "positive": "Positiv",
-      "negative": "Negativ",
-      "feedbackOverview": "Feedback-Übersicht",
-      "satisfactionRate": "Zufriedenheitsrate",
-      "aiModel": "KI-Modell",
-      "messages": "Nachrichten",
-      "totalTokens": "Gesamte Token",
-      "promptTokens": "Prompt-Token",
-      "completionTokens": "Antwort-Token",
-      "avgPerMessage": "Durchschn./Nachricht",
-      "tokenDistribution": "Token-Verteilung",
-      "activeUsers": "Aktive Benutzer",
-      "activeApps": "Aktive Apps",
-      "modelsUsed": "Verwendete Modelle",
-      "avgTokensPerMsg": "Durchschn. Token/Nachricht",
-      "modelUsageDetails": "Modellnutzungsdetails",
-      "systemOverview": "Systemübersicht",
-      "appUsage": "App-Nutzung",
-      "tokenEfficiency": "Token-Effizienz",
-      "inputTokenDistribution": "Eingabe-Token-Verteilung",
-      "outputTokenDistribution": "Ausgabe-Token-Verteilung",
-      "userFeedbackActivity": "Benutzer-Feedback-Aktivität",
-      "feedbackByApplication": "Feedback nach Anwendung",
-      "feedbackByModel": "Feedback nach Modell",
-      "averageRating": "Durchschnittsbewertung"
-    },
-    "groups": {
-      "management": "Gruppenverwaltung",
-      "subtitle": "Benutzergruppen, Berechtigungen und externe Gruppenzuordnungen verwalten",
-      "noGroupsFound": "Keine Gruppen gefunden",
-      "createFirstGroup": "Erstellen Sie Ihre erste Gruppe, um zu beginnen",
-      "apps": "Apps:",
-      "noMappings": "Keine Zuordnungen",
-      "error": "Fehler",
-      "basicInformation": "Grundlegende Informationen",
-      "basicGroupConfiguration": "Grundlegende Gruppenkonfiguration und Metadaten",
-      "groupId": "Gruppen-ID",
-      "protectedSystemGroup": "Dies ist eine geschützte Systemgruppe",
-      "groupName": "Gruppenname",
-      "description": "Beschreibung",
-      "adminAccess": "Admin-Zugriff",
-      "permissions": "Berechtigungen"
-    },
-    "usage": {
-      "title": "Admin Dashboard",
-      "subtitle": "Nutzungsanalysen und Systemübersicht",
-      "overview": {
-        "systemOverview": "Systemübersicht",
-        "activeUsers": "Aktive Benutzer",
-        "activeApps": "Aktive Apps",
-        "modelsUsed": "Verwendete Modelle",
-        "avgTokensPerMsg": "Ø Tokens/Nachricht"
+        "apiModelId": "z.B. gpt-4, claude-3-opus",
+        "apiUrl": "https://api.anbieter.com/v1/chat/completions",
+        "apiKey": "API-Schlüssel eingeben (optional - verwendet Umgebungsvariable, wenn nicht gesetzt)",
+        "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen, um aktuellen zu behalten)"
       },
       "sections": {
-        "appUsage": "App-Nutzung",
-        "tokenEfficiency": "Token-Effizienz",
-        "inputTokenDistribution": "Eingabe-Token-Verteilung",
-        "outputTokenDistribution": "Ausgabe-Token-Verteilung",
-        "userFeedbackActivity": "Benutzer-Feedback-Aktivität",
-        "feedbackByApplication": "Feedback nach Anwendung",
-        "feedbackByModel": "Feedback nach Modell"
+        "imageGeneration": "Bilderzeugungseinstellungen"
+      }
+    },
+    "chat": {
+      "title": "Chat",
+      "send": "Senden",
+      "sendMessage": "Nachricht senden",
+      "newConversation": "Neue Konversation",
+      "regenerate": "Neu generieren",
+      "stopGeneration": "Generierung stoppen",
+      "deleteMessage": "Nachricht löschen",
+      "deleteConversation": "Konversation löschen",
+      "exportConversation": "Konversation exportieren",
+      "thinking": "Denkt nach...",
+      "responseComplete": "Antwort vollständig",
+      "placeholder": "Gib deine Nachricht hier ein...",
+      "conversationHistory": "Konversationsverlauf",
+      "modelSelector": {
+        "label": "Modell",
+        "choose": "Modell wählen",
+        "noModels": "Keine Modelle verfügbar",
+        "loading": "Modelle werden geladen...",
+        "hint": {
+          "dismiss": "Ausblenden",
+          "acknowledge": "Verstanden",
+          "alertTitle": "Wichtiger Hinweis"
+        }
       }
     },
     "auth": {
@@ -826,7 +646,130 @@
       "defaultGroups": "Standardgruppen",
       "jwtProviders": "JWT-Anbieter",
       "noOidcProviders": "Keine OIDC-Anbieter konfiguriert",
-      "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren"
+      "addProvider": "Fügen Sie einen Anbieter hinzu, um OIDC-Authentifizierung zu aktivieren",
+      "oauth": {
+        "title": "OAuth-Clients",
+        "subtitle": "OAuth 2.0-Clients für externen API-Zugriff verwalten",
+        "enabled": "OAuth aktiviert",
+        "disabled": "OAuth deaktiviert",
+        "noClients": "Keine OAuth-Clients konfiguriert",
+        "createClient": "OAuth-Client erstellen",
+        "editClient": "OAuth-Client bearbeiten",
+        "deleteClient": "OAuth-Client löschen",
+        "clientId": "Client-ID",
+        "clientSecret": "Client-Secret",
+        "clientSecretWarning": "Speichern Sie dieses Secret jetzt. Es wird nicht erneut angezeigt.",
+        "clientSecretHidden": "Secret ist aus Sicherheitsgründen verborgen",
+        "name": "Client-Name",
+        "description": "Beschreibung",
+        "scopes": "Berechtigungen",
+        "allowedApps": "Erlaubte Apps",
+        "allowedModels": "Erlaubte Modelle",
+        "searchApps": "Apps zum Hinzufügen suchen...",
+        "searchModels": "Modelle zum Hinzufügen suchen...",
+        "noAppsSelected": "Keine Apps ausgewählt - Client kann auf alle Apps zugreifen",
+        "noModelsSelected": "Keine Modelle ausgewählt - Client kann auf alle Modelle zugreifen",
+        "tokenExpiration": "Token-Ablauf (Minuten)",
+        "active": "Aktiv",
+        "suspended": "Gesperrt",
+        "createdAt": "Erstellt",
+        "createdBy": "Erstellt von",
+        "lastUsed": "Zuletzt verwendet",
+        "lastRotated": "Secret zuletzt rotiert",
+        "rotateSecret": "Secret rotieren",
+        "rotateSecretConfirm": "Sind Sie sicher, dass Sie das Secret rotieren möchten? Das alte Secret funktioniert sofort nicht mehr.",
+        "rotateSecretSuccess": "Secret erfolgreich rotiert. Speichern Sie das neue Secret jetzt.",
+        "generateToken": "Langzeit-Token generieren",
+        "generateTokenDesc": "Wählen Sie die Ablaufzeit für diesen Token und klicken Sie auf Generieren.",
+        "generating": "Generiere...",
+        "generate": "Generieren",
+        "expirationRange": "Geben Sie einen Wert zwischen 1 und 3650 Tagen (10 Jahre) ein",
+        "tokenGenerated": "Langzeit-Token generiert",
+        "tokenWarning": "Speichern Sie diesen Token jetzt. Er wird nicht erneut angezeigt.",
+        "token": "Token",
+        "staticApiKey": "Statischer API-Schlüssel",
+        "expirationDays": "Ablauf (Tage)",
+        "expiresAt": "Läuft ab am",
+        "introspectToken": "Token untersuchen",
+        "introspectTokenDesc": "Token-Gültigkeit und Claims prüfen",
+        "tokenActive": "Token aktiv",
+        "tokenInactive": "Token inaktiv",
+        "tokenExpired": "Token abgelaufen",
+        "deleteConfirm": "Sind Sie sicher, dass Sie diesen OAuth-Client löschen möchten? Alle ausgestellten Token funktionieren nicht mehr.",
+        "createSuccess": "OAuth-Client erfolgreich erstellt",
+        "updateSuccess": "OAuth-Client erfolgreich aktualisiert",
+        "deleteSuccess": "OAuth-Client erfolgreich gelöscht",
+        "createError": "Fehler beim Erstellen des OAuth-Clients",
+        "updateError": "Fehler beim Aktualisieren des OAuth-Clients",
+        "deleteError": "Fehler beim Löschen des OAuth-Clients",
+        "loadError": "Fehler beim Laden der OAuth-Clients",
+        "validation": {
+          "nameRequired": "Client-Name ist erforderlich",
+          "tokenExpirationInvalid": "Token-Ablauf muss zwischen 1 und {{max}} Minuten liegen",
+          "expirationDaysInvalid": "Ablauf muss zwischen 1 und 3650 Tagen liegen"
+        }
+      }
+    },
+    "cloudStorage": {
+      "title": "Cloud-Speicher-Integration",
+      "subtitle": "Cloud-Speicher-Anbieter für Datei-Uploads konfigurieren",
+      "enabled": "Cloud-Speicher aktiviert",
+      "disabled": "Cloud-Speicher deaktiviert",
+      "noProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
+      "addProvider": "Anbieter hinzufügen",
+      "providers": "Cloud-Speicher",
+      "providerType": "Anbietertyp",
+      "selectType": "Anbietertyp auswählen",
+      "sharepoint": "SharePoint",
+      "office365": "Microsoft Office 365",
+      "googledrive": "Google Drive",
+      "googleDrive": "Google Drive",
+      "editProvider": "Anbieter bearbeiten",
+      "deleteProvider": "Anbieter löschen",
+      "deleteConfirm": "Sind Sie sicher, dass Sie diesen Cloud-Speicher-Anbieter löschen möchten?",
+      "name": "Name",
+      "displayName": "Anzeigename",
+      "tenantId": "Mandanten-ID",
+      "clientId": "Client-ID",
+      "clientSecret": "Client-Secret",
+      "siteUrl": "Website-URL (Optional)",
+      "driveId": "Laufwerk-ID (Optional)",
+      "redirectUri": "Weiterleitungs-URI (Optional)",
+      "providerEnabled": "Anbieter aktiviert",
+      "save": "Speichern",
+      "cancel": "Abbrechen",
+      "saving": "Speichern...",
+      "saveSuccess": "Cloud-Speicher-Konfiguration erfolgreich gespeichert",
+      "saveError": "Fehler beim Speichern der Cloud-Speicher-Konfiguration",
+      "deleteSuccess": "Anbieter erfolgreich gelöscht",
+      "deleteError": "Fehler beim Löschen des Anbieters",
+      "validation": {
+        "nameRequired": "Name ist erforderlich",
+        "displayNameRequired": "Anzeigename ist erforderlich",
+        "tenantIdRequired": "Mandanten-ID ist erforderlich",
+        "clientIdRequired": "Client-ID ist erforderlich",
+        "clientSecretRequired": "Client-Secret ist erforderlich"
+      },
+      "info": {
+        "title": "Über Cloud-Speicher-Integration",
+        "description": "Verbinden Sie sich mit Cloud-Speicher-Anbietern wie Office 365 und Google Drive, um Benutzern die direkte Auswahl von Dateien aus ihrem Cloud-Speicher während Datei-Uploads zu ermöglichen."
+      },
+      "office365Info": {
+        "title": "Office 365-Konfiguration",
+        "description": "Um die Office 365-Integration zu konfigurieren, müssen Sie eine Anwendung in Azure AD registrieren und die Mandanten-ID, Client-ID und das Client-Secret abrufen.",
+        "step1": "App in Azure AD registrieren",
+        "step2": "API-Berechtigungen konfigurieren (Files.Read, Sites.Read.All)",
+        "step3": "Client-Secret erstellen",
+        "step4": "Mandanten-ID, Client-ID und Client-Secret hier kopieren"
+      },
+      "googleDriveInfo": {
+        "title": "Google Drive-Konfiguration",
+        "description": "Um die Google Drive-Integration zu konfigurieren, müssen Sie ein Projekt in der Google Cloud Console erstellen und die Google Drive-API aktivieren.",
+        "step1": "Projekt in Google Cloud Console erstellen",
+        "step2": "Google Drive-API aktivieren",
+        "step3": "OAuth 2.0-Anmeldedaten erstellen",
+        "step4": "Client-ID und Client-Secret hier kopieren"
+      }
     },
     "system": {
       "title": "Systemverwaltung",
@@ -840,7 +783,7 @@
       "triggerSuccess": "Erzwungene Aktualisierung erfolgreich ausgelöst! Neuer Salt: {{salt}}. Alle Clients werden beim nächsten Seitenladen aktualisiert.",
       "triggerError": "Fehler beim Auslösen der erzwungenen Aktualisierung",
       "passwordTitle": "Admin-Passwort ändern",
-      "passwordDesc": "Das Admin-Passwort aktualisieren. Das neue Passwort wird mit bcrypt verschlüsselt und sicher gespeichert.",
+      "passwordDesc": "Das Admin-Passwort aktualisieren. Das neue Passwort wird mit bcryptjs verschlüsselt und sicher gespeichert.",
       "newPassword": "Neues Passwort",
       "newPasswordPlaceholder": "Neues Passwort eingeben",
       "confirmPassword": "Neues Passwort bestätigen",
@@ -877,7 +820,238 @@
       "versionServer": "Backend-Version",
       "versionNode": "Node.js-Version",
       "versionLoading": "Versionsinformationen werden geladen...",
-      "versionError": "Fehler beim Laden der Versionsinformationen"
+      "versionError": "Fehler beim Laden der Versionsinformationen",
+      "updateCheckTitle": "Update verfügbar",
+      "updateAvailable": "Eine neue Version von iHub Apps ist verfügbar!",
+      "currentVersion": "Aktuelle Version",
+      "latestVersion": "Neueste Version",
+      "viewRelease": "Release auf GitHub ansehen",
+      "checkingUpdate": "Suche nach Updates...",
+      "updateCheckFailed": "Fehler beim Prüfen auf Updates",
+      "noUpdateAvailable": "Sie verwenden die neueste Version",
+      "logging": {
+        "title": "Logging-Konfiguration",
+        "description": "Konfigurieren Sie Anwendungs-Logging-Stufen und -Ausgabe",
+        "currentLevel": "Aktuelle Log-Stufe",
+        "availableLevels": "Verfügbare Log-Stufen",
+        "changeLevel": "Log-Stufe ändern",
+        "changingLevel": "Log-Stufe wird geändert...",
+        "levelChanged": "Log-Stufe geändert zu {{level}}",
+        "levelChangeError": "Fehler beim Ändern der Log-Stufe",
+        "levels": {
+          "error": "Error - Nur Fehler",
+          "warn": "Warning - Fehler und Warnungen",
+          "info": "Info - Allgemeine Informationen (Standard)",
+          "http": "HTTP - HTTP-Anfragen und -Antworten",
+          "verbose": "Verbose - Detaillierte Informationen",
+          "debug": "Debug - Debugging-Informationen",
+          "silly": "Silly - Alles (sehr detailliert)"
+        },
+        "levelDescriptions": {
+          "error": "Nur Fehler protokollieren",
+          "warn": "Warnungen und Fehler protokollieren",
+          "info": "Allgemeine Informationen, Warnungen und Fehler protokollieren (empfohlen)",
+          "http": "HTTP-Anfragen zusammen mit Infos, Warnungen und Fehlern protokollieren",
+          "verbose": "Detaillierte Informationen zur Fehlerbehebung protokollieren",
+          "debug": "Debugging-Informationen für die Entwicklung protokollieren",
+          "silly": "Alles protokollieren - nur für detailliertes Debugging verwenden"
+        },
+        "fileLogging": "Datei-Logging",
+        "fileLoggingEnabled": "Datei-Logging aktivieren",
+        "fileLoggingPath": "Log-Dateipfad",
+        "fileLoggingMaxSize": "Max. Dateigröße (Bytes)",
+        "fileLoggingMaxFiles": "Max. Anzahl von Log-Dateien",
+        "saveConfig": "Konfiguration speichern",
+        "savingConfig": "Konfiguration wird gespeichert...",
+        "configSaved": "Logging-Konfiguration erfolgreich gespeichert",
+        "configSaveError": "Fehler beim Speichern der Logging-Konfiguration"
+      },
+      "ssl": {
+        "title": "SSL-Zertifikat-Konfiguration",
+        "description": "Konfigurieren Sie die SSL-Zertifikatvalidierung und Domain-Whitelist für externe Verbindungen",
+        "ignoreInvalidCertificates": "Ungültige SSL-Zertifikate ignorieren",
+        "ignoreInvalidCertificatesDesc": "Wenn aktiviert, werden Verbindungen zu Diensten mit selbstsignierten oder ungültigen SSL-Zertifikaten zugelassen. Nur in vertrauenswürdigen Umgebungen verwenden.",
+        "domainWhitelist": "Domain-Whitelist",
+        "domainWhitelistDesc": "Geben Sie Domains an, für die die SSL-Zertifikatvalidierung ignoriert werden soll. Die SSL-Validierung wird nur für explizit zu dieser Whitelist hinzugefügte Domains umgangen.",
+        "domainWhitelistPlaceholder": "api.example.com, *.internal.company.com",
+        "addDomain": "Domain hinzufügen",
+        "removeDomain": "Entfernen",
+        "domainPatternHelp": "Unterstützte Muster: exakte Domain (api.example.com), Wildcard (*.example.com), Subdomain (.example.com)",
+        "noDomains": "Keine Domains in der Whitelist",
+        "saveConfig": "Konfiguration speichern",
+        "savingConfig": "Konfiguration wird gespeichert...",
+        "configSaved": "SSL-Konfiguration erfolgreich gespeichert",
+        "configSaveError": "Fehler beim Speichern der SSL-Konfiguration",
+        "securityWarning": "Sicherheitswarnung",
+        "securityWarningDesc": "Das Deaktivieren der SSL-Zertifikatvalidierung macht Ihre Anwendung anfällig für Man-in-the-Middle-Angriffe. Verwenden Sie diese Funktion nur in sicheren, vertrauenswürdigen Netzwerkumgebungen.",
+        "globalWarning": "Derzeit sind keine Domains auf der Whitelist. Die SSL-Zertifikatvalidierung ist für ALLE externen Verbindungen aktiviert. Fügen Sie oben bestimmte Domains hinzu, um die SSL-Validierung nur für diese Domains zu umgehen."
+      }
+    },
+    "tools": {
+      "title": "Tool-Verwaltung",
+      "subtitle": "Erstellen, bearbeiten und verwalten Sie KI-Tools / Funktionsaufrufe für Ihre iHub Apps",
+      "toggle": "Werkzeuge umschalten",
+      "enableDisable": "Werkzeuge",
+      "enableDisableSubtitle": "Werkzeuge für diesen Chat aktivieren oder deaktivieren",
+      "createNew": "Neues Tool erstellen",
+      "uploadConfig": "Konfiguration hochladen",
+      "uploading": "Hochladen...",
+      "searchPlaceholder": "Tools durchsuchen...",
+      "filterAll": "Alle Tools",
+      "filterEnabled": "Nur aktivierte",
+      "filterDisabled": "Nur deaktivierte",
+      "filterAllTypes": "Alle Typen",
+      "filterRegular": "Reguläre Tools",
+      "filterMultiFunction": "Multi-Funktion",
+      "filterSpecial": "Spezial-Tools",
+      "loadError": "Fehler beim Laden der Tools",
+      "noTools": "Keine Tools gefunden",
+      "noToolsDescription": "Beginnen Sie mit der Erstellung eines neuen Tools.",
+      "enabled": "Aktiviert",
+      "disabled": "Deaktiviert",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "clone": "Klonen",
+      "edit": "Bearbeiten",
+      "delete": "Löschen",
+      "download": "Konfiguration herunterladen",
+      "deleteConfirm": "Sind Sie sicher, dass Sie dieses Tool löschen möchten?",
+      "deleteSuccess": "Tool erfolgreich gelöscht",
+      "typeRegular": "Regulär",
+      "typeMultiFunction": "Multi-Funktion",
+      "typeSpecial": "Spezial",
+      "table": {
+        "name": "Name",
+        "type": "Typ",
+        "description": "Beschreibung",
+        "script": "Skript",
+        "status": "Status",
+        "actions": "Aktionen"
+      },
+      "editTool": "Tool bearbeiten",
+      "createDescription": "Ein neues KI-Tool / Funktion erstellen",
+      "editDescription": "Tool-Konfiguration und Skript bearbeiten",
+      "configTab": "Konfiguration",
+      "scriptTab": "Skript-Editor",
+      "id": "Tool-ID",
+      "idHelp": "Eindeutige Kennung für das Tool",
+      "name": "Name",
+      "nameHelp": "Anzeigename für das Tool in verschiedenen Sprachen",
+      "description": "Beschreibung",
+      "descriptionHelp": "Beschreibung, die dem LLM für die Tool-Auswahl angezeigt wird",
+      "scriptFile": "Skriptdatei",
+      "scriptFileHelp": "JavaScript-Datei im Verzeichnis server/tools/",
+      "concurrency": "Parallelitätslimit",
+      "concurrencyHelp": "Maximale Anzahl gleichzeitiger Ausführungen",
+      "parameters": "Parameter (JSON-Schema)",
+      "parametersHelp": "JSON-Schema-Definition für Tool-Parameter",
+      "functions": "Funktionen (Multi-Funktions-Tool)",
+      "functionsHelp": "Definieren Sie mehrere Funktionen für dieses Tool (z.B. findUser, getAllUserDetails). Jede Funktion sollte eine Beschreibung und Parameter haben. Lassen Sie {} leer für reguläre Einzel-Funktions-Tools.",
+      "functionsExample": "Beispiel Multi-Funktions-Konfiguration anzeigen",
+      "isSpecialTool": "Spezial-Tool",
+      "isSpecialToolHelp": "Provider-spezifische Tools, die direkt vom Modellanbieter verarbeitet werden (z.B. Google Search Grounding, OpenAI Web Search)",
+      "provider": "Anbieter",
+      "providerHelp": "Anbieter-Kennung (z.B. \"google\" für Google Search, \"openai\" für OpenAI, \"openai-responses\" für antwortbasierte Tools)",
+      "scriptSaved": "Skript erfolgreich gespeichert",
+      "saveScript": "Skript speichern",
+      "scriptEditorInfo": "Bearbeiten Sie den JavaScript-Code für dieses Tool. Änderungen werden in server/tools/ gespeichert"
+    },
+    "users": {
+      "view": {
+        "title": "Benutzer anzeigen",
+        "description": "Benutzerdetails und Berechtigungen anzeigen",
+        "edit": "Benutzer bearbeiten",
+        "backToList": "Zurück zu Benutzern",
+        "basicInfo": "Grundinformationen",
+        "username": "Benutzername",
+        "email": "E-Mail",
+        "fullName": "Vollständiger Name",
+        "userId": "Benutzer-ID",
+        "authentication": "Authentifizierung",
+        "authMethods": "Authentifizierungsmethoden",
+        "status": "Status",
+        "active": "Aktiv",
+        "inactive": "Inaktiv",
+        "oidcProvider": "OIDC-Anbieter",
+        "groups": "Gruppen & Berechtigungen",
+        "internalGroups": "Interne Gruppen",
+        "noGroups": "Keine Gruppen zugewiesen",
+        "activity": "Aktivität",
+        "createdAt": "Erstellt am",
+        "lastActive": "Zuletzt aktiv",
+        "daysAgo": "Tage her",
+        "never": "Nie",
+        "lastModified": "Zuletzt geändert"
+      },
+      "edit": {
+        "createTitle": "Neuen Benutzer erstellen",
+        "editTitle": "Benutzer bearbeiten",
+        "createDesc": "Neues Benutzerkonto mit Berechtigungen und Einstellungen erstellen",
+        "editDesc": "Benutzerkonto, Berechtigungen und Einstellungen bearbeiten",
+        "backToList": "Zurück zu Benutzern",
+        "cancel": "Abbrechen",
+        "save": "Benutzer speichern",
+        "saving": "Speichern..."
+      }
+    },
+    "logging": {
+      "loadError": "Fehler beim Laden der Logging-Konfiguration",
+      "saveSuccess": "Logging-Konfiguration erfolgreich gespeichert",
+      "saveError": "Fehler beim Speichern der Logging-Konfiguration",
+      "authDebugSaveSuccess": "Authentifizierungs-Debug-Konfiguration erfolgreich gespeichert",
+      "authDebugSaveError": "Fehler beim Speichern der Authentifizierungs-Debug-Konfiguration",
+      "levelSection": "Log-Level",
+      "formatSection": "Log-Format",
+      "componentSection": "Komponenten-Filterung",
+      "fileSection": "Datei-Logging",
+      "authDebugSection": "Authentifizierungs-Debug-Logging",
+      "jsonDescription": "Strukturiertes JSON-Logging für Parsing und Analyse",
+      "textDescription": "Menschenlesbares Textformat mit Farben",
+      "enableComponentFilter": "Komponenten-Filterung aktivieren",
+      "componentFilterHelp": "Wenn aktiviert, werden nur Logs von ausgewählten Komponenten angezeigt",
+      "selectAll": "Alle auswählen",
+      "deselectAll": "Alle abwählen",
+      "enableFileLogging": "Datei-Logging aktivieren",
+      "filePath": "Log-Dateipfad",
+      "maxSize": "Maximale Größe (Bytes)",
+      "maxFiles": "Maximale Dateien",
+      "enableAuthDebug": "Authentifizierungs-Debug-Logging aktivieren",
+      "maskTokens": "Tokens in Logs maskieren",
+      "redactPasswords": "Passwörter in Logs schwärzen",
+      "consoleLogging": "Konsolen-Logging aktivieren",
+      "includeRawData": "Rohe Authentifizierungsdaten einschließen",
+      "authProviders": "Debug nach Provider",
+      "saveAuthDebug": "Authentifizierungs-Debug-Einstellungen speichern",
+      "saveChanges": "Änderungen speichern",
+      "saveDescription": "Logging-Konfiguration speichern und Änderungen sofort anwenden",
+      "save": "Logging-Konfiguration speichern",
+      "note1": "Änderungen werden sofort auf alle Serverprozesse angewendet",
+      "note2": "Log-Level-Änderungen werden in platform.json gespeichert",
+      "note3": "Niedrigere Level (error, warn) zeigen weniger Nachrichten, höhere Level (debug, silly) mehr",
+      "note4": "Verwenden Sie \"info\" Level für Produktion, \"debug\" für Entwicklung",
+      "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart"
+    },
+    "nav": {
+      "logging": "Logging"
+    },
+    "home": {
+      "sections": {
+        "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren"
+      }
+    },
+    "apps": {
+      "edit": {
+        "autoStart": "Konversation automatisch starten",
+        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird"
+      }
+    },
+    "features": {
+      "title": "Funktionen",
+      "description": "Plattform-Funktionen aktivieren oder deaktivieren",
+      "preview": "Vorschau",
+      "loadError": "Fehler beim Laden der Funktionen",
+      "saveError": "Fehler beim Speichern der Funktionen",
+      "saved": "Funktionen erfolgreich aktualisiert"
     }
   },
   "components": {
@@ -910,7 +1084,14 @@
       "required": "Dieses Feld ist erforderlich",
       "signInWith": "Anmelden mit:",
       "or": "oder",
-      "signingIn": "Anmeldung läuft..."
+      "signingIn": "Anmeldung läuft...",
+      "windowsAuth": "Windows-Authentifizierung",
+      "ldapProvider": "LDAP-Anbieter",
+      "selectProvider": "Automatische Erkennung",
+      "selectAuthMethod": "Authentifizierungsmethode wählen:",
+      "localAuth": "Lokale Authentifizierung",
+      "ldapAuth": "LDAP-Authentifizierung",
+      "backToMethodSelection": "Zurück zur Methodenauswahl"
     },
     "logout": "Abmelden",
     "menu": {
@@ -1024,5 +1205,12 @@
         "transitionTicket": "Sind Sie sicher, dass Sie den Ticket-Status ändern möchten?"
       }
     }
+  },
+  "workflow": {
+    "running": "Workflow läuft...",
+    "unknownStep": "Schritt",
+    "generated": "Generiert",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen"
   }
 }

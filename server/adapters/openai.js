@@ -3,6 +3,7 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
@@ -88,7 +89,11 @@ class OpenAIAdapterClass extends BaseAdapter {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
       const enforceNoExtras = node => {
-        console.log('Enforcing no extras on schema node:', node);
+        logger.info({
+          component: 'OpenAIAdapter',
+          message: 'Enforcing no extras on schema node',
+          nodeType: node?.type
+        });
         if (node && node.type === 'object') {
           node.additionalProperties = false;
         }
@@ -110,15 +115,17 @@ class OpenAIAdapterClass extends BaseAdapter {
           strict: true
         }
       };
-      console.log(
-        'Using response schema for structured output:',
-        JSON.stringify(body.response_format, null, 2)
-      );
+      logger.info({
+        component: 'OpenAIAdapter',
+        message: 'Using response schema for structured output',
+        responseFormat: body.response_format
+      });
     } else if (responseFormat === 'json') {
       body.response_format = { type: 'json_object' };
     }
 
-    console.log('OpenAI request body:', JSON.stringify(body, null, 2));
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // logger.info('OpenAI request body:', JSON.stringify(body, null, 2));
 
     return {
       url: model.url,
@@ -194,7 +201,12 @@ class OpenAIAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      console.error('Error parsing OpenAI response chunk:', error);
+      logger.error({
+        component: 'OpenAIAdapter',
+        message: 'Error parsing OpenAI response chunk',
+        error: error.message,
+        stack: error.stack
+      });
       result.error = true;
       result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
     }

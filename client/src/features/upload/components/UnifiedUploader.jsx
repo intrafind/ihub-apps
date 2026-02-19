@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import Icon from '../../../shared/components/Icon';
 import Uploader from './Uploader';
 import '../components/ImageUpload.css';
 import {
@@ -7,19 +6,39 @@ import {
   getFileTypeDisplay as getFileTypeDisplayUtil,
   formatMimeTypesToDisplay,
   processDocumentFile,
-  formatAcceptAttribute
+  formatAcceptAttribute,
+  processTiffFile,
+  extractAudioFromVideo
 } from '../utils/fileProcessing';
 
 /**
  * Unified uploader component that handles both images and files in a single interface.
  * Automatically detects file type and applies appropriate processing.
+ * Wraps children with drag-drop handlers to make any area a drop zone.
  */
-const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, config = {} }) => {
+const UnifiedUploader = ({
+  onFileSelect,
+  disabled = false,
+  fileData = null,
+  config = {},
+  openDialogRef = null,
+  children
+}) => {
   const { t } = useTranslation();
 
   // Image upload configuration
   const imageConfig = config.imageUpload || {};
   const isImageUploadEnabled = imageConfig.enabled !== false && config.imageUploadEnabled !== false;
+
+  // Audio upload configuration
+  const audioConfig = config.audioUpload || {};
+  const isAudioUploadEnabled = audioConfig.enabled !== false && config.audioUploadEnabled !== false;
+
+  // Video upload configuration
+  const videoConfig = config.videoUpload || {};
+  const isVideoUploadEnabled = videoConfig.enabled !== false && config.videoUploadEnabled !== false;
+  const extractAudioFromVideoEnabled =
+    videoConfig.extractAudio !== false && config.extractAudioFromVideo !== false;
 
   // File upload configuration
   const fileConfig = config.fileUpload || {};
@@ -31,7 +50,12 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   // Configuration with defaults
   const MAX_FILE_SIZE_MB =
     config.maxFileSizeMB ||
-    Math.max(imageConfig.maxFileSizeMB || 0, fileConfig.maxFileSizeMB || 0) ||
+    Math.max(
+      imageConfig.maxFileSizeMB || 0,
+      audioConfig.maxFileSizeMB || 0,
+      videoConfig.maxFileSizeMB || 0,
+      fileConfig.maxFileSizeMB || 0
+    ) ||
     10;
 
   // Image-specific configuration
@@ -48,16 +72,40 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
   const RESIZE_IMAGES = imageConfig.resizeImages !== false && config.resizeImages !== false;
   const MAX_DIMENSION = imageConfig.maxResizeDimension || config.maxResizeDimension || 1024;
 
+  // Audio-specific configuration
+  const AUDIO_FORMATS = isAudioUploadEnabled
+    ? audioConfig.supportedFormats ||
+      config.supportedAudioFormats || [
+        'audio/mpeg',
+        'audio/mp3',
+        'audio/wav',
+        'audio/flac',
+        'audio/ogg'
+      ]
+    : [];
+
+  // Video-specific configuration
+  const VIDEO_FORMATS = isVideoUploadEnabled
+    ? videoConfig.supportedFormats ||
+      config.supportedVideoFormats || ['video/mp4', 'video/webm', 'video/quicktime']
+    : [];
+
   // File-specific configuration
   const TEXT_FORMATS = isFileUploadEnabled
     ? fileConfig.supportedFormats || config.supportedFormats || SUPPORTED_TEXT_FORMATS
     : [];
 
   // All supported formats combined - include both MIME types and file extensions for better OS compatibility
-  const ALL_FORMATS = formatAcceptAttribute([...IMAGE_FORMATS, ...TEXT_FORMATS]);
+  const ALL_FORMATS = formatAcceptAttribute([
+    ...IMAGE_FORMATS,
+    ...AUDIO_FORMATS,
+    ...VIDEO_FORMATS,
+    ...TEXT_FORMATS
+  ]);
 
   const isImageFile = type => IMAGE_FORMATS.includes(type);
-  const isTextFile = type => TEXT_FORMATS.includes(type);
+  const isAudioFile = type => AUDIO_FORMATS.includes(type);
+  const isVideoFile = type => VIDEO_FORMATS.includes(type);
 
   const getFileTypeDisplay = mimeType => {
     // Image types
@@ -65,11 +113,102 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       return mimeType.replace('image/', '').toUpperCase();
     }
 
+    // Audio types
+    if (isAudioFile(mimeType)) {
+      return mimeType.replace('audio/', '').toUpperCase();
+    }
+
+    // Video types
+    if (isVideoFile(mimeType)) {
+      return mimeType.replace('video/', '').toUpperCase();
+    }
+
     // Use shared utility for document types
     return getFileTypeDisplayUtil(mimeType);
   };
 
-  const processImage = file => {
+  const processImage = async file => {
+    // Check if this is a TIFF file
+    const isTiff = file.type === 'image/tiff' || file.type === 'image/tif';
+
+    if (isTiff) {
+      try {
+        // Process TIFF file and convert to PNG
+        const pages = await processTiffFile(file, {
+          maxDimension: MAX_DIMENSION,
+          resize: RESIZE_IMAGES
+        });
+
+        // For multipage TIFFs, return all pages as separate images
+        if (pages.length > 1 && allowMultiple) {
+          // Return array of page results for multipage TIFF
+          const pageResults = [];
+
+          for (let i = 0; i < pages.length; i++) {
+            const page = pages[i];
+
+            // Create blob URL for preview
+            const response = await fetch(page.base64);
+            const blob = await response.blob();
+            const previewUrl = URL.createObjectURL(blob);
+
+            // Generate filename with page number
+            const baseFileName = file.name.replace(/\.tiff?$/i, '');
+            const fileName = `${baseFileName}_page${page.pageNumber}.png`;
+
+            pageResults.push({
+              preview: { type: 'image', url: previewUrl },
+              data: {
+                type: 'image',
+                source: 'local',
+                base64: page.base64,
+                fileName: fileName,
+                fileSize: blob.size,
+                fileType: 'image/png', // Converted to PNG
+                width: page.width,
+                height: page.height,
+                originalFileType: file.type,
+                originalFileName: file.name,
+                pageNumber: page.pageNumber,
+                totalPages: page.totalPages
+              }
+            });
+          }
+
+          // Return special structure to indicate multiple results from single file
+          return { multipleResults: pageResults };
+        }
+
+        // For single-page TIFF or when allowMultiple is false, use first page only
+        const firstPage = pages[0];
+
+        // Create blob URL for preview
+        const response = await fetch(firstPage.base64);
+        const blob = await response.blob();
+        const previewUrl = URL.createObjectURL(blob);
+
+        return {
+          preview: { type: 'image', url: previewUrl },
+          data: {
+            type: 'image',
+            source: 'local',
+            base64: firstPage.base64,
+            fileName: file.name.replace(/\.tiff?$/i, '.png'), // Change extension to PNG
+            fileSize: blob.size,
+            fileType: 'image/png', // Converted to PNG
+            width: firstPage.width,
+            height: firstPage.height,
+            originalFileType: file.type,
+            originalFileName: file.name,
+            tiffPages: pages.length > 1 ? pages : undefined // Include all pages if multipage
+          }
+        };
+      } catch (error) {
+        console.error('Error processing TIFF file:', error);
+        throw new Error('tiff-processing-error');
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
 
@@ -84,6 +223,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
               preview: { type: 'image', url: previewUrl },
               data: {
                 type: 'image',
+                source: 'local',
                 base64: e.target.result,
                 fileName: file.name,
                 fileSize: file.size,
@@ -116,6 +256,7 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
             preview: { type: 'image', url: previewUrl },
             data: {
               type: 'image',
+              source: 'local',
               base64,
               fileName: file.name,
               fileSize: file.size,
@@ -134,10 +275,118 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
     });
   };
 
+  const processAudio = file => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = e => {
+        // For audio files, we just need to read the base64 data
+        // No processing or resizing is needed
+        resolve({
+          preview: {
+            type: 'audio',
+            fileName: file.name,
+            fileType: getFileTypeDisplay(file.type),
+            fileSize: file.size
+          },
+          data: {
+            type: 'audio',
+            source: 'local',
+            base64: e.target.result,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type
+          }
+        });
+      };
+
+      reader.onerror = () => reject(new Error('read-error'));
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const processVideo = async file => {
+    // Extract audio from video if enabled
+    if (extractAudioFromVideoEnabled) {
+      try {
+        const audioData = await extractAudioFromVideo(file);
+
+        // Generate new filename for extracted audio
+        const baseFileName = file.name.replace(/\.[^/.]+$/, ''); // Remove extension
+        const audioFileName = `${baseFileName}.wav`;
+
+        return {
+          preview: {
+            type: 'audio',
+            fileName: audioFileName,
+            fileType: 'WAV',
+            fileSize: audioData.size,
+            extractedFrom: file.name,
+            duration: audioData.duration
+          },
+          data: {
+            type: 'audio',
+            source: 'local',
+            base64: audioData.base64,
+            fileName: audioFileName,
+            fileSize: audioData.size,
+            fileType: audioData.format,
+            extractedFromVideo: true,
+            originalVideoName: file.name,
+            duration: audioData.duration,
+            sampleRate: audioData.sampleRate,
+            channels: audioData.channels
+          }
+        };
+      } catch (error) {
+        console.error('Error extracting audio from video:', error);
+        throw error;
+      }
+    }
+
+    // If audio extraction is not enabled, treat as regular file
+    // (Some models might support video directly)
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = e => {
+        resolve({
+          preview: {
+            type: 'video',
+            fileName: file.name,
+            fileType: getFileTypeDisplay(file.type),
+            fileSize: file.size
+          },
+          data: {
+            type: 'video',
+            source: 'local',
+            base64: e.target.result,
+            fileName: file.name,
+            fileSize: file.size,
+            fileType: file.type
+          }
+        });
+      };
+
+      reader.onerror = () => reject(new Error('read-error'));
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processFile = async file => {
     // Check if image files are disabled
     if (!isImageUploadEnabled && IMAGE_FORMATS.some(format => format === file.type)) {
       throw new Error('image-upload-disabled');
+    }
+
+    // Check if audio files are disabled
+    if (!isAudioUploadEnabled && AUDIO_FORMATS.some(format => format === file.type)) {
+      throw new Error('audio-upload-disabled');
+    }
+
+    // Check if video files are disabled
+    if (!isVideoUploadEnabled && VIDEO_FORMATS.some(format => format === file.type)) {
+      throw new Error('video-upload-disabled');
     }
 
     // Check if file upload is disabled
@@ -150,10 +399,21 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       return await processImage(file);
     }
 
+    // Handle audio files
+    if (isAudioFile(file.type)) {
+      return await processAudio(file);
+    }
+
+    // Handle video files
+    if (isVideoFile(file.type)) {
+      return await processVideo(file);
+    }
+
     // Handle text/document files using shared utility
-    const processedContent = await processDocumentFile(file);
+    const { content: processedContent, pageImages } = await processDocumentFile(file);
+    const displayContent = processedContent || '';
     const previewContent =
-      processedContent.length > 200 ? processedContent.substring(0, 200) + '...' : processedContent;
+      displayContent.length > 200 ? displayContent.substring(0, 200) + '...' : displayContent;
 
     return {
       preview: {
@@ -164,7 +424,9 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       },
       data: {
         type: 'document',
+        source: 'local',
         content: processedContent,
+        pageImages,
         fileName: file.name,
         fileSize: file.size,
         fileType: file.type,
@@ -175,12 +437,18 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
 
   const formatList = (() => {
     const imageFormats = IMAGE_FORMATS.map(format => format.replace('image/', '').toUpperCase());
+    const audioFormats = AUDIO_FORMATS.map(format => format.replace('audio/', '').toUpperCase());
+    const videoFormats = VIDEO_FORMATS.map(format => format.replace('video/', '').toUpperCase());
     const textFormatsDisplay = formatMimeTypesToDisplay(TEXT_FORMATS);
-    const combined =
-      imageFormats.length > 0
-        ? [...imageFormats, textFormatsDisplay].join(', ')
-        : textFormatsDisplay;
-    return combined;
+    const allFormats = [
+      ...imageFormats,
+      ...audioFormats,
+      ...videoFormats,
+      textFormatsDisplay.length > 0 ? textFormatsDisplay : null
+    ]
+      .filter(Boolean)
+      .join(', ');
+    return allFormats;
   })();
 
   const getErrorMessage = code => {
@@ -197,12 +465,37 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
         });
       case 'invalid-image':
         return t('errors.invalidImage', 'Invalid image file');
+      case 'tiff-processing-error':
+        return t(
+          'errors.tiffProcessingError',
+          'Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.'
+        );
       case 'read-error':
         return t('errors.readError', 'Error reading file');
       case 'image-upload-disabled':
         return t(
           'errors.imageUploadDisabled',
           'Image upload is not supported by the selected model. Please choose a different model or upload a text file instead.'
+        );
+      case 'audio-upload-disabled':
+        return t(
+          'errors.audioUploadDisabled',
+          'Audio upload is not supported by the selected model. Please choose a different model.'
+        );
+      case 'video-upload-disabled':
+        return t(
+          'errors.videoUploadDisabled',
+          'Video upload is not supported by the selected model. Please choose a different model.'
+        );
+      case 'audio-decode-error':
+        return t(
+          'errors.audioDecodeError',
+          'Could not decode audio from video. The video format or codec may not be supported by your browser.'
+        );
+      case 'video-audio-extraction-error':
+        return t(
+          'errors.videoAudioExtractionError',
+          'Error extracting audio from video. Please ensure the video contains an audio track.'
         );
       case 'file-upload-disabled':
         return t('errors.fileUploadDisabled', 'File upload is disabled for this application.');
@@ -222,201 +515,64 @@ const UnifiedUploader = ({ onFileSelect, disabled = false, fileData = null, conf
       allowMultiple={allowMultiple}
     >
       {({
-        preview,
         error,
-        isProcessing,
+        isProcessing: _isProcessing,
         isDragging,
         handleButtonClick,
-        handleClear,
         handleDragEnter,
         handleDragLeave,
         handleDragOver,
         handleDrop,
         inputProps
-      }) => (
-        <div
-          className="unified-uploader"
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
-        >
-          <input {...inputProps} />
-          {isDragging && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none"
-              role="alert"
-              aria-live="polite"
-              aria-label={t(
-                'components.uploader.dropZoneActive',
-                'Drop zone active. Release to upload files.'
-              )}
-            >
-              <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
-                <div className="text-center">
-                  <div className="text-6xl mb-4">📎</div>
-                  <p className="text-xl font-semibold text-blue-600">
-                    {t('components.uploader.dropFileHere', 'Drop file here')}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-          {preview ? (
-            <div className="relative mt-2 mb-4">
-              {Array.isArray(preview) ? (
-                // Multiple files preview
-                <div className="space-y-2">
-                  {preview.map((item, index) => (
-                    <div key={index}>
-                      {item.type === 'image' ? (
-                        // Image preview
-                        <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                          <img
-                            src={item.url}
-                            alt={t('common.preview', 'Preview')}
-                            className="max-w-full max-h-60 mx-auto"
-                          />
-                        </div>
-                      ) : (
-                        // Document preview
-                        <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                          <div className="flex items-start gap-3">
-                            <Icon
-                              name="document-text"
-                              className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
-                            />
-                            <div className="flex-1 min-w-0">
-                              <div className="font-medium text-sm text-gray-900 truncate">
-                                {item.fileName}
-                              </div>
-                              <div className="text-xs text-gray-500 mb-2">{item.fileType} file</div>
-                              <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
-                                {item.content}
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={handleClear}
-                    className="w-full mt-2 px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 text-sm"
-                    title={t('common.remove', 'Remove files')}
-                  >
-                    {t('common.removeAll', 'Remove All')}
-                  </button>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.filesSelected', '{{count}} file(s) selected', {
-                      count: preview.length
-                    })}
-                  </div>
-                </div>
-              ) : preview.type === 'image' ? (
-                // Single image preview
-                <div>
-                  <div className="relative rounded-lg overflow-hidden border border-gray-300">
-                    <img
-                      src={preview.url}
-                      alt={t('common.preview', 'Preview')}
-                      className="max-w-full max-h-60 mx-auto"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleClear}
-                      className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90"
-                      title={t('common.remove', 'Remove file')}
-                    >
-                      <Icon name="x" className="w-4 h-4" />
-                    </button>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.imageSelected', 'Image selected')}
-                  </div>
-                </div>
-              ) : (
-                // Single document preview
-                <div>
-                  <div className="relative rounded-lg overflow-hidden border border-gray-300 p-3 bg-gray-50">
-                    <div className="flex items-start gap-3">
-                      <Icon
-                        name="document-text"
-                        className="w-8 h-8 text-blue-500 flex-shrink-0 mt-1"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm text-gray-900 truncate">
-                          {preview.fileName}
-                        </div>
-                        <div className="text-xs text-gray-500 mb-2">{preview.fileType} file</div>
-                        <div className="text-xs text-gray-700 bg-white p-2 rounded border max-h-20 overflow-y-auto">
-                          {preview.content}
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={handleClear}
-                        className="bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90 flex-shrink-0"
-                        title={t('common.remove', 'Remove file')}
-                      >
-                        <Icon name="x" className="w-4 h-4" />
-                      </button>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1 text-center">
-                    {t('components.uploader.fileSelected', 'File selected and processed')}
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="mt-2 mb-4">
-              <button
-                type="button"
-                onClick={handleButtonClick}
-                disabled={disabled || isProcessing}
-                className={`flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg ${
-                  disabled || isProcessing
-                    ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'border-gray-400 hover:border-indigo-500 hover:text-indigo-500'
-                }`}
+      }) => {
+        // Expose file dialog opener to parent via ref
+        if (openDialogRef) {
+          openDialogRef.current = handleButtonClick;
+        }
+
+        return (
+          <div
+            className="unified-uploader"
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDragOver={handleDragOver}
+            onDrop={handleDrop}
+          >
+            {/* Hidden file input */}
+            <input {...inputProps} />
+
+            {/* Drag overlay */}
+            {isDragging && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none"
+                role="alert"
+                aria-live="polite"
+                aria-label={t(
+                  'components.uploader.dropZoneActive',
+                  'Drop zone active. Release to upload files.'
+                )}
               >
-                {isProcessing ? (
-                  <>
-                    <div className="animate-spin h-5 w-5 mr-2 flex items-center justify-center">
-                      <Icon name="refresh" className="text-current" />
-                    </div>
-                    <span>{t('components.uploader.processing', 'Processing file...')}</span>
-                  </>
-                ) : (
-                  <>
-                    <Icon name="paper-clip" className="mr-2" />
-                    <span>
-                      {allowMultiple
-                        ? t('components.uploader.uploadFiles', 'Upload Files')
-                        : t('components.uploader.uploadFile', 'Upload File')}
-                    </span>
-                  </>
-                )}
-              </button>
-
-              {error && <div className="text-red-500 text-sm mt-1">{getErrorMessage(error)}</div>}
-
-              <div className="text-xs text-gray-500 mt-1 text-center">
-                {t(
-                  'components.uploader.supportedFormats',
-                  'Supported: {{formats}} (max {{maxSize}}MB)',
-                  {
-                    formats: formatList,
-                    maxSize: MAX_FILE_SIZE_MB
-                  }
-                )}
+                <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
+                  <div className="text-center">
+                    <div className="text-6xl mb-4">📎</div>
+                    <p className="text-xl font-semibold text-blue-600">
+                      {t('components.uploader.dropFileHere', 'Drop file here')}
+                    </p>
+                  </div>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      )}
+            )}
+
+            {/* Error message */}
+            {error && (
+              <div className="text-red-500 text-sm mb-2 px-2">{getErrorMessage(error)}</div>
+            )}
+
+            {/* Wrapped children (form + file list) */}
+            {children}
+          </div>
+        );
+      }}
     </Uploader>
   );
 };

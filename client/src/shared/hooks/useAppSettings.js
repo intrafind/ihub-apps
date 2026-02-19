@@ -19,6 +19,9 @@ const useAppSettings = (appId, app) => {
   const [thinkingEnabled, setThinkingEnabled] = useState(null);
   const [thinkingBudget, setThinkingBudget] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
+  const [enabledTools, setEnabledTools] = useState([]);
+  const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
+  const [imageQuality, setImageQuality] = useState('Medium');
 
   // Models and styles data
   const [models, setModels] = useState([]);
@@ -75,7 +78,10 @@ const useAppSettings = (appId, app) => {
       sendChatHistory: true,
       thinkingEnabled: app.thinking?.enabled ?? null,
       thinkingBudget: app.thinking?.budget ?? null,
-      thinkingThoughts: app.thinking?.thoughts ?? null
+      thinkingThoughts: app.thinking?.thoughts ?? null,
+      enabledTools: app.tools || [],
+      imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
+      imageQuality: app.imageGeneration?.quality || 'Medium'
     };
 
     // Set initial states
@@ -87,6 +93,9 @@ const useAppSettings = (appId, app) => {
     setThinkingEnabled(initialState.thinkingEnabled);
     setThinkingBudget(initialState.thinkingBudget);
     setThinkingThoughts(initialState.thinkingThoughts);
+    setEnabledTools(initialState.enabledTools);
+    setImageAspectRatio(initialState.imageAspectRatio);
+    setImageQuality(initialState.imageQuality);
 
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
@@ -105,6 +114,10 @@ const useAppSettings = (appId, app) => {
         setThinkingBudget(savedSettings.thinkingBudget);
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
+      if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
+      if (savedSettings.imageAspectRatio !== undefined)
+        setImageAspectRatio(savedSettings.imageAspectRatio);
+      if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
     }
   }, [app, appId, setHeaderColor, models, modelsLoading]);
 
@@ -119,7 +132,10 @@ const useAppSettings = (appId, app) => {
         sendChatHistory,
         thinkingEnabled,
         thinkingBudget,
-        thinkingThoughts
+        thinkingThoughts,
+        enabledTools,
+        imageAspectRatio,
+        imageQuality
       });
     }
   }, [
@@ -132,7 +148,10 @@ const useAppSettings = (appId, app) => {
     sendChatHistory,
     thinkingEnabled,
     thinkingBudget,
-    thinkingThoughts
+    thinkingThoughts,
+    enabledTools,
+    imageAspectRatio,
+    imageQuality
   ]);
 
   // Settings object for easy passing to components
@@ -144,7 +163,10 @@ const useAppSettings = (appId, app) => {
     sendChatHistory,
     thinkingEnabled,
     thinkingBudget,
-    thinkingThoughts
+    thinkingThoughts,
+    enabledTools,
+    imageAspectRatio,
+    imageQuality
   };
 
   // Setters object for easy passing to components
@@ -156,7 +178,10 @@ const useAppSettings = (appId, app) => {
     setSendChatHistory,
     setThinkingEnabled,
     setThinkingBudget,
-    setThinkingThoughts
+    setThinkingThoughts,
+    setEnabledTools,
+    setImageAspectRatio,
+    setImageQuality
   };
 
   return {

@@ -287,7 +287,8 @@
     }
   },
   "ssl": {
-    "ignoreInvalidCertificates": false
+    "ignoreInvalidCertificates": false,
+    "domainWhitelist": []
   },
   "proxy": {
     "enabled": false,

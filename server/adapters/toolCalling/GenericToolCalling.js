@@ -240,6 +240,17 @@ export function sanitizeSchemaForProvider(schema, provider) {
 
     // Remove provider-specific incompatible fields
     if (provider === 'google') {
+      // Normalize non-standard type values to valid JSON Schema types
+      if (
+        obj.type &&
+        !['string', 'number', 'integer', 'boolean', 'array', 'object'].includes(obj.type)
+      ) {
+        obj.type = 'string';
+      }
+      // Ensure description is a plain string (not a multilingual object)
+      if (obj.description && typeof obj.description === 'object') {
+        obj.description = obj.description.en || Object.values(obj.description)[0] || '';
+      }
       delete obj.exclusiveMaximum;
       delete obj.exclusiveMinimum;
       delete obj.title;

@@ -44,6 +44,7 @@ const AppCanvas = () => {
     selectedOutputFormat,
     temperature,
     sendChatHistory,
+    enabledTools,
     models,
     styles,
     setSelectedModel,
@@ -51,6 +52,7 @@ const AppCanvas = () => {
     setSelectedOutputFormat,
     setTemperature,
     setSendChatHistory,
+    setEnabledTools,
     modelsLoading
   } = useAppSettings(appId, app);
 
@@ -211,7 +213,8 @@ const AppCanvas = () => {
             temperature,
             outputFormat: selectedOutputFormat,
             language: currentLanguage,
-            bypassAppPrompts: true
+            bypassAppPrompts: true,
+            ...(enabledTools && enabledTools.length > 0 ? { enabledTools } : {})
           },
           sendChatHistory
         });
@@ -229,6 +232,7 @@ const AppCanvas = () => {
         );
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
       inputValue,
       processing,
@@ -560,7 +564,7 @@ const AppCanvas = () => {
   }
 
   return (
-    <div className="canvas-container flex flex-col h-[calc(100vh-8rem)] max-h-[calc(100vh-8rem)] min-h-0 overflow-hidden pt-4 pb-2 bg-white">
+    <div className="canvas-container flex flex-col h-[calc(100vh-5rem)] max-h-[calc(100vh-5rem)] min-h-0 overflow-hidden pt-4 pb-2 bg-white">
       {/* Shared Header */}
       <SharedAppHeader
         app={app}
@@ -577,11 +581,13 @@ const AppCanvas = () => {
         selectedOutputFormat={selectedOutputFormat}
         sendChatHistory={sendChatHistory}
         temperature={temperature}
+        enabledTools={enabledTools}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
         onSendChatHistoryChange={setSendChatHistory}
         onTemperatureChange={setTemperature}
+        onEnabledToolsChange={setEnabledTools}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onShare={() => setShowShare(true)}
@@ -609,6 +615,8 @@ const AppCanvas = () => {
           width={panelSizes.chat}
           inputRef={chatInputRef}
           onInsertAnswer={handleInsertAnswer}
+          modelId={selectedModel}
+          models={models}
         />
 
         {/* Resize Handle */}

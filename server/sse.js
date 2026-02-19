@@ -1,6 +1,7 @@
 export const clients = new Map();
 export const activeRequests = new Map();
 import { actionTracker } from './actionTracker.js';
+import logger from './utils/logger.js';
 
 export function sendSSE(res, event, data) {
   res.write(`event: ${event}\n`);
@@ -11,11 +12,12 @@ actionTracker.on('fire-sse', step => {
   const { chatId, event } = step;
   if (!chatId) return;
   if (clients.has(chatId)) {
-    const client = clients.get(chatId).response;
+    const clientEntry = clients.get(chatId);
+    clientEntry.lastActivity = new Date(); // Keep connection marked as active
     try {
-      sendSSE(client, event, step);
+      sendSSE(clientEntry.response, event, step);
     } catch (err) {
-      console.error('Error sending SSE action event:', err);
+      logger.error('Error sending SSE action event:', { component: 'SSE', error: err });
     }
   }
 });

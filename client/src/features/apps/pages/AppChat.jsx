@@ -15,6 +15,7 @@ import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
@@ -22,6 +23,7 @@ import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
 import InputVariables from '../../chat/components/InputVariables';
 import SharedAppHeader from '../components/SharedAppHeader';
+import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
 
@@ -102,6 +104,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const { appId } = useParams();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
@@ -112,7 +115,7 @@ const AppChat = ({ preloadedApp = null }) => {
   const [showParameters, setShowParameters] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
-  const shareEnabled = app?.features?.shortLinks !== false;
+  const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 
   // Shared app settings hook
   const {
@@ -124,6 +127,9 @@ const AppChat = ({ preloadedApp = null }) => {
     thinkingEnabled,
     thinkingBudget,
     thinkingThoughts,
+    enabledTools,
+    imageAspectRatio,
+    imageQuality,
     models,
     styles,
     setSelectedModel,
@@ -134,8 +140,15 @@ const AppChat = ({ preloadedApp = null }) => {
     setThinkingEnabled,
     setThinkingBudget,
     setThinkingThoughts,
+    setEnabledTools,
+    setImageAspectRatio,
+    setImageQuality,
     modelsLoading
   } = useAppSettings(appId, app);
+
+  // When tools feature is disabled platform-wide, hide tool UI entirely
+  const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
+  const effectiveEnabledTools = toolsFeatureEnabled ? enabledTools : null;
 
   // Apply settings and variables from URL parameters once app data is loaded
   useEffect(() => {
@@ -190,6 +203,7 @@ const AppChat = ({ preloadedApp = null }) => {
         'temp',
         'history',
         'prefill',
+        'send',
         ...Object.keys(newVars).map(v => `var_${v}`)
       ].forEach(k => newSearch.delete(k));
       navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
@@ -224,13 +238,15 @@ const AppChat = ({ preloadedApp = null }) => {
   const {
     monitorChatMessages,
     connectIntegration,
-    checkConnectionStatus,
+    // checkConnectionStatus is available but not currently used
     getRequiredIntegrations
   } = useIntegrationAuth();
 
   const inputRef = useRef(null);
   const formRef = useRef(null);
   const chatId = useRef(getOrCreateChatId(appId));
+  // Ref to store variables for resend operations to avoid race condition with state updates
+  const pendingVariablesRef = useRef(null);
 
   // Restore existing chat ID when the appId changes
   useEffect(() => {
@@ -303,18 +319,159 @@ const AppChat = ({ preloadedApp = null }) => {
   const {
     messages,
     processing,
+    clarificationPending,
     sendMessage: sendChatMessage,
     resendMessage: prepareResend,
     deleteMessage,
     editMessage,
     clearMessages,
     cancelGeneration,
-    addSystemMessage
+    addSystemMessage,
+    submitClarificationResponse
   } = useAppChat({
     appId,
     chatId: chatId.current,
     onMessageComplete: handleMessageComplete
   });
+
+  // Auto-send message if send=true query parameter is present
+  const autoSendTriggered = useRef(false);
+
+  // Reset auto-send trigger when appId changes
+  useEffect(() => {
+    autoSendTriggered.current = false;
+  }, [appId]);
+
+  useEffect(() => {
+    const shouldAutoSend = searchParams.get('send') === 'true';
+
+    if (shouldAutoSend && !autoSendTriggered.current && prefillMessage && app && !processing) {
+      autoSendTriggered.current = true;
+
+      // Clean up the send parameter from URL
+      const newSearch = new URLSearchParams(searchParams);
+      newSearch.delete('send');
+      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+
+      // Trigger the form submission after a short delay to ensure everything is initialized
+      setTimeout(() => {
+        if (formRef.current) {
+          formRef.current.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true }));
+        }
+      }, 100);
+    }
+  }, [app, processing, prefillMessage, searchParams, navigate]);
+
+  // Auto-start conversation if app.autoStart is enabled
+  const autoStartTriggered = useRef(false);
+
+  // Reset auto-start trigger when appId or chatId changes
+  useEffect(() => {
+    autoStartTriggered.current = false;
+  }, [appId, chatId.current]);
+
+  useEffect(() => {
+    // Check if we should auto-start the conversation
+    const shouldAutoStart =
+      app?.autoStart === true && // App has autoStart enabled
+      messages.length === 0 && // No messages yet
+      !processing && // Not currently processing
+      !autoStartTriggered.current && // Haven't triggered yet
+      selectedModel && // Model is selected
+      app.variables; // Variables are initialized
+
+    if (shouldAutoStart) {
+      console.log('Auto-starting conversation for app:', appId);
+      autoStartTriggered.current = true;
+
+      // Send an empty message to trigger the LLM
+      // The empty user message will be filtered out in ChatMessageList
+      setTimeout(() => {
+        const params = {
+          modelId: selectedModel,
+          style: selectedStyle,
+          temperature,
+          outputFormat: selectedOutputFormat,
+          language: currentLanguage,
+          ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+          ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+          ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
+          ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+            ? { enabledTools: effectiveEnabledTools }
+            : {}),
+          ...(imageAspectRatio ? { imageAspectRatio } : {}),
+          ...(imageQuality ? { imageQuality } : {})
+        };
+
+        // Prepare validated variables
+        const validatedVariables = {};
+        if (app?.variables && app.variables.length > 0) {
+          app.variables.forEach(varConfig => {
+            const currentValue = variables[varConfig.name];
+            const isEmptyOrWhitespace =
+              currentValue === undefined ||
+              currentValue === null ||
+              (typeof currentValue === 'string' && currentValue.trim() === '');
+
+            if (isEmptyOrWhitespace) {
+              const defaultValue =
+                typeof varConfig.defaultValue === 'object'
+                  ? getLocalizedContent(varConfig.defaultValue, currentLanguage)
+                  : varConfig.defaultValue || '';
+              validatedVariables[varConfig.name] = defaultValue;
+            } else {
+              validatedVariables[varConfig.name] = currentValue;
+            }
+          });
+        }
+
+        // Send empty message to trigger auto-start
+        sendChatMessage({
+          displayMessage: {
+            content: '', // Empty content - will be filtered out in ChatMessageList
+            meta: {
+              rawContent: '',
+              variables:
+                app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined
+            }
+          },
+          apiMessage: {
+            content: '',
+            promptTemplate: app?.prompt || null,
+            variables: { ...validatedVariables },
+            imageData: null,
+            fileData: null
+          },
+          params,
+          sendChatHistory,
+          messageMetadata: {
+            customResponseRenderer: app?.customResponseRenderer,
+            outputFormat: selectedOutputFormat
+          }
+        });
+      }, 300); // Small delay to ensure everything is initialized
+    }
+  }, [
+    app,
+    messages.length,
+    processing,
+    appId,
+    selectedModel,
+    selectedStyle,
+    temperature,
+    selectedOutputFormat,
+    sendChatHistory,
+    currentLanguage,
+    variables,
+    thinkingEnabled,
+    thinkingBudget,
+    thinkingThoughts,
+    effectiveEnabledTools,
+    imageAspectRatio,
+    imageQuality,
+    sendChatMessage,
+    getLocalizedContent
+  ]);
 
   // Determine which integrations this app uses
   const appIntegrations = useMemo(() => {
@@ -604,11 +761,18 @@ const AppChat = ({ preloadedApp = null }) => {
       content: contentToResend,
       variables: variablesToRestore,
       imageData: imageDataToRestore,
+      audioData: audioDataToRestore,
       fileData: fileDataToRestore
     } = resendData;
 
     // Allow resending if there's content OR if the app allows empty content (for variable-only messages)
-    if (!contentToResend && !imageDataToRestore && !fileDataToRestore && !app?.allowEmptyContent)
+    if (
+      !contentToResend &&
+      !imageDataToRestore &&
+      !audioDataToRestore &&
+      !fileDataToRestore &&
+      !app?.allowEmptyContent
+    )
       return;
 
     setInput(contentToResend || '');
@@ -616,14 +780,17 @@ const AppChat = ({ preloadedApp = null }) => {
     // Restore variables if they exist
     if (variablesToRestore) {
       setVariables(variablesToRestore);
+      // Store variables in ref to ensure they're available for validation
+      // This avoids race condition with async state updates
+      pendingVariablesRef.current = variablesToRestore;
     }
 
     // Clear any existing selected files first
     fileUploadHandler.clearSelectedFile();
 
-    // Restore file data (images and/or documents) if they exist
-    if (imageDataToRestore || fileDataToRestore) {
-      // Reconstruct the selectedFile state from imageData and fileData
+    // Restore file data (images, audio, and/or documents) if they exist
+    if (imageDataToRestore || audioDataToRestore || fileDataToRestore) {
+      // Reconstruct the selectedFile state from imageData, audioData, and fileData
       let filesToRestore = [];
 
       // Add images to the array
@@ -632,6 +799,15 @@ const AppChat = ({ preloadedApp = null }) => {
           filesToRestore = [...filesToRestore, ...imageDataToRestore];
         } else {
           filesToRestore.push(imageDataToRestore);
+        }
+      }
+
+      // Add audio files to the array
+      if (audioDataToRestore) {
+        if (Array.isArray(audioDataToRestore)) {
+          filesToRestore = [...filesToRestore, ...audioDataToRestore];
+        } else {
+          filesToRestore.push(audioDataToRestore);
         }
       }
 
@@ -667,6 +843,60 @@ const AppChat = ({ preloadedApp = null }) => {
       }
     }, 0);
   };
+
+  /**
+   * Handle clarification response submission.
+   * Formats the response and continues the conversation.
+   *
+   * @param {Object} response - The clarification response
+   */
+  const handleClarificationSubmit = useCallback(
+    response => {
+      const params = {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage
+      };
+      submitClarificationResponse(response, params);
+    },
+    [
+      submitClarificationResponse,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage
+    ]
+  );
+
+  /**
+   * Handle clarification skip.
+   * Creates a skip response and continues the conversation.
+   *
+   * @param {Object} response - The skip response
+   */
+  const handleClarificationSkip = useCallback(
+    response => {
+      const params = {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage
+      };
+      submitClarificationResponse(response, params);
+    },
+    [
+      submitClarificationResponse,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage
+    ]
+  );
 
   const clearChat = () => {
     if (
@@ -723,10 +953,14 @@ const AppChat = ({ preloadedApp = null }) => {
       return;
     }
 
+    // Use pending variables from ref if available (for resend operations),
+    // otherwise use the state variables. This avoids race condition with async state updates.
+    const currentVariables = pendingVariablesRef.current || variables;
+
     if (app?.variables) {
       const missingRequiredVars = app.variables
         .filter(v => v.required)
-        .filter(v => !variables[v.name] || variables[v.name].trim() === '');
+        .filter(v => !currentVariables[v.name] || currentVariables[v.name].trim() === '');
       if (missingRequiredVars.length > 0) {
         const errorMessage =
           t('error.missingRequiredFields', 'Please fill in all required fields:') +
@@ -736,6 +970,8 @@ const AppChat = ({ preloadedApp = null }) => {
         if (window.innerWidth < 768 && !showParameters) {
           toggleParameters();
         }
+        // Clear pending variables ref on validation failure
+        pendingVariablesRef.current = null;
         return;
       }
     }
@@ -744,11 +980,13 @@ const AppChat = ({ preloadedApp = null }) => {
 
     let finalInput = input.trim();
     let messageContent = finalInput;
+    let messageData = {};
 
     if (fileUploadHandler.selectedFile) {
       // Handle multiple files
       if (Array.isArray(fileUploadHandler.selectedFile)) {
         const images = fileUploadHandler.selectedFile.filter(f => f.type === 'image');
+        const audioFiles = fileUploadHandler.selectedFile.filter(f => f.type === 'audio');
         const documents = fileUploadHandler.selectedFile.filter(f => f.type === 'document');
 
         let contentParts = [finalInput];
@@ -764,6 +1002,17 @@ const AppChat = ({ preloadedApp = null }) => {
           contentParts.push(imgPreviews);
         }
 
+        // Add audio file indicators
+        if (audioFiles.length > 0) {
+          const audioIndicators = audioFiles
+            .map(
+              audio =>
+                `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin: 4px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${audio.fileName}</span>\n      </div>`
+            )
+            .join('');
+          contentParts.push(audioIndicators);
+        }
+
         // Add file indicators
         if (documents.length > 0) {
           const fileIndicators = documents
@@ -776,14 +1025,25 @@ const AppChat = ({ preloadedApp = null }) => {
         }
 
         messageContent = contentParts.filter(Boolean).join('\n\n');
+        messageData = {
+          imageData: images.length > 0 ? images : undefined,
+          audioData: audioFiles.length > 0 ? audioFiles : undefined,
+          fileData: documents.length > 0 ? documents : undefined
+        };
       } else {
         // Handle single file (legacy behavior)
         if (fileUploadHandler.selectedFile.type === 'image') {
           const imgPreview = `<img src="${fileUploadHandler.selectedFile.base64}" alt="${t('common.uploadedImage', 'Uploaded image')}" style="max-width: 100%; max-height: 300px; margin-top: 8px;" />`;
           messageContent = finalInput ? `${finalInput}\n\n${imgPreview}` : imgPreview;
+          messageData = { imageData: fileUploadHandler.selectedFile };
+        } else if (fileUploadHandler.selectedFile.type === 'audio') {
+          const audioIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">🎵</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
+          messageContent = finalInput ? `${finalInput} ${audioIndicator}` : audioIndicator;
+          messageData = { audioData: fileUploadHandler.selectedFile };
         } else {
           const fileIndicator = `<div style="display: inline-flex; align-items: center; background-color: #4b5563; border: 1px solid #d1d5db; border-radius: 6px; padding: 4px 8px; margin-left: 8px; font-size: 0.875em; color: #ffffff;">\n        <span style="margin-right: 4px;">📎</span>\n        <span>${fileUploadHandler.selectedFile.fileName}</span>\n      </div>`;
           messageContent = finalInput ? `${finalInput} ${fileIndicator}` : fileIndicator;
+          messageData = { fileData: fileUploadHandler.selectedFile };
         }
       }
     }
@@ -797,24 +1057,55 @@ const AppChat = ({ preloadedApp = null }) => {
       ...(useMaxTokens ? { useMaxTokens: true } : {}),
       ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
       ...(thinkingBudget !== null ? { thinkingBudget } : {}),
-      ...(thinkingThoughts !== null ? { thinkingThoughts } : {})
+      ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
+      ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+        ? { enabledTools: effectiveEnabledTools }
+        : {}),
+      ...(imageAspectRatio ? { imageAspectRatio } : {}),
+      ...(imageQuality ? { imageQuality } : {})
     };
 
     console.log('📤 Sending message with params:', params);
     console.log('🔢 useMaxTokens state:', useMaxTokens);
+
+    // Validate variables: fall back to defaults if empty or whitespace-only
+    const validatedVariables = {};
+    if (app?.variables && app.variables.length > 0) {
+      app.variables.forEach(varConfig => {
+        const currentValue = currentVariables[varConfig.name];
+        const isEmptyOrWhitespace =
+          currentValue === undefined ||
+          currentValue === null ||
+          (typeof currentValue === 'string' && currentValue.trim() === '');
+
+        if (isEmptyOrWhitespace) {
+          // Use default value if current value is empty/whitespace
+          const defaultValue =
+            typeof varConfig.defaultValue === 'object'
+              ? getLocalizedContent(varConfig.defaultValue, currentLanguage)
+              : varConfig.defaultValue || '';
+          validatedVariables[varConfig.name] = defaultValue;
+        } else {
+          // Use current value
+          validatedVariables[varConfig.name] = currentValue;
+        }
+      });
+    }
 
     sendChatMessage({
       displayMessage: {
         content: messageContent,
         meta: {
           rawContent: input,
-          variables: app?.variables && app.variables.length > 0 ? { ...variables } : undefined
+          variables:
+            app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
+          ...messageData
         }
       },
       apiMessage: {
         content: input,
         promptTemplate: app?.prompt || null,
-        variables: { ...variables },
+        variables: { ...validatedVariables },
         imageData: (() => {
           // Handle image data: convert to object/array/null based on count
           const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
@@ -827,6 +1118,20 @@ const AppChat = ({ preloadedApp = null }) => {
             ? imageFiles[0]
             : imageFiles.length > 1
               ? imageFiles
+              : null;
+        })(),
+        audioData: (() => {
+          // Handle audio data: convert to object/array/null based on count
+          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
+            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
+            : fileUploadHandler.selectedFile?.type === 'audio'
+              ? [fileUploadHandler.selectedFile]
+              : [];
+          // Return single object for 1 file, array for multiple, null for none
+          return audioFiles.length === 1
+            ? audioFiles[0]
+            : audioFiles.length > 1
+              ? audioFiles
               : null;
         })(),
         fileData: (() => {
@@ -845,7 +1150,11 @@ const AppChat = ({ preloadedApp = null }) => {
         })()
       },
       params,
-      sendChatHistory
+      sendChatHistory,
+      messageMetadata: {
+        customResponseRenderer: app?.customResponseRenderer,
+        outputFormat: selectedOutputFormat
+      }
     });
 
     setInput('');
@@ -853,6 +1162,8 @@ const AppChat = ({ preloadedApp = null }) => {
     magicPromptHandler.resetMagicPrompt();
     fileUploadHandler.clearSelectedFile();
     fileUploadHandler.hideUploader();
+    // Clear pending variables ref after successful submission
+    pendingVariablesRef.current = null;
   };
 
   // Function to reload the current app
@@ -917,6 +1228,69 @@ const AppChat = ({ preloadedApp = null }) => {
     }
   }, [variables, showParameters]);
 
+  // Helper function to render the appropriate chat input component
+  const renderChatInput = () => {
+    const currentModel = models.find(m => m.id === selectedModel);
+
+    const commonProps = {
+      app,
+      value: input,
+      onChange: handleInputChange,
+      onSubmit: handleSubmit,
+      isProcessing: processing,
+      onCancel: cancelGeneration,
+      onVoiceInput:
+        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+          ? handleVoiceInput
+          : undefined,
+      onVoiceCommand:
+        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
+          ? handleVoiceCommand
+          : undefined,
+      onFileSelect: fileUploadHandler.handleFileSelect,
+      uploadConfig: fileUploadHandler.createUploadConfig(app, currentModel),
+      allowEmptySubmit: app?.allowEmptyContent || fileUploadHandler.selectedFile !== null,
+      inputRef,
+      formRef,
+      selectedFile: fileUploadHandler.selectedFile,
+      showUploader: fileUploadHandler.showUploader,
+      onToggleUploader: fileUploadHandler.toggleUploader,
+      magicPromptEnabled: featureFlags.isAppFeatureEnabled(app, 'magicPrompt.enabled', false),
+      onMagicPrompt: handleMagicPrompt,
+      showUndoMagicPrompt: magicPromptHandler.showUndoMagicPrompt,
+      onUndoMagicPrompt: handleUndoMagicPrompt,
+      magicPromptLoading: magicPromptHandler.magicLoading,
+      enabledTools: effectiveEnabledTools,
+      onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
+      // Image generation props
+      model: currentModel,
+      imageAspectRatio,
+      imageQuality,
+      onImageAspectRatioChange: setImageAspectRatio,
+      onImageQualityChange: setImageQuality,
+      // Clarification state
+      clarificationPending
+    };
+
+    // Always use ChatInput (which now has the NextGen design with model selector)
+    return (
+      <>
+        <ChatInput
+          {...commonProps}
+          models={models}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
+          currentLanguage={currentLanguage}
+          showModelSelector={
+            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+          }
+        />
+        {/* Show AI disclaimer after user has submitted at least one message */}
+        {messages.length > 0 && <AIDisclaimerBanner />}
+      </>
+    );
+  };
+
   if (loading) {
     return <LoadingSpinner message={t('app.loading')} />;
   }
@@ -939,7 +1313,7 @@ const AppChat = ({ preloadedApp = null }) => {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)] max-h-[calc(100vh-10rem)] min-h-0 overflow-hidden pt-4 pb-2">
+    <div className="flex flex-col h-[calc(100vh-6rem)] max-h-[calc(100vh-6rem)] min-h-0 overflow-hidden pt-4 pb-2">
       {/* Shared App Header */}
       <SharedAppHeader
         app={app}
@@ -960,6 +1334,9 @@ const AppChat = ({ preloadedApp = null }) => {
         thinkingEnabled={thinkingEnabled}
         thinkingBudget={thinkingBudget}
         thinkingThoughts={thinkingThoughts}
+        enabledTools={effectiveEnabledTools}
+        imageAspectRatio={imageAspectRatio}
+        imageQuality={imageQuality}
         onModelChange={setSelectedModel}
         onStyleChange={setSelectedStyle}
         onOutputFormatChange={setSelectedOutputFormat}
@@ -968,6 +1345,9 @@ const AppChat = ({ preloadedApp = null }) => {
         onThinkingEnabledChange={setThinkingEnabled}
         onThinkingBudgetChange={setThinkingBudget}
         onThinkingThoughtsChange={setThinkingThoughts}
+        onEnabledToolsChange={setEnabledTools}
+        onImageAspectRatioChange={setImageAspectRatio}
+        onImageQualityChange={setImageQuality}
         showConfig={showConfig}
         onToggleConfig={toggleConfig}
         onToggleParameters={toggleParameters}
@@ -1028,9 +1408,9 @@ const AppChat = ({ preloadedApp = null }) => {
             <>
               {/* Mobile layout: content centers, input at bottom */}
               <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden flex flex-col">
                   {messages.length > 0 ? (
-                    <div className="w-full h-full overflow-y-auto bg-gray-50 rounded-lg">
+                    <div className="w-full h-full overflow-y-auto bg-gray-50 rounded-lg flex flex-col">
                       <ChatMessageList
                         messages={messages}
                         outputFormat={selectedOutputFormat}
@@ -1045,6 +1425,10 @@ const AppChat = ({ preloadedApp = null }) => {
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
+                        app={app}
+                        models={models}
+                        onClarificationSubmit={handleClarificationSubmit}
+                        onClarificationSkip={handleClarificationSkip}
                       />
                     </div>
                   ) : (
@@ -1058,41 +1442,7 @@ const AppChat = ({ preloadedApp = null }) => {
                   )}
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">
-                  <div className="w-full max-w-4xl mx-auto">
-                    <ChatInput
-                      app={app}
-                      value={input}
-                      onChange={handleInputChange}
-                      onSubmit={handleSubmit}
-                      isProcessing={processing}
-                      onCancel={cancelGeneration}
-                      onVoiceInput={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceInput
-                          : undefined
-                      }
-                      onVoiceCommand={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceCommand
-                          : undefined
-                      }
-                      onFileSelect={fileUploadHandler.handleFileSelect}
-                      uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={
-                        app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                      }
-                      inputRef={inputRef}
-                      formRef={formRef}
-                      selectedFile={fileUploadHandler.selectedFile}
-                      showUploader={fileUploadHandler.showUploader}
-                      onToggleUploader={fileUploadHandler.toggleUploader}
-                      magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                      onMagicPrompt={handleMagicPrompt}
-                      showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                      onUndoMagicPrompt={handleUndoMagicPrompt}
-                      magicPromptLoading={magicPromptHandler.magicLoading}
-                    />
-                  </div>
+                  <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
                 </div>
               </div>
 
@@ -1115,6 +1465,10 @@ const AppChat = ({ preloadedApp = null }) => {
                         canvasEnabled={app?.features?.canvas === true}
                         requiredIntegrations={requiredIntegrations}
                         onConnectIntegration={connectIntegration}
+                        app={app}
+                        models={models}
+                        onClarificationSubmit={handleClarificationSubmit}
+                        onClarificationSkip={handleClarificationSkip}
                       />
                     </div>
                   ) : (
@@ -1122,41 +1476,7 @@ const AppChat = ({ preloadedApp = null }) => {
                       {renderStartupState(app, welcomeMessage, handleStarterPromptClick)}
                     </div>
                   )}
-                  <div>
-                    <ChatInput
-                      app={app}
-                      value={input}
-                      onChange={handleInputChange}
-                      onSubmit={handleSubmit}
-                      isProcessing={processing}
-                      onCancel={cancelGeneration}
-                      onVoiceInput={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceInput
-                          : undefined
-                      }
-                      onVoiceCommand={
-                        (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                          ? handleVoiceCommand
-                          : undefined
-                      }
-                      onFileSelect={fileUploadHandler.handleFileSelect}
-                      uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                      allowEmptySubmit={
-                        app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                      }
-                      inputRef={inputRef}
-                      formRef={formRef}
-                      selectedFile={fileUploadHandler.selectedFile}
-                      showUploader={fileUploadHandler.showUploader}
-                      onToggleUploader={fileUploadHandler.toggleUploader}
-                      magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                      onMagicPrompt={handleMagicPrompt}
-                      showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                      onUndoMagicPrompt={handleUndoMagicPrompt}
-                      magicPromptLoading={magicPromptHandler.magicLoading}
-                    />
-                  </div>
+                  <div>{renderChatInput()}</div>
                 </div>
               </div>
             </>
@@ -1165,7 +1485,7 @@ const AppChat = ({ preloadedApp = null }) => {
             <>
               {/* Mobile layout: content scrollable, input at bottom */}
               <div className="flex flex-col h-full md:hidden">
-                <div className="flex-1 overflow-hidden">
+                <div className="flex-1 overflow-hidden flex flex-col">
                   <ChatMessageList
                     messages={messages}
                     outputFormat={selectedOutputFormat}
@@ -1184,43 +1504,13 @@ const AppChat = ({ preloadedApp = null }) => {
                     canvasEnabled={app?.features?.canvas === true}
                     requiredIntegrations={requiredIntegrations}
                     onConnectIntegration={connectIntegration}
-                  />
-                </div>
-                <div className="flex-shrink-0 px-4 pt-2">
-                  <ChatInput
                     app={app}
-                    value={input}
-                    onChange={handleInputChange}
-                    onSubmit={handleSubmit}
-                    isProcessing={processing}
-                    onCancel={cancelGeneration}
-                    onVoiceInput={
-                      (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                        ? handleVoiceInput
-                        : undefined
-                    }
-                    onVoiceCommand={
-                      (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                        ? handleVoiceCommand
-                        : undefined
-                    }
-                    onFileSelect={fileUploadHandler.handleFileSelect}
-                    uploadConfig={fileUploadHandler.createUploadConfig(app, selectedModel)}
-                    allowEmptySubmit={
-                      app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                    }
-                    inputRef={inputRef}
-                    formRef={formRef}
-                    selectedFile={fileUploadHandler.selectedFile}
-                    showUploader={fileUploadHandler.showUploader}
-                    onToggleUploader={fileUploadHandler.toggleUploader}
-                    magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                    onMagicPrompt={handleMagicPrompt}
-                    showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                    onUndoMagicPrompt={handleUndoMagicPrompt}
-                    magicPromptLoading={magicPromptHandler.magicLoading}
+                    models={models}
+                    onClarificationSubmit={handleClarificationSubmit}
+                    onClarificationSkip={handleClarificationSkip}
                   />
                 </div>
+                <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
               </div>
 
               {/* Desktop layout: normal flex column */}
@@ -1243,41 +1533,12 @@ const AppChat = ({ preloadedApp = null }) => {
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
+                  models={models}
+                  onClarificationSubmit={handleClarificationSubmit}
+                  onClarificationSkip={handleClarificationSkip}
                 />
 
-                <ChatInput
-                  app={app}
-                  value={input}
-                  onChange={handleInputChange}
-                  onSubmit={handleSubmit}
-                  isProcessing={processing}
-                  onCancel={cancelGeneration}
-                  onVoiceInput={
-                    (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                      ? handleVoiceInput
-                      : undefined
-                  }
-                  onVoiceCommand={
-                    (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
-                      ? handleVoiceCommand
-                      : undefined
-                  }
-                  onFileSelect={fileUploadHandler.handleFileSelect}
-                  uploadConfig={fileUploadHandler.createUploadConfig(app)}
-                  allowEmptySubmit={
-                    app?.allowEmptyContent || fileUploadHandler.selectedFile !== null
-                  }
-                  inputRef={inputRef}
-                  formRef={formRef}
-                  selectedFile={fileUploadHandler.selectedFile}
-                  showUploader={fileUploadHandler.showUploader}
-                  onToggleUploader={fileUploadHandler.toggleUploader}
-                  magicPromptEnabled={app?.features?.magicPrompt?.enabled === true}
-                  onMagicPrompt={handleMagicPrompt}
-                  showUndoMagicPrompt={magicPromptHandler.showUndoMagicPrompt}
-                  onUndoMagicPrompt={handleUndoMagicPrompt}
-                  magicPromptLoading={magicPromptHandler.magicLoading}
-                />
+                {renderChatInput()}
               </div>
             </>
           )}

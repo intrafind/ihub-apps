@@ -15,19 +15,64 @@ const Uploader = ({
   children
 }) => {
   const [preview, setPreview] = useState(null);
+  const [fileData, setFileData] = useState(null); // Track file data separately
   const [error, setError] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
-  const [dragCounter, setDragCounter] = useState(0);
+  const [_dragCounter, setDragCounter] = useState(0);
   const fileInputRef = useRef(null);
 
   // Reset preview when parent clears the data
   useEffect(() => {
     if (data === null && preview !== null) {
       setPreview(null);
+      setFileData(null);
       if (fileInputRef.current) {
         fileInputRef.current.value = '';
       }
+    }
+  }, [data, preview]);
+
+  // Sync preview from externally-provided data (e.g., cloud file downloads)
+  useEffect(() => {
+    if (data !== null && data !== undefined && preview === null) {
+      // Data was set externally (cloud upload) — derive preview from it
+      if (Array.isArray(data)) {
+        const previews = data.map(item => {
+          if (item.type === 'image') {
+            return {
+              type: 'image',
+              url: item.base64,
+              fileName: item.fileName,
+              fileType: item.fileType
+            };
+          }
+          return {
+            type: item.type,
+            fileName: item.fileName,
+            fileType: item.fileType,
+            content: item.content
+          };
+        });
+        setPreview(previews);
+      } else {
+        if (data.type === 'image') {
+          setPreview({
+            type: 'image',
+            url: data.base64,
+            fileName: data.fileName,
+            fileType: data.fileType
+          });
+        } else {
+          setPreview({
+            type: data.type,
+            fileName: data.fileName,
+            fileType: data.fileType,
+            content: data.content
+          });
+        }
+      }
+      setFileData(data);
     }
   }, [data, preview]);
 
@@ -88,23 +133,52 @@ const Uploader = ({
         for (const file of files) {
           const result = await onProcessFile(file);
           if (result && typeof result === 'object') {
-            results.push(result);
+            // Check if this is a multipage TIFF that returned multiple results
+            if (result.multipleResults && Array.isArray(result.multipleResults)) {
+              // Add all pages from multipage TIFF
+              results.push(...result.multipleResults);
+            } else {
+              results.push(result);
+            }
           }
         }
 
         if (results.length > 0) {
-          setPreview(results.map(r => r.preview || null));
+          const newPreviews = results.map(r => r.preview || null);
+          const newDataArray = results.map(r => r.data);
+
+          // Merge with existing data if present
+          const existingPreviews = Array.isArray(preview) ? preview : preview ? [preview] : [];
+          const existingData = Array.isArray(fileData) ? fileData : fileData ? [fileData] : [];
+
+          const mergedPreviews = [...existingPreviews, ...newPreviews];
+          const mergedData = [...existingData, ...newDataArray];
+
+          setPreview(mergedPreviews);
+          setFileData(mergedData);
           if (onSelect) {
-            onSelect(results.map(r => r.data));
+            onSelect(mergedData);
           }
         }
       } else {
         // Process single file (legacy behavior)
         const result = await onProcessFile(files[0]);
         if (result && typeof result === 'object') {
-          setPreview(result.preview || null);
-          if (onSelect) {
-            onSelect(result.data);
+          // Check if this is a multipage TIFF that returned multiple results
+          if (result.multipleResults && Array.isArray(result.multipleResults)) {
+            // For single file mode with multipage TIFF, use only the first page
+            const firstResult = result.multipleResults[0];
+            setPreview(firstResult.preview || null);
+            setFileData(firstResult.data);
+            if (onSelect) {
+              onSelect(firstResult.data);
+            }
+          } else {
+            setPreview(result.preview || null);
+            setFileData(result.data);
+            if (onSelect) {
+              onSelect(result.data);
+            }
           }
         }
       }
@@ -129,6 +203,7 @@ const Uploader = ({
 
   const handleClear = () => {
     setPreview(null);
+    setFileData(null);
     setError(null);
     setIsProcessing(false);
     if (fileInputRef.current) {
@@ -136,6 +211,26 @@ const Uploader = ({
     }
     if (onSelect) {
       onSelect(null);
+    }
+  };
+
+  const handleRemoveItem = index => {
+    if (Array.isArray(preview) && Array.isArray(fileData)) {
+      const newPreview = preview.filter((_, i) => i !== index);
+      const newData = fileData.filter((_, i) => i !== index);
+
+      setPreview(newPreview.length > 0 ? newPreview : null);
+      setFileData(newData.length > 0 ? newData : null);
+
+      // Update the onSelect callback with filtered data
+      if (onSelect) {
+        onSelect(newData.length > 0 ? newData : null);
+      }
+
+      // Clear file input if no files left
+      if (newPreview.length === 0 && fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -189,6 +284,7 @@ const Uploader = ({
     isDragging,
     handleButtonClick,
     handleClear,
+    handleRemoveItem,
     handleDragEnter,
     handleDragLeave,
     handleDragOver,

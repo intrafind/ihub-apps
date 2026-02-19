@@ -1,0 +1,19 @@
+{
+  "id": "gemini-2.0-flash-exp",
+  "modelId": "gemini-2.0-flash-exp",
+  "name": {
+    "en": "Gemini 2.0 Flash (Experimental)",
+    "de": "Gemini 2.0 Flash (Experimentell)"
+  },
+  "description": {
+    "en": "Google's experimental Gemini 2.0 model with multimodal support including audio, images, and text",
+    "de": "Googles experimentelles Gemini 2.0 Modell mit multimodaler Unterstützung für Audio, Bilder und Text"
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:streamGenerateContent",
+  "provider": "google",
+  "tokenLimit": 32768,
+  "supportsTools": true,
+  "supportsVision": true,
+  "supportsAudio": true,
+  "enabled": true
+}

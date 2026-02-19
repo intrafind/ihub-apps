@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { fetchAuthStatus, fetchUIConfig } from '../../api/api';
+import { fetchAuthStatus, fetchUIConfig, fetchPlatformConfig } from '../../api/api';
 
 const PlatformConfigContext = createContext({
   platformConfig: null,
@@ -17,10 +17,16 @@ export const PlatformConfigProvider = ({ children }) => {
     try {
       setIsLoading(true);
 
-      // Fetch both auth status and UI config in parallel
-      const [authStatus, uiConfig] = await Promise.all([fetchAuthStatus(), fetchUIConfig()]);
+      // Fetch auth status, UI config, and platform config in parallel
+      // On refresh (not initial load), skip cache to get fresh data
+      const skipCache = platformConfig !== null;
+      const [authStatus, uiConfig, platformCfg] = await Promise.all([
+        fetchAuthStatus({ skipCache }),
+        fetchUIConfig({ skipCache }),
+        fetchPlatformConfig({ skipCache })
+      ]);
 
-      // Combine both configs into a single object that matches the previous platform config structure
+      // Combine all configs into a single object that matches the previous platform config structure
       const combinedConfig = {
         // Auth-related fields from auth status
         auth: {
@@ -33,11 +39,27 @@ export const PlatformConfigProvider = ({ children }) => {
         ldapAuth: authStatus.authMethods?.ldap,
         ntlmAuth: authStatus.authMethods?.ntlm,
 
+        // Cloud storage configuration from auth status
+        cloudStorage: authStatus.cloudStorage,
+
+        // Jira integration status from auth status
+        jira: authStatus.jira,
+
         // UI-related fields from UI config
         admin: uiConfig.admin,
         version: uiConfig.version,
         computedRefreshSalt: uiConfig.computedRefreshSalt,
         defaultLanguage: uiConfig.defaultLanguage,
+
+        // Platform features and settings
+        features: platformCfg.features,
+        // Build a boolean lookup map from the resolved features array
+        featuresMap: Array.isArray(platformCfg.features)
+          ? platformCfg.features.reduce((map, f) => {
+              map[f.id] = f.enabled;
+              return map;
+            }, {})
+          : platformCfg.features || {},
 
         // Additional auth status fields
         authenticated: authStatus.authenticated,
@@ -70,6 +92,15 @@ export const PlatformConfigProvider = ({ children }) => {
   );
 };
 
+/**
+ * Hook to access platform configuration context.
+ * Provides server configuration, authentication settings, and feature flags.
+ * @returns {Object} Platform config context value
+ * @returns {Object|null} returns.platformConfig - The platform configuration object
+ * @returns {boolean} returns.isLoading - Whether config is still loading
+ * @returns {string|null} returns.error - Error message if loading failed
+ * @returns {Function} returns.refreshConfig - Function to reload configuration
+ */
 export const usePlatformConfig = () => useContext(PlatformConfigContext);
 
 export default PlatformConfigContext;

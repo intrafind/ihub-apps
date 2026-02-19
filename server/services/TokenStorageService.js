@@ -4,6 +4,7 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
+import logger from '../utils/logger.js';
 
 /**
  * Centralized Token Storage Service
@@ -12,16 +13,176 @@ import config from '../config.js';
  */
 class TokenStorageService {
   constructor() {
-    this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
-
-    // Initialize encryption key if not provided
-    if (!this.encryptionKey) {
-      this.encryptionKey = crypto.randomBytes(32).toString('hex');
-      console.warn('⚠️ Using generated encryption key. Set TOKEN_ENCRYPTION_KEY for production.');
-    }
-
+    // Initialize encryption key from environment or persistent storage
+    this.encryptionKey = null;
+    this.keyFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.encryption-key');
     this.algorithm = 'aes-256-gcm';
     this.storageBasePath = path.join(getRootDir(), config.CONTENTS_DIR, 'integrations');
+
+    // JWT secret for token signing
+    this.jwtSecret = null;
+    this.jwtSecretFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-secret');
+  }
+
+  /**
+   * Initialize the encryption key
+   * This MUST be called before any encryption/decryption operations
+   * Priority:
+   * 1. Use TOKEN_ENCRYPTION_KEY from environment if set
+   * 2. Use persisted key from disk if exists
+   * 3. Generate new key and persist it
+   */
+  async initializeEncryptionKey() {
+    // Priority 1: Environment variable (allows override)
+    if (process.env.TOKEN_ENCRYPTION_KEY) {
+      this.encryptionKey = process.env.TOKEN_ENCRYPTION_KEY;
+      logger.info('🔐 Using encryption key from TOKEN_ENCRYPTION_KEY environment variable', {
+        component: 'TokenStorage'
+      });
+      return;
+    }
+
+    // Priority 2: Try to load persisted key
+    try {
+      const persistedKey = await fs.readFile(this.keyFilePath, 'utf8');
+      if (persistedKey && persistedKey.length === 64) {
+        // Validate it's a valid hex string
+        if (/^[0-9a-f]{64}$/i.test(persistedKey.trim())) {
+          this.encryptionKey = persistedKey.trim();
+          logger.info('🔐 Using persisted encryption key from disk', { component: 'TokenStorage' });
+          return;
+        } else {
+          logger.warn('⚠️  Persisted encryption key has invalid format, generating new key', {
+            component: 'TokenStorage'
+          });
+        }
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.error('Error reading encryption key file:', {
+          component: 'TokenStorage',
+          error: error.message
+        });
+      }
+      // File doesn't exist or error reading, will generate new key
+    }
+
+    // Priority 3: Generate new key and persist it
+    this.encryptionKey = crypto.randomBytes(32).toString('hex');
+    logger.warn(
+      '⚠️  Generated new encryption key. This will be persisted to maintain API key compatibility across restarts.',
+      { component: 'TokenStorage' }
+    );
+
+    try {
+      // Ensure contents directory exists
+      const contentsDir = path.dirname(this.keyFilePath);
+      await fs.mkdir(contentsDir, { recursive: true });
+
+      // Save the key with restrictive permissions
+      await fs.writeFile(this.keyFilePath, this.encryptionKey, {
+        mode: 0o600 // Read/write for owner only
+      });
+      logger.info(`✅ Encryption key persisted to: ${this.keyFilePath}`, {
+        component: 'TokenStorage'
+      });
+      logger.info(
+        '⚠️  IMPORTANT: Keep this file secure and back it up. Losing it will make encrypted API keys unrecoverable.',
+        { component: 'TokenStorage' }
+      );
+    } catch (error) {
+      logger.error('❌ Failed to persist encryption key:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
+      logger.warn('⚠️  Encryption key is not persisted. API keys will be lost on server restart!', {
+        component: 'TokenStorage'
+      });
+    }
+  }
+
+  /**
+   * Initialize the JWT secret for token signing
+   * This MUST be called before any JWT operations
+   * Priority:
+   * 1. Use JWT_SECRET from environment if set
+   * 2. Use persisted encrypted secret from disk if exists
+   * 3. Generate new secret, encrypt with encryption key, and persist it
+   */
+  async initializeJwtSecret() {
+    // Priority 1: Environment variable (allows override, required for multi-node)
+    if (process.env.JWT_SECRET && process.env.JWT_SECRET !== '${JWT_SECRET}') {
+      this.jwtSecret = process.env.JWT_SECRET;
+      logger.info('Using JWT secret from JWT_SECRET environment variable', {
+        component: 'TokenStorage'
+      });
+      return;
+    }
+
+    // Priority 2: Try to load persisted encrypted secret
+    try {
+      const persistedData = await fs.readFile(this.jwtSecretFilePath, 'utf8');
+      const trimmed = persistedData.trim();
+      if (trimmed && this.isEncrypted(trimmed)) {
+        this.jwtSecret = this.decryptString(trimmed);
+        logger.info('Using persisted JWT secret from disk', { component: 'TokenStorage' });
+        return;
+      } else if (trimmed) {
+        logger.warn('Persisted JWT secret has invalid format, generating new secret', {
+          component: 'TokenStorage'
+        });
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.error('Error reading JWT secret file:', {
+          component: 'TokenStorage',
+          error: error.message
+        });
+      }
+      // File doesn't exist or error reading, will generate new secret
+    }
+
+    // Priority 3: Generate new secret, encrypt, and persist it
+    this._ensureKeyInitialized();
+    this.jwtSecret = crypto.randomBytes(64).toString('base64');
+    logger.info('Generated new JWT secret', { component: 'TokenStorage' });
+
+    try {
+      const contentsDir = path.dirname(this.jwtSecretFilePath);
+      await fs.mkdir(contentsDir, { recursive: true });
+
+      const encryptedSecret = this.encryptString(this.jwtSecret);
+      await fs.writeFile(this.jwtSecretFilePath, encryptedSecret, {
+        mode: 0o600
+      });
+      logger.info('JWT secret persisted to disk (encrypted)', { component: 'TokenStorage' });
+    } catch (error) {
+      logger.error('Failed to persist JWT secret:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
+      logger.warn('JWT secret is not persisted. Tokens will be invalidated on server restart.', {
+        component: 'TokenStorage'
+      });
+    }
+  }
+
+  /**
+   * Get the initialized JWT secret
+   * @returns {string|null} The JWT secret or null if not initialized
+   */
+  getJwtSecret() {
+    return this.jwtSecret;
+  }
+
+  /**
+   * Ensure encryption key is initialized
+   * @private
+   */
+  _ensureKeyInitialized() {
+    if (!this.encryptionKey) {
+      throw new Error('Encryption key not initialized. Call initializeEncryptionKey() first.');
+    }
   }
 
   /**
@@ -37,6 +198,7 @@ class TokenStorageService {
    * Encrypt token data with user and service-specific security
    */
   encryptTokens(tokens, userId, serviceName) {
+    this._ensureKeyInitialized();
     try {
       const key = Buffer.from(this.encryptionKey, 'hex');
       const iv = crypto.randomBytes(16);
@@ -60,7 +222,10 @@ class TokenStorageService {
         contextHash: context.toString('hex')
       };
     } catch (error) {
-      console.error('❌ Error encrypting tokens:', error.message);
+      logger.error('❌ Error encrypting tokens:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       throw new Error('Failed to encrypt tokens');
     }
   }
@@ -69,6 +234,7 @@ class TokenStorageService {
    * Decrypt token data with user and service verification
    */
   decryptTokens(encryptedData, userId, serviceName) {
+    this._ensureKeyInitialized();
     try {
       // Verify the tokens belong to the requesting user and service
       const expectedContext = this._generateEncryptionContext(userId, serviceName);
@@ -97,7 +263,10 @@ class TokenStorageService {
       delete parsedData.context;
       return parsedData;
     } catch (error) {
-      console.error('❌ Error decrypting tokens:', error.message);
+      logger.error('❌ Error decrypting tokens:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       throw new Error('Failed to decrypt tokens');
     }
   }
@@ -124,10 +293,15 @@ class TokenStorageService {
       const tokenFile = path.join(tokenDir, `${userId}.json`);
       await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
 
-      console.log(`✅ ${serviceName} tokens stored for user ${userId}`);
+      logger.info(`✅ ${serviceName} tokens stored for user ${userId}`, {
+        component: 'TokenStorage'
+      });
       return true;
     } catch (error) {
-      console.error('❌ Error storing user tokens:', error.message);
+      logger.error('❌ Error storing user tokens:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       throw new Error('Failed to store user tokens');
     }
   }
@@ -145,7 +319,10 @@ class TokenStorageService {
       if (error.code === 'ENOENT') {
         throw new Error(`User not authenticated with ${serviceName}`);
       }
-      console.error('❌ Error retrieving user tokens:', error.message);
+      logger.error('❌ Error retrieving user tokens:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       throw new Error('Failed to retrieve user tokens');
     }
   }
@@ -188,11 +365,16 @@ class TokenStorageService {
     try {
       const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
       await fs.unlink(tokenFile);
-      console.log(`✅ ${serviceName} tokens deleted for user ${userId}`);
+      logger.info(`✅ ${serviceName} tokens deleted for user ${userId}`, {
+        component: 'TokenStorage'
+      });
       return true;
     } catch (error) {
       if (error.code !== 'ENOENT') {
-        console.error('❌ Error deleting user tokens:', error.message);
+        logger.error('❌ Error deleting user tokens:', {
+          component: 'TokenStorage',
+          error: error.message
+        });
       }
       return false;
     }
@@ -231,7 +413,10 @@ class TokenStorageService {
 
       return services;
     } catch (error) {
-      console.error('❌ Error listing user services:', error.message);
+      logger.error('❌ Error listing user services:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       return [];
     }
   }
@@ -275,6 +460,7 @@ class TokenStorageService {
    * @returns {string} Encrypted data in ENC[...] format with metadata
    */
   encryptString(plaintext) {
+    this._ensureKeyInitialized();
     if (!plaintext || typeof plaintext !== 'string') {
       throw new Error('Invalid plaintext: must be a non-empty string');
     }
@@ -297,7 +483,10 @@ class TokenStorageService {
 
       return encryptedValue;
     } catch (error) {
-      console.error('❌ Error encrypting string:', error.message);
+      logger.error('❌ Error encrypting string:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       throw new Error('Failed to encrypt string');
     }
   }
@@ -309,6 +498,7 @@ class TokenStorageService {
    * @returns {string} Decrypted plaintext
    */
   decryptString(encryptedData) {
+    this._ensureKeyInitialized();
     if (!encryptedData || typeof encryptedData !== 'string') {
       throw new Error('Invalid encrypted data: must be a non-empty string');
     }
@@ -316,7 +506,10 @@ class TokenStorageService {
     try {
       return this._decrypt(encryptedData);
     } catch (error) {
-      console.error('❌ Error decrypting string:', error.message);
+      logger.error('❌ Error decrypting string:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
       throw new Error('Failed to decrypt string. The encryption key may have changed.');
     }
   }

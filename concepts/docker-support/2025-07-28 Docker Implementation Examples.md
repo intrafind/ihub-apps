@@ -492,7 +492,14 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
             proxy_cache_bypass $http_upgrade;
-            proxy_read_timeout 300s;
+            
+            # CRITICAL: Disable buffering for Server-Sent Events (SSE)
+            proxy_buffering off;
+            proxy_request_buffering off;
+            
+            # Timeouts for long-running streaming requests (15 minutes)
+            proxy_read_timeout 900s;
+            proxy_send_timeout 900s;
         }
 
         # Upload endpoints with stricter rate limiting
@@ -505,7 +512,14 @@ http {
             proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
             proxy_set_header X-Forwarded-Proto $scheme;
             client_max_body_size 50M;
+            
+            # Disable buffering for uploads
+            proxy_buffering off;
+            proxy_request_buffering off;
+            
+            # Timeout for uploads
             proxy_read_timeout 300s;
+            proxy_send_timeout 300s;
         }
 
         # Serve uploaded files directly

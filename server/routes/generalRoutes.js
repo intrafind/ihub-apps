@@ -2,6 +2,7 @@ import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 /**
  * @swagger
@@ -160,7 +161,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/apps', basePath), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/apps'), authRequired, async (req, res) => {
     try {
       const platformConfig = req.app.get('platform') || {};
       const authConfig = platformConfig.auth || {};
@@ -188,7 +189,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
       res.setHeader('ETag', userSpecificEtag);
       res.json(apps);
     } catch (error) {
-      console.error('Error fetching apps:', error);
+      logger.error('Error fetching apps:', error);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -302,7 +303,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
    *                   error: "Internal server error"
    */
   // Health check endpoint with base path information
-  app.get(buildServerPath('/api/health', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/health'), async (req, res) => {
     try {
       const { getBasePathInfo } = await import('../utils/basePath.js');
       const basePathInfo = getBasePathInfo();
@@ -318,7 +319,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
         environment: process.env.NODE_ENV || 'development'
       });
     } catch (error) {
-      console.error('Health check error:', error);
+      logger.error('Health check error:', error);
       res.status(500).json({
         status: 'ERROR',
         error: 'Health check failed',
@@ -328,7 +329,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
   });
 
   app.get(
-    buildServerPath('/api/apps/:appId', basePath),
+    buildServerPath('/api/apps/:appId'),
     authRequired,
     appAccessRequired,
     async (req, res) => {
@@ -361,7 +362,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError, basePath
 
         res.json(appData);
       } catch (error) {
-        console.error('Error fetching app details:', error);
+        logger.error('Error fetching app details:', error);
         res.status(500).json({ error: 'Internal server error' });
       }
     }

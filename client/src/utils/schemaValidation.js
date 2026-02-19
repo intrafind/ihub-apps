@@ -24,6 +24,32 @@ function createValidator() {
 }
 
 /**
+ * Preprocess data before validation
+ * Converts empty strings and null to undefined for optional fields to avoid validation issues
+ * @param {Object} data - Data to preprocess
+ * @param {Object} schema - JSON Schema
+ * @returns {Object} Preprocessed data
+ */
+function preprocessData(data, schema) {
+  if (!data || typeof data !== 'object' || !schema) {
+    return data;
+  }
+
+  const required = schema.required || [];
+  const processed = { ...data };
+
+  Object.keys(processed).forEach(key => {
+    // Convert empty strings and null to undefined for non-required fields
+    // This allows optional fields to pass validation without format checks
+    if ((processed[key] === '' || processed[key] === null) && !required.includes(key)) {
+      delete processed[key];
+    }
+  });
+
+  return processed;
+}
+
+/**
  * Validate data against a JSON schema
  * @param {Object} data - Data to validate
  * @param {Object} schema - JSON Schema
@@ -34,9 +60,12 @@ export function validateWithSchema(data, schema) {
     return { isValid: true, errors: [] };
   }
 
+  // Preprocess data to handle empty strings for optional format fields
+  const processedData = preprocessData(data, schema);
+
   const ajv = createValidator();
   const validate = ajv.compile(schema);
-  const isValid = validate(data);
+  const isValid = validate(processedData);
 
   if (!isValid) {
     return {
@@ -60,7 +89,7 @@ function formatValidationErrors(ajvErrors, schema) {
   const errors = {};
 
   ajvErrors.forEach(error => {
-    const { instancePath, keyword, message, params, schemaPath } = error;
+    const { instancePath, keyword, message, params } = error;
 
     // Extract field name from instancePath
     let field = instancePath.replace(/^\//, '').replace(/\//g, '.');

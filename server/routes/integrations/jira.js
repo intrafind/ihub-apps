@@ -5,8 +5,13 @@ import express from 'express';
 import crypto from 'crypto';
 import JiraService from '../../services/integrations/JiraService.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
+import { requireFeature } from '../../featureRegistry.js';
+import logger from '../../utils/logger.js';
 
 const router = express.Router();
+
+// Gate all Jira routes behind the integrations feature flag
+router.use(requireFeature('integrations'));
 
 /**
  * Initiate JIRA OAuth2 flow for Atlassian Cloud
@@ -14,10 +19,13 @@ const router = express.Router();
  */
 router.get('/auth', authRequired, async (req, res) => {
   try {
-    console.log('🔍 JIRA Auth Debug:', {
+    const { returnUrl } = req.query;
+
+    logger.debug('🔍 JIRA Auth Debug:', {
       hasUser: !!req.user,
       userId: req.user?.id,
       userGroups: req.user?.groups,
+      returnUrl,
       hasSession: !!req.session,
       cookies: Object.keys(req.cookies || {}),
       authHeader: req.headers.authorization ? 'present' : 'missing'
@@ -37,23 +45,26 @@ router.get('/auth', authRequired, async (req, res) => {
     // Generate PKCE parameters (may be ignored by Atlassian Cloud)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
-    // Store OAuth parameters in session
-    req.session.jiraAuth = {
+    // Store OAuth parameters in session with a consistent key
+    // Using oauth_jira key for consistency with Office 365 pattern
+    const sessionKey = 'oauth_jira';
+    req.session[sessionKey] = {
       state,
       codeVerifier,
       userId: req.user?.id || 'fallback-user',
+      returnUrl: returnUrl || '/settings/integrations',
       timestamp: Date.now()
     };
 
     // Generate authorization URL for Atlassian Cloud
     const authUrl = JiraService.generateAuthUrl(state, codeVerifier);
 
-    console.log(`🔗 Initiating JIRA OAuth for user ${req.user?.id} - URL: ${authUrl}`);
+    logger.info(`🔗 Initiating JIRA OAuth for user ${req.user?.id} - URL: ${authUrl}`);
 
     // Redirect to Atlassian OAuth consent screen
     res.redirect(authUrl);
   } catch (error) {
-    console.error('❌ Error initiating JIRA OAuth:', error.message);
+    logger.error('❌ Error initiating JIRA OAuth:', error.message);
     res.status(500).json({
       error: 'OAuth initiation failed',
       message: error.message
@@ -69,29 +80,36 @@ router.get('/callback', authOptional, async (req, res) => {
   try {
     const { code, state, error } = req.query;
 
+    // Use consistent session key
+    const sessionKey = 'oauth_jira';
+    const storedAuth = req.session?.[sessionKey];
+
+    // Get return URL early for error redirects
+    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
+    const separator = returnUrl.includes('?') ? '&' : '?';
+
     // Check for OAuth errors
     if (error) {
-      console.error('❌ JIRA OAuth error:', error);
-      return res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error)}`);
+      logger.error('❌ JIRA OAuth error:', error);
+      return res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error)}`);
     }
 
     // Check if session is available
     if (!req.session) {
-      console.error('❌ No session available for JIRA OAuth callback');
-      return res.redirect('/settings/integrations?jira_error=no_session');
+      logger.error('❌ No session available for JIRA OAuth callback');
+      return res.redirect(`${returnUrl}${separator}jira_error=no_session`);
     }
 
     // Validate state parameter
-    const storedAuth = req.session.jiraAuth;
     if (!storedAuth || storedAuth.state !== state) {
-      console.error('❌ Invalid JIRA OAuth state parameter');
-      return res.redirect('/settings/integrations?jira_error=invalid_state');
+      logger.error('❌ Invalid JIRA OAuth state parameter');
+      return res.redirect(`${returnUrl}${separator}jira_error=invalid_state`);
     }
 
     // Check session timeout (15 minutes)
     if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      console.error('❌ JIRA OAuth session expired');
-      return res.redirect('/settings/integrations?jira_error=session_expired');
+      logger.error('❌ JIRA OAuth session expired');
+      return res.redirect(`${returnUrl}${separator}jira_error=session_expired`);
     }
 
     // Exchange authorization code for tokens
@@ -99,17 +117,17 @@ router.get('/callback', authOptional, async (req, res) => {
 
     // Verify we received a refresh token (required for long-term access)
     if (!tokens.refreshToken) {
-      console.error('❌ CRITICAL: No refresh token received from JIRA OAuth.');
-      console.error(
+      logger.error('❌ CRITICAL: No refresh token received from JIRA OAuth.');
+      logger.error(
         '   This means the user will need to re-authenticate when the access token expires (usually within 1 hour).'
       );
-      console.error('   This can happen if:');
-      console.error('   - The JIRA app configuration does not support offline access');
-      console.error('   - The user denied the offline_access scope');
-      console.error('   - Atlassian OAuth server configuration issue');
+      logger.error('   This can happen if:');
+      logger.error('   - The JIRA app configuration does not support offline access');
+      logger.error('   - The user denied the offline_access scope');
+      logger.error('   - Atlassian OAuth server configuration issue');
 
       // Still store the tokens but with a clear warning in logs
-      console.warn(
+      logger.warn(
         '⚠️ Storing tokens WITHOUT refresh capability - user will need to reconnect every hour'
       );
     }
@@ -117,22 +135,29 @@ router.get('/callback', authOptional, async (req, res) => {
     // Store encrypted tokens for user
     await JiraService.storeUserTokens(storedAuth.userId, tokens);
 
-    // Clear session data
-    delete req.session.jiraAuth;
+    // Clear session data using the consistent key
+    delete req.session[sessionKey];
 
-    console.log(`✅ JIRA OAuth completed for user ${storedAuth.userId}`);
+    logger.info(`✅ JIRA OAuth completed for user ${storedAuth.userId}`, {
+      returnUrl
+    });
 
-    // Redirect back to settings with success
-    res.redirect('/settings/integrations?jira_connected=true');
+    // Redirect back to the original page with success
+    res.redirect(`${returnUrl}${separator}jira_connected=true`);
   } catch (error) {
-    console.error('❌ Error handling JIRA OAuth callback:', error.message);
+    logger.error('❌ Error handling JIRA OAuth callback:', error.message);
+
+    // Get return URL from session (default to /settings/integrations)
+    const sessionKey = 'oauth_jira';
+    const returnUrl = req.session?.[sessionKey]?.returnUrl || '/settings/integrations';
 
     // Clear session data on error
-    if (req.session) {
-      delete req.session.jiraAuth;
+    if (req.session && req.session[sessionKey]) {
+      delete req.session[sessionKey];
     }
 
-    res.redirect(`/settings/integrations?jira_error=${encodeURIComponent(error.message)}`);
+    const separator = returnUrl.includes('?') ? '&' : '?';
+    res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error.message)}`);
   }
 });
 
@@ -180,7 +205,7 @@ router.get('/status', authRequired, async (req, res) => {
         : 'JIRA account connected successfully'
     });
   } catch (error) {
-    console.error('❌ Error getting JIRA status:', error.message);
+    logger.error('❌ Error getting JIRA status:', error.message);
 
     if (error.message.includes('authentication required')) {
       return res.json({
@@ -209,7 +234,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
     const success = await JiraService.deleteUserTokens(req.user.id);
 
     if (success) {
-      console.log(`🔓 JIRA disconnected for user ${req.user.id}`);
+      logger.info(`🔓 JIRA disconnected for user ${req.user.id}`);
       res.json({
         success: true,
         message: 'JIRA account disconnected successfully'
@@ -221,7 +246,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
       });
     }
   } catch (error) {
-    console.error('❌ Error disconnecting JIRA:', error.message);
+    logger.error('❌ Error disconnecting JIRA:', error.message);
     res.status(500).json({
       error: 'Disconnect failed',
       message: error.message
@@ -239,7 +264,7 @@ router.post('/refresh', authRequired, async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    console.log(`🔄 Manual JIRA refresh requested for user ${req.user.id}`);
+    logger.info(`🔄 Manual JIRA refresh requested for user ${req.user.id}`);
 
     // Force a fresh check of authentication which will trigger refresh if needed
     const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
@@ -274,7 +299,7 @@ router.post('/refresh', authRequired, async (req, res) => {
       message: 'JIRA connection refreshed successfully'
     });
   } catch (error) {
-    console.error('❌ Error refreshing JIRA connection:', error.message);
+    logger.error('❌ Error refreshing JIRA connection:', error.message);
 
     if (error.message.includes('authentication required') || error.message.includes('expired')) {
       return res.status(401).json({
@@ -324,7 +349,7 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
     // Stream the attachment content directly to the response
     attachment.stream.pipe(res);
   } catch (error) {
-    console.error('❌ Error proxying JIRA attachment:', error.message);
+    logger.error('❌ Error proxying JIRA attachment:', error.message);
 
     if (error.message.includes('authentication required')) {
       return res.status(401).json({
@@ -374,7 +399,7 @@ router.get('/test', authRequired, async (req, res) => {
       message: 'JIRA connection test successful'
     });
   } catch (error) {
-    console.error('❌ Error testing JIRA connection:', error.message);
+    logger.error('❌ Error testing JIRA connection:', error.message);
 
     res.status(500).json({
       success: false,

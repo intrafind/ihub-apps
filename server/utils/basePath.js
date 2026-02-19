@@ -1,3 +1,4 @@
+import logger from './logger.js';
 /**
  * Base path utilities for server-side routing and URL generation
  *
@@ -56,7 +57,7 @@ export const isValidBasePath = path => {
 };
 
 /**
- * Build server route path with base path
+ * Build server route path with base path. base path is automatically prepended.
  * @param {string} path - Route path
  * @returns {string} Complete route path
  */
@@ -74,7 +75,7 @@ export const buildServerPath = path => {
  * @param {Object} req - Express request object (optional)
  * @returns {string} Complete public URL
  */
-export const buildPublicUrl = (path, req) => {
+export const buildPublicUrl = (path, _req) => {
   const basePath = getBasePath();
   const cleanPath = path.startsWith('/') ? path : `/${path}`;
 
@@ -215,7 +216,7 @@ export const basePathDetectionMiddleware = (req, res, next) => {
 export const basePathValidationMiddleware = (req, res, next) => {
   const basePath = getBasePath();
   if (basePath && !isValidBasePath(basePath)) {
-    console.warn(`Invalid base path configuration: ${basePath}. Using root path as fallback.`);
+    logger.warn(`Invalid base path configuration: ${basePath}. Using root path as fallback.`);
     // Override with empty base path for safety
     process.env.BASE_PATH = '';
   }

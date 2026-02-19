@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import LoginForm from './LoginForm';
 import Icon from '../../../shared/components/Icon';
 import { Link } from 'react-router-dom';
@@ -18,6 +19,7 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
   const { t } = useTranslation();
   const { user, isAuthenticated, logout, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
@@ -61,7 +63,9 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
   const hasEnabledAuthMethods =
     authConfig?.authMethods?.local?.enabled ||
     authConfig?.authMethods?.oidc?.enabled ||
-    authConfig?.authMethods?.proxy?.enabled;
+    authConfig?.authMethods?.proxy?.enabled ||
+    authConfig?.authMethods?.ldap?.enabled ||
+    authConfig?.authMethods?.ntlm?.enabled;
 
   // Don't show login options when in anonymous-only mode
   // This happens when anonymousAuth is enabled and no auth methods are enabled
@@ -215,6 +219,22 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
                     {t('auth.menu.profile', 'Profile')}
                   </button>
                 )}
+
+                {/* Integrations */}
+                {featureFlags.isEnabled('integrations', true) &&
+                  (platformConfig?.cloudStorage?.enabled || platformConfig?.jira?.enabled) && (
+                    <Link
+                      to="/settings/integrations"
+                      className="flex items-center px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      onClick={() => {
+                        setShowDropdown(false);
+                        setShowAllGroups(false);
+                      }}
+                    >
+                      <Icon name="link" size="sm" className="mr-3 text-gray-400" />
+                      {t('auth.menu.integrations', 'Integrations')}
+                    </Link>
+                  )}
 
                 {/* Admin Panel */}
                 {isAdmin && (

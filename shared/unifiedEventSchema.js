@@ -11,5 +11,9 @@ export const UnifiedEvents = {
   TOOL_CALL_END: 'tool.call.end',
   CITATION: 'citation',
   SAFETY_WARNING: 'safety.warning',
-  THINKING: 'thinking'
+  THINKING: 'thinking',
+  IMAGE: 'image',
+  CLARIFICATION: 'clarification',
+  WORKFLOW_STEP: 'workflow.step',
+  WORKFLOW_RESULT: 'workflow.result'
 };

@@ -13,6 +13,8 @@ const AppConfigForm = ({
   thinkingEnabled,
   thinkingBudget,
   thinkingThoughts,
+  imageAspectRatio: _imageAspectRatio,
+  imageQuality: _imageQuality,
   onModelChange,
   onStyleChange,
   onOutputFormatChange,
@@ -21,6 +23,8 @@ const AppConfigForm = ({
   onThinkingEnabledChange,
   onThinkingBudgetChange,
   onThinkingThoughtsChange,
+  onImageAspectRatioChange: _onImageAspectRatioChange,
+  onImageQualityChange: _onImageQualityChange,
   currentLanguage
 }) => {
   const { t } = useTranslation();
@@ -31,10 +35,27 @@ const AppConfigForm = ({
       ? models.filter(model => app.allowedModels.includes(model.id))
       : models;
 
-  const filteredModels =
-    app?.tools && app.tools.length > 0
-      ? availableModels.filter(model => model.supportsTools)
-      : availableModels;
+  // Apply additional filters from settings
+  let filteredModels = availableModels;
+
+  // Filter by tools requirement
+  if (app?.tools && app.tools.length > 0) {
+    filteredModels = filteredModels.filter(model => model.supportsTools);
+  }
+
+  // Apply model settings filter if specified
+  if (app?.settings?.model?.filter) {
+    const filter = app.settings.model.filter;
+    filteredModels = filteredModels.filter(model => {
+      // Check each filter property
+      for (const [key, value] of Object.entries(filter)) {
+        if (model[key] !== value) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }
 
   // Check if selected model supports thinking
   const selectedModelData = models.find(m => m.id === selectedModel);

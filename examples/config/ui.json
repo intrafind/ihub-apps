@@ -98,7 +98,12 @@
       "de": "Haftungsausschluss: Diese Anwendung verwendet künstliche Intelligenz-Sprachmodelle, die Inhalte basierend auf ihren Trainingsdaten und den bereitgestellten Eingaben generieren. Die Antworten sind möglicherweise nicht immer korrekt, angemessen oder vollständig. Die KI hat keine Kenntnis von Ereignissen nach ihrem Trainingsstichtag und greift nicht auf Echtzeit-Informationen zu. Benutzer sollten wichtige Informationen überprüfen und kritisches Urteilsvermögen bei der Nutzung von KI-generierten Inhalten anwenden. Diese Anwendung protokolliert Benutzerinteraktionen zur Verbesserung des Dienstes und zu Analysezwecken."
     },
     "version": "1.0",
-    "updated": "2025-04-16"
+    "updated": "2025-04-16",
+    "hint": {
+      "en": "iHub uses AI and can make mistakes. Click here to read the full disclaimer.",
+      "de": "iHub nutzt KI und kann Fehler machen. Klicken Sie hier, um den vollständigen Haftungsausschluss zu lesen."
+    },
+    "link": "/pages/disclaimer"
   },
   "widget": {
     "defaultApp": "faq-bot",
@@ -308,6 +313,16 @@
       "filePath": {
         "en": "pages/en/faq.md",
         "de": "pages/de/faq.md"
+      }
+    },
+    "nda-guide": {
+      "title": {
+        "en": "NDA Risk Analyzer - User Guide",
+        "de": "NDA-Risikoanalyse - Benutzerhandbuch"
+      },
+      "filePath": {
+        "en": "pages/en/nda-guide.md",
+        "de": "pages/de/nda-guide.md"
       }
     },
     "opensearch-analysis-script": {

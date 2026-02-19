@@ -18,28 +18,60 @@ export const detectBasePath = () => {
   // Find the base path by looking for where index.html is served
   // The app's root is where we are now, before any React routing
   // Remove any trailing /index.html or just trailing slash
-  let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
+  const cleanPath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
 
-  // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
-  // We can detect this by checking if there's a known React route pattern
-  const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
-  for (const route of knownRoutes) {
-    const routeIndex = basePath.indexOf(route);
-    if (routeIndex > 0) {
-      // Found a route, so everything before it is the base path
-      basePath = basePath.substring(0, routeIndex);
-      break;
-    } else if (routeIndex === 0) {
-      // We're at root with a route
-      basePath = '';
+  // Known React routes - these are app routes, not deployment subpaths
+  //
+  // ⚠️ IMPORTANT: When adding new top-level routes to App.jsx, you MUST update this array!
+  // Also update the matching array in index.html for consistency.
+  // This includes any new routes like:
+  // - New feature routes (e.g., /reports, /analytics)
+  // - New page routes (e.g., /help, /docs)
+  // - New API endpoint prefixes that need special handling
+  //
+  // Failure to update this array will cause base path detection to fail for subpath
+  // deployments (e.g., /ihub/newroute will incorrectly detect /ihub/newroute as base path
+  // instead of /ihub).
+  const knownRoutes = [
+    'apps', // App listing and individual app routes
+    'admin', // Admin panel routes
+    'auth', // Authentication routes
+    'login', // Login page
+    'chat', // Direct chat routes
+    'pages', // Dynamic pages
+    'prompts', // Prompts listing
+    'settings', // Settings pages (integrations, etc.)
+    'teams', // Microsoft Teams routes
+    'workflows', // Workflow management and execution
+    's' // Short links
+  ];
+
+  // Split path into segments and find the first known route
+  // This correctly handles paths like /admin/apps (route 'admin' at segment 0)
+  // vs /ihub/admin/apps (route 'admin' at segment 1, base path is '/ihub')
+  const segments = cleanPath.split('/').filter(s => s); // Remove empty strings
+
+  // Find the index of the first segment that matches a known route
+  let routeSegmentIndex = -1;
+  for (let i = 0; i < segments.length; i++) {
+    if (knownRoutes.includes(segments[i])) {
+      routeSegmentIndex = i;
       break;
     }
   }
 
-  // In development, we might still have a base path (e.g., when testing subpath deployment)
-  // So don't automatically return empty string for dev mode
+  // Determine base path from segment analysis
+  if (routeSegmentIndex === 0) {
+    // Route is at root (e.g., /admin/apps) - no subpath deployment
+    return '';
+  } else if (routeSegmentIndex > 0) {
+    // Route found after subpath (e.g., /ihub/admin/apps) - base is /ihub
+    return '/' + segments.slice(0, routeSegmentIndex).join('/');
+  }
 
-  return basePath;
+  // No known routes found, return empty string
+  // (in normal operation, we should always find a route)
+  return '';
 };
 
 /**
@@ -49,7 +81,63 @@ export const detectBasePath = () => {
 export const getBasePath = () => {
   // Cache the detected base path in sessionStorage for performance
   const cacheKey = 'runtime-base-path';
+
+  // Check if we're on a logout page - if so, clear the cache to force fresh detection
+  // This prevents stale cache from causing routing issues after logout redirects
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('logout') === 'true') {
+    sessionStorage.removeItem(cacheKey);
+  }
+
   let basePath = sessionStorage.getItem(cacheKey);
+
+  // Validate cached base path against current URL
+  // This prevents issues when navigating between different deployments
+  if (basePath !== null) {
+    const currentPath = window.location.pathname;
+
+    // Check if cached base path is actually a known route (invalid - routes are not base paths)
+    const knownRoutes = [
+      'apps',
+      'admin',
+      'auth',
+      'login',
+      'chat',
+      'pages',
+      'prompts',
+      'settings',
+      'teams',
+      'workflows',
+      's'
+    ];
+    const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
+
+    if (isKnownRoute) {
+      // Cached base path is a React route, not a deployment path - invalid!
+      sessionStorage.removeItem(cacheKey);
+      basePath = null;
+    }
+    // If base path is not empty, current path should start with it
+    else if (
+      basePath !== '' &&
+      !currentPath.startsWith(basePath + '/') &&
+      currentPath !== basePath
+    ) {
+      // Cached base path doesn't match current URL - clear and re-detect
+      sessionStorage.removeItem(cacheKey);
+      basePath = null;
+    }
+    // If base path is empty (root deployment), make sure we're not actually in a subpath
+    else if (basePath === '') {
+      // Detect fresh to see if we should have a base path
+      const freshDetection = detectBasePath();
+      if (freshDetection !== '') {
+        // We detected a base path but cache says root - cache is stale
+        sessionStorage.removeItem(cacheKey);
+        basePath = null;
+      }
+    }
+  }
 
   if (basePath === null) {
     basePath = detectBasePath();

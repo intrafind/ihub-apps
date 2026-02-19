@@ -4,6 +4,7 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class VLLMAdapterClass extends BaseAdapter {
   /**
@@ -49,7 +50,7 @@ class VLLMAdapterClass extends BaseAdapter {
    * Create a completion request for vLLM
    */
   createCompletionRequest(model, messages, apiKey, options = {}) {
-    const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
+    const { temperature, stream, tools, toolChoice, responseFormat, maxTokens } =
       this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
@@ -63,14 +64,17 @@ class VLLMAdapterClass extends BaseAdapter {
       max_tokens: maxTokens
     };
 
-    // Use vLLM-specific tool conversion with schema sanitization and tool choice handling
+    // Use vLLM-specific tool conversion with schema sanitization
     if (tools && tools.length > 0) {
-      const result = convertToolsFromGeneric(tools, 'local', toolChoice);
-      body.tools = result.tools;
-      body.tool_choice = result.toolChoice;
-      console.log(
-        `[vLLM Adapter] Converted ${tools.length} tools with schema sanitization and adjusted tool choice`
-      );
+      body.tools = convertToolsFromGeneric(tools, 'local');
+      if (toolChoice) {
+        body.tool_choice = toolChoice;
+      }
+      logger.info({
+        component: 'VLLMAdapter',
+        message: 'Converted tools with schema sanitization',
+        toolCount: tools.length
+      });
     } else if (toolChoice) {
       body.tool_choice = toolChoice;
     }
@@ -81,7 +85,8 @@ class VLLMAdapterClass extends BaseAdapter {
     }
     // Note: vLLM may not support structured output schemas
 
-    console.log('vLLM request body:', body);
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // logger.info('vLLM request body:', body);
 
     return {
       url: model.url,
@@ -162,7 +167,12 @@ class VLLMAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      console.error('Error parsing vLLM response chunk:', error);
+      logger.error({
+        component: 'VLLMAdapter',
+        message: 'Error parsing vLLM response chunk',
+        error: error.message,
+        stack: error.stack
+      });
       result.error = true;
       result.errorMessage = `Error parsing vLLM response: ${error.message}`;
     }

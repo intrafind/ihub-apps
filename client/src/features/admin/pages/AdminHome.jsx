@@ -4,12 +4,20 @@ import AdminNavigation from '../components/AdminNavigation';
 import QuickActions from '../components/QuickActions';
 import AdminSectionCard from '../components/AdminSectionCard';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 const AdminHome = () => {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const pageConfig = platformConfig?.admin?.pages || {};
-  const isEnabled = key => pageConfig[key] !== false;
+  const isEnabled = key => {
+    // Check if feature is disabled - prompts requires promptsLibrary feature
+    if (key === 'prompts' && !featureFlags.isEnabled('promptsLibrary', true)) {
+      return false;
+    }
+    return pageConfig[key] !== false;
+  };
 
   const adminSections = [
     {
@@ -35,6 +43,17 @@ const AdminHome = () => {
       href: '/admin/prompts',
       //icon: 'clipboard-document-list',
       color: 'bg-indigo-500'
+    },
+    {
+      key: 'tools',
+      title: t('admin.nav.tools', 'Tools Management'),
+      description: t(
+        'admin.home.sections.toolsDesc',
+        'Configure and manage AI tools / function calling'
+      ),
+      href: '/admin/tools',
+      //icon: 'wrench',
+      color: 'bg-amber-500'
     },
     {
       key: 'shortlinks',
@@ -73,6 +92,27 @@ const AdminHome = () => {
       href: '/admin/ui',
       //icon: 'paint-brush',
       color: 'bg-pink-500'
+    },
+    {
+      key: 'logging',
+      title: t('admin.nav.logging', 'Logging Configuration'),
+      description: t(
+        'admin.home.sections.loggingDesc',
+        'Configure logging levels, components, metadata, and debug settings'
+      ),
+      href: '/admin/logging',
+      //icon: 'adjustments',
+      color: 'bg-yellow-500'
+    },
+    {
+      key: 'features',
+      title: t('admin.nav.features', 'Features'),
+      description: t(
+        'admin.home.sections.featuresDesc',
+        'Enable or disable platform features like workflows, prompts library, and more'
+      ),
+      href: '/admin/features',
+      color: 'bg-cyan-500'
     }
   ];
 

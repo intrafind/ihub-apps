@@ -1,6 +1,18 @@
 import { useState } from 'react';
 import { generateMagicPrompt } from '../../api/api';
+import { FeatureFlags } from '../../../../shared/featureFlags.js';
 
+/**
+ * Custom hook for magic prompt generation functionality.
+ * Transforms user input into enhanced prompts using AI.
+ * @returns {Object} Magic prompt utilities
+ * @returns {string|null} returns.originalInput - Original user input before transformation
+ * @returns {boolean} returns.magicLoading - Whether generation is in progress
+ * @returns {Function} returns.handleMagicPrompt - Generate a magic prompt from input (input, app, appId) => Promise<string|null>
+ * @returns {Function} returns.handleUndoMagicPrompt - Restore the original input () => string|null
+ * @returns {Function} returns.resetMagicPrompt - Reset magic prompt state () => void
+ * @returns {boolean} returns.showUndoMagicPrompt - Whether undo option should be shown
+ */
 export const useMagicPrompt = () => {
   const [originalInput, setOriginalInput] = useState(null);
   const [magicLoading, setMagicLoading] = useState(false);
@@ -10,9 +22,12 @@ export const useMagicPrompt = () => {
 
     try {
       setMagicLoading(true);
+
+      // Use FeatureFlags utility to get nested feature values
+      const featureFlags = new FeatureFlags();
       const response = await generateMagicPrompt(input, {
-        prompt: app?.features?.magicPrompt?.prompt,
-        modelId: app?.features?.magicPrompt?.model,
+        prompt: featureFlags.getAppFeatureValue(app, 'magicPrompt.prompt', null),
+        modelId: featureFlags.getAppFeatureValue(app, 'magicPrompt.model', null),
         appId
       });
 

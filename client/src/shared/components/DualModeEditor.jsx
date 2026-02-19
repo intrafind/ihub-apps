@@ -34,8 +34,8 @@ const DualModeEditor = ({
   allowModeSwitch = true,
   onModeChange,
   onValidationChange,
-  title,
-  description,
+  title: _title,
+  description: _description,
   showValidationSummary = true,
   className = ''
 }) => {
@@ -43,7 +43,6 @@ const DualModeEditor = ({
   const [editingMode, setEditingMode] = useState(defaultMode);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
-  const [pendingModeSwitch, setPendingModeSwitch] = useState(null);
   const initialValueRef = useRef(JSON.stringify(value));
 
   // Track changes to detect unsaved modifications
@@ -59,7 +58,6 @@ const DualModeEditor = ({
     if (newMode === editingMode) return;
 
     if (hasUnsavedChanges) {
-      setPendingModeSwitch(newMode);
       const shouldSwitch = window.confirm(
         t(
           'admin.editor.unsavedChangesWarning',
@@ -70,7 +68,6 @@ const DualModeEditor = ({
       if (shouldSwitch) {
         performModeSwitch(newMode);
       }
-      setPendingModeSwitch(null);
     } else {
       performModeSwitch(newMode);
     }

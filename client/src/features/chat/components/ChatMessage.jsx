@@ -7,6 +7,9 @@ import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
 import StreamingMarkdown from './StreamingMarkdown';
 import { htmlToMarkdown, markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
+import ClarificationCard from './ClarificationCard';
+import WorkflowStepIndicator from './WorkflowStepIndicator';
 import './ChatMessage.css';
 
 const ChatMessage = ({
@@ -22,7 +25,11 @@ const ChatMessage = ({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
-  canvasEnabled = false
+  canvasEnabled = false,
+  app = null, // App configuration for custom response rendering
+  models = [], // Available models for determining if model param should be included in link
+  onClarificationSubmit = null, // Callback when a clarification response is submitted
+  onClarificationSkip = null // Callback when a clarification is skipped
 }) => {
   const { t } = useTranslation();
 
@@ -37,11 +44,17 @@ const ChatMessage = ({
   const isError = message.error === true;
   const hasVariables = message.variables && Object.keys(message.variables).length > 0;
   const [isEditing, setIsEditing] = useState(false);
-  const [editedContent, setEditedContent] = useState(
-    typeof message.content === 'string' ? message.content : message.content || ''
-  );
+
+  // Helper function to get editable content (plain text without HTML badges)
+  const getEditableContent = () => {
+    if (message.rawContent !== undefined) return message.rawContent;
+    return typeof message.content === 'string' ? message.content : message.content || '';
+  };
+
+  const [editedContent, setEditedContent] = useState(getEditableContent());
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [showFeedbackForm, setShowFeedbackForm] = useState(false);
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackRating, setFeedbackRating] = useState(0); // 0-5 rating scale
@@ -52,6 +65,11 @@ const ChatMessage = ({
   const messageRef = useRef(null); // Ref to scope DOM queries to this specific message
   const [showCopyMenu, setShowCopyMenu] = useState(false);
   const copyMenuRef = useRef(null);
+
+  // Get custom renderer info from message metadata (set when message completes)
+  // This survives re-renders and component unmounting/remounting
+  const customRendererFromMessage = message.customResponseRenderer;
+  const outputFormatFromMessage = message.outputFormat;
 
   // Configure marked renderer and copy buttons
   useEffect(() => {
@@ -139,6 +157,92 @@ const ChatMessage = ({
       });
   };
 
+  const handleCopyLink = () => {
+    // Get the current page URL (without query params)
+    const currentUrl = new URL(window.location.href);
+    const baseUrl = `${currentUrl.origin}${currentUrl.pathname}`;
+
+    // Get the message content (raw content if available, otherwise regular content)
+    const messageContent =
+      message.meta?.rawContent || (typeof message.content === 'string' ? message.content : '');
+
+    // Create URLSearchParams to build the query string
+    const params = new URLSearchParams();
+
+    // Add prefill parameter with the message content
+    params.set('prefill', messageContent);
+
+    // Add send=true to auto-execute
+    params.set('send', 'true');
+
+    // Add variables if they exist
+    const variables = message.meta?.variables || message.variables;
+    if (variables && Object.keys(variables).length > 0) {
+      Object.entries(variables).forEach(([key, value]) => {
+        params.set(`var_${key}`, value);
+      });
+    }
+
+    // Determine if we should include the model parameter
+    // Model should be included if:
+    // 1. There are more than one model available (after filtering)
+    // 2. The selected model is not the default/preferred model
+    if (app && models && models.length > 0 && modelId) {
+      // Filter models the same way as ModelSelector.jsx
+      let availableModels =
+        app.allowedModels && app.allowedModels.length > 0
+          ? models.filter(model => app.allowedModels.includes(model.id))
+          : models;
+
+      // Filter by tools requirement
+      if (app.tools && app.tools.length > 0) {
+        availableModels = availableModels.filter(model => model.supportsTools);
+      }
+
+      // Apply model settings filter if specified
+      if (app.settings?.model?.filter) {
+        const filter = app.settings.model.filter;
+        availableModels = availableModels.filter(model => {
+          for (const [key, value] of Object.entries(filter)) {
+            if (model[key] !== value) {
+              return false;
+            }
+          }
+          return true;
+        });
+      }
+
+      // Check if there are multiple models available
+      if (availableModels.length > 1) {
+        // Determine the default model
+        // Priority: app.preferredModel > model with default flag > first available model
+        const defaultModelFromList = availableModels.find(m => m.default);
+        const defaultModel =
+          app.preferredModel ||
+          (defaultModelFromList ? defaultModelFromList.id : availableModels[0]?.id);
+
+        // Include model parameter only if selected model is not the default
+        if (modelId !== defaultModel) {
+          params.set('model', modelId);
+        }
+      }
+    }
+
+    // Construct the final URL
+    const shareableLink = `${baseUrl}?${params.toString()}`;
+
+    // Copy to clipboard
+    navigator.clipboard
+      .writeText(shareableLink)
+      .then(() => {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy link: ', err);
+      });
+  };
+
   const handleDelete = () => {
     if (onDelete) {
       onDelete(message.id);
@@ -147,7 +251,7 @@ const ChatMessage = ({
 
   const handleEdit = () => {
     setIsEditing(true);
-    setEditedContent(typeof message.content === 'string' ? message.content : message.content || '');
+    setEditedContent(getEditableContent());
   };
 
   const handleResend = (useMaxTokens = false) => {
@@ -175,7 +279,7 @@ const ChatMessage = ({
 
   const handleCancelEdit = () => {
     setIsEditing(false);
-    setEditedContent(typeof message.content === 'string' ? message.content : message.content || '');
+    setEditedContent(getEditableContent());
   };
 
   // Handle feedback submission
@@ -253,8 +357,9 @@ const ChatMessage = ({
         (contentToRender.includes('<img') || contentToRender.includes('data:image')));
 
     const hasFileContent = !!message.fileData;
+    const hasAudioContent = !!message.audioData;
 
-    const hasHTMLContent = hasImageContent || hasFileContent;
+    const hasHTMLContent = hasImageContent || hasFileContent || hasAudioContent;
 
     if (isEditing) {
       return (
@@ -285,10 +390,28 @@ const ChatMessage = ({
 
     if (message.loading) {
       // console.log('🔄 Rendering loading state for message:', contentToRender);
+
+      // Check if we should use custom renderer (prioritize message metadata over app prop)
+      const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
+      const effectiveOutputFormat = outputFormatFromMessage || outputFormat;
+
+      // For JSON output with custom renderer, OR JSON with empty content, show a clean loading indicator
+      // This prevents empty ```json``` code blocks from appearing before any content arrives
+      if (!isUser && effectiveOutputFormat === 'json' && (customRendererName || !contentToRender)) {
+        return (
+          <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span className="text-sm">
+              {t('chatMessage.generatingResponse', 'Generating response...')}
+            </span>
+          </div>
+        );
+      }
+
       // For loading assistant messages with markdown or JSON, use StreamingMarkdown
-      if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+      if (!isUser && (effectiveOutputFormat === 'markdown' || effectiveOutputFormat === 'json')) {
         const mdContent =
-          outputFormat === 'json'
+          effectiveOutputFormat === 'json'
             ? `\u0060\u0060\u0060json\n${contentToRender}\n\u0060\u0060\u0060`
             : contentToRender;
         return (
@@ -344,9 +467,42 @@ const ChatMessage = ({
       );
     }
 
-    if (!isUser && (outputFormat === 'markdown' || outputFormat === 'json')) {
+    // Check effective format: message-level metadata overrides app-level prop
+    const effectiveFormat = outputFormatFromMessage || outputFormat;
+    if (!isUser && (effectiveFormat === 'markdown' || effectiveFormat === 'json')) {
       let mdContent = contentToRender;
-      if (outputFormat === 'json') {
+
+      // Check if we should use custom renderer (prioritize message metadata over app prop)
+      const customRendererName = customRendererFromMessage || app?.customResponseRenderer;
+      const effectiveOutputFormat = effectiveFormat;
+
+      // For JSON output with custom renderer, wait until message is complete
+      if (effectiveOutputFormat === 'json' && customRendererName) {
+        // While streaming, show a loading indicator instead of incomplete JSON
+        if (message.loading) {
+          return (
+            <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+              <span className="text-sm">
+                {t('chatMessage.generatingResponse', 'Generating response...')}
+              </span>
+            </div>
+          );
+        }
+
+        // Message is complete, try to parse and render with custom renderer
+        try {
+          const parsedData =
+            typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
+
+          return <CustomResponseRenderer componentName={customRendererName} data={parsedData} />;
+        } catch (error) {
+          console.error('Error parsing JSON for custom renderer:', error);
+          // Fall through to default JSON rendering on parse error
+        }
+      }
+
+      if (effectiveOutputFormat === 'json') {
         let jsonString = '';
         try {
           jsonString =
@@ -372,6 +528,10 @@ const ChatMessage = ({
     );
   };
 
+  // Don't apply bubble styling when showing ClarificationCard (it has its own styling)
+  const hasPendingClarification = message.clarification && !message.clarificationAnswered;
+  const showBubble = !hasPendingClarification;
+
   return (
     <div
       ref={messageRef}
@@ -379,9 +539,153 @@ const ChatMessage = ({
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
     >
-      <div className={`chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`}>
+      <div
+        className={
+          showBubble
+            ? `chat-widget-message-content whitespace-normal ${isError ? 'error' : ''}`
+            : 'w-full'
+        }
+      >
+        {/* Unified workflow step progress indicator */}
+        {!isUser && message.workflowSteps?.length > 0 && (
+          <WorkflowStepIndicator
+            steps={message.workflowSteps}
+            currentStep={message.workflowStep}
+            result={message.workflowResult}
+            loading={message.loading}
+          />
+        )}
+        {/* Show just the question for answered clarifications (at top of bubble) */}
+        {!isUser && message.clarification && message.clarificationAnswered && (
+          <div className="flex items-start gap-2">
+            <Icon
+              name="question-mark-circle"
+              size="sm"
+              className="text-indigo-500 dark:text-indigo-400 mt-0.5 flex-shrink-0"
+            />
+            <p className="text-slate-800 dark:text-slate-200">{message.clarification.question}</p>
+          </div>
+        )}
         {renderContent()}
         {isUser && hasVariables && <MessageVariables variables={message.variables} />}
+
+        {/* Display generated images */}
+        {message.images && message.images.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {message.images.map((image, idx) => {
+              // Check if image has data or was lost due to storage limitations
+              if (image.data) {
+                return (
+                  <div key={idx} className="space-y-2">
+                    <div className="relative inline-block">
+                      <img
+                        src={`data:${image.mimeType || 'image/png'};base64,${image.data}`}
+                        alt={t('chatMessage.generatedImage', `Generated image ${idx + 1}`)}
+                        className="max-w-full rounded-lg shadow-md"
+                        style={{ maxHeight: '512px' }}
+                      />
+                      <button
+                        onClick={() => {
+                          const link = document.createElement('a');
+                          link.href = `data:${image.mimeType || 'image/png'};base64,${image.data}`;
+                          link.download = `generated-image-${Date.now()}.png`;
+                          link.click();
+                        }}
+                        className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
+                        title={t('chatMessage.downloadImage', 'Download image')}
+                      >
+                        <Icon name="download" size="sm" />
+                      </button>
+                    </div>
+                    {/* Proactive warning to save images */}
+                    <div className="flex items-start space-x-2 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <Icon
+                        name="information-circle"
+                        className="text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5"
+                        size="sm"
+                      />
+                      <p className="text-xs text-blue-800 dark:text-blue-200">
+                        {t(
+                          'chatMessage.saveImageWarning',
+                          'Download this image to save it permanently. Images are not persisted when you navigate away due to browser storage limitations.'
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                );
+              } else if (image._hadImageData) {
+                // Image was present but not persisted due to storage quota
+                return (
+                  <div
+                    key={idx}
+                    className="mt-3 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg"
+                  >
+                    <div className="flex items-start space-x-2">
+                      <Icon
+                        name="exclamation-circle"
+                        className="text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5"
+                      />
+                      <div className="text-sm text-yellow-800 dark:text-yellow-200">
+                        <p className="font-medium">
+                          {t('chatMessage.imageNotPersisted', 'Image not available')}
+                        </p>
+                        <p className="mt-1 text-yellow-700 dark:text-yellow-300">
+                          {t(
+                            'chatMessage.imageNotPersistedDetail',
+                            'Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return null;
+            })}
+          </div>
+        )}
+
+        {/* Display uploaded audio files with playback */}
+        {message.meta?.audioData && (
+          <div className="mt-3 space-y-2">
+            {(Array.isArray(message.meta.audioData)
+              ? message.meta.audioData
+              : [message.meta.audioData]
+            ).map((audio, idx) => (
+              <div
+                key={idx}
+                className="p-3 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 rounded-lg"
+              >
+                <div className="flex items-center gap-3 mb-2">
+                  <Icon name="musical-note" className="text-purple-600 dark:text-purple-400" />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                      {audio.fileName}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {audio.fileType}
+                      {audio.fileSize && ` • ${(audio.fileSize / 1024 / 1024).toFixed(2)} MB`}
+                    </div>
+                  </div>
+                </div>
+                {audio.base64 && (
+                  <audio
+                    controls
+                    className="w-full mt-2"
+                    style={{ maxWidth: '100%', height: '40px' }}
+                  >
+                    <source src={audio.base64} type={audio.fileType || 'audio/mpeg'} />
+                    {t(
+                      'chatMessage.audioNotSupported',
+                      'Your browser does not support audio playback.'
+                    )}
+                  </audio>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
         {!isUser && message.thoughts && message.thoughts.length > 0 && (
           <div className="mt-1 text-xs text-gray-600">
             <button onClick={() => setShowThoughts(!showThoughts)} className="underline">
@@ -396,6 +700,17 @@ const ChatMessage = ({
             )}
           </div>
         )}
+
+        {/* Clarification UI - show card for pending clarifications */}
+        {!isUser && message.clarification && !message.clarificationAnswered && (
+          <ClarificationCard
+            clarification={message.clarification}
+            onSubmit={onClarificationSubmit}
+            onSkip={onClarificationSkip}
+          />
+        )}
+
+        {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
       </div>
 
       {/* Info about finish reason and retry options */}
@@ -434,17 +749,7 @@ const ChatMessage = ({
               className="flex items-center gap-1 hover:text-gray-700 transition-colors duration-150"
               title={t('pages.appChat.copyToClipboard')}
             >
-              {copied ? (
-                <>
-                  <Icon name="check" size="sm" />
-                  {!compact && <span>{t('chatMessage.copied')}</span>}
-                </>
-              ) : (
-                <>
-                  <Icon name="copy" size="sm" />
-                  {!compact && <span>{t('chatMessage.copy')}</span>}
-                </>
-              )}
+              {copied ? <Icon name="check" size="sm" /> : <Icon name="copy" size="sm" />}
             </button>
             <button
               onClick={() => setShowCopyMenu(!showCopyMenu)}
@@ -485,7 +790,6 @@ const ChatMessage = ({
               title={t('chatMessage.openInCanvas', 'Open in Canvas')}
             >
               <Icon name="document-text" size="sm" />
-              {!compact && <span>{t('chatMessage.openInCanvas', 'Canvas')}</span>}
             </button>
           )}
 
@@ -496,7 +800,6 @@ const ChatMessage = ({
               title={t('canvas.insertIntoDocument', 'Insert into document')}
             >
               <Icon name="arrow-right" size="sm" />
-              {!compact && <span>{t('canvas.insert', 'Insert')}</span>}
             </button>
           )}
 
@@ -508,7 +811,6 @@ const ChatMessage = ({
                 title={t('chatMessage.editMessage', 'Edit message')}
               >
                 <Icon name="edit" size="sm" />
-                {!compact && <span>{t('common.edit')}</span>}
               </button>
 
               <button
@@ -517,7 +819,14 @@ const ChatMessage = ({
                 title={t('chatMessage.resendMessage', 'Resend message')}
               >
                 <Icon name="refresh" size="sm" />
-                {!compact && <span>{t('chatMessage.resend', 'Resend')}</span>}
+              </button>
+
+              <button
+                onClick={handleCopyLink}
+                className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"
+                title={t('chatMessage.copyLink', 'Copy link')}
+              >
+                {linkCopied ? <Icon name="check" size="sm" /> : <Icon name="link" size="sm" />}
               </button>
             </>
           )}
@@ -528,7 +837,6 @@ const ChatMessage = ({
             title={t('chatMessage.deleteMessage', 'Delete message')}
           >
             <Icon name="trash" size="sm" />
-            {!compact && <span>{t('common.delete')}</span>}
           </button>
 
           {/* Add star rating for AI responses only */}
@@ -544,14 +852,6 @@ const ChatMessage = ({
                   showTooltip={true}
                   className="flex-shrink-0"
                 />
-                {!compact && (
-                  <span
-                    className="text-sm text-gray-600"
-                    style={{ visibility: activeFeedback > 0 ? 'visible' : 'hidden' }}
-                  >
-                    {t('feedback.rated', 'Rated')}
-                  </span>
-                )}
               </div>
             </>
           )}

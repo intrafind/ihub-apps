@@ -64,7 +64,7 @@ async function syncReleaseVersion() {
         );
         console.log(`✅ Updated client/package.json version: ${clientCurrentVersion} → ${version}`);
       }
-    } catch (error) {
+    } catch {
       console.log('ℹ️ No client/package.json found, skipping');
     }
 
@@ -84,7 +84,7 @@ async function syncReleaseVersion() {
         );
         console.log(`✅ Updated server/package.json version: ${serverCurrentVersion} → ${version}`);
       }
-    } catch (error) {
+    } catch {
       console.log('ℹ️ No server/package.json found, skipping');
     }
 

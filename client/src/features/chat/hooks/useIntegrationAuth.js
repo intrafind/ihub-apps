@@ -69,7 +69,7 @@ export const useIntegrationAuth = () => {
                   result.error === pattern || (result.message && result.message.includes(pattern))
               )
             );
-          } catch (e) {
+          } catch {
             // Check string content for auth error
             return (
               toolCall.result &&
@@ -124,6 +124,7 @@ export const useIntegrationAuth = () => {
     }
 
     return false;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -204,6 +205,7 @@ export const useIntegrationAuth = () => {
         );
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [authRequests, t]
   );
 
@@ -251,6 +253,7 @@ export const useIntegrationAuth = () => {
       console.error(`Error checking ${integration} connection status:`, error);
       return false;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /**
@@ -308,6 +311,7 @@ export const useIntegrationAuth = () => {
         return false;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t, checkConnectionStatus]
   );
 
@@ -351,6 +355,7 @@ export const useIntegrationAuth = () => {
         return false;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [t]
   );
 
@@ -400,6 +405,7 @@ export const useIntegrationAuth = () => {
         );
       }
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [t]);
 
   /**
@@ -445,6 +451,7 @@ export const useIntegrationAuth = () => {
       }
     });
     return required;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authRequests]);
 
   // Check for post-auth callback on mount

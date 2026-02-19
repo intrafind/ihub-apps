@@ -1,4 +1,11 @@
 {
+  "attachedFiles": {
+    "removeAll": "Remove All",
+    "filesCount": "{{count}} file(s) attached",
+    "remove": "Remove file",
+    "sourceLocal": "Local file",
+    "sourceCloud": "Cloud file"
+  },
   "app": {
     "title": "iHub Apps",
     "loading": "Loading...",
@@ -81,7 +88,22 @@
     "quote": "Quote",
     "code": "Code",
     "link": "Link",
-    "redo": "Redo"
+    "redo": "Redo",
+    "language": "en",
+    "zoomIn": "Zoom In",
+    "zoomOut": "Zoom Out",
+    "resetView": "Reset View",
+    "panZoomHint": "Drag to pan, scroll to zoom",
+    "interactive": "Interactive",
+    "downloadSVG": "Download SVG",
+    "downloadPNG": "Download PNG",
+    "downloadPDF": "Download PDF",
+    "viewFullscreen": "View Fullscreen"
+  },
+  "chatActions": {
+    "menu": "Actions menu",
+    "quickActions": "Quick Actions",
+    "attachFile": "Attach File"
   },
   "pages": {
     "home": {
@@ -103,6 +125,12 @@
       "toggleImageUpload": "Toggle image upload",
       "toggleFileUpload": "Toggle file upload",
       "toggleUpload": "Toggle file upload",
+      "uploadFromCloud": "Upload from cloud",
+      "uploadFromDevice": "Upload from device",
+      "selectCloudProvider": "Select cloud storage provider",
+      "selectFilesFromCloud": "Select files from {{provider}}",
+      "noCloudProviders": "No cloud storage providers configured",
+      "cloudStorageNotEnabled": "Cloud storage is not enabled",
       "favorites": "Favorites",
       "clearFilters": "Clear filters",
       "loadMore": "Load More",
@@ -223,7 +251,12 @@
       "label": "Model",
       "choose": "Choose model",
       "noModels": "No models available",
-      "loading": "Loading models..."
+      "loading": "Loading models...",
+      "hint": {
+        "dismiss": "Dismiss",
+        "acknowledge": "I Understand",
+        "alertTitle": "Important Notice"
+      }
     }
   },
   "auth": {
@@ -238,7 +271,14 @@
       "required": "This field is required",
       "signInWith": "Sign in with:",
       "or": "or",
-      "signingIn": "Signing In..."
+      "signingIn": "Signing In...",
+      "windowsAuth": "Windows Authentication",
+      "ldapProvider": "LDAP Provider",
+      "selectProvider": "Auto-detect",
+      "selectAuthMethod": "Select authentication method:",
+      "localAuth": "Local Authentication",
+      "ldapAuth": "LDAP Authentication",
+      "backToMethodSelection": "Back to method selection"
     },
     "logout": "Sign out",
     "menu": {
@@ -256,337 +296,134 @@
     }
   },
   "admin": {
-    "title": "Administration",
-    "nav": {
-      "home": "Home",
-      "apps": "Apps",
-      "models": "Models",
-      "prompts": "Prompts",
-      "pages": "Pages",
-      "groups": "Groups",
-      "auth": "Authentication",
-      "logs": "Logs"
-    },
-    "navigation": {
-      "overview": "Overview",
-      "apps": "Apps",
-      "models": "Models",
-      "users": "Users",
-      "settings": "Settings",
-      "logs": "Logs"
-    },
-    "apps": {
-      "title": "Apps Management",
-      "subtitle": "Manage your iHub applications",
-      "createApp": "Create App",
-      "list": {
-        "title": "Applications",
-        "addApp": "Add App",
-        "search": "Search apps...",
-        "noApps": "No apps found",
-        "edit": "Edit",
-        "delete": "Delete",
-        "confirmDelete": "Are you sure you want to delete this app?",
-        "status": "Status",
-        "enabled": "Enabled",
-        "disabled": "Disabled"
+    "providers": {
+      "title": "Provider Credentials",
+      "description": "Manage API keys for LLM providers, web search services, and custom integrations. Provider-level keys are used as fallback for models that do not have their own API key configured.",
+      "search": "Search providers...",
+      "noResults": "No providers found matching your search.",
+      "noProviders": "No providers configured.",
+      "configured": "Configured",
+      "notConfigured": "Not Configured",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "configure": "Configure",
+      "delete": "Delete",
+      "createNew": "Create New Provider",
+      "backToList": "Back to Providers",
+      "category": {
+        "llm": "LLM Providers",
+        "websearch": "Web Search Providers",
+        "cloudstorage": "Cloud Storage Providers",
+        "custom": "Custom / Generic API Keys"
       },
-      "edit": {
-        "title": "Edit App",
-        "create": "Create App",
-        "basicInfo": "Basic Information",
-        "name": "Name",
+      "table": {
+        "provider": "Provider",
         "description": "Description",
-        "color": "Color",
-        "icon": "Icon",
-        "category": "Category",
-        "enabled": "Enabled",
-        "advanced": "Advanced Settings",
-        "systemPrompt": "System Prompt",
-        "tokenLimit": "Token Limit",
-        "preferredModel": "Preferred Model",
-        "temperature": "Temperature",
-        "searchTools": "Search tools to add...",
-        "toolsHelper": "Search and select tools to add to this app. Click on selected tools to remove them."
-      },
-      "wizard": {
-        "title": "Create New App",
-        "basedOn": "Based on",
-        "back": "Back",
-        "next": "Next",
-        "finish": "Finish App",
-        "create": "Create App",
-        "creating": "Creating...",
-        "revert": "Revert to parent",
-        "steps": {
-          "basic": "Basic",
-          "prompt": "Prompt",
-          "advanced": "Advanced",
-          "tools": "Tools",
-          "review": "Review"
-        },
-        "navigation": {
-          "previous": "Previous",
-          "next": "Next",
-          "finish": "Create App",
-          "saving": "Creating..."
-        },
-        "method": {
-          "title": "Creation Method",
-          "description": "How would you like to create your app?",
-          "instruction": "Choose how you want to create your app:",
-          "ai": "AI-Generated",
-          "aiDescription": "Describe what your app should do, and AI will generate the configuration for you.",
-          "manual": "Manual Configuration",
-          "manualDescription": "Configure your app step by step with full control over all settings.",
-          "template": "Based on Template",
-          "templateDescription": "Start with the configuration from \"{templateName}\" and customize it."
-        },
-        "ai": {
-          "title": "AI Generation",
-          "description": "Describe what your app should do",
-          "language": "Language",
-          "prompt": "Describe your app",
-          "promptPlaceholder": "Example: Create a meeting summarizer app that takes meeting notes and extracts key points, action items, and decisions...",
-          "generate": "Generate App",
-          "generating": "Generating...",
-          "loadingPrompt": "Loading prompt configuration...",
-          "success": "App configuration generated successfully! You can review and modify it in the next steps.",
-          "error": {
-            "parse": "Failed to parse generated configuration",
-            "generate": "Failed to generate app configuration",
-            "network": "Network error occurred while generating app"
-          }
-        },
-        "generator": {
-          "title": "AI App Generator",
-          "description": "Describe the app you want to create and I'll generate it for you",
-          "placeholder": "Describe your app idea...",
-          "generate": "Generate App",
-          "generating": "Generating...",
-          "loadingPrompt": "Loading prompt configuration...",
-          "error": {
-            "parse": "Failed to parse generated configuration",
-            "generate": "Failed to generate app configuration",
-            "network": "Network error occurred while generating app"
-          }
-        },
-        "basic": {
-          "title": "Basic Information",
-          "description": "Description",
-          "language": "Language",
-          "appId": "App ID",
-          "appIdPlaceholder": "e.g., my-awesome-app",
-          "name": "App Name",
-          "namePlaceholder": "Enter app name",
-          "descriptionPlaceholder": "Enter app description",
-          "color": "Color",
-          "icon": "Icon",
-          "iconPlaceholder": "e.g., chat-bubbles",
-          "selectIcon": "Select an icon",
-          "searchIcons": "Search icons...",
-          "noIconsFound": "No icons found",
-          "iconCount": "{{count}} icons available",
-          "iconCountFiltered": "{{filtered}} of {{total}} icons",
-          "nameLabel": {
-            "label": "App Name",
-            "placeholder": "Enter app name"
-          },
-          "descriptionLabel": {
-            "label": "Description",
-            "placeholder": "Describe what this app does"
-          },
-          "colorLabel": {
-            "label": "Theme Color",
-            "description": "Choose a color for the app's theme"
-          },
-          "iconLabel": {
-            "label": "Icon",
-            "description": "Select an icon for the app"
-          },
-          "category": {
-            "label": "Category",
-            "placeholder": "Select or enter category"
-          }
-        },
-        "system": {
-          "title": "System Instructions",
-          "description": "Define how your app should behave",
-          "prompt": "System Instructions",
-          "promptPlaceholder": "Enter system instructions that define how the AI should behave...",
-          "messagePlaceholder": "Message Placeholder",
-          "messagePlaceholderPlaceholder": "Enter your message here...",
-          "model": "Preferred Model",
-          "temperature": "Temperature"
-        },
-        "variables": {
-          "title": "Variables",
-          "description": "Add user-configurable variables",
-          "instruction": "Variables allow users to customize the app behavior. They can be used in the prompt template with {{variableName}} syntax.",
-          "variable": "Variable {{index}}",
-          "name": "Name",
-          "namePlaceholder": "e.g., targetLanguage",
-          "type": "Type",
-          "label": "Label",
-          "labelPlaceholder": "e.g., Target Language",
-          "required": "Required",
-          "add": "Add Variable"
-        },
-        "prompt": {
-          "title": "System Prompt",
-          "description": "Define how the AI should behave",
-          "system": {
-            "label": "System Prompt",
-            "placeholder": "You are a helpful assistant that...",
-            "description": "Instructions that define the AI's role and behavior"
-          },
-          "variables": {
-            "title": "Variables",
-            "description": "Add variables that users can configure",
-            "add": "Add Variable",
-            "name": "Name",
-            "label": "Label",
-            "type": "Type",
-            "required": "Required",
-            "defaultValue": "Default Value",
-            "options": "Options (comma-separated)",
-            "placeholder": "Placeholder text"
-          }
-        },
-        "advanced": {
-          "title": "Advanced Settings",
-          "description": "Configure advanced features",
-          "instruction": "Configure advanced settings for your app.",
-          "allowEmptyContent": "Allow Empty Content",
-          "sendChatHistory": "Send Chat History",
-          "imageUpload": "Enable Image Upload",
-          "category": "Category",
-          "order": "Display Order",
-          "model": {
-            "label": "Preferred Model",
-            "description": "Default model for this app"
-          },
-          "tokenLimit": {
-            "label": "Token Limit",
-            "description": "Maximum tokens per request"
-          },
-          "temperature": {
-            "label": "Temperature",
-            "description": "Controls creativity vs consistency"
-          },
-          "outputFormat": {
-            "label": "Output Format",
-            "description": "Default format for responses"
-          }
-        },
-        "review": {
-          "title": "Review & Create",
-          "description": "Review your app configuration before creating",
-          "instruction": "Review your app configuration before creating it.",
-          "basicInfo": "Basic Information",
-          "systemPrompt": "System Prompt",
-          "settings": "Settings",
-          "selectedTools": "Selected Tools",
-          "noTools": "No tools selected",
-          "basedOn": "Based on template: {templateName}",
-          "overridden": "Overridden fields: {fields}",
-          "warning": "Once created, you can edit the app configuration but cannot change its ID. Make sure the ID is unique and descriptive."
-        },
-        "error": {
-          "missingFields": "Please fill in all required fields before proceeding.",
-          "methodRequired": "Please select a creation method",
-          "idRequired": "App ID is required",
-          "nameRequired": "App name is required",
-          "descriptionRequired": "App description is required",
-          "colorRequired": "App color is required",
-          "iconRequired": "App icon is required",
-          "systemRequired": "System instructions are required",
-          "tokenLimitRequired": "Token limit is required",
-          "createFailed": "Failed to create app"
-        },
-        "tools": {
-          "title": "Tools",
-          "description": "Select available tools",
-          "instruction": "Select the tools that will be available to your app. Tools extend the capabilities of the AI assistant.",
-          "searchPlaceholder": "Search tools...",
-          "noResults": "No tools match your search",
-          "noTools": "No tools available"
-        }
-      }
-    },
-    "pages": {
-      "title": "Pages Management",
-      "list": {
-        "title": "Pages",
-        "addPage": "Add Page",
-        "search": "Search pages...",
-        "noPages": "No pages found",
-        "edit": "Edit",
-        "delete": "Delete",
-        "view": "View"
+        "apiKey": "API Key",
+        "status": "Status",
+        "actions": "Actions"
       },
       "edit": {
-        "title": "Edit Page",
-        "create": "Create Page",
-        "id": "Page ID",
-        "idPlaceholder": "page-id (used in URL)",
-        "pageTitle": "Title",
-        "content": "Content",
-        "idRequired": "ID is required",
-        "authRequired": "Authentication Required",
-        "allowedGroups": "Allowed Groups (comma separated, '*' = all)"
+        "title": "Configure Provider",
+        "description": "Description",
+        "saved": "Provider configuration saved successfully!",
+        "id": "Provider ID",
+        "name": "Provider Name",
+        "apiKey": "API Key",
+        "apiKeyOptional": "(Optional - leave empty to use environment variable)",
+        "apiKeyPlaceholder": "Enter new API key or leave unchanged",
+        "apiKeyEnter": "Enter API key",
+        "apiKeySet": "An API key is currently configured",
+        "enabled": "Provider Enabled",
+        "cancel": "Cancel",
+        "save": "Save Changes",
+        "saving": "Saving...",
+        "info": {
+          "title": "About Provider API Keys",
+          "description": "API keys configured here are used as a fallback for all models of this provider that do not have their own API key configured. If you leave this field empty, the system will use the environment variable instead."
+        }
       },
-      "confirmDelete": "Are you sure you want to delete this page?",
-      "contentTypes": {
-        "markdown": "Markdown (.md)",
-        "reactComponent": "React Component (.jsx)",
-        "jsxDescription": "Write JSX code that will be compiled and rendered as a React component",
-        "markdownDescription": "Write standard markdown content with syntax highlighting support"
+      "create": {
+        "title": "Create New Provider",
+        "description": "Create a new custom provider for storing API keys",
+        "saved": "Provider created successfully!",
+        "id": "Provider ID",
+        "idHelp": "Unique identifier (lowercase, use hyphens instead of spaces)",
+        "name": "Provider Name",
+        "category": "Category",
+        "apiKey": "API Key",
+        "apiKeyOptional": "(Optional)",
+        "apiKeyEnter": "Enter API key",
+        "enabled": "Provider Enabled",
+        "cancel": "Cancel",
+        "save": "Create Provider",
+        "saving": "Creating..."
+      },
+      "info": {
+        "title": "API Key Priority",
+        "description": "When a model requests an API key, the system checks in this order: 1) Model-specific API key, 2) Provider-level API key (configured here), 3) Environment variable. This allows you to set a default API key for all models of a provider while still allowing individual models to override it."
       }
     },
     "models": {
       "title": "Model Management",
       "subtitle": "Configure and manage AI models for your applications",
-      "addNew": "Add New Model",
       "loadError": "Error loading models",
+      "addNew": "Add New Model",
+      "uploadConfig": "Upload Config",
+      "uploading": "Uploading...",
       "searchPlaceholder": "Search models...",
       "filterAll": "All Models",
       "filterEnabled": "Enabled Only",
       "filterDisabled": "Disabled Only",
       "name": "Name",
       "provider": "Provider",
-      "actions": "Actions",
       "enabled": "Enabled",
       "disabled": "Disabled",
-      "test": "Test",
+      "default": "Default",
+      "actions": "Actions",
+      "test": {
+        "success": "Test Successful",
+        "failed": "Test Failed"
+      },
       "enable": "Enable",
       "disable": "Disable",
       "clone": "Clone",
+      "download": "Download Config",
       "delete": "Delete",
       "deleteConfirm": "Delete this model?",
       "noModels": "No models found",
       "noModelsDesc": "Get started by creating a new model.",
+      "table": {
+        "status": "Status"
+      },
+      "status": {
+        "enabled": "Enabled",
+        "disabled": "Disabled"
+      },
+      "details": {
+        "messages": "Messages",
+        "tokens": "Tokens"
+      },
       "edit": {
         "title": "Edit Model",
         "titleNew": "Create New Model",
-        "subtitle": "Editing {{name}}",
+        "subtitle": "Configure model: {{name}}",
         "subtitleNew": "Create a new AI model configuration",
         "backToModels": "Back to Models",
-        "basicInfo": "Basic Information",
-        "basicInfoDesc": "Basic information about the model",
-        "configuration": "Configuration",
-        "configurationDesc": "Advanced configuration options for the model",
-        "saving": "Saving...",
-        "createModel": "Create Model",
-        "saveChanges": "Save Changes",
         "usageStats": "Usage Statistics",
         "noUsageData": "No usage data available",
         "appsUsingModel": "Apps Using This Model",
         "noApps": "No apps are currently using this model",
-        "requiredFields": "Please fill in all required fields",
-        "success": "Model {{action}} successfully",
+        "success": "Model {{action}} successfully!",
         "successCreated": "created",
-        "successUpdated": "updated"
+        "successUpdated": "updated",
+        "saving": "Saving...",
+        "createModel": "Create Model",
+        "saveChanges": "Save Changes",
+        "basicInfo": "Basic Information",
+        "basicInfoDesc": "Basic information about the model",
+        "configuration": "Configuration",
+        "configurationDesc": "Advanced configuration options for the model"
       },
       "fields": {
         "id": "Model ID",
@@ -595,161 +432,36 @@
         "provider": "Provider",
         "modelId": "API Model ID",
         "url": "API URL",
+        "apiKey": "API Key",
         "tokenLimit": "Token Limit",
         "concurrency": "Concurrency",
         "requestDelay": "Request Delay (ms)",
         "supportsTools": "Supports Tools",
         "enabled": "Enabled",
         "defaultModel": "Default Model",
-        "apiKey": "API Key"
+        "supportsImageGeneration": "Supports Image Generation",
+        "aspectRatio": "Aspect Ratio",
+        "imageSize": "Image Size",
+        "maxReferenceImages": "Max Reference Images"
       },
       "hints": {
-        "modelId": "Unique identifier for this model configuration",
-        "apiModelId": "The actual model ID used in API calls (e.g., gpt-4, claude-3-opus)",
+        "modelId": "Unique identifier for the model (cannot be changed after creation)",
+        "apiModelId": "Model identifier used by the provider's API (e.g., gpt-4, claude-3-opus)",
         "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
-        "apiKeySet": "✓ API key is configured for this model"
+        "apiKeySet": "✓ API key is configured for this model",
+        "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}",
+        "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
+        "maxReferenceImages": "Maximum number of reference images (1-14)"
       },
       "placeholders": {
         "selectProvider": "Select a provider",
         "apiModelId": "e.g., gpt-4, claude-3-opus",
-        "apiUrl": "https://api.example.com/v1/chat/completions",
+        "apiUrl": "https://api.provider.com/v1/chat/completions",
         "apiKey": "Enter API key (optional - will use environment variable if not set)",
         "apiKeySet": "API key is set (leave blank to keep current)"
       },
-      "status": {
-        "enabled": "Enabled",
-        "disabled": "Disabled"
-      },
-      "details": {
-        "messages": "Messages",
-        "tokens": "Tokens",
-        "editModel": "Edit Model"
-      }
-    },
-    "prompts": {
-      "title": "Prompt Management",
-      "subtitle": "Manage and organize prompts for your AI applications",
-      "createNew": "Create New Prompt",
-      "loadError": "Error loading prompts",
-      "searchPlaceholder": "Search prompts...",
-      "filterAll": "All Prompts",
-      "filterEnabled": "Enabled Only",
-      "filterDisabled": "Disabled Only",
-      "name": "Name",
-      "category": "Category",
-      "description": "Description",
-      "order": "Order",
-      "appId": "App ID",
-      "status": "Status",
-      "actions": "Actions",
-      "enabled": "Enabled",
-      "disabled": "Disabled",
-      "enable": "Enable",
-      "disable": "Disable",
-      "clone": "Clone",
-      "edit": "Edit",
-      "delete": "Delete",
-      "deleteConfirm": "Are you sure you want to delete this prompt?",
-      "deleteSuccess": "Prompt deleted successfully",
-      "noPrompts": "No prompts found",
-      "noPromptsDesc": "Get started by creating a new prompt.",
-      "variableTypes": {
-        "string": "String",
-        "number": "Number",
-        "boolean": "Boolean"
-      }
-    },
-    "shortlinks": {
-      "title": "Short Links Management",
-      "subtitle": "Manage and monitor short links for your applications",
-      "addNew": "Add New Link",
-      "loadError": "Error loading short links",
-      "filterByAppId": "Filter by App ID",
-      "filterByUser": "Filter by User",
-      "filter": "Filter",
-      "code": "Code",
-      "appId": "App ID",
-      "userId": "User ID",
-      "usage": "Usage",
-      "createdAt": "Created",
-      "expiresAt": "Expires",
-      "actions": "Actions",
-      "copyLink": "Copy link",
-      "testLink": "Test link",
-      "delete": "Delete",
-      "deleteConfirm": "Delete this link?",
-      "noLinks": "No short links found",
-      "noLinksDesc": "Short links will appear here when created by users."
-    },
-    "dashboard": {
-      "topUsersByMessages": "Top Users by Messages",
-      "topUsersByTokens": "Top Users by Tokens",
-      "topUsersByMagicPrompts": "Top Users by Magic Prompts",
-      "userFeedback": "User Feedback",
-      "totalInvocations": "Total Invocations",
-      "inputTokens": "Input Tokens",
-      "outputTokens": "Output Tokens",
-      "positive": "Positive",
-      "negative": "Negative",
-      "feedbackOverview": "Feedback Overview",
-      "satisfactionRate": "Satisfaction Rate",
-      "aiModel": "AI Model",
-      "messages": "messages",
-      "totalTokens": "Total Tokens",
-      "promptTokens": "Prompt Tokens",
-      "completionTokens": "Completion Tokens",
-      "avgPerMessage": "Avg/Message",
-      "tokenDistribution": "Token Distribution",
-      "activeUsers": "Active Users",
-      "activeApps": "Active Apps",
-      "modelsUsed": "Models Used",
-      "avgTokensPerMsg": "Avg Tokens/Msg",
-      "modelUsageDetails": "Model Usage Details",
-      "systemOverview": "System Overview",
-      "appUsage": "App Usage",
-      "tokenEfficiency": "Token Efficiency",
-      "inputTokenDistribution": "Input Token Distribution",
-      "outputTokenDistribution": "Output Token Distribution",
-      "userFeedbackActivity": "User Feedback Activity",
-      "feedbackByApplication": "Feedback by Application",
-      "feedbackByModel": "Feedback by Model",
-      "averageRating": "Average Rating"
-    },
-    "groups": {
-      "management": "Group Management",
-      "subtitle": "Manage user groups, permissions, and external group mappings",
-      "noGroupsFound": "No groups found",
-      "createFirstGroup": "Create your first group to get started",
-      "apps": "Apps:",
-      "noMappings": "No mappings",
-      "error": "Error",
-      "basicInformation": "Basic Information",
-      "basicGroupConfiguration": "Basic group configuration and metadata",
-      "groupId": "Group ID",
-      "protectedSystemGroup": "This is a protected system group",
-      "groupName": "Group Name",
-      "description": "Description",
-      "adminAccess": "Admin Access",
-      "permissions": "Permissions"
-    },
-    "usage": {
-      "title": "Admin Dashboard",
-      "subtitle": "Usage analytics and system overview",
-      "overview": {
-        "systemOverview": "System Overview",
-        "activeUsers": "Active Users",
-        "activeApps": "Active Apps",
-        "modelsUsed": "Models Used",
-        "avgTokensPerMsg": "Avg Tokens/Msg"
-      },
       "sections": {
-        "appUsage": "App Usage",
-        "tokenEfficiency": "Token Efficiency",
-        "inputTokenDistribution": "Input Token Distribution",
-        "outputTokenDistribution": "Output Token Distribution",
-        "userFeedbackActivity": "User Feedback Activity",
-        "feedbackByApplication": "Feedback by Application",
-        "feedbackByModel": "Feedback by Model"
+        "imageGeneration": "Image Generation Settings"
       }
     },
     "auth": {
@@ -761,7 +473,130 @@
       "defaultGroups": "Default Groups",
       "jwtProviders": "JWT Providers",
       "noOidcProviders": "No OIDC providers configured",
-      "addProvider": "Add a provider to enable OIDC authentication"
+      "addProvider": "Add a provider to enable OIDC authentication",
+      "oauth": {
+        "title": "OAuth Clients",
+        "subtitle": "Manage OAuth 2.0 clients for external API access",
+        "enabled": "OAuth Enabled",
+        "disabled": "OAuth Disabled",
+        "noClients": "No OAuth clients configured",
+        "createClient": "Create OAuth Client",
+        "editClient": "Edit OAuth Client",
+        "deleteClient": "Delete OAuth Client",
+        "clientId": "Client ID",
+        "clientSecret": "Client Secret",
+        "clientSecretWarning": "Save this secret now. It will not be shown again.",
+        "clientSecretHidden": "Secret is hidden for security",
+        "name": "Client Name",
+        "description": "Description",
+        "scopes": "Scopes",
+        "allowedApps": "Allowed Apps",
+        "allowedModels": "Allowed Models",
+        "searchApps": "Search apps to add...",
+        "searchModels": "Search models to add...",
+        "noAppsSelected": "No apps selected - client can access all apps",
+        "noModelsSelected": "No models selected - client can access all models",
+        "tokenExpiration": "Token Expiration (minutes)",
+        "active": "Active",
+        "suspended": "Suspended",
+        "createdAt": "Created",
+        "createdBy": "Created By",
+        "lastUsed": "Last Used",
+        "lastRotated": "Secret Last Rotated",
+        "rotateSecret": "Rotate Secret",
+        "rotateSecretConfirm": "Are you sure you want to rotate the secret? The old secret will stop working immediately.",
+        "rotateSecretSuccess": "Secret rotated successfully. Save the new secret now.",
+        "generateToken": "Generate Long-Term Token",
+        "generateTokenDesc": "Select the expiration period for this token and click Generate.",
+        "generating": "Generating...",
+        "generate": "Generate",
+        "expirationRange": "Enter a value between 1 and 3650 days (10 years)",
+        "tokenGenerated": "Long-Term Token Generated",
+        "tokenWarning": "Save this token now. It will not be shown again.",
+        "token": "Token",
+        "staticApiKey": "Static API Key",
+        "expirationDays": "Expiration (days)",
+        "expiresAt": "Expires At",
+        "introspectToken": "Introspect Token",
+        "introspectTokenDesc": "Check token validity and claims",
+        "tokenActive": "Token Active",
+        "tokenInactive": "Token Inactive",
+        "tokenExpired": "Token Expired",
+        "deleteConfirm": "Are you sure you want to delete this OAuth client? All issued tokens will stop working.",
+        "createSuccess": "OAuth client created successfully",
+        "updateSuccess": "OAuth client updated successfully",
+        "deleteSuccess": "OAuth client deleted successfully",
+        "createError": "Failed to create OAuth client",
+        "updateError": "Failed to update OAuth client",
+        "deleteError": "Failed to delete OAuth client",
+        "loadError": "Failed to load OAuth clients",
+        "validation": {
+          "nameRequired": "Client name is required",
+          "tokenExpirationInvalid": "Token expiration must be between 1 and {{max}} minutes",
+          "expirationDaysInvalid": "Expiration must be between 1 and 3650 days"
+        }
+      }
+    },
+    "cloudStorage": {
+      "title": "Cloud Storage Integration",
+      "subtitle": "Configure cloud storage providers for file uploads",
+      "enabled": "Cloud Storage Enabled",
+      "disabled": "Cloud Storage Disabled",
+      "noProviders": "No cloud storage providers configured",
+      "addProvider": "Add Provider",
+      "providers": "Cloud Storage",
+      "providerType": "Provider Type",
+      "selectType": "Select provider type",
+      "sharepoint": "SharePoint",
+      "office365": "Microsoft Office 365",
+      "googledrive": "Google Drive",
+      "googleDrive": "Google Drive",
+      "editProvider": "Edit Provider",
+      "deleteProvider": "Delete Provider",
+      "deleteConfirm": "Are you sure you want to delete this cloud storage provider?",
+      "name": "Name",
+      "displayName": "Display Name",
+      "tenantId": "Tenant ID",
+      "clientId": "Client ID",
+      "clientSecret": "Client Secret",
+      "siteUrl": "Site URL (Optional)",
+      "driveId": "Drive ID (Optional)",
+      "redirectUri": "Redirect URI (Optional)",
+      "providerEnabled": "Provider Enabled",
+      "save": "Save",
+      "cancel": "Cancel",
+      "saving": "Saving...",
+      "saveSuccess": "Cloud storage configuration saved successfully",
+      "saveError": "Failed to save cloud storage configuration",
+      "deleteSuccess": "Provider deleted successfully",
+      "deleteError": "Failed to delete provider",
+      "validation": {
+        "nameRequired": "Name is required",
+        "displayNameRequired": "Display name is required",
+        "tenantIdRequired": "Tenant ID is required",
+        "clientIdRequired": "Client ID is required",
+        "clientSecretRequired": "Client secret is required"
+      },
+      "info": {
+        "title": "About Cloud Storage Integration",
+        "description": "Connect to cloud storage providers like Office 365 and Google Drive to allow users to select files directly from their cloud storage during file uploads."
+      },
+      "office365Info": {
+        "title": "Office 365 Configuration",
+        "description": "To configure Office 365 integration, you need to register an application in Azure AD and obtain the Tenant ID, Client ID, and Client Secret.",
+        "step1": "Register an app in Azure AD",
+        "step2": "Configure API permissions (Files.Read, Sites.Read.All)",
+        "step3": "Create a client secret",
+        "step4": "Copy the Tenant ID, Client ID, and Client Secret here"
+      },
+      "googleDriveInfo": {
+        "title": "Google Drive Configuration",
+        "description": "To configure Google Drive integration, you need to create a project in Google Cloud Console and enable the Google Drive API.",
+        "step1": "Create a project in Google Cloud Console",
+        "step2": "Enable Google Drive API",
+        "step3": "Create OAuth 2.0 credentials",
+        "step4": "Copy the Client ID and Client Secret here"
+      }
     },
     "system": {
       "title": "System Administration",
@@ -775,7 +610,7 @@
       "triggerSuccess": "Force refresh triggered successfully! New salt: {{salt}}. All clients will refresh on their next page load.",
       "triggerError": "Failed to trigger force refresh",
       "passwordTitle": "Change Admin Password",
-      "passwordDesc": "Update the admin password. The new password will be encrypted using bcrypt and stored securely.",
+      "passwordDesc": "Update the admin password. The new password will be encrypted using bcryptjs and stored securely.",
       "newPassword": "New Password",
       "newPasswordPlaceholder": "Enter new password",
       "confirmPassword": "Confirm New Password",
@@ -812,7 +647,238 @@
       "versionServer": "Backend Version",
       "versionNode": "Node.js Version",
       "versionLoading": "Loading version information...",
-      "versionError": "Failed to load version information"
+      "versionError": "Failed to load version information",
+      "updateCheckTitle": "Update Available",
+      "updateAvailable": "A new version of iHub Apps is available!",
+      "currentVersion": "Current Version",
+      "latestVersion": "Latest Version",
+      "viewRelease": "View Release on GitHub",
+      "checkingUpdate": "Checking for updates...",
+      "updateCheckFailed": "Failed to check for updates",
+      "noUpdateAvailable": "You are running the latest version",
+      "logging": {
+        "title": "Logging Configuration",
+        "description": "Configure application logging levels and output",
+        "currentLevel": "Current Log Level",
+        "availableLevels": "Available Log Levels",
+        "changeLevel": "Change Log Level",
+        "changingLevel": "Changing Log Level...",
+        "levelChanged": "Log level changed to {{level}}",
+        "levelChangeError": "Failed to change log level",
+        "levels": {
+          "error": "Error - Only errors",
+          "warn": "Warning - Errors and warnings",
+          "info": "Info - General information (default)",
+          "http": "HTTP - HTTP requests and responses",
+          "verbose": "Verbose - Detailed information",
+          "debug": "Debug - Debugging information",
+          "silly": "Silly - Everything (very detailed)"
+        },
+        "levelDescriptions": {
+          "error": "Only log errors",
+          "warn": "Log warnings and errors",
+          "info": "Log general information, warnings, and errors (recommended)",
+          "http": "Log HTTP requests along with info, warnings, and errors",
+          "verbose": "Log detailed information useful for troubleshooting",
+          "debug": "Log debugging information for development",
+          "silly": "Log everything - use only for detailed debugging"
+        },
+        "fileLogging": "File Logging",
+        "fileLoggingEnabled": "Enable file logging",
+        "fileLoggingPath": "Log file path",
+        "fileLoggingMaxSize": "Max file size (bytes)",
+        "fileLoggingMaxFiles": "Max number of log files",
+        "saveConfig": "Save Configuration",
+        "savingConfig": "Saving Configuration...",
+        "configSaved": "Logging configuration saved successfully",
+        "configSaveError": "Failed to save logging configuration"
+      },
+      "ssl": {
+        "title": "SSL Certificate Configuration",
+        "description": "Configure SSL certificate validation and domain whitelist for external connections",
+        "ignoreInvalidCertificates": "Ignore Invalid SSL Certificates",
+        "ignoreInvalidCertificatesDesc": "When enabled, allows connections to services with self-signed or invalid SSL certificates. Use only in trusted environments.",
+        "domainWhitelist": "Domain Whitelist",
+        "domainWhitelistDesc": "Specify domains for which SSL certificate validation should be ignored. SSL validation will only be bypassed for domains explicitly added to this whitelist.",
+        "domainWhitelistPlaceholder": "api.example.com, *.internal.company.com",
+        "addDomain": "Add Domain",
+        "removeDomain": "Remove",
+        "domainPatternHelp": "Supported patterns: exact domain (api.example.com), wildcard (*.example.com), subdomain (.example.com)",
+        "noDomains": "No domains in whitelist",
+        "saveConfig": "Save Configuration",
+        "savingConfig": "Saving Configuration...",
+        "configSaved": "SSL configuration saved successfully",
+        "configSaveError": "Failed to save SSL configuration",
+        "securityWarning": "Security Warning",
+        "securityWarningDesc": "Disabling SSL certificate validation makes your application vulnerable to man-in-the-middle attacks. Only use this feature in secure, trusted network environments.",
+        "globalWarning": "No domains are currently whitelisted. SSL certificate validation is enabled for ALL external connections. Add specific domains above to bypass SSL validation for those domains only."
+      }
+    },
+    "tools": {
+      "title": "Tool Management",
+      "subtitle": "Create, edit, and manage AI tools / function calling for your iHub Apps",
+      "toggle": "Toggle tools",
+      "enableDisable": "Tools",
+      "enableDisableSubtitle": "Enable or disable tools for this chat",
+      "createNew": "Create New Tool",
+      "uploadConfig": "Upload Config",
+      "uploading": "Uploading...",
+      "searchPlaceholder": "Search tools...",
+      "filterAll": "All Tools",
+      "filterEnabled": "Enabled Only",
+      "filterDisabled": "Disabled Only",
+      "filterAllTypes": "All Types",
+      "filterRegular": "Regular Tools",
+      "filterMultiFunction": "Multi-Function",
+      "filterSpecial": "Special Tools",
+      "loadError": "Error loading tools",
+      "noTools": "No tools found",
+      "noToolsDescription": "Get started by creating a new tool.",
+      "enabled": "Enabled",
+      "disabled": "Disabled",
+      "enable": "Enable",
+      "disable": "Disable",
+      "clone": "Clone",
+      "edit": "Edit",
+      "delete": "Delete",
+      "download": "Download Config",
+      "deleteConfirm": "Are you sure you want to delete this tool?",
+      "deleteSuccess": "Tool deleted successfully",
+      "typeRegular": "Regular",
+      "typeMultiFunction": "Multi-Function",
+      "typeSpecial": "Special",
+      "table": {
+        "name": "Name",
+        "type": "Type",
+        "description": "Description",
+        "script": "Script",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "editTool": "Edit Tool",
+      "createDescription": "Create a new AI tool / function",
+      "editDescription": "Edit tool configuration and script",
+      "configTab": "Configuration",
+      "scriptTab": "Script Editor",
+      "id": "Tool ID",
+      "idHelp": "Unique identifier for the tool",
+      "name": "Name",
+      "nameHelp": "Display name for the tool in different languages",
+      "description": "Description",
+      "descriptionHelp": "Description shown to the LLM for tool selection",
+      "scriptFile": "Script File",
+      "scriptFileHelp": "JavaScript file in server/tools/ directory",
+      "concurrency": "Concurrency Limit",
+      "concurrencyHelp": "Maximum number of concurrent executions",
+      "parameters": "Parameters (JSON Schema)",
+      "parametersHelp": "JSON Schema definition for tool parameters",
+      "functions": "Functions (Multi-Function Tool)",
+      "functionsHelp": "Define multiple functions for this tool (e.g., findUser, getAllUserDetails). Each function should have description and parameters. Leave empty {} for regular single-function tools.",
+      "functionsExample": "Show example multi-function configuration",
+      "isSpecialTool": "Special Tool",
+      "isSpecialToolHelp": "Provider-specific tools that are handled directly by the model provider (e.g., Google Search Grounding, OpenAI Web Search)",
+      "provider": "Provider",
+      "providerHelp": "Provider identifier (e.g., \"google\" for Google Search, \"openai\" for OpenAI, \"openai-responses\" for response-based tools)",
+      "scriptSaved": "Script saved successfully",
+      "saveScript": "Save Script",
+      "scriptEditorInfo": "Edit the JavaScript code for this tool. Changes will be saved to server/tools/"
+    },
+    "users": {
+      "view": {
+        "title": "View User",
+        "description": "View user details and permissions",
+        "edit": "Edit User",
+        "backToList": "Back to Users",
+        "basicInfo": "Basic Information",
+        "username": "Username",
+        "email": "Email",
+        "fullName": "Full Name",
+        "userId": "User ID",
+        "authentication": "Authentication",
+        "authMethods": "Auth Methods",
+        "status": "Status",
+        "active": "Active",
+        "inactive": "Inactive",
+        "oidcProvider": "OIDC Provider",
+        "groups": "Groups & Permissions",
+        "internalGroups": "Internal Groups",
+        "noGroups": "No groups assigned",
+        "activity": "Activity",
+        "createdAt": "Created At",
+        "lastActive": "Last Active",
+        "daysAgo": "days ago",
+        "never": "Never",
+        "lastModified": "Last Modified"
+      },
+      "edit": {
+        "createTitle": "Create New User",
+        "editTitle": "Edit User",
+        "createDesc": "Create a new user account with permissions and settings",
+        "editDesc": "Edit user account, permissions, and settings",
+        "backToList": "Back to Users",
+        "cancel": "Cancel",
+        "save": "Save User",
+        "saving": "Saving..."
+      }
+    },
+    "logging": {
+      "loadError": "Failed to load logging configuration",
+      "saveSuccess": "Logging configuration saved successfully",
+      "saveError": "Failed to save logging configuration",
+      "authDebugSaveSuccess": "Authentication debug configuration saved successfully",
+      "authDebugSaveError": "Failed to save authentication debug configuration",
+      "levelSection": "Log Level",
+      "formatSection": "Log Format",
+      "componentSection": "Component Filtering",
+      "fileSection": "File Logging",
+      "authDebugSection": "Authentication Debug Logging",
+      "jsonDescription": "Structured JSON logging for parsing and analysis",
+      "textDescription": "Human-readable text format with colors",
+      "enableComponentFilter": "Enable component filtering",
+      "componentFilterHelp": "When enabled, only logs from selected components will be shown",
+      "selectAll": "Select All",
+      "deselectAll": "Deselect All",
+      "enableFileLogging": "Enable file logging",
+      "filePath": "Log File Path",
+      "maxSize": "Max Size (bytes)",
+      "maxFiles": "Max Files",
+      "enableAuthDebug": "Enable authentication debug logging",
+      "maskTokens": "Mask tokens in logs",
+      "redactPasswords": "Redact passwords in logs",
+      "consoleLogging": "Enable console logging",
+      "includeRawData": "Include raw authentication data",
+      "authProviders": "Debug by Provider",
+      "saveAuthDebug": "Save Authentication Debug Settings",
+      "saveChanges": "Save Changes",
+      "saveDescription": "Save logging configuration and apply changes immediately",
+      "save": "Save Logging Configuration",
+      "note1": "Changes take effect immediately across all server processes",
+      "note2": "Log level changes are persisted to platform.json configuration",
+      "note3": "Lower levels (error, warn) show fewer messages, higher levels (debug, silly) show more",
+      "note4": "Use \"info\" level for production, \"debug\" for development",
+      "note5": "Authentication debug logging is separate and requires restart"
+    },
+    "nav": {
+      "logging": "Logging"
+    },
+    "home": {
+      "sections": {
+        "loggingDesc": "Configure logging levels, components, metadata, and debug settings"
+      }
+    },
+    "apps": {
+      "edit": {
+        "autoStart": "Auto-start conversation",
+        "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset"
+      }
+    },
+    "features": {
+      "title": "Features",
+      "description": "Enable or disable platform features",
+      "preview": "Preview",
+      "loadError": "Failed to load features",
+      "saveError": "Failed to save features",
+      "saved": "Features updated successfully"
     }
   },
   "components": {
@@ -864,7 +930,17 @@
       "message": "Something went wrong on our end.",
       "subtitle": "Please try again later.",
       "retry": "Retry"
-    }
+    },
+    "audioUploadDisabled": "Audio upload is not supported by the selected model. Please choose a different model.",
+    "videoUploadDisabled": "Video upload is not supported by the selected model. Please choose a different model.",
+    "audioDecodeError": "Could not decode audio from video. The video format or codec may not be supported by your browser.",
+    "videoAudioExtractionError": "Error extracting audio from video. Please ensure the video contains an audio track.",
+    "fileTooLarge": "File too large. Maximum size is {{maxSize}}MB.",
+    "unsupportedFormat": "Unsupported file format. Please use: {{formats}}",
+    "invalidImage": "Invalid image file",
+    "tiffProcessingError": "Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.",
+    "readError": "Error reading file",
+    "fileProcessingError": "Error processing file. Please try again."
   },
   "toolbar": {
     "bold": "Bold",
@@ -937,6 +1013,8 @@
     "title": "Configuration",
     "save": "Save",
     "cancel": "Cancel",
+    "model": "Model",
+    "selectModel": "Select Model",
     "defaultModel": "Default model",
     "temperature": "Temperature",
     "temperatureDescription": "Controls randomness: Lower values are more deterministic, higher values are more creative.",
@@ -944,7 +1022,17 @@
     "systemPromptDescription": "Instructions for the AI at the beginning of the conversation.",
     "markdown": "Markdown",
     "plainText": "Plain text",
-    "json": "JSON"
+    "json": "JSON",
+    "toolsSettings": "Tools",
+    "toolsSettingsHelp": "Enable or disable individual tools for this session",
+    "imageGeneration": "Image Generation Settings",
+    "imageAspectRatio": "Aspect Ratio",
+    "imageAspectRatioHelp": "Select the aspect ratio for generated images",
+    "imageQuality": "Quality",
+    "imageQualityHelp": "Select the quality level for generated images",
+    "qualityLow": "Low (1K)",
+    "qualityMedium": "Medium (2K)",
+    "qualityHigh": "High (4K)"
   },
   "chatMessage": {
     "user": "You",
@@ -952,7 +1040,18 @@
     "system": "System",
     "copy": "Copy",
     "copied": "Copied!",
-    "edit": "Edit"
+    "edit": "Edit",
+    "resend": "Resend",
+    "editMessage": "Edit message",
+    "resendMessage": "Resend message",
+    "openInCanvas": "Open in Canvas",
+    "generatedImage": "Generated image",
+    "downloadImage": "Download image",
+    "saveImageWarning": "Download this image. Images are not persisted.",
+    "imageNotPersisted": "Image not available",
+    "imageNotPersistedDetail": "Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.",
+    "copyLink": "Copy link",
+    "linkCopied": "Link copied!"
   },
   "serverErrors": {
     "appNotFound": "Application not found",
@@ -977,7 +1076,11 @@
     "responseStreamError": "Error processing response stream: {error}",
     "connectionRefused": "Connection refused when trying to access {provider} API for model {model}. Please check your connection or server configuration.",
     "unauthorized": "Invalid API key",
-    "modelAccessDenied": "API key is not allowed to use this model"
+    "modelAccessDenied": "API key is not allowed to use this model",
+    "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",
+    "noCompatibleModels": "No compatible AI models found for this app. The app requires specific model features that are not available. Please contact your administrator.",
+    "noModelIdProvided": "No model selected. Please select an AI model to continue.",
+    "noModelsForUser": "You don't have permission to access any AI models. Please contact your administrator to request access."
   },
   "toolErrors": {
     "MISSING_URL": "URL parameter is required.",
@@ -1139,5 +1242,12 @@
         "transitionTicket": "Are you sure you want to change the ticket status?"
       }
     }
+  },
+  "workflow": {
+    "running": "Running workflow...",
+    "unknownStep": "Step",
+    "generated": "Generated",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
   }
 }

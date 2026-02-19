@@ -6,6 +6,11 @@ import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
+// Lazy load workflow components
+const WorkflowsPage = React.lazy(() => import('./features/workflows/pages/WorkflowsPage'));
+const WorkflowExecutionPage = React.lazy(
+  () => import('./features/workflows/pages/WorkflowExecutionPage')
+);
 import AppCanvas from './features/canvas/pages/AppCanvas';
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
@@ -24,20 +29,45 @@ const AdminShortLinkEditPage = React.lazy(
 );
 const AdminModelEditPage = React.lazy(() => import('./features/admin/pages/AdminModelEditPage'));
 const AdminModelsPage = React.lazy(() => import('./features/admin/pages/AdminModelsPage'));
+const AdminProvidersPage = React.lazy(() => import('./features/admin/pages/AdminProvidersPage'));
+const AdminProviderEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminProviderEditPage')
+);
+const AdminProviderCreatePage = React.lazy(
+  () => import('./features/admin/pages/AdminProviderCreatePage')
+);
 const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPromptsPage'));
 const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
+const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
+const AdminToolEditPage = React.lazy(() => import('./features/admin/pages/AdminToolEditPage'));
+const AdminWorkflowsPage = React.lazy(() => import('./features/admin/pages/AdminWorkflowsPage'));
+const AdminWorkflowEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminWorkflowEditPage')
+);
+const AdminWorkflowExecutionsPage = React.lazy(
+  () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
+);
 const AdminSourcesPage = React.lazy(() => import('./features/admin/pages/AdminSourcesPage'));
 const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/AdminSourceEditPage'));
 const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
 const AdminPageEditPage = React.lazy(() => import('./features/admin/pages/AdminPageEditPage'));
 const AdminAuthPage = React.lazy(() => import('./features/admin/pages/AdminAuthPage'));
+const AdminOAuthClientsPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthClientsPage')
+);
+const AdminOAuthClientEditPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthClientEditPage')
+);
 const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
 const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
+const AdminUserViewPage = React.lazy(() => import('./features/admin/pages/AdminUserViewPage'));
 const AdminGroupsPage = React.lazy(() => import('./features/admin/pages/AdminGroupsPage'));
 const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/AdminGroupEditPage'));
 const AdminUICustomization = React.lazy(
   () => import('./features/admin/pages/AdminUICustomization')
 );
+const AdminLoggingPage = React.lazy(() => import('./features/admin/pages/AdminLoggingPage'));
+const AdminFeaturesPage = React.lazy(() => import('./features/admin/pages/AdminFeaturesPage'));
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
@@ -48,6 +78,7 @@ import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
 import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
+import useFeatureFlags from './shared/hooks/useFeatureFlags';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
 const TeamsWrapper = React.lazy(() => import('./features/teams/TeamsWrapper'));
 const TeamsAuthStart = React.lazy(() => import('./features/teams/TeamsAuthStart'));
@@ -80,6 +111,7 @@ function App() {
   useSessionManagement();
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
 
@@ -151,9 +183,19 @@ function App() {
                   {/* Regular application routes */}
                   <Route path="/" element={<Layout />}>
                     <Route index element={<SafeAppsList />} />
-                    {uiConfig?.promptsList?.enabled !== false && (
-                      <Route path="prompts" element={<SafePromptsList />} />
-                    )}
+                    {uiConfig?.promptsList?.enabled !== false &&
+                      featureFlags.isEnabled('promptsLibrary', true) && (
+                        <Route path="prompts" element={<SafePromptsList />} />
+                      )}
+                    {/* Workflow routes - feature flag is enforced by server API (returns 403 if disabled) */}
+                    <Route
+                      path="workflows"
+                      element={<LazyAdminRoute component={WorkflowsPage} />}
+                    />
+                    <Route
+                      path="workflows/executions/:executionId"
+                      element={<LazyAdminRoute component={WorkflowExecutionPage} />}
+                    />
                     <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
                     <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
@@ -170,6 +212,12 @@ function App() {
                       <Route
                         path="admin/system"
                         element={<LazyAdminRoute component={AdminSystemPage} />}
+                      />
+                    )}
+                    {showAdminPage('logging') && (
+                      <Route
+                        path="admin/logging"
+                        element={<LazyAdminRoute component={AdminLoggingPage} />}
                       />
                     )}
                     {showAdminPage('apps') && (
@@ -208,6 +256,24 @@ function App() {
                         element={<LazyAdminRoute component={AdminModelEditPage} />}
                       />
                     )}
+                    {showAdminPage('providers') && (
+                      <Route
+                        path="admin/providers"
+                        element={<LazyAdminRoute component={AdminProvidersPage} />}
+                      />
+                    )}
+                    {showAdminPage('providers') && (
+                      <Route
+                        path="admin/providers/new"
+                        element={<LazyAdminRoute component={AdminProviderCreatePage} />}
+                      />
+                    )}
+                    {showAdminPage('providers') && (
+                      <Route
+                        path="admin/providers/:providerId"
+                        element={<LazyAdminRoute component={AdminProviderEditPage} />}
+                      />
+                    )}
                     {showAdminPage('pages') && (
                       <Route
                         path="admin/pages"
@@ -232,6 +298,42 @@ function App() {
                         element={<LazyAdminRoute component={AdminPromptEditPage} />}
                       />
                     )}
+                    {showAdminPage('tools') && (
+                      <Route
+                        path="admin/tools"
+                        element={<LazyAdminRoute component={AdminToolsPage} />}
+                      />
+                    )}
+                    {showAdminPage('tools') && (
+                      <Route
+                        path="admin/tools/:toolId"
+                        element={<LazyAdminRoute component={AdminToolEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows"
+                        element={<LazyAdminRoute component={AdminWorkflowsPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/new"
+                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/executions"
+                        element={<LazyAdminRoute component={AdminWorkflowExecutionsPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/:id"
+                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+                      />
+                    )}
                     {showAdminPage('sources') && (
                       <Route
                         path="admin/sources"
@@ -250,10 +352,24 @@ function App() {
                         element={<LazyAdminRoute component={AdminAuthPage} />}
                       />
                     )}
+                    <Route
+                      path="admin/oauth/clients"
+                      element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
+                    />
+                    <Route
+                      path="admin/oauth/clients/:clientId"
+                      element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+                    />
                     {showAdminPage('users') && (
                       <Route
                         path="admin/users"
                         element={<LazyAdminRoute component={AdminUsersPage} />}
+                      />
+                    )}
+                    {showAdminPage('users') && (
+                      <Route
+                        path="admin/users/:userId/view"
+                        element={<LazyAdminRoute component={AdminUserViewPage} />}
                       />
                     )}
                     {showAdminPage('users') && (
@@ -278,6 +394,12 @@ function App() {
                       <Route
                         path="admin/ui"
                         element={<LazyAdminRoute component={AdminUICustomization} />}
+                      />
+                    )}
+                    {showAdminPage('features') && (
+                      <Route
+                        path="admin/features"
+                        element={<LazyAdminRoute component={AdminFeaturesPage} />}
                       />
                     )}
                     <Route

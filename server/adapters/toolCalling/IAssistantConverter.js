@@ -6,6 +6,7 @@
  */
 
 import { createGenericStreamingResponse, normalizeFinishReason } from './GenericToolCalling.js';
+import logger from '../../utils/logger.js';
 
 /**
  * Convert iAssistant streaming response to generic format
@@ -13,7 +14,7 @@ import { createGenericStreamingResponse, normalizeFinishReason } from './Generic
  * @param {string} streamId - Stream identifier
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse}
  */
-export function convertIassistantResponseToGeneric(data, streamId) {
+export function convertIassistantResponseToGeneric(data, _streamId) {
   // Create result with properly initialized arrays
   const result = createGenericStreamingResponse();
   result.tool_calls = []; // iAssistant doesn't support tool calling
@@ -69,7 +70,7 @@ export function convertIassistantResponseToGeneric(data, streamId) {
               processSSEEvent(parsed.eventType, currentData, result);
             }
           } catch (error) {
-            console.error('[IAssistant Converter] Failed to parse JSON data:', error);
+            logger.error('[IAssistant Converter] Failed to parse JSON data:', error);
           }
         }
 
@@ -112,7 +113,7 @@ export function convertIassistantResponseToGeneric(data, streamId) {
     }
   } catch (error) {
     // Return empty result on error
-    console.error('Error converting iAssistant response:', error);
+    logger.error('Error converting iAssistant response:', error);
   }
 
   return result;
@@ -177,7 +178,7 @@ function processSSEEvent(eventType, data, result) {
         break;
     }
   } catch (error) {
-    console.error('Error processing SSE event:', { eventType, error: error.message });
+    logger.error('Error processing SSE event:', { eventType, error: error.message });
   }
 }
 

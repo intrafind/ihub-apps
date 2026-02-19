@@ -1,5 +1,39 @@
 [
   {
+    "id": "googleSearch",
+    "name": {
+      "en": "Google Search Grounding",
+      "de": "Google-Suche-Grounding"
+    },
+    "description": {
+      "en": "Ground Gemini's responses with real-time information from Google Search. Provides verifiable, up-to-date answers with citations. Only works with Gemini models.",
+      "de": "Grundiert Geminis Antworten mit Echtzeitinformationen aus der Google-Suche. Liefert überprüfbare, aktuelle Antworten mit Zitaten. Funktioniert nur mit Gemini-Modellen."
+    },
+    "provider": "google",
+    "isSpecialTool": true,
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "id": "webSearch",
+    "name": {
+      "en": "Web Search",
+      "de": "Websuche"
+    },
+    "description": {
+      "en": "Enable the model to search the web for up-to-date information. Supports GPT-5 and other models with native web search capabilities. Returns answers with citations and sources.",
+      "de": "Ermöglicht dem Modell, das Web nach aktuellen Informationen zu durchsuchen. Unterstützt GPT-5 und andere Modelle mit nativen Websuchfunktionen. Liefert Antworten mit Zitaten und Quellen."
+    },
+    "provider": "openai-responses",
+    "isSpecialTool": true,
+    "parameters": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
     "id": "braveSearch",
     "name": {
       "en": "Brave Web / Internet Search",
@@ -105,10 +139,9 @@
         "ignoreSSL": {
           "type": "boolean",
           "description": {
-            "en": "Ignore invalid HTTPS certificates (default: false, configurable by admin)",
-            "de": "Ungültige HTTPS-Zertifikate ignorieren (Standard: false, vom Administrator konfigurierbar)"
-          },
-          "default": false
+            "en": "Ignore invalid HTTPS certificates (uses platform SSL config if not specified)",
+            "de": "Ungültige HTTPS-Zertifikate ignorieren (verwendet Plattform-SSL-Konfiguration wenn nicht angegeben)"
+          }
         }
       },
       "required": ["url"]
@@ -771,6 +804,143 @@
           "required": ["question"]
         }
       }
+    }
+  },
+  {
+    "id": "ask_user",
+    "name": {
+      "en": "Ask User for Clarification",
+      "de": "Benutzer um Klärung bitten"
+    },
+    "description": {
+      "en": "Ask the user a clarifying question when you need more information. IMPORTANT: Always use 'select' or 'multiselect' with options when there are common choices - this is faster for users than typing. Keep questions SHORT (e.g., 'Which language?' not 'Into which language would you like me to translate your text?'). Do NOT repeat the user's input in your question.",
+      "de": "Stellen Sie dem Benutzer eine klärende Frage, wenn Sie mehr Informationen benötigen. WICHTIG: Verwenden Sie immer 'select' oder 'multiselect' mit Optionen, wenn es gängige Auswahlmöglichkeiten gibt - das ist schneller für Benutzer als Tippen. Halten Sie Fragen KURZ (z.B. 'Welche Sprache?' nicht 'In welche Sprache möchten Sie Ihren Text übersetzen?'). Wiederholen Sie NICHT die Eingabe des Benutzers in Ihrer Frage."
+    },
+    "script": "askUser.js",
+    "requiresUserInput": true,
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": {
+            "en": "A SHORT clarifying question (e.g., 'Which language?' or 'What format?'). Do NOT include the user's input text in the question. Maximum 500 characters.",
+            "de": "Eine KURZE klärende Frage (z.B. 'Welche Sprache?' oder 'Welches Format?'). Fügen Sie NICHT den Text des Benutzers in die Frage ein. Maximal 500 Zeichen."
+          },
+          "maxLength": 500
+        },
+        "input_type": {
+          "type": "string",
+          "enum": ["text", "select", "multiselect", "confirm", "number", "date"],
+          "default": "select",
+          "description": {
+            "en": "PREFER 'select' or 'multiselect' over 'text' when there are common choices! Use 'select' for single choice from options (RECOMMENDED), 'multiselect' for multiple choices, 'text' ONLY for truly open-ended answers, 'confirm' for yes/no, 'number' for numeric input, 'date' for dates.",
+            "de": "BEVORZUGEN Sie 'select' oder 'multiselect' gegenüber 'text', wenn es gängige Auswahlmöglichkeiten gibt! Verwenden Sie 'select' für Einzelauswahl (EMPFOHLEN), 'multiselect' für Mehrfachauswahl, 'text' NUR für wirklich offene Antworten, 'confirm' für Ja/Nein, 'number' für Zahlen, 'date' für Daten."
+          }
+        },
+        "options": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": "string",
+                "description": {
+                  "en": "Display text for the option (max 100 chars)",
+                  "de": "Anzeigetext für die Option (max. 100 Zeichen)"
+                },
+                "maxLength": 100
+              },
+              "value": {
+                "type": "string",
+                "description": {
+                  "en": "Value returned when selected (defaults to label if not provided, max 100 chars)",
+                  "de": "Rückgabewert bei Auswahl (standardmäßig Label, wenn nicht angegeben, max. 100 Zeichen)"
+                },
+                "maxLength": 100
+              }
+            },
+            "required": ["label"]
+          },
+          "maxItems": 20,
+          "description": {
+            "en": "REQUIRED for select/multiselect! Provide 2-10 common options. Example: [{\"label\": \"English\", \"value\": \"en\"}, {\"label\": \"French\", \"value\": \"fr\"}]. Set allow_other=true if user might need an unlisted option.",
+            "de": "ERFORDERLICH für select/multiselect! Geben Sie 2-10 gängige Optionen an. Beispiel: [{\"label\": \"Englisch\", \"value\": \"en\"}, {\"label\": \"Französisch\", \"value\": \"fr\"}]. Setzen Sie allow_other=true, wenn der Benutzer eine nicht aufgeführte Option benötigen könnte."
+          }
+        },
+        "allow_other": {
+          "type": "boolean",
+          "default": false,
+          "description": {
+            "en": "For select/multiselect: allow user to enter a custom 'Other' value not in the options list.",
+            "de": "Für select/multiselect: Erlaubt dem Benutzer, einen benutzerdefinierten 'Sonstiges'-Wert einzugeben, der nicht in der Optionsliste steht."
+          }
+        },
+        "allow_skip": {
+          "type": "boolean",
+          "default": false,
+          "description": {
+            "en": "Allow the user to skip this question without providing an answer.",
+            "de": "Erlaubt dem Benutzer, diese Frage zu überspringen, ohne eine Antwort zu geben."
+          }
+        },
+        "placeholder": {
+          "type": "string",
+          "description": {
+            "en": "Placeholder text shown in the input field before user types.",
+            "de": "Platzhaltertext, der im Eingabefeld angezeigt wird, bevor der Benutzer tippt."
+          },
+          "maxLength": 200
+        },
+        "validation": {
+          "type": "object",
+          "properties": {
+            "pattern": {
+              "type": "string",
+              "description": {
+                "en": "Regular expression pattern for text validation (max 200 chars). Use simple patterns to avoid ReDoS.",
+                "de": "Regulärer Ausdruck für Textvalidierung (max. 200 Zeichen). Verwenden Sie einfache Muster, um ReDoS zu vermeiden."
+              },
+              "maxLength": 200
+            },
+            "min": {
+              "type": "number",
+              "description": {
+                "en": "Minimum value for number input or minimum length for text.",
+                "de": "Mindestwert für Zahleneingabe oder Mindestlänge für Text."
+              }
+            },
+            "max": {
+              "type": "number",
+              "description": {
+                "en": "Maximum value for number input or maximum length for text.",
+                "de": "Maximalwert für Zahleneingabe oder Maximallänge für Text."
+              }
+            },
+            "message": {
+              "type": "string",
+              "description": {
+                "en": "Custom error message to show when validation fails.",
+                "de": "Benutzerdefinierte Fehlermeldung bei fehlgeschlagener Validierung."
+              },
+              "maxLength": 200
+            }
+          },
+          "description": {
+            "en": "Validation rules for the user's input.",
+            "de": "Validierungsregeln für die Eingabe des Benutzers."
+          }
+        },
+        "context": {
+          "type": "string",
+          "description": {
+            "en": "Brief explanation of why you need this information, shown to the user to help them understand the question's purpose.",
+            "de": "Kurze Erklärung, warum Sie diese Information benötigen, wird dem Benutzer angezeigt, um den Zweck der Frage zu verstehen."
+          },
+          "maxLength": 500
+        }
+      },
+      "required": ["question"]
     }
   }
 ]

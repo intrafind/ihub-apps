@@ -1,5 +1,6 @@
 import configCache from '../configCache.js';
 import { createSourceManager } from '../sources/index.js';
+import logger from '../utils/logger.js';
 
 /**
  * Source Resolution Service
@@ -29,7 +30,7 @@ class SourceResolutionService {
    */
   async resolveAppSources(app, context = {}) {
     if (!app.sources || !Array.isArray(app.sources) || app.sources.length === 0) {
-      console.log('No sources configured for app:', app.id);
+      logger.info('No sources configured for app:', app.id);
       return [];
     }
 
@@ -40,12 +41,12 @@ class SourceResolutionService {
     if (this.resolutionCache.has(cacheKey)) {
       const cached = this.resolutionCache.get(cacheKey);
       if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        console.log(`Using cached source resolution for app: ${app.id}`);
+        logger.info(`Using cached source resolution for app: ${app.id}`);
         return cached.sources;
       }
     }
 
-    console.log(`Resolving ${app.sources.length} source references for app: ${app.id}`);
+    logger.info(`Resolving ${app.sources.length} source references for app: ${app.id}`);
     const resolvedSources = [];
 
     for (const sourceRef of app.sources) {
@@ -55,20 +56,18 @@ class SourceResolutionService {
           const resolvedSource = await this.resolveSourceById(sourceRef, context);
           if (resolvedSource) {
             resolvedSources.push(resolvedSource);
-            console.log(`✓ Resolved admin source reference: ${sourceRef}`);
+            logger.info(`✓ Resolved admin source reference: ${sourceRef}`);
           } else {
-            console.warn(
-              `⚠ Source reference '${sourceRef}' not found in admin sources or disabled`
-            );
+            logger.warn(`⚠ Source reference '${sourceRef}' not found in admin sources or disabled`);
           }
         } else {
-          console.warn(
+          logger.warn(
             `⚠ Invalid source reference format - only string IDs are supported:`,
             sourceRef
           );
         }
       } catch (error) {
-        console.error(`Error resolving source reference:`, sourceRef, error);
+        logger.error(`Error resolving source reference:`, sourceRef, error);
         // Continue processing other sources
       }
     }
@@ -79,7 +78,7 @@ class SourceResolutionService {
       timestamp: Date.now()
     });
 
-    console.log(
+    logger.info(
       `Resolved ${resolvedSources.length}/${app.sources.length} sources for app: ${app.id}`
     );
     return resolvedSources;
@@ -96,12 +95,12 @@ class SourceResolutionService {
     const adminSource = this.getAdminSourceById(sourceId);
 
     if (!adminSource) {
-      console.warn(`Admin source not found: ${sourceId}`);
+      logger.warn(`Admin source not found: ${sourceId}`);
       return null;
     }
 
     if (!adminSource.enabled) {
-      console.warn(`Admin source disabled: ${sourceId}`);
+      logger.warn(`Admin source disabled: ${sourceId}`);
       return null;
     }
 
@@ -122,7 +121,7 @@ class SourceResolutionService {
       const { data: sources } = this.configCache.getSources() || { data: [] };
       return sources.find(source => source.id === sourceId) || null;
     } catch (error) {
-      console.error(`Error loading admin sources:`, error);
+      logger.error(`Error loading admin sources:`, error);
       return null;
     }
   }
@@ -199,7 +198,7 @@ class SourceResolutionService {
    */
   clearCache() {
     this.resolutionCache.clear();
-    console.log('Source resolution cache cleared');
+    logger.info('Source resolution cache cleared');
   }
 
   /**
@@ -212,7 +211,7 @@ class SourceResolutionService {
     let validEntries = 0;
     let expiredEntries = 0;
 
-    for (const [key, value] of this.resolutionCache.entries()) {
+    for (const [_key, value] of this.resolutionCache.entries()) {
       if (now - value.timestamp < this.cacheTimeout) {
         validEntries++;
       } else {

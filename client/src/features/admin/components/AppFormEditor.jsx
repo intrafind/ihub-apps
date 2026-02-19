@@ -5,12 +5,14 @@ import ToolsSelector from '../../../shared/components/ToolsSelector';
 import SourcePicker from './SourcePicker';
 import Icon from '../../../shared/components/Icon';
 import IconPicker from '../../../shared/components/IconPicker';
+import MimeTypeSelector from './MimeTypeSelector';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import {
   validateWithSchema,
   errorsToFieldErrors,
   isFieldRequired
 } from '../../../utils/schemaValidation';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * AppFormEditor - Form-based editor for app configuration
@@ -37,6 +39,10 @@ const AppFormEditor = ({
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [validationErrors, setValidationErrors] = useState({});
+  const featureFlags = useFeatureFlags();
+
+  // Check if sources feature is enabled
+  const isSourcesEnabled = featureFlags.isEnabled('sources', true);
 
   // Validation function
   const validateApp = appData => {
@@ -114,6 +120,7 @@ const AppFormEditor = ({
     if (app) {
       validateApp(app);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [app, jsonSchema]);
 
   const handleInputChange = (field, value) => {
@@ -521,6 +528,29 @@ const AppFormEditor = ({
                   </label>
                 </div>
               </div>
+
+              {/* Auto-start - Only for chat apps */}
+              {(app.type === 'chat' || !app.type) && (
+                <div className="col-span-6">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.autoStart === true}
+                      onChange={e => handleInputChange('autoStart', e.target.checked)}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900">
+                      {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
+                    </label>
+                  </div>
+                  <p className="mt-1 ml-6 text-xs text-gray-500">
+                    {t(
+                      'admin.apps.edit.autoStartHelp',
+                      'When enabled, the app will automatically start the conversation when the chat is opened or reset'
+                    )}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -937,70 +967,79 @@ const AppFormEditor = ({
                           />
                         </div>
 
-                        {variable.type === 'select' && (
-                          <div className="col-span-6">
-                            <label className="block text-sm font-medium text-gray-700 mb-2">
-                              {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
-                            </label>
-                            <div className="space-y-2">
-                              {(variable.predefinedValues || []).map(
-                                (predefinedValue, valueIndex) => (
-                                  <div key={valueIndex} className="flex items-center space-x-2">
-                                    <div className="flex-1">
-                                      <DynamicLanguageEditor
-                                        label={`${t('admin.apps.edit.option', 'Option')} ${valueIndex + 1}`}
-                                        value={predefinedValue.label || {}}
-                                        onChange={value =>
-                                          handleVariablePredefinedValueChange(
-                                            index,
-                                            valueIndex,
-                                            'label',
-                                            value
-                                          )
-                                        }
-                                        placeholder={{
-                                          en: 'Option label',
-                                          de: 'Options-Beschriftung'
-                                        }}
-                                      />
-                                    </div>
-                                    <div className="w-32">
-                                      <input
-                                        type="text"
-                                        value={predefinedValue.value || ''}
-                                        onChange={e =>
-                                          handleVariablePredefinedValueChange(
-                                            index,
-                                            valueIndex,
-                                            'value',
-                                            e.target.value
-                                          )
-                                        }
-                                        placeholder={t('admin.apps.edit.value', 'Value')}
-                                        className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                                      />
-                                    </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => removePredefinedValue(index, valueIndex)}
-                                      className="text-red-600 hover:text-red-800"
-                                    >
-                                      <Icon name="trash" className="h-4 w-4" />
-                                    </button>
-                                  </div>
+                        <div className="col-span-6">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            {t('admin.apps.edit.predefinedValues', 'Predefined Values')}
+                          </label>
+                          <p className="text-xs text-gray-500 mb-2">
+                            {variable.type === 'select'
+                              ? t(
+                                  'admin.apps.edit.predefinedValuesHintSelect',
+                                  'Options that will be available in the dropdown menu.'
                                 )
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => addPredefinedValue(index)}
-                                className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                              >
-                                <Icon name="plus" className="h-4 w-4 mr-2" />
-                                {t('admin.apps.edit.addOption', 'Add Option')}
-                              </button>
-                            </div>
+                              : t(
+                                  'admin.apps.edit.predefinedValuesHint',
+                                  'Optional suggested values that can be used as autocomplete options.'
+                                )}
+                          </p>
+                          <div className="space-y-2">
+                            {(variable.predefinedValues || []).map(
+                              (predefinedValue, valueIndex) => (
+                                <div key={valueIndex} className="flex items-center space-x-2">
+                                  <div className="flex-1">
+                                    <DynamicLanguageEditor
+                                      label={`${t('admin.apps.edit.option', 'Option')} ${valueIndex + 1}`}
+                                      value={predefinedValue.label || {}}
+                                      onChange={value =>
+                                        handleVariablePredefinedValueChange(
+                                          index,
+                                          valueIndex,
+                                          'label',
+                                          value
+                                        )
+                                      }
+                                      placeholder={{
+                                        en: 'Option label',
+                                        de: 'Options-Beschriftung'
+                                      }}
+                                    />
+                                  </div>
+                                  <div className="w-32">
+                                    <input
+                                      type="text"
+                                      value={predefinedValue.value || ''}
+                                      onChange={e =>
+                                        handleVariablePredefinedValueChange(
+                                          index,
+                                          valueIndex,
+                                          'value',
+                                          e.target.value
+                                        )
+                                      }
+                                      placeholder={t('admin.apps.edit.value', 'Value')}
+                                      className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                    />
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => removePredefinedValue(index, valueIndex)}
+                                    className="text-red-600 hover:text-red-800"
+                                  >
+                                    <Icon name="trash" className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => addPredefinedValue(index)}
+                              className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                            >
+                              <Icon name="plus" className="h-4 w-4 mr-2" />
+                              {t('admin.apps.edit.addOption', 'Add Option')}
+                            </button>
                           </div>
-                        )}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1216,50 +1255,34 @@ const AppFormEditor = ({
                                   'Supported Image Formats'
                                 )}
                               </label>
-                              <div className="mt-1 space-y-1">
-                                {[
+                              <MimeTypeSelector
+                                categoryType="images"
+                                selectedFormats={
+                                  app.upload?.imageUpload?.supportedFormats || [
+                                    'image/jpeg',
+                                    'image/jpg',
+                                    'image/png',
+                                    'image/gif',
+                                    'image/webp'
+                                  ]
+                                }
+                                onChange={newFormats =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    imageUpload: {
+                                      ...app.upload.imageUpload,
+                                      supportedFormats: newFormats
+                                    }
+                                  })
+                                }
+                                defaultFormats={[
                                   'image/jpeg',
                                   'image/jpg',
                                   'image/png',
                                   'image/gif',
                                   'image/webp'
-                                ].map(format => (
-                                  <div key={format} className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        app.upload?.imageUpload?.supportedFormats?.includes(
-                                          format
-                                        ) !== false
-                                      }
-                                      onChange={e => {
-                                        const currentFormats = app.upload?.imageUpload
-                                          ?.supportedFormats || [
-                                          'image/jpeg',
-                                          'image/jpg',
-                                          'image/png',
-                                          'image/gif',
-                                          'image/webp'
-                                        ];
-                                        const newFormats = e.target.checked
-                                          ? [...currentFormats.filter(f => f !== format), format]
-                                          : currentFormats.filter(f => f !== format);
-                                        handleInputChange('upload', {
-                                          ...app.upload,
-                                          imageUpload: {
-                                            ...app.upload.imageUpload,
-                                            supportedFormats: newFormats
-                                          }
-                                        });
-                                      }}
-                                      className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 block text-xs text-gray-700">
-                                      {format.replace('image/', '').toUpperCase()}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
+                                ]}
+                              />
                             </div>
                           </div>
                         )}
@@ -1309,84 +1332,155 @@ const AppFormEditor = ({
                               <label className="block text-xs font-medium text-gray-700">
                                 {t('admin.apps.edit.supportedFormats', 'Supported File Formats')}
                               </label>
-                              <div className="mt-1 space-y-1">
-                                {[
-                                  { mime: 'text/plain', label: 'TXT' },
-                                  { mime: 'text/markdown', label: 'MD' },
-                                  { mime: 'text/csv', label: 'CSV' },
-                                  { mime: 'application/json', label: 'JSON' },
-                                  { mime: 'text/html', label: 'HTML' },
-                                  { mime: 'text/css', label: 'CSS' },
-                                  { mime: 'text/javascript', label: 'JS' },
-                                  { mime: 'application/javascript', label: 'JS' },
-                                  { mime: 'text/xml', label: 'XML' },
-                                  { mime: 'message/rfc822', label: 'EML' },
-                                  { mime: 'application/pdf', label: 'PDF' },
-                                  {
-                                    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                    label: 'DOCX'
-                                  },
-                                  { mime: 'application/vnd.ms-outlook', label: 'MSG' },
-                                  {
-                                    mime: 'application/vnd.oasis.opendocument.text',
-                                    label: 'ODT'
-                                  },
-                                  {
-                                    mime: 'application/vnd.oasis.opendocument.spreadsheet',
-                                    label: 'ODS'
-                                  },
-                                  {
-                                    mime: 'application/vnd.oasis.opendocument.presentation',
-                                    label: 'ODP'
-                                  }
-                                ].map(({ mime, label }) => (
-                                  <div key={mime} className="flex items-center">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        app.upload?.fileUpload?.supportedFormats?.includes(mime) !==
-                                        false
-                                      }
-                                      onChange={e => {
-                                        const currentFormats = app.upload?.fileUpload
-                                          ?.supportedFormats || [
-                                          'text/plain',
-                                          'text/markdown',
-                                          'text/csv',
-                                          'application/json',
-                                          'text/html',
-                                          'text/css',
-                                          'text/javascript',
-                                          'application/javascript',
-                                          'text/xml',
-                                          'message/rfc822',
-                                          'application/pdf',
-                                          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-                                          'application/vnd.ms-outlook',
-                                          'application/vnd.oasis.opendocument.text',
-                                          'application/vnd.oasis.opendocument.spreadsheet',
-                                          'application/vnd.oasis.opendocument.presentation'
-                                        ];
-                                        const newFormats = e.target.checked
-                                          ? [...currentFormats.filter(f => f !== mime), mime]
-                                          : currentFormats.filter(f => f !== mime);
-                                        handleInputChange('upload', {
-                                          ...app.upload,
-                                          fileUpload: {
-                                            ...app.upload.fileUpload,
-                                            supportedFormats: newFormats
-                                          }
-                                        });
-                                      }}
-                                      className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                                    />
-                                    <label className="ml-2 block text-xs text-gray-700">
-                                      {label}
-                                    </label>
-                                  </div>
-                                ))}
-                              </div>
+                              <MimeTypeSelector
+                                categoryType="documents"
+                                selectedFormats={
+                                  app.upload?.fileUpload?.supportedFormats || [
+                                    'text/plain',
+                                    'text/markdown',
+                                    'text/csv',
+                                    'application/json',
+                                    'application/pdf',
+                                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                  ]
+                                }
+                                onChange={newFormats =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    fileUpload: {
+                                      ...app.upload.fileUpload,
+                                      supportedFormats: newFormats
+                                    }
+                                  })
+                                }
+                                defaultFormats={[
+                                  'text/plain',
+                                  'text/markdown',
+                                  'text/csv',
+                                  'application/json',
+                                  'application/pdf',
+                                  'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                                ]}
+                              />
                             </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            checked={app.upload?.audioUpload?.enabled || false}
+                            onChange={e =>
+                              handleInputChange('upload', {
+                                ...app.upload,
+                                audioUpload: {
+                                  ...app.upload.audioUpload,
+                                  enabled: e.target.checked
+                                }
+                              })
+                            }
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-2 block text-sm font-medium text-gray-900">
+                            {t('admin.apps.edit.enableAudioUpload', 'Enable Audio Upload')}
+                          </label>
+                        </div>
+                        {app.upload?.audioUpload?.enabled && (
+                          <div className="ml-6 space-y-3">
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700">
+                                {t('admin.apps.edit.maxAudioSize', 'Max Audio File Size (MB)')}
+                              </label>
+                              <input
+                                type="number"
+                                min="1"
+                                max="100"
+                                value={app.upload?.audioUpload?.maxFileSizeMB || 20}
+                                onChange={e =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    audioUpload: {
+                                      ...app.upload.audioUpload,
+                                      maxFileSizeMB: parseInt(e.target.value)
+                                    }
+                                  })
+                                }
+                                className="mt-1 block w-20 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 text-xs"
+                              />
+                            </div>
+                            <div>
+                              <label className="block text-xs font-medium text-gray-700 mb-2">
+                                {t(
+                                  'admin.apps.edit.supportedAudioFormats',
+                                  'Supported Audio Formats'
+                                )}
+                              </label>
+                              <MimeTypeSelector
+                                categoryType="audio"
+                                selectedFormats={
+                                  app.upload?.audioUpload?.supportedFormats || [
+                                    'audio/mpeg',
+                                    'audio/mp3',
+                                    'audio/wav',
+                                    'audio/flac',
+                                    'audio/ogg'
+                                  ]
+                                }
+                                onChange={newFormats =>
+                                  handleInputChange('upload', {
+                                    ...app.upload,
+                                    audioUpload: {
+                                      ...app.upload.audioUpload,
+                                      supportedFormats: newFormats
+                                    }
+                                  })
+                                }
+                                defaultFormats={[
+                                  'audio/mpeg',
+                                  'audio/mp3',
+                                  'audio/wav',
+                                  'audio/flac',
+                                  'audio/ogg'
+                                ]}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            checked={app.upload?.cloudStorageUpload?.enabled || false}
+                            onChange={e =>
+                              handleInputChange('upload', {
+                                ...app.upload,
+                                cloudStorageUpload: {
+                                  ...app.upload.cloudStorageUpload,
+                                  enabled: e.target.checked
+                                }
+                              })
+                            }
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          />
+                          <label className="ml-2 block text-sm font-medium text-gray-900">
+                            {t(
+                              'admin.apps.edit.enableCloudStorageUpload',
+                              'Enable Cloud Storage Upload'
+                            )}
+                          </label>
+                        </div>
+                        {app.upload?.cloudStorageUpload?.enabled && (
+                          <div className="ml-6">
+                            <p className="text-xs text-gray-500">
+                              {t(
+                                'admin.apps.edit.cloudStorageUploadDesc',
+                                'Allow users to select files from configured cloud storage providers (Office 365, Google Drive). Global cloud storage must be enabled in Providers settings.'
+                              )}
+                            </p>
                           </div>
                         )}
                       </div>
@@ -1672,81 +1766,83 @@ const AppFormEditor = ({
             </div>
           </div>
 
-          {/* Sources Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
-                  {t('admin.apps.edit.sources', 'Sources Configuration')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {t(
-                    'admin.apps.edit.sourcesDesc',
-                    'Configure data sources that provide content to this app'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:col-span-2 md:mt-0">
-                <div className="space-y-6">
-                  {/* Source References */}
-                  <div>
-                    <p className="text-sm text-gray-600 mb-4">
-                      {t(
-                        'admin.apps.edit.sourcesDesc',
-                        'Select data sources configured in the admin interface to provide content to this app'
-                      )}
-                    </p>
-                    <SourcePicker
-                      value={app.sources || []}
-                      onChange={handleSourcesChange}
-                      allowMultiple={true}
-                      className="mb-4"
-                    />
-                  </div>
+          {/* Sources Configuration - Only show if sources feature is enabled */}
+          {isSourcesEnabled && (
+            <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900">
+                    {t('admin.apps.edit.sources', 'Sources Configuration')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {t(
+                      'admin.apps.edit.sourcesDesc',
+                      'Configure data sources that provide content to this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:col-span-2 md:mt-0">
+                  <div className="space-y-6">
+                    {/* Source References */}
+                    <div>
+                      <p className="text-sm text-gray-600 mb-4">
+                        {t(
+                          'admin.apps.edit.sourcesDesc',
+                          'Select data sources configured in the admin interface to provide content to this app'
+                        )}
+                      </p>
+                      <SourcePicker
+                        value={app.sources || []}
+                        onChange={handleSourcesChange}
+                        allowMultiple={true}
+                        className="mb-4"
+                      />
+                    </div>
 
-                  {/* Sources Summary */}
-                  {app.sources && app.sources.length > 0 && (
-                    <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-                      <div className="flex">
-                        <div className="flex-shrink-0">
-                          <Icon name="information-circle" className="h-5 w-5 text-blue-400" />
-                        </div>
-                        <div className="ml-3">
-                          <h3 className="text-sm font-medium text-blue-800">
-                            {t('admin.apps.edit.sourcesConfigured', 'Sources Configured')}
-                          </h3>
-                          <div className="mt-2 text-sm text-blue-700">
-                            <p>
-                              {t(
-                                'admin.apps.edit.sourcesCount',
-                                'This app has {{count}} source(s) configured:',
-                                { count: app.sources.length }
-                              )}
-                            </p>
-                            <ul className="list-disc list-inside mt-1 space-y-1">
-                              {app.sources.map((sourceId, index) => (
-                                <li key={`source-${index}`}>
-                                  <span className="font-mono text-xs bg-blue-100 px-1 rounded">
-                                    {sourceId}
-                                  </span>
-                                </li>
-                              ))}
-                            </ul>
-                            <p className="mt-2 text-xs">
-                              {t(
-                                'admin.apps.edit.sourcesUsage',
-                                'Sources will be loaded and their content made available via {{sources}} template in system prompts.'
-                              )}
-                            </p>
+                    {/* Sources Summary */}
+                    {app.sources && app.sources.length > 0 && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                        <div className="flex">
+                          <div className="flex-shrink-0">
+                            <Icon name="information-circle" className="h-5 w-5 text-blue-400" />
+                          </div>
+                          <div className="ml-3">
+                            <h3 className="text-sm font-medium text-blue-800">
+                              {t('admin.apps.edit.sourcesConfigured', 'Sources Configured')}
+                            </h3>
+                            <div className="mt-2 text-sm text-blue-700">
+                              <p>
+                                {t(
+                                  'admin.apps.edit.sourcesCount',
+                                  'This app has {{count}} source(s) configured:',
+                                  { count: app.sources.length }
+                                )}
+                              </p>
+                              <ul className="list-disc list-inside mt-1 space-y-1">
+                                {app.sources.map((sourceId, index) => (
+                                  <li key={`source-${index}`}>
+                                    <span className="font-mono text-xs bg-blue-100 px-1 rounded">
+                                      {sourceId}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                              <p className="mt-2 text-xs">
+                                {t(
+                                  'admin.apps.edit.sourcesUsage',
+                                  'Sources will be loaded and their content made available via {{sources}} template in system prompts.'
+                                )}
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Settings Configuration */}
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">

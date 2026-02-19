@@ -13,6 +13,7 @@ import { setupMiddleware } from '../serverHelpers.js';
 import registerAuthRoutes from '../routes/auth.js';
 import registerAdminRoutes from '../routes/adminRoutes.js';
 import jwt from 'jsonwebtoken';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -189,7 +190,7 @@ describe('Authentication Integration Tests', () => {
   describe('JWT Token Security', () => {
     test('should generate secure JWT tokens on successful login', async () => {
       // Mock successful password verification
-      const originalBcrypt = require('bcrypt');
+      const originalBcrypt = require('bcryptjs');
       jest.spyOn(originalBcrypt, 'compare').mockResolvedValue(true);
 
       const response = await request(app)

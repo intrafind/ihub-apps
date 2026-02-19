@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
+import logger from './logger.js';
 
 /**
  * Get application version from various sources
@@ -28,7 +29,10 @@ export function getAppVersion() {
         return version;
       }
     } catch (error) {
-      console.warn('Could not read version from version.txt:', error.message);
+      logger.warn('Could not read version from version.txt:', {
+        component: 'Version',
+        error: error.message
+      });
     }
   }
 
@@ -41,7 +45,10 @@ export function getAppVersion() {
         return packageJson.version;
       }
     } catch (error) {
-      console.warn('Could not read version from package.json:', error.message);
+      logger.warn('Could not read version from package.json:', {
+        component: 'Version',
+        error: error.message
+      });
     }
   }
 
@@ -62,6 +69,6 @@ export function logVersionInfo() {
         ? 'package.json'
         : 'default';
 
-  console.log(`📦 Application version: ${version} (source: ${source})`);
+  logger.info(`📦 Application version: ${version} (source: ${source})`, { component: 'Version' });
   return version;
 }

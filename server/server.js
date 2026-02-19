@@ -7,6 +7,7 @@ import cluster from 'cluster';
 import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
+import logger from './utils/logger.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -16,13 +17,17 @@ import registerGeneralRoutes from './routes/generalRoutes.js';
 import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
 import registerPageRoutes from './routes/pageRoutes.js';
+import registerRendererRoutes from './routes/rendererRoutes.js';
 import registerSessionRoutes from './routes/sessionRoutes.js';
 import registerMagicPromptRoutes from './routes/magicPromptRoutes.js';
 import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
+import registerOAuthRoutes from './routes/oauth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
+import registerWorkflowRoutes from './routes/workflow/index.js';
 import jiraRoutes from './routes/integrations/jira.js';
+import office365Routes from './routes/integrations/office365.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -50,13 +55,24 @@ import config from './config.js';
 const workerCount = config.WORKERS;
 
 if (cluster.isPrimary && workerCount > 1) {
-  console.log(`Primary process ${process.pid} starting ${workerCount} workers`);
+  logger.info({
+    component: 'Server',
+    message: `Primary process ${process.pid} starting ${workerCount} workers`,
+    pid: process.pid,
+    workerCount
+  });
   for (let i = 0; i < workerCount; i++) {
     cluster.fork();
   }
 
   cluster.on('exit', (worker, code, signal) => {
-    console.warn(`Worker ${worker.process.pid} exited (${code || signal}).`);
+    logger.warn({
+      component: 'Server',
+      message: `Worker ${worker.process.pid} exited (${code || signal})`,
+      workerPid: worker.process.pid,
+      code,
+      signal
+    });
     cluster.fork();
   });
 } else {
@@ -67,22 +83,45 @@ if (cluster.isPrimary && workerCount > 1) {
   // Resolve the application root directory
   const rootDir = getRootDir();
   if (isPackaged) {
-    console.log(`Running in packaged binary mode with APP_ROOT_DIR: ${rootDir}`);
+    logger.info({
+      component: 'Server',
+      message: 'Running in packaged binary mode',
+      rootDir
+    });
   } else {
-    console.log('Running in normal mode');
+    logger.info({
+      component: 'Server',
+      message: 'Running in normal mode'
+    });
   }
-  console.log(`Root directory: ${rootDir}`);
+  logger.info({
+    component: 'Server',
+    message: 'Root directory configured',
+    rootDir
+  });
 
   // Get the contents directory, either from environment variable or use default 'contents'
   const contentsDir = config.CONTENTS_DIR;
-  console.log(`Using contents directory: ${contentsDir}`);
+  logger.info({
+    component: 'Server',
+    message: 'Using contents directory',
+    contentsDir
+  });
 
   // Perform initial setup if contents directory is empty
   try {
     await performInitialSetup();
   } catch (err) {
-    console.error('Failed to perform initial setup:', err);
-    console.warn('Server will continue, but may not function properly without configuration files');
+    logger.error({
+      component: 'Server',
+      message: 'Failed to perform initial setup',
+      error: err.message,
+      stack: err.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but may not function properly without configuration files'
+    });
   }
 
   // Load platform configuration and initialize telemetry
@@ -94,19 +133,55 @@ if (cluster.isPrimary && workerCount > 1) {
     }
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (err) {
-    console.error('Failed to initialize telemetry:', err);
+    logger.error({
+      component: 'Server',
+      message: 'Failed to initialize telemetry',
+      error: err.message,
+      stack: err.stack
+    });
   }
 
   // Log application version information
   const { logVersionInfo } = await import('./utils/versionHelper.js');
   logVersionInfo();
 
+  // Initialize encryption key and JWT secret for secure storage and token signing
+  try {
+    const tokenStorageService = (await import('./services/TokenStorageService.js')).default;
+    await tokenStorageService.initializeEncryptionKey();
+    await tokenStorageService.initializeJwtSecret();
+  } catch (err) {
+    console.error('Failed to initialize encryption key or JWT secret:', err);
+    console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
+  }
+
+  // Ensure default providers are present (migration for existing installations)
+  try {
+    const { ensureDefaultProviders } = await import('./utils/providerMigration.js');
+    await ensureDefaultProviders();
+  } catch (error) {
+    console.error('⚠️  Error ensuring default providers:', error.message);
+    // Continue - this is non-critical
+  }
+
   // Initialize configuration cache for optimal performance
   try {
     await configCache.initialize();
+    // Set configCache reference in logger after initialization
+    logger.setConfigCache(configCache);
+    // Reconfigure logger to pick up logging settings from platform config
+    logger.reconfigureLogger();
   } catch (err) {
-    console.error('Failed to initialize configuration cache:', err);
-    console.warn('Server will continue with file-based configuration loading');
+    logger.error({
+      component: 'Server',
+      message: 'Failed to initialize configuration cache',
+      error: err.message,
+      stack: err.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue with file-based configuration loading'
+    });
   }
 
   // Create Express application
@@ -163,12 +238,14 @@ if (cluster.isPrimary && workerCount > 1) {
   const basePath = getBasePath();
 
   registerAuthRoutes(app, basePath);
+  registerOAuthRoutes(app, basePath);
   registerGeneralRoutes(app, { getLocalizedError, basePath });
   registerModelRoutes(app, { getLocalizedError, basePath });
   registerToolRoutes(app, basePath);
   registerPageRoutes(app, basePath);
+  registerRendererRoutes(app, basePath);
   registerSessionRoutes(app, basePath);
-  registerMagicPromptRoutes(app, { verifyApiKey, DEFAULT_TIMEOUT, basePath });
+  registerMagicPromptRoutes(app, { basePath });
   registerChatRoutes(app, {
     verifyApiKey,
     processMessageTemplates,
@@ -176,14 +253,16 @@ if (cluster.isPrimary && workerCount > 1) {
     DEFAULT_TIMEOUT,
     basePath
   });
-  registerOpenAIProxyRoutes(app, { getLocalizedError, basePath });
+  registerOpenAIProxyRoutes(app, { basePath });
   await registerAdminRoutes(app, basePath);
   registerShortLinkRoutes(app, basePath);
   await registerSwaggerRoutes(app, basePath);
+  registerWorkflowRoutes(app, { basePath, getLocalizedError });
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
   app.use('/api/integrations/jira', jiraRoutes);
+  app.use('/api/integrations/office365', office365Routes);
 
   // --- Session Management handled in sessionRoutes ---
 
@@ -221,23 +300,49 @@ if (cluster.isPrimary && workerCount > 1) {
 
       // Create HTTPS server
       server = https.createServer(httpsOptions, app);
-      console.log(`Starting HTTPS server with SSL certificate from ${config.SSL_CERT}`);
+      logger.info({
+        component: 'Server',
+        message: 'Starting HTTPS server',
+        certPath: config.SSL_CERT
+      });
     } catch (error) {
-      console.error('Error setting up HTTPS server:', error);
-      console.log('Falling back to HTTP server');
+      logger.error({
+        component: 'Server',
+        message: 'Error setting up HTTPS server',
+        error: error.message,
+        stack: error.stack
+      });
+      logger.info({
+        component: 'Server',
+        message: 'Falling back to HTTP server'
+      });
       server = http.createServer(serverOptions, app);
     }
   } else {
     // Create regular HTTP server with socket reuse options
     server = http.createServer(serverOptions, app);
-    console.log('Starting HTTP server (no SSL configuration provided)');
+    logger.info({
+      component: 'Server',
+      message: 'Starting HTTP server (no SSL configuration provided)'
+    });
   }
 
   // Start server
   server.listen(PORT, HOST, () => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
-    console.log(`Server is running on ${protocol}://${HOST}:${PORT}`);
-    console.log(`Open ${protocol}://${HOST}:${PORT} in your browser to use iHub Apps`);
+    logger.info({
+      component: 'Server',
+      message: 'Server is running',
+      protocol,
+      host: HOST,
+      port: PORT,
+      url: `${protocol}://${HOST}:${PORT}`
+    });
+    logger.info({
+      component: 'Server',
+      message: 'Open in browser to use iHub Apps',
+      url: `${protocol}://${HOST}:${PORT}`
+    });
   });
 
   const handleShutdownSignal = async () => {

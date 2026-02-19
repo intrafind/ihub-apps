@@ -10,8 +10,10 @@ import { updateSettingsFromUrl, saveIntegrationSettings } from '../../utils/inte
 import Icon from './Icon';
 import UserAuthMenu from '../../features/auth/components/UserAuthMenu';
 import { useAuth } from '../contexts/AuthContext.jsx';
+import useFeatureFlags from '../hooks/useFeatureFlags';
 import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
+import { useOAuthCallbackCleanup } from '../hooks/useOAuthCallbackCleanup';
 
 const Layout = () => {
   const { t, i18n } = useTranslation();
@@ -21,6 +23,13 @@ const Layout = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [searchParams] = useSearchParams();
   const { user, isAuthenticated } = useAuth();
+  const featureFlags = useFeatureFlags();
+
+  // Clean up OAuth callback query parameters globally
+  useOAuthCallbackCleanup();
+
+  // Map navigation URLs to feature IDs for gating
+  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
 
   // Update integration settings from URL parameters and retrieve current settings
   const { showHeader, showFooter, language } = updateSettingsFromUrl(searchParams);
@@ -116,11 +125,11 @@ const Layout = () => {
               <nav className="hidden md:flex items-center space-x-6">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(
-                      link =>
-                        !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false) &&
-                        canAccessLink(link)
-                    )
+                    .filter(link => {
+                      const featureId = featureRoutes[link.url];
+                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                      return canAccessLink(link);
+                    })
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -155,11 +164,11 @@ const Layout = () => {
               <nav className="container mx-auto px-4 py-3 flex flex-col">
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
-                    .filter(
-                      link =>
-                        !(link.url === '/prompts' && uiConfig?.promptsList?.enabled === false) &&
-                        canAccessLink(link)
-                    )
+                    .filter(link => {
+                      const featureId = featureRoutes[link.url];
+                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                      return canAccessLink(link);
+                    })
                     .map((link, index) => (
                       <Link
                         key={index}
@@ -187,8 +196,8 @@ const Layout = () => {
         </div>
       </main>
 
-      {/* Footer - Only render if enabled (defaults to true) */}
-      {uiConfig?.footer?.enabled !== false && showFooter && (
+      {/* Footer - Only render if enabled (defaults to true) and not on an app page */}
+      {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (
         <footer className="bg-gray-800 text-white py-4">
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
@@ -199,30 +208,31 @@ const Layout = () => {
                     : t('footer.copyright')}
                 </p>
               </div>
-              {/* Only show footer links when NOT on an app page */}
-              {!isAppPage && (
-                <div className="flex flex-wrap justify-center gap-4 md:gap-6">
-                  {uiConfig?.footer?.links &&
-                    uiConfig.footer.links
-                      .filter(link => canAccessLink(link))
-                      .map((link, index) => (
-                        <Link
-                          key={index}
-                          to={link.url}
-                          onClick={resetHeaderColor}
-                          className="hover:text-gray-300"
-                          target={
-                            link.url.startsWith('http') || link.url.startsWith('mailto:')
-                              ? '_blank'
-                              : undefined
-                          }
-                          rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
-                        >
-                          {getLocalizedContent(link.name, currentLanguage)}
-                        </Link>
-                      ))}
-                </div>
-              )}
+              <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+                {uiConfig?.footer?.links &&
+                  uiConfig.footer.links
+                    .filter(link => {
+                      const featureId = featureRoutes[link.url];
+                      if (featureId && !featureFlags.isEnabled(featureId, true)) return false;
+                      return canAccessLink(link);
+                    })
+                    .map((link, index) => (
+                      <Link
+                        key={index}
+                        to={link.url}
+                        onClick={resetHeaderColor}
+                        className="hover:text-gray-300"
+                        target={
+                          link.url.startsWith('http') || link.url.startsWith('mailto:')
+                            ? '_blank'
+                            : undefined
+                        }
+                        rel={link.url.startsWith('http') ? 'noopener noreferrer' : undefined}
+                      >
+                        {getLocalizedContent(link.name, currentLanguage)}
+                      </Link>
+                    ))}
+              </div>
             </div>
             {/* Disclaimer removed from footer - now shown as a popup */}
           </div>

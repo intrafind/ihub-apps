@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { throttledFetch } from './requestThrottler.js';
 import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
+import logger from './utils/logger.js';
 
 // Constants
 const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
@@ -32,8 +33,9 @@ function sanitizeForLog(input) {
  * Helper function to get API key for a model
  * Checks in this order:
  * 1. Model's stored encrypted API key (from model config)
- * 2. Environment variable for model-specific key
- * 3. Environment variable for provider key
+ * 2. Provider's stored encrypted API key (from providers config)
+ * 3. Environment variable for model-specific key
+ * 4. Environment variable for provider key
  * @param {string} modelId - The model ID
  * @returns {string|null} The API key or null if not found
  */
@@ -44,14 +46,14 @@ export async function getApiKeyForModel(modelId) {
     let { data: models = [] } = configCache.getModels();
 
     if (!models) {
-      console.error('Failed to load models configuration');
+      logger.error('Failed to load models configuration', { component: 'Utils' });
       return null;
     }
 
     // Find the model by ID
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      console.error(`Model not found: ${sanitizeForLog(modelId)}`);
+      logger.error(`Model not found: ${sanitizeForLog(modelId)}`, { component: 'Utils' });
       return null;
     }
 
@@ -66,33 +68,80 @@ export async function getApiKeyForModel(modelId) {
 
         if (isEncrypted) {
           const decryptedKey = tokenStorageService.decryptString(model.apiKey);
-          console.log(`Using stored encrypted API key for model: %s`, sanitizeForLog(modelId));
+          logger.info(`Using stored encrypted API key for model: %s`, {
+            component: 'Utils',
+            modelId: sanitizeForLog(modelId)
+          });
           return decryptedKey;
         } else {
           // If not encrypted, use as-is (for backwards compatibility during migration)
-          console.log(`Using stored plaintext API key for model: %s`, sanitizeForLog(modelId));
+          logger.info(`Using stored plaintext API key for model: %s`, {
+            component: 'Utils',
+            modelId: sanitizeForLog(modelId)
+          });
           return model.apiKey;
         }
       } catch (error) {
-        console.error(
-          'Failed to decrypt API key for model %s:',
-          sanitizeForLog(modelId),
-          error.message
-        );
+        logger.error('Failed to decrypt API key for model', {
+          component: 'Utils',
+          modelId: sanitizeForLog(modelId),
+          error: error.message
+        });
         // Continue to fallback options
       }
     }
 
-    // Second priority: Check for model-specific API key in environment
+    // Second priority: Check provider-level encrypted API key
+    try {
+      const { data: providers = [] } = configCache.getProviders(true);
+      const providerConfig = providers.find(p => p.id === provider);
+
+      if (providerConfig && providerConfig.apiKey) {
+        try {
+          const isEncrypted = tokenStorageService.isEncrypted(providerConfig.apiKey);
+
+          if (isEncrypted) {
+            const decryptedKey = tokenStorageService.decryptString(providerConfig.apiKey);
+            logger.info(`Using stored encrypted provider API key for provider`, {
+              component: 'Utils',
+              provider: sanitizeForLog(provider)
+            });
+            return decryptedKey;
+          } else {
+            // If not encrypted, use as-is (for backwards compatibility during migration)
+            logger.info(`Using stored plaintext provider API key for provider`, {
+              component: 'Utils',
+              provider: sanitizeForLog(provider)
+            });
+            return providerConfig.apiKey;
+          }
+        } catch (error) {
+          logger.error('Failed to decrypt provider API key', {
+            component: 'Utils',
+            provider: sanitizeForLog(provider),
+            error: error.message
+          });
+          // Continue to fallback options
+        }
+      }
+    } catch (error) {
+      logger.error('Error checking provider credentials:', { component: 'Utils', error });
+      // Continue to environment variable fallbacks
+    }
+
+    // Third priority: Check for model-specific API key in environment
     // (e.g., GPT_4_AZURE1_API_KEY for model id "gpt-4-azure1")
     const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
     const modelSpecificKey = config[modelSpecificKeyName];
     if (modelSpecificKey) {
-      console.log(`Using environment variable API key: %s`, modelSpecificKeyName);
+      logger.info(`Using environment variable API key`, {
+        component: 'Utils',
+        envVar: modelSpecificKeyName
+      });
       return modelSpecificKey;
     }
 
-    // Third priority: Check for provider-specific API keys from environment
+    // Fourth priority: Check for provider-specific API keys from environment
     switch (provider) {
       case 'openai':
         return config.OPENAI_API_KEY;
@@ -119,17 +168,19 @@ export async function getApiKeyForModel(modelId) {
 
         // Check for a default API key as last resort
         if (config.DEFAULT_API_KEY) {
-          console.log(`Using DEFAULT_API_KEY for provider: ${provider}`);
+          logger.info(`Using DEFAULT_API_KEY for provider`, { component: 'Utils', provider });
           return config.DEFAULT_API_KEY;
         }
 
-        console.error(
-          `No API key found for provider: ${provider} or model-specific key: ${modelSpecificKeyName}`
-        );
+        logger.error(`No API key found for provider or model-specific key`, {
+          component: 'Utils',
+          provider,
+          modelSpecificKeyName
+        });
         return null;
     }
   } catch (error) {
-    console.error('Error getting API key for model:', error);
+    logger.error('Error getting API key for model:', { component: 'Utils', error });
     return null;
   }
 }
@@ -289,69 +340,68 @@ export async function logInteraction(interactionType, data) {
 
     // For debugging purposes, log to console with appropriate type prefix
     const userInfo = logEntry.user
-      ? `| User: ${logEntry.user.username || logEntry.user.id || logEntry.user.email || 'unknown'}`
-      : '| User: anonymous';
+      ? logEntry.user.username || logEntry.user.id || logEntry.user.email || 'unknown'
+      : 'anonymous';
 
     if (logType === 'feedback') {
-      console.log(
-        `[FEEDBACK] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} | Rating: ${data.feedback?.rating || 'unknown'}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'User feedback received',
+        type: 'FEEDBACK',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo,
+        rating: data.feedback?.rating || 'unknown'
+      });
     } else if (logType === 'chat_response') {
-      console.log(
-        `[CHAT_RESPONSE] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'Chat response generated',
+        type: 'CHAT_RESPONSE',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo
+      });
     } else if (logType === 'chat_request') {
-      const queryPreview = logEntry.query
-        ? `| Query: ${logEntry.query.substring(0, 50)}${logEntry.query.length > 50 ? '...' : ''}`
-        : '';
-      console.log(
-        `[CHAT_REQUEST] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo} ${queryPreview}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'Chat request received',
+        type: 'CHAT_REQUEST',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo,
+        query: logEntry.query
+      });
     } else {
-      console.log(
-        `[INTERACTION] ${timestamp} | ID: ${interactionId} | App: ${logEntry.appId} | Model: ${logEntry.modelId || 'unknown'} | Session: ${logEntry.sessionId} ${userInfo}`
-      );
+      logger.info({
+        component: 'ChatService',
+        message: 'Interaction logged',
+        type: 'INTERACTION',
+        id: interactionId,
+        appId: logEntry.appId,
+        modelId: logEntry.modelId || 'unknown',
+        sessionId: logEntry.sessionId,
+        user: userInfo
+      });
     }
-
-    // Write to log file
-    await appendToLogFile(logEntry);
 
     // Return the interaction ID so it can be used to link requests, responses, and feedback
     return interactionId;
   } catch (error) {
     // Don't let logging errors affect the main application flow
-    console.error('Error logging interaction:', error);
+    logger.error({
+      component: 'ChatService',
+      message: 'Error logging interaction',
+      error: error.message,
+      stack: error.stack
+    });
     return null;
-  }
-}
-
-/**
- * Append log entry to the log file
- *
- * @param {Object} logEntry - The log entry to append
- * @returns {Promise<void>}
- */
-async function appendToLogFile(logEntry) {
-  try {
-    const __filename = fileURLToPath(import.meta.url);
-    const __dirname = path.dirname(__filename);
-
-    // Create logs directory if it doesn't exist
-    const logsDir = path.join(__dirname, '../logs');
-    try {
-      await fs.mkdir(logsDir, { recursive: true });
-    } catch (err) {
-      if (err.code !== 'EEXIST') throw err;
-    }
-
-    // Create log file path with today's date
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const logFilePath = path.join(logsDir, `interactions-${today}.log`);
-
-    // Append log entry to file
-    await fs.appendFile(logFilePath, JSON.stringify(logEntry) + '\n', 'utf8');
-  } catch (error) {
-    console.error('Error writing to log file:', error);
   }
 }
 
@@ -367,25 +417,24 @@ export function trackSession(chatId, info = {}) {
     // Log chat session start, including both chatId and userSessionId if available
     const userSessionId = info.userSessionId || 'unknown';
 
-    console.log(
-      `[CHAT STARTED] Chat ID: ${chatId} | User Session: ${userSessionId} | App: ${info.appId || 'unknown'}`
-    );
-
-    // Store the chat session info in a log file
-    appendToLogFile({
-      type: 'chat_started',
-      timestamp: new Date().toISOString(),
-      chatId: chatId,
-      userSessionId: userSessionId,
+    logger.info({
+      component: 'ChatService',
+      message: 'Chat session started',
+      type: 'CHAT_STARTED',
+      chatId,
+      userSessionId,
       appId: info.appId || 'unknown',
       userAgent: info.userAgent || 'unknown'
-    }).catch(error => {
-      console.error('Error logging chat session start:', error);
     });
 
     return chatId;
   } catch (error) {
-    console.error('Error tracking chat session:', error);
+    logger.error({
+      component: 'ChatService',
+      message: 'Error tracking chat session',
+      error: error.message,
+      stack: error.stack
+    });
     return chatId;
   }
 }
@@ -402,9 +451,10 @@ export async function logNewSession(chatId, appId, metadata = {}) {
   try {
     const timestamp = new Date().toISOString();
 
-    // Build the log entry
-    const logEntry = {
-      type: 'session_start',
+    logger.info({
+      component: 'ChatService',
+      message: 'New session started',
+      type: 'SESSION_START',
       timestamp,
       sessionId: chatId,
       appId: appId || 'unknown',
@@ -412,15 +462,15 @@ export async function logNewSession(chatId, appId, metadata = {}) {
       ipAddress: metadata.ipAddress || 'unknown',
       language: metadata.language || configCache.getPlatform()?.defaultLanguage || 'en',
       referrer: metadata.referrer || 'unknown'
-    };
-
-    console.log(`[NEW SESSION] ${timestamp} | Session ID: ${chatId} | App: ${appId}`);
-
-    // Write to log file
-    await appendToLogFile(logEntry);
+    });
   } catch (error) {
     // Don't let logging errors affect the main application flow
-    console.error('Error logging new session:', error);
+    logger.error({
+      component: 'ChatService',
+      message: 'Error logging new session',
+      error: error.message,
+      stack: error.stack
+    });
   }
 }
 
@@ -443,37 +493,41 @@ export async function simpleCompletion(
     temperature = 0.7,
     maxTokens = 8192,
     responseFormat = null,
-    responseSchema = null
+    responseSchema = null,
+    apiKey = null
   } = {}
 ) {
   const resolvedModelId = modelId || model;
 
-  console.log('Starting simple completion...', {
+  logger.info('Starting simple completion...', {
+    component: 'Utils',
     messages: JSON.stringify(messages, null, 2),
     modelId: resolvedModelId,
     temperature
   });
   // Try to get models from cache first
   let { data: models = [] } = configCache.getModels();
-  console.log(
-    'Available models:',
-    models.map(m => m.id)
-  );
+  logger.info('Available models:', { component: 'Utils', models: models.map(m => m.id) });
 
   const modelConfig = models.find(m => m.id === resolvedModelId);
-  console.log('Using model:', modelConfig);
+  logger.info('Using model:', { component: 'Utils', modelConfig });
   if (!modelConfig) {
     throw new Error(`Model ${resolvedModelId} not found`);
   }
 
-  const apiKey = config[`${modelConfig.provider.toUpperCase()}_API_KEY`];
-  if (!apiKey) {
-    throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
+  // Use provided API key if available, otherwise get from environment or stored config
+  let resolvedApiKey = apiKey;
+  if (!resolvedApiKey) {
+    // Try to get API key from model/provider configuration or environment
+    resolvedApiKey = await getApiKeyForModel(modelConfig.id);
+    if (!resolvedApiKey) {
+      throw new Error(`API key for ${modelConfig.provider} not found in environment variables.`);
+    }
   }
 
   const msgArray = Array.isArray(messages) ? messages : [{ role: 'user', content: messages }];
 
-  const request = createCompletionRequest(modelConfig, msgArray, apiKey, {
+  const request = createCompletionRequest(modelConfig, msgArray, resolvedApiKey, {
     temperature,
     maxTokens,
     stream: false,
@@ -522,7 +576,7 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
 
     // Check if any models are available
     if (!models || models.length === 0) {
-      console.warn(`${toolName}: No models available, using fallback`);
+      logger.warn(`${toolName}: No models available, using fallback`, { component: 'Utils' });
       return null;
     }
 
@@ -533,8 +587,9 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
 
     // Log warning if preferred model was specified but not found
     if (preferredModel) {
-      console.warn(
-        `${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`
+      logger.warn(
+        `${toolName}: Model '${preferredModel}' not found, falling back to default model '${defaultModel}'`,
+        { component: 'Utils' }
       );
     }
 
@@ -546,16 +601,17 @@ export function resolveModelId(preferredModel = null, toolName = 'unknown') {
     // Final fallback to first available model
     const firstModel = models[0]?.id;
     if (firstModel) {
-      console.warn(
-        `${toolName}: Default model not found, using first available model '${firstModel}'`
+      logger.warn(
+        `${toolName}: Default model not found, using first available model '${firstModel}'`,
+        { component: 'Utils' }
       );
       return firstModel;
     }
 
-    console.error(`${toolName}: No models available`);
+    logger.error(`${toolName}: No models available`, { component: 'Utils' });
     return null;
   } catch (error) {
-    console.error(`${toolName}: Error resolving model ID:`, error);
+    logger.error(`${toolName}: Error resolving model ID:`, { component: 'Utils', error });
     return null;
   }
 }

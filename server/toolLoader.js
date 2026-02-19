@@ -2,6 +2,90 @@ import config from './config.js';
 import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
 import { createSourceManager } from './sources/index.js';
+import logger from './utils/logger.js';
+
+/**
+ * Build JSON Schema parameters from a workflow's start node inputVariables
+ * @param {Object} workflow - Workflow definition
+ * @returns {Object} JSON Schema parameters object
+ */
+function buildWorkflowToolParams(workflow, language = 'en') {
+  const properties = {
+    input: {
+      type: 'string',
+      description: 'The user message or primary input for the workflow'
+    }
+  };
+  const required = ['input'];
+
+  // Extract input variables from the start node config
+  const startNode = (workflow.nodes || []).find(n => n.type === 'start');
+  const inputVariables = startNode?.config?.inputVariables;
+
+  if (Array.isArray(inputVariables)) {
+    for (const varDef of inputVariables) {
+      if (typeof varDef === 'string') {
+        if (varDef !== 'input') {
+          properties[varDef] = { type: 'string', description: varDef };
+        }
+      } else if (varDef && varDef.name && varDef.name !== 'input') {
+        // Skip file/image variables — they are injected via _fileData/inputFiles,
+        // not passed as tool parameters by the LLM
+        if (varDef.type === 'file' || varDef.type === 'image') {
+          continue;
+        }
+
+        const VALID_JSON_SCHEMA_TYPES = new Set([
+          'string',
+          'number',
+          'integer',
+          'boolean',
+          'array',
+          'object'
+        ]);
+        const CUSTOM_TYPE_MAP = {
+          file: 'string',
+          select: 'string',
+          multiselect: 'array',
+          date: 'string',
+          textarea: 'string'
+        };
+
+        const rawType = varDef.type || 'string';
+        const schemaType = VALID_JSON_SCHEMA_TYPES.has(rawType)
+          ? rawType
+          : CUSTOM_TYPE_MAP[rawType] || 'string';
+
+        const descriptionRaw = varDef.description || varDef.name;
+        const prop = {
+          type: schemaType,
+          description:
+            typeof descriptionRaw === 'string'
+              ? descriptionRaw
+              : extractLanguageValue(descriptionRaw, language)
+        };
+
+        // Enrich select types with enum values so the LLM knows valid choices
+        if (varDef.type === 'select' && Array.isArray(varDef.options)) {
+          prop.enum = varDef.options
+            .map(o => (typeof o === 'string' ? o : o.value))
+            .filter(Boolean);
+        }
+
+        properties[varDef.name] = prop;
+        if (varDef.required) {
+          required.push(varDef.name);
+        }
+      }
+    }
+  }
+
+  return {
+    type: 'object',
+    properties,
+    required
+  };
+}
 
 /**
  * Extract language-specific value from a multilingual object or return the value as-is
@@ -98,16 +182,15 @@ export async function loadConfiguredTools(language = null) {
   // Try to get tools from cache first
   const { data: tools } = configCache.getTools();
   if (!tools) {
-    console.warn('Tools could not be loaded');
+    logger.warn('Tools could not be loaded');
     return [];
   }
 
-  // If language is specified, localize the tools
-  if (language) {
-    return localizeTools(tools, language);
-  }
-
-  return tools;
+  // Always localize tools to ensure nested multilingual fields (like descriptions in schemas)
+  // are converted to strings. Use provided language or fall back to platform default.
+  const platformConfig = configCache.getPlatform() || {};
+  const effectiveLanguage = language || platformConfig?.defaultLanguage || 'en';
+  return localizeTools(tools, effectiveLanguage);
 }
 
 /**
@@ -120,12 +203,12 @@ export async function discoverMcpTools() {
   try {
     const response = await throttledFetch('mcp', `${mcpUrl.replace(/\/$/, '')}/tools`);
     if (!response.ok) {
-      console.error(`Failed to fetch tools from MCP server: ${response.status}`);
+      logger.error(`Failed to fetch tools from MCP server: ${response.status}`);
       return [];
     }
     return await response.json();
   } catch (error) {
-    console.error('Error fetching tools from MCP server:', error);
+    logger.error('Error fetching tools from MCP server:', error);
     return [];
   }
 }
@@ -167,6 +250,23 @@ export async function getToolsForApp(app, language = null, context = {}) {
       const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
       return app.tools.includes(baseToolId);
     });
+
+    // Filter by enabledTools if provided in context
+    if (
+      context.enabledTools !== undefined &&
+      context.enabledTools !== null &&
+      Array.isArray(context.enabledTools)
+    ) {
+      appTools = appTools.filter(t => {
+        // Check if tool ID is in enabledTools
+        if (context.enabledTools.includes(t.id)) {
+          return true;
+        }
+        // For function-based tools, check if base tool is enabled
+        const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
+        return context.enabledTools.includes(baseToolId);
+      });
+    }
   }
 
   // Add source-generated tools
@@ -178,11 +278,73 @@ export async function getToolsForApp(app, language = null, context = {}) {
         const appSources = sourcesConfig.filter(
           source => app.sources.includes(source.id) && source.enabled
         );
-        const sourceTools = sourceManager.generateTools(appSources, context);
+        let sourceTools = sourceManager.generateTools(appSources, context);
+
+        // Filter source tools by enabledTools if provided in context
+        if (
+          context.enabledTools !== undefined &&
+          context.enabledTools !== null &&
+          Array.isArray(context.enabledTools)
+        ) {
+          sourceTools = sourceTools.filter(t => {
+            // Check if tool ID is in enabledTools
+            if (context.enabledTools.includes(t.id)) {
+              return true;
+            }
+            // For function-based tools, check if base tool is enabled
+            const baseToolId = t.id.includes('_') ? t.id.split('_')[0] : t.id;
+            return context.enabledTools.includes(baseToolId);
+          });
+        }
+
         appTools = appTools.concat(sourceTools);
       }
     } catch (error) {
-      console.error('Error generating source tools:', error);
+      logger.error('Error generating source tools:', error);
+    }
+  }
+
+  // Add workflow tools (entries like "workflow:<id>" in app.tools)
+  if (Array.isArray(app.tools)) {
+    const workflowToolIds = app.tools.filter(
+      t => typeof t === 'string' && t.startsWith('workflow:')
+    );
+    for (const ref of workflowToolIds) {
+      try {
+        const wfId = ref.replace('workflow:', '');
+        const wf = configCache.getWorkflowById(wfId);
+        if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
+
+        let toolDescription = extractLanguageValue(
+          wf.chatIntegration?.toolDescription || wf.description,
+          language || 'en'
+        );
+        const toolName = extractLanguageValue(wf.name, language || 'en');
+
+        // If the workflow has file/image input variables, hint that attached files
+        // are passed automatically so the LLM knows to call this tool
+        const startNode = (wf.nodes || []).find(n => n.type === 'start');
+        const hasFileInputs = (startNode?.config?.inputVariables || []).some(
+          v => v.type === 'file' || v.type === 'image'
+        );
+        if (hasFileInputs) {
+          toolDescription +=
+            ' Any files attached to the user message are passed to this tool automatically.';
+        }
+
+        appTools.push({
+          id: `workflow_${wfId}`,
+          name: toolName,
+          description: toolDescription,
+          script: 'workflowRunner.js',
+          isWorkflowTool: true,
+          workflowId: wfId,
+          passthrough: true,
+          parameters: buildWorkflowToolParams(wf, language || 'en')
+        });
+      } catch (error) {
+        logger.error(`Error generating workflow tool for ${ref}:`, error);
+      }
     }
   }
 
@@ -205,9 +367,15 @@ export { localizeTools };
  * @param {object} params - Parameters passed to the tool
  */
 export async function runTool(toolId, params = {}) {
-  console.log(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
+  logger.info(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
   if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
+  }
+
+  // Check if this is a workflow tool (starts with 'workflow_')
+  if (toolId.startsWith('workflow_')) {
+    const mod = await import('./tools/workflowRunner.js');
+    return await mod.default({ ...params, workflowId: toolId.replace('workflow_', '') });
   }
 
   // Check if this is a source tool (starts with 'source_')
@@ -217,7 +385,7 @@ export async function runTool(toolId, params = {}) {
     const sourceToolFn = sourceManager.getToolFunction(toolId);
 
     if (sourceToolFn) {
-      console.log(`Executing source tool: ${toolId}`);
+      logger.info(`Executing source tool: ${toolId}`);
       return await sourceToolFn(params);
     } else {
       throw new Error(`Source tool ${toolId} not found in registry`);
@@ -229,6 +397,13 @@ export async function runTool(toolId, params = {}) {
   const tool = allTools.find(t => t.id === toolId);
   if (!tool) {
     throw new Error(`Tool ${toolId} not found`);
+  }
+
+  // Check if this is a special tool (like Google Search) that doesn't have a script
+  if (tool.isSpecialTool) {
+    // Special tools are handled by the model provider directly, not executed here
+    logger.info(`Special tool ${toolId} is handled by provider, skipping execution`);
+    return { handled_by_provider: true };
   }
 
   const scriptName = tool.script || `${toolId}.js`;
@@ -254,7 +429,7 @@ export async function runTool(toolId, params = {}) {
 
     return await fn(params);
   } catch (err) {
-    console.error(`Failed to execute tool ${toolId}:`, err);
+    logger.error(`Failed to execute tool ${toolId}:`, err);
     throw err;
   }
 }

@@ -6,11 +6,12 @@ import config from '../config.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { simpleCompletion } from '../utils.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 export default function registerMagicPromptRoutes(app, deps = {}) {
-  const { verifyApiKey, DEFAULT_TIMEOUT, basePath = '' } = deps;
+  const { basePath = '' } = deps;
   app.post(
-    buildServerPath('/api/magic-prompt', basePath),
+    buildServerPath('/api/magic-prompt'),
     authRequired,
     validate(magicPromptSchema),
     async (req, res) => {
@@ -39,7 +40,7 @@ export default function registerMagicPromptRoutes(app, deps = {}) {
 
         if (!modelExists) {
           const fallbackModel = config.MAGIC_PROMPT_MODEL || defaultModel;
-          console.warn(
+          logger.warn(
             `Magic prompt model '${selectedModelId}' not found, falling back to '${fallbackModel}'`
           );
           selectedModelId = fallbackModel;
@@ -47,9 +48,7 @@ export default function registerMagicPromptRoutes(app, deps = {}) {
           // Double-check fallback model exists
           const fallbackExists = models.some(m => m.id === fallbackModel);
           if (!fallbackExists) {
-            console.warn(
-              `Fallback model '${fallbackModel}' not found, using first available model`
-            );
+            logger.warn(`Fallback model '${fallbackModel}' not found, using first available model`);
             selectedModelId = models[0]?.id;
           }
         }
@@ -83,7 +82,7 @@ export default function registerMagicPromptRoutes(app, deps = {}) {
 
         return res.json({ prompt: newPrompt });
       } catch (error) {
-        console.error('Error generating magic prompt:', error);
+        logger.error('Error generating magic prompt:', error);
         return res.status(500).json({ error: 'Internal server error' });
       }
     }

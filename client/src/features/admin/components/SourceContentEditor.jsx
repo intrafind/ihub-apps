@@ -1,11 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   DocumentTextIcon,
   EyeIcon,
   CheckIcon,
   ExclamationTriangleIcon
 } from '@heroicons/react/24/outline';
-import { adminApi } from '../../../api/adminApi';
 
 /**
  * Source Content Editor Component
@@ -49,6 +48,7 @@ function SourceContentEditor({
     if (isOpen && sourceId) {
       loadContent();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, sourceId]);
 
   // Track changes

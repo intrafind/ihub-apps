@@ -1,7 +1,4 @@
 {
-  "features": {
-    "usageTracking": true
-  },
   "globalPromptVariables": {
     "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user. \n"
   },
@@ -39,15 +36,16 @@
     "salt": 1,
     "lastUpdated": "2025-07-08T17:00:38.743Z"
   },
-  "admin": {
-    "secret": "platform-secret",
-    "encrypted": false
-  },
   "auth": {
     "mode": "local",
     "authenticatedGroup": "authenticated",
-    "sessionTimeoutMinutes": 480,
-    "jwtSecret": "${JWT_SECRET}"
+    "sessionTimeoutMinutes": 480
+  },
+  "oauth": {
+    "enabled": false,
+    "clientsFile": "contents/config/oauth-clients.json",
+    "defaultTokenExpirationMinutes": 60,
+    "maxTokenExpirationMinutes": 1440
   },
   "anonymousAuth": {
     "enabled": true,
@@ -95,6 +93,17 @@
     }
   },
   "ssl": {
-    "ignoreInvalidCertificates": false
+    "ignoreInvalidCertificates": false,
+    "domainWhitelist": []
+  },
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "file": {
+      "enabled": false,
+      "path": "logs/app.log",
+      "maxSize": 10485760,
+      "maxFiles": 5
+    }
   }
 }

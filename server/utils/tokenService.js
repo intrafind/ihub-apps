@@ -1,11 +1,35 @@
 import jwt from 'jsonwebtoken';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import tokenStorageService from '../services/TokenStorageService.js';
+import logger from './logger.js';
 
 /**
  * Central JWT token service for all authentication methods
  * Consolidates token generation logic from all auth middleware
  */
+
+/**
+ * Resolve the JWT secret from available sources
+ * Resolution chain: env var > platform config (non-placeholder) > TokenStorageService
+ * @returns {string|null} The JWT secret or null if not available
+ */
+export function resolveJwtSecret() {
+  // Priority 1: Environment variable
+  if (config.JWT_SECRET && config.JWT_SECRET !== '${JWT_SECRET}') {
+    return config.JWT_SECRET;
+  }
+
+  // Priority 2: Platform config (non-placeholder)
+  const platform = configCache.getPlatform() || {};
+  const configSecret = platform.auth?.jwtSecret;
+  if (configSecret && configSecret !== '${JWT_SECRET}') {
+    return configSecret;
+  }
+
+  // Priority 3: Auto-generated secret from TokenStorageService
+  return tokenStorageService.getJwtSecret();
+}
 
 /**
  * Generate JWT token for authenticated user
@@ -23,9 +47,9 @@ export function generateJwt(user, options = {}) {
   }
 
   const platform = configCache.getPlatform() || {};
-  const jwtSecret = config.JWT_SECRET || platform.auth?.jwtSecret;
+  const jwtSecret = resolveJwtSecret();
 
-  if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
+  if (!jwtSecret) {
     throw new Error(
       `JWT secret not configured for ${options.authMode || 'unknown'} authentication`
     );
@@ -88,11 +112,10 @@ export function generateJwt(user, options = {}) {
  */
 export function verifyJwt(token) {
   try {
-    const platform = configCache.getPlatform() || {};
-    const jwtSecret = config.JWT_SECRET || platform.localAuth?.jwtSecret;
+    const jwtSecret = resolveJwtSecret();
 
-    if (!jwtSecret || jwtSecret === '${JWT_SECRET}') {
-      console.warn('JWT secret not configured for token verification');
+    if (!jwtSecret) {
+      logger.warn('JWT secret not configured for token verification');
       return null;
     }
 
@@ -101,7 +124,7 @@ export function verifyJwt(token) {
       audience: 'ihub-apps'
     });
   } catch (error) {
-    console.warn('JWT verification failed:', error.message);
+    logger.warn('JWT verification failed:', error.message);
     return null;
   }
 }
@@ -115,7 +138,7 @@ export function decodeJwt(token) {
   try {
     return jwt.decode(token, { complete: true });
   } catch (error) {
-    console.warn('JWT decode failed:', error.message);
+    logger.warn('JWT decode failed:', error.message);
     return null;
   }
 }

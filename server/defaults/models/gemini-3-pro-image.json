@@ -1,0 +1,30 @@
+{
+  "id": "gemini-3-pro-image",
+  "modelId": "gemini-3-pro-image-preview",
+  "name": {
+    "en": "Gemini 3 Pro Image Preview",
+    "de": "Gemini 3 Pro Bild Vorschau"
+  },
+  "description": {
+    "en": "Google's state-of-the-art image generation and editing model optimized for professional asset production. Supports text-to-image, image editing, and multi-turn conversations. Generates images up to 4K resolution.",
+    "de": "Googles hochmodernes Bildgenerierungs- und Bearbeitungsmodell, optimiert für professionelle Asset-Produktion. Unterstützt Text-zu-Bild, Bildbearbeitung und mehrfache Konversationen. Generiert Bilder bis zu 4K Auflösung."
+  },
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:streamGenerateContent",
+  "provider": "google",
+  "tokenLimit": 32768,
+  "supportsTools": true,
+  "supportsImages": true,
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "aspectRatio": "1:1",
+    "quality": "Low",
+    "maxReferenceImages": 14
+  },
+  "thinking": {
+    "enabled": true,
+    "budget": -1,
+    "thoughts": true
+  },
+  "enabled": true,
+  "default": false
+}

@@ -45,6 +45,26 @@
 2. **New Endpoints**: Follow the established pattern for creating API endpoints.
 3. **New Components**: Maintain component structure and naming consistency.
 4. **New Features**: Ensure new features integrate seamlessly with existing ones.
+5. **New Routes** ⚠️: When adding new top-level routes, update `client/src/utils/runtimeBasePath.js`
+
+### Adding New Routes - CRITICAL
+
+When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+
+**Why this is important**:
+
+- The `knownRoutes` array is used for base path detection in subpath deployments
+- Without updating it, subpath deployments will break (e.g., `/ihub/newroute`)
+- Logout and navigation may redirect to incorrect paths
+- Assets may fail to load from correct locations
+
+**How to update**:
+
+1. After adding route in `App.jsx`: `<Route path="newroute" element={...} />`
+2. Add to `knownRoutes` in `runtimeBasePath.js`: `'/newroute'`
+3. Test both root (`/newroute`) and subpath (`/custompath/newroute`) deployments
+
+**Current routes in array**: `/apps`, `/admin`, `/auth`, `/login`, `/chat`, `/pages`, `/prompts`, `/settings`, `/teams`, `/s`
 
 ## Testing Guidelines
 

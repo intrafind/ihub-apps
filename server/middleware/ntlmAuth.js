@@ -2,6 +2,8 @@ import expressNtlm from 'express-ntlm';
 import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
+import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import logger from '../utils/logger.js';
 
 /**
  * NTLM/Windows Authentication middleware and utilities
@@ -36,30 +38,30 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     ...ntlmConfig.options
   };
 
-  console.log(
+  logger.info(
     `[NTLM Auth] Configuring NTLM middleware with domain: ${options.domain || 'default'}`
   );
-  console.log(`[NTLM Auth] Domain controller: ${options.domaincontroller || 'NOT CONFIGURED'}`);
-  console.log(`[NTLM Auth] Get groups enabled: ${options.getGroups}`);
-  console.log(
+  logger.info(`[NTLM Auth] Domain controller: ${options.domaincontroller || 'NOT CONFIGURED'}`);
+  logger.info(`[NTLM Auth] Get groups enabled: ${options.getGroups}`);
+  logger.info(
     `[NTLM Auth] LDAP bind user: ${options.domaincontrolleruser ? '✓ Configured' : '✗ NOT CONFIGURED'}`
   );
-  console.log(
+  logger.info(
     `[NTLM Auth] LDAP bind password: ${options.domaincontrollerpassword ? '✓ Configured' : '✗ NOT CONFIGURED'}`
   );
-  console.log(`[NTLM Auth] Debug mode: ${options.debug}`);
+  logger.info(`[NTLM Auth] Debug mode: ${options.debug}`);
 
   // Warn if getGroups is enabled but no domain controller is configured
   if (options.getGroups && !options.domaincontroller) {
-    console.warn(
+    logger.warn(
       '⚠️  [NTLM Auth] WARNING: getGroups is enabled but no domain controller is configured.'
     );
-    console.warn('⚠️  [NTLM Auth] Group retrieval requires a domain controller for LDAP queries.');
-    console.warn('⚠️  [NTLM Auth] Users will be assigned default groups only.');
-    console.warn(
+    logger.warn('⚠️  [NTLM Auth] Group retrieval requires a domain controller for LDAP queries.');
+    logger.warn('⚠️  [NTLM Auth] Users will be assigned default groups only.');
+    logger.warn(
       '⚠️  [NTLM Auth] To fix: Configure "domainController" in platform.json ntlmAuth section'
     );
-    console.warn('⚠️  [NTLM Auth] Example: "domainController": "ldap://dc.yourdomain.com"');
+    logger.warn('⚠️  [NTLM Auth] Example: "domainController": "ldap://dc.yourdomain.com"');
   }
 
   // Warn if getGroups is enabled but LDAP credentials are missing
@@ -68,19 +70,19 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     options.domaincontroller &&
     (!options.domaincontrolleruser || !options.domaincontrollerpassword)
   ) {
-    console.warn(
+    logger.warn(
       '⚠️  [NTLM Auth] WARNING: getGroups is enabled with domain controller, but LDAP credentials are missing.'
     );
-    console.warn(
+    logger.warn(
       '⚠️  [NTLM Auth] Group retrieval requires LDAP bind credentials to query Active Directory.'
     );
-    console.warn(
+    logger.warn(
       '⚠️  [NTLM Auth] Configure "domainControllerUser" and "domainControllerPassword" in platform.json'
     );
-    console.warn(
+    logger.warn(
       '⚠️  [NTLM Auth] Example: "domainControllerUser": "CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de"'
     );
-    console.warn(
+    logger.warn(
       '⚠️  [NTLM Auth] Or use environment variables: NTLM_LDAP_USER and NTLM_LDAP_PASSWORD'
     );
   }
@@ -111,23 +113,23 @@ function getNtlmMiddleware(ntlmConfig) {
  */
 function processNtlmUser(req, ntlmConfig) {
   if (!req.ntlm) {
-    console.debug('[NTLM Auth] No NTLM data in request');
+    logger.debug('[NTLM Auth] No NTLM data in request');
     return null;
   }
 
   const ntlmUser = req.ntlm;
 
-  console.debug('[NTLM Auth] Raw NTLM data:', JSON.stringify(ntlmUser, null, 2));
+  logger.debug('[NTLM Auth] Raw NTLM data:', JSON.stringify(ntlmUser, null, 2));
 
   // Check if user is authenticated
   if (!ntlmUser.Authenticated) {
-    console.warn(
+    logger.warn(
       `[NTLM Auth] User not authenticated: ${ntlmUser.UserName || ntlmUser.username || 'unknown'}`
     );
     return null;
   }
 
-  console.log(
+  logger.info(
     `[NTLM Auth] Processing authenticated user: ${ntlmUser.UserName || ntlmUser.username}`
   );
 
@@ -140,38 +142,38 @@ function processNtlmUser(req, ntlmConfig) {
   let groups = [];
   if (ntlmUser.groups && Array.isArray(ntlmUser.groups)) {
     groups = ntlmUser.groups;
-    console.debug('[NTLM Auth] Found groups in ntlmUser.groups:', groups);
+    logger.debug('[NTLM Auth] Found groups in ntlmUser.groups:', groups);
   } else if (ntlmUser.Groups && Array.isArray(ntlmUser.Groups)) {
     groups = ntlmUser.Groups;
-    console.debug('[NTLM Auth] Found groups in ntlmUser.Groups:', groups);
+    logger.debug('[NTLM Auth] Found groups in ntlmUser.Groups:', groups);
   } else {
-    console.debug(
+    logger.debug(
       '[NTLM Auth] No groups found in NTLM data. Available fields:',
       Object.keys(ntlmUser)
     );
-    console.debug('[NTLM Auth] NTLM config getGroups setting:', ntlmConfig.getGroups);
-    console.debug(
+    logger.debug('[NTLM Auth] NTLM config getGroups setting:', ntlmConfig.getGroups);
+    logger.debug(
       '[NTLM Auth] NTLM config domainController:',
       ntlmConfig.domainController || 'NOT CONFIGURED'
     );
 
     if (ntlmConfig.getGroups && !ntlmConfig.domainController) {
-      console.warn(
+      logger.warn(
         '⚠️  [NTLM Auth] Groups cannot be retrieved without a domain controller configuration'
       );
     }
   }
 
-  console.debug('[NTLM Auth] Extracted groups before mapping:', groups);
+  logger.debug('[NTLM Auth] Extracted groups before mapping:', groups);
 
   // Apply group mapping using centralized function
   const mappedGroups = mapExternalGroups(groups);
 
-  console.debug('[NTLM Auth] Groups after mapping:', mappedGroups);
+  logger.debug('[NTLM Auth] Groups after mapping:', mappedGroups);
 
   // Add default groups if configured
   if (ntlmConfig.defaultGroups && Array.isArray(ntlmConfig.defaultGroups)) {
-    console.debug('[NTLM Auth] Adding default groups:', ntlmConfig.defaultGroups);
+    logger.debug('[NTLM Auth] Adding default groups:', ntlmConfig.defaultGroups);
     ntlmConfig.defaultGroups.forEach(g => {
       if (!mappedGroups.includes(g)) {
         mappedGroups.push(g);
@@ -179,7 +181,7 @@ function processNtlmUser(req, ntlmConfig) {
     });
   }
 
-  console.debug('[NTLM Auth] Final groups for user:', mappedGroups);
+  logger.debug('[NTLM Auth] Final groups for user:', mappedGroups);
 
   // Create normalized user object
   const user = {
@@ -196,7 +198,7 @@ function processNtlmUser(req, ntlmConfig) {
     raw: ntlmUser // Keep raw NTLM data for debugging
   };
 
-  console.debug('[NTLM Auth] Created user object:', {
+  logger.debug('[NTLM Auth] Created user object:', {
     id: user.id,
     name: user.name,
     groups: user.groups,
@@ -204,6 +206,22 @@ function processNtlmUser(req, ntlmConfig) {
   });
 
   return user;
+}
+
+/**
+ * Check if multiple authentication providers are enabled
+ * @param {Object} platform - Platform configuration
+ * @returns {boolean} True if more than one auth provider is enabled
+ */
+function hasMultipleAuthProviders(platform) {
+  const enabledProviders = [
+    platform.localAuth?.enabled,
+    platform.ldapAuth?.enabled,
+    platform.oidcAuth?.enabled,
+    platform.proxyAuth?.enabled
+  ].filter(Boolean).length;
+
+  return enabledProviders > 0; // NTLM + at least one other provider
 }
 
 /**
@@ -222,10 +240,23 @@ export function ntlmAuthMiddleware(req, res, next) {
     return next();
   }
 
+  // Skip if user is already authenticated by a previous middleware (JWT, OAuth, etc.)
+  if (req.user && req.user.id && req.user.id !== 'anonymous') {
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development') {
+      logger.debug('[NTLM Debug] Skipping NTLM - user already authenticated:', {
+        userId: req.user.id,
+        authMode: req.user.authMode,
+        url: req.url
+      });
+    }
+    return next();
+  }
+
   // Debug logging in development
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
-    console.log('[NTLM Debug] Request:', {
+    logger.debug('[NTLM Debug] Request:', {
       url: req.url,
       hostname: req.hostname,
       origin: req.headers.origin,
@@ -246,15 +277,33 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   if (isViteProxy) {
     if (isDev) {
-      console.log(
+      logger.info(
         '[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)'
       );
     }
     return next();
   }
 
+  // When multiple auth providers are configured, NTLM should only activate when explicitly requested
+  // This prevents automatic NTLM SSO from blocking access to local/LDAP login
+  const multipleProviders = hasMultipleAuthProviders(platform);
+  const ntlmRequested = req.query.ntlm === 'true' || req.session?.ntlmRequested === true;
+
+  // Check if this is the NTLM login endpoint - use exact path matching for security
+  const isNtlmLoginEndpoint =
+    req.path === '/api/auth/ntlm/login' || req.path.startsWith('/api/auth/ntlm/login?');
+
+  if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
+    if (isDev) {
+      logger.info(
+        '[NTLM Debug] Multiple providers configured, skipping auto-NTLM (not explicitly requested)'
+      );
+    }
+    return next();
+  }
+
   if (isDev) {
-    console.log('[NTLM Debug] Applying NTLM middleware');
+    logger.debug('[NTLM Debug] Applying NTLM middleware');
   }
 
   // Get or create the express-ntlm middleware instance
@@ -269,9 +318,9 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.end = function (...args) {
     responseSent = true;
     if (isDev) {
-      console.log('[NTLM Debug] Response sent by express-ntlm, status:', res.statusCode);
+      logger.debug('[NTLM Debug] Response sent by express-ntlm, status:', res.statusCode);
       if (res.statusCode === 401) {
-        console.log('[NTLM Debug] NTLM challenge sent, headers:', res.getHeaders());
+        logger.debug('[NTLM Debug] NTLM challenge sent, headers:', res.getHeaders());
       }
     }
     return originalEnd.apply(this, args);
@@ -280,9 +329,12 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.send = function (...args) {
     responseSent = true;
     if (isDev) {
-      console.log('[NTLM Debug] Response sent by express-ntlm (via send), status:', res.statusCode);
+      logger.debug(
+        '[NTLM Debug] Response sent by express-ntlm (via send), status:',
+        res.statusCode
+      );
       if (res.statusCode === 500 && args.length > 0) {
-        console.error('[NTLM Debug] 500 Error body:', args[0]);
+        logger.error('[NTLM Debug] 500 Error body:', args[0]);
       }
     }
     return originalSend.apply(this, args);
@@ -291,7 +343,7 @@ export function ntlmAuthMiddleware(req, res, next) {
   // Set a timeout to prevent hanging
   const timeout = setTimeout(() => {
     if (!responseSent) {
-      console.error('[NTLM Auth] express-ntlm middleware timed out after 5 seconds');
+      logger.error('[NTLM Auth] express-ntlm middleware timed out after 5 seconds');
       res.end = originalEnd;
       res.send = originalSend;
       if (!res.headersSent) {
@@ -302,22 +354,22 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   // Apply express-ntlm middleware first to populate req.ntlm
   try {
-    ntlmMiddleware(req, res, err => {
+    ntlmMiddleware(req, res, async err => {
       clearTimeout(timeout);
       res.end = originalEnd;
       res.send = originalSend;
 
       if (responseSent) {
         if (isDev) {
-          console.log('[NTLM Debug] express-ntlm sent response directly, not calling next()');
+          logger.debug('[NTLM Debug] express-ntlm sent response directly, not calling next()');
         }
         return; // Don't call next() if response was already sent
       }
 
       if (err) {
-        console.error('[NTLM Auth] Error in express-ntlm middleware:', err.message);
-        console.error('[NTLM Auth] Error stack:', err.stack);
-        console.error('[NTLM Auth] Request details:', {
+        logger.error('[NTLM Auth] Error in express-ntlm middleware:', err.message);
+        logger.error('[NTLM Auth] Error stack:', err.stack);
+        logger.error('[NTLM Auth] Request details:', {
           url: req.url,
           method: req.method,
           headers: req.headers
@@ -329,14 +381,14 @@ export function ntlmAuthMiddleware(req, res, next) {
       // Now process the NTLM data if available
       try {
         if (isDev) {
-          console.log('[NTLM Debug] After express-ntlm, req.ntlm:', req.ntlm);
+          logger.debug('[NTLM Debug] After express-ntlm, req.ntlm:', req.ntlm);
         }
 
         // Check if NTLM data is available (should be set by express-ntlm middleware)
         if (!req.ntlm) {
           // This is normal for public endpoints - just continue without authentication
           if (isDev) {
-            console.log('[NTLM Debug] No NTLM data, continuing without auth');
+            logger.debug('[NTLM Debug] No NTLM data, continuing without auth');
           }
           return next();
         }
@@ -352,6 +404,13 @@ export function ntlmAuthMiddleware(req, res, next) {
         // Enhance user with authenticated group
         const authConfig = platform.auth || {};
         user = enhanceUserGroups(user, authConfig, ntlmAuth);
+
+        // Validate and persist NTLM user (similar to OIDC/Proxy)
+        // User must be persisted - if this fails, authentication fails
+        user = await validateAndPersistExternalUser(user, platform);
+        logger.info(
+          `[NTLM Auth] User persisted: ${user.id} with groups: ${user.groups.join(', ')}`
+        );
 
         // Set user in request
         req.user = user;
@@ -380,18 +439,18 @@ export function ntlmAuthMiddleware(req, res, next) {
               maxAge: expiresIn * 1000
             });
           } catch (tokenError) {
-            console.error('[NTLM Auth] JWT token generation failed:', tokenError.message);
+            logger.error('[NTLM Auth] JWT token generation failed:', tokenError.message);
             // Continue without token - NTLM auth still valid
           }
         }
 
-        console.log(
+        logger.info(
           `[NTLM Auth] User authenticated: ${user.id} with groups: ${user.groups.join(', ')}`
         );
         next();
       } catch (error) {
-        console.error('[NTLM Auth] Error processing NTLM authentication:', error);
-        console.error('[NTLM Auth] Stack trace:', error.stack);
+        logger.error('[NTLM Auth] Error processing NTLM authentication:', error);
+        logger.error('[NTLM Auth] Stack trace:', error.stack);
         // Don't block the request - continue without authentication
         next();
       }
@@ -400,8 +459,8 @@ export function ntlmAuthMiddleware(req, res, next) {
     clearTimeout(timeout);
     res.end = originalEnd;
     res.send = originalSend;
-    console.error('[NTLM Auth] Unexpected error in NTLM middleware:', error.message);
-    console.error('[NTLM Auth] Stack trace:', error.stack);
+    logger.error('[NTLM Auth] Unexpected error in NTLM middleware:', error.message);
+    logger.error('[NTLM Auth] Stack trace:', error.stack);
     // Continue without NTLM authentication on error
     next();
   }
@@ -420,9 +479,9 @@ export function getNtlmConfig() {
  * Login function for NTLM authentication (for API endpoints)
  * @param {Object} req - Express request object with NTLM data
  * @param {Object} ntlmConfig - NTLM configuration
- * @returns {Object} Login result with user and token
+ * @returns {Promise<Object>} Login result with user and token
  */
-export function processNtlmLogin(req, ntlmConfig) {
+export async function processNtlmLogin(req, ntlmConfig) {
   if (!req.ntlm || !req.ntlm.Authenticated) {
     throw new Error('NTLM authentication required');
   }
@@ -439,6 +498,15 @@ export function processNtlmLogin(req, ntlmConfig) {
   const authConfig = platform.auth || {};
 
   user = enhanceUserGroups(user, authConfig, ntlmConfig);
+
+  // Validate and persist NTLM user (similar to OIDC/Proxy)
+  try {
+    user = await validateAndPersistExternalUser(user, platform);
+    logger.info(`[NTLM Auth] User persisted via login: ${user.id}`);
+  } catch (userError) {
+    logger.error('[NTLM Auth] User persistence error during login:', userError.message);
+    // Continue with authentication even if persistence fails
+  }
 
   // Generate JWT token using centralized token service
   const sessionTimeout =

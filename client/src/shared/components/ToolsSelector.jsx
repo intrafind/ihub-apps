@@ -2,9 +2,11 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import { fetchTools } from '../../api/api';
+import { getLocalizedContent } from '../../utils/localizeContent';
 
 const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
@@ -32,7 +34,9 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
 
   // Filter tools based on search term and exclude already selected
   const filteredTools = availableTools.filter(tool => {
-    const searchableText = `${tool.name || tool.id} ${tool.description || ''}`.toLowerCase();
+    const toolName = getLocalizedContent(tool.name, currentLanguage) || tool.id;
+    const toolDescription = getLocalizedContent(tool.description, currentLanguage) || '';
+    const searchableText = `${toolName} ${toolDescription}`.toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const notSelected = !selectedTools.includes(tool.id);
     return matchesSearch && notSelected;
@@ -92,7 +96,9 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
         <div className="flex flex-wrap gap-2">
           {selectedTools.map(toolId => {
             const toolInfo = availableTools.find(t => t.id === toolId);
-            const displayName = toolInfo ? toolInfo.name : toolId;
+            const displayName = toolInfo
+              ? getLocalizedContent(toolInfo.name, currentLanguage)
+              : toolId;
             return (
               <span
                 key={toolId}
@@ -145,10 +151,12 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
                   onClick={() => handleAddTool(tool)}
                   className="w-full text-left px-3 py-3 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
                 >
-                  <div className="font-medium text-gray-900">{tool.name}</div>
+                  <div className="font-medium text-gray-900">
+                    {getLocalizedContent(tool.name, currentLanguage)}
+                  </div>
                   {tool.description && (
                     <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {tool.description}
+                      {getLocalizedContent(tool.description, currentLanguage)}
                     </div>
                   )}
                 </button>

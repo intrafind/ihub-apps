@@ -13,41 +13,53 @@
         // Remove any trailing /index.html or just trailing slash
         let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
 
-        // If we're at a React route (e.g., /ihub/apps/chat), we need to find the base
-        // We can detect this by checking if there's a known React route pattern
+        // Known React routes - these are app routes, not deployment subpaths
+        // IMPORTANT: Keep in sync with runtimeBasePath.js
         const knownRoutes = [
-          '/apps',
-          '/admin',
-          '/auth',
-          '/login',
-          '/chat',
-          '/pages',
-          '/settings',
-          '/s/'
+          'apps',
+          'admin',
+          'auth',
+          'login',
+          'chat',
+          'pages',
+          'prompts',
+          'settings',
+          'teams',
+          's'
         ];
-        for (const route of knownRoutes) {
-          const routeIndex = basePath.indexOf(route);
-          if (routeIndex > 0) {
-            // Found a route, so everything before it is the base path
-            basePath = basePath.substring(0, routeIndex);
-            break;
-          } else if (routeIndex === 0) {
-            // We're at root with a route - set base to root
-            basePath = '/';
+
+        // Split path into segments and find the first known route
+        // This correctly handles paths like /admin/apps (route 'admin' at segment 0)
+        // vs /ihub/admin/apps (route 'admin' at segment 1, base path is '/ihub')
+        const segments = basePath.split('/').filter(function (s) {
+          return s !== '';
+        });
+        let routeSegmentIndex = -1;
+
+        for (var i = 0; i < segments.length; i++) {
+          if (knownRoutes.indexOf(segments[i]) !== -1) {
+            routeSegmentIndex = i;
             break;
           }
         }
 
-        // Add base tag to ensure proper asset loading
-        // Always add base tag when we have a basePath (including '/')
-        if (basePath !== null && basePath !== undefined) {
-          const base = document.createElement('base');
-          base.href = basePath === '/' || basePath === '' ? '/' : basePath + '/';
-          document.head.appendChild(base);
-
-          // Store for debugging (same as runtimeBasePath.js)
-          window.__BASE_PATH__ = basePath === '/' ? '' : basePath;
+        // Determine base path from segment analysis
+        if (routeSegmentIndex === 0) {
+          // Route is at root (e.g., /admin/apps) - no subpath deployment
+          basePath = '';
+        } else if (routeSegmentIndex > 0) {
+          // Route found after subpath (e.g., /ihub/admin/apps) - base is /ihub
+          basePath = '/' + segments.slice(0, routeSegmentIndex).join('/');
         }
+        // If no route found, basePath remains as-is (unusual case)
+
+        // Add base tag to ensure proper asset loading
+        const base = document.createElement('base');
+        base.href = basePath === '' ? '/' : basePath + '/';
+        document.head.appendChild(base);
+
+        // Store for debugging (same as runtimeBasePath.js)
+        window.__BASE_PATH__ = basePath;
       })();
     </script>
     <link rel="icon" type="image/svg+xml" href="./favicon.ico" />

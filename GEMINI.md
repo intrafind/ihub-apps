@@ -47,6 +47,25 @@ This document provides guidelines for Gemini models working on the iHub Apps pro
 2.  **New Endpoints**: Follow the established pattern for creating API endpoints.
 3.  **New Components**: Maintain component structure and naming consistency.
 4.  **New Features**: Ensure new features integrate seamlessly with existing ones.
+5.  **New Routes** ⚠️: When adding new top-level routes, update `client/src/utils/runtimeBasePath.js`
+
+### Adding New Routes - CRITICAL
+
+When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+
+**Why this matters**:
+
+- Enables correct base path detection for subpath deployments (e.g., `/ihub/apps`)
+- Prevents incorrect redirects during logout
+- Ensures assets load from correct paths
+
+**Steps**:
+
+1. Add route in `App.jsx`: `<Route path="newroute" element={...} />`
+2. Add to `knownRoutes` array: `'/newroute'`
+3. Test both root and subpath deployments
+
+**Current routes**: `/apps`, `/admin`, `/auth`, `/login`, `/chat`, `/pages`, `/prompts`, `/settings`, `/teams`, `/s`
 
 ## Testing Guidelines
 
@@ -87,3 +106,59 @@ This document provides guidelines for Gemini models working on the iHub Apps pro
 ## Adaptation Requirements
 
 These guidelines may be superseded by explicit instructions, but should be followed by default to maintain project integrity.
+
+## Documentation Organization
+
+### Feature Documentation
+
+All feature documentation should be added to the `docs/` folder:
+
+**When to Update Existing Documentation:**
+- **Always check first** if documentation already exists in `docs/` for the area you're working on
+- Update existing files rather than creating new ones when the feature fits within an existing document
+- For example, new model features should be added to `docs/models.md`, new UI features to `docs/ui.md`, etc.
+
+**When to Create New Documentation:**
+- Only create new documentation files when the feature doesn't fit into any existing document
+- Use descriptive, lowercase filenames with hyphens: `feature-name.md`
+- Add the new file to `docs/SUMMARY.md` for inclusion in the documentation site
+
+**Documentation Structure:**
+- `docs/` - User-facing feature documentation, guides, and references
+  - Updated as features are added or modified
+  - Organized by topic (models, authentication, configuration, etc.)
+  - Rendered on the documentation site
+
+**Example Workflow:**
+1. Check if `docs/models.md`, `docs/ui.md`, or other relevant file exists
+2. If exists, add your feature documentation to the appropriate section
+3. If doesn't exist, create new file and add to `docs/SUMMARY.md`
+4. Use clear headings, code examples, and use cases
+
+### Concept Documents (Design & Planning)
+
+The `concepts/` folder is for design documents, RFC-style proposals, and technical planning:
+
+**Single Document Features:**
+- Format: `concepts/YYYY-MM-DD {title}.md`
+- Example: `2026-02-02 Provider API Key Persistence Fix.md`
+
+**Multi-Document Features (3+ related documents):**
+- Create subfolder: `concepts/{feature-name}/`
+- Include `README.md` with overview
+- Place all related documents in subfolder
+- Example:
+  ```
+  concepts/websearch-provider-api-keys/
+  ├── README.md
+  ├── 2026-02-03 Websearch Provider API Key Configuration.md
+  └── IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md
+  ```
+
+**Documentation Types:**
+
+- Feature concepts and design documents
+- Fix summaries and root cause analyses
+- Migration guides
+- Implementation summaries
+- UI/UX documentation with screenshots

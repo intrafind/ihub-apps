@@ -7,10 +7,11 @@ import validate from '../../validators/validate.js';
 import { feedbackSchema } from '../../validators/index.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError, basePath = '' }) {
   app.post(
-    buildServerPath('/api/feedback', basePath),
+    buildServerPath('/api/feedback'),
     authRequired,
     validate(feedbackSchema),
     async (req, res) => {
@@ -53,7 +54,7 @@ export default function registerFeedbackRoutes(app, { getLocalizedError, basePat
           modelId,
           rating
         });
-        console.log(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
+        logger.info(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
         return res.status(200).json({ success: true });
       } catch (error) {
         return sendInternalError(res, error, 'processing feedback');

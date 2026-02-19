@@ -1,7 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { fileURLToPath } from 'url';
+import logger from './logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -32,7 +33,7 @@ async function rehashUserPasswords() {
     // Read existing users file
     const usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
 
-    console.log('Rehashing passwords for existing users...');
+    logger.info('Rehashing passwords for existing users...');
 
     // Known passwords for demo users (in production, you'd need to handle this differently)
     const knownPasswords = {
@@ -46,9 +47,9 @@ async function rehashUserPasswords() {
         const newHash = await hashPasswordWithUserId(plainPassword, userId);
 
         usersData.users[userId].passwordHash = newHash;
-        console.log(`✅ Rehashed password for user: ${user.username} (${userId})`);
+        logger.info(`✅ Rehashed password for user: ${user.username} (${userId})`);
       } else {
-        console.log(`⚠️  Skipped user ${user.username} (${userId}) - password unknown`);
+        logger.info(`⚠️  Skipped user ${user.username} (${userId}) - password unknown`);
       }
     }
 
@@ -63,9 +64,9 @@ async function rehashUserPasswords() {
 
     // Write updated file
     fs.writeFileSync(usersFilePath, JSON.stringify(usersData, null, 2));
-    console.log('✅ Users file updated with new password hashes');
+    logger.info('✅ Users file updated with new password hashes');
   } catch (error) {
-    console.error('❌ Error rehashing passwords:', error);
+    logger.error('❌ Error rehashing passwords:', error);
     throw error;
   }
 }
@@ -74,11 +75,11 @@ async function rehashUserPasswords() {
 if (import.meta.url === `file://${process.argv[1]}`) {
   rehashUserPasswords()
     .then(() => {
-      console.log('🎉 Password rehashing completed successfully');
+      logger.info('🎉 Password rehashing completed successfully');
       process.exit(0);
     })
     .catch(error => {
-      console.error('💥 Password rehashing failed:', error);
+      logger.error('💥 Password rehashing failed:', error);
       process.exit(1);
     });
 }

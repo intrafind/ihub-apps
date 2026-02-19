@@ -1,5 +1,15 @@
 import webSearchService from '../services/WebSearchService.js';
+import logger from '../utils/logger.js';
 
+/**
+ * Perform a web search using the Brave Search API
+ * @param {Object} params - The search parameters
+ * @param {string} [params.query] - The search query
+ * @param {string} [params.q] - Alternative query parameter name
+ * @param {string} [params.chatId] - The chat ID for context tracking
+ * @returns {Promise<{results: Array<{title: string, url: string, description: string}>}>} The search results
+ * @throws {Error} If no query is provided
+ */
 export default async function braveSearch({ query, q, chatId }) {
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;
@@ -20,29 +30,29 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const searchQuery = process.argv.slice(2).join(' ');
 
   if (!searchQuery) {
-    console.error('Usage: node braveSearch.js <search term>');
-    console.error('Example: node braveSearch.js "JavaScript tutorials"');
+    logger.error('Usage: node braveSearch.js <search term>');
+    logger.error('Example: node braveSearch.js "JavaScript tutorials"');
     process.exit(1);
   }
 
-  console.log(`Searching for: "${searchQuery}"`);
+  logger.info(`Searching for: "${searchQuery}"`);
 
   try {
     const result = await braveSearch({ query: searchQuery });
-    console.log('\nSearch Results:');
-    console.log('===============');
+    logger.info('\nSearch Results:');
+    logger.info('===============');
 
     if (result.results.length === 0) {
-      console.log('No results found.');
+      logger.info('No results found.');
     } else {
       result.results.forEach((item, index) => {
-        console.log(`${index + 1}. ${item.title}`);
-        console.log(`   URL: ${item.url}\n`);
-        console.log(`   Result: ${JSON.stringify(item, null, 2)}\n`);
+        logger.info(`${index + 1}. ${item.title}`);
+        logger.info(`   URL: ${item.url}\n`);
+        logger.info(`   Result: ${JSON.stringify(item, null, 2)}\n`);
       });
     }
   } catch (error) {
-    console.error('Error performing search:', error.message);
+    logger.error('Error performing search:', error.message);
     process.exit(1);
   }
 }

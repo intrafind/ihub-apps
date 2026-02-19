@@ -58,7 +58,8 @@ const settingsSchema = z
     enabled: z.boolean().optional().default(true),
     model: z
       .object({
-        enabled: z.boolean().optional().default(true)
+        enabled: z.boolean().optional().default(true),
+        filter: z.record(z.any()).optional() // Allow filtering models by any property
       })
       .optional(),
     temperature: z
@@ -77,6 +78,11 @@ const settingsSchema = z
       })
       .optional(),
     style: z
+      .object({
+        enabled: z.boolean().optional().default(true)
+      })
+      .optional(),
+    imageGeneration: z
       .object({
         enabled: z.boolean().optional().default(true)
       })
@@ -121,6 +127,16 @@ const uploadSchema = z
           .default(['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'])
       })
       .optional(),
+    audioUpload: z
+      .object({
+        enabled: z.boolean().optional().default(false),
+        maxFileSizeMB: z.number().int().min(1).max(100).optional().default(20),
+        supportedFormats: z
+          .array(z.string().regex(/^audio\//))
+          .optional()
+          .default(['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg'])
+      })
+      .optional(),
     fileUpload: z
       .object({
         enabled: z.boolean().optional().default(false),
@@ -147,7 +163,22 @@ const uploadSchema = z
             'application/vnd.oasis.opendocument.presentation'
           ])
       })
+      .optional(),
+    cloudStorageUpload: z
+      .object({
+        enabled: z.boolean().optional().default(false)
+      })
       .optional()
+  })
+  .optional();
+
+// Image generation configuration schema for app-level defaults
+const imageGenerationConfigSchema = z
+  .object({
+    aspectRatio: z
+      .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3', '3:4', '4:3', '21:9'])
+      .optional(),
+    quality: z.enum(['Low', 'Medium', 'High']).optional()
   })
   .optional();
 
@@ -266,6 +297,7 @@ const baseAppConfigSchema = z.object({
   preferredTemperature: z.number().min(0).max(2).optional(),
   sendChatHistory: z.boolean().optional().default(true),
   thinking: thinkingSchema.optional(),
+  imageGeneration: imageGenerationConfigSchema,
   messagePlaceholder: localizedStringSchema.optional(),
   prompt: localizedStringSchema.optional(),
   variables: z.array(variableSchema).optional(),
@@ -279,8 +311,10 @@ const baseAppConfigSchema = z.object({
   allowedModels: z.array(z.string()).optional(),
   disallowModelSelection: z.boolean().optional().default(false),
   allowEmptyContent: z.boolean().optional().default(false),
+  autoStart: z.boolean().optional().default(false),
   tools: z.array(z.string()).optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
+  customResponseRenderer: z.string().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().default(true),
 

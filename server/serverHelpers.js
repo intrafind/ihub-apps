@@ -2,6 +2,7 @@ import PromptService from './services/PromptService.js';
 import { clients, activeRequests } from './sse.js';
 import ErrorHandler from './utils/ErrorHandler.js';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
+import logger from './utils/logger.js';
 
 const errorHandler = new ErrorHandler();
 
@@ -59,12 +60,15 @@ export function cleanupInactiveClients() {
             controller.abort();
             activeRequests.delete(chatId);
           } catch (e) {
-            console.error(`Error aborting request for chat ID: ${chatId}`, e);
+            logger.error(`Error aborting request for chat ID: ${chatId}`, {
+              component: 'SSE',
+              error: e
+            });
           }
         }
         client.response.end();
         clients.delete(chatId);
-        console.log(`Removed inactive client: ${chatId}`);
+        logger.info(`Removed inactive client: ${chatId}`, { component: 'SSE' });
       }
     }
   }, 60 * 1000);

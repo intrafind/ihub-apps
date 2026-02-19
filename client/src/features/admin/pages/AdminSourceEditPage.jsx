@@ -101,6 +101,16 @@ const AdminSourceEditPage = () => {
         delete cleanSourceData.config.uploadedAt;
       }
 
+      // Remove description field if all values are empty (to avoid validation errors)
+      if (cleanSourceData.description) {
+        const hasNonEmptyDescription = Object.values(cleanSourceData.description).some(
+          value => value && value.trim() !== ''
+        );
+        if (!hasNonEmptyDescription) {
+          delete cleanSourceData.description;
+        }
+      }
+
       let savedSource;
 
       if (isEditing) {
@@ -139,7 +149,44 @@ const AdminSourceEditPage = () => {
       navigate('/admin/sources');
     } catch (err) {
       console.error('Failed to save source:', err);
-      setError(err.message || 'Failed to save source');
+
+      // Extract detailed error message from response
+      let errorMessage = 'Failed to save source';
+
+      if (err.response?.data) {
+        const responseData = err.response.data;
+
+        // If there's a main error message, use it
+        if (responseData.error) {
+          errorMessage = responseData.error;
+        }
+
+        // If there are validation details, append them
+        if (responseData.details) {
+          if (Array.isArray(responseData.details)) {
+            // Zod validation errors
+            const validationErrors = responseData.details
+              .map(detail => {
+                if (detail.path && detail.message) {
+                  return `${detail.path.join('.')}: ${detail.message}`;
+                }
+                return detail.message || JSON.stringify(detail);
+              })
+              .join('; ');
+            if (validationErrors) {
+              errorMessage += `: ${validationErrors}`;
+            }
+          } else if (typeof responseData.details === 'string') {
+            errorMessage += `: ${responseData.details}`;
+          } else if (typeof responseData.details === 'object') {
+            errorMessage += `: ${JSON.stringify(responseData.details)}`;
+          }
+        }
+      } else if (err.message) {
+        errorMessage = err.message;
+      }
+
+      setError(errorMessage);
     } finally {
       setSaving(false);
     }

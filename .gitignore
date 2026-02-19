@@ -68,4 +68,7 @@ book/
 ai-input/
 # Attachments for generated images
 attachments/
+.claude/settings.local.json
 
+# Auto-generated secrets
+contents/.jwt-secret

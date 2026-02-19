@@ -17,6 +17,27 @@ const thinkingSchema = z
   })
   .strict();
 
+// Image generation configuration schema
+const imageGenerationSchema = z
+  .object({
+    aspectRatio: z
+      .enum(['1:1', '16:9', '9:16', '5:4', '4:5', '3:2', '2:3', '3:4', '4:3', '21:9'])
+      .optional()
+      .default('1:1'),
+    quality: z.enum(['Low', 'Medium', 'High']).optional().default('Medium'),
+    maxReferenceImages: z.number().int().min(1).max(14).optional().default(14)
+  })
+  .strict();
+
+// Hint configuration schema for displaying important messages when model is selected
+const hintSchema = z
+  .object({
+    message: localizedStringSchema, // Internationalized hint message
+    level: z.enum(['hint', 'info', 'warning', 'alert']), // Severity levels
+    dismissible: z.boolean().optional().default(true) // Whether user can dismiss (only for hint/info)
+  })
+  .strict();
+
 export const modelConfigSchema = z
   .object({
     // Required fields
@@ -30,12 +51,22 @@ export const modelConfigSchema = z
     modelId: z.string().min(1, 'Model ID cannot be empty'),
     name: localizedStringSchema,
     description: localizedStringSchema,
-    url: z.string().url('URL must be a valid URI format'),
-    provider: z.enum(['openai', 'anthropic', 'google', 'mistral', 'local', 'iassistant'], {
-      errorMap: () => ({
-        message: 'Provider must be one of: openai, anthropic, google, mistral, local, iassistant'
-      })
-    }),
+    url: z
+      .string()
+      .min(1, 'URL cannot be empty')
+      .refine(
+        val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
+        'URL must be a valid URI format or environment variable reference'
+      ),
+    provider: z.enum(
+      ['openai', 'openai-responses', 'anthropic', 'google', 'mistral', 'local', 'iassistant'],
+      {
+        errorMap: () => ({
+          message:
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant'
+        })
+      }
+    ),
     tokenLimit: z
       .number()
       .int()
@@ -63,7 +94,15 @@ export const modelConfigSchema = z
 
     // Additional fields for specific providers
     supportsImages: z.boolean().optional(),
+    supportsVision: z.boolean().optional(),
+    supportsAudio: z.boolean().optional(),
+    supportsStructuredOutput: z.boolean().optional(),
+    supportsImageGeneration: z.boolean().optional().default(false),
+    imageGeneration: imageGenerationSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration
+
+    // Hint configuration - display important messages when model is selected
+    hint: hintSchema.optional(),
 
     // API Key configuration - stored encrypted on server
     apiKey: z.string().optional() // Encrypted API key for this model

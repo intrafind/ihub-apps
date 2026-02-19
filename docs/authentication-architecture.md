@@ -321,12 +321,12 @@ For groups to be retrieved:
 
 #### Flow
 
-1. **POST /api/auth/ldap/login**
+1. **POST /api/auth/login** (Unified endpoint supports both local and LDAP)
    ```javascript
    {
      "username": "john.doe",
      "password": "password123",
-     "provider": "corporate-ldap"
+     "provider": "corporate-ldap"  // optional: specific LDAP provider
    }
    ```
 
@@ -747,8 +747,7 @@ VITE_API_URL=/api                     # Optional, defaults to runtime detection
 
 ### Authentication
 
-- **POST /api/auth/login** - Local authentication
-- **POST /api/auth/ldap/login** - LDAP authentication
+- **POST /api/auth/login** - Universal authentication (supports both local and LDAP)
 - **POST /api/auth/ntlm/login** - NTLM authentication (requires Windows auth)
 - **GET /api/auth/status** - Get auth status and available methods
 - **GET /api/auth/user** - Get current user info

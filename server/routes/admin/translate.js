@@ -3,9 +3,10 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { simpleCompletion } from '../../utils.js';
 import { verifyApiKey } from '../../serverHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import logger from '../../utils/logger.js';
 
 export default function registerAdminTranslateRoute(app, basePath = '') {
-  app.post(buildServerPath('/api/admin/translate', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/translate'), adminAuth, async (req, res) => {
     try {
       const { text, from = 'en', to } = req.body || {};
       if (!text || !to) {
@@ -36,10 +37,13 @@ export default function registerAdminTranslateRoute(app, basePath = '') {
         { role: 'user', content: text }
       ];
 
-      const result = await simpleCompletion(messages, { modelId: model.id });
+      const result = await simpleCompletion(messages, {
+        modelId: model.id,
+        apiKey: apiKey
+      });
       res.json({ translation: result.content });
     } catch (error) {
-      console.error('Translation error:', error);
+      logger.error('Translation error:', error);
       res.status(500).json({ error: 'Translation failed' });
     }
   });

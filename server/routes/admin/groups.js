@@ -6,6 +6,7 @@ import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -210,7 +211,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to load groups configuration
    */
-  app.get(buildServerPath('/api/admin/groups', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
       const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
@@ -220,12 +221,12 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        console.log('Groups file not found or invalid, returning empty list');
+        logger.info('Groups file not found or invalid, returning empty list');
       }
 
       res.json(groupsData);
     } catch (error) {
-      console.error('Error getting groups:', error);
+      logger.error('Error getting groups:', error);
       res.status(500).json({ error: 'Failed to get groups' });
     }
   });
@@ -283,7 +284,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to load resources
    */
-  app.get(buildServerPath('/api/admin/groups/resources', basePath), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/groups/resources'), adminAuth, async (req, res) => {
     try {
       const rootDir = getRootDir();
 
@@ -302,7 +303,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
               name: app.name || { en: app.id, de: app.id }
             });
           } catch (error) {
-            console.warn(`Error reading app file ${file}:`, error.message);
+            logger.warn(`Error reading app file ${file}:`, error.message);
           }
         }
       }
@@ -322,7 +323,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
               name: model.name || { en: model.id, de: model.id }
             });
           } catch (error) {
-            console.warn(`Error reading model file ${file}:`, error.message);
+            logger.warn(`Error reading model file ${file}:`, error.message);
           }
         }
       }
@@ -343,21 +344,46 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
                 name: prompt.name || { en: prompt.id, de: prompt.id }
               });
             } catch (error) {
-              console.warn(`Error reading prompt file ${file}:`, error.message);
+              logger.warn(`Error reading prompt file ${file}:`, error.message);
             }
           }
         }
       } catch {
-        console.log('Prompts directory not found or empty');
+        logger.info('Prompts directory not found or empty');
+      }
+
+      // Get workflows
+      const workflowsPath = join(rootDir, 'contents', 'workflows');
+      const workflows = [];
+
+      try {
+        const workflowFiles = await fs.readdir(workflowsPath);
+        for (const file of workflowFiles) {
+          if (file.endsWith('.json')) {
+            try {
+              const workflowData = await fs.readFile(join(workflowsPath, file), 'utf8');
+              const workflow = JSON.parse(workflowData);
+              workflows.push({
+                id: workflow.id,
+                name: workflow.name || { en: workflow.id, de: workflow.id }
+              });
+            } catch (error) {
+              logger.warn(`Error reading workflow file ${file}:`, error.message);
+            }
+          }
+        }
+      } catch {
+        logger.info('Workflows directory not found or empty');
       }
 
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
-        prompts: prompts.sort((a, b) => a.id.localeCompare(b.id))
+        prompts: prompts.sort((a, b) => a.id.localeCompare(b.id)),
+        workflows: workflows.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
-      console.error('Error getting resources:', error);
+      logger.error('Error getting resources:', error);
       res.status(500).json({ error: 'Failed to get resources' });
     }
   });
@@ -461,7 +487,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to create group
    */
-  app.post(buildServerPath('/api/admin/groups', basePath), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/groups'), adminAuth, async (req, res) => {
     try {
       const { id, name, description, permissions, mappings = [] } = req.body;
 
@@ -513,6 +539,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
           apps: Array.isArray(permissions.apps) ? permissions.apps : [],
           prompts: Array.isArray(permissions.prompts) ? permissions.prompts : [],
           models: Array.isArray(permissions.models) ? permissions.models : [],
+          workflows: Array.isArray(permissions.workflows) ? permissions.workflows : [],
           adminAccess: Boolean(permissions.adminAccess)
         },
         mappings: Array.isArray(mappings) ? mappings : []
@@ -527,11 +554,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      console.log(`👥 Created new group: ${name} (${id})`);
+      logger.info(`👥 Created new group: ${name} (${id})`);
 
       res.json({ group: newGroup });
     } catch (error) {
-      console.error('Error creating group:', error);
+      logger.error('Error creating group:', error);
       res.status(500).json({ error: 'Failed to create group' });
     }
   });
@@ -600,7 +627,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to update group
    */
-  app.put(buildServerPath('/api/admin/groups/:groupId', basePath), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/groups/:groupId'), adminAuth, async (req, res) => {
     try {
       const { groupId } = req.params;
 
@@ -645,6 +672,9 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
           models: Array.isArray(permissions.models)
             ? permissions.models
             : group.permissions.models || [],
+          workflows: Array.isArray(permissions.workflows)
+            ? permissions.workflows
+            : group.permissions.workflows || [],
           adminAccess:
             permissions.adminAccess !== undefined
               ? Boolean(permissions.adminAccess)
@@ -660,11 +690,11 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      console.log(`👥 Updated group: ${group.name} (${groupId})`);
+      logger.info(`👥 Updated group: ${group.name} (${groupId})`);
 
       res.json({ group });
     } catch (error) {
-      console.error('Error updating group:', error);
+      logger.error('Error updating group:', error);
       res.status(500).json({ error: 'Failed to update group' });
     }
   });
@@ -735,62 +765,56 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
    *       500:
    *         description: Failed to delete group
    */
-  app.delete(
-    buildServerPath('/api/admin/groups/:groupId', basePath),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { groupId } = req.params;
+  app.delete(buildServerPath('/api/admin/groups/:groupId'), adminAuth, async (req, res) => {
+    try {
+      const { groupId } = req.params;
 
-        // Validate groupId for security (prevents prototype pollution)
-        if (!validateIdForPath(groupId, 'group', res)) {
-          return;
-        }
-
-        // Prevent deletion of core system groups
-        const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
-        if (protectedGroups.includes(groupId)) {
-          return res
-            .status(400)
-            .json({ error: `Cannot delete protected system group: ${groupId}` });
-        }
-
-        const rootDir = getRootDir();
-        const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
-
-        // Load existing groups
-        let groupsData = { groups: {}, metadata: {} };
-        try {
-          const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
-          groupsData = JSON.parse(groupsFileData);
-        } catch {
-          return res.status(404).json({ error: 'Groups file not found' });
-        }
-
-        // Check if group exists
-        if (!groupsData.groups[groupId]) {
-          return res.status(404).json({ error: 'Group not found' });
-        }
-
-        const groupName = groupsData.groups[groupId].name;
-
-        // Remove group
-        delete groupsData.groups[groupId];
-        groupsData.metadata.lastModified = new Date().toISOString();
-
-        // Save to file
-        await atomicWriteJSON(groupsFilePath, groupsData);
-
-        // Refresh cache
-        await configCache.refreshCacheEntry('config/groups.json');
-
-        console.log(`👥 Deleted group: ${groupName} (${groupId})`);
-
-        res.json({ message: 'Group deleted successfully' });
-      } catch (error) {
-        console.error('Error deleting group:', error);
-        res.status(500).json({ error: 'Failed to delete group' });
+      // Validate groupId for security (prevents prototype pollution)
+      if (!validateIdForPath(groupId, 'group', res)) {
+        return;
       }
+
+      // Prevent deletion of core system groups
+      const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
+      if (protectedGroups.includes(groupId)) {
+        return res.status(400).json({ error: `Cannot delete protected system group: ${groupId}` });
+      }
+
+      const rootDir = getRootDir();
+      const groupsFilePath = join(rootDir, 'contents', 'config', 'groups.json');
+
+      // Load existing groups
+      let groupsData = { groups: {}, metadata: {} };
+      try {
+        const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
+        groupsData = JSON.parse(groupsFileData);
+      } catch {
+        return res.status(404).json({ error: 'Groups file not found' });
+      }
+
+      // Check if group exists
+      if (!groupsData.groups[groupId]) {
+        return res.status(404).json({ error: 'Group not found' });
+      }
+
+      const groupName = groupsData.groups[groupId].name;
+
+      // Remove group
+      delete groupsData.groups[groupId];
+      groupsData.metadata.lastModified = new Date().toISOString();
+
+      // Save to file
+      await atomicWriteJSON(groupsFilePath, groupsData);
+
+      // Refresh cache
+      await configCache.refreshCacheEntry('config/groups.json');
+
+      logger.info(`👥 Deleted group: ${groupName} (${groupId})`);
+
+      res.json({ message: 'Group deleted successfully' });
+    } catch (error) {
+      logger.error('Error deleting group:', error);
+      res.status(500).json({ error: 'Failed to delete group' });
     }
-  );
+  });
 }

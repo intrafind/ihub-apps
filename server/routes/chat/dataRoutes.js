@@ -7,7 +7,9 @@ import {
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
 import crypto from 'crypto';
+import logger from '../../utils/logger.js';
 
 /**
  * @swagger
@@ -235,7 +237,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/styles', basePath), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/styles'), authRequired, async (req, res) => {
     try {
       // Try to get styles from cache first
       let { data: styles = [] } = configCache.getStyles();
@@ -245,7 +247,12 @@ export default function registerDataRoutes(app, deps = {}) {
       }
       res.json(styles);
     } catch (error) {
-      console.error('Error fetching styles:', error);
+      logger.error({
+        component: 'DataRoutes',
+        message: 'Error fetching styles',
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -359,75 +366,85 @@ export default function registerDataRoutes(app, deps = {}) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/prompts', basePath), authRequired, async (req, res) => {
-    try {
-      const platformConfig = req.app.get('platform') || {};
+  app.get(
+    buildServerPath('/api/prompts'),
+    requireFeature('promptsLibrary'),
+    authRequired,
+    async (req, res) => {
+      try {
+        const platformConfig = req.app.get('platform') || {};
 
-      // Get prompts with ETag from cache
-      let { data: prompts, etag } = configCache.getPrompts();
+        // Get prompts with ETag from cache
+        let { data: prompts, etag } = configCache.getPrompts();
 
-      if (!prompts) {
-        return res.status(500).json({ error: 'Failed to load prompts configuration' });
-      }
-
-      // Force permission enhancement if not already done
-      if (req.user && !req.user.permissions) {
-        const authConfig = platformConfig.auth || {};
-        req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
-      }
-
-      // Create anonymous user if none exists and anonymous access is allowed
-      if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
-        const authConfig = platformConfig.auth || {};
-        req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
-      }
-
-      // Apply group-based filtering if user is authenticated
-      if (req.user && req.user.permissions) {
-        const allowedPrompts = req.user.permissions.prompts || new Set();
-        prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
-      } else if (isAnonymousAccessAllowed(platformConfig)) {
-        // For anonymous users, filter to only anonymous-allowed prompts
-        const allowedPrompts = new Set(); // No default prompts for anonymous
-        prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
-      }
-
-      // Generate user-specific ETag to prevent cache poisoning between users with different permissions
-      let userSpecificEtag = etag;
-
-      // Create ETag based on the actual filtered prompts content
-      // This ensures users with the same permissions share cache, but different permissions get different ETags
-      const originalPromptsCount = configCache.getPrompts().data?.length || 0;
-      if (prompts.length < originalPromptsCount) {
-        // Prompts were filtered - create content-based ETag from filtered prompt IDs
-        const promptIds = prompts.map(prompt => prompt.id).sort();
-        const contentHash = crypto
-          .createHash('md5')
-          .update(JSON.stringify(promptIds))
-          .digest('hex')
-          .substring(0, 8);
-
-        userSpecificEtag = `${etag}-${contentHash}`;
-      }
-      // If prompts.length === originalPromptsCount, user sees all prompts, use original ETag
-
-      // Set ETag header
-      if (userSpecificEtag) {
-        res.setHeader('ETag', userSpecificEtag);
-
-        // Check if client has the same ETag
-        const clientETag = req.headers['if-none-match'];
-        if (clientETag && clientETag === userSpecificEtag) {
-          return res.status(304).end();
+        if (!prompts) {
+          return res.status(500).json({ error: 'Failed to load prompts configuration' });
         }
-      }
 
-      res.json(prompts);
-    } catch (error) {
-      console.error('Error fetching prompts:', error);
-      res.status(500).json({ error: 'Internal server error' });
+        // Force permission enhancement if not already done
+        if (req.user && !req.user.permissions) {
+          const authConfig = platformConfig.auth || {};
+          req.user = enhanceUserWithPermissions(req.user, authConfig, platformConfig);
+        }
+
+        // Create anonymous user if none exists and anonymous access is allowed
+        if (!req.user && isAnonymousAccessAllowed(platformConfig)) {
+          const authConfig = platformConfig.auth || {};
+          req.user = enhanceUserWithPermissions(null, authConfig, platformConfig);
+        }
+
+        // Apply group-based filtering if user is authenticated
+        if (req.user && req.user.permissions) {
+          const allowedPrompts = req.user.permissions.prompts || new Set();
+          prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
+        } else if (isAnonymousAccessAllowed(platformConfig)) {
+          // For anonymous users, filter to only anonymous-allowed prompts
+          const allowedPrompts = new Set(); // No default prompts for anonymous
+          prompts = filterResourcesByPermissions(prompts, allowedPrompts, 'prompts');
+        }
+
+        // Generate user-specific ETag to prevent cache poisoning between users with different permissions
+        let userSpecificEtag = etag;
+
+        // Create ETag based on the actual filtered prompts content
+        // This ensures users with the same permissions share cache, but different permissions get different ETags
+        const originalPromptsCount = configCache.getPrompts().data?.length || 0;
+        if (prompts.length < originalPromptsCount) {
+          // Prompts were filtered - create content-based ETag from filtered prompt IDs
+          const promptIds = prompts.map(prompt => prompt.id).sort();
+          const contentHash = crypto
+            .createHash('md5')
+            .update(JSON.stringify(promptIds))
+            .digest('hex')
+            .substring(0, 8);
+
+          userSpecificEtag = `${etag}-${contentHash}`;
+        }
+        // If prompts.length === originalPromptsCount, user sees all prompts, use original ETag
+
+        // Set ETag header
+        if (userSpecificEtag) {
+          res.setHeader('ETag', userSpecificEtag);
+
+          // Check if client has the same ETag
+          const clientETag = req.headers['if-none-match'];
+          if (clientETag && clientETag === userSpecificEtag) {
+            return res.status(304).end();
+          }
+        }
+
+        res.json(prompts);
+      } catch (error) {
+        logger.error({
+          component: 'DataRoutes',
+          message: 'Error fetching prompts',
+          error: error.message,
+          stack: error.stack
+        });
+        res.status(500).json({ error: 'Internal server error' });
+      }
     }
-  });
+  );
 
   /**
    * @swagger
@@ -516,19 +533,29 @@ export default function registerDataRoutes(app, deps = {}) {
    *                   error: "Internal server error"
    *                   requestId: "1640995200000-xyz789abc"
    */
-  app.get(buildServerPath('/api/translations/:lang', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/translations/:lang'), async (req, res) => {
     const originalLang = req.params.lang;
     let requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      console.log(`[${requestId}] Translation request for language: ${originalLang}`);
+      logger.info({
+        component: 'DataRoutes',
+        message: 'Translation request',
+        requestId,
+        language: originalLang
+      });
 
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let { lang } = req.params;
 
       // Validate language parameter
       if (!/^[a-zA-Z0-9-]{1,10}$/.test(lang)) {
-        console.warn(`[${requestId}] Suspicious language parameter received: ${lang}`);
+        logger.warn({
+          component: 'DataRoutes',
+          message: 'Suspicious language parameter received',
+          requestId,
+          lang
+        });
         lang = defaultLang;
       }
 
@@ -537,16 +564,24 @@ export default function registerDataRoutes(app, deps = {}) {
       const baseLanguage = lang.split('-')[0].toLowerCase();
 
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
-        console.log(
-          `[${requestId}] Language '${lang}' not directly supported, falling back to '${baseLanguage}'`
-        );
+        logger.info({
+          component: 'DataRoutes',
+          message: 'Language not directly supported, falling back to base language',
+          requestId,
+          requestedLang: lang,
+          fallbackLang: baseLanguage
+        });
         lang = baseLanguage;
       }
 
       if (!supportedLanguages.includes(lang)) {
-        console.log(
-          `[${requestId}] Language '${lang}' not supported, falling back to default language '${defaultLang}'`
-        );
+        logger.info({
+          component: 'DataRoutes',
+          message: 'Language not supported, falling back to default language',
+          requestId,
+          requestedLang: lang,
+          defaultLang
+        });
         lang = defaultLang;
       }
 
@@ -554,24 +589,44 @@ export default function registerDataRoutes(app, deps = {}) {
       let translations = configCache.getLocalizations(lang);
 
       if (!translations) {
-        console.warn(
-          `[${requestId}] Translations not in cache for language: ${lang}, attempting to load...`
-        );
+        logger.warn({
+          component: 'DataRoutes',
+          message: 'Translations not in cache, attempting to load',
+          requestId,
+          lang
+        });
 
         // Try to load and cache the locale
         try {
           await configCache.loadAndCacheLocale(lang);
           translations = configCache.getLocalizations(lang);
         } catch (loadError) {
-          console.error(`[${requestId}] Failed to load locale for ${lang}:`, loadError);
+          logger.error({
+            component: 'DataRoutes',
+            message: 'Failed to load locale',
+            requestId,
+            lang,
+            error: loadError.message,
+            stack: loadError.stack
+          });
         }
       }
 
       if (!translations) {
-        console.error(`[${requestId}] Failed to load translations for language: ${lang}`);
+        logger.error({
+          component: 'DataRoutes',
+          message: 'Failed to load translations for language',
+          requestId,
+          lang
+        });
 
         if (lang !== defaultLang) {
-          console.log(`[${requestId}] Attempting fallback to default language: ${defaultLang}`);
+          logger.info({
+            component: 'DataRoutes',
+            message: 'Attempting fallback to default language',
+            requestId,
+            defaultLang
+          });
           // Try to get default translations from cache first
           let enTranslations = configCache.getLocalizations(defaultLang);
 
@@ -581,15 +636,24 @@ export default function registerDataRoutes(app, deps = {}) {
               await configCache.loadAndCacheLocale(defaultLang);
               enTranslations = configCache.getLocalizations(defaultLang);
             } catch (fallbackLoadError) {
-              console.error(
-                `[${requestId}] Failed to load fallback locale for ${defaultLang}:`,
-                fallbackLoadError
-              );
+              logger.error({
+                component: 'DataRoutes',
+                message: 'Failed to load fallback locale',
+                requestId,
+                defaultLang,
+                error: fallbackLoadError.message,
+                stack: fallbackLoadError.stack
+              });
             }
           }
 
           if (enTranslations) {
-            console.log(`[${requestId}] Returning fallback translations for ${defaultLang}`);
+            logger.info({
+              component: 'DataRoutes',
+              message: 'Returning fallback translations',
+              requestId,
+              defaultLang
+            });
             return res.json(enTranslations);
           }
         }
@@ -600,14 +664,22 @@ export default function registerDataRoutes(app, deps = {}) {
         });
       }
 
-      console.log(`[${requestId}] Successfully returning translations for language: ${lang}`);
+      logger.info({
+        component: 'DataRoutes',
+        message: 'Successfully returning translations',
+        requestId,
+        lang
+      });
       res.json(translations);
     } catch (error) {
-      console.error(
-        `[${requestId}] Error fetching translations for language ${originalLang}:`,
-        error
-      );
-      console.error(`[${requestId}] Stack trace:`, error.stack);
+      logger.error({
+        component: 'DataRoutes',
+        message: 'Error fetching translations',
+        requestId,
+        language: originalLang,
+        error: error.message,
+        stack: error.stack
+      });
 
       try {
         // Try to get default translations from cache first as fallback
@@ -620,16 +692,32 @@ export default function registerDataRoutes(app, deps = {}) {
             await configCache.loadAndCacheLocale(defaultLang);
             enTranslations = configCache.getLocalizations(defaultLang);
           } catch (fallbackLoadError) {
-            console.error(`[${requestId}] Failed to load fallback locale:`, fallbackLoadError);
+            logger.error({
+              component: 'DataRoutes',
+              message: 'Failed to load fallback locale',
+              requestId,
+              error: fallbackLoadError.message,
+              stack: fallbackLoadError.stack
+            });
           }
         }
 
         if (enTranslations) {
-          console.log(`[${requestId}] Returning emergency fallback translations`);
+          logger.info({
+            component: 'DataRoutes',
+            message: 'Returning emergency fallback translations',
+            requestId
+          });
           return res.json(enTranslations);
         }
       } catch (fallbackError) {
-        console.error(`[${requestId}] Failed to load fallback translations:`, fallbackError);
+        logger.error({
+          component: 'DataRoutes',
+          message: 'Failed to load fallback translations',
+          requestId,
+          error: fallbackError.message,
+          stack: fallbackError.stack
+        });
       }
 
       res.status(500).json({
@@ -707,7 +795,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/configs/ui', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/configs/ui'), async (req, res) => {
     try {
       // Try to get UI config from cache first
       let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
@@ -749,7 +837,77 @@ export default function registerDataRoutes(app, deps = {}) {
       res.setHeader('ETag', uiConfigEtag);
       res.json(enhancedUiConfig);
     } catch (error) {
-      console.error('Error fetching UI configuration:', error);
+      logger.error({
+        component: 'DataRoutes',
+        message: 'Error fetching UI configuration',
+        error: error.message,
+        stack: error.stack
+      });
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/configs/mimetypes:
+   *   get:
+   *     summary: Get mimetypes configuration
+   *     description: |
+   *       Retrieves MIME type mappings and display names for file uploads.
+   *       This endpoint provides configuration for supported file formats, extensions, and display names.
+   *     tags:
+   *       - Configuration
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *       - anonymousAuth: []
+   *     responses:
+   *       200:
+   *         description: Mimetypes configuration retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 supportedTextFormats:
+   *                   type: array
+   *                   items:
+   *                     type: string
+   *                   description: Array of supported MIME types for text/document uploads
+   *                 mimeToExtension:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: string
+   *                   description: Mapping from MIME type to file extension(s)
+   *                 typeDisplayNames:
+   *                   type: object
+   *                   additionalProperties:
+   *                     type: string
+   *                   description: Mapping from MIME type to display name
+   *       500:
+   *         description: Internal server error
+   *         content:
+   *           application/json:
+   *             schema:
+   *               $ref: '#/components/schemas/DataError'
+   */
+  app.get(buildServerPath('/api/configs/mimetypes'), async (req, res) => {
+    try {
+      const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
+
+      if (!mimetypesConfig) {
+        return res.status(500).json({ error: 'Failed to load mimetypes configuration' });
+      }
+
+      res.setHeader('ETag', mimetypesEtag);
+      res.json(mimetypesConfig);
+    } catch (error) {
+      logger.error({
+        component: 'DataRoutes',
+        message: 'Error fetching mimetypes configuration',
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -792,7 +950,7 @@ export default function registerDataRoutes(app, deps = {}) {
    *             example:
    *               error: "Failed to load platform configuration"
    */
-  app.get(buildServerPath('/api/configs/platform', basePath), async (req, res) => {
+  app.get(buildServerPath('/api/configs/platform'), async (req, res) => {
     try {
       // Get platform config from cache
       const platform = configCache.getPlatform();
@@ -805,7 +963,7 @@ export default function registerDataRoutes(app, deps = {}) {
       // Note: Auth configuration is available via /api/auth/status endpoint
       const sanitizedConfig = {
         defaultLanguage: platform.defaultLanguage,
-        features: platform.features,
+        features: resolveFeatures(configCache.getFeatures()),
         requestBodyLimitMB: platform.requestBodyLimitMB,
         requestConcurrency: platform.requestConcurrency,
         pdfExport: platform.pdfExport,
@@ -846,7 +1004,12 @@ export default function registerDataRoutes(app, deps = {}) {
 
       res.json(cleanedConfig);
     } catch (error) {
-      console.error('Error fetching platform configuration:', error);
+      logger.error({
+        component: 'DataRoutes',
+        message: 'Error fetching platform configuration',
+        error: error.message,
+        stack: error.stack
+      });
       res.status(500).json({ error: 'Internal server error' });
     }
   });

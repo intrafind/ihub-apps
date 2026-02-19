@@ -11,6 +11,15 @@ iHub Apps supports enterprise authentication through:
 
 Both authentication methods integrate with the existing group-based permission system and support JWT token generation for stateless operation.
 
+### Unified Login Support
+
+As of version 4.2.0, the standard `/api/auth/login` endpoint supports both local and LDAP authentication automatically. This means:
+
+- **Username/password forms work with LDAP** - When LDAP is the only authentication method enabled, users can log in using the standard login form
+- **Automatic fallback** - The system tries local authentication first (if enabled), then automatically falls back to LDAP
+- **Provider selection** - Users can optionally specify which LDAP provider to use when multiple are configured
+- **Seamless user experience** - No need to know which authentication backend is being used
+
 ## LDAP Authentication
 
 ### Features
@@ -222,24 +231,109 @@ The system includes predefined groups for LDAP and NTLM users:
 
 ### Group Mapping
 
-Both LDAP and NTLM support automatic group mapping. Groups from the authentication provider are mapped to internal groups using the `mappings` field:
+Both LDAP and NTLM support automatic group mapping. Groups from the authentication provider are mapped to internal groups using the `mappings` field in `contents/config/groups.json`.
+
+#### How Group Mapping Works
+
+1. **LDAP groups are extracted** during authentication from the `memberOf` attribute
+2. **External groups are mapped** to internal groups using the `mappings` configuration
+3. **Permissions are assigned** based on the user's internal groups
+4. **Admin access is granted** if the user is in a group with `adminAccess: true`
+
+#### Configuration Example
+
+To map LDAP groups to the admin role, edit `contents/config/groups.json`:
 
 ```json
 {
-  "ad-users": {
-    "mappings": ["Domain Users", "Employees", "Staff"]
+  "groups": {
+    "admins": {
+      "id": "admins",
+      "name": "Admins",
+      "description": "Full administrative access to all resources",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["IT-Admin", "IT-Admins", "Domain Admins", "Administrators"]
+    },
+    "users": {
+      "id": "users",
+      "name": "Users",
+      "description": "Standard user access",
+      "permissions": {
+        "apps": ["*"],
+        "prompts": ["*"],
+        "models": ["*"],
+        "adminAccess": false
+      },
+      "mappings": ["Domain Users", "Employees", "Staff"]
+    }
   }
 }
 ```
 
+**Important Notes**:
+- Group names are **case-sensitive** - "IT-Admin" ≠ "it-admin"
+- Multiple LDAP groups can map to the same internal group
+- One LDAP group can map to multiple internal groups
+- The `mappings` array should contain exact LDAP group names
+
+#### Assigning Admin Role via LDAP
+
+To give admin access to users based on their LDAP group membership:
+
+1. Add their LDAP group name to the `admins` group's `mappings` array
+2. Ensure `"adminAccess": true` is set in the admins group permissions
+3. Users in those LDAP groups will automatically get admin access
+
+#### Troubleshooting Group Mapping
+
+If group mapping isn't working:
+
+1. **Check server logs** for group extraction and mapping information:
+   ```
+   [LDAP Auth] Extracted N LDAP groups for user: ["Group1", "Group2", ...]
+   [LDAP Auth] Mapped N LDAP groups to M internal groups: ["admins", "users", ...]
+   ```
+
+2. **Verify LDAP groups are retrieved**:
+   - Configure `groupSearchBase` in your LDAP provider
+   - Set correct `groupClass` (e.g., `groupOfNames` for OpenLDAP, `group` for AD)
+
+3. **Check for unmapped groups** in logs:
+   ```
+   [Authorization] External group "GroupName" has no mapping in groups configuration
+   ```
+
+4. **Ensure exact case match** - LDAP group names must match exactly in `mappings`
+
+For detailed troubleshooting, see [LDAP Group Mapping Troubleshooting Guide](LDAP-GROUP-MAPPING-TROUBLESHOOTING.md).
+
 ## API Endpoints
 
-### LDAP Authentication
+### Universal Login (Recommended)
 
-#### Login
+The `/api/auth/login` endpoint now supports both local and LDAP authentication automatically. It will try local authentication first (if enabled), then fall back to LDAP authentication.
+
+#### Login with Auto-Detection
 
 ```http
-POST /api/auth/ldap/login
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "username": "john.doe",
+  "password": "password123"
+}
+```
+
+#### Login with Specific LDAP Provider
+
+```http
+POST /api/auth/login
 Content-Type: application/json
 
 {
@@ -248,6 +342,8 @@ Content-Type: application/json
   "provider": "corporate-ldap"
 }
 ```
+
+**Note**: The `provider` parameter is optional. If not specified and multiple LDAP providers are configured, the system will try each provider until one succeeds.
 
 #### Get Providers
 
@@ -282,14 +378,19 @@ GET /api/auth/status
 ### JavaScript Example
 
 ```javascript
-// LDAP login
-async function loginLdap(username, password, provider) {
-  const response = await fetch('/api/auth/ldap/login', {
+// Universal login (works with both local and LDAP)
+async function login(username, password, provider = null) {
+  const requestBody = { username, password };
+  if (provider) {
+    requestBody.provider = provider; // Optional: specify LDAP provider
+  }
+
+  const response = await fetch('/api/auth/login', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ username, password, provider })
+    body: JSON.stringify(requestBody)
   });
 
   const result = await response.json();
@@ -331,20 +432,31 @@ async function makeAuthenticatedRequest(url) {
 
 ### LDAP Issues
 
-1. **Connection Errors**
+1. **Username/Password Form Not Showing (RESOLVED in v4.2.0)**
+   - **Previous Issue**: When only LDAP was enabled, the username/password form would not appear
+   - **Resolution**: The login form now appears when either local auth OR LDAP auth is enabled
+   - **Note**: Upgrade to v4.2.0+ to use the unified login endpoint
+
+2. **Connection Errors**
    - Verify LDAP server URL and port
    - Check network connectivity
    - Ensure TLS/SSL configuration is correct
 
-2. **Authentication Failures**
+3. **Authentication Failures**
    - Verify admin DN and password
    - Check user search base and username attribute
    - Test with a simple LDAP client (e.g., `ldapsearch`)
+   - Check server logs for detailed error messages (with generic responses to clients for security)
 
 3. **Group Mapping Issues**
    - Check group search base configuration
    - Verify group class setting
    - Review LDAP server logs
+
+4. **Multiple LDAP Providers**
+   - If you have multiple LDAP providers, the system will try each one in order
+   - Optionally specify a provider using the `provider` parameter in the login request
+   - Check logs to see which provider is being attempted
 
 ### NTLM Issues
 

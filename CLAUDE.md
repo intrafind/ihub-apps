@@ -354,6 +354,47 @@ The system automatically resolves group inheritance at startup:
 2. **Client Feature**: Create feature module in `client/src/features/`
 3. **Configuration**: Add to relevant JSON config file
 4. **Permissions**: Update `groups.json` if needed
+5. **Known Routes** ⚠️: If adding new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
+
+### When Adding New Routes
+
+**CRITICAL**: When adding new top-level routes to `client/src/App.jsx`, you **MUST** update the `knownRoutes` array in `client/src/utils/runtimeBasePath.js`.
+
+This array is essential for:
+
+- Detecting the base path for subpath deployments (e.g., `/ihub/apps`)
+- Preventing incorrect redirects during logout
+- Ensuring assets load from correct paths
+
+**Steps**:
+
+1. Add your route in `App.jsx` (e.g., `<Route path="reports" element={...} />`)
+2. Add the route to `knownRoutes` array in `client/src/utils/runtimeBasePath.js` (e.g., `'/reports'`)
+3. Test both root deployment (`/reports`) and subpath deployment (`/ihub/reports`)
+
+**Example routes that must be in the array**:
+
+- `/apps`, `/admin`, `/auth`, `/login`, `/prompts`, `/settings`, `/teams`, `/s`
+
+### Breaking Changes & Backward Compatibility
+
+**Always ask the user before implementing backward compatibility shims.**
+
+When refactoring or replacing an API/interface:
+
+1. Clearly describe what will break (old endpoints, removed fields, changed data shapes)
+2. Ask the user whether they want backward compatibility or a clean break
+3. Let them make an informed decision before proceeding
+4. Do NOT silently add backward-compat wrappers, deprecated endpoints, or re-exports
+
+**Examples of breaking changes**:
+
+- Removing or renaming API endpoints
+- Changing response data structures
+- Removing fields from data objects
+- Changing authentication/authorization requirements
+
+When breaking changes are necessary for significant performance improvements or architectural simplifications, present the tradeoffs clearly and let the user decide.
 
 ### LLM Provider Integration
 
@@ -448,6 +489,48 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 - **Request validation**: Input validation on all API endpoints
 - **Authentication bypass prevention**: `authRequired` middleware on protected routes
 - **CORS Support**: Cross-Origin Resource Sharing configured for web app integration
+- **Secret encryption at rest**: Integration secrets encrypted in `platform.json` using AES-256-GCM
+
+#### Secret Encryption at Rest
+
+Platform config secrets (Jira, OIDC, LDAP, NTLM, Cloud Storage) are encrypted on disk using `TokenStorageService` (AES-256-GCM). The encryption key is stored at `contents/.encryption-key`.
+
+**Encrypted format:** `ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]`
+
+**Which secrets are encrypted:**
+
+| Config Path                | Field                                  |
+| -------------------------- | -------------------------------------- |
+| `jira`                     | `clientSecret`                         |
+| `cloudStorage.providers[]` | `clientSecret`, `tenantId` (office365) |
+| `oidcAuth.providers[]`     | `clientSecret`                         |
+| `ldapAuth.providers[]`     | `adminPassword`                        |
+| `ntlmAuth`                 | `domainControllerPassword`             |
+
+**How it works:**
+
+- **On admin save** (`POST /api/admin/configs/platform`): Secrets are encrypted before writing to `platform.json`
+- **On admin read** (`GET /api/admin/configs/platform`): Secrets are decrypted, then sanitized to `***REDACTED***`
+- **At runtime** (`configCache.js`): Secrets are decrypted when platform config is loaded into cache, so all consumers receive plaintext
+
+**Guard pattern when encrypting:**
+
+```js
+function encryptIfNeeded(value) {
+  if (!value || typeof value !== 'string') return value;
+  if (/^\$\{[^}]+\}$/.test(value)) return value; // skip env var placeholders
+  if (tokenStorageService.isEncrypted(value)) return value; // skip already encrypted
+  return tokenStorageService.encryptString(value);
+}
+```
+
+**Backward compatibility:** Plaintext secrets pass through unchanged on read. They get encrypted automatically on the next admin save (lazy migration). No migration script needed.
+
+**Key files:**
+
+- `server/services/TokenStorageService.js` — `encryptString()`, `decryptString()`, `isEncrypted()`
+- `server/routes/admin/configs.js` — `encryptPlatformSecrets()`, `decryptPlatformSecrets()`, `encryptIfNeeded()`, `decryptIfNeeded()`
+- `server/configCache.js` — `decryptPlatformSecrets()` applied during platform config loading
 
 #### CORS Configuration
 
@@ -558,6 +641,18 @@ fetch('https://your-ihub-domain.com/api/health', {
 - **ES modules**: Use `import/export` syntax throughout
 - **Error handling**: Always handle async operations properly
 
+### Linting & Code Quality
+
+When fixing lint errors, batch similar fixes across files (e.g., fix all unused variable warnings together, then all formatting issues) rather than file-by-file to improve efficiency.
+
+### Pre-commit Checklist
+
+For JavaScript projects, always check for and fix ESLint/Prettier errors before committing. Run `npm run lint:fix && npm run format:fix` as the standard command.
+
+## Editing Guidelines
+
+When making multi-file changes, group related edits and verify no new lint errors are introduced after each logical batch of changes.
+
 ## File Structure Context
 
 ### Critical Server Files
@@ -611,3 +706,69 @@ function UserComponent(props) {
 - Access to all React hooks and app context through props
 
 This architecture supports enterprise-grade AI applications with flexible authentication, real-time chat, and extensive customization capabilities.
+
+## Documentation Organization
+
+### Feature Documentation
+
+All feature documentation should be added to the `docs/` folder:
+
+**When to Update Existing Documentation:**
+- **Always check first** if documentation already exists in `docs/` for the area you're working on
+- Update existing files rather than creating new ones when the feature fits within an existing document
+- For example, new model features should be added to `docs/models.md`, new UI features to `docs/ui.md`, etc.
+
+**When to Create New Documentation:**
+- Only create new documentation files when the feature doesn't fit into any existing document
+- Use descriptive, lowercase filenames with hyphens: `feature-name.md`
+- Add the new file to `docs/SUMMARY.md` for inclusion in the documentation site
+
+**Documentation Structure:**
+- `docs/` - User-facing feature documentation, guides, and references
+  - Updated as features are added or modified
+  - Organized by topic (models, authentication, configuration, etc.)
+  - Rendered on the documentation site
+
+**Example Workflow:**
+1. Check if `docs/models.md`, `docs/ui.md`, or other relevant file exists
+2. If exists, add your feature documentation to the appropriate section
+3. If doesn't exist, create new file and add to `docs/SUMMARY.md`
+4. Use clear headings, code examples, and use cases
+
+### Concept Documents (Design & Planning)
+
+The `concepts/` folder is for design documents, RFC-style proposals, and technical planning:
+
+**Single Document Features:**
+
+- Use format: `concepts/YYYY-MM-DD {title}.md`
+- Examples: `2026-02-02 Provider API Key Persistence Fix.md`
+
+**Multi-Document Features:**
+
+- Create a dedicated subfolder: `concepts/{feature-name}/`
+- Include a `README.md` that provides an overview
+- Place all related documents in the subfolder
+- Example structure:
+  ```
+  concepts/websearch-provider-api-keys/
+  ├── README.md
+  ├── 2026-02-03 Websearch Provider API Key Configuration.md
+  ├── 2026-02-03 Websearch Provider UI Screenshots.md
+  └── IMPLEMENTATION_SUMMARY_WEBSEARCH_PROVIDERS.md
+  ```
+
+**When to Use Subfolders:**
+
+- Features with 3+ related documents
+- Features with implementation summaries, UI documentation, and concept docs
+- Complex features that need organized documentation
+
+**What to Document:**
+
+- Feature concepts and design documents
+- Fix summaries and root cause analyses
+- Migration guides for breaking changes
+- Implementation summaries
+- UI/UX changes with screenshots
+- API changes and usage examples

@@ -4,7 +4,9 @@ import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import configCache from '../configCache.js';
-import { mapExternalGroups } from './authorization.js';
+import { mapExternalGroups, loadGroupsConfiguration } from './authorization.js';
+import logger from './logger.js';
+import { ensureFirstUserIsAdmin } from './adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -42,8 +44,9 @@ export function loadUsers(usersFilePath) {
     }
 
     // Fallback to file system if cache miss or invalid data
-    console.warn(
-      `[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`
+    logger.warn(
+      `[WARN] Users configuration not found in cache for: ${cacheKey}, attempting file system fallback`,
+      { component: 'Utils' }
     );
 
     const fullPath = path.isAbsolute(usersFilePath)
@@ -52,7 +55,9 @@ export function loadUsers(usersFilePath) {
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
-      console.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`);
+      logger.warn(`[WARN] Users file not found: ${fullPath}, creating empty structure`, {
+        component: 'Utils'
+      });
       const emptyConfig = {
         users: {},
         metadata: { version: '2.0.0', lastUpdated: new Date().toISOString() }
@@ -87,8 +92,11 @@ export function loadUsers(usersFilePath) {
 
     return usersConfig;
   } catch (error) {
-    console.error(`[ERROR] Could not load users configuration:`, error.message);
-    console.error(`[ERROR] Stack trace:`, error.stack);
+    logger.error(`[ERROR] Could not load users configuration:`, {
+      component: 'Utils',
+      message: error.message
+    });
+    logger.error(`[ERROR] Stack trace:`, { component: 'Utils', stack: error.stack });
 
     // Return safe empty structure as last resort
     const safeConfig = {
@@ -96,7 +104,7 @@ export function loadUsers(usersFilePath) {
       metadata: { version: '2.0.0', lastUpdated: new Date().toISOString(), error: error.message }
     };
 
-    console.warn(`[WARN] Returning safe empty users structure due to error`);
+    logger.warn(`[WARN] Returning safe empty users structure due to error`, { component: 'Utils' });
     return safeConfig;
   }
 }
@@ -137,7 +145,10 @@ export async function saveUsers(usersConfig, usersFilePath) {
 
     configCache.setCacheEntry(cacheKey, usersConfig);
   } catch (error) {
-    console.error('Could not save users configuration:', error.message);
+    logger.error('Could not save users configuration:', {
+      component: 'Utils',
+      message: error.message
+    });
     throw error;
   }
 }
@@ -146,7 +157,7 @@ export async function saveUsers(usersConfig, usersFilePath) {
  * Find user by various identifiers (username, email, oidcSubject)
  * @param {Object} usersConfig - Users configuration
  * @param {string} identifier - Username, email, or OIDC subject ID
- * @param {string} authMethod - Authentication method ('local', 'oidc', 'proxy')
+ * @param {string} authMethod - Authentication method ('local', 'oidc', 'proxy', 'ldap', 'ntlm')
  * @returns {Object|null} User object or null if not found
  */
 export function findUserByIdentifier(usersConfig, identifier, authMethod = null) {
@@ -160,11 +171,15 @@ export function findUserByIdentifier(usersConfig, identifier, authMethod = null)
       continue;
     }
 
-    // Match by username, email, or OIDC subject
+    // Match by username, email, or auth-specific subject
     if (
       user.username === identifier ||
-      user.email === identifier ||
-      (user.oidcData && user.oidcData.subject === identifier)
+      (identifier && user.email === identifier) ||
+      (user.oidcData && user.oidcData.subject === identifier) ||
+      (user.proxyData && user.proxyData.subject === identifier) ||
+      (user.teamsData && user.teamsData.subject === identifier) ||
+      (user.ntlmData && user.ntlmData.subject === identifier) ||
+      (user.ldapData && user.ldapData.subject === identifier)
     ) {
       return { ...user, id: userId };
     }
@@ -184,11 +199,15 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
   // Determine auth method based on provider
   const authMethod =
-    externalUser.provider === 'proxy'
-      ? 'proxy'
-      : externalUser.provider === 'teams'
-        ? 'teams'
-        : 'oidc';
+    externalUser.authMethod === 'ldap'
+      ? 'ldap'
+      : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+        ? 'ntlm'
+        : externalUser.provider === 'proxy'
+          ? 'proxy'
+          : externalUser.provider === 'teams'
+            ? 'teams'
+            : 'oidc';
 
   // Try to find existing user by email or external subject
   let existingUser =
@@ -234,6 +253,23 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
         upn: externalUser.teamsData?.upn,
         ...user.teamsData
       };
+    } else if (authMethod === 'ntlm') {
+      user.ntlmData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        domain: externalUser.domain,
+        workstation: externalUser.workstation,
+        ...user.ntlmData
+      };
+    } else if (authMethod === 'ldap') {
+      user.ldapData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        username: externalUser.ldapData?.username,
+        ...user.ldapData
+      };
     }
 
     // Update basic info from external provider
@@ -258,9 +294,9 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
 
     const newUser = {
       id: userId,
-      username: externalUser.email, // Use email as username for external users
-      email: externalUser.email,
-      name: externalUser.name,
+      username: externalUser.email || externalUser.id, // Use email or fallback to external id
+      email: externalUser.email || null,
+      name: externalUser.name || externalUser.id,
       internalGroups: [], // Only store internal/manual groups, not external groups
       active: true,
       authMethods: [authMethod],
@@ -289,6 +325,21 @@ export async function createOrUpdateExternalUser(externalUser, usersFilePath) {
         lastProvider: externalUser.provider,
         tenantId: externalUser.teamsData?.tenantId,
         upn: externalUser.teamsData?.upn
+      };
+    } else if (authMethod === 'ntlm') {
+      newUser.ntlmData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        domain: externalUser.domain,
+        workstation: externalUser.workstation
+      };
+    } else if (authMethod === 'ldap') {
+      newUser.ldapData = {
+        subject: externalUser.id,
+        provider: externalUser.provider,
+        lastProvider: externalUser.provider,
+        username: externalUser.ldapData?.username
       };
     }
 
@@ -350,25 +401,33 @@ export function mergeUserGroups(externalGroups = [], internalGroups = []) {
 
 /**
  * Validate and persist external user based on platform configuration
- * Consolidates the validation logic from proxyAuth.js and oidcAuth.js
- * @param {Object} externalUser - External user data (OIDC/Proxy/Teams)
+ * Consolidates the validation logic from proxyAuth.js, oidcAuth.js, ntlmAuth.js, and ldapAuth.js
+ * @param {Object} externalUser - External user data (OIDC/Proxy/Teams/NTLM/LDAP)
  * @param {Object} platformConfig - Platform configuration
  * @returns {Object} Validated and persisted user object
  */
 export async function validateAndPersistExternalUser(externalUser, platformConfig) {
   const authMethod =
-    externalUser.provider === 'proxy'
-      ? 'proxy'
-      : externalUser.provider === 'teams'
-        ? 'teams'
-        : 'oidc';
+    externalUser.authMethod === 'ldap'
+      ? 'ldap'
+      : externalUser.authMethod === 'ntlm' || externalUser.provider === 'ntlm'
+        ? 'ntlm'
+        : externalUser.provider === 'proxy'
+          ? 'proxy'
+          : externalUser.provider === 'teams'
+            ? 'teams'
+            : 'oidc';
 
   // Get the appropriate auth config based on auth method
   let authConfig;
-  if (authMethod === 'proxy') {
+  if (authMethod === 'ldap') {
+    authConfig = platformConfig.ldapAuth || {};
+  } else if (authMethod === 'proxy') {
     authConfig = platformConfig.proxyAuth || {};
   } else if (authMethod === 'teams') {
     authConfig = platformConfig.teamsAuth || {};
+  } else if (authMethod === 'ntlm') {
+    authConfig = platformConfig.ntlmAuth || {};
   } else {
     authConfig = platformConfig.oidcAuth || {};
   }
@@ -412,7 +471,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
     const mergedGroups = Array.from(allGroups);
 
-    return {
+    // Admin rescue: Ensure first user gets admin rights if no admin exists
+    let userWithAdminCheck = {
       ...externalUser,
       id: persistedUser.id,
       groups: mergedGroups,
@@ -421,10 +481,22 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
       lastActiveDate: persistedUser.lastActiveDate,
       persistedUser: true
     };
+
+    userWithAdminCheck = await ensureFirstUserIsAdmin(
+      userWithAdminCheck,
+      authMethod,
+      usersFilePath
+    );
+
+    return userWithAdminCheck;
   }
 
   // User doesn't exist - check self-signup settings
-  if (!authConfig.allowSelfSignup) {
+  // For NTLM and LDAP, default to allowing self-signup since users are already authenticated by domain controller/LDAP server
+  const allowSelfSignup =
+    authConfig.allowSelfSignup ??
+    (authMethod === 'ntlm' || authMethod === 'proxy' || authMethod === 'ldap');
+  if (!allowSelfSignup) {
     throw new Error(
       `New user registration is not allowed. User ID: ${externalUser.id}, Email: ${externalUser.email}. Please contact your administrator.`
     );
@@ -450,7 +522,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
 
   const combinedGroups = Array.from(allGroups);
 
-  return {
+  // Admin rescue: Ensure first user gets admin rights if no admin exists
+  let userWithAdminCheck = {
     ...externalUser,
     id: persistedUser.id,
     groups: combinedGroups,
@@ -459,4 +532,8 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     lastActiveDate: persistedUser.lastActiveDate,
     persistedUser: true
   };
+
+  userWithAdminCheck = await ensureFirstUserIsAdmin(userWithAdminCheck, authMethod, usersFilePath);
+
+  return userWithAdminCheck;
 }

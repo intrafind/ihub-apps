@@ -5,6 +5,7 @@ import SourceResolutionService from './SourceResolutionService.js';
 import config from '../config.js';
 import { getRootDir } from '../pathUtils.js';
 import path from 'path';
+import logger from '../utils/logger.js';
 
 /**
  * Service for handling prompt processing and template resolution
@@ -118,11 +119,11 @@ class PromptService {
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
-    console.log(`Using language '${lang}' for message templates`);
+    logger.info(`Using language '${lang}' for message templates`);
 
     // Resolve global prompt variables once for use throughout the function
     const globalPromptVariables = this.resolveGlobalPromptVariables(user, modelName, lang, style);
-    console.log(`Resolved ${Object.keys(globalPromptVariables).length} global prompt variables`);
+    logger.info(`Resolved ${Object.keys(globalPromptVariables).length} global prompt variables`);
 
     let llmMessages = [...messages].map(msg => {
       if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
@@ -168,6 +169,7 @@ class PromptService {
         const processedMsg = { role: 'user', content: processedContent };
         if (msg.imageData) processedMsg.imageData = msg.imageData;
         if (msg.fileData) processedMsg.fileData = msg.fileData;
+        if (msg.audioData) processedMsg.audioData = msg.audioData;
         return processedMsg;
       }
       // Apply global prompt variables to normal prompts as well
@@ -188,6 +190,7 @@ class PromptService {
       const processedMsg = { role: msg.role, content: processedContent };
       if (msg.imageData) processedMsg.imageData = msg.imageData;
       if (msg.fileData) processedMsg.fileData = msg.fileData;
+      if (msg.audioData) processedMsg.audioData = msg.audioData;
       return processedMsg;
     });
 
@@ -245,21 +248,29 @@ class PromptService {
             sourceContent = result.content;
 
             if (result.metadata.errors.length > 0) {
-              console.warn('Source loading errors:', result.metadata.errors);
+              logger.warn('Source loading errors:', result.metadata.errors);
             }
           }
 
           // Replace {{sources}} template with combined content
-          if (systemPrompt.includes('{{sources}}')) {
+          const hasSourcesPlaceholder = systemPrompt.includes('{{sources}}');
+          const hasSourcePlaceholder = systemPrompt.includes('{{source}}');
+
+          if (hasSourcesPlaceholder) {
             systemPrompt = systemPrompt.replace('{{sources}}', sourceContent || '');
           }
           // Also support legacy {{source}} template
-          if (systemPrompt.includes('{{source}}')) {
+          if (hasSourcePlaceholder) {
             systemPrompt = systemPrompt.replace('{{source}}', sourceContent || '');
+          }
+
+          // If no placeholder was found but we have source content, append it automatically
+          if (!hasSourcesPlaceholder && !hasSourcePlaceholder && sourceContent) {
+            systemPrompt += `\n\nSources:\n<sources>${sourceContent}</sources>`;
           }
         }
       } catch (error) {
-        console.error('Error in source resolution system:', error);
+        logger.error('Error in source resolution system:', error);
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 
@@ -271,10 +282,10 @@ class PromptService {
           if (styles && styles[style] && style !== 'keep') {
             systemPrompt += `\n\n${styles[style]}`;
           } else {
-            console.log(`No specific style found for '${style}'. Nothing added to system prompt.`);
+            logger.info(`No specific style found for '${style}'. Nothing added to system prompt.`);
           }
         } catch (err) {
-          console.error('Error loading styles:', err);
+          logger.error('Error loading styles:', err);
         }
       }
 

@@ -3,6 +3,7 @@
  */
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
+import logger from '../utils/logger.js';
 
 class AnthropicAdapterClass extends BaseAdapter {
   /**
@@ -21,7 +22,10 @@ class AnthropicAdapterClass extends BaseAdapter {
 
         // If tool message contains imageData, prioritize the image for vision analysis
         if (this.hasImageData(msg)) {
-          console.log(`🖼️ Anthropic adapter: Processing image from tool message`);
+          logger.info({
+            component: 'AnthropicAdapter',
+            message: 'Processing image from tool message'
+          });
 
           // Add simple tool result acknowledgment
           toolContent.push({
@@ -200,7 +204,8 @@ class AnthropicAdapterClass extends BaseAdapter {
       requestBody.system = systemPrompt;
     }
 
-    console.log('Anthropic request body:', JSON.stringify(requestBody, null, 2));
+    // Note: Request body logging disabled to prevent exposing sensitive data in logs
+    // logger.info('Anthropic request body:', JSON.stringify(requestBody, null, 2));
 
     return {
       url: model.url,
@@ -231,9 +236,9 @@ class AnthropicAdapterClass extends BaseAdapter {
     if (!data) return result;
     try {
       const parsed = JSON.parse(data);
-      // console.log('--- Anthropic Raw Chunk ---');
-      // console.log(JSON.stringify(parsed, null, 2));
-      // console.log('--------------------------');
+      // logger.info('--- Anthropic Raw Chunk ---');
+      // logger.info(JSON.stringify(parsed, null, 2));
+      // logger.info('--------------------------');
 
       // Handle full response object (non-streaming)
       if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {
@@ -287,7 +292,12 @@ class AnthropicAdapterClass extends BaseAdapter {
         // that was already processed by the ToolExecutor.
       }
     } catch (parseError) {
-      console.error('Error parsing Claude response chunk:', parseError);
+      logger.error({
+        component: 'AnthropicAdapter',
+        message: 'Error parsing Claude response chunk',
+        error: parseError.message,
+        stack: parseError.stack
+      });
       result.error = true;
       result.errorMessage = `Error parsing Claude response: ${parseError.message}`;
     }

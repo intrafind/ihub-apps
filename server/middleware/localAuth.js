@@ -1,10 +1,12 @@
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
+import logger from '../utils/logger.js';
+import { ensureFirstUserIsAdmin } from '../utils/adminRescue.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,14 +23,14 @@ function loadUsers(usersFilePath) {
       : path.join(__dirname, '../../', usersFilePath);
 
     if (!fs.existsSync(fullPath)) {
-      console.warn(`Users file not found: ${fullPath}`);
+      logger.warn(`Users file not found: ${fullPath}`);
       return { users: {} };
     }
 
     const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
     return config;
   } catch (error) {
-    console.warn('Could not load users configuration:', error.message);
+    logger.warn('Could not load users configuration:', error.message);
     return { users: {} };
   }
 }
@@ -124,6 +126,10 @@ export async function loginUser(username, password, localAuthConfig) {
 
   userResponse = enhanceUserGroups(userResponse, authConfig);
 
+  // Admin rescue: Ensure first user gets admin rights if no admin exists
+  const usersFilePath = localAuthConfig.usersFile || 'contents/config/users.json';
+  userResponse = await ensureFirstUserIsAdmin(userResponse, 'local', usersFilePath);
+
   // Create JWT token using centralized token service
   const sessionTimeoutMinutes = localAuthConfig.sessionTimeoutMinutes || 480;
   const { token, expiresIn: sessionTimeoutSeconds } = generateJwt(userResponse, {
@@ -198,7 +204,7 @@ export async function createUser(userData, usersFilePath) {
   fs.writeFileSync(fullPath, JSON.stringify(usersConfig, null, 2));
 
   // Return user without sensitive data
-  // eslint-disable-next-line no-unused-vars
+
   const { passwordHash: _pw, ...userResponse } = newUser;
   return userResponse;
 }

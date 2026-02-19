@@ -96,6 +96,18 @@ export const UIConfigProvider = ({ children }) => {
   );
 };
 
+/**
+ * Hook to access UI configuration context.
+ * Provides UI customization settings, header color management, and branding options.
+ * @returns {Object} UI config context value
+ * @returns {Object|null} returns.uiConfig - The UI configuration object
+ * @returns {boolean} returns.isLoading - Whether config is still loading
+ * @returns {string|null} returns.error - Error message if loading failed
+ * @returns {string} returns.headerColor - Current header color (hex)
+ * @returns {Function} returns.setHeaderColor - Function to change header color
+ * @returns {Function} returns.resetHeaderColor - Function to reset header to default
+ * @returns {Function} returns.refreshUIConfig - Function to reload UI configuration
+ */
 export const useUIConfig = () => useContext(UIConfigContext);
 
 export default UIConfigContext;
