@@ -44,7 +44,8 @@ const AIDisclaimerBanner = ({ uiConfig }) => {
 
   const isClickable = !!disclaimerLink;
   const ElementTag = isClickable ? 'button' : 'div';
-  const baseClasses = 'flex items-center gap-2 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400';
+  const baseClasses =
+    'flex items-center gap-2 px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400';
   const clickableClasses = isClickable
     ? 'hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 cursor-pointer'
     : 'cursor-default';
@@ -58,7 +59,9 @@ const AIDisclaimerBanner = ({ uiConfig }) => {
         data-testid="disclaimer-banner"
       >
         <span data-testid="icon-informationCircle">informationCircle</span>
-        <span>{disclaimerHint || 'iHub uses AI and can make mistakes. Please verify results carefully.'}</span>
+        <span>
+          {disclaimerHint || 'iHub uses AI and can make mistakes. Please verify results carefully.'}
+        </span>
       </ElementTag>
     </div>
   );
@@ -149,7 +152,11 @@ describe('AIDisclaimerBanner', () => {
       const banner = screen.getByTestId('disclaimer-banner');
       fireEvent.click(banner);
 
-      expect(window.open).toHaveBeenCalledWith('/pages/disclaimer', '_blank', 'noopener,noreferrer');
+      expect(window.open).toHaveBeenCalledWith(
+        '/pages/disclaimer',
+        '_blank',
+        'noopener,noreferrer'
+      );
     });
   });
 
