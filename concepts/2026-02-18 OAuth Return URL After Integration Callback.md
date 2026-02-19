@@ -2,6 +2,7 @@
 
 **Date**: 2026-02-18  
 **Status**: Implemented  
+**Last Updated**: 2026-02-19 (Added provider-specific session keys)  
 **Related Issue**: [Issue #TBD] We should return to the App after Integration Callback
 
 ## Problem Statement
@@ -15,7 +16,16 @@ This created a poor user experience, especially when users were:
 
 ## Solution
 
-Implemented a return URL mechanism that redirects users back to the original page after completing the OAuth flow.
+Implemented a return URL mechanism that redirects users back to the original page after completing the OAuth flow, with support for multiple concurrent OAuth providers.
+
+### Key Features
+
+1. **Provider-Specific Session Keys**: Each OAuth provider uses a unique session key to prevent conflicts
+   - Office 365: `oauth_office365_{providerId}` - Supports multiple Office 365 provider configurations
+   - JIRA: `oauth_jira` - Single provider architecture
+2. **Return URL Storage**: The original page URL is stored server-side in the session
+3. **State-Based Matching**: OAuth callbacks match the state parameter to find the correct session
+4. **Global URL Cleanup**: Client-side hook removes OAuth query parameters after redirect
 
 ### Implementation Details
 
@@ -25,17 +35,34 @@ Implemented a return URL mechanism that redirects users back to the original pag
 
 Both `/api/integrations/office365/auth` and `/api/integrations/jira/auth` endpoints now:
 - Accept an optional `returnUrl` query parameter
-- Store the `returnUrl` in the session alongside other OAuth data
+- Store the `returnUrl` in the session alongside other OAuth data using provider-specific keys
 - Default to `/settings/integrations` if no return URL is provided
 
+**Office 365 - Multiple Provider Support:**
 ```javascript
-// Example: Office 365
-req.session.office365Auth = {
+// Example: Office 365 with dynamic session key per provider
+const sessionKey = `oauth_office365_${providerId}`;
+req.session[sessionKey] = {
   state,
   codeVerifier,
   providerId,
   userId: req.user?.id || 'fallback-user',
-  returnUrl: returnUrl || '/settings/integrations',  // NEW
+  returnUrl: returnUrl || '/settings/integrations',
+  timestamp: Date.now()
+};
+```
+
+This allows multiple Office 365 providers (e.g., "Company SharePoint", "Partner SharePoint") to have concurrent OAuth flows without session conflicts.
+
+**JIRA - Single Provider:**
+```javascript
+// Example: JIRA with consistent session key
+const sessionKey = 'oauth_jira';
+req.session[sessionKey] = {
+  state,
+  codeVerifier,
+  userId: req.user?.id || 'fallback-user',
+  returnUrl: returnUrl || '/settings/integrations',
   timestamp: Date.now()
 };
 ```
@@ -43,18 +70,55 @@ req.session.office365Auth = {
 **2. OAuth Callback (Office 365 & JIRA)**
 
 Both `/api/integrations/office365/callback` and `/api/integrations/jira/callback` endpoints now:
-- Retrieve the stored `returnUrl` from session early in the callback process
+- Search session for the matching OAuth flow using the state parameter
+- Retrieve the stored `returnUrl` from the matched session
 - Use the return URL for all redirects (success and error cases)
 - Properly append query parameters to the return URL (handling existing query strings)
+- Clean up the session after completion
 
+**Office 365 Callback - State-Based Lookup:**
 ```javascript
-// Get return URL early for error redirects
-const returnUrl = req.session?.office365Auth?.returnUrl || '/settings/integrations';
+// Find the session key that matches the state parameter
+let storedAuth = null;
+let sessionKey = null;
+
+if (req.session) {
+  // Look for any oauth_office365_* keys in the session
+  for (const key of Object.keys(req.session)) {
+    if (key.startsWith('oauth_office365_') && req.session[key]?.state === state) {
+      storedAuth = req.session[key];
+      sessionKey = key;
+      break;
+    }
+  }
+}
+
+// Use the stored return URL
+const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
 const separator = returnUrl.includes('?') ? '&' : '?';
+
+// Clean up session after use
+if (sessionKey) {
+  delete req.session[sessionKey];
+}
 
 // Redirect on success or error
 res.redirect(`${returnUrl}${separator}office365_connected=true`);
-res.redirect(`${returnUrl}${separator}office365_error=${encodeURIComponent(error.message)}`);
+```
+
+**JIRA Callback - Direct Lookup:**
+```javascript
+// Direct lookup with consistent key
+const sessionKey = 'oauth_jira';
+const storedAuth = req.session?.[sessionKey];
+const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
+const separator = returnUrl.includes('?') ? '&' : '?';
+
+// Clean up session
+delete req.session[sessionKey];
+
+// Redirect
+res.redirect(`${returnUrl}${separator}jira_connected=true`);
 ```
 
 #### Client-Side Changes
@@ -114,6 +178,46 @@ window.location.href = `/api/integrations/${provider.type}/auth?providerId=${enc
 2. **CSRF Protection**: Existing CSRF protection (state parameter) remains unchanged
 3. **URL Validation**: Return URLs are internal paths within the application
 4. **Query Parameter Handling**: Properly handles existing query parameters in return URLs
+5. **Provider Isolation**: Each OAuth provider uses a unique session key to prevent conflicts between concurrent flows
+6. **State-Based Matching**: Callbacks match the state parameter to find the correct session, preventing session confusion attacks
+
+## Multiple Provider Support
+
+The system now supports multiple Office 365 providers with concurrent OAuth flows:
+
+**Configuration Example:**
+```json
+{
+  "cloudStorage": {
+    "enabled": true,
+    "providers": [
+      {
+        "id": "office365-company",
+        "displayName": "Company SharePoint",
+        "type": "office365",
+        "enabled": true,
+        "tenantId": "company-tenant-id",
+        "clientId": "company-client-id",
+        "clientSecret": "company-secret"
+      },
+      {
+        "id": "office365-partner",
+        "displayName": "Partner SharePoint",
+        "type": "office365",
+        "enabled": true,
+        "tenantId": "partner-tenant-id",
+        "clientId": "partner-client-id",
+        "clientSecret": "partner-secret"
+      }
+    ]
+  }
+}
+```
+
+**Session Keys:**
+- User connecting to "Company SharePoint": Session key = `oauth_office365_office365-company`
+- User connecting to "Partner SharePoint": Session key = `oauth_office365_office365-partner`
+- Both can be in OAuth flow simultaneously without conflicts
 
 ## Backward Compatibility
 
