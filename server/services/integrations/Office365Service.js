@@ -38,8 +38,8 @@ class Office365Service {
       throw new Error('Unable to determine host for callback URL');
     }
 
-    // Build full callback URL with provider ID
-    return `${protocol}://${host}/api/integrations/office365/${providerId}/callback`;
+    // Build full callback URL with provider ID using service name
+    return `${protocol}://${host}/api/integrations/${this.serviceName}/${providerId}/callback`;
   }
 
   /**
@@ -102,7 +102,7 @@ class Office365Service {
 
     if (!redirectUri) {
       // Final fallback to localhost (development)
-      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/${providerId}/callback`;
+      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
       logger.warn('⚠️ Using fallback localhost URL for Office 365 callback', {
         component: 'Office 365',
         redirectUri
@@ -164,7 +164,7 @@ class Office365Service {
 
       if (!redirectUri) {
         // Final fallback to localhost (development)
-        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/office365/${providerId}/callback`;
+        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
         logger.warn('⚠️ Using fallback localhost URL for Office 365 token exchange', {
           component: 'Office 365',
           redirectUri
