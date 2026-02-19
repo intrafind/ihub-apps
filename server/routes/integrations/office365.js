@@ -72,8 +72,8 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       timestamp: Date.now()
     };
 
-    // Generate authorization URL
-    const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier);
+    // Generate authorization URL (pass request for auto-detection)
+    const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier, req);
 
     logger.info(
       `🔗 Initiating Office 365 OAuth for user ${req.user?.id} - Provider: ${providerId}`,
@@ -97,8 +97,116 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
 });
 
 /**
- * Handle Office 365 OAuth callback
+ * Handle Office 365 OAuth callback (provider-specific)
+ * GET /api/integrations/office365/:providerId/callback
+ */
+router.get('/:providerId/callback', authOptional, async (req, res) => {
+  try {
+    const { code, state, error: oauthError } = req.query;
+    const { providerId } = req.params;
+
+    // Check for OAuth errors
+    if (oauthError) {
+      logger.error('❌ Office 365 OAuth error:', {
+        component: 'Office 365',
+        error: oauthError,
+        providerId
+      });
+      // Redirect with a generic error code to avoid exposing raw error details in the URL
+      return res.redirect('/settings/integrations?office365_error=oauth_failed');
+    }
+
+    // Check if session is available
+    if (!req.session) {
+      logger.error('❌ No session available for Office 365 OAuth callback', {
+        component: 'Office 365',
+        providerId
+      });
+      return res.redirect('/settings/integrations?office365_error=no_session');
+    }
+
+    // Validate state parameter
+    const storedAuth = req.session.office365Auth;
+    if (!storedAuth || storedAuth.state !== state) {
+      logger.error('❌ Invalid Office 365 OAuth state parameter', {
+        component: 'Office 365',
+        providerId
+      });
+      return res.redirect('/settings/integrations?office365_error=invalid_state');
+    }
+
+    // Verify providerId matches
+    if (storedAuth.providerId !== providerId) {
+      logger.error('❌ Provider ID mismatch in Office 365 OAuth callback', {
+        component: 'Office 365',
+        urlProviderId: providerId,
+        sessionProviderId: storedAuth.providerId
+      });
+      return res.redirect('/settings/integrations?office365_error=provider_mismatch');
+    }
+
+    // Check session timeout (15 minutes)
+    if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
+      logger.error('❌ Office 365 OAuth session expired', {
+        component: 'Office 365',
+        providerId
+      });
+      return res.redirect('/settings/integrations?office365_error=session_expired');
+    }
+
+    // Exchange authorization code for tokens (pass request for auto-detection)
+    const tokens = await Office365Service.exchangeCodeForTokens(
+      storedAuth.providerId,
+      code,
+      storedAuth.codeVerifier,
+      req
+    );
+
+    // Verify we received a refresh token
+    if (!tokens.refreshToken) {
+      logger.error('❌ CRITICAL: No refresh token received from Office 365 OAuth.', {
+        component: 'Office 365',
+        providerId
+      });
+      logger.warn(
+        '⚠️ Storing tokens WITHOUT refresh capability - user will need to reconnect periodically',
+        { component: 'Office 365' }
+      );
+    }
+
+    // Store encrypted tokens for user
+    await Office365Service.storeUserTokens(storedAuth.userId, tokens);
+
+    // Clear session data
+    delete req.session.office365Auth;
+
+    logger.info(`✅ Office 365 OAuth completed for user ${storedAuth.userId}`, {
+      component: 'Office 365',
+      providerId: storedAuth.providerId
+    });
+
+    // Redirect back to settings with success
+    res.redirect('/settings/integrations?office365_connected=true');
+  } catch (error) {
+    logger.error('❌ Error handling Office 365 OAuth callback:', {
+      component: 'Office 365',
+      error: error.message,
+      providerId: req.params.providerId
+    });
+
+    // Clear session data on error
+    if (req.session) {
+      delete req.session.office365Auth;
+    }
+
+    res.redirect(`/settings/integrations?office365_error=${encodeURIComponent(error.message)}`);
+  }
+});
+
+/**
+ * Handle Office 365 OAuth callback (legacy - without provider ID in URL)
  * GET /api/integrations/office365/callback
+ * @deprecated Use /:providerId/callback instead
  */
 router.get('/callback', authOptional, async (req, res) => {
   try {
@@ -158,11 +266,12 @@ router.get('/callback', authOptional, async (req, res) => {
       return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
     }
 
-    // Exchange authorization code for tokens
+    // Exchange authorization code for tokens (pass request for auto-detection)
     const tokens = await Office365Service.exchangeCodeForTokens(
       storedAuth.providerId,
       code,
-      storedAuth.codeVerifier
+      storedAuth.codeVerifier,
+      req
     );
 
     // Verify we received a refresh token
