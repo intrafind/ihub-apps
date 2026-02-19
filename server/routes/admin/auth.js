@@ -3,7 +3,7 @@ import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
-import { adminAuth, isAdminAuthRequired, hashPassword } from '../../middleware/adminAuth.js';
+import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
 import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -214,85 +214,6 @@ export default function registerAdminAuthRoutes(app, basePath = '') {
     } catch (error) {
       logger.error('Error testing admin auth:', error);
       res.status(500).json({ error: 'Failed to test authentication' });
-    }
-  });
-
-  /**
-   * @swagger
-   * /api/admin/auth/change-password:
-   *   post:
-   *     summary: Change admin password
-   *     description: |
-   *       Changes the admin password and encrypts it in the platform configuration.
-   *       The new password is hashed and stored securely, and the cache is refreshed.
-   *
-   *       **Security Features:**
-   *       - Password is hashed before storage
-   *       - Atomic write operations prevent corruption
-   *       - Cache automatically refreshed
-   *     tags:
-   *       - Admin
-   *       - Authentication
-   *       - Security
-   *     security:
-   *       - adminAuth: []
-   *     requestBody:
-   *       required: true
-   *       content:
-   *         application/json:
-   *           schema:
-   *             type: object
-   *             required:
-   *               - newPassword
-   *             properties:
-   *               newPassword:
-   *                 type: string
-   *                 description: New admin password
-   *                 minLength: 1
-   *                 example: "newSecurePassword123"
-   *     responses:
-   *       200:
-   *         description: Password successfully changed
-   *         content:
-   *           application/json:
-   *             schema:
-   *               type: object
-   *               properties:
-   *                 message:
-   *                   type: string
-   *                 encrypted:
-   *                   type: boolean
-   *             example:
-   *               message: "Admin password changed successfully"
-   *               encrypted: true
-   *       400:
-   *         description: Invalid password
-   *       500:
-   *         description: Failed to change password
-   */
-  app.post(buildServerPath('/api/admin/auth/change-password'), adminAuth, async (req, res) => {
-    try {
-      const { newPassword } = req.body;
-      if (!newPassword || typeof newPassword !== 'string' || newPassword.length < 1) {
-        return res.status(400).json({ error: 'New password is required' });
-      }
-      const rootDir = getRootDir();
-      const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
-      const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
-      const platformConfig = JSON.parse(platformConfigData);
-      if (!platformConfig.admin) {
-        platformConfig.admin = {};
-      }
-      const hashedPassword = hashPassword(newPassword);
-      platformConfig.admin.secret = hashedPassword;
-      platformConfig.admin.encrypted = true;
-      await atomicWriteJSON(platformConfigPath, platformConfig);
-      await configCache.refreshCacheEntry('config/platform.json');
-      logger.info('🔐 Admin password changed and encrypted');
-      res.json({ message: 'Admin password changed successfully', encrypted: true });
-    } catch (error) {
-      logger.error('Error changing admin password:', error);
-      res.status(500).json({ error: 'Failed to change admin password' });
     }
   });
 

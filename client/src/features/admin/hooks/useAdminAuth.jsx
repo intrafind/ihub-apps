@@ -8,7 +8,6 @@ export function AdminAuthProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authRequired, setAuthRequired] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [token, setToken] = useState(localStorage.getItem('adminToken') || '');
   const { user, isAuthenticated: userIsAuthenticated } = useAuth();
 
   // Check authentication status
@@ -22,42 +21,18 @@ export function AdminAuthProvider({ children }) {
       const data = response.data;
 
       setAuthRequired(data.authRequired);
-
-      if (!data.authRequired) {
-        setIsAuthenticated(true);
-        setIsLoading(false);
-        return;
-      }
-
-      // If auth is required, test the current token
-      if (token) {
-        const testResponse = await apiClient.get('/admin/auth/test', {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        });
-
-        if (testResponse.status >= 200 && testResponse.status < 300) {
-          setIsAuthenticated(true);
-        } else {
-          setIsAuthenticated(false);
-          localStorage.removeItem('adminToken');
-          setToken('');
-        }
-      } else {
-        setIsAuthenticated(false);
-      }
+      setIsAuthenticated(!data.authRequired);
     } catch (error) {
       console.error('Error checking auth status:', error);
       setIsAuthenticated(false);
     }
 
     setIsLoading(false);
-  }, [token]);
+  }, []);
 
   useEffect(() => {
     checkAuthStatus();
-  }, [token, checkAuthStatus]);
+  }, [checkAuthStatus]);
 
   // Refresh admin auth status when user authentication changes
   useEffect(() => {
@@ -89,41 +64,10 @@ export function AdminAuthProvider({ children }) {
     }
   }, [user?.id, user?.isAdmin, userIsAuthenticated, isAuthenticated, checkAuthStatus]);
 
-  const login = async adminSecret => {
-    try {
-      const response = await apiClient.get('/admin/auth/test', {
-        headers: {
-          Authorization: `Bearer ${adminSecret}`
-        }
-      });
-
-      if (response.status >= 200 && response.status < 300) {
-        setToken(adminSecret);
-        setIsAuthenticated(true);
-        localStorage.setItem('adminToken', adminSecret);
-        return { success: true };
-      } else {
-        const data = response.data;
-        return { success: false, error: data.message || 'Authentication failed' };
-      }
-    } catch {
-      return { success: false, error: 'Network error during authentication' };
-    }
-  };
-
-  const logout = () => {
-    setToken('');
-    setIsAuthenticated(false);
-    localStorage.removeItem('adminToken');
-  };
-
   const value = {
     isAuthenticated,
     authRequired,
     isLoading,
-    token,
-    login,
-    logout,
     checkAuthStatus
   };
 

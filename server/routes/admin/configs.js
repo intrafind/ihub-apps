@@ -341,14 +341,6 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         };
       }
 
-      // Sanitize admin secret
-      if (sanitizedConfig.admin?.secret) {
-        sanitizedConfig.admin = {
-          ...sanitizedConfig.admin,
-          secret: sanitizeSecret(sanitizedConfig.admin.secret)
-        };
-      }
-
       // Sanitize OIDC provider secrets
       if (sanitizedConfig.oidcAuth?.providers) {
         sanitizedConfig.oidcAuth = {
@@ -486,15 +478,6 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
         );
       }
 
-      // Restore admin secret
-      if (newConfig.admin?.secret) {
-        if (!mergedConfig.admin) mergedConfig.admin = {};
-        mergedConfig.admin.secret = restoreSecretIfRedacted(
-          newConfig.admin.secret,
-          existingConfig.admin?.secret
-        );
-      }
-
       // Restore OIDC provider client secrets
       if (newConfig.oidcAuth?.providers && existingConfig.oidcAuth?.providers) {
         if (!mergedConfig.oidcAuth) mergedConfig.oidcAuth = {};
@@ -624,9 +607,6 @@ export default function registerAdminConfigRoutes(app, basePath = '') {
       }
       if (responseConfig.localAuth?.jwtSecret) {
         responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
-      }
-      if (responseConfig.admin?.secret) {
-        responseConfig.admin.secret = sanitizeSecret(responseConfig.admin.secret);
       }
 
       res.json({
