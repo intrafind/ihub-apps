@@ -71,7 +71,11 @@ const ModelHintBanner = ({ hint, currentLanguage, onAcknowledge }) => {
       className={`flex items-start gap-3 p-3 rounded-lg border ${config.bgColor} ${config.borderColor} ${config.textColor} text-sm`}
       role="alert"
     >
-      <Icon name={config.iconName} size="md" className={`flex-shrink-0 mt-0.5 ${config.iconColor}`} />
+      <Icon
+        name={config.iconName}
+        size="md"
+        className={`flex-shrink-0 mt-0.5 ${config.iconColor}`}
+      />
 
       <div className="flex-1 min-w-0">
         {level === 'alert' && (
