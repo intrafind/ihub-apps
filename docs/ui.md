@@ -139,18 +139,27 @@ The `disclaimer` section defines the legal disclaimer shown to users:
     "de": "Disclaimer text in German..."
   },
   "version": "1.0",
-  "updated": "2023-01-01"
+  "updated": "2023-01-01",
+  "hint": {
+    "en": "Short hint text displayed below chat input...",
+    "de": "Kurzer Hinweistext unter der Chat-Eingabe..."
+  },
+  "link": "/pages/disclaimer"
 }
 ```
 
-| Property  | Type    | Description                                       |
-| --------- | ------- | ------------------------------------------------- |
-| `enabled` | Boolean | Whether to display the disclaimer (default: true) |
-| `text`    | Object  | Localized disclaimer text                         |
-| `version` | String  | Version of the disclaimer                         |
-| `updated` | String  | Date the disclaimer was last updated              |
+| Property  | Type    | Description                                                                      |
+| --------- | ------- | -------------------------------------------------------------------------------- |
+| `enabled` | Boolean | Whether to display the disclaimer (default: true)                                |
+| `text`    | Object  | Localized disclaimer text shown in the disclaimer modal                          |
+| `version` | String  | Version of the disclaimer                                                        |
+| `updated` | String  | Date the disclaimer was last updated                                             |
+| `hint`    | Object  | (Optional) Localized hint text shown below the chat input with info icon        |
+| `link`    | String  | (Optional) URL or page path to open when the hint is clicked (e.g., /pages/disclaimer, https://example.com/disclaimer) |
 
 Setting `enabled` to `false` will completely remove the disclaimer from the application.
+
+**Note:** If `link` is not provided, the hint will be displayed as non-clickable text. If `hint` is not provided, a default hint text will be shown.
 
 ### Icons Configuration
 
