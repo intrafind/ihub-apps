@@ -25,10 +25,9 @@ class Office365Service {
    * Build callback URL from request
    * @param {Object} req - Express request object
    * @param {string} providerId - Provider ID to include in callback URL
-   * @param {string} providerType - Provider type (e.g., 'office365')
    * @returns {string} Full callback URL
    */
-  _buildCallbackUrl(req, providerId, providerType) {
+  _buildCallbackUrl(req, providerId) {
     // Get protocol - consider X-Forwarded-Proto for reverse proxy setups
     const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
 
@@ -39,8 +38,9 @@ class Office365Service {
       throw new Error('Unable to determine host for callback URL');
     }
 
-    // Build full callback URL with provider type and provider ID
-    return `${protocol}://${host}/api/integrations/${providerType}/${providerId}/callback`;
+    // Build full callback URL with provider ID
+    // Note: serviceName is included in the route mount point (/api/integrations/office365)
+    return `${protocol}://${host}/api/integrations/${this.serviceName}/${providerId}/callback`;
   }
 
   /**
@@ -94,7 +94,7 @@ class Office365Service {
 
     if (!redirectUri && req) {
       // Auto-detect from request if not configured
-      redirectUri = this._buildCallbackUrl(req, providerId, provider.type);
+      redirectUri = this._buildCallbackUrl(req, providerId);
       logger.info('🔗 Auto-detected Office 365 callback URL from request', {
         component: 'Office 365',
         redirectUri
@@ -102,8 +102,8 @@ class Office365Service {
     }
 
     if (!redirectUri) {
-      // Final fallback to localhost (development) using provider type
-      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${provider.type}/${providerId}/callback`;
+      // Final fallback to localhost (development)
+      redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
       logger.warn('⚠️ Using fallback localhost URL for Office 365 callback', {
         component: 'Office 365',
         redirectUri
@@ -156,7 +156,7 @@ class Office365Service {
 
       if (!redirectUri && req) {
         // Auto-detect from request if not configured
-        redirectUri = this._buildCallbackUrl(req, providerId, provider.type);
+        redirectUri = this._buildCallbackUrl(req, providerId);
         logger.info('🔗 Auto-detected Office 365 callback URL from request for token exchange', {
           component: 'Office 365',
           redirectUri
@@ -164,8 +164,8 @@ class Office365Service {
       }
 
       if (!redirectUri) {
-        // Final fallback to localhost (development) using provider type
-        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${provider.type}/${providerId}/callback`;
+        // Final fallback to localhost (development)
+        redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
         logger.warn('⚠️ Using fallback localhost URL for Office 365 token exchange', {
           component: 'Office 365',
           redirectUri
