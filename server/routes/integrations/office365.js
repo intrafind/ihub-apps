@@ -60,8 +60,10 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     // Generate PKCE parameters
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
-    // Store OAuth parameters in session
-    req.session.office365Auth = {
+    // Store OAuth parameters in session with provider-specific key
+    // This allows multiple Office 365 providers to have concurrent OAuth flows
+    const sessionKey = `oauth_office365_${providerId}`;
+    req.session[sessionKey] = {
       state,
       codeVerifier,
       providerId,
@@ -102,8 +104,24 @@ router.get('/callback', authOptional, async (req, res) => {
   try {
     const { code, state, error: oauthError } = req.query;
 
+    // Find the session key that matches the state parameter
+    // We need to iterate through session keys to find the matching OAuth flow
+    let storedAuth = null;
+    let sessionKey = null;
+
+    if (req.session) {
+      // Look for any oauth_office365_* keys in the session
+      for (const key of Object.keys(req.session)) {
+        if (key.startsWith('oauth_office365_') && req.session[key]?.state === state) {
+          storedAuth = req.session[key];
+          sessionKey = key;
+          break;
+        }
+      }
+    }
+
     // Get return URL early for error redirects
-    const returnUrl = req.session?.office365Auth?.returnUrl || '/settings/integrations';
+    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
     const separator = returnUrl.includes('?') ? '&' : '?';
 
     // Check for OAuth errors
@@ -124,8 +142,7 @@ router.get('/callback', authOptional, async (req, res) => {
       return res.redirect(`${returnUrl}${separator}office365_error=no_session`);
     }
 
-    // Validate state parameter
-    const storedAuth = req.session.office365Auth;
+    // Validate state parameter - storedAuth should have been found above
     if (!storedAuth || storedAuth.state !== state) {
       logger.error('❌ Invalid Office 365 OAuth state parameter', {
         component: 'Office 365'
@@ -162,8 +179,10 @@ router.get('/callback', authOptional, async (req, res) => {
     // Store encrypted tokens for user
     await Office365Service.storeUserTokens(storedAuth.userId, tokens);
 
-    // Clear session data
-    delete req.session.office365Auth;
+    // Clear session data using the provider-specific key
+    if (sessionKey) {
+      delete req.session[sessionKey];
+    }
 
     logger.info(`✅ Office 365 OAuth completed for user ${storedAuth.userId}`, {
       component: 'Office 365',
@@ -179,12 +198,16 @@ router.get('/callback', authOptional, async (req, res) => {
       error: error.message
     });
 
-    // Get return URL from session (default to /settings/integrations)
-    const returnUrl = req.session?.office365Auth?.returnUrl || '/settings/integrations';
-
-    // Clear session data on error
+    // Try to find any Office 365 OAuth session to get return URL
+    let returnUrl = '/settings/integrations';
     if (req.session) {
-      delete req.session.office365Auth;
+      for (const key of Object.keys(req.session)) {
+        if (key.startsWith('oauth_office365_')) {
+          returnUrl = req.session[key]?.returnUrl || returnUrl;
+          // Clear the session key
+          delete req.session[key];
+        }
+      }
     }
 
     const separator = returnUrl.includes('?') ? '&' : '?';

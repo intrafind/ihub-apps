@@ -45,8 +45,10 @@ router.get('/auth', authRequired, async (req, res) => {
     // Generate PKCE parameters (may be ignored by Atlassian Cloud)
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
-    // Store OAuth parameters in session
-    req.session.jiraAuth = {
+    // Store OAuth parameters in session with a consistent key
+    // Using oauth_jira key for consistency with Office 365 pattern
+    const sessionKey = 'oauth_jira';
+    req.session[sessionKey] = {
       state,
       codeVerifier,
       userId: req.user?.id || 'fallback-user',
@@ -78,8 +80,12 @@ router.get('/callback', authOptional, async (req, res) => {
   try {
     const { code, state, error } = req.query;
 
+    // Use consistent session key
+    const sessionKey = 'oauth_jira';
+    const storedAuth = req.session?.[sessionKey];
+
     // Get return URL early for error redirects
-    const returnUrl = req.session?.jiraAuth?.returnUrl || '/settings/integrations';
+    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
     const separator = returnUrl.includes('?') ? '&' : '?';
 
     // Check for OAuth errors
@@ -95,7 +101,6 @@ router.get('/callback', authOptional, async (req, res) => {
     }
 
     // Validate state parameter
-    const storedAuth = req.session.jiraAuth;
     if (!storedAuth || storedAuth.state !== state) {
       logger.error('❌ Invalid JIRA OAuth state parameter');
       return res.redirect(`${returnUrl}${separator}jira_error=invalid_state`);
@@ -130,8 +135,8 @@ router.get('/callback', authOptional, async (req, res) => {
     // Store encrypted tokens for user
     await JiraService.storeUserTokens(storedAuth.userId, tokens);
 
-    // Clear session data
-    delete req.session.jiraAuth;
+    // Clear session data using the consistent key
+    delete req.session[sessionKey];
 
     logger.info(`✅ JIRA OAuth completed for user ${storedAuth.userId}`, {
       returnUrl
@@ -143,11 +148,12 @@ router.get('/callback', authOptional, async (req, res) => {
     logger.error('❌ Error handling JIRA OAuth callback:', error.message);
 
     // Get return URL from session (default to /settings/integrations)
-    const returnUrl = req.session?.jiraAuth?.returnUrl || '/settings/integrations';
+    const sessionKey = 'oauth_jira';
+    const returnUrl = req.session?.[sessionKey]?.returnUrl || '/settings/integrations';
 
     // Clear session data on error
-    if (req.session) {
-      delete req.session.jiraAuth;
+    if (req.session && req.session[sessionKey]) {
+      delete req.session[sessionKey];
     }
 
     const separator = returnUrl.includes('?') ? '&' : '?';
