@@ -387,8 +387,8 @@ export default async function workflowRunner(params = {}) {
         actionTracker.off('fire-sse', bridgeHandler);
         activeWorkflowExecutions.delete(chatId);
 
-        // Attempt to cancel the workflow
-        engine.cancel(executionId).catch(() => {});
+        // Attempt to cancel the workflow with timeout reason
+        engine.cancel(executionId, 'timeout').catch(() => {});
 
         if (chatId) {
           actionTracker.trackWorkflowResult(chatId, {
