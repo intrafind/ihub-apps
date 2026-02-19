@@ -346,6 +346,7 @@ const ChatInput = ({
         {selectedModelData?.hint && (
           <div className="mb-2">
             <ModelHintBanner
+              key={selectedModel} // Key ensures component resets when model changes
               hint={selectedModelData.hint}
               currentLanguage={currentLanguage}
               onAcknowledge={() => setModelAlertAcknowledged(true)}
