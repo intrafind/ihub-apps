@@ -137,7 +137,7 @@ The feature fully supports internationalization through:
 
 ### Example Models
 
-Four example models are provided in `server/defaults/models/`:
+Four example models are provided in `examples/models/`:
 
 1. **`gpt-4-turbo-hint-example.json`** - Demonstrates "hint" level
 2. **`claude-3-info-example.json`** - Demonstrates "info" level
@@ -145,6 +145,8 @@ Four example models are provided in `server/defaults/models/`:
 4. **`experimental-alert-example.json`** - Demonstrates "alert" level
 
 All examples are disabled by default (`"enabled": false`).
+
+**See `examples/models/MODEL_HINTS_EXAMPLES.md` for detailed documentation on using these examples.**
 
 ## Use Cases
 

@@ -59,7 +59,9 @@ All examples include:
 - ✅ English and German messages
 - ✅ Appropriate hint levels
 - ✅ Proper dismissibility settings
-- ✅ Enabled for testing
+- ✅ Located in `examples/models/` directory
+
+**See `examples/models/MODEL_HINTS_EXAMPLES.md` for detailed usage documentation.**
 
 ### ✅ Documentation (100%)
 
@@ -97,10 +99,10 @@ Three comprehensive documents created:
 
 ### New Files Created (6)
 1. `client/src/features/chat/components/ModelHintBanner.jsx` - Main UI component
-2. `server/defaults/models/gpt-4-turbo-hint-example.json` - Hint level example
-3. `server/defaults/models/claude-3-info-example.json` - Info level example
-4. `server/defaults/models/gemini-warning-example.json` - Warning level example
-5. `server/defaults/models/experimental-alert-example.json` - Alert level example
+2. `examples/models/gpt-4-turbo-hint-example.json` - Hint level example
+3. `examples/models/claude-3-info-example.json` - Info level example
+4. `examples/models/gemini-warning-example.json` - Warning level example
+5. `examples/models/experimental-alert-example.json` - Alert level example
 6. `concepts/2026-02-18 Model Hints Feature.md` - Feature documentation
 7. `concepts/2026-02-18 Model Hints Visual Examples.md` - Visual documentation
 8. `concepts/2026-02-18 Model Hints Testing Guide.md` - Testing documentation
@@ -323,7 +325,7 @@ If issues arise:
 - **Testing**: See `concepts/2026-02-18 Model Hints Testing Guide.md`
 - **Visual Reference**: See `concepts/2026-02-18 Model Hints Visual Examples.md`
 - **Schema Reference**: See `server/validators/modelConfigSchema.js`
-- **Example Configs**: See `server/defaults/models/*-example.json`
+- **Example Configs**: See `examples/models/*-example.json`
 
 ---
 
