@@ -1237,5 +1237,12 @@
         "transitionTicket": "Are you sure you want to change the ticket status?"
       }
     }
+  },
+  "workflow": {
+    "running": "Running workflow...",
+    "unknownStep": "Step",
+    "generated": "Generated",
+    "failed": "Failed",
+    "cancelled": "Cancelled"
   }
 }

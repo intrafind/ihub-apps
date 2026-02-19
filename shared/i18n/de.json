@@ -1200,5 +1200,12 @@
         "transitionTicket": "Sind Sie sicher, dass Sie den Ticket-Status ändern möchten?"
       }
     }
+  },
+  "workflow": {
+    "running": "Workflow läuft...",
+    "unknownStep": "Schritt",
+    "generated": "Generiert",
+    "failed": "Fehlgeschlagen",
+    "cancelled": "Abgebrochen"
   }
 }

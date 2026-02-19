@@ -191,12 +191,18 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           if (lastMessageIdRef.current && data) {
             const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
             const prevSteps = currentMsg?.workflowSteps || [];
-            // Mark any still-running steps as completed (safety net for race conditions)
-            const finalSteps = prevSteps.map(s =>
-              s.status === 'running'
-                ? { ...s, status: data.status === 'failed' ? 'error' : 'completed' }
-                : s
-            );
+            // Mark any still-running steps based on workflow result status
+            const finalSteps = prevSteps.map(s => {
+              if (s.status === 'running') {
+                // If workflow failed, mark running steps as error
+                // If workflow cancelled or completed, mark as completed
+                return {
+                  ...s,
+                  status: data.status === 'failed' ? 'error' : 'completed'
+                };
+              }
+              return s;
+            });
 
             updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
               workflowStep: null,

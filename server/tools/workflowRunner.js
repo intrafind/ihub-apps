@@ -339,22 +339,27 @@ export default async function workflowRunner(params = {}) {
         actionTracker.off('fire-sse', bridgeHandler);
         activeWorkflowExecutions.delete(chatId);
 
+        const isCancelled = eventType === 'workflow.cancelled';
+        const finalStatus = isCancelled ? 'cancelled' : 'failed';
+
         try {
-          getExecutionRegistry().updateStatus(
-            executionId,
-            eventType === 'workflow.cancelled' ? 'cancelled' : 'failed'
-          );
+          getExecutionRegistry().updateStatus(executionId, finalStatus);
         } catch (_e) {
           /* non-fatal */
         }
 
-        const errorMsg = event.error || event.message || 'Workflow execution failed';
-        const errorContent = `Workflow failed: ${errorMsg}`;
+        const errorMsg =
+          event.error ||
+          event.message ||
+          (isCancelled ? 'Workflow cancelled' : 'Workflow execution failed');
+        const errorContent = isCancelled
+          ? `Workflow cancelled: ${errorMsg}`
+          : `Workflow failed: ${errorMsg}`;
 
         if (chatId) {
           actionTracker.trackWorkflowResult(chatId, {
             workflowName,
-            status: 'failed',
+            status: finalStatus,
             error: errorMsg,
             executionId
           });
@@ -362,7 +367,7 @@ export default async function workflowRunner(params = {}) {
           // In passthrough mode, executePassthroughTool handles streaming.
           if (!passthrough) {
             actionTracker.trackChunk(chatId, { content: errorContent });
-            actionTracker.trackDone(chatId, { finishReason: 'error' });
+            actionTracker.trackDone(chatId, { finishReason: isCancelled ? 'cancelled' : 'error' });
           }
         }
 
@@ -370,7 +375,7 @@ export default async function workflowRunner(params = {}) {
           passthrough
             ? errorContent
             : {
-                status: 'failed',
+                status: finalStatus,
                 executionId,
                 error: errorMsg
               }
