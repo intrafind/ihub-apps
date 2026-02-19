@@ -59,6 +59,7 @@
 ## Hover State
 
 When hovering over a provider card:
+
 ```
 ┌──────────────────────────┐
 │  ┌────────────────────┐  │  ← Blue border appears

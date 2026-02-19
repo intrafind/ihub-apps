@@ -16,6 +16,7 @@ Administrators previously had to manually configure all OIDC provider settings (
 ## Solution Delivered
 
 A modal-based provider selector with 5 pre-configured templates:
+
 1. **Auth0** - Enterprise identity platform
 2. **Google** - Consumer Google accounts
 3. **Microsoft** - Azure AD / Microsoft 365
@@ -24,21 +25,22 @@ A modal-based provider selector with 5 pre-configured templates:
 
 ## Key Metrics
 
-| Metric | Value |
-|--------|-------|
-| Configuration fields reduced | 80% (10→2) |
-| Setup time reduction | 80% (~5min→~1min) |
-| Error rate improvement | Significant (pre-filled URLs) |
-| Lines of code added | ~200 |
-| Documentation pages | 4 documents |
-| Languages supported | 2 (English, German) |
-| Provider templates | 5 |
+| Metric                       | Value                         |
+| ---------------------------- | ----------------------------- |
+| Configuration fields reduced | 80% (10→2)                    |
+| Setup time reduction         | 80% (~5min→~1min)             |
+| Error rate improvement       | Significant (pre-filled URLs) |
+| Lines of code added          | ~200                          |
+| Documentation pages          | 4 documents                   |
+| Languages supported          | 2 (English, German)           |
+| Provider templates           | 5                             |
 
 ## Implementation Details
 
 ### Code Changes
 
 **Files Modified:**
+
 - `client/src/features/admin/components/PlatformFormEditor.jsx`
   - Added `OIDC_PROVIDER_TEMPLATES` constant (50 lines)
   - Added `showProviderModal` state
@@ -48,6 +50,7 @@ A modal-based provider selector with 5 pre-configured templates:
 - `shared/i18n/de.json` - Added 8 translation keys
 
 **Files Created:**
+
 - `OIDC_PROVIDER_SELECTOR_FEATURE.md` - Feature documentation
 - `concepts/2026-02-19 OIDC Provider Template Selector.md` - Design document
 - `test-oidc-provider-selector.sh` - Automated test script
@@ -57,6 +60,7 @@ A modal-based provider selector with 5 pre-configured templates:
 ## Success Criteria
 
 ✅ All success criteria met:
+
 - [x] Templates for Auth0, Google, Microsoft, Keycloak, Custom
 - [x] Visual modal with provider selection
 - [x] Pre-filled form values

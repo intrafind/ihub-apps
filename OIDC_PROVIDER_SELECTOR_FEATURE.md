@@ -1,22 +1,28 @@
 # OIDC Provider Template Selector Feature
 
 ## Overview
+
 This document describes the newly implemented OIDC Provider Template Selector feature that simplifies the process of adding OIDC authentication providers to iHub Apps.
 
 ## Problem Statement
+
 Previously, when adding an OIDC provider, administrators had to manually configure all provider-specific settings (authorization URL, token URL, user info URL, scopes, etc.). This required deep knowledge of each provider's OIDC implementation and was error-prone.
 
 ## Solution
+
 The new feature adds a provider template selector modal that allows administrators to:
+
 1. Choose from predefined provider templates (Auth0, Google, Microsoft, Keycloak)
 2. Or create a custom provider with manual configuration
 
 ## Implementation Details
 
 ### 1. Provider Templates
+
 Five provider templates are now available:
 
 #### Auth0
+
 ```javascript
 {
   name: 'auth0',
@@ -31,6 +37,7 @@ Five provider templates are now available:
 ```
 
 #### Google
+
 ```javascript
 {
   name: 'google',
@@ -45,6 +52,7 @@ Five provider templates are now available:
 ```
 
 #### Microsoft
+
 ```javascript
 {
   name: 'microsoft',
@@ -59,6 +67,7 @@ Five provider templates are now available:
 ```
 
 #### Keycloak
+
 ```javascript
 {
   name: 'keycloak',
@@ -73,15 +82,18 @@ Five provider templates are now available:
 ```
 
 #### Custom
+
 An empty template for manual configuration.
 
 ### 2. User Interface Changes
 
 #### Before
+
 - Single "Add OIDC Provider" button that immediately created an empty provider
 - All fields had to be filled manually
 
 #### After
+
 - "Add OIDC Provider" button opens a selection modal
 - Modal displays 5 provider options in a grid layout:
   - Auth0 (orange icon)
@@ -96,7 +108,9 @@ An empty template for manual configuration.
 - Clicking a provider creates a new provider configuration with pre-filled values
 
 ### 3. Modal Design
+
 The modal includes:
+
 - Title: "Select OIDC Provider"
 - Description: "Choose a preconfigured provider template or create a custom configuration"
 - 2-column grid layout (responsive: 1 column on mobile, 2 on desktop)
@@ -117,6 +131,7 @@ The modal includes:
 **Files: `shared/i18n/en.json` and `shared/i18n/de.json`**
 
 Added translation keys:
+
 - `admin.auth.addOidcProvider`: "Add OIDC Provider" / "OIDC-Anbieter hinzufügen"
 - `admin.auth.selectOidcProvider`: "Select OIDC Provider" / "OIDC-Anbieter auswählen"
 - `admin.auth.selectProviderDescription`: Description text
@@ -175,6 +190,7 @@ Added translation keys:
 ## Future Enhancements
 
 Potential future improvements:
+
 1. Add more provider templates (Okta, Azure AD B2C, etc.)
 2. Provider-specific configuration wizards
 3. Test connection button for each provider
@@ -184,6 +200,7 @@ Potential future improvements:
 ## Testing
 
 ### Manual Testing Checklist
+
 - [ ] Modal opens when clicking "Add OIDC Provider"
 - [ ] All 5 provider options are displayed correctly
 - [ ] Clicking each provider creates configuration with pre-filled values
@@ -196,6 +213,7 @@ Potential future improvements:
 - [ ] Save functionality works with new providers
 
 ### Browser Compatibility
+
 - Chrome/Edge: ✓ (Tested)
 - Firefox: ✓ (Expected)
 - Safari: ✓ (Expected)
@@ -214,5 +232,6 @@ No documentation updates required as this is a UI enhancement that simplifies ex
 ## Support
 
 For issues or questions:
+
 - GitHub Issues: https://github.com/intrafind/ihub-apps/issues
 - Documentation: https://github.com/intrafind/ihub-apps/blob/main/docs/oidc-authentication.md
