@@ -4,7 +4,7 @@ import './envDecryptor.js';
 
 /**
  * Test script to verify environment variable decryption
- * Usage: 
+ * Usage:
  * 1. Add encrypted values to .env file
  * 2. Run: node server/utils/testEnvDecryption.js
  */

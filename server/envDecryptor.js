@@ -22,7 +22,7 @@ function validateEncryptionKey() {
     if (process.env.NODE_ENV === 'production') {
       throw new Error(
         'TOKEN_ENCRYPTION_KEY is required in production. ' +
-          'Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
+          "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
       );
     }
 
@@ -33,9 +33,7 @@ function validateEncryptionKey() {
     console.warn('   Encrypted values from previous runs CANNOT be decrypted with a new key.');
     console.warn('');
     console.warn('   For persistent encryption, set TOKEN_ENCRYPTION_KEY in your .env file:');
-    console.warn(
-      '   node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"'
-    );
+    console.warn("   node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"");
     console.warn('');
 
     // Set a temporary key for this session
