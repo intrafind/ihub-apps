@@ -95,6 +95,13 @@ AD_BIND_USER=your_ad_service_account
 AD_BIND_PASSWORD=your_ad_service_password
 ```
 
+> **Security Note**: For enhanced security, you can encrypt these passwords using the **Value Encryption Tool** in the Admin System page. The application will automatically decrypt them at runtime. See [Value Encryption Tool](./value-encryption-tool.md) for details.
+>
+> Example with encrypted password:
+> ```bash
+> LDAP_ADMIN_PASSWORD=ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]
+> ```
+
 ### Configuration Options
 
 | Option                  | Description                                    | Required | Default                                        |
