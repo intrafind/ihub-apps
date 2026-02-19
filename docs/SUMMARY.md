@@ -21,6 +21,7 @@
     - [JWT Authentication](jwt-authentication.md)
     - [OIDC Authentication](oidc-authentication.md)
     - [LDAP/NTLM Authentication](ldap-ntlm-authentication.md)
+    - [Value Encryption Tool](value-encryption-tool.md)
     - [Security Guide](security.md)
     - [SSL Certificates](ssl-certificates.md)
   - [Features]()
