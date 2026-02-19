@@ -48,8 +48,6 @@ The optional `platform.json` file controls global platform behavior and is locat
     "lastUpdated": "2025-07-08T17:00:38.743Z"
   },
   "admin": {
-    "secret": "platform-secret",
-    "encrypted": false,
     "pages": {
       "usage": true,
       "models": true
@@ -324,8 +322,8 @@ export ALLOWED_ORIGINS="https://yourdomain.com,https://app.yourdomain.com"
 ### **admin**
 Administrative interface configuration.
 
-- **secret** (string) – Admin authentication secret
-- **encrypted** (boolean) – Whether the admin secret is encrypted. Default: `false`
+Admin access is controlled entirely through user group permissions. Users must have `adminAccess: true` in their group configuration to access the admin panel.
+
 - **pages** (object) – Enable/disable individual admin pages. Each property defaults to `true` when omitted
 
 Example admin pages configuration:
