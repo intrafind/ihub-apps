@@ -7,6 +7,7 @@ import { getUsage } from '../../usageTracker.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import tokenStorageService from '../../services/TokenStorageService.js';
 
 export default function registerAdminCacheRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/usage'), adminAuth, async (req, res) => {
@@ -89,5 +90,58 @@ export default function registerAdminCacheRoutes(app, basePath = '') {
   app.get(buildServerPath('/api/admin/client/_refresh'), adminAuth, (req, res, next) => {
     req.method = 'POST';
     app._router.handle(req, res, next);
+  });
+
+  /**
+   * Encrypt a plaintext value for storage in environment variables
+   * POST /api/admin/encrypt-value
+   *
+   * Request body:
+   * {
+   *   "value": "plaintext_to_encrypt"
+   * }
+   *
+   * Response:
+   * {
+   *   "encryptedValue": "ENC[AES256_GCM,data:...,iv:...,tag:...,type:str]"
+   * }
+   */
+  app.post(buildServerPath('/api/admin/encrypt-value'), adminAuth, async (req, res) => {
+    try {
+      const { value } = req.body;
+
+      // Validate input
+      if (!value || typeof value !== 'string' || value.trim() === '') {
+        return res.status(400).json({
+          error: 'Invalid value: must be a non-empty string'
+        });
+      }
+
+      // Check if value is already encrypted
+      if (tokenStorageService.isEncrypted(value)) {
+        return res.status(400).json({
+          error: 'Value is already encrypted'
+        });
+      }
+
+      // Encrypt the value
+      const encryptedValue = tokenStorageService.encryptString(value);
+
+      logger.info('Value encrypted successfully via admin UI', { component: 'AdminEncryption' });
+
+      res.json({
+        encryptedValue,
+        message: 'Value encrypted successfully'
+      });
+    } catch (error) {
+      logger.error('Error encrypting value:', {
+        component: 'AdminEncryption',
+        error: error.message
+      });
+      res.status(500).json({
+        error: 'Failed to encrypt value',
+        details: error.message
+      });
+    }
   });
 }
