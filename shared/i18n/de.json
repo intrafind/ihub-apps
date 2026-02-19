@@ -1039,6 +1039,14 @@
         "autoStart": "Konversation automatisch starten",
         "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird"
       }
+    },
+    "features": {
+      "title": "Funktionen",
+      "description": "Plattform-Funktionen aktivieren oder deaktivieren",
+      "preview": "Vorschau",
+      "loadError": "Fehler beim Laden der Funktionen",
+      "saveError": "Fehler beim Speichern der Funktionen",
+      "saved": "Funktionen erfolgreich aktualisiert"
     }
   },
   "components": {

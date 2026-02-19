@@ -32,7 +32,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { requireFeature } from '../../featureRegistry.js';
 
-const checkWorkflowsFeature = requireFeature('experimentalWorkflows');
+const checkWorkflowsFeature = requireFeature('workflows');
 
 /**
  * SSE clients map for workflow execution streaming
