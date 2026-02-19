@@ -10,15 +10,26 @@
 
 export const featureRegistry = [
   {
-    id: 'experimentalWorkflows',
+    id: 'workflows',
     name: { en: 'Workflows', de: 'Workflows' },
     description: {
       en: 'Agentic workflow automation for multi-step AI tasks',
       de: 'Agentische Workflow-Automatisierung für mehrstufige KI-Aufgaben'
     },
-    category: 'automation',
+    category: 'preview',
     default: false,
-    experimental: true
+    preview: true
+  },
+  {
+    id: 'integrations',
+    name: { en: 'Integrations', de: 'Integrationen' },
+    description: {
+      en: 'External service integrations (Jira, Cloud Storage)',
+      de: 'Externe Dienst-Integrationen (Jira, Cloud Storage)'
+    },
+    category: 'preview',
+    default: true,
+    preview: true
   },
   {
     id: 'promptsLibrary',
@@ -79,23 +90,13 @@ export const featureRegistry = [
     },
     category: 'content',
     default: true
-  },
-  {
-    id: 'integrations',
-    name: { en: 'Integrations', de: 'Integrationen' },
-    description: {
-      en: 'External service integrations (Jira, Cloud Storage)',
-      de: 'Externe Dienst-Integrationen (Jira, Cloud Storage)'
-    },
-    category: 'content',
-    default: true
   }
 ];
 
 export const featureCategories = {
-  ai: { name: { en: 'AI Capabilities', de: 'KI-Funktionen' }, order: 1 },
-  content: { name: { en: 'Content', de: 'Inhalte' }, order: 2 },
-  automation: { name: { en: 'Automation', de: 'Automatisierung' }, order: 3 },
+  preview: { name: { en: 'Preview', de: 'Vorschau' }, order: 1 },
+  ai: { name: { en: 'AI Capabilities', de: 'KI-Funktionen' }, order: 2 },
+  content: { name: { en: 'Content', de: 'Inhalte' }, order: 3 },
   analytics: { name: { en: 'Analytics', de: 'Analytik' }, order: 4 }
 };
 

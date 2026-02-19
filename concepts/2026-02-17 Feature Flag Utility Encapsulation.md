@@ -130,7 +130,7 @@ The following files were updated to use the new utility:
 
 5. **`client/src/features/admin/components/AdminNavigation.jsx`**
    - Navigation item filtering: Changed to `isEnabled()`
-   - Workflows conditional rendering: Changed to `isEnabled('experimentalWorkflows', false)`
+   - Workflows conditional rendering: Changed to `isEnabled('workflows', false)`
 
 6. **`client/src/features/admin/components/AppFormEditor.jsx`**
    - Sources feature check: Changed to `isEnabled('sources', true)`

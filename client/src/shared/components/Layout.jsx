@@ -25,7 +25,7 @@ const Layout = () => {
   const featureFlags = useFeatureFlags();
 
   // Map navigation URLs to feature IDs for gating
-  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'experimentalWorkflows' };
+  const featureRoutes = { '/prompts': 'promptsLibrary', '/workflows': 'workflows' };
 
   // Update integration settings from URL parameters and retrieve current settings
   const { showHeader, showFooter, language } = updateSettingsFromUrl(searchParams);

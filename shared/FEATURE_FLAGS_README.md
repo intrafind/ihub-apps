@@ -58,7 +58,7 @@ Check if a platform-level feature is enabled.
 ```javascript
 const toolsEnabled = featureFlags.isEnabled('tools', true);
 const promptsEnabled = featureFlags.isEnabled('promptsLibrary', true);
-const workflowsEnabled = featureFlags.isEnabled('experimentalWorkflows', false);
+const workflowsEnabled = featureFlags.isEnabled('workflows', false);
 ```
 
 ---
@@ -127,9 +127,10 @@ const maxTokens = featureFlags.getAppFeatureValue(app, 'tokenLimit', 4096);
 
 ## Available Platform Features
 
-Current platform-level features (as of 2026-02-17):
+Current platform-level features (as of 2026-02-19):
 
-- `experimentalWorkflows` - Agentic workflow automation (default: false)
+- `workflows` - Agentic workflow automation (default: false) **[Preview]**
+- `integrations` - External service integrations (Jira, Cloud Storage) (default: true) **[Preview]**
 - `promptsLibrary` - Browsable library of reusable prompt templates (default: true)
 - `usageTracking` - Track token usage, request counts, and costs (default: true)
 - `tools` - Allow AI models to call external tools and functions (default: true)

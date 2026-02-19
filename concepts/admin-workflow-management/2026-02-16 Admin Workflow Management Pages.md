@@ -89,9 +89,9 @@ If you want to extend this feature:
 
 To test these pages:
 
-1. Enable the experimental workflows feature in `contents/config/platform.json`:
+1. Enable the workflows feature in `contents/config/platform.json`:
    ```json
-   { "features": { "experimentalWorkflows": true } }
+   { "features": { "workflows": true } }
    ```
 2. Log in as an admin user
 3. Navigate to Admin > More > Workflows

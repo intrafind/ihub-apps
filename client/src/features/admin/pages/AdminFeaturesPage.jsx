@@ -117,9 +117,9 @@ const AdminFeaturesPage = () => {
                             <span className="text-sm font-medium text-gray-900">
                               {getLocalizedContent(feature.name, lang)}
                             </span>
-                            {feature.experimental && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                                {t('admin.features.experimental', 'Experimental')}
+                            {feature.preview && (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                                {t('admin.features.preview', 'Preview')}
                               </span>
                             )}
                           </div>

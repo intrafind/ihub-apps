@@ -117,7 +117,7 @@ const AdminNavigation = () => {
           // icon: 'link',
           current: location.pathname.startsWith('/admin/shortlinks')
         },
-        ...(featureFlags.isEnabled('experimentalWorkflows', false)
+        ...(featureFlags.isEnabled('workflows', false)
           ? [
               {
                 key: 'workflows',

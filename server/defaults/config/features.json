@@ -1,4 +1,4 @@
 {
-  "experimentalWorkflows": false,
+  "workflows": false,
   "usageTracking": true
 }

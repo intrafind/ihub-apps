@@ -866,6 +866,14 @@
         "autoStart": "Auto-start conversation",
         "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset"
       }
+    },
+    "features": {
+      "title": "Features",
+      "description": "Enable or disable platform features",
+      "preview": "Preview",
+      "loadError": "Failed to load features",
+      "saveError": "Failed to save features",
+      "saved": "Features updated successfully"
     }
   },
   "components": {
