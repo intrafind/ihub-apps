@@ -251,7 +251,12 @@
       "label": "Model",
       "choose": "Choose model",
       "noModels": "No models available",
-      "loading": "Loading models..."
+      "loading": "Loading models...",
+      "hint": {
+        "dismiss": "Dismiss",
+        "acknowledge": "I Understand",
+        "alertTitle": "Important Notice"
+      }
     }
   },
   "auth": {

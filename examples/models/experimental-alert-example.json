@@ -1,0 +1,25 @@
+{
+  "id": "experimental-alert-example",
+  "modelId": "experimental-model",
+  "name": {
+    "en": "Experimental Model (Alert Example)",
+    "de": "Experimentelles Modell (Alarm Beispiel)"
+  },
+  "description": {
+    "en": "Example model demonstrating hint feature at 'alert' level",
+    "de": "Beispiel-Modell zur Demonstration der Hinweis-Funktion auf Ebene 'Alarm'"
+  },
+  "url": "https://api.example.com/v1/chat/completions",
+  "provider": "local",
+  "tokenLimit": 8192,
+  "supportsTools": false,
+  "enabled": false,
+  "hint": {
+    "message": {
+      "en": "⚠️ EXPERIMENTAL MODEL ⚠️\n\nThis model is in early testing and may produce incorrect or unexpected results. Only use for testing purposes. Do not use for production data or sensitive information.",
+      "de": "⚠️ EXPERIMENTELLES MODELL ⚠️\n\nDieses Modell befindet sich in der frühen Testphase und kann falsche oder unerwartete Ergebnisse liefern. Nur für Testzwecke verwenden. Nicht für Produktionsdaten oder sensible Informationen verwenden."
+    },
+    "level": "alert",
+    "dismissible": false
+  }
+}

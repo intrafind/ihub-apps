@@ -629,7 +629,12 @@
         "label": "Modell",
         "choose": "Modell wählen",
         "noModels": "Keine Modelle verfügbar",
-        "loading": "Modelle werden geladen..."
+        "loading": "Modelle werden geladen...",
+        "hint": {
+          "dismiss": "Ausblenden",
+          "acknowledge": "Verstanden",
+          "alertTitle": "Wichtiger Hinweis"
+        }
       }
     },
     "auth": {

@@ -290,7 +290,7 @@ Never include API keys or secrets in configuration files:
 - Provide en + de translations
 - Follow naming conventions
 - Test configuration changes
-- Document complex configurations in `concepts/`
+- Document complex configurations in `docs/` (update existing files) or `concepts/` (for design decisions)
 
 ## Testing Configuration Changes
 

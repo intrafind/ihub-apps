@@ -9,8 +9,8 @@ This is a full-stack AI application platform built with **Node.js (Express)** an
 - **`shared/`**: Code shared between client and server (utilities, i18n)
 - **`contents/`**: JSON configuration files for apps, models, UI, groups, sources, tools
 - **`examples/`**: Example and customer-specific configuration templates
-- **`concepts/`**: Feature concept documents (format: `YYYY-MM-DD {title}.md`)
-- **`docs/`**: Documentation sources (rendered to `public/help` in production builds)
+- **`concepts/`**: Feature concept documents, design docs, RFCs (format: `YYYY-MM-DD {title}.md`)
+- **`docs/`**: User-facing feature documentation (rendered to `/help` in production)
 - **`tests/`**: Test files for server components and integrations
 
 ## Quick Setup
@@ -34,9 +34,35 @@ npm run dev
 - Server runs on port 3000, Vite dev server on port 5173
 - Access frontend at `http://localhost:5173` during development
 
-## Concepts
+## Concepts and Documentation
 
-Every new feature, bug fix, or significant change should have a concept document in the `concepts/` folder. Always check the concept regarding information. When implementing new features, make sure that a concept document exists. If none exists, always make sure to create one.
+### Feature Documentation (docs/)
+
+**All user-facing feature documentation should be added to the `docs/` folder:**
+
+**When to Update Existing Documentation:**
+- **Always check first** if documentation already exists in `docs/` for the area you're working on
+- Update existing files rather than creating new ones when the feature fits within an existing document
+- For example:
+  - New model features → add to `docs/models.md`
+  - New UI features → add to `docs/ui.md`
+  - New authentication features → add to `docs/authentication-architecture.md`
+  - New configuration → add to relevant config docs
+
+**When to Create New Documentation:**
+- Only create new documentation files when the feature doesn't fit into any existing document
+- Use descriptive, lowercase filenames with hyphens: `feature-name.md`
+- Add the new file to `docs/SUMMARY.md` for inclusion in the documentation site
+
+**Documentation Structure:**
+- `docs/` - User-facing feature documentation, guides, and references
+  - Updated as features are added or modified
+  - Organized by topic (models, authentication, configuration, etc.)
+  - Rendered on the documentation site at `/help`
+
+### Concept Documents (concepts/)
+
+Every new feature, bug fix, or significant change should have a concept document in the `concepts/` folder for design and planning purposes. Always check the concept regarding information. When implementing new features, make sure that a concept document exists. If none exists, always make sure to create one.
 If one exists, make sure that you update it with decisions we have taken and where code related to the feature can be found.
 
 **Always store the following in the concepts folder `concepts/` and format them `YYYY-MM-DD {title}.md`:**
@@ -268,7 +294,7 @@ client/src/
 3. **Configuration**: Add to relevant JSON file in `contents/`
 4. **Permissions**: Update `contents/config/groups.json` if needed
 5. **Translations**: Add keys to `shared/i18n/{en,de}.json`
-6. **Documentation**: Update `docs/` and create concept document in `concepts/`
+6. **Documentation**: Update relevant file in `docs/` (check existing docs first) and optionally create concept document in `concepts/` for design decisions
 7. **Testing**: Add tests if modifying critical functionality
 8. **Known Routes** ⚠️: If adding a new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
 

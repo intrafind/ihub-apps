@@ -1,0 +1,25 @@
+{
+  "id": "claude-3-info-example",
+  "modelId": "claude-3-opus-20240229",
+  "name": {
+    "en": "Claude 3 Opus (Info Example)",
+    "de": "Claude 3 Opus (Info Beispiel)"
+  },
+  "description": {
+    "en": "Example model demonstrating hint feature at 'info' level",
+    "de": "Beispiel-Modell zur Demonstration der Hinweis-Funktion auf Ebene 'Info'"
+  },
+  "url": "https://api.anthropic.com/v1/messages",
+  "provider": "anthropic",
+  "tokenLimit": 200000,
+  "supportsTools": true,
+  "enabled": false,
+  "hint": {
+    "message": {
+      "en": "This model provides excellent reasoning capabilities. Recommended for complex analytical tasks.",
+      "de": "Dieses Modell bietet hervorragende Reasoning-Fähigkeiten. Empfohlen für komplexe analytische Aufgaben."
+    },
+    "level": "info",
+    "dismissible": true
+  }
+}

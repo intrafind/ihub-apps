@@ -7,6 +7,8 @@ These files are only meant to be used as references / examples of what is possib
 - **apps/** - Example application configurations
 - **config/** - Example configuration files
 - **models/** - Example model configurations
+  - Includes **Model Hints** examples demonstrating the hint/info/warning/alert feature
+  - See `models/MODEL_HINTS_EXAMPLES.md` for detailed documentation
 - **prompts/** - Example prompts
 - **logging-demo.sh** - Interactive demonstration of structured logging with component names
 
