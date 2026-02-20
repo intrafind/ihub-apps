@@ -3,42 +3,108 @@ import { Document, Paragraph, TextRun, HeadingLevel } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
 /**
- * Strip markdown formatting from text to get plain text
- * Removes bold, italic, code, links, headers, etc.
+ * Parse markdown text and return array of TextRun objects for DOCX
+ * Handles bold, italic, bold+italic, code, and plain text
  */
-const stripMarkdown = text => {
-  if (!text || typeof text !== 'string') return '';
+const parseMarkdownForDOCX = text => {
+  if (!text || typeof text !== 'string') return [new TextRun('')];
 
-  return (
-    text
-      // Remove headers
-      .replace(/^#{1,6}\s+/gm, '')
-      // Remove bold/italic
-      .replace(/\*\*\*(.*?)\*\*\*/g, '$1')
-      .replace(/\*\*(.*?)\*\*/g, '$1')
-      .replace(/\*(.*?)\*/g, '$1')
-      .replace(/\_\_\_(.*?)\_\_\_/g, '$1')
-      .replace(/\_\_(.*?)\_\_/g, '$1')
-      .replace(/\_(.*?)\_/g, '$1')
-      // Remove inline code
-      .replace(/`([^`]+)`/g, '$1')
-      // Remove code blocks
-      .replace(/```[\s\S]*?```/g, '')
-      // Remove links but keep text
-      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-      // Remove images
-      .replace(/!\[([^\]]*)\]\([^\)]+\)/g, '$1')
-      // Remove blockquotes
-      .replace(/^>\s+/gm, '')
-      // Remove horizontal rules
-      .replace(/^[-*_]{3,}\s*$/gm, '')
-      // Remove list markers
-      .replace(/^[\s]*[-*+]\s+/gm, '')
-      .replace(/^[\s]*\d+\.\s+/gm, '')
-      // Clean up extra whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .trim()
-  );
+  const runs = [];
+  let currentPos = 0;
+
+  // Regular expression to match markdown patterns
+  // Matches: ***bold+italic***, **bold**, *italic*, `code`, and plain text
+  const markdownRegex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
+
+  let match;
+  while ((match = markdownRegex.exec(text)) !== null) {
+    // Add plain text before the match
+    if (match.index > currentPos) {
+      const plainText = text.slice(currentPos, match.index);
+      if (plainText) {
+        runs.push(new TextRun(plainText));
+      }
+    }
+
+    // Add formatted text based on the match
+    if (match[2]) {
+      // ***bold+italic***
+      runs.push(new TextRun({ text: match[2], bold: true, italics: true }));
+    } else if (match[3]) {
+      // **bold**
+      runs.push(new TextRun({ text: match[3], bold: true }));
+    } else if (match[4]) {
+      // *italic*
+      runs.push(new TextRun({ text: match[4], italics: true }));
+    } else if (match[5]) {
+      // `code`
+      runs.push(new TextRun({ text: match[5], font: 'Courier New' }));
+    }
+
+    currentPos = match.index + match[0].length;
+  }
+
+  // Add remaining plain text after the last match
+  if (currentPos < text.length) {
+    const remainingText = text.slice(currentPos);
+    if (remainingText) {
+      runs.push(new TextRun(remainingText));
+    }
+  }
+
+  return runs.length > 0 ? runs : [new TextRun(text)];
+};
+
+/**
+ * Parse markdown text and return formatted text object for PPTX
+ * Returns array of text objects with formatting options
+ */
+const parseMarkdownForPPTX = text => {
+  if (!text || typeof text !== 'string') return [{ text: '' }];
+
+  const textParts = [];
+  let currentPos = 0;
+
+  // Regular expression to match markdown patterns
+  const markdownRegex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
+
+  let match;
+  while ((match = markdownRegex.exec(text)) !== null) {
+    // Add plain text before the match
+    if (match.index > currentPos) {
+      const plainText = text.slice(currentPos, match.index);
+      if (plainText) {
+        textParts.push({ text: plainText });
+      }
+    }
+
+    // Add formatted text based on the match
+    if (match[2]) {
+      // ***bold+italic***
+      textParts.push({ text: match[2], options: { bold: true, italic: true } });
+    } else if (match[3]) {
+      // **bold**
+      textParts.push({ text: match[3], options: { bold: true } });
+    } else if (match[4]) {
+      // *italic*
+      textParts.push({ text: match[4], options: { italic: true } });
+    } else if (match[5]) {
+      // `code`
+      textParts.push({ text: match[5], options: { fontFace: 'Courier New' } });
+    }
+
+    currentPos = match.index + match[0].length;
+  }
+
+  // Add remaining plain text after the last match
+  if (currentPos < text.length) {
+    const remainingText = text.slice(currentPos);
+    if (remainingText) {
+      textParts.push({ text: remainingText });
+    }
+  }
+
+  return textParts.length > 0 ? textParts : [{ text }];
 };
 
 /**
@@ -204,8 +270,7 @@ export const exportToDOCX = async (messages, settings, appName, appId, chatId) =
   // Add messages
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
-    // Strip markdown formatting to get plain text
-    const content = stripMarkdown(msg.content || '');
+    const content = msg.content || '';
 
     // Add role heading
     children.push(
@@ -230,10 +295,17 @@ export const exportToDOCX = async (messages, settings, appName, appId, chatId) =
       );
     }
 
-    // Add content (split by lines)
+    // Add content with markdown formatting preserved
     const lines = content.split('\n');
     lines.forEach(line => {
-      children.push(new Paragraph({ text: line }));
+      if (line.trim()) {
+        // Parse markdown and create paragraph with formatted text runs
+        const textRuns = parseMarkdownForDOCX(line);
+        children.push(new Paragraph({ children: textRuns }));
+      } else {
+        // Empty line
+        children.push(new Paragraph({ text: '' }));
+      }
     });
 
     children.push(new Paragraph({ text: '' }));
@@ -438,14 +510,25 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
       });
     }
 
-    // Add content
-    // Strip markdown formatting to get plain text
-    const content = stripMarkdown(msg.content || '');
+    // Add content with markdown formatting preserved
+    const content = msg.content || '';
     const maxLength = 800; // Limit content length per slide
     const truncatedContent =
       content.length > maxLength ? content.slice(0, maxLength) + '...' : content;
 
-    slide.addText(truncatedContent, {
+    // Parse markdown to get formatted text parts
+    const textParts = parseMarkdownForPPTX(truncatedContent);
+
+    // Build rich text array for PptxGenJS
+    const richText = textParts.map(part => {
+      const textObj = { text: part.text };
+      if (part.options) {
+        Object.assign(textObj, part.options);
+      }
+      return textObj;
+    });
+
+    slide.addText(richText, {
       x: 0.5,
       y: 1.5,
       w: 9,
