@@ -495,6 +495,31 @@ const markdownToHtml = content => {
     .replace(/\n/g, '<br>');
 };
 
+const cleanHtmlForExport = html => {
+  if (!html || typeof html !== 'string') {
+    return '';
+  }
+
+  // Create a temporary DOM element to parse HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+
+  // Remove code block toolbars (contains buttons and language labels)
+  const toolbars = tempDiv.querySelectorAll('.code-block-toolbar');
+  toolbars.forEach(toolbar => toolbar.remove());
+
+  // Remove mermaid diagram controls if any
+  const diagramControls = tempDiv.querySelectorAll('.mermaid-diagram-controls');
+  diagramControls.forEach(control => control.remove());
+
+  // Remove any button elements that might be left
+  const buttons = tempDiv.querySelectorAll('button');
+  buttons.forEach(button => button.remove());
+
+  // Return the cleaned HTML
+  return tempDiv.innerHTML;
+};
+
 const generateMarkdown = messages => {
   return messages
     .filter(m => !m.isGreeting)
@@ -505,10 +530,13 @@ const generateMarkdown = messages => {
 };
 
 const generateHTML = messages => {
-  return messages
+  const html = messages
     .filter(m => !m.isGreeting)
     .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`)
     .join('');
+
+  // Clean the HTML to remove interactive elements like buttons and toolbars
+  return cleanHtmlForExport(html);
 };
 
 // Client-side export functions

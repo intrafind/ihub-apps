@@ -63,3 +63,34 @@ export const isMarkdown = text => {
 
   return markdownPatterns.some(pattern => pattern.test(text));
 };
+
+/**
+ * Clean HTML by removing code block toolbars and interactive elements
+ * This is useful for copying/downloading content without UI elements
+ * @param {string} html - The HTML string to clean
+ * @returns {string} Cleaned HTML string
+ */
+export const cleanHtmlForExport = html => {
+  if (!html || typeof html !== 'string') {
+    return '';
+  }
+
+  // Create a temporary DOM element to parse HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+
+  // Remove code block toolbars (contains buttons and language labels)
+  const toolbars = tempDiv.querySelectorAll('.code-block-toolbar');
+  toolbars.forEach(toolbar => toolbar.remove());
+
+  // Remove mermaid diagram controls if any
+  const diagramControls = tempDiv.querySelectorAll('.mermaid-diagram-controls');
+  diagramControls.forEach(control => control.remove());
+
+  // Remove any button elements that might be left
+  const buttons = tempDiv.querySelectorAll('button');
+  buttons.forEach(button => button.remove());
+
+  // Return the cleaned HTML
+  return tempDiv.innerHTML;
+};

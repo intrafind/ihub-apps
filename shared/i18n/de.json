@@ -320,7 +320,10 @@
     "imageNotPersisted": "Bild nicht verfügbar",
     "imageNotPersistedDetail": "Generierte Bilder werden beim Navigieren nicht gespeichert, da Browser-Speicherlimits überschritten werden. Bilder bleiben während der aktiven Sitzung sichtbar.",
     "copyLink": "Link kopieren",
-    "linkCopied": "Link kopiert!"
+    "linkCopied": "Link kopiert!",
+    "downloadMessage": "Nachricht herunterladen",
+    "downloadOptions": "Download-Optionen",
+    "deleteMessage": "Nachricht löschen"
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -440,7 +443,17 @@
     "creative": "Kreativ",
     "translate": "Übersetzen",
     "grammar": "Grammatik",
-    "format": "Formatieren"
+    "format": "Formatieren",
+    "export": {
+      "copyText": "als Text",
+      "copyMarkdown": "als Markdown",
+      "copyHTML": "als HTML",
+      "copyOptions": "Kopieroptionen",
+      "downloadText": "als Text",
+      "downloadMarkdown": "als Markdown",
+      "downloadHTML": "als HTML"
+    },
+    "insertIntoDocument": "In Dokument einfügen"
   },
   "admin": {
     "providers": {
