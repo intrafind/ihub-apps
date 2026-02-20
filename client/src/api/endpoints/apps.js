@@ -564,7 +564,7 @@ export const exportChatToJSONL = async (messages, settings, appId = null) => {
   return { success: true, filename };
 };
 
-export const exportChatToMarkdown = async (messages, appId = null) => {
+export const exportChatToMarkdown = async (messages, settings, appId = null, chatId = null) => {
   const content = generateMarkdown(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.md`;
@@ -573,7 +573,7 @@ export const exportChatToMarkdown = async (messages, appId = null) => {
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (messages, appId = null) => {
+export const exportChatToHTML = async (messages, settings, appId = null, chatId = null) => {
   const content = generateHTML(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.html`;

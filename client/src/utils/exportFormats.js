@@ -3,6 +3,45 @@ import { Document, Paragraph, TextRun, HeadingLevel } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
 /**
+ * Strip markdown formatting from text to get plain text
+ * Removes bold, italic, code, links, headers, etc.
+ */
+const stripMarkdown = text => {
+  if (!text || typeof text !== 'string') return '';
+
+  return (
+    text
+      // Remove headers
+      .replace(/^#{1,6}\s+/gm, '')
+      // Remove bold/italic
+      .replace(/\*\*\*(.*?)\*\*\*/g, '$1')
+      .replace(/\*\*(.*?)\*\*/g, '$1')
+      .replace(/\*(.*?)\*/g, '$1')
+      .replace(/\_\_\_(.*?)\_\_\_/g, '$1')
+      .replace(/\_\_(.*?)\_\_/g, '$1')
+      .replace(/\_(.*?)\_/g, '$1')
+      // Remove inline code
+      .replace(/`([^`]+)`/g, '$1')
+      // Remove code blocks
+      .replace(/```[\s\S]*?```/g, '')
+      // Remove links but keep text
+      .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
+      // Remove images
+      .replace(/!\[([^\]]*)\]\([^\)]+\)/g, '$1')
+      // Remove blockquotes
+      .replace(/^>\s+/gm, '')
+      // Remove horizontal rules
+      .replace(/^[-*_]{3,}\s*$/gm, '')
+      // Remove list markers
+      .replace(/^[\s]*[-*+]\s+/gm, '')
+      .replace(/^[\s]*\d+\.\s+/gm, '')
+      // Clean up extra whitespace
+      .replace(/\n{3,}/g, '\n\n')
+      .trim()
+  );
+};
+
+/**
  * Export chat messages to XLSX (Excel) format
  * Creates a spreadsheet with columns: Role, Timestamp, Content
  */
@@ -165,7 +204,8 @@ export const exportToDOCX = async (messages, settings, appName, appId, chatId) =
   // Add messages
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
-    const content = msg.content || '';
+    // Strip markdown formatting to get plain text
+    const content = stripMarkdown(msg.content || '');
 
     // Add role heading
     children.push(
@@ -399,7 +439,8 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
     }
 
     // Add content
-    const content = msg.content || '';
+    // Strip markdown formatting to get plain text
+    const content = stripMarkdown(msg.content || '');
     const maxLength = 800; // Limit content length per slide
     const truncatedContent =
       content.length > maxLength ? content.slice(0, maxLength) + '...' : content;
