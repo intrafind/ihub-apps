@@ -119,7 +119,6 @@ class Office365Service {
       'Sites.Read.All', // Read items in all site collections
       'Team.ReadBasic.All', // Read Teams information
       'Channel.ReadBasic.All', // Read Teams channel information
-      'Group.Read.All', // Read group/team membership
       'offline_access' // Refresh token
     ].join(' ');
 
@@ -239,7 +238,7 @@ class Office365Service {
         refresh_token: refreshToken,
         grant_type: 'refresh_token',
         scope:
-          'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All Group.Read.All offline_access'
+          'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All offline_access'
       });
 
       const response = await axios.post(
@@ -640,7 +639,7 @@ class Office365Service {
       const requests = teamsBatch.map(team => ({
         id: team.id,
         method: 'GET',
-        url: `/groups/${team.id}/drive`
+        url: `/teams/${team.id}/drive`
       }));
 
       logger.info(
