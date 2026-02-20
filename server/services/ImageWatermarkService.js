@@ -174,17 +174,29 @@ class ImageWatermarkService {
     const textWidth = text.length * fontSize * 0.6;
     const textHeight = fontSize * 1.5;
 
+    // Ensure positions are valid integers (sharp requires this)
+    const ensureInt = val => Math.max(0, Math.floor(val));
+
     const positions = {
-      'top-left': { top: padding, left: padding },
-      'top-right': { top: padding, left: imageWidth - textWidth - padding },
-      'bottom-left': { top: imageHeight - textHeight - padding, left: padding },
+      'top-left': { 
+        top: ensureInt(padding), 
+        left: ensureInt(padding) 
+      },
+      'top-right': { 
+        top: ensureInt(padding), 
+        left: ensureInt(Math.max(0, imageWidth - textWidth - padding))
+      },
+      'bottom-left': { 
+        top: ensureInt(Math.max(0, imageHeight - textHeight - padding)), 
+        left: ensureInt(padding) 
+      },
       'bottom-right': {
-        top: imageHeight - textHeight - padding,
-        left: imageWidth - textWidth - padding
+        top: ensureInt(Math.max(0, imageHeight - textHeight - padding)),
+        left: ensureInt(Math.max(0, imageWidth - textWidth - padding))
       },
       center: {
-        top: Math.floor((imageHeight - textHeight) / 2),
-        left: Math.floor((imageWidth - textWidth) / 2)
+        top: ensureInt(Math.max(0, (imageHeight - textHeight) / 2)),
+        left: ensureInt(Math.max(0, (imageWidth - textWidth) / 2))
       }
     };
 
