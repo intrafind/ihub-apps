@@ -218,6 +218,25 @@ const thinkingSchema = z
   })
   .optional();
 
+// Image watermark configuration schema (can be used at platform or app level)
+const imageWatermarkSchema = z
+  .object({
+    enabled: z.boolean().optional().default(false),
+    text: z.string().optional(),
+    logo: z.string().optional(), // Path to SVG logo file relative to contents/logos/
+    position: z
+      .enum(['top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'])
+      .optional()
+      .default('bottom-right'),
+    opacity: z.number().min(0).max(1).optional().default(0.5),
+    textColor: z.string().optional().default('#ffffff'),
+    includeUser: z.boolean().optional().default(false),
+    includeTimestamp: z.boolean().optional().default(false),
+    installationId: z.string().optional(),
+    enableC2PA: z.boolean().optional().default(false) // Enable C2PA-style signing
+  })
+  .optional();
+
 // Sources configuration - only supports string references to admin-configured sources
 const sourceReferenceSchema = z.string().min(1, 'Source reference ID cannot be empty');
 
@@ -317,6 +336,9 @@ const baseAppConfigSchema = z.object({
   customResponseRenderer: z.string().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().default(true),
+
+  // Image watermark configuration (overrides platform-level settings)
+  imageWatermark: imageWatermarkSchema,
 
   // Tool-specific configurations
   iassistant: iAssistantConfigSchema,

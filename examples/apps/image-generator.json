@@ -128,5 +128,16 @@
       }
     }
   ],
+  "imageWatermark": {
+    "enabled": true,
+    "text": "AI Generated",
+    "logo": "example-logo.svg",
+    "position": "bottom-right",
+    "opacity": 0.6,
+    "textColor": "#ffffff",
+    "includeUser": true,
+    "includeTimestamp": true,
+    "enableC2PA": false
+  },
   "enabled": true
 }

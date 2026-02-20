@@ -1,14 +1,17 @@
 # Image Watermarking Implementation Summary
 
 ## Overview
+
 Successfully implemented automatic watermarking and metadata tagging for AI-generated images in iHub Apps.
 
 ## What Was Implemented
 
 ### 1. Core Watermarking Service
+
 **File**: `server/services/ImageWatermarkService.js`
 
 Features:
+
 - SVG-based text watermarks with drop shadows
 - Configurable position (5 options: top-left, top-right, bottom-left, bottom-right, center)
 - Adjustable opacity (0.0 to 1.0) and text color
@@ -24,16 +27,20 @@ Features:
 - Graceful error handling (returns original image on failure)
 
 ### 2. Integration into Chat Pipeline
+
 **Files Modified**:
+
 - `server/services/chat/StreamingHandler.js` - Made processImages async, applies watermarks
 - `server/services/chat/ChatService.js` - Passes user context
 - `server/services/chat/ToolExecutor.js` - Supports tool-generated images
 - `server/routes/chat/sessionRoutes.js` - Route-level user passing
 
 ### 3. Configuration System
+
 **File**: `examples/config/platform.json`
 
 Added `imageWatermark` configuration:
+
 ```json
 {
   "imageWatermark": {
@@ -50,16 +57,20 @@ Added `imageWatermark` configuration:
 ```
 
 ### 4. Internationalization
+
 **Files**: `shared/i18n/en.json`, `shared/i18n/de.json`
 
 Added translation keys:
+
 - `appConfig.imageWatermark`
 - `appConfig.imageWatermarkHelp`
 
 ### 5. Testing
+
 **File**: `server/tests/imageWatermarkService.test.js`
 
 Comprehensive test suite with 5 tests:
+
 1. Basic watermark application
 2. User-specific watermarks
 3. Timestamp watermarks
@@ -69,13 +80,16 @@ Comprehensive test suite with 5 tests:
 All tests passing ✅
 
 ### 6. Documentation
+
 **Files**:
+
 - `docs/models.md` - User-facing documentation with examples
 - `concepts/2026-02-20 Image Watermarking Feature.md` - Technical design document
 
 ## Technology Used
 
 ### sharp (Image Processing Library)
+
 - Version: ^0.33.x
 - Why chosen:
   - Fastest performance (libvips-based)
@@ -100,6 +114,7 @@ All tests passing ✅
 ## Configuration Examples
 
 ### Basic Installation Watermark
+
 ```json
 {
   "imageWatermark": {
@@ -110,6 +125,7 @@ All tests passing ✅
 ```
 
 ### User-Specific with Timestamp
+
 ```json
 {
   "imageWatermark": {
@@ -121,9 +137,11 @@ All tests passing ✅
   }
 }
 ```
+
 Output: "Confidential | john.doe | 2026-02-20"
 
 ### Center Draft Watermark
+
 ```json
 {
   "imageWatermark": {
@@ -139,6 +157,7 @@ Output: "Confidential | john.doe | 2026-02-20"
 ## Testing Results
 
 All automated tests passed:
+
 ```
 ═══════════════════════════════════════════════
   Test Results: 5/5 passed
@@ -158,6 +177,7 @@ Note: Tests use a 1x1 pixel test image, which is smaller than watermark text. Th
 ## Deployment Instructions
 
 1. **Install Dependencies**:
+
    ```bash
    cd server
    npm install
@@ -165,6 +185,7 @@ Note: Tests use a 1x1 pixel test image, which is smaller than watermark text. Th
 
 2. **Configure Watermark**:
    Edit `contents/config/platform.json`:
+
    ```json
    {
      "imageWatermark": {
@@ -175,6 +196,7 @@ Note: Tests use a 1x1 pixel test image, which is smaller than watermark text. Th
    ```
 
 3. **Restart Server**:
+
    ```bash
    npm run start
    ```
@@ -220,18 +242,21 @@ Identified but not implemented (can be added later):
 ## Security Considerations
 
 ✅ **Implemented**:
+
 - User information only included if explicitly enabled
 - Graceful error handling prevents data loss
 - Watermark configuration requires admin access
 - No client-side bypass possible
 
 ❌ **Not Implemented** (Future):
+
 - C2PA digital signatures
 - Tamper detection
 
 ## Backward Compatibility
 
 ✅ **Fully Backward Compatible**:
+
 - Disabled by default (no impact on existing installations)
 - Optional feature (enable per installation)
 - Graceful fallback on errors
@@ -240,11 +265,13 @@ Identified but not implemented (can be added later):
 ## Files Added/Modified
 
 ### New Files
+
 1. `server/services/ImageWatermarkService.js` - Watermarking service (249 lines)
 2. `server/tests/imageWatermarkService.test.js` - Test suite (223 lines)
 3. `concepts/2026-02-20 Image Watermarking Feature.md` - Design document (395 lines)
 
 ### Modified Files
+
 1. `server/services/chat/StreamingHandler.js` - Image processing integration
 2. `server/services/chat/ChatService.js` - User context passing
 3. `server/services/chat/ToolExecutor.js` - Tool integration support
@@ -256,6 +283,7 @@ Identified but not implemented (can be added later):
 9. `server/package.json` - Added sharp dependency
 
 ### Dependencies
+
 - Added: `sharp@^0.33.x` (906 packages installed)
 
 ## Total Implementation
@@ -269,6 +297,7 @@ Identified but not implemented (can be added later):
 ## Conclusion
 
 The image watermarking feature is fully implemented, tested, and documented. It provides:
+
 - ✅ Installation-specific watermarks
 - ✅ User-specific watermarks
 - ✅ EXIF/IPTC metadata embedding
@@ -282,12 +311,14 @@ Ready for production use after manual testing with real image generation.
 ## Next Steps
 
 **Recommended Before Production**:
+
 1. Manual testing with Gemini 2.5 Flash Image model
 2. Verify watermark appearance at different image sizes
 3. Check EXIF metadata with EXIF viewer tool
 4. Test with different configurations
 
 **Optional Enhancements**:
+
 1. Add admin UI for watermark configuration
 2. Implement C2PA support for enhanced provenance
 3. Add logo watermark support

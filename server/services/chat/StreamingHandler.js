@@ -22,11 +22,34 @@ class StreamingHandler {
    * Helper to process and emit images from a result
    * Applies watermarking if configured
    */
-  async processImages(result, chatId, user = null) {
+  async processImages(result, chatId, user = null, app = null) {
     if (result && result.images && result.images.length > 0) {
       // Get platform configuration for watermark settings
       const platformConfig = configCache.get('platform');
-      const watermarkConfig = platformConfig?.imageWatermark || {};
+      const platformWatermark = platformConfig?.imageWatermark || {};
+
+      // Merge app-level watermark config with platform-level (app takes precedence)
+      const appWatermark = app?.imageWatermark || {};
+      const watermarkConfig = {
+        ...platformWatermark,
+        ...appWatermark
+      };
+
+      // Get JWT secret for C2PA signing if enabled
+      let jwtSecret = null;
+      if (watermarkConfig.enableC2PA) {
+        try {
+          const TokenStorageService = (await import('../TokenStorageService.js')).default;
+          await TokenStorageService.initializeJwtSecret();
+          jwtSecret = TokenStorageService.getJwtSecret();
+        } catch (error) {
+          logger.error({
+            component: 'StreamingHandler',
+            message: 'Failed to get JWT secret for C2PA signing',
+            error: error.message
+          });
+        }
+      }
 
       for (const image of result.images) {
         let processedImage = image;
@@ -38,7 +61,7 @@ class StreamingHandler {
               image.data,
               image.mimeType,
               watermarkConfig,
-              { user }
+              { user, jwtSecret }
             );
             processedImage = {
               ...image,
@@ -108,7 +131,8 @@ class StreamingHandler {
     DEFAULT_TIMEOUT,
     getLocalizedError,
     clientLanguage,
-    user
+    user,
+    app
   }) {
     actionTracker.trackAction(chatId, {
       event: 'processing',
@@ -293,7 +317,7 @@ class StreamingHandler {
               }
 
               // Handle generated images
-              await this.processImages(result, chatId, user);
+              await this.processImages(result, chatId, user, app);
 
               // Handle thinking content
               this.processThinking(result, chatId);
@@ -361,7 +385,7 @@ class StreamingHandler {
           }
 
           // Handle generated images in remaining buffer
-          await this.processImages(result, chatId, user);
+          await this.processImages(result, chatId, user, app);
 
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
@@ -414,7 +438,7 @@ class StreamingHandler {
             }
 
             // Handle generated images
-            await this.processImages(result, chatId, user);
+            await this.processImages(result, chatId, user, app);
 
             // Handle thinking
             this.processThinking(result, chatId);

@@ -3,9 +3,15 @@
  *
  * Adds watermarks and metadata to generated images.
  * Supports installation-specific and user-specific watermarks.
+ * Supports text watermarks, SVG logo watermarks, and C2PA-style signing.
  */
 import sharp from 'sharp';
+import fs from 'fs/promises';
+import path from 'path';
+import crypto from 'crypto';
 import logger from '../utils/logger.js';
+import { getRootDir } from '../pathUtils.js';
+import config from '../config.js';
 
 class ImageWatermarkService {
   /**
@@ -48,13 +54,45 @@ class ImageWatermarkService {
       const position = watermarkConfig.position || 'bottom-right';
       const padding = Math.floor(height * 0.02); // 2% padding
 
-      // Create SVG watermark
-      const svgWatermark = this._createSvgWatermark(
-        watermarkText,
-        fontSize,
-        watermarkConfig.opacity || 0.5,
-        watermarkConfig.textColor || '#ffffff'
-      );
+      // Determine watermark type: logo, text, or both
+      const hasLogo = watermarkConfig.logo && watermarkConfig.logo.length > 0;
+      const hasText = watermarkConfig.text && watermarkConfig.text.length > 0;
+
+      let watermarkBuffer;
+      let watermarkWidth;
+      let watermarkHeight;
+
+      if (hasLogo && hasText) {
+        // Both logo and text
+        const result = await this._createLogoAndTextWatermark(
+          watermarkConfig,
+          watermarkText,
+          fontSize,
+          width,
+          height
+        );
+        watermarkBuffer = result.buffer;
+        watermarkWidth = result.width;
+        watermarkHeight = result.height;
+      } else if (hasLogo) {
+        // Logo only
+        const result = await this._createLogoWatermark(watermarkConfig, width, height);
+        watermarkBuffer = result.buffer;
+        watermarkWidth = result.width;
+        watermarkHeight = result.height;
+      } else {
+        // Text only (original behavior)
+        const svgWatermark = this._createSvgWatermark(
+          watermarkText,
+          fontSize,
+          watermarkConfig.opacity || 0.5,
+          watermarkConfig.textColor || '#ffffff'
+        );
+        watermarkBuffer = Buffer.from(svgWatermark);
+        // Rough estimate for positioning
+        watermarkWidth = watermarkText.length * fontSize * 0.6;
+        watermarkHeight = fontSize * 1.5;
+      }
 
       // Calculate watermark position
       const watermarkPosition = this._calculatePosition(
@@ -62,8 +100,8 @@ class ImageWatermarkService {
         width,
         height,
         padding,
-        watermarkText,
-        fontSize
+        watermarkWidth,
+        watermarkHeight
       );
 
       // Apply watermark
@@ -72,15 +110,37 @@ class ImageWatermarkService {
       // Composite watermark onto image
       processedImage = processedImage.composite([
         {
-          input: Buffer.from(svgWatermark),
+          input: watermarkBuffer,
           top: watermarkPosition.top,
           left: watermarkPosition.left
         }
       ]);
 
       // Add EXIF/IPTC metadata
+      let exifMetadata = null;
       if (metadata) {
-        const exifMetadata = this._buildExifMetadata(metadata, watermarkConfig);
+        exifMetadata = this._buildExifMetadata(metadata, watermarkConfig);
+        processedImage = processedImage.withMetadata(exifMetadata);
+      }
+
+      // Add C2PA-style provenance if enabled
+      if (watermarkConfig.enableC2PA && metadata.jwtSecret) {
+        const c2paManifest = await this._createC2PAManifest(
+          metadata,
+          watermarkConfig,
+          imageMetadata,
+          exifMetadata
+        );
+        const signedManifest = this._signManifest(c2paManifest, metadata.jwtSecret);
+
+        // Embed signed manifest in EXIF UserComment
+        if (!exifMetadata) {
+          exifMetadata = { exif: {} };
+        }
+        if (!exifMetadata.exif) {
+          exifMetadata.exif = {};
+        }
+        exifMetadata.exif.UserComment = JSON.stringify(signedManifest);
         processedImage = processedImage.withMetadata(exifMetadata);
       }
 
@@ -94,7 +154,8 @@ class ImageWatermarkService {
         message: 'Watermark applied successfully',
         originalSize: imageBuffer.length,
         outputSize: outputBuffer.length,
-        watermarkText
+        watermarkType: hasLogo ? (hasText ? 'logo+text' : 'logo') : 'text',
+        c2paEnabled: watermarkConfig.enableC2PA || false
       });
 
       return {
@@ -169,34 +230,30 @@ class ImageWatermarkService {
   /**
    * Calculate watermark position based on configuration
    */
-  _calculatePosition(position, imageWidth, imageHeight, padding, text, fontSize) {
-    // Rough estimate of text dimensions
-    const textWidth = text.length * fontSize * 0.6;
-    const textHeight = fontSize * 1.5;
-
+  _calculatePosition(position, imageWidth, imageHeight, padding, watermarkWidth, watermarkHeight) {
     // Ensure positions are valid integers (sharp requires this)
     const ensureInt = val => Math.max(0, Math.floor(val));
 
     const positions = {
-      'top-left': { 
-        top: ensureInt(padding), 
-        left: ensureInt(padding) 
+      'top-left': {
+        top: ensureInt(padding),
+        left: ensureInt(padding)
       },
-      'top-right': { 
-        top: ensureInt(padding), 
-        left: ensureInt(Math.max(0, imageWidth - textWidth - padding))
+      'top-right': {
+        top: ensureInt(padding),
+        left: ensureInt(Math.max(0, imageWidth - watermarkWidth - padding))
       },
-      'bottom-left': { 
-        top: ensureInt(Math.max(0, imageHeight - textHeight - padding)), 
-        left: ensureInt(padding) 
+      'bottom-left': {
+        top: ensureInt(Math.max(0, imageHeight - watermarkHeight - padding)),
+        left: ensureInt(padding)
       },
       'bottom-right': {
-        top: ensureInt(Math.max(0, imageHeight - textHeight - padding)),
-        left: ensureInt(Math.max(0, imageWidth - textWidth - padding))
+        top: ensureInt(Math.max(0, imageHeight - watermarkHeight - padding)),
+        left: ensureInt(Math.max(0, imageWidth - watermarkWidth - padding))
       },
       center: {
-        top: ensureInt(Math.max(0, (imageHeight - textHeight) / 2)),
-        left: ensureInt(Math.max(0, (imageWidth - textWidth) / 2))
+        top: ensureInt(Math.max(0, (imageHeight - watermarkHeight) / 2)),
+        left: ensureInt(Math.max(0, (imageWidth - watermarkWidth) / 2))
       }
     };
 
@@ -233,6 +290,216 @@ class ImageWatermarkService {
     }
 
     return { exif };
+  }
+
+  /**
+   * Load and create a logo watermark from SVG file
+   */
+  async _createLogoWatermark(watermarkConfig, imageWidth, imageHeight) {
+    try {
+      const logoPath = path.join(getRootDir(), config.CONTENTS_DIR, 'logos', watermarkConfig.logo);
+      const logoBuffer = await fs.readFile(logoPath);
+
+      // Scale logo to appropriate size (max 20% of image dimensions)
+      const maxLogoWidth = Math.floor(imageWidth * 0.2);
+      const maxLogoHeight = Math.floor(imageHeight * 0.2);
+
+      const logoMetadata = await sharp(logoBuffer).metadata();
+      const logoAspectRatio = logoMetadata.width / logoMetadata.height;
+
+      let targetWidth = maxLogoWidth;
+      let targetHeight = Math.floor(targetWidth / logoAspectRatio);
+
+      if (targetHeight > maxLogoHeight) {
+        targetHeight = maxLogoHeight;
+        targetWidth = Math.floor(targetHeight * logoAspectRatio);
+      }
+
+      // Apply opacity to logo
+      const opacity = watermarkConfig.opacity || 0.5;
+      const processedLogo = await sharp(logoBuffer)
+        .resize(targetWidth, targetHeight, {
+          fit: 'inside',
+          withoutEnlargement: true
+        })
+        .composite([
+          {
+            input: Buffer.from(
+              `<svg><rect x="0" y="0" width="${targetWidth}" height="${targetHeight}" fill="white" opacity="${1 - opacity}"/></svg>`
+            ),
+            blend: 'dest-in'
+          }
+        ])
+        .png()
+        .toBuffer();
+
+      return {
+        buffer: processedLogo,
+        width: targetWidth,
+        height: targetHeight
+      };
+    } catch (error) {
+      logger.error({
+        component: 'ImageWatermarkService',
+        message: 'Failed to load logo watermark',
+        logo: watermarkConfig.logo,
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create a combined logo and text watermark
+   */
+  async _createLogoAndTextWatermark(
+    watermarkConfig,
+    watermarkText,
+    fontSize,
+    imageWidth,
+    imageHeight
+  ) {
+    try {
+      // Load logo
+      const logoResult = await this._createLogoWatermark(watermarkConfig, imageWidth, imageHeight);
+
+      // Create text SVG
+      const textSvg = this._createSvgWatermark(
+        watermarkText,
+        fontSize,
+        watermarkConfig.opacity || 0.5,
+        watermarkConfig.textColor || '#ffffff'
+      );
+      const textBuffer = Buffer.from(textSvg);
+      const textMetadata = await sharp(textBuffer).metadata();
+
+      // Combine logo and text horizontally with some spacing
+      const spacing = Math.floor(fontSize * 0.5);
+      const combinedWidth = logoResult.width + spacing + textMetadata.width;
+      const combinedHeight = Math.max(logoResult.height, textMetadata.height);
+
+      // Create canvas
+      const canvas = sharp({
+        create: {
+          width: combinedWidth,
+          height: combinedHeight,
+          channels: 4,
+          background: { r: 0, g: 0, b: 0, alpha: 0 }
+        }
+      });
+
+      // Composite logo and text
+      const combined = await canvas
+        .composite([
+          {
+            input: logoResult.buffer,
+            top: Math.floor((combinedHeight - logoResult.height) / 2),
+            left: 0
+          },
+          {
+            input: textBuffer,
+            top: Math.floor((combinedHeight - textMetadata.height) / 2),
+            left: logoResult.width + spacing
+          }
+        ])
+        .png()
+        .toBuffer();
+
+      return {
+        buffer: combined,
+        width: combinedWidth,
+        height: combinedHeight
+      };
+    } catch (error) {
+      logger.error({
+        component: 'ImageWatermarkService',
+        message: 'Failed to create combined logo and text watermark',
+        error: error.message
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Create C2PA-style provenance manifest
+   */
+  async _createC2PAManifest(metadata, watermarkConfig, imageMetadata, exifMetadata) {
+    const manifest = {
+      '@context': 'https://c2pa.org/specifications/1.0/context.jsonld',
+      '@type': 'c2pa.manifest',
+      version: '1.0',
+      created: new Date().toISOString(),
+      claim_generator: watermarkConfig.text || 'iHub Apps',
+      instance_id: crypto.randomUUID(),
+
+      // Assertion: Image generation details
+      assertions: [
+        {
+          '@type': 'c2pa.actions',
+          actions: [
+            {
+              action: 'c2pa.created',
+              when: new Date().toISOString(),
+              softwareAgent: {
+                name: watermarkConfig.text || 'iHub Apps',
+                version: '1.0'
+              }
+            }
+          ]
+        }
+      ],
+
+      // Image metadata
+      image: {
+        format: imageMetadata.format,
+        width: imageMetadata.width,
+        height: imageMetadata.height
+      }
+    };
+
+    // Add creator information if available
+    if (metadata.user) {
+      const creator = metadata.user.name || metadata.user.username || metadata.user.id;
+      manifest.assertions.push({
+        '@type': 'c2pa.creator',
+        creator: [
+          {
+            '@type': 'Person',
+            name: creator
+          }
+        ]
+      });
+    }
+
+    // Add watermark information
+    if (watermarkConfig.text || watermarkConfig.logo) {
+      manifest.assertions.push({
+        '@type': 'c2pa.watermarking',
+        watermark: {
+          type: watermarkConfig.logo ? 'logo' : 'text',
+          value: watermarkConfig.text || watermarkConfig.logo
+        }
+      });
+    }
+
+    return manifest;
+  }
+
+  /**
+   * Sign manifest using HMAC-SHA256 with JWT secret
+   */
+  _signManifest(manifest, jwtSecret) {
+    const manifestString = JSON.stringify(manifest, null, 0);
+    const signature = crypto
+      .createHmac('sha256', jwtSecret)
+      .update(manifestString)
+      .digest('base64');
+
+    return {
+      manifest,
+      signature,
+      algorithm: 'HS256'
+    };
   }
 }
 

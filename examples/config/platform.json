@@ -8,12 +8,14 @@
   "imageWatermark": {
     "enabled": true,
     "text": "iHub Apps",
+    "logo": "",
     "position": "bottom-right",
     "opacity": 0.5,
     "textColor": "#ffffff",
     "includeUser": true,
     "includeTimestamp": false,
-    "installationId": ""
+    "installationId": "",
+    "enableC2PA": false
   },
   "pdfExport": {
     "defaultTemplate": "default",

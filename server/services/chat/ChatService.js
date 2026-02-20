@@ -99,7 +99,8 @@ class ChatService {
       DEFAULT_TIMEOUT,
       getLocalizedError,
       clientLanguage,
-      user
+      user,
+      app
     } = params;
 
     return await this.streamingHandler.executeStreamingResponse({
@@ -112,7 +113,8 @@ class ChatService {
       DEFAULT_TIMEOUT,
       getLocalizedError,
       clientLanguage,
-      user
+      user,
+      app
     });
   }
 

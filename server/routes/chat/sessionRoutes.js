@@ -249,7 +249,8 @@ export default function registerSessionRoutes(
         DEFAULT_TIMEOUT,
         getLocalizedError,
         clientLanguage,
-        user
+        user,
+        app: prep.app
       });
     } else {
       return await chatService.processNonStreamingChat({
