@@ -46,6 +46,7 @@
     "pdfjs-dist": "^5.3.31",
     "playwright": "^1.55.1",
     "selenium-webdriver": "^4.20.0",
+    "sharp": "^0.34.5",
     "swagger-jsdoc": "^6.2.8",
     "swagger-ui-express": "^5.0.1",
     "winston": "^3.19.0",

@@ -819,7 +819,7 @@ class ToolExecutor {
           }
 
           // Process images (important for image generation with tools like google_search)
-          this.streamingHandler.processImages(result, chatId);
+          await this.streamingHandler.processImages(result, chatId, user);
 
           // Process thinking content
           this.streamingHandler.processThinking(result, chatId);

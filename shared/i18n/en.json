@@ -1061,7 +1061,9 @@
     "imageQualityHelp": "Select the quality level for generated images",
     "qualityLow": "Low (1K)",
     "qualityMedium": "Medium (2K)",
-    "qualityHigh": "High (4K)"
+    "qualityHigh": "High (4K)",
+    "imageWatermark": "Image Watermark",
+    "imageWatermarkHelp": "Automatically add watermarks and metadata to generated images"
   },
   "chatMessage": {
     "user": "You",

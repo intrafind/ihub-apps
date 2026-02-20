@@ -98,7 +98,8 @@ class ChatService {
       llmMessages,
       DEFAULT_TIMEOUT,
       getLocalizedError,
-      clientLanguage
+      clientLanguage,
+      user
     } = params;
 
     return await this.streamingHandler.executeStreamingResponse({
@@ -110,7 +111,8 @@ class ChatService {
       llmMessages,
       DEFAULT_TIMEOUT,
       getLocalizedError,
-      clientLanguage
+      clientLanguage,
+      user
     });
   }
 

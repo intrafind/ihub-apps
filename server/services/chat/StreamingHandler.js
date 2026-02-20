@@ -10,6 +10,8 @@ import { getAdapter } from '../../adapters/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
 import { redactUrl } from '../../utils/logRedactor.js';
 import logger from '../../utils/logger.js';
+import ImageWatermarkService from '../ImageWatermarkService.js';
+import configCache from '../../configCache.js';
 
 class StreamingHandler {
   constructor() {
@@ -18,14 +20,46 @@ class StreamingHandler {
 
   /**
    * Helper to process and emit images from a result
+   * Applies watermarking if configured
    */
-  processImages(result, chatId) {
+  async processImages(result, chatId, user = null) {
     if (result && result.images && result.images.length > 0) {
+      // Get platform configuration for watermark settings
+      const platformConfig = configCache.get('platform');
+      const watermarkConfig = platformConfig?.imageWatermark || {};
+
       for (const image of result.images) {
+        let processedImage = image;
+
+        // Apply watermark if enabled
+        if (watermarkConfig.enabled) {
+          try {
+            const watermarked = await ImageWatermarkService.addWatermark(
+              image.data,
+              image.mimeType,
+              watermarkConfig,
+              { user }
+            );
+            processedImage = {
+              ...image,
+              data: watermarked.data,
+              mimeType: watermarked.mimeType
+            };
+          } catch (error) {
+            logger.error({
+              component: 'StreamingHandler',
+              message: 'Failed to apply watermark to image',
+              error: error.message
+            });
+            // Continue with original image on error
+            processedImage = image;
+          }
+        }
+
         actionTracker.trackImage(chatId, {
-          mimeType: image.mimeType,
-          data: image.data,
-          thoughtSignature: image.thoughtSignature
+          mimeType: processedImage.mimeType,
+          data: processedImage.data,
+          thoughtSignature: processedImage.thoughtSignature
         });
       }
     }
@@ -73,7 +107,8 @@ class StreamingHandler {
     llmMessages,
     DEFAULT_TIMEOUT,
     getLocalizedError,
-    clientLanguage
+    clientLanguage,
+    user
   }) {
     actionTracker.trackAction(chatId, {
       event: 'processing',
@@ -258,7 +293,7 @@ class StreamingHandler {
               }
 
               // Handle generated images
-              this.processImages(result, chatId);
+              await this.processImages(result, chatId, user);
 
               // Handle thinking content
               this.processThinking(result, chatId);
@@ -326,7 +361,7 @@ class StreamingHandler {
           }
 
           // Handle generated images in remaining buffer
-          this.processImages(result, chatId);
+          await this.processImages(result, chatId, user);
 
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
@@ -379,7 +414,7 @@ class StreamingHandler {
             }
 
             // Handle generated images
-            this.processImages(result, chatId);
+            await this.processImages(result, chatId, user);
 
             // Handle thinking
             this.processThinking(result, chatId);

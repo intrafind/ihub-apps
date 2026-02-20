@@ -301,7 +301,9 @@
     "imageQualityHelp": "Wählen Sie die Qualitätsstufe für generierte Bilder",
     "qualityLow": "Niedrig (1K)",
     "qualityMedium": "Mittel (2K)",
-    "qualityHigh": "Hoch (4K)"
+    "qualityHigh": "Hoch (4K)",
+    "imageWatermark": "Bildwasserzeichen",
+    "imageWatermarkHelp": "Fügen Sie automatisch Wasserzeichen und Metadaten zu generierten Bildern hinzu"
   },
   "chatMessage": {
     "user": "Du",
