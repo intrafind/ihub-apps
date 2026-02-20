@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 import { Document, Paragraph, TextRun, HeadingLevel } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
@@ -6,49 +6,62 @@ import PptxGenJS from 'pptxgenjs';
  * Export chat messages to XLSX (Excel) format
  * Creates a spreadsheet with columns: Role, Timestamp, Content
  */
-export const exportToXLSX = (messages, settings, appName, appId, chatId) => {
+export const exportToXLSX = async (messages, settings, appName, appId, chatId) => {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.xlsx`;
 
-  // Prepare data for Excel
-  const data = [
-    ['Chat Export', '', ''],
-    ['App', appName, ''],
-    ['Date', new Date().toLocaleString(), ''],
-    ['', '', ''],
-    ['Role', 'Timestamp', 'Content']
-  ];
+  // Create workbook and worksheet
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Chat Export');
+
+  // Set column widths
+  worksheet.columns = [{ width: 15 }, { width: 20 }, { width: 80 }];
+
+  // Add header information
+  worksheet.addRow(['Chat Export', '', '']);
+  worksheet.addRow(['App', appName, '']);
+  worksheet.addRow(['Date', new Date().toLocaleString(), '']);
+  worksheet.addRow(['', '', '']);
+
+  // Add column headers with styling
+  const headerRow = worksheet.addRow(['Role', 'Timestamp', 'Content']);
+  headerRow.font = { bold: true };
+  headerRow.fill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE0E0E0' }
+  };
 
   // Add messages
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
     const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
     const content = msg.content || '';
-    data.push([role, timestamp, content]);
+    worksheet.addRow([role, timestamp, content]);
   });
 
   // Add metadata if available
   if (settings) {
-    data.push(['', '', '']);
-    data.push(['Settings', '', '']);
-    if (settings.model) data.push(['Model', settings.model, '']);
-    if (settings.temperature) data.push(['Temperature', settings.temperature, '']);
-    if (settings.style) data.push(['Style', settings.style, '']);
-    if (settings.outputFormat) data.push(['Output Format', settings.outputFormat, '']);
+    worksheet.addRow(['', '', '']);
+    const settingsHeaderRow = worksheet.addRow(['Settings', '', '']);
+    settingsHeaderRow.font = { bold: true };
+
+    if (settings.model) worksheet.addRow(['Model', settings.model, '']);
+    if (settings.temperature) worksheet.addRow(['Temperature', settings.temperature, '']);
+    if (settings.style) worksheet.addRow(['Style', settings.style, '']);
+    if (settings.outputFormat) worksheet.addRow(['Output Format', settings.outputFormat, '']);
   }
 
-  // Create workbook and worksheet
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(data);
-
-  // Set column widths
-  ws['!cols'] = [{ wch: 15 }, { wch: 20 }, { wch: 80 }];
-
-  // Add worksheet to workbook
-  XLSX.utils.book_append_sheet(wb, ws, 'Chat Export');
-
-  // Write file
-  XLSX.writeFile(wb, filename);
+  // Generate buffer and download
+  const buffer = await workbook.xlsx.writeBuffer();
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 
   return { success: true, filename };
 };
@@ -57,36 +70,39 @@ export const exportToXLSX = (messages, settings, appName, appId, chatId) => {
  * Export chat messages to CSV format
  * Creates a CSV file with columns: Role, Timestamp, Content
  */
-export const exportToCSV = (messages, settings, appName, appId, chatId) => {
+export const exportToCSV = async (messages, settings, appName, appId, chatId) => {
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.csv`;
 
-  // Prepare data for CSV
-  const data = [
-    ['Chat Export'],
-    ['App', appName],
-    ['Date', new Date().toLocaleString()],
-    [''],
-    ['Role', 'Timestamp', 'Content']
-  ];
+  // Create workbook and worksheet
+  const workbook = new ExcelJS.Workbook();
+  const worksheet = workbook.addWorksheet('Chat Export');
+
+  // Add header information
+  worksheet.addRow(['Chat Export']);
+  worksheet.addRow(['App', appName]);
+  worksheet.addRow(['Date', new Date().toLocaleString()]);
+  worksheet.addRow(['']);
+
+  // Add column headers
+  worksheet.addRow(['Role', 'Timestamp', 'Content']);
 
   // Add messages
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
     const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
-    const content = (msg.content || '').replace(/"/g, '""'); // Escape quotes
-    data.push([role, timestamp, content]);
+    const content = msg.content || '';
+    worksheet.addRow([role, timestamp, content]);
   });
 
-  // Create workbook and worksheet
-  const wb = XLSX.utils.book_new();
-  const ws = XLSX.utils.aoa_to_sheet(data);
-
-  // Add worksheet to workbook
-  XLSX.utils.book_append_sheet(wb, ws, 'Chat Export');
-
-  // Write CSV file
-  XLSX.writeFile(wb, filename, { bookType: 'csv' });
+  // Generate CSV buffer and download
+  const buffer = await workbook.csv.writeBuffer();
+  const blob = new Blob([buffer], { type: 'text/csv;charset=utf-8' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
 
   return { success: true, filename };
 };
