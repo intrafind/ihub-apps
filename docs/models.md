@@ -508,3 +508,262 @@ Planned improvements include:
 
 - [Platform Configuration](platform.md) - Main configuration file
 - [App Configuration](apps.md) - Image generation apps
+
+### Per-App Watermark Configuration
+
+Apps can override global watermark settings with app-specific configuration. This allows different watermarks for different use cases.
+
+**Configuration in App JSON**:
+
+```json
+{
+  "id": "image-generator",
+  "name": { "en": "Image Generator" },
+  "imageWatermark": {
+    "enabled": true,
+    "text": "AI Generated",
+    "position": "top-left",
+    "opacity": 0.7,
+    "includeUser": true,
+    "includeTimestamp": true
+  }
+}
+```
+
+**Merge Behavior**:
+- App-level settings override platform-level settings
+- Unspecified fields use platform defaults
+- Set `enabled: false` in app to disable watermark for specific app
+
+### SVG Logo Watermarks
+
+In addition to text watermarks, iHub Apps supports SVG logo watermarks.
+
+**Setup**:
+1. Place SVG logo files in `contents/logos/` directory
+2. Reference logo filename in watermark configuration
+3. Logo is automatically scaled to 20% of image dimensions
+4. Opacity applies to logo
+
+**Configuration**:
+
+```json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "logo": "company-logo.svg",
+    "position": "bottom-right",
+    "opacity": 0.5
+  }
+}
+```
+
+**Watermark Modes**:
+- **Text Only**: Set `text`, leave `logo` empty
+- **Logo Only**: Set `logo`, leave `text` empty  
+- **Combined**: Set both for side-by-side logo + text watermark
+
+**Combined Example**:
+```json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "text": "iHub Apps",
+    "logo": "example-logo.svg",
+    "position": "bottom-right",
+    "opacity": 0.6
+  }
+}
+```
+
+Result: Logo appears on left, text on right, separated by spacing.
+
+### C2PA-Style Provenance Signing
+
+iHub Apps includes lightweight C2PA-style provenance signing for enhanced image authenticity tracking.
+
+**What is C2PA?**
+
+C2PA (Coalition for Content Provenance and Authenticity) is a standard for tracking content origin and modifications. iHub Apps implements a simplified version using existing JWT infrastructure.
+
+**Features**:
+- Provenance manifest with image generation details
+- HMAC-SHA256 signature using JWT secret
+- Embedded in EXIF UserComment field
+- Includes creator, timestamp, watermark info
+
+**Configuration**:
+
+```json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "text": "iHub Apps",
+    "enableC2PA": true,
+    "installationId": "production-01"
+  }
+}
+```
+
+**Manifest Structure**:
+
+The C2PA manifest includes:
+- **Claim Generator**: Installation name
+- **Created**: ISO timestamp
+- **Instance ID**: Unique UUID per image
+- **Actions**: Image creation action with timestamp
+- **Creator**: Username or user ID
+- **Watermarking**: Watermark type and value
+- **Signature**: HMAC-SHA256 signature for verification
+
+**Accessing the Manifest**:
+
+The signed manifest is embedded in EXIF UserComment:
+```bash
+# Using exiftool
+exiftool -UserComment image.jpg
+
+# Output example:
+# {"manifest":{...},"signature":"base64-signature","algorithm":"HS256"}
+```
+
+**Verification**:
+
+To verify image authenticity:
+1. Extract manifest from EXIF UserComment
+2. Recreate manifest string (manifest only)
+3. Calculate HMAC-SHA256 using JWT secret
+4. Compare with embedded signature
+
+**Security Notes**:
+- Uses same JWT secret as authentication system
+- Signature cannot be forged without secret
+- Detects any tampering with manifest data
+- Lightweight alternative to full C2PA standard
+
+**Performance**:
+- Minimal overhead (< 10ms per image)
+- No external dependencies required
+- No complex cryptographic operations
+
+### Configuration Priority
+
+Watermark settings follow this priority order:
+
+1. **App-level configuration** (highest priority)
+   - Defined in app JSON's `imageWatermark` field
+   - Overrides all platform settings
+
+2. **Platform-level configuration**
+   - Defined in `platform.json`
+   - Used when no app-level config exists
+
+3. **Defaults**
+   - `enabled: false`
+   - `position: "bottom-right"`
+   - `opacity: 0.5`
+   - `textColor: "#ffffff"`
+
+**Example Priority**:
+
+```json
+// platform.json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "text": "Global Watermark",
+    "opacity": 0.5
+  }
+}
+
+// app.json
+{
+  "imageWatermark": {
+    "text": "App Watermark",
+    "opacity": 0.8
+  }
+}
+
+// Result: 
+// - enabled: true (from platform)
+// - text: "App Watermark" (from app)
+// - opacity: 0.8 (from app)
+// - position: "bottom-right" (default)
+```
+
+### Use Cases
+
+**Corporate Branding**:
+```json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "logo": "company-logo.svg",
+    "text": "Company Name",
+    "position": "bottom-right",
+    "includeUser": false,
+    "includeTimestamp": false,
+    "enableC2PA": true
+  }
+}
+```
+
+**User Attribution**:
+```json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "text": "Created by",
+    "includeUser": true,
+    "includeTimestamp": true,
+    "position": "bottom-left",
+    "enableC2PA": true
+  }
+}
+```
+
+**Draft/Internal Use**:
+```json
+{
+  "imageWatermark": {
+    "enabled": true,
+    "text": "DRAFT - INTERNAL USE ONLY",
+    "position": "center",
+    "opacity": 0.3,
+    "textColor": "#ff0000",
+    "enableC2PA": false
+  }
+}
+```
+
+**Per-Department Watermarks**:
+- Marketing app: Logo + brand name
+- Legal app: "Confidential" + user + timestamp
+- Demo app: "Demo Only" center watermark
+- Public app: Logo only
+
+### Troubleshooting
+
+**Logo not appearing**:
+- Check logo file exists in `contents/logos/`
+- Verify SVG file is valid
+- Check logo filename matches config
+- Review server logs for load errors
+
+**C2PA manifest not embedded**:
+- Ensure `enableC2PA: true` in config
+- Verify server restart after config change
+- Check JWT secret is initialized
+- Review logs for C2PA errors
+
+**App watermark not overriding platform**:
+- Verify app config is valid JSON
+- Check app ID matches
+- Ensure server loaded latest config
+- Review app watermark schema validation
+
+### Related Documentation
+
+- [App Configuration](apps.md) - App-level configuration
+- [Platform Configuration](platform.md) - Platform-level settings
+- [Security](security.md) - JWT and authentication
