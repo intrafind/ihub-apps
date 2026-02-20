@@ -908,6 +908,30 @@
       "loadError": "Failed to load features",
       "saveError": "Failed to save features",
       "saved": "Features updated successfully"
+    },
+    "watermark": {
+      "enabled": "Enable Watermark",
+      "enabledHelp": "Apply watermark to all generated images",
+      "text": "Watermark Text",
+      "textPlaceholder": "Enter watermark text",
+      "logo": "Logo (SVG or PNG)",
+      "logoHelp": "Upload SVG or PNG logo (will be stored as base64)",
+      "position": "Position",
+      "opacity": "Opacity",
+      "textColor": "Text Color",
+      "includeUser": "Include username in watermark",
+      "includeTimestamp": "Include timestamp in watermark",
+      "enableC2PA": "Enable C2PA provenance signing",
+      "installationId": "Installation ID (Optional)",
+      "installationIdPlaceholder": "e.g., production-01",
+      "preview": "Live Preview",
+      "title": "Watermark Configuration",
+      "platformLevel": "Platform-Level Watermark",
+      "platformLevelHelp": "Global watermark settings applied to all apps",
+      "appLevel": "App-Level Watermark Override",
+      "appLevelHelp": "Override platform settings for this specific app",
+      "saveSuccess": "Watermark configuration saved successfully",
+      "saveError": "Failed to save watermark configuration"
     }
   },
   "components": {

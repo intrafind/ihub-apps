@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import SSLConfig from '../components/SSLConfig';
+import WatermarkConfig from '../components/WatermarkConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
@@ -25,6 +26,9 @@ const AdminSystemPage = () => {
   const [encryptedResult, setEncryptedResult] = useState('');
   const [encryptLoading, setEncryptLoading] = useState(false);
   const [encryptMessage, setEncryptMessage] = useState('');
+  const [watermarkConfig, setWatermarkConfig] = useState(null);
+  const [watermarkSaving, setWatermarkSaving] = useState(false);
+  const [watermarkMessage, setWatermarkMessage] = useState('');
 
   // Fetch version information on mount
   useEffect(() => {
@@ -63,6 +67,22 @@ const AdminSystemPage = () => {
     };
 
     checkForUpdates();
+  }, []);
+
+  // Fetch watermark configuration on mount
+  useEffect(() => {
+    const fetchWatermarkConfig = async () => {
+      try {
+        const response = await makeAdminApiCall('/admin/configs/platform', {
+          method: 'GET'
+        });
+        setWatermarkConfig(response.data?.imageWatermark || {});
+      } catch (error) {
+        console.error('Error fetching watermark config:', error);
+      }
+    };
+
+    fetchWatermarkConfig();
   }, []);
 
   const handleForceRefresh = async () => {
@@ -263,6 +283,47 @@ const AdminSystemPage = () => {
         type: 'error',
         text: t('admin.system.copyError', 'Failed to copy to clipboard')
       });
+    }
+  };
+
+  const handleSaveWatermarkConfig = async () => {
+    setWatermarkSaving(true);
+    setWatermarkMessage('');
+
+    try {
+      // Get current platform config
+      const currentConfig = await makeAdminApiCall('/admin/configs/platform', {
+        method: 'GET'
+      });
+
+      // Update with new watermark config
+      const updatedConfig = {
+        ...currentConfig.data,
+        imageWatermark: watermarkConfig
+      };
+
+      // Save updated config
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        body: JSON.stringify(updatedConfig),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      setWatermarkMessage({
+        type: 'success',
+        text: t('admin.watermark.saveSuccess', 'Watermark configuration saved successfully')
+      });
+    } catch (error) {
+      setWatermarkMessage({
+        type: 'error',
+        text:
+          t('admin.watermark.saveError', 'Failed to save watermark configuration') +
+          (error.message ? `: ${error.message}` : '')
+      });
+    } finally {
+      setWatermarkSaving(false);
     }
   };
 
@@ -958,6 +1019,111 @@ const AdminSystemPage = () => {
 
             {/* SSL Configuration Section */}
             <SSLConfig />
+
+            {/* Watermark Configuration Section */}
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0 mt-1">
+                  <div className="p-3 rounded-full bg-purple-100">
+                    <Icon name="photograph" size="lg" className="text-purple-600" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {t('admin.watermark.title', 'Watermark Configuration')}
+                  </h3>
+                  <p className="text-gray-600 mb-4">
+                    {t(
+                      'admin.watermark.platformLevelHelp',
+                      'Global watermark settings applied to all apps'
+                    )}
+                  </p>
+
+                  {watermarkMessage && (
+                    <div
+                      className={`p-4 rounded-md mb-4 ${
+                        watermarkMessage.type === 'success'
+                          ? 'bg-green-50 border border-green-200'
+                          : 'bg-red-50 border border-red-200'
+                      }`}
+                    >
+                      <div className="flex">
+                        <Icon
+                          name={watermarkMessage.type === 'success' ? 'check' : 'warning'}
+                          size="md"
+                          className={`mt-0.5 mr-3 ${
+                            watermarkMessage.type === 'success' ? 'text-green-500' : 'text-red-500'
+                          }`}
+                        />
+                        <p
+                          className={`text-sm ${
+                            watermarkMessage.type === 'success' ? 'text-green-700' : 'text-red-700'
+                          }`}
+                        >
+                          {watermarkMessage.text}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {watermarkConfig && (
+                    <div className="mb-4">
+                      <WatermarkConfig
+                        config={watermarkConfig}
+                        onChange={setWatermarkConfig}
+                        showPreview={true}
+                        level="platform"
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleSaveWatermarkConfig}
+                    disabled={watermarkSaving}
+                    className={`
+                      inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium 
+                      rounded-md shadow-sm text-white 
+                      ${
+                        watermarkSaving
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-purple-600 hover:bg-purple-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-purple-500'
+                      }
+                    `}
+                  >
+                    {watermarkSaving ? (
+                      <>
+                        <svg
+                          className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                          xmlns="http://www.w3.org/2000/svg"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                        >
+                          <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                          ></circle>
+                          <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                          ></path>
+                        </svg>
+                        {t('common.saving', 'Saving...')}
+                      </>
+                    ) : (
+                      <>
+                        <Icon name="save" size="md" className="mr-2" />
+                        {t('common.save', 'Save Changes')}
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -293,12 +293,34 @@ class ImageWatermarkService {
   }
 
   /**
-   * Load and create a logo watermark from SVG file
+   * Load and create a logo watermark from SVG file or base64 string
    */
   async _createLogoWatermark(watermarkConfig, imageWidth, imageHeight) {
     try {
-      const logoPath = path.join(getRootDir(), config.CONTENTS_DIR, 'logos', watermarkConfig.logo);
-      const logoBuffer = await fs.readFile(logoPath);
+      let logoBuffer;
+
+      // Check if logo is base64 encoded (starts with data:image/)
+      if (watermarkConfig.logo.startsWith('data:image/')) {
+        // Extract base64 data from data URL
+        const base64Data = watermarkConfig.logo.split(',')[1];
+        logoBuffer = Buffer.from(base64Data, 'base64');
+        
+        logger.info({
+          component: 'ImageWatermarkService',
+          message: 'Loading logo from base64 string',
+          size: logoBuffer.length
+        });
+      } else {
+        // Load from file system (original behavior)
+        const logoPath = path.join(getRootDir(), config.CONTENTS_DIR, 'logos', watermarkConfig.logo);
+        logoBuffer = await fs.readFile(logoPath);
+        
+        logger.info({
+          component: 'ImageWatermarkService',
+          message: 'Loading logo from file',
+          path: logoPath
+        });
+      }
 
       // Scale logo to appropriate size (max 20% of image dimensions)
       const maxLogoWidth = Math.floor(imageWidth * 0.2);
