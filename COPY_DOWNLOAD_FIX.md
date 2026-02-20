@@ -1,9 +1,11 @@
 # Copy and Download Mechanism Fix
 
 ## Problem
+
 When copying or downloading chat messages in HTML format, the code block toolbars (language labels, Copy button, Download button) were being included in the exported content.
 
 ## Solution
+
 Implemented a `cleanHtmlForExport` function that removes interactive UI elements before copying or downloading content.
 
 ### Changes Made
@@ -36,6 +38,7 @@ Implemented a `cleanHtmlForExport` function that removes interactive UI elements
 ## How It Works
 
 ### Copy Flow (HTML Format)
+
 1. User clicks "Copy" → "as HTML"
 2. Content is converted to HTML using `markdownToHtml()`
 3. HTML is cleaned with `cleanHtmlForExport()` to remove UI elements
@@ -43,6 +46,7 @@ Implemented a `cleanHtmlForExport` function that removes interactive UI elements
 5. Both text/html and text/plain formats are stored in clipboard
 
 ### Download Flow
+
 1. User clicks "Download" button → selects format
 2. Content is processed based on format:
    - **Text**: Original raw content
@@ -51,7 +55,9 @@ Implemented a `cleanHtmlForExport` function that removes interactive UI elements
 3. Content is downloaded as a file with appropriate extension and timestamp
 
 ### Cleaning Process
+
 The `cleanHtmlForExport()` function:
+
 1. Creates a temporary DOM element
 2. Parses the HTML string into DOM
 3. Removes toolbar elements (`.code-block-toolbar`)
@@ -60,14 +66,18 @@ The `cleanHtmlForExport()` function:
 6. Returns cleaned HTML string
 
 ## Testing
+
 To test the fix:
+
 1. Start a chat with code blocks
 2. Try copying the message as HTML - verify no buttons/toolbars in copied content
 3. Try downloading the message as HTML - verify no buttons/toolbars in downloaded file
 4. Verify text and markdown formats work correctly
 
 ## Example
+
 Before fix:
+
 ```html
 <pre>console.log('hello')</pre>
 <div class="code-block-toolbar">
@@ -78,6 +88,7 @@ Before fix:
 ```
 
 After fix:
+
 ```html
 <pre>console.log('hello')</pre>
 ```

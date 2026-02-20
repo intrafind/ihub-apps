@@ -534,7 +534,7 @@ const generateHTML = messages => {
     .filter(m => !m.isGreeting)
     .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`)
     .join('');
-  
+
   // Clean the HTML to remove interactive elements like buttons and toolbars
   return cleanHtmlForExport(html);
 };
