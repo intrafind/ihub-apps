@@ -1080,7 +1080,10 @@
     "imageNotPersisted": "Image not available",
     "imageNotPersistedDetail": "Generated images are not persisted when navigating away due to browser storage limitations. Images remain visible during the active session.",
     "copyLink": "Copy link",
-    "linkCopied": "Link copied!"
+    "linkCopied": "Link copied!",
+    "downloadMessage": "Download message",
+    "downloadOptions": "Download Options",
+    "deleteMessage": "Delete message"
   },
   "serverErrors": {
     "appNotFound": "Application not found",
@@ -1183,7 +1186,17 @@
     "creative": "Creative",
     "translate": "Translate",
     "grammar": "Grammar",
-    "format": "Format"
+    "format": "Format",
+    "export": {
+      "copyText": "as Text",
+      "copyMarkdown": "as Markdown",
+      "copyHTML": "as HTML",
+      "copyOptions": "Copy Options",
+      "downloadText": "as Text",
+      "downloadMarkdown": "as Markdown",
+      "downloadHTML": "as HTML"
+    },
+    "insertIntoDocument": "Insert into document"
   },
   "teams": {
     "status": {
