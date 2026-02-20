@@ -75,9 +75,6 @@ const testConfig = {
   localAuth: {
     enabled: false,
     jwtSecret: '${JWT_SECRET}' // Environment variable
-  },
-  admin: {
-    secret: 'admin-secret-value' // Actual secret
   }
 };
 
@@ -175,10 +172,6 @@ function runTest() {
     localAuth: {
       ...testConfig.localAuth,
       jwtSecret: sanitizeSecret(testConfig.localAuth.jwtSecret)
-    },
-    admin: {
-      ...testConfig.admin,
-      secret: sanitizeSecret(testConfig.admin.secret)
     }
   };
 
@@ -208,14 +201,6 @@ function runTest() {
     passed++;
   } else {
     console.log(`  ✗ GET: JWT secret not preserved: ${sanitizedConfig.localAuth.jwtSecret}`);
-    failed++;
-  }
-
-  if (sanitizedConfig.admin.secret === '***REDACTED***') {
-    console.log('  ✓ GET: Admin secret redacted (actual secret)');
-    passed++;
-  } else {
-    console.log(`  ✗ GET: Admin secret not redacted: ${sanitizedConfig.admin.secret}`);
     failed++;
   }
 
@@ -250,10 +235,6 @@ function runTest() {
         clientModifiedConfig.localAuth.jwtSecret,
         testConfig.localAuth.jwtSecret
       )
-    },
-    admin: {
-      ...clientModifiedConfig.admin,
-      secret: restoreSecretIfRedacted(clientModifiedConfig.admin.secret, testConfig.admin.secret)
     }
   };
 
@@ -283,14 +264,6 @@ function runTest() {
     passed++;
   } else {
     console.log(`  ✗ POST: JWT secret not preserved: ${restoredConfig.localAuth.jwtSecret}`);
-    failed++;
-  }
-
-  if (restoredConfig.admin.secret === 'admin-secret-value') {
-    console.log('  ✓ POST: Admin secret restored from original (was ***REDACTED***)');
-    passed++;
-  } else {
-    console.log(`  ✗ POST: Admin secret not restored: ${restoredConfig.admin.secret}`);
     failed++;
   }
 

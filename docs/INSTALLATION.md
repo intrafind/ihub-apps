@@ -559,9 +559,6 @@ Edit `contents/config/platform.json`:
 ```bash
 # Generate JWT secret
 openssl rand -base64 32
-
-# Generate admin secret (if using anonymous mode)
-openssl rand -base64 16
 ```
 
 #### Configure Authentication
@@ -573,8 +570,7 @@ Edit `contents/config/platform.json`:
     "jwtSecret": "your-generated-jwt-secret"
   },
   "anonymousAuth": {
-    "enabled": true,
-    "adminSecret": "your-admin-secret"
+    "enabled": true
   }
 }
 ```

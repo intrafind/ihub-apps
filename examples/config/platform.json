@@ -62,8 +62,6 @@
     "lastUpdated": "2025-07-08T17:00:38.743Z"
   },
   "admin": {
-    "secret": "admin-secret",
-    "encrypted": false,
     "pages": {
       "home": true,
       "usage": true,

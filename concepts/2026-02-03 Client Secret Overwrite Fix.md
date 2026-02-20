@@ -92,8 +92,8 @@ The fix handles the following secret fields:
    - `auth.jwtSecret`
    - `localAuth.jwtSecret`
 
-3. **Admin Secret**
-   - `admin.secret`
+3. **Admin Secret** (DEPRECATED - removed in February 2026)
+   - `admin.secret` - No longer used, admin access now controlled by group permissions only
 
 4. **LDAP Secrets**
    - `ldapAuth.providers[].adminPassword`

@@ -55,18 +55,11 @@ Created `scripts/audit-admin-endpoints.js` that:
 
 The `adminAuth` middleware enforces:
 
-**Anonymous Mode:**
-
-- Requires admin secret via Bearer token
-- Secret configured in `ADMIN_SECRET` environment variable
-- Supports both plain text and bcrypt-hashed secrets
-
-**Local/OIDC/Proxy Modes:**
+**All Authentication Modes:**
 
 - Requires authenticated user session
 - User must be in a group with `adminAccess: true` permission
 - Group permissions resolved hierarchically
-- Admin secret NOT allowed in these modes
 
 ## Intentional Exception
 
