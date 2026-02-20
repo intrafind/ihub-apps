@@ -18,6 +18,7 @@
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
     "axios": "^1.13.5",
+    "docx": "^9.5.3",
     "file-saver": "^2.0.5",
     "fuse.js": "^6.6.2",
     "html-to-image": "^1.11.13",
@@ -29,6 +30,7 @@
     "mermaid": "^11.12.3",
     "microsoft-cognitiveservices-speech-sdk": "^1.44.0",
     "pdfjs-dist": "^4.10.38",
+    "pptxgenjs": "^4.0.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-error-boundary": "^6.0.0",
@@ -41,7 +43,8 @@
     "tailwindcss": "^3.3.2",
     "turndown": "^7.2.0",
     "utif2": "^4.1.0",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "^18.0.28",

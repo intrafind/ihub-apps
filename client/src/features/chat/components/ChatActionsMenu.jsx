@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
-import ExportConversationMenu from './ExportConversationMenu';
+import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
 const ChatActionsMenu = ({
@@ -26,14 +26,13 @@ const ChatActionsMenu = ({
   const navigate = useNavigate();
   const { user } = useAuth();
   const [open, setOpen] = useState(false);
-  const [showExport, setShowExport] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const menuRef = useRef(null);
 
   useEffect(() => {
     const handleClick = e => {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
         setOpen(false);
-        setShowExport(false);
       }
     };
     document.addEventListener('mousedown', handleClick);
@@ -126,29 +125,27 @@ const ChatActionsMenu = ({
               <div className="border-t border-gray-200 my-1"></div>
               <button
                 onClick={() => {
-                  setShowExport(!showExport);
+                  setShowExportDialog(true);
+                  setOpen(false);
                 }}
                 className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
               >
                 <Icon name="download" size="sm" /> {t('common.export', 'Export')}
-                <Icon
-                  name={showExport ? 'chevron-up' : 'chevron-down'}
-                  size="sm"
-                  className="ml-auto"
-                />
               </button>
-              {showExport && (
-                <ExportConversationMenu
-                  messages={messages}
-                  exportSettings={exportSettings}
-                  appId={appId}
-                  chatId={chatId}
-                />
-              )}
             </>
           )}
         </div>
       )}
+
+      {/* Export Dialog */}
+      <ExportDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        messages={messages}
+        settings={exportSettings}
+        appId={appId}
+        chatId={chatId}
+      />
     </div>
   );
 };
