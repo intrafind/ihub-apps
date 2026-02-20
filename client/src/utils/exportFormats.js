@@ -1,4 +1,4 @@
-import ExcelJS from 'exceljs';
+import writeXlsxFile from 'write-excel-file';
 import { Document, Paragraph, TextRun, HeadingLevel } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
@@ -10,58 +10,56 @@ export const exportToXLSX = async (messages, settings, appName, appId, chatId) =
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.xlsx`;
 
-  // Create workbook and worksheet
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Chat Export');
-
-  // Set column widths
-  worksheet.columns = [{ width: 15 }, { width: 20 }, { width: 80 }];
-
-  // Add header information
-  worksheet.addRow(['Chat Export', '', '']);
-  worksheet.addRow(['App', appName, '']);
-  worksheet.addRow(['Date', new Date().toLocaleString(), '']);
-  worksheet.addRow(['', '', '']);
-
-  // Add column headers with styling
-  const headerRow = worksheet.addRow(['Role', 'Timestamp', 'Content']);
-  headerRow.font = { bold: true };
-  headerRow.fill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FFE0E0E0' }
+  // Define header style
+  const headerStyle = {
+    fontWeight: 'bold',
+    backgroundColor: '#E0E0E0'
   };
 
-  // Add messages
+  // Prepare data rows for write-excel-file
+  const data = [
+    // Header information
+    [{ value: 'Chat Export', span: 3, fontWeight: 'bold' }],
+    [{ value: 'App' }, { value: appName, span: 2 }],
+    [{ value: 'Date' }, { value: new Date().toLocaleString(), span: 2 }],
+    [{ value: '', span: 3 }],
+    // Column headers
+    [
+      { value: 'Role', ...headerStyle },
+      { value: 'Timestamp', ...headerStyle },
+      { value: 'Content', ...headerStyle }
+    ]
+  ];
+
+  // Add message rows
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
     const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
     const content = msg.content || '';
-    worksheet.addRow([role, timestamp, content]);
+    data.push([{ value: role }, { value: timestamp }, { value: content }]);
   });
 
-  // Add metadata if available
-  if (settings) {
-    worksheet.addRow(['', '', '']);
-    const settingsHeaderRow = worksheet.addRow(['Settings', '', '']);
-    settingsHeaderRow.font = { bold: true };
+  // Add settings section if available
+  if (settings && Object.keys(settings).filter(k => settings[k]).length > 0) {
+    data.push([{ value: '', span: 3 }]);
+    data.push([{ value: 'Settings', ...headerStyle, span: 3 }]);
 
-    if (settings.model) worksheet.addRow(['Model', settings.model, '']);
-    if (settings.temperature) worksheet.addRow(['Temperature', settings.temperature, '']);
-    if (settings.style) worksheet.addRow(['Style', settings.style, '']);
-    if (settings.outputFormat) worksheet.addRow(['Output Format', settings.outputFormat, '']);
+    if (settings.model) data.push([{ value: 'Model' }, { value: settings.model, span: 2 }]);
+    if (settings.temperature !== undefined)
+      data.push([{ value: 'Temperature' }, { value: String(settings.temperature), span: 2 }]);
+    if (settings.style) data.push([{ value: 'Style' }, { value: settings.style, span: 2 }]);
+    if (settings.outputFormat)
+      data.push([{ value: 'Output Format' }, { value: settings.outputFormat, span: 2 }]);
   }
 
-  // Generate buffer and download
-  const buffer = await workbook.xlsx.writeBuffer();
-  const blob = new Blob([buffer], {
-    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+  // Define column widths
+  const columns = [{ width: 15 }, { width: 20 }, { width: 80 }];
+
+  // Write XLSX file
+  await writeXlsxFile(data, {
+    columns,
+    fileName: filename
   });
-  const link = document.createElement('a');
-  link.href = URL.createObjectURL(blob);
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(link.href);
 
   return { success: true, filename };
 };
@@ -74,30 +72,42 @@ export const exportToCSV = async (messages, settings, appName, appId, chatId) =>
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.csv`;
 
-  // Create workbook and worksheet
-  const workbook = new ExcelJS.Workbook();
-  const worksheet = workbook.addWorksheet('Chat Export');
+  // Helper function to escape CSV values
+  const escapeCSV = value => {
+    if (value === null || value === undefined) return '';
+    const stringValue = String(value);
+    // Escape quotes and wrap in quotes if contains comma, quote, or newline
+    if (stringValue.includes(',') || stringValue.includes('"') || stringValue.includes('\n')) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
 
-  // Add header information
-  worksheet.addRow(['Chat Export']);
-  worksheet.addRow(['App', appName]);
-  worksheet.addRow(['Date', new Date().toLocaleString()]);
-  worksheet.addRow(['']);
+  // Build CSV content
+  const rows = [];
 
-  // Add column headers
-  worksheet.addRow(['Role', 'Timestamp', 'Content']);
+  // Header information
+  rows.push(['Chat Export', '', ''].map(escapeCSV).join(','));
+  rows.push(['App', appName, ''].map(escapeCSV).join(','));
+  rows.push(['Date', new Date().toLocaleString(), ''].map(escapeCSV).join(','));
+  rows.push(['', '', ''].map(escapeCSV).join(','));
 
-  // Add messages
+  // Column headers
+  rows.push(['Role', 'Timestamp', 'Content'].map(escapeCSV).join(','));
+
+  // Add message rows
   messages.forEach(msg => {
     const role = msg.role === 'user' ? 'User' : 'Assistant';
     const timestamp = msg.timestamp ? new Date(msg.timestamp).toLocaleString() : '';
     const content = msg.content || '';
-    worksheet.addRow([role, timestamp, content]);
+    rows.push([role, timestamp, content].map(escapeCSV).join(','));
   });
 
-  // Generate CSV buffer and download
-  const buffer = await workbook.csv.writeBuffer();
-  const blob = new Blob([buffer], { type: 'text/csv;charset=utf-8' });
+  // Create CSV content
+  const csvContent = rows.join('\n');
+
+  // Download file
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
   const link = document.createElement('a');
   link.href = URL.createObjectURL(blob);
   link.download = filename;
