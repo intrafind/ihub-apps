@@ -304,7 +304,7 @@ class ImageWatermarkService {
         // Extract base64 data from data URL
         const base64Data = watermarkConfig.logo.split(',')[1];
         logoBuffer = Buffer.from(base64Data, 'base64');
-        
+
         logger.info({
           component: 'ImageWatermarkService',
           message: 'Loading logo from base64 string',
@@ -312,9 +312,14 @@ class ImageWatermarkService {
         });
       } else {
         // Load from file system (original behavior)
-        const logoPath = path.join(getRootDir(), config.CONTENTS_DIR, 'logos', watermarkConfig.logo);
+        const logoPath = path.join(
+          getRootDir(),
+          config.CONTENTS_DIR,
+          'logos',
+          watermarkConfig.logo
+        );
         logoBuffer = await fs.readFile(logoPath);
-        
+
         logger.info({
           component: 'ImageWatermarkService',
           message: 'Loading logo from file',
