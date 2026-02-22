@@ -136,14 +136,14 @@ const ExportDialog = ({ isOpen, onClose, messages = [], settings = {}, appId, ch
     {
       id: 'pptx',
       name: t('pages.appChat.export.formats.pptx', 'PowerPoint'),
-      icon: 'document-duplicate',
-      description: t('pages.appChat.export.descriptions.pptx', 'PowerPoint presentation')
+      icon: 'presentation-chart-bar',
+      description: t('pages.appChat.export.descriptions.pptx', 'PowerPoint presentation with slides')
     },
     {
       id: 'xlsx',
       name: t('pages.appChat.export.formats.xlsx', 'Excel Spreadsheet'),
-      icon: 'document-chart-bar',
-      description: t('pages.appChat.export.descriptions.xlsx', 'Excel workbook with data')
+      icon: 'table-cells',
+      description: t('pages.appChat.export.descriptions.xlsx', 'Excel workbook with structured data')
     },
     {
       id: 'csv',

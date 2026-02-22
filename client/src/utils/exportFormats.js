@@ -239,44 +239,45 @@ const markdownToPPTX = blocks => {
     if (block.type === 'heading') {
       // Headings in PPTX - make them bold and larger
       block.segments.forEach(segment => {
-        const options = {
+        const textObj = {
+          text: segment.text,
           bold: true,
           fontSize: Math.max(18, 24 - block.level * 2) // H1=24, H2=22, etc.
         };
-        if (segment.format.italic) options.italic = true;
-        if (segment.format.code) options.fontFace = 'Courier New';
+        if (segment.format.italic) textObj.italic = true;
+        if (segment.format.code) textObj.fontFace = 'Courier New';
 
-        richTextParts.push({ text: segment.text, options });
+        richTextParts.push(textObj);
       });
-      richTextParts.push({ text: '\n', options: {} });
+      richTextParts.push({ text: '\n' });
     } else if (block.type === 'list') {
       // Lists in PPTX
       block.items.forEach((item, itemIndex) => {
         // Add bullet/number
         const bullet = block.ordered ? `${itemIndex + 1}. ` : '• ';
-        richTextParts.push({ text: bullet, options: {} });
+        richTextParts.push({ text: bullet });
 
         item.segments.forEach(segment => {
-          const options = {};
-          if (segment.format.bold) options.bold = true;
-          if (segment.format.italic) options.italic = true;
-          if (segment.format.code) options.fontFace = 'Courier New';
+          const textObj = { text: segment.text };
+          if (segment.format.bold) textObj.bold = true;
+          if (segment.format.italic) textObj.italic = true;
+          if (segment.format.code) textObj.fontFace = 'Courier New';
 
-          richTextParts.push({ text: segment.text, options });
+          richTextParts.push(textObj);
         });
-        richTextParts.push({ text: '\n', options: {} });
+        richTextParts.push({ text: '\n' });
       });
     } else if (block.type === 'paragraph') {
       block.segments.forEach(segment => {
-        const options = {};
-        if (segment.format.bold) options.bold = true;
-        if (segment.format.italic) options.italic = true;
-        if (segment.format.code) options.fontFace = 'Courier New';
+        const textObj = { text: segment.text };
+        if (segment.format.bold) textObj.bold = true;
+        if (segment.format.italic) textObj.italic = true;
+        if (segment.format.code) textObj.fontFace = 'Courier New';
 
-        richTextParts.push({ text: segment.text, options });
+        richTextParts.push(textObj);
       });
       if (blockIndex < blocks.length - 1) {
-        richTextParts.push({ text: '\n', options: {} });
+        richTextParts.push({ text: '\n' });
       }
     }
   });
@@ -528,8 +529,29 @@ export const exportToDOCX = async (messages, settings, appName, appId, chatId) =
     }
   }
 
-  // Create document
+  // Create document with proper numbering support
+  const { AlignmentType, convertInchesToTwip } = await import('docx');
   const doc = new Document({
+    numbering: {
+      config: [
+        {
+          reference: 'default-numbering',
+          levels: [
+            {
+              level: 0,
+              format: 'decimal',
+              text: '%1.',
+              alignment: AlignmentType.LEFT,
+              style: {
+                paragraph: {
+                  indent: { left: convertInchesToTwip(0.5), hanging: convertInchesToTwip(0.25) }
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
     sections: [
       {
         children
