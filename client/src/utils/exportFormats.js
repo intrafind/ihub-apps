@@ -57,7 +57,7 @@ const parseInlineMarkdown = text => {
 /**
  * Parse markdown content into structured blocks
  * Returns array of blocks with type and content information
- * Supports: headings, lists, paragraphs with inline formatting
+ * Supports: headings, lists, paragraphs, horizontal rules with inline formatting
  * Preserves newlines and paragraph breaks for readability
  */
 const parseMarkdown = content => {
@@ -77,6 +77,16 @@ const parseMarkdown = content => {
       blocks.push({
         type: 'paragraph',
         segments: [{ text: '', format: {} }]
+      });
+      i++;
+      continue;
+    }
+
+    // Horizontal rule: ***, ---, ___ (three or more)
+    if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmedLine)) {
+      blocks.push({
+        type: 'hr',
+        segments: []
       });
       i++;
       continue;
@@ -214,6 +224,9 @@ const markdownToDOCX = blocks => {
           heading: headingLevels[block.level] || HeadingLevel.HEADING_6
         })
       );
+    } else if (block.type === 'hr') {
+      // Horizontal rule as empty paragraph with border
+      paragraphs.push(new Paragraph({ text: '___________________________________________' }));
     } else if (block.type === 'list') {
       // Add list items as paragraphs with bullets/numbering
       block.items.forEach((item, index) => {
@@ -281,6 +294,9 @@ const markdownToPPTX = blocks => {
         richTextParts.push(textObj);
       });
       richTextParts.push({ text: '\n' });
+    } else if (block.type === 'hr') {
+      // Horizontal rule as line
+      richTextParts.push({ text: '___________________________________________\n' });
     } else if (block.type === 'list') {
       // Lists in PPTX
       block.items.forEach((item, itemIndex) => {

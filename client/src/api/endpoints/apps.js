@@ -120,9 +120,16 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
+      const trimmedLine = line.trim();
+      
+      // Handle horizontal rules: ***, ---, ___ (three or more)
+      if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmedLine)) {
+        processedLines.push('<hr>');
+        continue;
+      }
       
       // Handle headings (# through ######)
-      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+      const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
       if (headingMatch) {
         const level = headingMatch[1].length;
         const text = headingMatch[2];
@@ -130,22 +137,22 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
         continue;
       }
       
-      // Handle unordered lists (* - +)
-      const unorderedListMatch = line.match(/^[\*\-\+]\s+(.+)$/);
+      // Handle unordered lists (* - +) - must check AFTER horizontal rule
+      const unorderedListMatch = trimmedLine.match(/^[\*\-\+]\s+(.+)$/);
       if (unorderedListMatch) {
         processedLines.push(`<li>${processInlineMarkdown(unorderedListMatch[1])}</li>`);
         continue;
       }
       
       // Handle ordered lists (1. 2. etc.)
-      const orderedListMatch = line.match(/^(\d+)\.\s+(.+)$/);
+      const orderedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
       if (orderedListMatch) {
         processedLines.push(`<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`);
         continue;
       }
       
       // Empty line creates paragraph break
-      if (line.trim() === '') {
+      if (trimmedLine === '') {
         processedLines.push('<br>');
         continue;
       }
@@ -397,6 +404,12 @@ const getTemplateStyles = template => {
     .message-content h3:first-child, .message-content h4:first-child,
     .message-content h5:first-child, .message-content h6:first-child {
       margin-top: 0;
+    }
+    
+    .message-content hr {
+      border: none;
+      border-top: 2px solid #e2e8f0;
+      margin: 15px 0;
     }
     
     .message-content li {
