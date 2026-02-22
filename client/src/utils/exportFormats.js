@@ -3,108 +3,285 @@ import { Document, Paragraph, TextRun, HeadingLevel } from 'docx';
 import PptxGenJS from 'pptxgenjs';
 
 /**
- * Parse markdown text and return array of TextRun objects for DOCX
- * Handles bold, italic, bold+italic, code, and plain text
+ * Parse inline markdown formatting (bold, italic, code) within a text line
+ * Returns array of text segments with formatting information
  */
-const parseMarkdownForDOCX = text => {
-  if (!text || typeof text !== 'string') return [new TextRun('')];
+const parseInlineMarkdown = text => {
+  if (!text || typeof text !== 'string') return [{ text: '', format: {} }];
 
-  const runs = [];
+  const segments = [];
   let currentPos = 0;
 
-  // Regular expression to match markdown patterns
-  // Matches: ***bold+italic***, **bold**, *italic*, `code`, and plain text
-  const markdownRegex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
+  // Match: ***bold+italic***, **bold**, *italic*, `code`
+  const inlineRegex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
 
   let match;
-  while ((match = markdownRegex.exec(text)) !== null) {
+  while ((match = inlineRegex.exec(text)) !== null) {
     // Add plain text before the match
     if (match.index > currentPos) {
       const plainText = text.slice(currentPos, match.index);
       if (plainText) {
-        runs.push(new TextRun(plainText));
+        segments.push({ text: plainText, format: {} });
       }
     }
 
     // Add formatted text based on the match
     if (match[2]) {
       // ***bold+italic***
-      runs.push(new TextRun({ text: match[2], bold: true, italics: true }));
+      segments.push({ text: match[2], format: { bold: true, italic: true } });
     } else if (match[3]) {
       // **bold**
-      runs.push(new TextRun({ text: match[3], bold: true }));
+      segments.push({ text: match[3], format: { bold: true } });
     } else if (match[4]) {
       // *italic*
-      runs.push(new TextRun({ text: match[4], italics: true }));
+      segments.push({ text: match[4], format: { italic: true } });
     } else if (match[5]) {
       // `code`
-      runs.push(new TextRun({ text: match[5], font: 'Courier New' }));
+      segments.push({ text: match[5], format: { code: true } });
     }
 
     currentPos = match.index + match[0].length;
   }
 
-  // Add remaining plain text after the last match
+  // Add remaining plain text
   if (currentPos < text.length) {
     const remainingText = text.slice(currentPos);
     if (remainingText) {
-      runs.push(new TextRun(remainingText));
+      segments.push({ text: remainingText, format: {} });
     }
   }
 
-  return runs.length > 0 ? runs : [new TextRun(text)];
+  return segments.length > 0 ? segments : [{ text, format: {} }];
 };
 
 /**
- * Parse markdown text and return formatted text object for PPTX
- * Returns array of text objects with formatting options
+ * Parse markdown content into structured blocks
+ * Returns array of blocks with type and content information
+ * Supports: headings, lists, paragraphs with inline formatting
  */
-const parseMarkdownForPPTX = text => {
-  if (!text || typeof text !== 'string') return [{ text: '' }];
+const parseMarkdown = content => {
+  if (!content || typeof content !== 'string') return [];
 
-  const textParts = [];
-  let currentPos = 0;
+  const blocks = [];
+  const lines = content.split('\n');
+  let i = 0;
 
-  // Regular expression to match markdown patterns
-  const markdownRegex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|`([^`]+)`)/g;
+  while (i < lines.length) {
+    const line = lines[i];
+    const trimmedLine = line.trim();
 
-  let match;
-  while ((match = markdownRegex.exec(text)) !== null) {
-    // Add plain text before the match
-    if (match.index > currentPos) {
-      const plainText = text.slice(currentPos, match.index);
-      if (plainText) {
-        textParts.push({ text: plainText });
+    // Skip empty lines
+    if (!trimmedLine) {
+      i++;
+      continue;
+    }
+
+    // Headings: # H1, ## H2, ### H3, etc.
+    const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+    if (headingMatch) {
+      const level = headingMatch[1].length;
+      const text = headingMatch[2];
+      blocks.push({
+        type: 'heading',
+        level,
+        segments: parseInlineMarkdown(text)
+      });
+      i++;
+      continue;
+    }
+
+    // Unordered list: *, -, +
+    const unorderedListMatch = trimmedLine.match(/^[\*\-\+]\s+(.+)$/);
+    if (unorderedListMatch) {
+      const listItems = [];
+      while (i < lines.length) {
+        const listLine = lines[i].trim();
+        const listMatch = listLine.match(/^[\*\-\+]\s+(.+)$/);
+        if (listMatch) {
+          listItems.push({
+            segments: parseInlineMarkdown(listMatch[1])
+          });
+          i++;
+        } else if (!listLine) {
+          // Empty line ends the list
+          break;
+        } else {
+          // Non-list line ends the list
+          break;
+        }
+      }
+      blocks.push({
+        type: 'list',
+        ordered: false,
+        items: listItems
+      });
+      continue;
+    }
+
+    // Ordered list: 1., 2., etc.
+    const orderedListMatch = trimmedLine.match(/^\d+\.\s+(.+)$/);
+    if (orderedListMatch) {
+      const listItems = [];
+      while (i < lines.length) {
+        const listLine = lines[i].trim();
+        const listMatch = listLine.match(/^\d+\.\s+(.+)$/);
+        if (listMatch) {
+          listItems.push({
+            segments: parseInlineMarkdown(listMatch[1])
+          });
+          i++;
+        } else if (!listLine) {
+          // Empty line ends the list
+          break;
+        } else {
+          // Non-list line ends the list
+          break;
+        }
+      }
+      blocks.push({
+        type: 'list',
+        ordered: true,
+        items: listItems
+      });
+      continue;
+    }
+
+    // Regular paragraph
+    blocks.push({
+      type: 'paragraph',
+      segments: parseInlineMarkdown(trimmedLine)
+    });
+    i++;
+  }
+
+  return blocks;
+};
+
+/**
+ * Convert parsed markdown blocks to DOCX paragraphs
+ */
+const markdownToDOCX = blocks => {
+  const paragraphs = [];
+
+  blocks.forEach(block => {
+    if (block.type === 'heading') {
+      // Map heading levels to DOCX heading levels
+      const headingLevels = {
+        1: HeadingLevel.HEADING_1,
+        2: HeadingLevel.HEADING_2,
+        3: HeadingLevel.HEADING_3,
+        4: HeadingLevel.HEADING_4,
+        5: HeadingLevel.HEADING_5,
+        6: HeadingLevel.HEADING_6
+      };
+
+      const textRuns = block.segments.map(segment => {
+        const options = { text: segment.text };
+        if (segment.format.bold) options.bold = true;
+        if (segment.format.italic) options.italics = true;
+        if (segment.format.code) options.font = 'Courier New';
+        return new TextRun(options);
+      });
+
+      paragraphs.push(
+        new Paragraph({
+          children: textRuns,
+          heading: headingLevels[block.level] || HeadingLevel.HEADING_6
+        })
+      );
+    } else if (block.type === 'list') {
+      // Add list items as paragraphs with bullets/numbering
+      block.items.forEach((item, index) => {
+        const textRuns = item.segments.map(segment => {
+          const options = { text: segment.text };
+          if (segment.format.bold) options.bold = true;
+          if (segment.format.italic) options.italics = true;
+          if (segment.format.code) options.font = 'Courier New';
+          return new TextRun(options);
+        });
+
+        paragraphs.push(
+          new Paragraph({
+            children: textRuns,
+            bullet: block.ordered ? undefined : { level: 0 },
+            numbering: block.ordered
+              ? {
+                  reference: 'default-numbering',
+                  level: 0
+                }
+              : undefined
+          })
+        );
+      });
+    } else if (block.type === 'paragraph') {
+      const textRuns = block.segments.map(segment => {
+        const options = { text: segment.text };
+        if (segment.format.bold) options.bold = true;
+        if (segment.format.italic) options.italics = true;
+        if (segment.format.code) options.font = 'Courier New';
+        return new TextRun(options);
+      });
+
+      paragraphs.push(new Paragraph({ children: textRuns }));
+    }
+  });
+
+  return paragraphs;
+};
+
+/**
+ * Convert parsed markdown blocks to PPTX rich text
+ */
+const markdownToPPTX = blocks => {
+  const richTextParts = [];
+
+  blocks.forEach((block, blockIndex) => {
+    if (block.type === 'heading') {
+      // Headings in PPTX - make them bold and larger
+      block.segments.forEach(segment => {
+        const options = {
+          bold: true,
+          fontSize: Math.max(18, 24 - block.level * 2) // H1=24, H2=22, etc.
+        };
+        if (segment.format.italic) options.italic = true;
+        if (segment.format.code) options.fontFace = 'Courier New';
+
+        richTextParts.push({ text: segment.text, options });
+      });
+      richTextParts.push({ text: '\n', options: {} });
+    } else if (block.type === 'list') {
+      // Lists in PPTX
+      block.items.forEach((item, itemIndex) => {
+        // Add bullet/number
+        const bullet = block.ordered ? `${itemIndex + 1}. ` : '• ';
+        richTextParts.push({ text: bullet, options: {} });
+
+        item.segments.forEach(segment => {
+          const options = {};
+          if (segment.format.bold) options.bold = true;
+          if (segment.format.italic) options.italic = true;
+          if (segment.format.code) options.fontFace = 'Courier New';
+
+          richTextParts.push({ text: segment.text, options });
+        });
+        richTextParts.push({ text: '\n', options: {} });
+      });
+    } else if (block.type === 'paragraph') {
+      block.segments.forEach(segment => {
+        const options = {};
+        if (segment.format.bold) options.bold = true;
+        if (segment.format.italic) options.italic = true;
+        if (segment.format.code) options.fontFace = 'Courier New';
+
+        richTextParts.push({ text: segment.text, options });
+      });
+      if (blockIndex < blocks.length - 1) {
+        richTextParts.push({ text: '\n', options: {} });
       }
     }
+  });
 
-    // Add formatted text based on the match
-    if (match[2]) {
-      // ***bold+italic***
-      textParts.push({ text: match[2], options: { bold: true, italic: true } });
-    } else if (match[3]) {
-      // **bold**
-      textParts.push({ text: match[3], options: { bold: true } });
-    } else if (match[4]) {
-      // *italic*
-      textParts.push({ text: match[4], options: { italic: true } });
-    } else if (match[5]) {
-      // `code`
-      textParts.push({ text: match[5], options: { fontFace: 'Courier New' } });
-    }
-
-    currentPos = match.index + match[0].length;
-  }
-
-  // Add remaining plain text after the last match
-  if (currentPos < text.length) {
-    const remainingText = text.slice(currentPos);
-    if (remainingText) {
-      textParts.push({ text: remainingText });
-    }
-  }
-
-  return textParts.length > 0 ? textParts : [{ text }];
+  return richTextParts;
 };
 
 /**
@@ -295,18 +472,10 @@ export const exportToDOCX = async (messages, settings, appName, appId, chatId) =
       );
     }
 
-    // Add content with markdown formatting preserved
-    const lines = content.split('\n');
-    lines.forEach(line => {
-      if (line.trim()) {
-        // Parse markdown and create paragraph with formatted text runs
-        const textRuns = parseMarkdownForDOCX(line);
-        children.push(new Paragraph({ children: textRuns }));
-      } else {
-        // Empty line
-        children.push(new Paragraph({ text: '' }));
-      }
-    });
+    // Parse markdown and convert to DOCX paragraphs
+    const blocks = parseMarkdown(content);
+    const parsedParagraphs = markdownToDOCX(blocks);
+    children.push(...parsedParagraphs);
 
     children.push(new Paragraph({ text: '' }));
   });
@@ -516,17 +685,9 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
     const truncatedContent =
       content.length > maxLength ? content.slice(0, maxLength) + '...' : content;
 
-    // Parse markdown to get formatted text parts
-    const textParts = parseMarkdownForPPTX(truncatedContent);
-
-    // Build rich text array for PptxGenJS
-    const richText = textParts.map(part => {
-      const textObj = { text: part.text };
-      if (part.options) {
-        Object.assign(textObj, part.options);
-      }
-      return textObj;
-    });
+    // Parse markdown and convert to PPTX rich text
+    const blocks = parseMarkdown(truncatedContent);
+    const richText = markdownToPPTX(blocks);
 
     slide.addText(richText, {
       x: 0.5,
