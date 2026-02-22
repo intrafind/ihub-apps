@@ -769,9 +769,9 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
       fontSize: 14,
       color: '111827',
       valign: 'top', // Align text to top
-      wrap: true, // Enable text wrapping
-      valign: 'top'
+      wrap: true // Enable text wrapping
     });
+
 
     // Add slide number
     slide.addText(`${index + 1} / ${messages.length}`, {
