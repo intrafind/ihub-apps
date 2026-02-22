@@ -225,7 +225,14 @@
       "getStarted": "Get started",
       "examplePrompts": "Here are some example prompts to get started",
       "noMessagesTitle": "No messages yet",
-      "noMessagesSubtitle": "Start a conversation by sending a message!"
+      "noMessagesSubtitle": "Start a conversation by sending a message!",
+      "modelSelector": {
+        "hint": {
+          "alertTitle": "Important Notice",
+          "dismiss": "Dismiss",
+          "acknowledge": "I Understand"
+        }
+      }
     },
     "authRequired": {
       "title": "Authentication Required",

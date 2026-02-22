@@ -219,7 +219,14 @@
       "getStarted": "Loslegen",
       "examplePrompts": "Hier sind einige Beispiel-Prompts zum Einstieg",
       "noMessagesTitle": "Noch keine Nachrichten",
-      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!"
+      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!",
+      "modelSelector": {
+        "hint": {
+          "alertTitle": "Wichtiger Hinweis",
+          "dismiss": "Schließen",
+          "acknowledge": "Verstanden"
+        }
+      }
     }
   },
   "models": {
