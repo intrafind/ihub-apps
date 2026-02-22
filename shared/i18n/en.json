@@ -1171,7 +1171,8 @@
   "disclaimer": {
     "title": "Disclaimer",
     "accept": "I understand",
-    "versionInfo": "Version {{version}}, Last updated: {{date}}"
+    "versionInfo": "Version {{version}}, Last updated: {{date}}",
+    "defaultMessage": "iHub uses AI and can make mistakes. Please verify results carefully."
   },
   "canvas": {
     "toolbox": {

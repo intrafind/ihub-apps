@@ -42,7 +42,7 @@ const AIDisclaimerBanner = () => {
       >
         <Icon name="informationCircle" size="sm" className="flex-shrink-0" />
         <span>
-          {disclaimerHint || 'iHub uses AI and can make mistakes. Please verify results carefully.'}
+          {disclaimerHint || t('disclaimer.defaultMessage', 'iHub uses AI and can make mistakes. Please verify results carefully.')}
         </span>
       </ElementTag>
     </div>
