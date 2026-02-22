@@ -216,6 +216,15 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             });
           }
           break;
+        case 'skill.activation':
+          if (lastMessageIdRef.current && data) {
+            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const prevSkills = currentMsg?.activeSkills || [];
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              activeSkills: [...prevSkills, { name: data.skillName, description: data.description }]
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message

@@ -2,6 +2,8 @@ import config from './config.js';
 import configCache from './configCache.js';
 import { throttledFetch } from './requestThrottler.js';
 import { createSourceManager } from './sources/index.js';
+import { getSkillContent, getSkillResource } from './services/skillLoader.js';
+import { actionTracker } from './actionTracker.js';
 import logger from './utils/logger.js';
 
 /**
@@ -348,6 +350,58 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
+  // Add skill activation tools if the app has skills configured
+  if (Array.isArray(app.skills) && app.skills.length > 0) {
+    const lang = language || 'en';
+    const activateDesc = {
+      en: 'Load the full instructions for a skill when it is relevant to the current task. Call this when you identify a task that matches an available skill from the <available_skills> list.',
+      de: 'Lade die vollständigen Anweisungen für einen Skill, wenn er für die aktuelle Aufgabe relevant ist.'
+    };
+    const readDesc = {
+      en: 'Read a referenced file from an activated skill (scripts, references, assets).',
+      de: 'Lese eine referenzierte Datei aus einem aktivierten Skill.'
+    };
+
+    appTools.push({
+      id: 'activate_skill',
+      name: extractLanguageValue({ en: 'Activate Skill', de: 'Skill aktivieren' }, lang),
+      description: extractLanguageValue(activateDesc, lang),
+      isInternalTool: true,
+      parameters: {
+        type: 'object',
+        properties: {
+          skill_name: {
+            type: 'string',
+            description: 'The name of the skill to activate'
+          }
+        },
+        required: ['skill_name']
+      }
+    });
+
+    appTools.push({
+      id: 'read_skill_resource',
+      name: extractLanguageValue({ en: 'Read Skill Resource', de: 'Skill-Ressource lesen' }, lang),
+      description: extractLanguageValue(readDesc, lang),
+      isInternalTool: true,
+      parameters: {
+        type: 'object',
+        properties: {
+          skill_name: {
+            type: 'string',
+            description: 'The name of the skill whose resource to read'
+          },
+          file_path: {
+            type: 'string',
+            description:
+              "Relative path from the skill root, e.g. 'references/REFERENCE.md' or 'scripts/extract.py'"
+          }
+        },
+        required: ['skill_name', 'file_path']
+      }
+    });
+  }
+
   return appTools;
 }
 
@@ -370,6 +424,48 @@ export async function runTool(toolId, params = {}) {
   logger.info(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
   if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
     throw new Error('Invalid tool id');
+  }
+
+  // Check if this is a skill activation tool
+  if (toolId === 'activate_skill') {
+    const skillName = params.skill_name;
+    if (!skillName) {
+      throw new Error('skill_name parameter is required');
+    }
+    logger.info(`Activating skill: ${skillName}`);
+    const content = await getSkillContent(skillName);
+    if (!content) {
+      return `Skill '${skillName}' not found or could not be loaded.`;
+    }
+    // Emit skill activation SSE event for UI indicators
+    const chatId = params.chatId;
+    if (chatId) {
+      actionTracker.trackSkillActivation(chatId, {
+        skillName,
+        description: content.description || ''
+      });
+    }
+    let result = content.body;
+    // Include list of available resources if any exist
+    const allResources = [...content.references, ...content.scripts, ...content.assets];
+    if (allResources.length > 0) {
+      result += `\n\n---\nAvailable resources you can read with read_skill_resource:\n${allResources.map(r => `- ${r}`).join('\n')}`;
+    }
+    return result;
+  }
+
+  // Check if this is a skill resource read tool
+  if (toolId === 'read_skill_resource') {
+    const { skill_name: skillName, file_path: filePath } = params;
+    if (!skillName || !filePath) {
+      throw new Error('skill_name and file_path parameters are required');
+    }
+    logger.info(`Reading skill resource: ${skillName}/${filePath}`);
+    const content = await getSkillResource(skillName, filePath);
+    if (content === null) {
+      return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
+    }
+    return content;
   }
 
   // Check if this is a workflow tool (starts with 'workflow_')

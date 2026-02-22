@@ -9,6 +9,7 @@ import {
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
 import { loadTools, localizeTools } from './toolLoader.js';
+import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
@@ -199,7 +200,8 @@ class ConfigCache {
       'config/sources.json',
       'config/providers.json',
       'config/mimetypes.json',
-      'config/features.json'
+      'config/features.json',
+      'config/skills.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -285,6 +287,36 @@ class ConfigCache {
           } else {
             logger.warn(`⚠️  Failed to load: ${configPath}`, { component: 'ConfigCache' });
           }
+          return;
+        }
+
+        // Special handling for skills.json - load config then scan filesystem for skills
+        if (configPath === 'config/skills.json') {
+          const skillsConfig = await loadJson(configPath);
+          const configData = skillsConfig || { skills: {}, settings: {} };
+
+          // Scan filesystem for actual skill directories
+          const customDir = configData.settings?.skillsDirectory || undefined;
+          const discoveredSkills = await loadSkillsMetadata(customDir);
+
+          // Merge discovered skills with config overrides
+          const mergedSkills = [];
+          for (const [name, skillMeta] of discoveredSkills) {
+            const configOverride = configData.skills?.[name] || {};
+            mergedSkills.push({
+              ...skillMeta,
+              enabled: configOverride.enabled !== undefined ? configOverride.enabled : true,
+              description: configOverride.overrides?.description || skillMeta.description
+            });
+          }
+
+          this.setCacheEntry(configPath, {
+            skills: mergedSkills,
+            settings: configData.settings || {}
+          });
+          logger.info(`✓ Cached: ${configPath} (${mergedSkills.length} skills discovered)`, {
+            component: 'ConfigCache'
+          });
           return;
         }
 
@@ -496,6 +528,35 @@ class ConfigCache {
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, platformData);
           }
+        }
+        return;
+      }
+
+      // Special handling for skills.json - rescan filesystem + merge config
+      if (key === 'config/skills.json') {
+        const skillsConfig = await loadJson(key, { useCache: false });
+        const configData = skillsConfig || { skills: {}, settings: {} };
+        const customDir = configData.settings?.skillsDirectory || undefined;
+        const discoveredSkills = await loadSkillsMetadata(customDir);
+
+        const mergedSkills = [];
+        for (const [name, skillMeta] of discoveredSkills) {
+          const configOverride = configData.skills?.[name] || {};
+          mergedSkills.push({
+            ...skillMeta,
+            enabled: configOverride.enabled !== undefined ? configOverride.enabled : true,
+            description: configOverride.overrides?.description || skillMeta.description
+          });
+        }
+
+        const cacheData = { skills: mergedSkills, settings: configData.settings || {} };
+        const newEtag = this.generateETag(cacheData);
+        const existing = this.cache.get(key);
+        if (!existing || existing.etag !== newEtag) {
+          this.setCacheEntry(key, cacheData);
+          logger.info(`✓ Refreshed: ${key} (${mergedSkills.length} skills)`, {
+            component: 'ConfigCache'
+          });
         }
         return;
       }
@@ -1073,6 +1134,26 @@ class ConfigCache {
   }
 
   /**
+   * Refresh skills cache
+   * Should be called when skills are modified (upload, delete, toggle, config change)
+   */
+  async refreshSkillsCache() {
+    logger.info('Refreshing skills cache...', { component: 'ConfigCache' });
+
+    try {
+      await this.refreshCacheEntry('config/skills.json');
+      const { data: skills } = this.getSkills(true);
+      logger.info(`Skills cache refreshed: ${skills.length} skills loaded`, {
+        component: 'ConfigCache'
+      });
+      return true;
+    } catch (error) {
+      logger.error('Failed to refresh skills cache:', { component: 'ConfigCache', error });
+      return false;
+    }
+  }
+
+  /**
    * Invalidate and refresh all cached entries
    */
   async refreshAll() {
@@ -1235,6 +1316,88 @@ class ConfigCache {
     }
 
     return { data: tools, etag: userSpecificEtag };
+  }
+
+  /**
+   * Get skills configuration
+   * @param {boolean} includeDisabled - Whether to include disabled skills
+   * @returns {{ data: Array, etag: string, settings: object }}
+   */
+  getSkills(includeDisabled = false) {
+    const cached = this.get('config/skills.json');
+    if (cached === null || !cached.data) {
+      return { data: [], etag: null, settings: {} };
+    }
+
+    const { skills = [], settings = {} } = cached.data;
+
+    if (includeDisabled) {
+      return { data: skills, etag: cached.etag, settings };
+    }
+
+    return {
+      data: skills.filter(skill => skill.enabled !== false),
+      etag: cached.etag,
+      settings
+    };
+  }
+
+  /**
+   * Get skills filtered by user permissions
+   * @param {object} user - User object with permissions
+   * @param {object} platformConfig - Platform configuration
+   * @returns {{ data: Array, etag: string }}
+   */
+  async getSkillsForUser(user, platformConfig) {
+    const { data: skills, etag: skillsEtag, settings } = this.getSkills();
+
+    if (!skills || skills.length === 0) {
+      return { data: [], etag: null, settings };
+    }
+
+    let filteredSkills = [...skills];
+    const originalCount = filteredSkills.length;
+    let userSpecificEtag = skillsEtag || 'no-etag';
+
+    // Apply filtering based on user permissions
+    if (user && user.permissions && user.permissions.skills) {
+      const allowedSkills = user.permissions.skills;
+      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills, 'skills');
+    } else if (isAnonymousAccessAllowed(platformConfig)) {
+      // For anonymous users, no default skills
+      const allowedSkills = new Set();
+      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills, 'skills');
+    }
+
+    // Generate user-specific ETag if skills were filtered
+    if (filteredSkills.length < originalCount) {
+      const skillNames = filteredSkills.map(s => s.name).sort();
+      const contentHash = createHash('md5')
+        .update(JSON.stringify(skillNames))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${skillsEtag}-${contentHash}`;
+    }
+
+    return { data: filteredSkills, etag: userSpecificEtag, settings };
+  }
+
+  /**
+   * Get skills for a specific app, filtered by app config and user permissions
+   * @param {object} app - App configuration with skills array
+   * @param {object} user - User object with permissions
+   * @param {object} platformConfig - Platform configuration
+   * @returns {Promise<Array>}
+   */
+  async getSkillsForApp(app, user, platformConfig) {
+    if (!app.skills || !Array.isArray(app.skills) || app.skills.length === 0) {
+      return [];
+    }
+
+    const { data: userSkills } = await this.getSkillsForUser(user, platformConfig);
+
+    // Filter to only skills assigned to this app
+    return userSkills.filter(skill => app.skills.includes(skill.name));
   }
 
   /**

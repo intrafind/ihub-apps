@@ -15,6 +15,7 @@ import registerBackupRoutes from './admin/backup.js';
 import registerAdminSchemasRoutes from './admin/schemas.js';
 import registerAdminVersionRoutes from './admin/version.js';
 import registerAdminToolsRoutes from './admin/tools.js';
+import registerAdminSkillsRoutes from './admin/skills.js';
 import registerAdminLoggingRoutes from './admin/logging.js';
 import registerAdminSSLRoutes from './admin/ssl.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
@@ -37,6 +38,7 @@ export default async function registerAdminRoutes(app, basePath = '') {
   registerAdminSchemasRoutes(app, basePath);
   registerAdminVersionRoutes(app, basePath);
   registerAdminToolsRoutes(app, basePath);
+  registerAdminSkillsRoutes(app, basePath);
   registerAdminLoggingRoutes(app, basePath);
   registerAdminSSLRoutes(app, basePath);
   registerAdminFeaturesRoutes(app, basePath);

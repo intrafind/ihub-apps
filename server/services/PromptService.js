@@ -274,6 +274,32 @@ class PromptService {
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 
+      // Inject available skills metadata for progressive disclosure
+      if (app.skills && Array.isArray(app.skills) && app.skills.length > 0) {
+        try {
+          const platformConfig = configCache.getPlatform() || {};
+          const appSkills = await configCache.getSkillsForApp(app, user, platformConfig);
+
+          if (appSkills.length > 0) {
+            const skillEntries = appSkills
+              .map(
+                skill =>
+                  `  <skill>\n    <name>${skill.name}</name>\n    <description>${skill.description}</description>\n  </skill>`
+              )
+              .join('\n');
+            const skillsBlock = `\n\n<available_skills>\n${skillEntries}\n</available_skills>`;
+            systemPrompt += skillsBlock;
+
+            logger.info(
+              `Injected ${appSkills.length} skills into system prompt for app ${app.id}`,
+              { component: 'PromptService' }
+            );
+          }
+        } catch (err) {
+          logger.error('Error loading skills for system prompt:', err);
+        }
+      }
+
       if (style) {
         try {
           // Try to get styles from cache first

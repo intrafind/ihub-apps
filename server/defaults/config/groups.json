@@ -8,6 +8,7 @@
         "apps": ["*"],
         "prompts": ["*"],
         "models": ["*"],
+        "skills": ["*"],
         "adminAccess": true
       },
       "mappings": ["IT-Admin", "IT-Admins", "Platform-Admin", "Platform-Admins"]
@@ -20,6 +21,7 @@
         "apps": ["*"],
         "prompts": ["*"],
         "models": ["*"],
+        "skills": ["*"],
         "adminAccess": false
       },
       "mappings": ["Employees", "Staff"]
@@ -32,6 +34,7 @@
         "apps": ["chat"],
         "prompts": ["*"],
         "models": ["gemini-2.0-flash"],
+        "skills": [],
         "adminAccess": false
       },
       "mappings": ["anonymous", "public"]
@@ -45,6 +48,7 @@
         "apps": ["*"],
         "prompts": ["*"],
         "models": ["*"],
+        "skills": ["*"],
         "adminAccess": false
       },
       "mappings": []

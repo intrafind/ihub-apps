@@ -492,6 +492,101 @@ export const cancelAdminExecution = async id => {
   return response.data;
 };
 
+// Skills API functions
+
+/**
+ * Fetches all installed skills for the admin panel.
+ *
+ * @returns {Promise<Array>} Array of skill objects
+ */
+export const fetchAdminSkills = async () => {
+  try {
+    const response = await makeAdminApiCall('/admin/skills');
+    const data = response.data;
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.error('Error in fetchAdminSkills:', error);
+    throw error;
+  }
+};
+
+/**
+ * Fetches detailed information for a single skill by name.
+ *
+ * @param {string} skillName - The unique name identifier of the skill
+ * @returns {Promise<Object>} The skill detail object
+ */
+export const fetchAdminSkillDetail = async skillName => {
+  const response = await makeAdminApiCall(`/admin/skills/${encodeURIComponent(skillName)}`);
+  return response.data;
+};
+
+/**
+ * Updates an existing skill's configuration overrides.
+ *
+ * @param {string} skillName - The unique name identifier of the skill
+ * @param {Object} data - The updated skill data
+ * @returns {Promise<Object>} The updated skill object
+ */
+export const updateSkill = async (skillName, data) => {
+  const response = await makeAdminApiCall(`/admin/skills/${encodeURIComponent(skillName)}`, {
+    method: 'PUT',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Toggles the enabled/disabled state of a skill.
+ *
+ * @param {string} skillName - The unique name identifier of the skill
+ * @returns {Promise<Object>} The toggled skill object with updated enabled state
+ */
+export const toggleSkill = async skillName => {
+  const response = await makeAdminApiCall(`/admin/skills/${encodeURIComponent(skillName)}/toggle`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+/**
+ * Deletes a skill by name.
+ *
+ * @param {string} skillName - The unique name identifier of the skill
+ * @returns {Promise<Object>} Confirmation of deletion
+ */
+export const deleteSkill = async skillName => {
+  const response = await makeAdminApiCall(`/admin/skills/${encodeURIComponent(skillName)}`, {
+    method: 'DELETE'
+  });
+  return response.data;
+};
+
+/**
+ * Imports a skill from an uploaded .zip archive via FormData.
+ *
+ * @param {FormData} formData - Form data containing the skill .zip file
+ * @returns {Promise<Object>} The imported skill object
+ */
+export const importSkill = async formData => {
+  const response = await makeAdminApiCall('/admin/skills/import', {
+    method: 'POST',
+    body: formData
+  });
+  return response.data;
+};
+
+/**
+ * Triggers a browser download of a skill package by opening the export
+ * endpoint in a new tab.
+ *
+ * @param {string} skillName - The unique name identifier of the skill
+ */
+export const exportSkill = skillName => {
+  const baseURL = import.meta.env.VITE_API_URL || '/api';
+  window.open(`${baseURL}/admin/skills/${encodeURIComponent(skillName)}/export`, '_blank');
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -553,5 +648,14 @@ export const adminApi = {
   deleteTool,
   toggleTool,
   fetchToolScript,
-  updateToolScript
+  updateToolScript,
+
+  // Skills functions
+  fetchAdminSkills,
+  fetchAdminSkillDetail,
+  updateSkill,
+  toggleSkill,
+  deleteSkill,
+  importSkill,
+  exportSkill
 };

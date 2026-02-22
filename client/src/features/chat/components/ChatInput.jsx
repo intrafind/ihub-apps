@@ -520,7 +520,16 @@ const ChatInput = ({
           appId={app?.id}
           onClose={() => setShowPromptSearch(false)}
           onSelect={p => {
-            onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            if (p._type === 'skill') {
+              // For skills, set input to a skill activation request
+              onChange({
+                target: {
+                  value: `Please activate and use the "${p.name}" skill to help me with this task.`
+                }
+              });
+            } else {
+              onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            }
             setShowPromptSearch(false);
             setTimeout(() => {
               focusInputAtEnd();

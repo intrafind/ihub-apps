@@ -97,6 +97,13 @@ const AdminNavigation = () => {
           current: location.pathname.startsWith('/admin/tools')
         },
         {
+          key: 'skills',
+          name: t('admin.nav.skills', 'Skills'),
+          href: '/admin/skills',
+          // icon: 'bolt',
+          current: location.pathname.startsWith('/admin/skills')
+        },
+        {
           key: 'sources',
           name: t('admin.nav.sources', 'Sources'),
           href: '/admin/sources',

@@ -15,7 +15,7 @@ const GroupFormEditor = ({
   value: group,
   onChange,
   onValidationChange,
-  resources = { apps: [], models: [], prompts: [], workflows: [] },
+  resources = { apps: [], models: [], prompts: [], workflows: [], skills: [] },
   jsonSchema
 }) => {
   const { t } = useTranslation();
@@ -309,6 +309,16 @@ const GroupFormEditor = ({
                 onSelectionChange={selected => handlePermissionChange('workflows', selected)}
                 placeholder="Search workflows to add..."
                 emptyMessage="No workflows selected - users can't execute any workflows"
+              />
+
+              {/* Skills Permission */}
+              <ResourceSelector
+                label="Skills"
+                resources={resources.skills || []}
+                selectedResources={group.permissions?.skills || []}
+                onSelectionChange={selected => handlePermissionChange('skills', selected)}
+                placeholder="Search skills to add..."
+                emptyMessage="No skills selected - users can't use any agent skills"
               />
             </div>
           </div>

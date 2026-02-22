@@ -40,6 +40,8 @@ const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPr
 const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
 const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
 const AdminToolEditPage = React.lazy(() => import('./features/admin/pages/AdminToolEditPage'));
+const AdminSkillsPage = React.lazy(() => import('./features/admin/pages/AdminSkillsPage'));
+const AdminSkillEditPage = React.lazy(() => import('./features/admin/pages/AdminSkillEditPage'));
 const AdminWorkflowsPage = React.lazy(() => import('./features/admin/pages/AdminWorkflowsPage'));
 const AdminWorkflowEditPage = React.lazy(
   () => import('./features/admin/pages/AdminWorkflowEditPage')
@@ -308,6 +310,18 @@ function App() {
                       <Route
                         path="admin/tools/:toolId"
                         element={<LazyAdminRoute component={AdminToolEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('skills') && (
+                      <Route
+                        path="admin/skills"
+                        element={<LazyAdminRoute component={AdminSkillsPage} />}
+                      />
+                    )}
+                    {showAdminPage('skills') && (
+                      <Route
+                        path="admin/skills/:skillName"
+                        element={<LazyAdminRoute component={AdminSkillEditPage} />}
                       />
                     )}
                     {showAdminPage('workflows') && (
