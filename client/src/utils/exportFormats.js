@@ -58,6 +58,7 @@ const parseInlineMarkdown = text => {
  * Parse markdown content into structured blocks
  * Returns array of blocks with type and content information
  * Supports: headings, lists, paragraphs with inline formatting
+ * Preserves newlines and paragraph breaks for readability
  */
 const parseMarkdown = content => {
   if (!content || typeof content !== 'string') return [];
@@ -70,8 +71,13 @@ const parseMarkdown = content => {
     const line = lines[i];
     const trimmedLine = line.trim();
 
-    // Skip empty lines
+    // Empty lines create line breaks (preserve them for readability)
     if (!trimmedLine) {
+      // Add empty paragraph for spacing
+      blocks.push({
+        type: 'paragraph',
+        segments: [{ text: '', format: {} }]
+      });
       i++;
       continue;
     }
@@ -146,12 +152,31 @@ const parseMarkdown = content => {
       continue;
     }
 
-    // Regular paragraph
-    blocks.push({
-      type: 'paragraph',
-      segments: parseInlineMarkdown(trimmedLine)
-    });
-    i++;
+    // Regular paragraph - collect consecutive non-empty lines
+    const paragraphLines = [];
+    while (i < lines.length) {
+      const currentLine = lines[i].trim();
+      if (!currentLine) {
+        // Empty line ends paragraph
+        break;
+      }
+      // Check if next line is a special format (heading, list)
+      if (currentLine.match(/^#{1,6}\s+/)) break;
+      if (currentLine.match(/^[\*\-\+]\s+/)) break;
+      if (currentLine.match(/^\d+\.\s+/)) break;
+
+      paragraphLines.push(currentLine);
+      i++;
+    }
+
+    if (paragraphLines.length > 0) {
+      // Join lines with space to preserve readability
+      const paragraphText = paragraphLines.join(' ');
+      blocks.push({
+        type: 'paragraph',
+        segments: parseInlineMarkdown(paragraphText)
+      });
+    }
   }
 
   return blocks;
@@ -214,15 +239,21 @@ const markdownToDOCX = blocks => {
         );
       });
     } else if (block.type === 'paragraph') {
-      const textRuns = block.segments.map(segment => {
-        const options = { text: segment.text };
-        if (segment.format.bold) options.bold = true;
-        if (segment.format.italic) options.italics = true;
-        if (segment.format.code) options.font = 'Courier New';
-        return new TextRun(options);
-      });
+      // Check if this is an empty paragraph (line break)
+      if (block.segments.length === 1 && block.segments[0].text === '') {
+        // Add empty paragraph for spacing
+        paragraphs.push(new Paragraph({ text: '' }));
+      } else {
+        const textRuns = block.segments.map(segment => {
+          const options = { text: segment.text };
+          if (segment.format.bold) options.bold = true;
+          if (segment.format.italic) options.italics = true;
+          if (segment.format.code) options.font = 'Courier New';
+          return new TextRun(options);
+        });
 
-      paragraphs.push(new Paragraph({ children: textRuns }));
+        paragraphs.push(new Paragraph({ children: textRuns }));
+      }
     }
   });
 
@@ -268,16 +299,22 @@ const markdownToPPTX = blocks => {
         richTextParts.push({ text: '\n' });
       });
     } else if (block.type === 'paragraph') {
-      block.segments.forEach(segment => {
-        const textObj = { text: segment.text };
-        if (segment.format.bold) textObj.bold = true;
-        if (segment.format.italic) textObj.italic = true;
-        if (segment.format.code) textObj.fontFace = 'Courier New';
-
-        richTextParts.push(textObj);
-      });
-      if (blockIndex < blocks.length - 1) {
+      // Check if this is an empty paragraph (line break)
+      if (block.segments.length === 1 && block.segments[0].text === '') {
+        // Add newline for spacing
         richTextParts.push({ text: '\n' });
+      } else {
+        block.segments.forEach(segment => {
+          const textObj = { text: segment.text };
+          if (segment.format.bold) textObj.bold = true;
+          if (segment.format.italic) textObj.italic = true;
+          if (segment.format.code) textObj.fontFace = 'Courier New';
+
+          richTextParts.push(textObj);
+        });
+        if (blockIndex < blocks.length - 1) {
+          richTextParts.push({ text: '\n' });
+        }
       }
     }
   });
@@ -703,12 +740,9 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
 
     // Add content with markdown formatting preserved
     const content = msg.content || '';
-    const maxLength = 800; // Limit content length per slide
-    const truncatedContent =
-      content.length > maxLength ? content.slice(0, maxLength) + '...' : content;
 
     // Parse markdown and convert to PPTX rich text
-    const blocks = parseMarkdown(truncatedContent);
+    const blocks = parseMarkdown(content);
     const richText = markdownToPPTX(blocks);
 
     slide.addText(richText, {
@@ -718,6 +752,8 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
       h: 4.5,
       fontSize: 14,
       color: '111827',
+      valign: 'top', // Align text to top
+      wrap: true, // Enable text wrapping
       valign: 'top'
     });
 

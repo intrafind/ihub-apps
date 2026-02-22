@@ -113,13 +113,15 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
   const formatContent = content => {
     if (!content) return '';
-    // Basic markdown-like formatting for PDF
+    // Enhanced markdown formatting for PDF
+    // Process in order: bold+italic first, then bold, then italic, to avoid conflicts
     return content
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>');
+      .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **bold**
+      .replace(/\*(.*?)\*/g, '<em>$1</em>') // *italic*
+      .replace(/`(.*?)`/g, '<code>$1</code>') // `code`
+      .replace(/\n\n/g, '</p><p>') // Double newline = new paragraph
+      .replace(/\n/g, '<br>'); // Single newline = line break
   };
 
   const messagesHTML = messages
