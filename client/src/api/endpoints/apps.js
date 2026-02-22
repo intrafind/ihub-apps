@@ -113,21 +113,58 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
   const formatContent = content => {
     if (!content) return '';
-    // Enhanced markdown formatting for PDF
-    // Process in order: bold+italic first, then bold, then italic, to avoid conflicts
-    // Use [\s\S] instead of . to match across newlines
-    let formatted = content
+    
+    // Split content into lines to process block-level elements
+    const lines = content.split('\n');
+    const processedLines = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      // Handle headings (# through ######)
+      const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2];
+        processedLines.push(`<h${level}>${processInlineMarkdown(text)}</h${level}>`);
+        continue;
+      }
+      
+      // Handle unordered lists (* - +)
+      const unorderedListMatch = line.match(/^[\*\-\+]\s+(.+)$/);
+      if (unorderedListMatch) {
+        processedLines.push(`<li>${processInlineMarkdown(unorderedListMatch[1])}</li>`);
+        continue;
+      }
+      
+      // Handle ordered lists (1. 2. etc.)
+      const orderedListMatch = line.match(/^(\d+)\.\s+(.+)$/);
+      if (orderedListMatch) {
+        processedLines.push(`<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`);
+        continue;
+      }
+      
+      // Empty line creates paragraph break
+      if (line.trim() === '') {
+        processedLines.push('<br>');
+        continue;
+      }
+      
+      // Regular paragraph text
+      processedLines.push(processInlineMarkdown(line));
+    }
+    
+    // Join with line breaks and wrap in paragraph tags
+    return processedLines.join('<br>');
+  };
+  
+  // Helper function to process inline markdown (bold, italic, code)
+  const processInlineMarkdown = text => {
+    return text
       .replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
       .replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>') // **bold**
-      .replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>') // *italic* (don't match across lines)
+      .replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>') // *italic*
       .replace(/`([^`]+?)`/g, '<code>$1</code>'); // `code`
-    
-    // Handle newlines after markdown formatting
-    formatted = formatted
-      .replace(/\n\n/g, '</p><p>') // Double newline = new paragraph
-      .replace(/\n/g, '<br>'); // Single newline = line break
-    
-    return formatted;
   };
 
   const messagesHTML = messages
@@ -338,6 +375,38 @@ const getTemplateStyles = template => {
       border-radius: 3px;
       font-family: 'Monaco', 'Consolas', 'Courier New', monospace;
       font-size: 13px;
+    }
+    
+    .message-content h1, .message-content h2, .message-content h3,
+    .message-content h4, .message-content h5, .message-content h6 {
+      margin-top: 15px;
+      margin-bottom: 10px;
+      font-weight: 600;
+      color: #1a202c;
+      line-height: 1.3;
+    }
+    
+    .message-content h1 { font-size: 24px; }
+    .message-content h2 { font-size: 20px; }
+    .message-content h3 { font-size: 18px; }
+    .message-content h4 { font-size: 16px; }
+    .message-content h5 { font-size: 14px; }
+    .message-content h6 { font-size: 13px; }
+    
+    .message-content h1:first-child, .message-content h2:first-child,
+    .message-content h3:first-child, .message-content h4:first-child,
+    .message-content h5:first-child, .message-content h6:first-child {
+      margin-top: 0;
+    }
+    
+    .message-content li {
+      margin-left: 20px;
+      margin-bottom: 5px;
+      list-style-type: disc;
+    }
+    
+    .message-content li.ordered {
+      list-style-type: decimal;
     }
     
     @media print {
