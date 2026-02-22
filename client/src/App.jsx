@@ -187,15 +187,19 @@ function App() {
                       featureFlags.isEnabled('promptsLibrary', true) && (
                         <Route path="prompts" element={<SafePromptsList />} />
                       )}
-                    {/* Workflow routes - feature flag is enforced by server API (returns 403 if disabled) */}
-                    <Route
-                      path="workflows"
-                      element={<LazyAdminRoute component={WorkflowsPage} />}
-                    />
-                    <Route
-                      path="workflows/executions/:executionId"
-                      element={<LazyAdminRoute component={WorkflowExecutionPage} />}
-                    />
+                    {/* Workflow routes - conditionally rendered based on feature flag */}
+                    {featureFlags.isEnabled('workflows', true) && (
+                      <>
+                        <Route
+                          path="workflows"
+                          element={<LazyAdminRoute component={WorkflowsPage} />}
+                        />
+                        <Route
+                          path="workflows/executions/:executionId"
+                          element={<LazyAdminRoute component={WorkflowExecutionPage} />}
+                        />
+                      </>
+                    )}
                     <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
                     <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
