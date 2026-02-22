@@ -113,21 +113,21 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
   const formatContent = content => {
     if (!content) return '';
-    
+
     // Split content into lines to process block-level elements
     const lines = content.split('\n');
     const processedLines = [];
-    
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       const trimmedLine = line.trim();
-      
+
       // Handle horizontal rules: ***, ---, ___ (three or more)
       if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmedLine)) {
         processedLines.push('<hr>');
         continue;
       }
-      
+
       // Handle headings (# through ######)
       const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
       if (headingMatch) {
@@ -136,35 +136,37 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
         processedLines.push(`<h${level}>${processInlineMarkdown(text)}</h${level}>`);
         continue;
       }
-      
+
       // Handle unordered lists (* - +) - must check AFTER horizontal rule
       const unorderedListMatch = trimmedLine.match(/^[\*\-\+]\s+(.+)$/);
       if (unorderedListMatch) {
         processedLines.push(`<li>${processInlineMarkdown(unorderedListMatch[1])}</li>`);
         continue;
       }
-      
+
       // Handle ordered lists (1. 2. etc.)
       const orderedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
       if (orderedListMatch) {
-        processedLines.push(`<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`);
+        processedLines.push(
+          `<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`
+        );
         continue;
       }
-      
+
       // Empty line creates paragraph break
       if (trimmedLine === '') {
         processedLines.push('<br>');
         continue;
       }
-      
+
       // Regular paragraph text
       processedLines.push(processInlineMarkdown(line));
     }
-    
+
     // Join with line breaks and wrap in paragraph tags
     return processedLines.join('<br>');
   };
-  
+
   // Helper function to process inline markdown (bold, italic, code)
   const processInlineMarkdown = text => {
     return text

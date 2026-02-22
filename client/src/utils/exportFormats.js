@@ -772,7 +772,6 @@ export const exportToPPTX = async (messages, settings, appName, appId, chatId) =
       wrap: true // Enable text wrapping
     });
 
-
     // Add slide number
     slide.addText(`${index + 1} / ${messages.length}`, {
       x: 8.5,
