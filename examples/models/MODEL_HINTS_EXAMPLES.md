@@ -189,6 +189,15 @@ All hint messages must be internationalized:
 - **Additional**: Add more language codes as needed (e.g., `fr`, `es`, `ja`)
 - **Fallback**: System falls back to English if user's language is not available
 
+### UI Element Translations
+
+The hint feature includes built-in UI elements that are automatically translated:
+- **"Important Notice"** (Alert title) - Displayed for alert-level hints
+- **"Dismiss"** (Dismiss button) - Shown for dismissible hints (hint/info levels)
+- **"I Understand"** (Acknowledge button) - Required for alert-level hints
+
+These UI elements are automatically translated based on the user's language preference. You only need to provide translations for the hint `message` content in your model configuration files.
+
 ## Visual Examples
 
 See detailed visual examples with color schemes and behavior:
