@@ -6,24 +6,31 @@
 
 ## Problem
 
-The AI hint feature (ModelHintBanner component) was missing German translations for its UI elements. When users selected the German language, the following elements still appeared in English:
+The AI hint feature (ModelHintBanner component) and the AIDisclaimerBanner component were missing German translations for their UI elements. When users selected the German language, the following elements still appeared in English:
+
+**ModelHintBanner:**
 - Alert title ("Important Notice")
 - Dismiss button ("Dismiss")
 - Acknowledge button ("I Understand")
 
+**AIDisclaimerBanner:**
+- Default disclaimer message ("iHub uses AI and can make mistakes. Please verify results carefully.")
+
 ## Root Cause
 
-The translation keys referenced by the ModelHintBanner component were not present in the translation files:
+The translation keys referenced by the components were not present in the translation files:
 - Missing from `shared/i18n/en.json`
 - Missing from `shared/i18n/de.json`
 
-The component was using the `t()` function with fallback values, which meant it always displayed the English fallback text regardless of the user's language preference.
+The components were using the `t()` function with fallback values (ModelHintBanner) or hardcoded strings (AIDisclaimerBanner), which meant they always displayed English text regardless of the user's language preference.
 
 ## Solution
 
-Added the missing translation keys to both language files under the path `pages.appChat.modelSelector.hint`:
+Added the missing translation keys to both language files.
 
-### English (`shared/i18n/en.json`)
+### ModelHintBanner Translation Keys
+
+#### English (`shared/i18n/en.json`)
 ```json
 {
   "pages": {
@@ -40,7 +47,7 @@ Added the missing translation keys to both language files under the path `pages.
 }
 ```
 
-### German (`shared/i18n/de.json`)
+#### German (`shared/i18n/de.json`)
 ```json
 {
   "pages": {
@@ -53,6 +60,26 @@ Added the missing translation keys to both language files under the path `pages.
         }
       }
     }
+  }
+}
+```
+
+### AIDisclaimerBanner Translation Keys
+
+#### English (`shared/i18n/en.json`)
+```json
+{
+  "disclaimer": {
+    "defaultMessage": "iHub uses AI and can make mistakes. Please verify results carefully."
+  }
+}
+```
+
+#### German (`shared/i18n/de.json`)
+```json
+{
+  "disclaimer": {
+    "defaultMessage": "iHub nutzt KI und kann Fehler machen. Bitte überprüfen Sie die Ergebnisse sorgfältig."
   }
 }
 ```
@@ -74,6 +101,8 @@ Added a new subsection "UI Element Translations" under the "Internationalization
 
 ## Component Implementation
 
+### ModelHintBanner
+
 The ModelHintBanner component correctly uses the translation keys:
 
 ```jsx
@@ -85,6 +114,20 @@ title={t('pages.appChat.modelSelector.hint.dismiss', 'Dismiss')}
 
 // Acknowledge button (for alert-level hints)
 {t('pages.appChat.modelSelector.hint.acknowledge', 'I Understand')}
+```
+
+### AIDisclaimerBanner
+
+The AIDisclaimerBanner component was updated to use translation key instead of hardcoded string:
+
+**Before:**
+```jsx
+{disclaimerHint || 'iHub uses AI and can make mistakes. Please verify results carefully.'}
+```
+
+**After:**
+```jsx
+{disclaimerHint || t('disclaimer.defaultMessage', 'iHub uses AI and can make mistakes. Please verify results carefully.')}
 ```
 
 ## Testing
@@ -115,8 +158,9 @@ The hint feature in model configuration files remains unchanged:
 ## Related Files
 
 ### Modified Files
-- `shared/i18n/en.json` - Added hint UI translations
-- `shared/i18n/de.json` - Added hint UI translations
+- `shared/i18n/en.json` - Added hint UI translations + disclaimer default message
+- `shared/i18n/de.json` - Added hint UI translations + disclaimer default message
+- `client/src/features/chat/components/AIDisclaimerBanner.jsx` - Updated to use translation key
 - `docs/models.md` - Enhanced documentation
 - `examples/models/MODEL_HINTS_EXAMPLES.md` - Enhanced documentation
 
@@ -127,7 +171,8 @@ The hint feature in model configuration files remains unchanged:
 
 ## Impact
 
-- ✅ German users now see fully translated UI elements
+- ✅ German users now see fully translated UI elements in ModelHintBanner
+- ✅ German users now see translated default message in AIDisclaimerBanner
 - ✅ English users see properly translated UI elements
 - ✅ All four hint levels (hint, info, warning, alert) work correctly in both languages
 - ✅ No breaking changes to existing configurations
@@ -136,6 +181,11 @@ The hint feature in model configuration files remains unchanged:
 ## Future Considerations
 
 If additional languages are added to the platform, the following translation keys will need to be added for each new language:
+
+**ModelHintBanner:**
 - `pages.appChat.modelSelector.hint.alertTitle`
 - `pages.appChat.modelSelector.hint.dismiss`
 - `pages.appChat.modelSelector.hint.acknowledge`
+
+**AIDisclaimerBanner:**
+- `disclaimer.defaultMessage`
