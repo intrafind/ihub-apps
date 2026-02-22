@@ -115,13 +115,19 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
     if (!content) return '';
     // Enhanced markdown formatting for PDF
     // Process in order: bold+italic first, then bold, then italic, to avoid conflicts
-    return content
-      .replace(/\*\*\*(.*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') // **bold**
-      .replace(/\*(.*?)\*/g, '<em>$1</em>') // *italic*
-      .replace(/`(.*?)`/g, '<code>$1</code>') // `code`
+    // Use [\s\S] instead of . to match across newlines
+    let formatted = content
+      .replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
+      .replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>') // **bold**
+      .replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>') // *italic* (don't match across lines)
+      .replace(/`([^`]+?)`/g, '<code>$1</code>'); // `code`
+    
+    // Handle newlines after markdown formatting
+    formatted = formatted
       .replace(/\n\n/g, '</p><p>') // Double newline = new paragraph
       .replace(/\n/g, '<br>'); // Single newline = line break
+    
+    return formatted;
   };
 
   const messagesHTML = messages
