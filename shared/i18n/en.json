@@ -209,7 +209,37 @@
         "toJSON": "as JSON",
         "toJSONL": "as JSONL",
         "toMarkdown": "as Markdown",
-        "toHTML": "as HTML"
+        "toHTML": "as HTML",
+        "dialogTitle": "Export Conversation",
+        "selectFormat": "Select export format",
+        "export": "Export",
+        "exporting": "Exporting...",
+        "pdfOptions": "PDF Options",
+        "watermarkPlaceholder": "Enter watermark text",
+        "formats": {
+          "pdf": "PDF Document",
+          "docx": "Word Document",
+          "pptx": "PowerPoint Presentation",
+          "xlsx": "Excel Spreadsheet",
+          "csv": "CSV File",
+          "txt": "Text File",
+          "markdown": "Markdown",
+          "html": "HTML",
+          "json": "JSON",
+          "jsonl": "JSON Lines"
+        },
+        "descriptions": {
+          "pdf": "Formatted PDF with styling options",
+          "docx": "Microsoft Word document",
+          "pptx": "PowerPoint presentation with slides",
+          "xlsx": "Excel workbook with structured data",
+          "csv": "Comma-separated values",
+          "txt": "Plain text format",
+          "markdown": "Markdown formatted text",
+          "html": "HTML document",
+          "json": "JSON format with metadata",
+          "jsonl": "JSON Lines format"
+        }
       },
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
@@ -225,7 +255,14 @@
       "getStarted": "Get started",
       "examplePrompts": "Here are some example prompts to get started",
       "noMessagesTitle": "No messages yet",
-      "noMessagesSubtitle": "Start a conversation by sending a message!"
+      "noMessagesSubtitle": "Start a conversation by sending a message!",
+      "modelSelector": {
+        "hint": {
+          "alertTitle": "Important Notice",
+          "dismiss": "Dismiss",
+          "acknowledge": "I Understand"
+        }
+      }
     },
     "authRequired": {
       "title": "Authentication Required",
@@ -1164,7 +1201,8 @@
   "disclaimer": {
     "title": "Disclaimer",
     "accept": "I understand",
-    "versionInfo": "Version {{version}}, Last updated: {{date}}"
+    "versionInfo": "Version {{version}}, Last updated: {{date}}",
+    "defaultMessage": "iHub uses AI and can make mistakes. Please verify results carefully."
   },
   "canvas": {
     "toolbox": {

@@ -113,13 +113,70 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
   const formatContent = content => {
     if (!content) return '';
-    // Basic markdown-like formatting for PDF
-    return content
-      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*(.*?)\*/g, '<em>$1</em>')
-      .replace(/`(.*?)`/g, '<code>$1</code>')
-      .replace(/\n\n/g, '</p><p>')
-      .replace(/\n/g, '<br>');
+
+    // Split content into lines to process block-level elements
+    const lines = content.split('\n');
+    const processedLines = [];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const trimmedLine = line.trim();
+
+      // Handle horizontal rules: ***, ---, ___ (three or more)
+      if (/^(\*{3,}|-{3,}|_{3,})$/.test(trimmedLine)) {
+        processedLines.push('<hr>');
+        continue;
+      }
+
+      // Handle headings (# through ######)
+      const headingMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2];
+        processedLines.push(`<h${level}>${processInlineMarkdown(text)}</h${level}>`);
+        continue;
+      }
+
+      // Handle unordered lists (* - +) - must check AFTER horizontal rule
+      const unorderedListMatch = trimmedLine.match(/^[\*\-\+]\s+(.+)$/);
+      if (unorderedListMatch) {
+        processedLines.push(`<li>${processInlineMarkdown(unorderedListMatch[1])}</li>`);
+        continue;
+      }
+
+      // Handle ordered lists (1. 2. etc.)
+      const orderedListMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+      if (orderedListMatch) {
+        processedLines.push(
+          `<li class="ordered">${processInlineMarkdown(orderedListMatch[2])}</li>`
+        );
+        continue;
+      }
+
+      // Empty line creates paragraph break
+      if (trimmedLine === '') {
+        if (processedLines.length > 0 && processedLines[processedLines.length - 1] !== '<br>') {
+          processedLines.push('<br>');
+        }
+        continue;
+      }
+
+      // Regular paragraph text
+      processedLines.push(processInlineMarkdown(line));
+      processedLines.push('<br>');
+    }
+
+    // Join with line breaks and wrap in paragraph tags
+    return processedLines.join('');
+  };
+
+  // Helper function to process inline markdown (bold, italic, code)
+  const processInlineMarkdown = text => {
+    return text
+      .replace(/\*\*\*([\s\S]*?)\*\*\*/g, '<strong><em>$1</em></strong>') // ***bold italic***
+      .replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>') // **bold**
+      .replace(/\*([^\*\n]+?)\*/g, '<em>$1</em>') // *italic*
+      .replace(/`([^`]+?)`/g, '<code>$1</code>'); // `code`
   };
 
   const messagesHTML = messages
@@ -332,6 +389,44 @@ const getTemplateStyles = template => {
       font-size: 13px;
     }
     
+    .message-content h1, .message-content h2, .message-content h3,
+    .message-content h4, .message-content h5, .message-content h6 {
+      margin-top: 15px;
+      margin-bottom: 10px;
+      font-weight: 600;
+      color: #1a202c;
+      line-height: 1.3;
+    }
+    
+    .message-content h1 { font-size: 24px; }
+    .message-content h2 { font-size: 20px; }
+    .message-content h3 { font-size: 18px; }
+    .message-content h4 { font-size: 16px; }
+    .message-content h5 { font-size: 14px; }
+    .message-content h6 { font-size: 13px; }
+    
+    .message-content h1:first-child, .message-content h2:first-child,
+    .message-content h3:first-child, .message-content h4:first-child,
+    .message-content h5:first-child, .message-content h6:first-child {
+      margin-top: 0;
+    }
+    
+    .message-content hr {
+      border: none;
+      border-top: 2px solid #e2e8f0;
+      margin: 15px 0;
+    }
+    
+    .message-content li {
+      margin-left: 20px;
+      margin-bottom: 5px;
+      list-style-type: disc;
+    }
+    
+    .message-content li.ordered {
+      list-style-type: decimal;
+    }
+    
     @media print {
       .container {
         max-width: none;
@@ -529,14 +624,13 @@ const generateMarkdown = messages => {
     .join('\n\n');
 };
 
-const generateHTML = messages => {
-  const html = messages
-    .filter(m => !m.isGreeting)
-    .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`)
-    .join('');
+const generateHTML = (messages, settings, appName) => {
+  // Use the same high-quality HTML generation as PDF export
+  // This ensures consistent styling and proper markdown rendering
+  const htmlContent = generatePDFHTML(messages, settings, 'default', {}, appName || 'iHub Apps');
 
-  // Clean the HTML to remove interactive elements like buttons and toolbars
-  return cleanHtmlForExport(html);
+  // Return the full HTML document
+  return htmlContent;
 };
 
 // Client-side export functions
@@ -564,7 +658,7 @@ export const exportChatToJSONL = async (messages, settings, appId = null) => {
   return { success: true, filename };
 };
 
-export const exportChatToMarkdown = async (messages, appId = null) => {
+export const exportChatToMarkdown = async (messages, settings, appId = null, chatId = null) => {
   const content = generateMarkdown(messages);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.md`;
@@ -573,8 +667,14 @@ export const exportChatToMarkdown = async (messages, appId = null) => {
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (messages, appId = null) => {
-  const content = generateHTML(messages);
+export const exportChatToHTML = async (
+  messages,
+  settings,
+  appId = null,
+  chatId = null,
+  appName = 'iHub Apps'
+) => {
+  const content = generateHTML(messages, settings, appName);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.html`;
 
@@ -602,7 +702,7 @@ export const exportChatToFormat = async (messages, settings, format, options = {
     case 'markdown':
       return exportChatToMarkdown(messages, settings, appId, chatId);
     case 'html':
-      return exportChatToHTML(messages, settings, appId, chatId);
+      return exportChatToHTML(messages, settings, appId, chatId, appName);
     default:
       throw new Error(`Unsupported export format: ${format}`);
   }
