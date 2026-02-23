@@ -200,8 +200,7 @@ class ConfigCache {
       'config/sources.json',
       'config/providers.json',
       'config/mimetypes.json',
-      'config/features.json',
-      'config/skills.json'
+      'config/features.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -290,36 +289,6 @@ class ConfigCache {
           return;
         }
 
-        // Special handling for skills.json - load config then scan filesystem for skills
-        if (configPath === 'config/skills.json') {
-          const skillsConfig = await loadJson(configPath);
-          const configData = skillsConfig || { skills: {}, settings: {} };
-
-          // Scan filesystem for actual skill directories
-          const customDir = configData.settings?.skillsDirectory || undefined;
-          const discoveredSkills = await loadSkillsMetadata(customDir);
-
-          // Merge discovered skills with config overrides
-          const mergedSkills = [];
-          for (const [name, skillMeta] of discoveredSkills) {
-            const configOverride = configData.skills?.[name] || {};
-            mergedSkills.push({
-              ...skillMeta,
-              enabled: configOverride.enabled !== undefined ? configOverride.enabled : true,
-              description: configOverride.overrides?.description || skillMeta.description
-            });
-          }
-
-          this.setCacheEntry(configPath, {
-            skills: mergedSkills,
-            settings: configData.settings || {}
-          });
-          logger.info(`✓ Cached: ${configPath} (${mergedSkills.length} skills discovered)`, {
-            component: 'ConfigCache'
-          });
-          return;
-        }
-
         const data = await loadJson(configPath);
         if (data !== null) {
           // Expand tool functions into individual entries
@@ -369,6 +338,9 @@ class ConfigCache {
       if (platformConfig) {
         this.apiKeyVerifier.validateEnvironmentVariables(platformConfig, 'platform.json');
       }
+
+      // Load skills from filesystem using platform config settings
+      await this._loadSkillsFromFilesystem(platformConfig);
 
       this.isInitialized = true;
       logger.info(`✅ Configuration cache initialized with ${this.cache.size} files`, {
@@ -528,35 +500,6 @@ class ConfigCache {
           if (!existing || existing.etag !== newEtag) {
             this.setCacheEntry(key, platformData);
           }
-        }
-        return;
-      }
-
-      // Special handling for skills.json - rescan filesystem + merge config
-      if (key === 'config/skills.json') {
-        const skillsConfig = await loadJson(key, { useCache: false });
-        const configData = skillsConfig || { skills: {}, settings: {} };
-        const customDir = configData.settings?.skillsDirectory || undefined;
-        const discoveredSkills = await loadSkillsMetadata(customDir);
-
-        const mergedSkills = [];
-        for (const [name, skillMeta] of discoveredSkills) {
-          const configOverride = configData.skills?.[name] || {};
-          mergedSkills.push({
-            ...skillMeta,
-            enabled: configOverride.enabled !== undefined ? configOverride.enabled : true,
-            description: configOverride.overrides?.description || skillMeta.description
-          });
-        }
-
-        const cacheData = { skills: mergedSkills, settings: configData.settings || {} };
-        const newEtag = this.generateETag(cacheData);
-        const existing = this.cache.get(key);
-        if (!existing || existing.etag !== newEtag) {
-          this.setCacheEntry(key, cacheData);
-          logger.info(`✓ Refreshed: ${key} (${mergedSkills.length} skills)`, {
-            component: 'ConfigCache'
-          });
         }
         return;
       }
@@ -1134,15 +1077,39 @@ class ConfigCache {
   }
 
   /**
-   * Refresh skills cache
-   * Should be called when skills are modified (upload, delete, toggle, config change)
+   * Load skills from the filesystem using platform config settings.
+   * Skills are determined purely by directory presence — no external registry.
+   * @param {object} [platformConfig] - Platform config (reads skills.skillsDirectory)
+   */
+  async _loadSkillsFromFilesystem(platformConfig) {
+    try {
+      const customDir = platformConfig?.skills?.skillsDirectory || undefined;
+      const discoveredSkills = await loadSkillsMetadata(customDir);
+      const skills = [...discoveredSkills.values()];
+      this.setCacheEntry('skills', skills);
+      logger.info(`✓ Cached: skills (${skills.length} skills discovered)`, {
+        component: 'ConfigCache'
+      });
+    } catch (error) {
+      logger.error('Error loading skills from filesystem:', {
+        component: 'ConfigCache',
+        error: error.message
+      });
+      this.setCacheEntry('skills', []);
+    }
+  }
+
+  /**
+   * Refresh skills cache by rescanning the filesystem.
+   * Should be called when skills are added, removed, or their SKILL.md is modified.
    */
   async refreshSkillsCache() {
     logger.info('Refreshing skills cache...', { component: 'ConfigCache' });
 
     try {
-      await this.refreshCacheEntry('config/skills.json');
-      const { data: skills } = this.getSkills(true);
+      const platformConfig = this.getPlatform();
+      await this._loadSkillsFromFilesystem(platformConfig);
+      const { data: skills } = this.getSkills();
       logger.info(`Skills cache refreshed: ${skills.length} skills loaded`, {
         component: 'ConfigCache'
       });
@@ -1319,27 +1286,16 @@ class ConfigCache {
   }
 
   /**
-   * Get skills configuration
-   * @param {boolean} includeDisabled - Whether to include disabled skills
-   * @returns {{ data: Array, etag: string, settings: object }}
+   * Get all discovered skills from the filesystem.
+   * Skills are determined purely by directory presence — no external enable/disable registry.
+   * @returns {{ data: Array, etag: string }}
    */
-  getSkills(includeDisabled = false) {
-    const cached = this.get('config/skills.json');
+  getSkills() {
+    const cached = this.get('skills');
     if (cached === null || !cached.data) {
-      return { data: [], etag: null, settings: {} };
+      return { data: [], etag: null };
     }
-
-    const { skills = [], settings = {} } = cached.data;
-
-    if (includeDisabled) {
-      return { data: skills, etag: cached.etag, settings };
-    }
-
-    return {
-      data: skills.filter(skill => skill.enabled !== false),
-      etag: cached.etag,
-      settings
-    };
+    return { data: cached.data, etag: cached.etag };
   }
 
   /**
@@ -1349,10 +1305,10 @@ class ConfigCache {
    * @returns {{ data: Array, etag: string }}
    */
   async getSkillsForUser(user, platformConfig) {
-    const { data: skills, etag: skillsEtag, settings } = this.getSkills();
+    const { data: skills, etag: skillsEtag } = this.getSkills();
 
     if (!skills || skills.length === 0) {
-      return { data: [], etag: null, settings };
+      return { data: [], etag: null };
     }
 
     let filteredSkills = [...skills];
@@ -1379,7 +1335,7 @@ class ConfigCache {
       userSpecificEtag = `${skillsEtag}-${contentHash}`;
     }
 
-    return { data: filteredSkills, etag: userSpecificEtag, settings };
+    return { data: filteredSkills, etag: userSpecificEtag };
   }
 
   /**

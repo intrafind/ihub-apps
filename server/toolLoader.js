@@ -4,6 +4,7 @@ import { throttledFetch } from './requestThrottler.js';
 import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
 import { actionTracker } from './actionTracker.js';
+import { isFeatureEnabled } from './featureRegistry.js';
 import logger from './utils/logger.js';
 
 /**
@@ -350,8 +351,12 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Add skill activation tools if the app has skills configured
-  if (Array.isArray(app.skills) && app.skills.length > 0) {
+  // Add skill activation tools if the skills feature is enabled and the app has skills configured
+  if (
+    isFeatureEnabled('skills', configCache.getFeatures()) &&
+    Array.isArray(app.skills) &&
+    app.skills.length > 0
+  ) {
     const lang = language || 'en';
     const activateDesc = {
       en: 'Load the full instructions for a skill when it is relevant to the current task. Call this when you identify a task that matches an available skill from the <available_skills> list.',

@@ -377,7 +377,7 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
       }
 
       // Get skills
-      const { data: allSkills } = configCache.getSkills(true);
+      const { data: allSkills } = configCache.getSkills();
       const skills = (allSkills || []).map(skill => ({
         id: skill.name,
         name: { en: skill.displayName || skill.name, de: skill.displayName || skill.name }

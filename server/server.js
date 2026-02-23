@@ -156,6 +156,15 @@ if (cluster.isPrimary && workerCount > 1) {
     console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
   }
 
+  // Run config migrations (adds missing fields to existing installations)
+  try {
+    const { runMigrations } = await import('./migrations/runner.js');
+    await runMigrations();
+  } catch (error) {
+    console.error('⚠️  Error running config migrations:', error.message);
+    // Continue - non-critical
+  }
+
   // Ensure default providers are present (migration for existing installations)
   try {
     const { ensureDefaultProviders } = await import('./utils/providerMigration.js');

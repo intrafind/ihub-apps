@@ -102,14 +102,16 @@ function validateSkillData(frontmatter, dirName) {
 }
 
 /**
- * Scan a directory for subdirectories that may be skills
+ * Scan a directory for subdirectories that may be skills.
+ * Symlinks are skipped to prevent directory traversal attacks.
  * @param {string} dirPath - Path to scan
  * @returns {Promise<string[]>} Array of subdirectory names
  */
 async function scanForSkillDirs(dirPath) {
   try {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
-    return entries.filter(e => e.isDirectory()).map(e => e.name);
+    // Exclude symlinks — only real directories are valid skill containers
+    return entries.filter(e => e.isDirectory() && !e.isSymbolicLink()).map(e => e.name);
   } catch (error) {
     if (error.code === 'ENOENT') {
       // Directory doesn't exist yet — create it
@@ -127,7 +129,8 @@ async function scanForSkillDirs(dirPath) {
 }
 
 /**
- * List files in a skill directory (for file browser)
+ * List files in a skill directory (for file browser).
+ * Symlinks are excluded to prevent path traversal attacks.
  * @param {string} skillDir - Absolute path to the skill directory
  * @returns {Promise<string[]>} Relative file paths
  */
@@ -138,6 +141,8 @@ async function listSkillFiles(skillDir) {
     try {
       const entries = await fs.readdir(dir, { withFileTypes: true });
       for (const entry of entries) {
+        // Skip symlinks to prevent traversal outside skill directory
+        if (entry.isSymbolicLink()) continue;
         const relPath = prefix ? `${prefix}/${entry.name}` : entry.name;
         if (entry.isDirectory()) {
           await walk(path.join(dir, entry.name), relPath);
@@ -255,20 +260,35 @@ export async function getSkillResource(skillName, filePath, customDir) {
   const skillsDir = getSkillsDirectory(customDir);
   const skillPath = path.join(skillsDir, skillName);
 
-  // Path traversal prevention
+  // Reject absolute paths and obvious traversal sequences
   if (filePath.includes('..') || path.isAbsolute(filePath)) {
     logger.warn(`Path traversal attempt blocked for skill '${skillName}': ${filePath}`);
     return null;
   }
 
   const resolvedPath = path.resolve(skillPath, filePath);
-  if (!resolvedPath.startsWith(skillPath)) {
-    logger.warn(`Path traversal attempt blocked for skill '${skillName}': ${filePath}`);
+
+  // Resolve real paths (follows symlinks) to detect symlink-based traversal
+  let realResolvedPath;
+  let realSkillPath;
+  try {
+    realSkillPath = await fs.realpath(skillPath);
+    realResolvedPath = await fs.realpath(resolvedPath);
+  } catch {
+    // Target doesn't exist or symlink target is missing
+    return null;
+  }
+
+  const normalizedSkillPath = realSkillPath.endsWith(path.sep)
+    ? realSkillPath
+    : realSkillPath + path.sep;
+  if (realResolvedPath !== realSkillPath && !realResolvedPath.startsWith(normalizedSkillPath)) {
+    logger.warn(`Symlink-based path traversal blocked for skill '${skillName}': ${filePath}`);
     return null;
   }
 
   try {
-    const content = await fs.readFile(resolvedPath, 'utf-8');
+    const content = await fs.readFile(realResolvedPath, 'utf-8');
     return content;
   } catch (error) {
     logger.error(`Failed to read skill resource '${filePath}' from '${skillName}':`, error.message);

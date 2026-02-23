@@ -1,9 +1,0 @@
-{
-  "skills": {},
-  "settings": {
-    "skillsDirectory": "contents/skills",
-    "maxSkillBodyTokens": 5000,
-    "maxSkillsPerRequest": 10,
-    "allowScriptExecution": false
-  }
-}

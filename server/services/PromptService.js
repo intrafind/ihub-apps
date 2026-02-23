@@ -5,6 +5,7 @@ import SourceResolutionService from './SourceResolutionService.js';
 import config from '../config.js';
 import { getRootDir } from '../pathUtils.js';
 import path from 'path';
+import { isFeatureEnabled } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -275,7 +276,12 @@ class PromptService {
       }
 
       // Inject available skills metadata for progressive disclosure
-      if (app.skills && Array.isArray(app.skills) && app.skills.length > 0) {
+      if (
+        isFeatureEnabled('skills', configCache.getFeatures()) &&
+        app.skills &&
+        Array.isArray(app.skills) &&
+        app.skills.length > 0
+      ) {
         try {
           const platformConfig = configCache.getPlatform() || {};
           const appSkills = await configCache.getSkillsForApp(app, user, platformConfig);
