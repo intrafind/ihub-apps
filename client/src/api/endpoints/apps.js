@@ -155,16 +155,23 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
       // Empty line creates paragraph break
       if (trimmedLine === '') {
-        processedLines.push('<br>');
+        console.log('Adding paragraph break ' + processedLines[processedLines.length - 1]);
+        if (processedLines.length > 0 && processedLines[processedLines.length - 1] !== '<br>') {
+          processedLines.push('<br>');
+        }
         continue;
-      }
+      } 
+
 
       // Regular paragraph text
+      console.log('Processing line: ' + line);
+      console.log('Processed line: ' + processInlineMarkdown(line));
       processedLines.push(processInlineMarkdown(line));
+      processedLines.push('<br>');
     }
 
     // Join with line breaks and wrap in paragraph tags
-    return processedLines.join('<br>');
+    return processedLines.join('');
   };
 
   // Helper function to process inline markdown (bold, italic, code)
