@@ -316,6 +316,15 @@ All hint messages must be internationalized:
 - **Additional**: Add more language codes as needed (e.g., `fr`, `es`, `ja`)
 - **Fallback**: System falls back to English if user's language is not available
 
+#### UI Element Translations
+
+The hint feature includes built-in UI elements that are automatically translated:
+- **"Important Notice"** (Alert title) - Translated via `pages.appChat.modelSelector.hint.alertTitle`
+- **"Dismiss"** (Dismiss button) - Translated via `pages.appChat.modelSelector.hint.dismiss`
+- **"I Understand"** (Acknowledge button) - Translated via `pages.appChat.modelSelector.hint.acknowledge`
+
+These translations are defined in `shared/i18n/en.json` and `shared/i18n/de.json` and do not need to be configured in your model configuration files. Only the hint `message` content needs to be provided in your model configuration.
+
 ### User Experience
 
 **Hint and Info Levels:**
