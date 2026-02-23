@@ -188,14 +188,17 @@ export default function registerAdminSkillsRoutes(app) {
         const candidateSkillPath = getSkillPath(skillName);
         const resolvedSkillsRoot = path.resolve(skillsRoot);
         const resolvedSkillPath = path.resolve(candidateSkillPath);
-        const normalizedRootWithSep =
-          resolvedSkillsRoot.endsWith(path.sep) ? resolvedSkillsRoot : resolvedSkillsRoot + path.sep;
+        const normalizedRootWithSep = resolvedSkillsRoot.endsWith(path.sep)
+          ? resolvedSkillsRoot
+          : resolvedSkillsRoot + path.sep;
 
         if (
           !resolvedSkillPath.startsWith(normalizedRootWithSep) ||
           path.basename(resolvedSkillPath) !== skillName
         ) {
-          logger.warn(`Skill directory validation blocked for invalid path derived from name '${skillName}'`);
+          logger.warn(
+            `Skill directory validation blocked for invalid path derived from name '${skillName}'`
+          );
           return res.status(400).json({ error: 'Invalid skill path' });
         }
 
@@ -225,8 +228,9 @@ export default function registerAdminSkillsRoutes(app) {
         const candidateSkillPath = getSkillPath(skillName);
         const resolvedSkillsRoot = path.resolve(skillsRoot);
         const resolvedSkillPath = path.resolve(candidateSkillPath);
-        const normalizedRootWithSep =
-          resolvedSkillsRoot.endsWith(path.sep) ? resolvedSkillsRoot : resolvedSkillsRoot + path.sep;
+        const normalizedRootWithSep = resolvedSkillsRoot.endsWith(path.sep)
+          ? resolvedSkillsRoot
+          : resolvedSkillsRoot + path.sep;
 
         if (
           !resolvedSkillPath.startsWith(normalizedRootWithSep) ||
