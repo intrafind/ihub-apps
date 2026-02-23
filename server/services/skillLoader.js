@@ -281,6 +281,12 @@ export async function getSkillResource(skillName, filePath, customDir) {
     return null;
   }
 
+  // Ensure filePath is a simple string to avoid type confusion attacks
+  if (typeof filePath !== 'string') {
+    logger.warn(`Rejected non-string file path for skill '${skillName}': ${String(filePath)}`);
+    return null;
+  }
+
   const skillsDir = getSkillsDirectory(customDir);
   // Resolve the skill path against the skills directory and ensure it stays within it
   const resolvedSkillPath = path.resolve(skillsDir, skillName);
