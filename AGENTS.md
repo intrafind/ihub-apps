@@ -168,6 +168,47 @@ Platform config secrets are encrypted on disk in `platform.json` using `TokenSto
 - `server/routes/admin/configs.js` — encrypt on save, decrypt on read
 - `server/configCache.js` — decrypt at runtime for all consumers
 
+## Configuration Migrations
+
+The project uses a versioned migration system for configuration changes. Migrations run automatically at server startup (before `configCache` loads) and are tracked in `contents/.migration-history.json`.
+
+### When to Write a Migration
+
+Create a migration whenever you:
+- Add new required or default fields to **existing** JSON config files
+- Rename, restructure, or remove fields in config files
+- Add default entries to `providers.json`, `groups.json`, `tools.json`, `sources.json`, etc.
+
+Do **not** create migrations for brand-new config files (those are handled by `performInitialSetup`).
+
+### How to Create a Migration
+
+Find the next version number from `server/migrations/V*.js`, then create:
+
+```javascript
+// server/migrations/V003__add_feature_flag.js
+export const version = '003';
+export const description = 'add_feature_flag';
+
+// Optional: return false to skip this migration
+export async function precondition(ctx) {
+  return await ctx.fileExists('config/platform.json');
+}
+
+export async function up(ctx) {
+  const platform = await ctx.readJson('config/platform.json');
+  ctx.setDefault(platform, 'features.myNewFlag', false); // never overwrites existing values
+  await ctx.writeJson('config/platform.json', platform);
+  ctx.log('Added features.myNewFlag default');
+}
+```
+
+Key `ctx` methods: `readJson`, `writeJson`, `fileExists`, `readDefaultJson`, `setDefault`, `removeKey`, `renameKey`, `addIfMissing`, `removeById`, `mergeDefaults`.
+
+**Rules:**
+- Never modify a migration file after it has been applied (checksums are tracked).
+- Migrations are forward-only — to undo, create a new higher-versioned migration.
+
 ## Internationalization (i18n)
 
 - Every user-facing string or configuration key must be internationalized.
