@@ -46,14 +46,24 @@ const SearchModal = ({
   }, [isOpen, onClose]);
 
   useEffect(() => {
-    if (!isOpen || !query.trim() || !fuseRef.current) {
+    if (!isOpen) {
+      setResults([]);
+      return;
+    }
+    if (!query.trim()) {
+      // Show all items when no search query (capped at reasonable limit)
+      setResults(items.slice(0, 10));
+      setSelectedIndex(0);
+      return;
+    }
+    if (!fuseRef.current) {
       setResults([]);
       return;
     }
     const searchResults = fuseRef.current.search(query).map(r => r.item || r);
-    setResults(searchResults.slice(0, 5));
+    setResults(searchResults.slice(0, 10));
     setSelectedIndex(0);
-  }, [query, isOpen]);
+  }, [query, isOpen, items]);
 
   useEffect(() => {
     if (!listRef.current || results.length === 0) return;

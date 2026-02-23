@@ -1,4 +1,8 @@
 {
+  "skills": {
+    "skillsDirectory": "contents/skills",
+    "maxSkillBodyTokens": 5000
+  },
   "globalPromptVariables": {
     "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user. \n"
   },

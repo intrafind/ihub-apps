@@ -3,7 +3,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminVersionRoutes(app, basePath = '') {
+export default function registerAdminVersionRoutes(app) {
   /**
    * GET /api/admin/version
    * Returns version information for frontend and backend

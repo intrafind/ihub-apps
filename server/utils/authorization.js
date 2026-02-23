@@ -62,6 +62,7 @@ export function resolveGroupInheritance(groupsConfig) {
         prompts: new Set(),
         models: new Set(),
         workflows: new Set(),
+        skills: new Set(),
         adminAccess: false
       };
 
@@ -89,6 +90,11 @@ export function resolveGroupInheritance(groupsConfig) {
           parentPerms.workflows.forEach(workflow => mergedPermissions.workflows.add(workflow));
         }
 
+        // Merge skills
+        if (Array.isArray(parentPerms.skills)) {
+          parentPerms.skills.forEach(skill => mergedPermissions.skills.add(skill));
+        }
+
         // Admin access: if any parent has admin access, inherit it
         if (parentPerms.adminAccess === true) {
           mergedPermissions.adminAccess = true;
@@ -109,6 +115,9 @@ export function resolveGroupInheritance(groupsConfig) {
       if (Array.isArray(ownPerms.workflows)) {
         ownPerms.workflows.forEach(workflow => mergedPermissions.workflows.add(workflow));
       }
+      if (Array.isArray(ownPerms.skills)) {
+        ownPerms.skills.forEach(skill => mergedPermissions.skills.add(skill));
+      }
       if (ownPerms.adminAccess === true) {
         mergedPermissions.adminAccess = true;
       }
@@ -121,6 +130,7 @@ export function resolveGroupInheritance(groupsConfig) {
           prompts: Array.from(mergedPermissions.prompts),
           models: Array.from(mergedPermissions.models),
           workflows: Array.from(mergedPermissions.workflows),
+          skills: Array.from(mergedPermissions.skills),
           adminAccess: mergedPermissions.adminAccess
         }
       };
@@ -187,6 +197,7 @@ export function loadGroupPermissions() {
       prompts: group.permissions?.prompts || [],
       models: group.permissions?.models || [],
       workflows: group.permissions?.workflows || [],
+      skills: group.permissions?.skills || [],
       adminAccess: group.permissions?.adminAccess || false,
       description: group.description || ''
     };
@@ -287,6 +298,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     prompts: new Set(),
     models: new Set(),
     workflows: new Set(),
+    skills: new Set(),
     adminAccess: false
   };
 
@@ -329,6 +341,13 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
       groupPerms.workflows.forEach(workflow => permissions.workflows.add(workflow));
     }
 
+    // Handle wildcards and specific permissions for skills
+    if (groupPerms.skills?.includes('*')) {
+      permissions.skills.add('*');
+    } else if (Array.isArray(groupPerms.skills)) {
+      groupPerms.skills.forEach(skill => permissions.skills.add(skill));
+    }
+
     // Admin access
     if (groupPerms.adminAccess) {
       permissions.adminAccess = true;
@@ -340,6 +359,7 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
     prompts: Array.from(permissions.prompts),
     models: Array.from(permissions.models),
     workflows: Array.from(permissions.workflows),
+    skills: Array.from(permissions.skills),
     adminAccess: permissions.adminAccess
   });
 
@@ -469,6 +489,7 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
       prompts: new Set(), // OAuth clients don't have prompt permissions
       models: new Set(user.allowedModels || []),
       workflows: new Set(), // OAuth clients don't have workflow permissions
+      skills: new Set(), // OAuth clients don't have skill permissions
       adminAccess: false // OAuth clients never have admin access
     };
   } else {

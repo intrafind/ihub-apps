@@ -5,7 +5,7 @@ import { verifyApiKey } from '../../serverHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminTranslateRoute(app, basePath = '') {
+export default function registerAdminTranslateRoute(app) {
   app.post(buildServerPath('/api/admin/translate'), adminAuth, async (req, res) => {
     try {
       const { text, from = 'en', to } = req.body || {};

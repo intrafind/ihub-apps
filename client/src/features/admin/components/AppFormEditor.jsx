@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ToolsSelector from '../../../shared/components/ToolsSelector';
+import SkillsSelector from '../../../shared/components/SkillsSelector';
 import SourcePicker from './SourcePicker';
 import Icon from '../../../shared/components/Icon';
 import IconPicker from '../../../shared/components/IconPicker';
@@ -859,6 +860,31 @@ const AppFormEditor = ({
               </div>
             </div>
           </div>
+
+          {/* Skills Configuration */}
+          {featureFlags.isEnabled('skills', false) && (
+            <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900">
+                    {t('admin.apps.edit.skills', 'Skills')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {t(
+                      'admin.apps.edit.skillsDesc',
+                      'Configure which agent skills are available for this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:mt-0 md:col-span-2">
+                  <SkillsSelector
+                    selectedSkills={app.skills || []}
+                    onSkillsChange={skills => handleInputChange('skills', skills)}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Variables Configuration */}
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">

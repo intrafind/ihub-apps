@@ -128,6 +128,7 @@ class RequestBuilder {
     enabledTools,
     imageAspectRatio,
     imageQuality,
+    requestedSkill,
     processMessageTemplates,
     res,
     clientRes,
@@ -278,7 +279,8 @@ class RequestBuilder {
         app.outputSchema,
         user,
         chatId,
-        modelName
+        modelName,
+        requestedSkill
       );
       // Extract raw file/image data from the last user message before preprocessing
       // flattens it into the content string. This is needed so workflow tools

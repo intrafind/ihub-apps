@@ -8,7 +8,7 @@ import logger from '../utils/logger.js';
  * @param {Express} app - Express app instance
  * @param {string} basePath - Base path for the application
  */
-export default function registerRendererRoutes(app, basePath = '') {
+export default function registerRendererRoutes(app) {
   const router = express.Router();
 
   /**

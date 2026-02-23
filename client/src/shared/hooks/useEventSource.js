@@ -147,7 +147,8 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
         'research-complete',
         'research-error',
         'workflow.step',
-        'workflow.result'
+        'workflow.result',
+        'skill.activation'
       ];
 
       events.forEach(evt => eventSource.addEventListener(evt, handleEvent));

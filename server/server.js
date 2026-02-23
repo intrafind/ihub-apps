@@ -16,6 +16,7 @@ import registerStaticRoutes from './routes/staticRoutes.js';
 import registerGeneralRoutes from './routes/generalRoutes.js';
 import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
+import registerSkillRoutes from './routes/skillRoutes.js';
 import registerPageRoutes from './routes/pageRoutes.js';
 import registerRendererRoutes from './routes/rendererRoutes.js';
 import registerSessionRoutes from './routes/sessionRoutes.js';
@@ -42,7 +43,6 @@ import { performInitialSetup } from './utils/setupUtils.js';
 import { runConfigMigrations } from './migrations/runner.js';
 import {
   getBasePath,
-  buildServerPath,
   basePathDetectionMiddleware,
   basePathValidationMiddleware
 } from './utils/basePath.js';
@@ -245,27 +245,27 @@ if (cluster.isPrimary && workerCount > 1) {
   // All API routes are registered with base path support
   const basePath = getBasePath();
 
-  registerAuthRoutes(app, basePath);
-  registerOAuthRoutes(app, basePath);
-  registerGeneralRoutes(app, { getLocalizedError, basePath });
-  registerModelRoutes(app, { getLocalizedError, basePath });
-  registerToolRoutes(app, basePath);
-  registerPageRoutes(app, basePath);
-  registerRendererRoutes(app, basePath);
-  registerSessionRoutes(app, basePath);
-  registerMagicPromptRoutes(app, { basePath });
+  registerAuthRoutes(app);
+  registerOAuthRoutes(app);
+  registerGeneralRoutes(app, { getLocalizedError });
+  registerModelRoutes(app, { getLocalizedError });
+  registerToolRoutes(app);
+  registerSkillRoutes(app);
+  registerPageRoutes(app);
+  registerRendererRoutes(app);
+  registerSessionRoutes(app);
+  registerMagicPromptRoutes(app);
   registerChatRoutes(app, {
     verifyApiKey,
     processMessageTemplates,
     getLocalizedError,
-    DEFAULT_TIMEOUT,
-    basePath
+    DEFAULT_TIMEOUT
   });
-  registerOpenAIProxyRoutes(app, { basePath });
-  await registerAdminRoutes(app, basePath);
-  registerShortLinkRoutes(app, basePath);
-  await registerSwaggerRoutes(app, basePath);
-  registerWorkflowRoutes(app, { basePath, getLocalizedError });
+  registerOpenAIProxyRoutes(app);
+  await registerAdminRoutes(app);
+  registerShortLinkRoutes(app);
+  await registerSwaggerRoutes(app);
+  registerWorkflowRoutes(app, { getLocalizedError });
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up

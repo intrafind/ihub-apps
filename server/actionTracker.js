@@ -102,6 +102,15 @@ export class ActionTracker extends EventEmitter {
   trackWorkflowResult(chatId, data = {}) {
     this.emit('fire-sse', { event: UnifiedEvents.WORKFLOW_RESULT, chatId, ...data });
   }
+
+  /**
+   * Track a skill activation event on the chat's SSE channel
+   * @param {string} chatId - The chat session ID
+   * @param {Object} data - Skill data: { skillName, description }
+   */
+  trackSkillActivation(chatId, data = {}) {
+    this.emit('fire-sse', { event: UnifiedEvents.SKILL_ACTIVATION, chatId, ...data });
+  }
 }
 
 export const actionTracker = new ActionTracker();

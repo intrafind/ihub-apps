@@ -114,9 +114,11 @@
   ],
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
+    "archiver": "^7.0.1",
     "axios": "^1.13.5",
     "dotenv": "^17.2.3",
     "file-saver": "^2.0.5",
+    "gray-matter": "^4.0.3",
     "html-to-image": "^1.11.13",
     "http-proxy-agent": "^7.0.2",
     "https-proxy-agent": "^7.0.6",

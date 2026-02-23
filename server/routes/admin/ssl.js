@@ -3,10 +3,11 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { buildServerPath } from '../../utils/basePath.js';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
-export default function registerAdminSSLRoutes(app, basePath = '') {
+export default function registerAdminSSLRoutes(app) {
   /**
    * @swagger
    * /api/admin/ssl/config:
@@ -32,7 +33,7 @@ export default function registerAdminSSLRoutes(app, basePath = '') {
    *                     type: string
    *                   description: List of domains to bypass SSL validation
    */
-  app.get(`${basePath}/api/admin/ssl/config`, adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/ssl/config'), adminAuth, async (req, res) => {
     try {
       const platformConfig = configCache.getPlatform() || {};
       const sslConfig = platformConfig.ssl || {
@@ -76,7 +77,7 @@ export default function registerAdminSSLRoutes(app, basePath = '') {
    *       400:
    *         description: Invalid SSL configuration
    */
-  app.put(`${basePath}/api/admin/ssl/config`, adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/ssl/config'), adminAuth, async (req, res) => {
     try {
       const { ignoreInvalidCertificates, domainWhitelist } = req.body;
 

@@ -8,7 +8,7 @@ import {
 } from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
 
-export default function registerModelRoutes(app, { getLocalizedError, basePath = '' }) {
+export default function registerModelRoutes(app, { getLocalizedError }) {
   /**
    * @swagger
    * /models:

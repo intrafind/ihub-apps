@@ -9,7 +9,7 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminProvidersRoutes(app, basePath = '') {
+export default function registerAdminProvidersRoutes(app) {
   /**
    * @swagger
    * /admin/providers:

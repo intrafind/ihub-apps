@@ -9,6 +9,7 @@ import {
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
 import { loadTools, localizeTools } from './toolLoader.js';
+import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
@@ -338,6 +339,9 @@ class ConfigCache {
         this.apiKeyVerifier.validateEnvironmentVariables(platformConfig, 'platform.json');
       }
 
+      // Load skills from filesystem using platform config settings
+      await this._loadSkillsFromFilesystem(platformConfig);
+
       this.isInitialized = true;
       logger.info(`✅ Configuration cache initialized with ${this.cache.size} files`, {
         component: 'ConfigCache'
@@ -503,6 +507,13 @@ class ConfigCache {
       if (key.startsWith('locales/')) {
         const lang = key.split('/')[1].replace('.json', '');
         await this.loadAndCacheLocale(lang);
+        return;
+      }
+
+      // Special handling for skills - load from filesystem, not a JSON file
+      if (key === 'skills') {
+        const platformConfig = this.getPlatform();
+        await this._loadSkillsFromFilesystem(platformConfig);
         return;
       }
 
@@ -1073,6 +1084,50 @@ class ConfigCache {
   }
 
   /**
+   * Load skills from the filesystem using platform config settings.
+   * Skills are determined purely by directory presence — no external registry.
+   * @param {object} [platformConfig] - Platform config (reads skills.skillsDirectory)
+   */
+  async _loadSkillsFromFilesystem(platformConfig) {
+    try {
+      const customDir = platformConfig?.skills?.skillsDirectory || undefined;
+      const discoveredSkills = await loadSkillsMetadata(customDir);
+      const skills = [...discoveredSkills.values()];
+      this.setCacheEntry('skills', skills);
+      logger.info(`✓ Cached: skills (${skills.length} skills discovered)`, {
+        component: 'ConfigCache'
+      });
+    } catch (error) {
+      logger.error('Error loading skills from filesystem:', {
+        component: 'ConfigCache',
+        error: error.message
+      });
+      this.setCacheEntry('skills', []);
+    }
+  }
+
+  /**
+   * Refresh skills cache by rescanning the filesystem.
+   * Should be called when skills are added, removed, or their SKILL.md is modified.
+   */
+  async refreshSkillsCache() {
+    logger.info('Refreshing skills cache...', { component: 'ConfigCache' });
+
+    try {
+      const platformConfig = this.getPlatform();
+      await this._loadSkillsFromFilesystem(platformConfig);
+      const { data: skills } = this.getSkills();
+      logger.info(`Skills cache refreshed: ${skills.length} skills loaded`, {
+        component: 'ConfigCache'
+      });
+      return true;
+    } catch (error) {
+      logger.error('Failed to refresh skills cache:', { component: 'ConfigCache', error });
+      return false;
+    }
+  }
+
+  /**
    * Invalidate and refresh all cached entries
    */
   async refreshAll() {
@@ -1235,6 +1290,77 @@ class ConfigCache {
     }
 
     return { data: tools, etag: userSpecificEtag };
+  }
+
+  /**
+   * Get all discovered skills from the filesystem.
+   * Skills are determined purely by directory presence — no external enable/disable registry.
+   * @returns {{ data: Array, etag: string }}
+   */
+  getSkills() {
+    const cached = this.get('skills');
+    if (cached === null || !cached.data) {
+      return { data: [], etag: null };
+    }
+    return { data: cached.data, etag: cached.etag };
+  }
+
+  /**
+   * Get skills filtered by user permissions
+   * @param {object} user - User object with permissions
+   * @param {object} platformConfig - Platform configuration
+   * @returns {{ data: Array, etag: string }}
+   */
+  async getSkillsForUser(user, platformConfig) {
+    const { data: skills, etag: skillsEtag } = this.getSkills();
+
+    if (!skills || skills.length === 0) {
+      return { data: [], etag: null };
+    }
+
+    let filteredSkills = [...skills];
+    const originalCount = filteredSkills.length;
+    let userSpecificEtag = skillsEtag || 'no-etag';
+
+    // Apply filtering based on user permissions
+    if (user && user.permissions && user.permissions.skills && user.permissions.skills.size > 0) {
+      const allowedSkills = user.permissions.skills;
+      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
+    } else if (isAnonymousAccessAllowed(platformConfig)) {
+      // For anonymous users, no default skills
+      const allowedSkills = new Set();
+      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
+    }
+
+    // Generate user-specific ETag if skills were filtered
+    if (filteredSkills.length < originalCount) {
+      const skillNames = filteredSkills.map(s => s.name).sort();
+      const contentHash = createHash('md5')
+        .update(JSON.stringify(skillNames))
+        .digest('hex')
+        .substring(0, 8);
+      userSpecificEtag = `${skillsEtag}-${contentHash}`;
+    }
+
+    return { data: filteredSkills, etag: userSpecificEtag };
+  }
+
+  /**
+   * Get skills for a specific app, filtered by app config and user permissions
+   * @param {object} app - App configuration with skills array
+   * @param {object} user - User object with permissions
+   * @param {object} platformConfig - Platform configuration
+   * @returns {Promise<Array>}
+   */
+  async getSkillsForApp(app, user, platformConfig) {
+    if (!app.skills || !Array.isArray(app.skills) || app.skills.length === 0) {
+      return [];
+    }
+
+    const { data: userSkills } = await this.getSkillsForUser(user, platformConfig);
+
+    // Filter to only skills assigned to this app
+    return userSkills.filter(skill => app.skills.includes(skill.name));
   }
 
   /**

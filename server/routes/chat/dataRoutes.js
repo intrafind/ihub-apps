@@ -169,8 +169,7 @@ import logger from '../../utils/logger.js';
  *           example: "1640995200000-abc123def"
  */
 
-export default function registerDataRoutes(app, deps = {}) {
-  const { basePath = '' } = deps;
+export default function registerDataRoutes(app) {
   /**
    * @swagger
    * /api/styles:

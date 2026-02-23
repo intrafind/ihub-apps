@@ -9,7 +9,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminPagesRoutes(app, basePath = '') {
+export default function registerAdminPagesRoutes(app) {
   app.get(buildServerPath('/api/admin/pages'), adminAuth, async (req, res) => {
     try {
       const { data: uiConfig } = configCache.getUI();

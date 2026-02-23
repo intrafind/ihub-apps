@@ -49,7 +49,7 @@ function sanitizeAuthInput(value, fieldName, maxLength = 255) {
   return sanitized;
 }
 
-export default function registerAuthRoutes(app, basePath = '') {
+export default function registerAuthRoutes(app) {
   /**
    * @swagger
    * /auth/local/login:

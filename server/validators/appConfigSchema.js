@@ -313,6 +313,13 @@ const baseAppConfigSchema = z.object({
   allowEmptyContent: z.boolean().optional().default(false),
   autoStart: z.boolean().optional().default(false),
   tools: z.array(z.string()).optional(),
+  skills: z.array(z.string()).optional(),
+  skillSettings: z
+    .object({
+      autoActivate: z.boolean().optional(),
+      maxActiveSkills: z.number().min(1).max(10).optional()
+    })
+    .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
   customResponseRenderer: z.string().optional(),
   category: z.string().optional(),

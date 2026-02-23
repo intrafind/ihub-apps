@@ -19,7 +19,7 @@ const __dirname = path.dirname(__filename);
  * @param {string} basePath - Base path for the API server
  * @returns {Object} Swagger configuration object
  */
-function createSwaggerConfig(title, description, version, paths, basePath = '') {
+function createSwaggerConfig(title, description, version, paths) {
   return {
     definition: {
       openapi: '3.0.0',
@@ -70,7 +70,7 @@ function createSwaggerConfig(title, description, version, paths, basePath = '') 
  * @param {Object} app - Express application instance
  * @param {string} basePath - Base path for route registration
  */
-export default async function registerSwaggerRoutes(app, basePath = '') {
+export default async function registerSwaggerRoutes(app) {
   // Check if Swagger is enabled in platform configuration
   let platformConfig = {};
   try {
@@ -97,6 +97,7 @@ export default async function registerSwaggerRoutes(app, basePath = '') {
 
   // Apply authentication middleware if required
   const middleware = requireAuth ? [authRequired] : [];
+  const basePath = buildServerPath('/'); // Get base path without leading slash for config
 
   // Normal/Chat APIs Documentation
   const normalApiConfig = createSwaggerConfig(

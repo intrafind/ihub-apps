@@ -626,6 +626,20 @@ const ChatMessage = ({
             loading={message.loading}
           />
         )}
+        {/* Skill activation indicators */}
+        {!isUser && message.activeSkills?.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-2">
+            {message.activeSkills.map((skill, idx) => (
+              <div
+                key={idx}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300"
+              >
+                <Icon name="sparkles" className="w-3 h-3" />
+                <span>{skill.name}</span>
+              </div>
+            ))}
+          </div>
+        )}
         {/* Show just the question for answered clarifications (at top of bubble) */}
         {!isUser && message.clarification && message.clarificationAnswered && (
           <div className="flex items-start gap-2">

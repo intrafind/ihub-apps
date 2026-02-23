@@ -10,6 +10,17 @@
 
 export const featureRegistry = [
   {
+    id: 'skills',
+    name: { en: 'Agent Skills', de: 'Agent Skills' },
+    description: {
+      en: 'Folder-based skill definitions following the Agent Skills standard (agentskills.io)',
+      de: 'Ordnerbasierte Skill-Definitionen nach dem Agent Skills Standard (agentskills.io)'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
     id: 'workflows',
     name: { en: 'Workflows', de: 'Workflows' },
     description: {

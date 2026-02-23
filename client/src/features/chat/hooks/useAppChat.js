@@ -216,6 +216,15 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             });
           }
           break;
+        case 'skill.activation':
+          if (lastMessageIdRef.current && data) {
+            const currentMsg = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
+            const prevSkills = currentMsg?.activeSkills || [];
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              activeSkills: [...prevSkills, { name: data.skillName, description: data.description }]
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message
@@ -297,7 +306,14 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
    * @param {Object} messageMetadata - Metadata to attach to the assistant message (e.g., customResponseRenderer)
    */
   const sendMessage = useCallback(
-    ({ displayMessage, apiMessage, params, sendChatHistory = true, messageMetadata = null }) => {
+    ({
+      displayMessage,
+      apiMessage,
+      params,
+      sendChatHistory = true,
+      messageMetadata = null,
+      requestedSkill = null
+    }) => {
       try {
         // Reset cancellation flag when starting a new message
         isCancellingRef.current = false;
@@ -340,7 +356,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           appId,
           chatId: chatId,
           messages: messagesForAPI,
-          params
+          params: {
+            ...params,
+            ...(requestedSkill ? { requestedSkill } : {})
+          }
         };
 
         initEventSource(buildApiUrl(`apps/${appId}/chat/${chatId}`));

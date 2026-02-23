@@ -148,7 +148,7 @@ import logger from '../../utils/logger.js';
  *           description: The affected group (for single operations)
  */
 
-export default function registerAdminGroupRoutes(app, basePath = '') {
+export default function registerAdminGroupRoutes(app) {
   /**
    * @swagger
    * /api/admin/groups:
@@ -376,11 +376,19 @@ export default function registerAdminGroupRoutes(app, basePath = '') {
         logger.info('Workflows directory not found or empty');
       }
 
+      // Get skills
+      const { data: allSkills } = configCache.getSkills();
+      const skills = (allSkills || []).map(skill => ({
+        id: skill.name,
+        name: { en: skill.displayName || skill.name, de: skill.displayName || skill.name }
+      }));
+
       res.json({
         apps: apps.sort((a, b) => a.id.localeCompare(b.id)),
         models: models.sort((a, b) => a.id.localeCompare(b.id)),
         prompts: prompts.sort((a, b) => a.id.localeCompare(b.id)),
-        workflows: workflows.sort((a, b) => a.id.localeCompare(b.id))
+        workflows: workflows.sort((a, b) => a.id.localeCompare(b.id)),
+        skills: skills.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
       logger.error('Error getting resources:', error);

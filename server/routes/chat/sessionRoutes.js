@@ -18,7 +18,7 @@ import logger from '../../utils/logger.js';
 
 export default function registerSessionRoutes(
   app,
-  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT, basePath = '' }
+  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
 
@@ -286,7 +286,8 @@ export default function registerSessionRoutes(
           thinkingThoughts,
           enabledTools,
           imageAspectRatio,
-          imageQuality
+          imageQuality,
+          requestedSkill
         } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
@@ -417,6 +418,7 @@ export default function registerSessionRoutes(
             enabledTools,
             imageAspectRatio,
             imageQuality,
+            requestedSkill,
             res,
             user: req.user,
             chatId
@@ -474,6 +476,7 @@ export default function registerSessionRoutes(
             enabledTools,
             imageAspectRatio,
             imageQuality,
+            requestedSkill,
             clientRes,
             user: req.user,
             chatId
@@ -489,6 +492,16 @@ export default function registerSessionRoutes(
           }
           model = prep.data.model;
           llmMessages = prep.data.llmMessages;
+
+          // Emit skill.activation SSE event when a skill was pre-activated via slash command
+          if (requestedSkill) {
+            const { data: skills = [] } = configCache.getSkills();
+            const skillMeta = skills.find(s => s.name === requestedSkill);
+            actionTracker.trackSkillActivation(chatId, {
+              skillName: requestedSkill,
+              description: skillMeta?.description || ''
+            });
+          }
 
           await processChatRequest({
             prep: prep.data,

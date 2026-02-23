@@ -9,7 +9,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
-export default function registerToolRoutes(app, basePath = '') {
+export default function registerToolRoutes(app) {
   app.get(
     buildServerPath('/api/tools'),
     requireFeature('tools'),

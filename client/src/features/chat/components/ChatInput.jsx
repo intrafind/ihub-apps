@@ -54,6 +54,10 @@ const ChatInput = ({
   imageQuality = null,
   onImageAspectRatioChange = null,
   onImageQualityChange = null,
+  // Skill activation
+  onSkillSelect = null,
+  // Skills slash command gating (when skills feature is enabled and app has skills)
+  skillsSlashEnabled = false,
   // Clarification state
   clarificationPending = false // When true, input is disabled waiting for clarification answer
 }) => {
@@ -71,6 +75,7 @@ const ChatInput = ({
 
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
+  const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
   const workflowMentionsEnabled = app?.tools?.some(t => t.startsWith('workflow:'));
 
   // Derive the @mention query from the current input value
@@ -279,7 +284,7 @@ const ChatInput = ({
 
   // Handle key events for the textarea
   const handleKeyDown = e => {
-    if (promptsListEnabled && !showPromptSearch && e.key === '/' && value === '') {
+    if (slashCommandEnabled && !showPromptSearch && e.key === '/' && value === '') {
       e.preventDefault();
       setShowPromptSearch(true);
       return;
@@ -514,18 +519,24 @@ const ChatInput = ({
 
   return (
     <div className="next-gen-chat-input-container">
-      {promptsListEnabled && (
+      {slashCommandEnabled && (
         <PromptSearch
           isOpen={showPromptSearch}
           appId={app?.id}
           onClose={() => setShowPromptSearch(false)}
           onSelect={p => {
-            onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            if (p._type === 'skill') {
+              onSkillSelect?.(p);
+            } else {
+              onChange({ target: { value: p.prompt.replace('[content]', '') } });
+            }
             setShowPromptSearch(false);
             setTimeout(() => {
               focusInputAtEnd();
             }, 0);
           }}
+          appSkills={app?.skills}
+          promptsEnabled={promptsListEnabled}
         />
       )}
 

@@ -15,5 +15,6 @@ export const UnifiedEvents = {
   IMAGE: 'image',
   CLARIFICATION: 'clarification',
   WORKFLOW_STEP: 'workflow.step',
-  WORKFLOW_RESULT: 'workflow.result'
+  WORKFLOW_RESULT: 'workflow.result',
+  SKILL_ACTIVATION: 'skill.activation'
 };

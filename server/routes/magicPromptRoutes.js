@@ -8,8 +8,7 @@ import { simpleCompletion } from '../utils.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
-export default function registerMagicPromptRoutes(app, deps = {}) {
-  const { basePath = '' } = deps;
+export default function registerMagicPromptRoutes(app) {
   app.post(
     buildServerPath('/api/magic-prompt'),
     authRequired,
