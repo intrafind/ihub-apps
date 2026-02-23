@@ -621,14 +621,13 @@ const generateMarkdown = messages => {
     .join('\n\n');
 };
 
-const generateHTML = messages => {
-  const html = messages
-    .filter(m => !m.isGreeting)
-    .map(m => `<p><strong>${m.role}:</strong> ${markdownToHtml(m.content)}</p>`)
-    .join('');
-
-  // Clean the HTML to remove interactive elements like buttons and toolbars
-  return cleanHtmlForExport(html);
+const generateHTML = (messages, settings, appName) => {
+  // Use the same high-quality HTML generation as PDF export
+  // This ensures consistent styling and proper markdown rendering
+  const htmlContent = generatePDFHTML(messages, settings, 'default', {}, appName || 'iHub Apps');
+  
+  // Return the full HTML document
+  return htmlContent;
 };
 
 // Client-side export functions
@@ -665,8 +664,8 @@ export const exportChatToMarkdown = async (messages, settings, appId = null, cha
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (messages, settings, appId = null, chatId = null) => {
-  const content = generateHTML(messages);
+export const exportChatToHTML = async (messages, settings, appId = null, chatId = null, appName = 'iHub Apps') => {
+  const content = generateHTML(messages, settings, appName);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.html`;
 
@@ -694,7 +693,7 @@ export const exportChatToFormat = async (messages, settings, format, options = {
     case 'markdown':
       return exportChatToMarkdown(messages, settings, appId, chatId);
     case 'html':
-      return exportChatToHTML(messages, settings, appId, chatId);
+      return exportChatToHTML(messages, settings, appId, chatId, appName);
     default:
       throw new Error(`Unsupported export format: ${format}`);
   }
