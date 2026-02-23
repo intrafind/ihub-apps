@@ -8,6 +8,7 @@ import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
@@ -44,6 +45,7 @@ const ChatInputActionsMenu = ({
 }) => {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
@@ -85,7 +87,8 @@ const ChatInputActionsMenu = ({
         const hasWorkflowTools = app.tools.some(
           t => typeof t === 'string' && t.startsWith('workflow:')
         );
-        if (hasWorkflowTools) {
+        // Only fetch workflows if feature is enabled
+        if (hasWorkflowTools && featureFlags.isEnabled('workflows', true)) {
           try {
             const { data: workflows } = await apiClient.get('/workflows');
             if (Array.isArray(workflows)) {
@@ -119,7 +122,7 @@ const ChatInputActionsMenu = ({
     };
 
     loadTools();
-  }, [app?.tools, t]);
+  }, [app?.tools, t, featureFlags]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

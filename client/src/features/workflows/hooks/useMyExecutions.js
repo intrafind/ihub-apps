@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../../../api/client';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * Hook for fetching the current user's workflow executions.
  * Supports filtering by status and pagination.
+ * Only fetches if the workflows feature is enabled.
  *
  * @param {Object} options - Fetch options
  * @param {string} [options.status] - Filter by status (running, paused, completed, failed, cancelled)
@@ -22,8 +24,16 @@ function useMyExecutions(options = {}) {
   const [executions, setExecutions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const featureFlags = useFeatureFlags();
 
   const fetchExecutions = useCallback(async () => {
+    // Don't fetch if workflows feature is disabled
+    if (!featureFlags.isEnabled('workflows', true)) {
+      setExecutions([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -42,7 +52,7 @@ function useMyExecutions(options = {}) {
     } finally {
       setLoading(false);
     }
-  }, [status, limit, offset]);
+  }, [status, limit, offset, featureFlags]);
 
   useEffect(() => {
     fetchExecutions();
