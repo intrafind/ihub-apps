@@ -274,22 +274,38 @@ export async function getSkillContent(skillName, customDir) {
  * @returns {Promise<string | null>}
  */
 export async function getSkillResource(skillName, filePath, customDir) {
-  const skillsDir = getSkillsDirectory(customDir);
-  const skillPath = path.join(skillsDir, skillName);
+  // Validate skill name to prevent path traversal and enforce spec
+  const nameValidation = validateSkillName(skillName);
+  if (!nameValidation.valid) {
+    logger.warn(`Rejected invalid skill name '${skillName}': ${nameValidation.error}`);
+    return null;
+  }
 
-  // Reject absolute paths and obvious traversal sequences
+  const skillsDir = getSkillsDirectory(customDir);
+  // Resolve the skill path against the skills directory and ensure it stays within it
+  const resolvedSkillPath = path.resolve(skillsDir, skillName);
+  const normalizedSkillsDir = path.resolve(skillsDir);
+  if (
+    resolvedSkillPath !== normalizedSkillsDir &&
+    !resolvedSkillPath.startsWith(normalizedSkillsDir + path.sep)
+  ) {
+    logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
+    return null;
+  }
+
+  // Reject absolute paths and obvious traversal sequences for the file path
   if (filePath.includes('..') || path.isAbsolute(filePath)) {
     logger.warn(`Path traversal attempt blocked for skill '${skillName}': ${filePath}`);
     return null;
   }
 
-  const resolvedPath = path.resolve(skillPath, filePath);
+  const resolvedPath = path.resolve(resolvedSkillPath, filePath);
 
   // Resolve real paths (follows symlinks) to detect symlink-based traversal
   let realResolvedPath;
   let realSkillPath;
   try {
-    realSkillPath = await fs.realpath(skillPath);
+    realSkillPath = await fs.realpath(resolvedSkillPath);
     realResolvedPath = await fs.realpath(resolvedPath);
   } catch {
     // Target doesn't exist or symlink target is missing
