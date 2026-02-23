@@ -862,27 +862,29 @@ const AppFormEditor = ({
           </div>
 
           {/* Skills Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
-            <div className="md:grid md:grid-cols-3 md:gap-6">
-              <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
-                  {t('admin.apps.edit.skills', 'Skills')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500">
-                  {t(
-                    'admin.apps.edit.skillsDesc',
-                    'Configure which agent skills are available for this app'
-                  )}
-                </p>
-              </div>
-              <div className="mt-5 md:mt-0 md:col-span-2">
-                <SkillsSelector
-                  selectedSkills={app.skills || []}
-                  onSkillsChange={skills => handleInputChange('skills', skills)}
-                />
+          {featureFlags.isEnabled('skills', false) && (
+            <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+              <div className="md:grid md:grid-cols-3 md:gap-6">
+                <div className="md:col-span-1">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900">
+                    {t('admin.apps.edit.skills', 'Skills')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {t(
+                      'admin.apps.edit.skillsDesc',
+                      'Configure which agent skills are available for this app'
+                    )}
+                  </p>
+                </div>
+                <div className="mt-5 md:mt-0 md:col-span-2">
+                  <SkillsSelector
+                    selectedSkills={app.skills || []}
+                    onSkillsChange={skills => handleInputChange('skills', skills)}
+                  />
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Variables Configuration */}
           <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
