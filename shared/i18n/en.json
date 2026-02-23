@@ -209,7 +209,37 @@
         "toJSON": "as JSON",
         "toJSONL": "as JSONL",
         "toMarkdown": "as Markdown",
-        "toHTML": "as HTML"
+        "toHTML": "as HTML",
+        "dialogTitle": "Export Conversation",
+        "selectFormat": "Select export format",
+        "export": "Export",
+        "exporting": "Exporting...",
+        "pdfOptions": "PDF Options",
+        "watermarkPlaceholder": "Enter watermark text",
+        "formats": {
+          "pdf": "PDF Document",
+          "docx": "Word Document",
+          "pptx": "PowerPoint Presentation",
+          "xlsx": "Excel Spreadsheet",
+          "csv": "CSV File",
+          "txt": "Text File",
+          "markdown": "Markdown",
+          "html": "HTML",
+          "json": "JSON",
+          "jsonl": "JSON Lines"
+        },
+        "descriptions": {
+          "pdf": "Formatted PDF with styling options",
+          "docx": "Microsoft Word document",
+          "pptx": "PowerPoint presentation with slides",
+          "xlsx": "Excel workbook with structured data",
+          "csv": "Comma-separated values",
+          "txt": "Plain text format",
+          "markdown": "Markdown formatted text",
+          "html": "HTML document",
+          "json": "JSON format with metadata",
+          "jsonl": "JSON Lines format"
+        }
       },
       "copyToClipboard": "Copy to clipboard",
       "copied": "Copied to clipboard!",
