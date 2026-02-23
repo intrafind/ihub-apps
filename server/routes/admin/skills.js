@@ -9,7 +9,6 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import {
-  loadSkillsMetadata,
   getSkillContent,
   getSkillResource,
   getSkillsDirectory,
@@ -18,6 +17,7 @@ import {
   validateSkillDirectory,
   validateSkillName
 } from '../../services/skillLoader.js';
+
 import { loadJson } from '../../configLoader.js';
 import logger from '../../utils/logger.js';
 
