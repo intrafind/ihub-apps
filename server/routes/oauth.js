@@ -56,7 +56,7 @@ function sendOAuthError(res, status, error, description) {
   });
 }
 
-export default function registerOAuthRoutes(app, basePath = '') {
+export default function registerOAuthRoutes(app) {
   /**
    * @swagger
    * /api/oauth/token:

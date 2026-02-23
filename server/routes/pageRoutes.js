@@ -3,7 +3,7 @@ import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 
-export default function registerPageRoutes(app, basePath = '') {
+export default function registerPageRoutes(app) {
   app.get(buildServerPath('/api/pages/:pageId'), async (req, res) => {
     const { pageId } = req.params;
     const lang = req.query.lang || 'en';

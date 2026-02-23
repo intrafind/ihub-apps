@@ -152,7 +152,7 @@ function loadRawTools() {
   return { tools, needsCleanup, filePath: toolsFilePath };
 }
 
-export default function registerAdminToolsRoutes(app, basePath = '') {
+export default function registerAdminToolsRoutes(app) {
   /**
    * @swagger
    * /api/admin/tools:

@@ -10,7 +10,7 @@ import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminModelsRoutes(app, basePath = '') {
+export default function registerAdminModelsRoutes(app) {
   /**
    * @swagger
    * /admin/models:

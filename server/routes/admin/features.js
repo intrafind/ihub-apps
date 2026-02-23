@@ -8,7 +8,7 @@ import configCache from '../../configCache.js';
 import { resolveFeatures, featureCategories, featureRegistry } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminFeaturesRoutes(app, basePath = '') {
+export default function registerAdminFeaturesRoutes(app) {
   /**
    * @swagger
    * /api/admin/features:

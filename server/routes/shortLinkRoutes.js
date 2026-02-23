@@ -17,7 +17,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
-export default function registerShortLinkRoutes(app, basePath = '') {
+export default function registerShortLinkRoutes(app) {
   app.post(
     buildServerPath('/api/shortlinks'),
     requireFeature('shortLinks'),

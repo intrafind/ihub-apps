@@ -203,7 +203,37 @@
         "toJSON": "als JSON",
         "toJSONL": "als JSONL",
         "toMarkdown": "als Markdown",
-        "toHTML": "als HTML"
+        "toHTML": "als HTML",
+        "dialogTitle": "Unterhaltung exportieren",
+        "selectFormat": "Exportformat auswählen",
+        "export": "Exportieren",
+        "exporting": "Exportiere...",
+        "pdfOptions": "PDF-Optionen",
+        "watermarkPlaceholder": "Wasserzeichentext eingeben",
+        "formats": {
+          "pdf": "PDF-Dokument",
+          "docx": "Word-Dokument",
+          "pptx": "PowerPoint-Präsentation",
+          "xlsx": "Excel-Tabelle",
+          "csv": "CSV-Datei",
+          "txt": "Textdatei",
+          "markdown": "Markdown",
+          "html": "HTML",
+          "json": "JSON",
+          "jsonl": "JSON-Zeilen"
+        },
+        "descriptions": {
+          "pdf": "Formatiertes PDF mit Styling-Optionen",
+          "docx": "Microsoft Word-Dokument",
+          "pptx": "PowerPoint-Präsentation mit Folien",
+          "xlsx": "Excel-Arbeitsmappe mit strukturierten Daten",
+          "csv": "Durch Kommas getrennte Werte",
+          "txt": "Einfaches Textformat",
+          "markdown": "Markdown-formatierter Text",
+          "html": "HTML-Dokument",
+          "json": "JSON-Format mit Metadaten",
+          "jsonl": "JSON-Zeilen-Format"
+        }
       },
       "copyToClipboard": "In die Zwischenablage kopieren",
       "copied": "In die Zwischenablage kopiert!",
@@ -219,7 +249,14 @@
       "getStarted": "Loslegen",
       "examplePrompts": "Hier sind einige Beispiel-Prompts zum Einstieg",
       "noMessagesTitle": "Noch keine Nachrichten",
-      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!"
+      "noMessagesSubtitle": "Beginne eine Unterhaltung, indem du eine Nachricht sendest!",
+      "modelSelector": {
+        "hint": {
+          "alertTitle": "Wichtiger Hinweis",
+          "dismiss": "Schließen",
+          "acknowledge": "Verstanden"
+        }
+      }
     }
   },
   "models": {
@@ -421,7 +458,8 @@
   "disclaimer": {
     "title": "Haftungsausschluss",
     "accept": "Ich verstehe",
-    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}"
+    "versionInfo": "Version {{version}}, Zuletzt aktualisiert: {{date}}",
+    "defaultMessage": "iHub nutzt KI und kann Fehler machen. Bitte überprüfen Sie die Ergebnisse sorgfältig."
   },
   "canvas": {
     "toolbox": {

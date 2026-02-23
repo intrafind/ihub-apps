@@ -435,7 +435,7 @@ function getSourceManager() {
  * Register all sources administration routes
  * @param {Express} app - Express application instance
  */
-export default function registerAdminSourcesRoutes(app, basePath = '') {
+export default function registerAdminSourcesRoutes(app) {
   /**
    * @swagger
    * /api/admin/sources:

@@ -4,12 +4,14 @@ import Fuse from 'fuse.js';
 import { apiClient } from '../../../api/client';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * Inline suggestion dropdown for @mention workflow autocomplete.
  * No input field — focus stays in the parent textarea.
  * The parent passes a `query` string (text typed after '@') and
  * forwards keyboard events via the imperative ref.
+ * Only fetches workflows if the workflows feature is enabled.
  *
  * @param {Object} props
  * @param {boolean} props.isOpen - Whether the dropdown is visible
@@ -25,6 +27,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
   const [selectedIndex, setSelectedIndex] = useState(0);
   const fuseRef = useRef(null);
   const listRef = useRef(null);
+  const featureFlags = useFeatureFlags();
 
   // Determine which workflow IDs are available for this app
   const appWorkflowIds = (app?.tools || [])
@@ -32,6 +35,12 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
     .map(t => t.replace('workflow:', ''));
 
   const fetchAndFilter = useCallback(async () => {
+    // Don't fetch if workflows feature is disabled
+    if (!featureFlags.isEnabled('workflows', true)) {
+      setWorkflows([]);
+      return;
+    }
+
     try {
       const response = await apiClient.get('/workflows');
       const allWorkflows = response.data || [];
@@ -53,7 +62,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
       console.error('Failed to load workflows for @mention:', err);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [i18n.language, app?.id]);
+  }, [i18n.language, app?.id, featureFlags]);
 
   // Fetch workflows when dropdown opens
   useEffect(() => {

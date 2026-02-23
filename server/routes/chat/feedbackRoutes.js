@@ -9,7 +9,7 @@ import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.j
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
-export default function registerFeedbackRoutes(app, { getLocalizedError, basePath = '' }) {
+export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   app.post(
     buildServerPath('/api/feedback'),
     authRequired,

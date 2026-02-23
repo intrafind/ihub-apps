@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { apiClient } from '../../../api/client';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * Hook for fetching available workflow definitions.
  * Returns workflows the user has permission to execute.
+ * Only fetches if the workflows feature is enabled.
  *
  * @returns {Object} Workflow list state and methods
  * @property {Array} workflows - List of workflow definitions
@@ -15,8 +17,16 @@ function useWorkflowList() {
   const [workflows, setWorkflows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const featureFlags = useFeatureFlags();
 
   const fetchWorkflows = useCallback(async () => {
+    // Don't fetch if workflows feature is disabled
+    if (!featureFlags.isEnabled('workflows', true)) {
+      setWorkflows([]);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -30,7 +40,7 @@ function useWorkflowList() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [featureFlags]);
 
   useEffect(() => {
     fetchWorkflows();

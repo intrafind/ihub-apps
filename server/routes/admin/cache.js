@@ -9,7 +9,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 
-export default function registerAdminCacheRoutes(app, basePath = '') {
+export default function registerAdminCacheRoutes(app) {
   app.get(buildServerPath('/api/admin/usage'), adminAuth, async (req, res) => {
     try {
       const data = await getUsage();

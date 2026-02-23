@@ -267,7 +267,45 @@ client/src/
 
 ## Key Development Guidelines
 
-### When Modifying Configuration Files
+### When Modifying Configuration Files — Write a Migration if Needed
+
+**IMPORTANT**: When making changes to the **schema or default values** of existing configuration files, you must also create a configuration migration so that existing installations are updated automatically on next server startup.
+
+#### When to write a migration
+
+- Adding new required or default fields to existing JSON config files (e.g., new section in `platform.json`)
+- Renaming, restructuring, or removing fields that existing installs may have in the old format
+- Adding default entries to `providers.json`, `groups.json`, `tools.json`, `sources.json`, etc.
+
+Do **not** create migrations for brand-new config files (those are created by `performInitialSetup` from `server/defaults/`).
+
+#### How to create a migration
+
+Find the next version number from `server/migrations/V*.js`, then create the file:
+
+```javascript
+// server/migrations/V003__add_feature_flag.js
+export const version = '003';
+export const description = 'add_feature_flag';
+
+// Optional: skip if target file doesn't exist
+export async function precondition(ctx) {
+  return await ctx.fileExists('config/platform.json');
+}
+
+export async function up(ctx) {
+  const platform = await ctx.readJson('config/platform.json');
+  ctx.setDefault(platform, 'features.myNewFlag', false); // never overwrites admin-set values
+  await ctx.writeJson('config/platform.json', platform);
+  ctx.log('Added features.myNewFlag default');
+}
+```
+
+Key `ctx` methods: `readJson`, `writeJson`, `fileExists`, `readDefaultJson`, `setDefault`, `removeKey`, `renameKey`, `addIfMissing`, `removeById`, `mergeDefaults`. See `CLAUDE.md` for the full API reference.
+
+**Rules:** Never modify a migration after it's been applied (checksums tracked). Migrations are forward-only.
+
+---
 
 **Apps (`contents/apps/*.json`):**
 - Follow Zod schema in `server/validators/appConfigSchema.js`
@@ -292,11 +330,12 @@ client/src/
 1. **Server Route**: Add to appropriate subdirectory in `routes/`
 2. **Client Feature**: Create feature module in `client/src/features/`
 3. **Configuration**: Add to relevant JSON file in `contents/`
-4. **Permissions**: Update `contents/config/groups.json` if needed
-5. **Translations**: Add keys to `shared/i18n/{en,de}.json`
-6. **Documentation**: Update relevant file in `docs/` (check existing docs first) and optionally create concept document in `concepts/` for design decisions
-7. **Testing**: Add tests if modifying critical functionality
-8. **Known Routes** ⚠️: If adding a new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
+4. **Migration** ⚠️: If you changed the schema or defaults of an existing config file, create a migration in `server/migrations/` (see above)
+5. **Permissions**: Update `contents/config/groups.json` if needed
+6. **Translations**: Add keys to `shared/i18n/{en,de}.json`
+7. **Documentation**: Update relevant file in `docs/` (check existing docs first) and optionally create concept document in `concepts/` for design decisions
+8. **Testing**: Add tests if modifying critical functionality
+9. **Known Routes** ⚠️: If adding a new top-level route in `App.jsx`, update `client/src/utils/runtimeBasePath.js`
 
 ### When Adding New Routes or API Endpoints
 

@@ -148,7 +148,7 @@ import logger from '../../utils/logger.js';
  *           description: The affected group (for single operations)
  */
 
-export default function registerAdminGroupRoutes(app, basePath = '') {
+export default function registerAdminGroupRoutes(app) {
   /**
    * @swagger
    * /api/admin/groups:

@@ -219,7 +219,6 @@ function validateWorkflow(workflow) {
  * @param {WorkflowEngine} deps.workflowEngine - Optional custom workflow engine instance
  */
 export default function registerWorkflowRoutes(app, deps = {}) {
-  const { basePath = '' } = deps;
   const workflowEngine = deps.workflowEngine || new WorkflowEngine();
 
   // Recover persisted executions from disk on startup

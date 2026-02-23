@@ -40,9 +40,9 @@ import {
   cleanupInactiveClients
 } from './serverHelpers.js';
 import { performInitialSetup } from './utils/setupUtils.js';
+import { runConfigMigrations } from './migrations/runner.js';
 import {
   getBasePath,
-  buildServerPath,
   basePathDetectionMiddleware,
   basePathValidationMiddleware
 } from './utils/basePath.js';
@@ -125,6 +125,22 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Run versioned configuration migrations
+  try {
+    await runConfigMigrations();
+  } catch (err) {
+    logger.error({
+      component: 'Server',
+      message: 'Configuration migration failed',
+      error: err.message,
+      stack: err.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but configuration may be outdated'
+    });
+  }
+
   // Load platform configuration and initialize telemetry
   let platformConfig = {};
   try {
@@ -154,24 +170,6 @@ if (cluster.isPrimary && workerCount > 1) {
   } catch (err) {
     console.error('Failed to initialize encryption key or JWT secret:', err);
     console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
-  }
-
-  // Run config migrations (adds missing fields to existing installations)
-  try {
-    const { runMigrations } = await import('./migrations/runner.js');
-    await runMigrations();
-  } catch (error) {
-    console.error('⚠️  Error running config migrations:', error.message);
-    // Continue - non-critical
-  }
-
-  // Ensure default providers are present (migration for existing installations)
-  try {
-    const { ensureDefaultProviders } = await import('./utils/providerMigration.js');
-    await ensureDefaultProviders();
-  } catch (error) {
-    console.error('⚠️  Error ensuring default providers:', error.message);
-    // Continue - this is non-critical
   }
 
   // Initialize configuration cache for optimal performance
@@ -247,28 +245,27 @@ if (cluster.isPrimary && workerCount > 1) {
   // All API routes are registered with base path support
   const basePath = getBasePath();
 
-  registerAuthRoutes(app, basePath);
-  registerOAuthRoutes(app, basePath);
-  registerGeneralRoutes(app, { getLocalizedError, basePath });
-  registerModelRoutes(app, { getLocalizedError, basePath });
-  registerToolRoutes(app, basePath);
-  registerSkillRoutes(app, basePath);
-  registerPageRoutes(app, basePath);
-  registerRendererRoutes(app, basePath);
-  registerSessionRoutes(app, basePath);
-  registerMagicPromptRoutes(app, { basePath });
+  registerAuthRoutes(app);
+  registerOAuthRoutes(app);
+  registerGeneralRoutes(app, { getLocalizedError });
+  registerModelRoutes(app, { getLocalizedError });
+  registerToolRoutes(app);
+  registerSkillRoutes(app);
+  registerPageRoutes(app);
+  registerRendererRoutes(app);
+  registerSessionRoutes(app);
+  registerMagicPromptRoutes(app);
   registerChatRoutes(app, {
     verifyApiKey,
     processMessageTemplates,
     getLocalizedError,
-    DEFAULT_TIMEOUT,
-    basePath
+    DEFAULT_TIMEOUT
   });
-  registerOpenAIProxyRoutes(app, { basePath });
-  await registerAdminRoutes(app, basePath);
-  registerShortLinkRoutes(app, basePath);
-  await registerSwaggerRoutes(app, basePath);
-  registerWorkflowRoutes(app, { basePath, getLocalizedError });
+  registerOpenAIProxyRoutes(app);
+  await registerAdminRoutes(app);
+  registerShortLinkRoutes(app);
+  await registerSwaggerRoutes(app);
+  registerWorkflowRoutes(app, { getLocalizedError });
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up

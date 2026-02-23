@@ -214,9 +214,26 @@ export async function loadSkillsMetadata(customDir) {
  * @returns {Promise<{ body: string, references: string[], scripts: string[], assets: string[] } | null>}
  */
 export async function getSkillContent(skillName, customDir) {
+  // Validate skill name to prevent path traversal and enforce spec
+  const nameValidation = validateSkillName(skillName);
+  if (!nameValidation.valid) {
+    logger.warn(`Rejected invalid skill name '${skillName}': ${nameValidation.error}`);
+    return null;
+  }
+
   const skillsDir = getSkillsDirectory(customDir);
-  const skillPath = path.join(skillsDir, skillName);
-  const skillFilePath = path.join(skillPath, SKILL_FILE);
+  // Resolve the skill path against the skills directory and ensure it stays within it
+  const resolvedSkillPath = path.resolve(skillsDir, skillName);
+  const normalizedSkillsDir = path.resolve(skillsDir);
+  if (
+    resolvedSkillPath !== normalizedSkillsDir &&
+    !resolvedSkillPath.startsWith(normalizedSkillsDir + path.sep)
+  ) {
+    logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
+    return null;
+  }
+
+  const skillFilePath = path.join(resolvedSkillPath, SKILL_FILE);
 
   const parsed = await parseSkillFile(skillFilePath);
   if (!parsed) return null;
@@ -231,7 +248,7 @@ export async function getSkillContent(skillName, customDir) {
     ['scripts', scripts],
     ['assets', assets]
   ]) {
-    const dirPath = path.join(skillPath, dirName);
+    const dirPath = path.join(resolvedSkillPath, dirName);
     try {
       const entries = await fs.readdir(dirPath);
       arr.push(...entries.map(e => `${dirName}/${e}`));

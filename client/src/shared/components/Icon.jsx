@@ -63,7 +63,10 @@ import {
   ArrowUpIcon,
   FolderIcon,
   FolderOpenIcon,
-  ServerIcon
+  ServerIcon,
+  TableCellsIcon as OutlineTableCellsIcon,
+  DocumentDuplicateIcon as OutlineDocumentDuplicateIcon,
+  PresentationChartBarIcon as OutlinePresentationChartBarIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -111,7 +114,10 @@ import {
   ArrowUpIcon as SolidArrowUpIcon,
   FolderIcon as SolidFolderIcon,
   FolderOpenIcon as SolidFolderOpenIcon,
-  ServerIcon as SolidServerIcon
+  ServerIcon as SolidServerIcon,
+  TableCellsIcon as SolidTableCellsIcon,
+  DocumentDuplicateIcon as SolidDocumentDuplicateIcon,
+  PresentationChartBarIcon as SolidPresentationChartBarIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -206,7 +212,19 @@ const iconMap = {
   'arrow-up': { outline: ArrowUpIcon, solid: SolidArrowUpIcon },
   folder: { outline: FolderIcon, solid: SolidFolderIcon },
   'folder-open': { outline: FolderOpenIcon, solid: SolidFolderOpenIcon },
-  'hard-drive': { outline: ServerIcon, solid: SolidServerIcon }
+  'hard-drive': { outline: ServerIcon, solid: SolidServerIcon },
+  'table-cells': { outline: OutlineTableCellsIcon, solid: SolidTableCellsIcon },
+  'document-duplicate': {
+    outline: OutlineDocumentDuplicateIcon,
+    solid: SolidDocumentDuplicateIcon
+  },
+  'presentation-chart-bar': {
+    outline: OutlinePresentationChartBarIcon,
+    solid: SolidPresentationChartBarIcon
+  },
+  // Aliases for export formats
+  'file-text': { outline: OutlineDocumentTextIcon, solid: SolidDocumentTextIcon },
+  table: { outline: OutlineTableCellsIcon, solid: SolidTableCellsIcon }
 };
 
 const sizeClasses = {

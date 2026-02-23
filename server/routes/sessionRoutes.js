@@ -6,7 +6,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
-export default function registerSessionRoutes(app, basePath = '') {
+export default function registerSessionRoutes(app) {
   app.post(
     buildServerPath('/api/session/start'),
     authOptional,

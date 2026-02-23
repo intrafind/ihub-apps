@@ -1,10 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { apiClient } from '../../../api/client';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * Hook for managing a single workflow execution.
  * Handles SSE streaming for real-time updates and checkpoint responses.
+ * Only fetches if the workflows feature is enabled.
  *
  * @param {string} executionId - The workflow execution ID
  * @returns {Object} Execution state and methods
@@ -23,10 +25,19 @@ function useWorkflowExecution(executionId) {
   const [error, setError] = useState(null);
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  const featureFlags = useFeatureFlags();
 
   // Fetch initial execution state
   const fetchState = useCallback(async () => {
     if (!executionId) return;
+
+    // Don't fetch if workflows feature is disabled
+    if (!featureFlags.isEnabled('workflows', true)) {
+      setState(null);
+      setLoading(false);
+      setError('Workflows feature is disabled');
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -40,11 +51,16 @@ function useWorkflowExecution(executionId) {
     } finally {
       setLoading(false);
     }
-  }, [executionId]);
+  }, [executionId, featureFlags]);
 
   // Connect to SSE stream
   const connectSSE = useCallback(() => {
     if (!executionId) return;
+
+    // Don't connect if workflows feature is disabled
+    if (!featureFlags.isEnabled('workflows', true)) {
+      return;
+    }
 
     // Close existing connection
     if (eventSourceRef.current) {
@@ -275,12 +291,17 @@ function useWorkflowExecution(executionId) {
       eventSource.close();
       eventSourceRef.current = null;
     };
-  }, [executionId, state?.status]);
+  }, [executionId, state?.status, featureFlags]);
 
   // Respond to human checkpoint
   const respondToCheckpoint = useCallback(
     async ({ checkpointId, response, data }) => {
       if (!executionId) return;
+
+      // Don't respond if workflows feature is disabled
+      if (!featureFlags.isEnabled('workflows', true)) {
+        throw new Error('Workflows feature is disabled');
+      }
 
       try {
         const result = await apiClient.post(`/workflows/executions/${executionId}/respond`, {
@@ -302,13 +323,18 @@ function useWorkflowExecution(executionId) {
         throw err;
       }
     },
-    [executionId]
+    [executionId, featureFlags]
   );
 
   // Cancel execution
   const cancelExecution = useCallback(
     async (reason = 'user_cancelled') => {
       if (!executionId) return;
+
+      // Don't cancel if workflows feature is disabled
+      if (!featureFlags.isEnabled('workflows', true)) {
+        throw new Error('Workflows feature is disabled');
+      }
 
       try {
         const result = await apiClient.post(`/workflows/executions/${executionId}/cancel`, {
@@ -326,7 +352,7 @@ function useWorkflowExecution(executionId) {
         throw err;
       }
     },
-    [executionId]
+    [executionId, featureFlags]
   );
 
   // Initial fetch

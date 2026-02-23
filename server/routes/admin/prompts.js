@@ -193,7 +193,7 @@ import logger from '../../utils/logger.js';
  *           description: Additional error details
  */
 
-export default function registerAdminPromptsRoutes(app, basePath = '') {
+export default function registerAdminPromptsRoutes(app) {
   /**
    * @swagger
    * /api/admin/prompts:
