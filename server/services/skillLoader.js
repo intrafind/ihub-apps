@@ -220,7 +220,10 @@ export async function getSkillContent(skillName, customDir) {
   // Resolve the skill path against the skills directory and ensure it stays within it
   const resolvedSkillPath = path.resolve(skillsDir, skillName);
   const normalizedSkillsDir = path.resolve(skillsDir);
-  if (resolvedSkillPath !== normalizedSkillsDir && !resolvedSkillPath.startsWith(normalizedSkillsDir + path.sep)) {
+  if (
+    resolvedSkillPath !== normalizedSkillsDir &&
+    !resolvedSkillPath.startsWith(normalizedSkillsDir + path.sep)
+  ) {
     logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
     return null;
   }
