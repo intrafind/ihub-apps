@@ -187,7 +187,9 @@ export default function registerAdminSkillsRoutes(app) {
 
       // Ensure the resolved skill path is within the skills directory (path traversal protection)
       if (!skillPathResolved.startsWith(skillsDirResolved + path.sep)) {
-        logger.warn(`Path traversal attempt blocked when deleting skill '${req.params.name}': ${skillPathResolved}`);
+        logger.warn(
+          `Path traversal attempt blocked when deleting skill '${req.params.name}': ${skillPathResolved}`
+        );
         return res.status(400).json({ error: 'Invalid skill path' });
       }
 
