@@ -180,13 +180,23 @@ export default function registerAdminSkillsRoutes(app) {
     try {
       if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
+      const skillsDir = getSkillsDirectory();
+      const skillsDirResolved = path.resolve(skillsDir);
       const skillPath = getSkillPath(req.params.name);
-      if (!existsSync(skillPath)) {
+      const skillPathResolved = path.resolve(skillPath);
+
+      // Ensure the resolved skill path is within the skills directory (path traversal protection)
+      if (!skillPathResolved.startsWith(skillsDirResolved + path.sep)) {
+        logger.warn(`Path traversal attempt blocked when deleting skill '${req.params.name}': ${skillPathResolved}`);
+        return res.status(400).json({ error: 'Invalid skill path' });
+      }
+
+      if (!existsSync(skillPathResolved)) {
         return res.status(404).json({ error: 'Skill directory not found' });
       }
 
       // Remove skill directory
-      await fs.rm(skillPath, { recursive: true, force: true });
+      await fs.rm(skillPathResolved, { recursive: true, force: true });
 
       // Remove from config
       const skillsConfig = await readSkillsConfig();
