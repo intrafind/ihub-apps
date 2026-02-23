@@ -183,8 +183,23 @@ export default function registerAdminSkillsRoutes(app) {
           return res.json({ valid: false, errors: [nameValidation.error] });
         }
 
-        const skillPath = getSkillPath(skillName);
-        const validation = await validateSkillDirectory(skillPath);
+        // Ensure the resolved skill path stays within the skills root directory
+        const skillsRoot = getSkillsDirectory();
+        const candidateSkillPath = getSkillPath(skillName);
+        const resolvedSkillsRoot = path.resolve(skillsRoot);
+        const resolvedSkillPath = path.resolve(candidateSkillPath);
+        const normalizedRootWithSep =
+          resolvedSkillsRoot.endsWith(path.sep) ? resolvedSkillsRoot : resolvedSkillsRoot + path.sep;
+
+        if (
+          !resolvedSkillPath.startsWith(normalizedRootWithSep) ||
+          path.basename(resolvedSkillPath) !== skillName
+        ) {
+          logger.warn(`Skill directory validation blocked for invalid path derived from name '${skillName}'`);
+          return res.status(400).json({ error: 'Invalid skill path' });
+        }
+
+        const validation = await validateSkillDirectory(resolvedSkillPath);
         res.json(validation);
       } catch (error) {
         logger.error('Error validating skill:', error);
@@ -202,21 +217,37 @@ export default function registerAdminSkillsRoutes(app) {
     requireFeature('skills'),
     async (req, res) => {
       try {
-        if (!validateIdForPath(req.params.name, 'skill', res)) return;
+        const skillName = req.params.name;
+        if (!validateIdForPath(skillName, 'skill', res)) return;
 
-        const skillPath = getSkillPath(req.params.name);
-        if (!existsSync(skillPath)) {
+        // Ensure the resolved skill path stays within the skills root directory
+        const skillsRoot = getSkillsDirectory();
+        const candidateSkillPath = getSkillPath(skillName);
+        const resolvedSkillsRoot = path.resolve(skillsRoot);
+        const resolvedSkillPath = path.resolve(candidateSkillPath);
+        const normalizedRootWithSep =
+          resolvedSkillsRoot.endsWith(path.sep) ? resolvedSkillsRoot : resolvedSkillsRoot + path.sep;
+
+        if (
+          !resolvedSkillPath.startsWith(normalizedRootWithSep) ||
+          path.basename(resolvedSkillPath) !== skillName
+        ) {
+          logger.warn(`Skill export blocked for invalid path derived from name '${skillName}'`);
+          return res.status(400).json({ error: 'Invalid skill path' });
+        }
+
+        if (!existsSync(resolvedSkillPath)) {
           return res.status(404).json({ error: 'Skill not found' });
         }
 
         const archive = archiver('zip', { zlib: { level: 9 } });
-        const fileName = `${req.params.name}.zip`;
+        const fileName = `${skillName}.zip`;
 
         res.setHeader('Content-Type', 'application/zip');
         res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
 
         archive.pipe(res);
-        archive.directory(skillPath, req.params.name);
+        archive.directory(resolvedSkillPath, skillName);
         await archive.finalize();
       } catch (error) {
         logger.error('Error exporting skill:', error);
