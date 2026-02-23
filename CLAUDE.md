@@ -474,12 +474,14 @@ The project uses a versioned migration system (similar to Flyway) for configurat
 #### When to Write a Migration
 
 Create a new migration whenever you:
+
 - Add new required or default fields to existing config files (e.g., new section in `platform.json`)
 - Rename or restructure fields in JSON config files
 - Add default entries to `providers.json`, `groups.json`, `tools.json`, `sources.json`, etc.
 - Remove or move configuration keys that existing installations may still have in old format
 
 **Do NOT** create migrations for:
+
 - Adding brand-new config files (handled by `performInitialSetup` copying from `server/defaults/`)
 - Client-side changes or code-only changes with no config schema impact
 
@@ -511,23 +513,23 @@ export async function up(ctx) {
 
 #### Migration Context API (`ctx`)
 
-| Method | Description |
-|--------|-------------|
-| `ctx.readJson(path)` | Read JSON from `contents/{path}` |
-| `ctx.writeJson(path, data)` | Atomically write JSON to `contents/{path}` |
-| `ctx.fileExists(path)` | Check if `contents/{path}` exists |
-| `ctx.readDefaultJson(path)` | Read JSON from `server/defaults/{path}` |
-| `ctx.listFiles(dir, pattern)` | List files in `contents/{dir}` |
-| `ctx.deleteFile(path)` | Delete `contents/{path}` |
-| `ctx.moveFile(from, to)` | Move file within `contents/` |
-| `ctx.setDefault(obj, dotPath, value)` | Set value only if path is missing |
-| `ctx.removeKey(obj, dotPath)` | Remove key at dot-path |
-| `ctx.renameKey(obj, oldPath, newPath)` | Move key from old to new path |
-| `ctx.mergeDefaults(existing, defaults)` | Deep merge; existing values always win |
-| `ctx.addIfMissing(array, item, idField)` | Push item if no match on `idField` |
-| `ctx.removeById(array, id, idField)` | Remove first item matching `id` |
-| `ctx.transformWhere(array, pred, fn)` | Apply `fn` to items matching `pred` |
-| `ctx.log(msg)` / `ctx.warn(msg)` | Structured logging with version prefix |
+| Method                                   | Description                                |
+| ---------------------------------------- | ------------------------------------------ |
+| `ctx.readJson(path)`                     | Read JSON from `contents/{path}`           |
+| `ctx.writeJson(path, data)`              | Atomically write JSON to `contents/{path}` |
+| `ctx.fileExists(path)`                   | Check if `contents/{path}` exists          |
+| `ctx.readDefaultJson(path)`              | Read JSON from `server/defaults/{path}`    |
+| `ctx.listFiles(dir, pattern)`            | List files in `contents/{dir}`             |
+| `ctx.deleteFile(path)`                   | Delete `contents/{path}`                   |
+| `ctx.moveFile(from, to)`                 | Move file within `contents/`               |
+| `ctx.setDefault(obj, dotPath, value)`    | Set value only if path is missing          |
+| `ctx.removeKey(obj, dotPath)`            | Remove key at dot-path                     |
+| `ctx.renameKey(obj, oldPath, newPath)`   | Move key from old to new path              |
+| `ctx.mergeDefaults(existing, defaults)`  | Deep merge; existing values always win     |
+| `ctx.addIfMissing(array, item, idField)` | Push item if no match on `idField`         |
+| `ctx.removeById(array, id, idField)`     | Remove first item matching `id`            |
+| `ctx.transformWhere(array, pred, fn)`    | Apply `fn` to items matching `pred`        |
+| `ctx.log(msg)` / `ctx.warn(msg)`         | Structured logging with version prefix     |
 
 #### Rules
 

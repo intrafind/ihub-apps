@@ -175,6 +175,7 @@ The project uses a versioned migration system for configuration changes. Migrati
 ### When to Write a Migration
 
 Create a migration whenever you:
+
 - Add new required or default fields to **existing** JSON config files
 - Rename, restructure, or remove fields in config files
 - Add default entries to `providers.json`, `groups.json`, `tools.json`, `sources.json`, etc.
@@ -206,6 +207,7 @@ export async function up(ctx) {
 Key `ctx` methods: `readJson`, `writeJson`, `fileExists`, `readDefaultJson`, `setDefault`, `removeKey`, `renameKey`, `addIfMissing`, `removeById`, `mergeDefaults`.
 
 **Rules:**
+
 - Never modify a migration file after it has been applied (checksums are tracked).
 - Migrations are forward-only — to undo, create a new higher-versioned migration.
 
