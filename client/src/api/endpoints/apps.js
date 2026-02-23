@@ -159,8 +159,7 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
           processedLines.push('<br>');
         }
         continue;
-      } 
-
+      }
 
       // Regular paragraph text
       processedLines.push(processInlineMarkdown(line));
@@ -629,7 +628,7 @@ const generateHTML = (messages, settings, appName) => {
   // Use the same high-quality HTML generation as PDF export
   // This ensures consistent styling and proper markdown rendering
   const htmlContent = generatePDFHTML(messages, settings, 'default', {}, appName || 'iHub Apps');
-  
+
   // Return the full HTML document
   return htmlContent;
 };
@@ -668,7 +667,13 @@ export const exportChatToMarkdown = async (messages, settings, appId = null, cha
   return { success: true, filename };
 };
 
-export const exportChatToHTML = async (messages, settings, appId = null, chatId = null, appName = 'iHub Apps') => {
+export const exportChatToHTML = async (
+  messages,
+  settings,
+  appId = null,
+  chatId = null,
+  appName = 'iHub Apps'
+) => {
   const content = generateHTML(messages, settings, appName);
   const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
   const filename = `chat-${appId || 'export'}-${timestamp}.html`;
