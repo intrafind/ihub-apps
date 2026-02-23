@@ -710,6 +710,69 @@ const AppChat = ({ preloadedApp = null }) => {
     }
   };
 
+  const handleSkillSelect = useCallback(
+    skill => {
+      if (processing) return;
+
+      const displayMessage = `/${skill.name}`;
+      const apiMessage = `Activate and follow the "${skill.name}" skill to help me with the next task.`;
+
+      const params = {
+        modelId: selectedModel,
+        style: selectedStyle,
+        temperature,
+        outputFormat: selectedOutputFormat,
+        language: currentLanguage,
+        ...(thinkingEnabled !== null ? { thinkingEnabled } : {}),
+        ...(thinkingBudget !== null ? { thinkingBudget } : {}),
+        ...(thinkingThoughts !== null ? { thinkingThoughts } : {}),
+        ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
+          ? { enabledTools: effectiveEnabledTools }
+          : {}),
+        ...(imageAspectRatio ? { imageAspectRatio } : {}),
+        ...(imageQuality ? { imageQuality } : {})
+      };
+
+      sendChatMessage({
+        displayMessage: {
+          content: displayMessage,
+          meta: { rawContent: displayMessage }
+        },
+        apiMessage: {
+          content: apiMessage,
+          promptTemplate: null,
+          variables: {},
+          imageData: null,
+          fileData: null
+        },
+        params,
+        sendChatHistory,
+        requestedSkill: skill.name,
+        messageMetadata: {
+          customResponseRenderer: app?.customResponseRenderer,
+          outputFormat: selectedOutputFormat
+        }
+      });
+    },
+    [
+      processing,
+      sendChatMessage,
+      app,
+      selectedModel,
+      selectedStyle,
+      temperature,
+      selectedOutputFormat,
+      currentLanguage,
+      sendChatHistory,
+      thinkingEnabled,
+      thinkingBudget,
+      thinkingThoughts,
+      effectiveEnabledTools,
+      imageAspectRatio,
+      imageQuality
+    ]
+  );
+
   const handleInputChange = e => {
     setInput(e.target.value);
   };
@@ -1268,6 +1331,13 @@ const AppChat = ({ preloadedApp = null }) => {
       imageQuality,
       onImageAspectRatioChange: setImageAspectRatio,
       onImageQualityChange: setImageQuality,
+      // Skill activation
+      onSkillSelect: handleSkillSelect,
+      // Skills slash command gating
+      skillsSlashEnabled:
+        featureFlags.isEnabled('skills', false) &&
+        Array.isArray(app?.skills) &&
+        app.skills.length > 0,
       // Clarification state
       clarificationPending
     };

@@ -503,7 +503,9 @@ export const fetchAdminSkills = async () => {
   try {
     const response = await makeAdminApiCall('/admin/skills');
     const data = response.data;
-    return Array.isArray(data) ? data : [];
+    // Server returns { skills: [...], settings: {...} }
+    const skills = data?.skills ?? data;
+    return Array.isArray(skills) ? skills : [];
   } catch (error) {
     console.error('Error in fetchAdminSkills:', error);
     throw error;

@@ -116,7 +116,8 @@ class PromptService {
     outputSchema = null,
     user = null,
     chatId = null,
-    modelName = null
+    modelName = null,
+    requestedSkill = null
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
@@ -303,6 +304,29 @@ class PromptService {
           }
         } catch (err) {
           logger.error('Error loading skills for system prompt:', err);
+        }
+      }
+
+      // Pre-activate a specific skill when requested via slash command
+      if (requestedSkill && isFeatureEnabled('skills', configCache.getFeatures())) {
+        try {
+          const { getSkillContent } = await import('./skillLoader.js');
+          const content = await getSkillContent(requestedSkill);
+          if (content) {
+            const skillBlock = `\n\n<active_skill name="${requestedSkill}">\n${content.body}\n</active_skill>`;
+            systemPrompt += skillBlock;
+
+            const allResources = [...content.references, ...content.scripts, ...content.assets];
+            if (allResources.length > 0) {
+              systemPrompt += `\nAvailable skill resources: ${allResources.join(', ')}`;
+            }
+
+            logger.info(`Pre-activated skill '${requestedSkill}' via slash command`, {
+              component: 'PromptService'
+            });
+          }
+        } catch (err) {
+          logger.error(`Error pre-activating skill '${requestedSkill}':`, err);
         }
       }
 

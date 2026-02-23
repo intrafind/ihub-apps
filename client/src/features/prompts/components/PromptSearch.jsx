@@ -12,7 +12,14 @@ import SearchModal from '../../../shared/components/SearchModal';
 
 const fuseRef = { current: null };
 
-const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
+const PromptSearch = ({
+  isOpen,
+  onClose,
+  onSelect,
+  appId,
+  appSkills = [],
+  promptsEnabled = true
+}) => {
   const { t, i18n } = useTranslation();
   const [prompts, setPrompts] = useState([]);
   const [skills, setSkills] = useState([]);
@@ -36,7 +43,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
       try {
         // Fetch prompts and skills in parallel
         const [rawPrompts, rawSkills] = await Promise.all([
-          fetchPrompts().catch(() => []),
+          promptsEnabled ? fetchPrompts().catch(() => []) : Promise.resolve([]),
           fetchSkills().catch(() => [])
         ]);
         const localized = (Array.isArray(rawPrompts) ? rawPrompts : []).map(p => ({
@@ -48,12 +55,14 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
         }));
         setPrompts(localized);
 
-        const skillItems = (Array.isArray(rawSkills) ? rawSkills : []).map(s => ({
-          ...s,
-          _type: 'skill',
-          id: s.name,
-          description: s.description || ''
-        }));
+        const skillItems = (Array.isArray(rawSkills) ? rawSkills : [])
+          .filter(s => appSkills.length > 0 && appSkills.includes(s.name))
+          .map(s => ({
+            ...s,
+            _type: 'skill',
+            id: s.name,
+            description: s.description || ''
+          }));
         setSkills(skillItems);
       } catch (err) {
         console.error('Failed to load prompts/skills', err);
@@ -65,7 +74,7 @@ const PromptSearch = ({ isOpen, onClose, onSelect, appId }) => {
     if (isOpen) {
       setFavoritePromptIds(getFavoritePrompts());
       setRecentPromptIds(getRecentPromptIds());
-      if (prompts.length === 0) {
+      if (promptsEnabled && prompts.length === 0) {
         fetchPrompts()
           .then(raw => {
             const localized = (Array.isArray(raw) ? raw : []).map(p => ({

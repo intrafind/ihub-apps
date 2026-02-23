@@ -99,7 +99,7 @@ export const fetchAdminSkills = async (options = {}) => {
   const { skipCache = false } = options;
   const cacheKey = skipCache ? null : 'admin_skills';
 
-  return handleApiResponse(
+  const data = await handleApiResponse(
     () => {
       const headers = {};
 
@@ -118,6 +118,10 @@ export const fetchAdminSkills = async (options = {}) => {
     true,
     true // Enable ETag handling
   );
+
+  // Server returns { skills: [...], settings: {...} }
+  const skills = data?.skills ?? data;
+  return Array.isArray(skills) ? skills : [];
 };
 
 /**

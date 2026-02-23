@@ -197,6 +197,7 @@ export function loadGroupPermissions() {
       prompts: group.permissions?.prompts || [],
       models: group.permissions?.models || [],
       workflows: group.permissions?.workflows || [],
+      skills: group.permissions?.skills || [],
       adminAccess: group.permissions?.adminAccess || false,
       description: group.description || ''
     };

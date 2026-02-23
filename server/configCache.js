@@ -1323,7 +1323,7 @@ class ConfigCache {
     let userSpecificEtag = skillsEtag || 'no-etag';
 
     // Apply filtering based on user permissions
-    if (user && user.permissions && user.permissions.skills) {
+    if (user && user.permissions && user.permissions.skills && user.permissions.skills.size > 0) {
       const allowedSkills = user.permissions.skills;
       filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
     } else if (isAnonymousAccessAllowed(platformConfig)) {
