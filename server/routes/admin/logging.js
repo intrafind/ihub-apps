@@ -3,6 +3,7 @@ import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import { buildServerPath } from '../../utils/basePath.js';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
@@ -32,7 +33,7 @@ export default function registerAdminLoggingRoutes(app) {
    *                     type: string
    *                   description: Available log levels
    */
-  app.get(`${basePath}/api/admin/logging/level`, adminAuth, (req, res) => {
+  app.get(buildServerPath('/api/admin/logging/level'), adminAuth, (req, res) => {
     try {
       const levelInfo = logger.getLogLevelInfo();
       res.json(levelInfo);
@@ -72,7 +73,7 @@ export default function registerAdminLoggingRoutes(app) {
    *       400:
    *         description: Invalid log level
    */
-  app.put(`${basePath}/api/admin/logging/level`, adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/logging/level'), adminAuth, async (req, res) => {
     try {
       const { level, persist = true } = req.body;
 
@@ -141,7 +142,7 @@ export default function registerAdminLoggingRoutes(app) {
    *       200:
    *         description: Logging configuration
    */
-  app.get(`${basePath}/api/admin/logging/config`, adminAuth, (req, res) => {
+  app.get(buildServerPath('/api/admin/logging/config'), adminAuth, (req, res) => {
     try {
       const platformConfig = configCache.getPlatform();
       const loggingConfig = platformConfig?.logging || {
@@ -194,7 +195,7 @@ export default function registerAdminLoggingRoutes(app) {
    *       200:
    *         description: Logging configuration updated
    */
-  app.put(`${basePath}/api/admin/logging/config`, adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/logging/config'), adminAuth, async (req, res) => {
     try {
       const newLoggingConfig = req.body;
 
