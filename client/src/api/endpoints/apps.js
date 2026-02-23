@@ -155,7 +155,6 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
       // Empty line creates paragraph break
       if (trimmedLine === '') {
-        console.log('Adding paragraph break ' + processedLines[processedLines.length - 1]);
         if (processedLines.length > 0 && processedLines[processedLines.length - 1] !== '<br>') {
           processedLines.push('<br>');
         }
@@ -164,8 +163,6 @@ const generatePDFHTML = (messages, settings, template, watermark, appName) => {
 
 
       // Regular paragraph text
-      console.log('Processing line: ' + line);
-      console.log('Processed line: ' + processInlineMarkdown(line));
       processedLines.push(processInlineMarkdown(line));
       processedLines.push('<br>');
     }
