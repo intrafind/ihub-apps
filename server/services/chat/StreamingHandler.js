@@ -1,57 +1,29 @@
-import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction } from '../../utils.js';
 import { estimateTokens, recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
-import { createParser } from 'eventsource-parser';
-import { throttledFetch } from '../../requestThrottler.js';
-import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
-import { redactUrl } from '../../utils/logRedactor.js';
+import StreamResponseCollector from './utils/StreamResponseCollector.js';
+import { logLLMRequest, executeLLMRequest } from './utils/llmRequestExecutor.js';
+import RequestLifecycle from './utils/requestLifecycle.js';
+import { emitImages, emitThinking, emitGroundingMetadata } from './utils/resultEmitters.js';
 import logger from '../../utils/logger.js';
 
 class StreamingHandler {
-  constructor() {
-    this.errorHandler = new ErrorHandler();
-  }
-
-  /**
-   * Helper to process and emit images from a result
-   */
+  /** @deprecated Use emitImages from utils/resultEmitters.js instead */
   processImages(result, chatId) {
-    if (result && result.images && result.images.length > 0) {
-      for (const image of result.images) {
-        actionTracker.trackImage(chatId, {
-          mimeType: image.mimeType,
-          data: image.data,
-          thoughtSignature: image.thoughtSignature
-        });
-      }
-    }
+    emitImages(result, chatId);
   }
 
-  /**
-   * Helper to process and emit thinking content from a result
-   */
+  /** @deprecated Use emitThinking from utils/resultEmitters.js instead */
   processThinking(result, chatId) {
-    if (result && result.thinking && result.thinking.length > 0) {
-      for (const thought of result.thinking) {
-        actionTracker.trackThinking(chatId, { content: thought });
-      }
-    }
+    emitThinking(result, chatId);
   }
 
-  /**
-   * Helper to process grounding metadata
-   */
+  /** @deprecated Use emitGroundingMetadata from utils/resultEmitters.js instead */
   processGroundingMetadata(result, chatId) {
-    if (result && result.groundingMetadata) {
-      actionTracker.trackAction(chatId, {
-        event: 'grounding',
-        metadata: result.groundingMetadata
-      });
-    }
+    emitGroundingMetadata(result, chatId);
   }
 
   /**
@@ -79,13 +51,18 @@ class StreamingHandler {
       event: 'processing',
       message: 'Processing your request...'
     });
-    const controller = new AbortController();
 
-    if (activeRequests.has(chatId)) {
-      const existingController = activeRequests.get(chatId);
-      existingController.abort();
-    }
-    activeRequests.set(chatId, controller);
+    const lifecycle = new RequestLifecycle(chatId, {
+      timeout: DEFAULT_TIMEOUT,
+      onTimeout: async () => {
+        const errorMessage = await getLocalizedError(
+          'requestTimeout',
+          { timeout: DEFAULT_TIMEOUT / 1000 },
+          clientLanguage
+        );
+        actionTracker.trackError(chatId, { message: errorMessage });
+      }
+    });
 
     const baseLog = buildLogData(true);
     const promptTokens = llmMessages
@@ -98,101 +75,59 @@ class StreamingHandler {
       tokens: promptTokens
     });
 
-    let timeoutId;
-    const setupTimeout = () => {
-      timeoutId = setTimeout(async () => {
-        if (activeRequests.has(chatId)) {
-          controller.abort();
-          const errorMessage = await getLocalizedError(
-            'requestTimeout',
-            { timeout: DEFAULT_TIMEOUT / 1000 },
-            clientLanguage
-          );
-          actionTracker.trackError(chatId, { message: errorMessage });
-          activeRequests.delete(chatId);
-        }
-      }, DEFAULT_TIMEOUT);
-    };
-    setupTimeout();
-
-    // Debug logging for LLM request
-    logger.debug(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
-    logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-    logger.debug(
-      `[LLM REQUEST DEBUG] Headers:`,
-      JSON.stringify(
-        {
-          ...request.headers,
-          Authorization: request.headers.Authorization ? '[REDACTED]' : undefined
-        },
-        null,
-        2
-      )
-    );
-    logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
+    logLLMRequest(request, { chatId, modelId: model.id });
 
     let doneEmitted = false;
     let finishReason = null;
 
     try {
-      const llmResponse = await throttledFetch(model.id, request.url, {
-        method: 'POST',
-        headers: request.headers,
-        body: JSON.stringify(request.body),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!llmResponse.ok) {
-        logger.error(`StreamingHandler: HTTP error from ${model.provider}:`, {
-          status: llmResponse.status,
-          statusText: llmResponse.statusText,
-          url: redactUrl(request.url)
-        });
-
-        const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
-          llmResponse,
+      let llmResponse;
+      try {
+        llmResponse = await executeLLMRequest({
+          request,
           model,
-          clientLanguage
-        );
+          signal: lifecycle.signal,
+          language: clientLanguage
+        });
+      } catch (httpError) {
+        lifecycle.clearTimeout();
 
+        // Handle HTTP errors with streaming-specific error reporting
         await logInteraction(
           'chat_error',
           buildLogData(true, {
             responseType: 'error',
             error: {
-              message: errorInfo.message,
-              code: errorInfo.code,
-              httpStatus: errorInfo.httpStatus,
-              details: errorInfo.details,
-              isContextWindowError: errorInfo.isContextWindowError
+              message: httpError.message,
+              code: httpError.code,
+              httpStatus: httpError.httpStatus,
+              details: httpError.details,
+              isContextWindowError: httpError.isContextWindowError
             }
           })
         );
 
-        // Log additional info for context window errors
-        if (errorInfo.isContextWindowError) {
+        if (httpError.isContextWindowError) {
           logger.warn(`Context window exceeded for model ${model.id} in streaming:`, {
             modelId: model.id,
             tokenLimit: model.tokenLimit,
-            httpStatus: errorInfo.httpStatus,
-            errorCode: errorInfo.code
+            httpStatus: httpError.httpStatus,
+            errorCode: httpError.code
           });
         }
 
         actionTracker.trackError(chatId, {
-          message: errorInfo.message,
-          code: errorInfo.code,
-          details: errorInfo.details,
-          isContextWindowError: errorInfo.isContextWindowError
+          message: httpError.message,
+          code: httpError.code,
+          details: httpError.details,
+          isContextWindowError: httpError.isContextWindowError
         });
 
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
+        lifecycle.cleanup();
         return;
       }
+
+      lifecycle.clearTimeout();
 
       const readableStream = this.getReadableStream(llmResponse);
       const reader = readableStream.getReader();
@@ -347,95 +282,63 @@ class StreamingHandler {
         }
       } else {
         // Standard eventsource-parser approach for OpenAI-style providers
-        const events = [];
-        const parser = createParser({
-          onEvent: event => {
-            if (event.type === 'event' || !event.type) {
-              events.push(event);
-            }
-          }
-        });
+        // Uses shared StreamResponseCollector for consistent processing
+        const collector = new StreamResponseCollector(model.provider);
+        let streamError = false;
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (!activeRequests.has(chatId)) {
-            reader.cancel();
-            break;
-          }
-          if (done) break;
-
-          const chunk = decoder.decode(value, { stream: true });
-          parser.feed(chunk);
-
-          while (events.length > 0) {
-            const evt = events.shift();
-            const result = convertResponseToGeneric(evt.data, model.provider);
-
-            if (result && result.content && result.content.length > 0) {
-              for (const textContent of result.content) {
-                actionTracker.trackChunk(chatId, { content: textContent });
-                fullResponse += textContent;
-              }
-            }
-
-            // Handle generated images
-            this.processImages(result, chatId);
-
-            // Handle thinking
-            this.processThinking(result, chatId);
-
-            // Handle grounding metadata
-            this.processGroundingMetadata(result, chatId);
-
-            if (result && result.error) {
-              await logInteraction(
+        const { content: collectedContent, finishReason: collectedFinishReason } =
+          await collector.process(llmResponse, {
+            isAborted: () => lifecycle.signal.aborted,
+            onContent: text => {
+              actionTracker.trackChunk(chatId, { content: text });
+              fullResponse += text;
+            },
+            onImages: result => emitImages(result, chatId),
+            onThinking: result => emitThinking(result, chatId),
+            onGrounding: result => emitGroundingMetadata(result, chatId),
+            onError: (_err, msg) => {
+              streamError = true;
+              finishReason = 'error';
+              logInteraction(
                 'chat_error',
                 buildLogData(true, {
                   responseType: 'error',
                   error: {
-                    message: result.errorMessage || 'Error processing response',
+                    message: msg || 'Error processing response',
                     code: 'PROCESSING_ERROR'
                   },
                   response: fullResponse
                 })
               );
               actionTracker.trackError(chatId, {
-                message: result.errorMessage || 'Error processing response'
+                message: msg || 'Error processing response'
               });
-              finishReason = 'error';
-              break;
+            },
+            onFinishReason: reason => {
+              finishReason = reason;
+            },
+            onComplete: () => {
+              if (!streamError) {
+                actionTracker.trackDone(chatId, { finishReason });
+                doneEmitted = true;
+                logInteraction(
+                  'chat_response',
+                  buildLogData(true, { responseType: 'success', response: fullResponse })
+                );
+
+                const completionTokens = estimateTokens(fullResponse);
+                recordChatResponse({
+                  userId: baseLog.userSessionId,
+                  appId: baseLog.appId,
+                  modelId: model.id,
+                  tokens: completionTokens
+                });
+              }
             }
-
-            if (result && result.finishReason) {
-              finishReason = result.finishReason;
-            }
-
-            if (result && result.complete) {
-              actionTracker.trackDone(chatId, { finishReason });
-              doneEmitted = true;
-              await logInteraction(
-                'chat_response',
-                buildLogData(true, { responseType: 'success', response: fullResponse })
-              );
-
-              const completionTokens = estimateTokens(fullResponse);
-              await recordChatResponse({
-                userId: baseLog.userSessionId,
-                appId: baseLog.appId,
-                modelId: model.id,
-                tokens: completionTokens
-              });
-              break;
-            }
-          }
-
-          if (finishReason === 'error' || doneEmitted) {
-            break;
-          }
-        }
+          });
       }
     } catch (error) {
-      clearTimeout(timeoutId);
+      lifecycle.clearTimeout();
 
       logger.error(
         'StreamingHandler: Caught error in executeStreamingResponse:',
@@ -473,14 +376,11 @@ class StreamingHandler {
         actionTracker.trackError(chatId, { message: errorMessage });
       }
     } finally {
-      clearTimeout(timeoutId);
       if (!doneEmitted) {
         const finalFinishReason = finishReason || 'connection_closed';
         actionTracker.trackDone(chatId, { finishReason: finalFinishReason });
       }
-      if (activeRequests.get(chatId) === controller) {
-        activeRequests.delete(chatId);
-      }
+      lifecycle.cleanup();
     }
   }
 }

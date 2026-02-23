@@ -14,13 +14,10 @@
  */
 
 import { createCompletionRequest } from '../../adapters/index.js';
-import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
-import { throttledFetch } from '../../requestThrottler.js';
-import { getStreamReader } from '../../utils/streamUtils.js';
+import StreamResponseCollector from '../chat/utils/StreamResponseCollector.js';
+import { logLLMRequest, executeLLMRequest } from '../chat/utils/llmRequestExecutor.js';
 import ApiKeyVerifier from '../../utils/ApiKeyVerifier.js';
-import ErrorHandler from '../../utils/ErrorHandler.js';
 import logger from '../../utils/logger.js';
-import { createParser } from 'eventsource-parser';
 
 /**
  * Valid adapter options as defined in BaseAdapter.extractRequestOptions()
@@ -54,7 +51,6 @@ export class WorkflowLLMHelper {
    */
   constructor(options = {}) {
     this.apiKeyVerifier = options.apiKeyVerifier || new ApiKeyVerifier();
-    this.errorHandler = options.errorHandler || new ErrorHandler();
   }
 
   /**
@@ -121,37 +117,10 @@ export class WorkflowLLMHelper {
       hasTools: !!filteredOptions.tools
     });
 
-    // Execute the request
-    const response = await throttledFetch(model.id, request.url, {
-      method: 'POST',
-      headers: request.headers,
-      body: JSON.stringify(request.body)
-    });
+    logLLMRequest(request, { modelId: model.id, label: 'workflow' });
 
-    // Handle errors using centralized error handling
-    if (!response.ok) {
-      const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
-        response,
-        model,
-        language
-      );
-
-      logger.error({
-        component: 'WorkflowLLMHelper',
-        message: 'LLM request failed',
-        modelId: model.id,
-        status: response.status,
-        errorCode: errorInfo.code,
-        errorMessage: errorInfo.message,
-        errorDetails: errorInfo.details
-      });
-
-      const error = new Error(errorInfo.message);
-      error.code = errorInfo.code;
-      error.status = errorInfo.httpStatus;
-      error.details = errorInfo.details;
-      throw error;
-    }
+    // Execute the request (throws on HTTP error with enhanced error details)
+    const response = await executeLLMRequest({ request, model, language });
 
     // Process the streaming response
     return await this.processStreamingResponse(response, model);
@@ -159,111 +128,15 @@ export class WorkflowLLMHelper {
 
   /**
    * Process a streaming response and extract content and tool calls.
-   *
-   * Uses getStreamReader() for node-fetch/Web Streams compatibility.
-   * Uses convertResponseToGeneric() for provider-agnostic response parsing.
+   * Delegates to shared StreamResponseCollector for consistent parsing.
    *
    * @param {Response} response - Fetch response object
    * @param {Object} model - Model configuration (for provider info)
-   * @returns {Promise<Object>} Collected response with { content, toolCalls }
+   * @returns {Promise<Object>} Collected response with { content, toolCalls, thoughtSignatures, usage }
    */
   async processStreamingResponse(response, model) {
-    // Use getStreamReader for node-fetch/Web Streams compatibility
-    const reader = getStreamReader(response);
-    const decoder = new TextDecoder();
-    const events = [];
-    const parser = createParser({ onEvent: e => events.push(e) });
-
-    let content = '';
-    const toolCalls = [];
-    const thoughtSignatures = [];
-    let usage = null;
-    let done = false;
-
-    while (!done) {
-      const { value, done: readerDone } = await reader.read();
-      if (readerDone) break;
-
-      const chunk = decoder.decode(value, { stream: true });
-      parser.feed(chunk);
-
-      while (events.length > 0) {
-        const evt = events.shift();
-        const result = convertResponseToGeneric(evt.data, model.provider);
-
-        if (result.error) {
-          throw new Error(result.errorMessage || 'Error processing LLM response');
-        }
-
-        // Accumulate content
-        if (result.content?.length > 0) {
-          content += result.content.join('');
-        }
-
-        // Collect tool calls
-        if (result.tool_calls?.length > 0) {
-          this.mergeToolCalls(toolCalls, result.tool_calls);
-        }
-
-        // Collect thoughtSignatures (required for Gemini 3 thinking models with tool calling)
-        if (result.thoughtSignatures?.length > 0) {
-          thoughtSignatures.push(...result.thoughtSignatures);
-        }
-
-        // Capture usage data (usually in final chunk)
-        if (result.usage) {
-          usage = result.usage;
-        }
-
-        if (result.complete) {
-          done = true;
-          break;
-        }
-      }
-    }
-
-    return { content, toolCalls, thoughtSignatures, usage };
-  }
-
-  /**
-   * Merge streaming tool call chunks into complete tool calls.
-   *
-   * Streaming responses send tool calls in chunks (index, id, function name, arguments).
-   * This method accumulates them into complete tool call objects.
-   *
-   * @param {Array} collectedCalls - Array of collected tool calls (mutated)
-   * @param {Array} newCalls - New tool call chunks to merge
-   */
-  mergeToolCalls(collectedCalls, newCalls) {
-    for (const call of newCalls) {
-      let existing = collectedCalls.find(c => c.index === call.index);
-
-      if (existing) {
-        if (call.id) existing.id = call.id;
-        if (call.type) existing.type = call.type;
-        if (call.function) {
-          if (call.function.name) existing.function.name = call.function.name;
-          if (call.function.arguments) {
-            existing.function.arguments += call.function.arguments;
-          }
-        }
-        // Preserve metadata (critical for Gemini thoughtSignatures)
-        if (call.metadata) {
-          existing.metadata = { ...(existing.metadata || {}), ...call.metadata };
-        }
-      } else if (call.index !== undefined) {
-        collectedCalls.push({
-          index: call.index,
-          id: call.id || null,
-          type: call.type || 'function',
-          function: {
-            name: call.function?.name || '',
-            arguments: call.function?.arguments || ''
-          },
-          metadata: call.metadata || undefined
-        });
-      }
-    }
+    const collector = new StreamResponseCollector(model.provider);
+    return await collector.collect(response);
   }
 }
 
