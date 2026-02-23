@@ -510,6 +510,13 @@ class ConfigCache {
         return;
       }
 
+      // Special handling for skills - load from filesystem, not a JSON file
+      if (key === 'skills') {
+        const platformConfig = this.getPlatform();
+        await this._loadSkillsFromFilesystem(platformConfig);
+        return;
+      }
+
       const data = await loadJson(key, { useCache: false });
       if (data !== null) {
         const finalData = key === 'config/tools.json' ? expandToolFunctions(data) : data;
