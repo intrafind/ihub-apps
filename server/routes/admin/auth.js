@@ -114,7 +114,7 @@ import { isLastAdmin } from '../../utils/adminRescue.js';
  *           description: Error message
  */
 
-export default function registerAdminAuthRoutes(app, basePath = '') {
+export default function registerAdminAuthRoutes(app) {
   /**
    * @swagger
    * /api/admin/auth/status:

@@ -18,7 +18,7 @@ import logger from '../../utils/logger.js';
 
 export default function registerSessionRoutes(
   app,
-  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT, basePath = '' }
+  { verifyApiKey, getLocalizedError, DEFAULT_TIMEOUT }
 ) {
   const chatService = new ChatService();
 

@@ -10,7 +10,7 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
-export default function registerAdminUIRoutes(app, basePath = '') {
+export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {

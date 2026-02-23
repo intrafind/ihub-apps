@@ -1362,11 +1362,11 @@ class ConfigCache {
     // Apply filtering based on user permissions
     if (user && user.permissions && user.permissions.skills) {
       const allowedSkills = user.permissions.skills;
-      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills, 'skills');
+      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
     } else if (isAnonymousAccessAllowed(platformConfig)) {
       // For anonymous users, no default skills
       const allowedSkills = new Set();
-      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills, 'skills');
+      filteredSkills = filterResourcesByPermissions(filteredSkills, allowedSkills);
     }
 
     // Generate user-specific ETag if skills were filtered

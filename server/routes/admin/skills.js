@@ -1,7 +1,6 @@
 import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
 import path from 'path';
-import { createHash } from 'crypto';
 import archiver from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';

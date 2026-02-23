@@ -330,7 +330,7 @@ export async function importConfig(req, res) {
 /**
  * Register backup routes
  */
-export default async function registerBackupRoutes(app, basePath = '') {
+export default async function registerBackupRoutes(app) {
   // Setup multer for file uploads
   const multer = (await import('multer')).default;
   const upload = multer({

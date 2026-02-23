@@ -15,7 +15,7 @@ import { getStreamReader } from '../utils/streamUtils.js';
 import logger from '../utils/logger.js';
 
 export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
-  const base = buildServerPath('/api/inference', basePath);
+  const base = buildServerPath('/api/inference');
   app.use(`${base}/v1`, authRequired);
 
   /**

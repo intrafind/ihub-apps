@@ -77,7 +77,7 @@ import logger from '../utils/logger.js';
  *           description: Error message
  */
 
-export default function registerGeneralRoutes(app, { getLocalizedError, basePath = '' }) {
+export default function registerGeneralRoutes(app, { getLocalizedError }) {
   /**
    * @swagger
    * /api/apps:

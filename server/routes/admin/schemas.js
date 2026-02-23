@@ -45,7 +45,7 @@ import { buildServerPath } from '../../utils/basePath.js';
  *       500:
  *         description: Internal server error
  */
-export default function registerAdminSchemasRoutes(app, basePath = '') {
+export default function registerAdminSchemasRoutes(app) {
   app.get(buildServerPath('/api/admin/schemas'), adminAuth, async (req, res) => {
     try {
       const schemas = getAllJsonSchemas();

@@ -238,7 +238,7 @@ function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
   return results;
 }
 
-export default function registerAdminConfigRoutes(app, basePath = '') {
+export default function registerAdminConfigRoutes(app) {
   /**
    * @swagger
    * /admin/configs/platform:

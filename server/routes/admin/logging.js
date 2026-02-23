@@ -6,7 +6,7 @@ import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 
-export default function registerAdminLoggingRoutes(app, basePath = '') {
+export default function registerAdminLoggingRoutes(app) {
   /**
    * @swagger
    * /api/admin/logging/level:

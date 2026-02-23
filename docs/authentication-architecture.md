@@ -553,7 +553,7 @@ export const getBasePath = () => {
 
 Routes are built with base path:
 ```javascript
-registerAuthRoutes(app, basePath);
+registerAuthRoutes(app);
 // Results in: /subpath/api/auth/login (if basePath = '/subpath')
 ```
 

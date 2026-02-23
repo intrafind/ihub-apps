@@ -233,7 +233,7 @@ async function findAppFile(appId, appsDir) {
  *           example: "Failed to update app"
  */
 
-export default function registerAdminAppsRoutes(app, basePath = '') {
+export default function registerAdminAppsRoutes(app) {
   /**
    * @swagger
    * /api/admin/apps:

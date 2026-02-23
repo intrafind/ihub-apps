@@ -19,7 +19,7 @@ import logger from '../../utils/logger.js';
  * All routes require admin authentication
  */
 
-export default function registerAdminOAuthRoutes(app, basePath = '') {
+export default function registerAdminOAuthRoutes(app) {
   /**
    * @swagger
    * /api/admin/oauth/clients:
