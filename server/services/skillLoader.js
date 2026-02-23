@@ -209,6 +209,13 @@ export async function loadSkillsMetadata(customDir) {
  * @returns {Promise<{ body: string, references: string[], scripts: string[], assets: string[] } | null>}
  */
 export async function getSkillContent(skillName, customDir) {
+  // Validate skill name to prevent path traversal and enforce spec
+  const nameValidation = validateSkillName(skillName);
+  if (!nameValidation.valid) {
+    logger.warn(`Rejected invalid skill name '${skillName}': ${nameValidation.error}`);
+    return null;
+  }
+
   const skillsDir = getSkillsDirectory(customDir);
   const skillPath = path.join(skillsDir, skillName);
   const skillFilePath = path.join(skillPath, SKILL_FILE);
