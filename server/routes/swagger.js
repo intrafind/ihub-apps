@@ -97,7 +97,7 @@ export default async function registerSwaggerRoutes(app) {
 
   // Apply authentication middleware if required
   const middleware = requireAuth ? [authRequired] : [];
-  const basePath = buildServerPath('/', ''); // Get base path without leading slash for config
+  const basePath = buildServerPath('/'); // Get base path without leading slash for config
 
   // Normal/Chat APIs Documentation
   const normalApiConfig = createSwaggerConfig(
