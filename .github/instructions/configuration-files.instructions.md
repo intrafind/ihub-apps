@@ -292,12 +292,68 @@ Never include API keys or secrets in configuration files:
 - Test configuration changes
 - Document complex configurations in `docs/` (update existing files) or `concepts/` (for design decisions)
 
+## Configuration Migrations ⚠️
+
+When you change the **schema or default values** of an existing configuration file, you must create a migration so that existing installations are updated automatically on next server startup. Migrations live in `server/migrations/` and run before `configCache` initializes.
+
+### When to Write a Migration
+
+| Scenario | Need Migration? |
+|----------|----------------|
+| Adding new fields/defaults to existing config file | ✅ Yes |
+| Renaming or restructuring fields in existing config | ✅ Yes |
+| Adding default entries to `providers.json`, `groups.json`, etc. | ✅ Yes |
+| Creating a completely new config file | ❌ No (handled by `performInitialSetup`) |
+| Code-only changes, no config schema impact | ❌ No |
+
+### How to Create a Migration
+
+1. Check `server/migrations/V*.js` for the next available version number.
+2. Create `server/migrations/V{NNN}__{description}.js`:
+
+```javascript
+// server/migrations/V003__add_feature_flag.js
+export const version = '003';
+export const description = 'add_feature_flag';
+
+// Optional: skip if precondition not met
+export async function precondition(ctx) {
+  return await ctx.fileExists('config/platform.json');
+}
+
+export async function up(ctx) {
+  const platform = await ctx.readJson('config/platform.json');
+
+  // ctx.setDefault never overwrites values the admin has already set
+  ctx.setDefault(platform, 'features.myNewFlag', false);
+
+  // Writes atomically to contents/config/platform.json
+  await ctx.writeJson('config/platform.json', platform);
+  ctx.log('Added features.myNewFlag default');
+}
+```
+
+### Available `ctx` helpers
+
+- **File ops**: `readJson(path)`, `writeJson(path, data)`, `fileExists(path)`, `readDefaultJson(path)`, `listFiles(dir)`, `deleteFile(path)`, `moveFile(from, to)`
+- **JSON mutation**: `setDefault(obj, dotPath, val)`, `removeKey(obj, dotPath)`, `renameKey(obj, old, new)`, `mergeDefaults(existing, defaults)`, `addIfMissing(arr, item, id)`, `removeById(arr, id)`, `transformWhere(arr, pred, fn)`
+- **Logging**: `ctx.log(msg)`, `ctx.warn(msg)`
+
+All paths passed to file ops are relative to `contents/` (or `server/defaults/` for `readDefaultJson`).
+
+### Rules
+
+- **Never edit a migration file after it has been applied** — checksums are tracked; modifications cause warnings or halt startup.
+- Migrations are **forward-only**. To revert a change, create a new higher-versioned migration.
+- History is stored at `contents/.migration-history.json`.
+
 ## Testing Configuration Changes
 
 After modifying configuration:
 
 1. **Validate JSON** - Ensure valid JSON syntax
-2. **Test Server Startup** - Run `timeout 10s node server/server.js`
-3. **Check Logs** - Look for validation errors in server logs
-4. **Test Functionality** - Verify the feature works as expected
-5. **Test Hot-Reload** - For auto-reload configs, verify changes apply without restart
+2. **Write migration if needed** - See section above
+3. **Test Server Startup** - Run `timeout 10s node server/server.js`
+4. **Check Logs** - Look for validation errors and migration output in server logs
+5. **Test Functionality** - Verify the feature works as expected
+6. **Test Hot-Reload** - For auto-reload configs, verify changes apply without restart

@@ -39,6 +39,7 @@ import {
   cleanupInactiveClients
 } from './serverHelpers.js';
 import { performInitialSetup } from './utils/setupUtils.js';
+import { runConfigMigrations } from './migrations/runner.js';
 import {
   getBasePath,
   buildServerPath,
@@ -124,6 +125,22 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Run versioned configuration migrations
+  try {
+    await runConfigMigrations();
+  } catch (err) {
+    logger.error({
+      component: 'Server',
+      message: 'Configuration migration failed',
+      error: err.message,
+      stack: err.stack
+    });
+    logger.warn({
+      component: 'Server',
+      message: 'Server will continue, but configuration may be outdated'
+    });
+  }
+
   // Load platform configuration and initialize telemetry
   let platformConfig = {};
   try {
@@ -153,15 +170,6 @@ if (cluster.isPrimary && workerCount > 1) {
   } catch (err) {
     console.error('Failed to initialize encryption key or JWT secret:', err);
     console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
-  }
-
-  // Ensure default providers are present (migration for existing installations)
-  try {
-    const { ensureDefaultProviders } = await import('./utils/providerMigration.js');
-    await ensureDefaultProviders();
-  } catch (error) {
-    console.error('⚠️  Error ensuring default providers:', error.message);
-    // Continue - this is non-critical
   }
 
   // Initialize configuration cache for optimal performance
