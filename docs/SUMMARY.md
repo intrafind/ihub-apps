@@ -19,6 +19,7 @@
   - [Authentication & Security]()
     - [External Authentication](external-authentication.md)
     - [JWT Authentication](jwt-authentication.md)
+    - [JWT Well-Known Endpoints](jwt-well-known-endpoints.md)
     - [OIDC Authentication](oidc-authentication.md)
     - [LDAP/NTLM Authentication](ldap-ntlm-authentication.md)
     - [Value Encryption Tool](value-encryption-tool.md)

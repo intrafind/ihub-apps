@@ -109,5 +109,8 @@
       "maxSize": 10485760,
       "maxFiles": 5
     }
+  },
+  "jwt": {
+    "algorithm": "RS256"
   }
 }
