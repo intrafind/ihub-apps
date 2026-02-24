@@ -4,6 +4,7 @@ import SourceHandler from './SourceHandler.js';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
+import { resolveAndValidatePath, sanitizeRelativePath } from '../utils/pathSecurity.js';
 
 /**
  * Filesystem Source Handler
@@ -34,6 +35,22 @@ class FileSystemHandler extends SourceHandler {
   }
 
   /**
+   * Resolve a relative path safely within the base directory.
+   * Strips leading slashes and validates the resolved path stays within bounds.
+   * @param {string} relativePath - Relative file path
+   * @returns {string} - Resolved absolute path
+   * @throws {Error} - If the path escapes the base directory
+   */
+  _resolveSafePath(relativePath) {
+    const cleaned = sanitizeRelativePath(relativePath);
+    const resolved = resolveAndValidatePath(cleaned, this.basePath);
+    if (!resolved) {
+      throw new Error(`Access denied: path ${relativePath} is outside allowed directory`);
+    }
+    return resolved;
+  }
+
+  /**
    * Load content from filesystem
    * @param {Object} sourceConfig - { path: string, encoding?: string, url?: string }
    * @returns {Promise<Object>} - { content: string, metadata: Object }
@@ -45,13 +62,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('FileSystemHandler requires a path in sourceConfig');
     }
 
-    // Resolve path relative to base path
-    const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
-
-    // Security check - ensure path is within base directory
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${filePath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(filePath);
 
     try {
       // Get file stats
@@ -98,7 +109,7 @@ class FileSystemHandler extends SourceHandler {
   async getEnhancedCacheKey(sourceConfig) {
     try {
       const { path: filePath, url, encoding } = sourceConfig;
-      const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
+      const fullPath = this._resolveSafePath(filePath);
       const stats = await fs.stat(fullPath);
 
       // Include relevant config in cache key for consistency
@@ -171,12 +182,7 @@ class FileSystemHandler extends SourceHandler {
    * @returns {Promise<Array>} - List of files with metadata
    */
   async listFiles(dirPath = '') {
-    const fullPath = path.resolve(this.basePath, dirPath.replace(/^\/+/, ''));
-
-    // Security check
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${dirPath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(dirPath);
 
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });
@@ -210,7 +216,7 @@ class FileSystemHandler extends SourceHandler {
    */
   async fileExists(filePath) {
     try {
-      const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
+      const fullPath = this._resolveSafePath(filePath);
       const stats = await fs.stat(fullPath);
       return stats.isFile();
     } catch {
@@ -233,12 +239,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('Content must be a string');
     }
 
-    const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
-
-    // Security check
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${filePath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(filePath);
 
     try {
       // Ensure directory exists
@@ -277,12 +278,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('File path is required');
     }
 
-    const fullPath = path.resolve(this.basePath, filePath.replace(/^\/+/, ''));
-
-    // Security check
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${filePath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(filePath);
 
     try {
       await fs.unlink(fullPath);
@@ -313,12 +309,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('Directory path is required');
     }
 
-    const fullPath = path.resolve(this.basePath, dirPath.replace(/^\/+/, ''));
-
-    // Security check
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${dirPath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(dirPath);
 
     try {
       await fs.mkdir(fullPath, { recursive: true });
@@ -340,12 +331,7 @@ class FileSystemHandler extends SourceHandler {
    * @returns {Promise<Array>} - List of directories
    */
   async listDirectories(dirPath = '') {
-    const fullPath = path.resolve(this.basePath, dirPath.replace(/^\/+/, ''));
-
-    // Security check
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${dirPath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(dirPath);
 
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });
@@ -391,12 +377,7 @@ class FileSystemHandler extends SourceHandler {
       return { files: [], directories: [] };
     }
 
-    const fullPath = path.resolve(this.basePath, dirPath.replace(/^\/+/, ''));
-
-    // Security check
-    if (!fullPath.startsWith(path.resolve(this.basePath))) {
-      throw new Error(`Access denied: path ${dirPath} is outside allowed directory`);
-    }
+    const fullPath = this._resolveSafePath(dirPath);
 
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });

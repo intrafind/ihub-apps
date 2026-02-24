@@ -6,7 +6,11 @@ import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import {
+  validateIdForPath,
+  validateLanguageKeys,
+  resolveAndValidatePath
+} from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminPagesRoutes(app) {
@@ -43,9 +47,16 @@ export default function registerAdminPagesRoutes(app) {
       }
       const content = {};
       const rootDir = getRootDir();
+      const contentsBase = join(rootDir, 'contents');
       for (const [lang, relPath] of Object.entries(page.filePath || {})) {
         try {
-          const abs = join(rootDir, 'contents', relPath);
+          // Validate stored path stays within contents directory
+          const abs = resolveAndValidatePath(relPath, contentsBase);
+          if (!abs) {
+            logger.warn(`Skipping page file with invalid path: ${relPath}`);
+            content[lang] = '';
+            continue;
+          }
           content[lang] = await fs.readFile(abs, 'utf8');
         } catch {
           content[lang] = '';
@@ -91,6 +102,14 @@ export default function registerAdminPagesRoutes(app) {
       if (uiConfig.pages[id]) {
         return res.status(409).json({ error: 'Page with this ID already exists' });
       }
+      // Validate language keys in content and title to prevent path traversal
+      if (Object.keys(content).length > 0 && !validateLanguageKeys(content)) {
+        return res.status(400).json({ error: 'Invalid language code in content keys' });
+      }
+      if (Object.keys(title).length > 0 && !validateLanguageKeys(title)) {
+        return res.status(400).json({ error: 'Invalid language code in title keys' });
+      }
+
       uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
@@ -140,6 +159,14 @@ export default function registerAdminPagesRoutes(app) {
       pageEntry.authRequired = authRequired;
       pageEntry.allowedGroups = allowedGroups;
       pageEntry.contentType = contentType;
+      // Validate language keys in content and title to prevent path traversal
+      if (Object.keys(content).length > 0 && !validateLanguageKeys(content)) {
+        return res.status(400).json({ error: 'Invalid language code in content keys' });
+      }
+      if (Object.keys(title).length > 0 && !validateLanguageKeys(title)) {
+        return res.status(400).json({ error: 'Invalid language code in title keys' });
+      }
+
       pageEntry.filePath = pageEntry.filePath || {};
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
@@ -174,9 +201,16 @@ export default function registerAdminPagesRoutes(app) {
       if (!pageEntry) {
         return res.status(404).json({ error: 'Page not found' });
       }
+      const contentsBase = join(rootDir, 'contents');
       for (const rel of Object.values(pageEntry.filePath || {})) {
         try {
-          await fs.unlink(join(rootDir, 'contents', rel));
+          // Validate stored path stays within contents directory
+          const abs = resolveAndValidatePath(rel, contentsBase);
+          if (!abs) {
+            logger.warn(`Skipping deletion of page file with invalid path: ${rel}`);
+            continue;
+          }
+          await fs.unlink(abs);
         } catch {}
       }
       delete uiConfig.pages[pageId];

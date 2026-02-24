@@ -7,6 +7,7 @@ import {
 import { authRequired } from '../../middleware/authRequired.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
@@ -547,8 +548,8 @@ export default function registerDataRoutes(app) {
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let { lang } = req.params;
 
-      // Validate language parameter
-      if (!/^[a-zA-Z0-9-]{1,10}$/.test(lang)) {
+      // Validate language parameter using centralized validation
+      if (!isValidLanguageCode(lang)) {
         logger.warn({
           component: 'DataRoutes',
           message: 'Suspicious language parameter received',

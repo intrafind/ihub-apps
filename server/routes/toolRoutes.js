@@ -6,6 +6,7 @@ import { runToolSchema } from '../validators/index.js';
 import configCache from '../configCache.js';
 import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/authorization.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
@@ -56,6 +57,10 @@ export default function registerToolRoutes(app) {
     validate(runToolSchema),
     async (req, res) => {
       const { toolId } = req.params;
+
+      // Validate toolId to prevent injection via dynamic import
+      if (!validateIdForPath(toolId, 'tool', res)) return;
+
       const params = req.method === 'GET' ? req.query : req.body;
       if (req.headers['x-chat-id']) {
         params.chatId = req.headers['x-chat-id'];

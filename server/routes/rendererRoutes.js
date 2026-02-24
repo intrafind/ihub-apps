@@ -1,6 +1,7 @@
 import express from 'express';
 import { loadAllRenderers, getRendererById } from '../renderersLoader.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { validateIdForPath } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -45,6 +46,10 @@ export default function registerRendererRoutes(app) {
   router.get('/:id', async (req, res) => {
     try {
       const { id } = req.params;
+
+      // Validate renderer ID to prevent path traversal
+      if (!validateIdForPath(id, 'renderer', res)) return;
+
       const renderer = await getRendererById(id, false);
 
       if (!renderer) {

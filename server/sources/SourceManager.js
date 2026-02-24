@@ -3,6 +3,7 @@ import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
+import { resolveAndValidatePath } from '../utils/pathSecurity.js';
 
 // Global registry for source tool functions (persists across SourceManager instances)
 const globalSourceToolRegistry = new Map();
@@ -574,10 +575,8 @@ class SourceManager {
 
       // Resolve path relative to contents directory
       const contentsDir = path.join(getRootDir(), 'contents');
-      const fullPath = path.resolve(contentsDir, filePath);
-
-      // Security check: ensure resolved path stays within contents directory
-      if (!fullPath.startsWith(contentsDir)) {
+      const fullPath = resolveAndValidatePath(filePath, contentsDir);
+      if (!fullPath) {
         throw new Error('Invalid file path: Path must be within contents directory');
       }
 

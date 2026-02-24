@@ -5,6 +5,7 @@ import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
 import { actionTracker } from './actionTracker.js';
 import { isFeatureEnabled } from './featureRegistry.js';
+import { isValidId } from './utils/pathSecurity.js';
 import logger from './utils/logger.js';
 
 /**
@@ -427,7 +428,7 @@ export { localizeTools };
  */
 export async function runTool(toolId, params = {}) {
   logger.info(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
-  if (!/^[A-Za-z0-9_.-]+$/.test(toolId)) {
+  if (!isValidId(toolId)) {
     throw new Error('Invalid tool id');
   }
 
@@ -508,7 +509,7 @@ export async function runTool(toolId, params = {}) {
   }
 
   const scriptName = tool.script || `${toolId}.js`;
-  if (!/^[A-Za-z0-9_-]+\.js$/.test(scriptName)) {
+  if (!isValidId(scriptName.replace(/\.js$/, ''))) {
     throw new Error('Invalid script name');
   }
 

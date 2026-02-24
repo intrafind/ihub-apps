@@ -7,6 +7,7 @@ import {
   sendInternalError
 } from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { validateIdForPath } from '../utils/pathSecurity.js';
 
 export default function registerModelRoutes(app, { getLocalizedError }) {
   /**
@@ -118,6 +119,10 @@ export default function registerModelRoutes(app, { getLocalizedError }) {
     async (req, res) => {
       try {
         const { modelId } = req.params;
+
+        // Validate modelId to prevent injection
+        if (!validateIdForPath(modelId, 'model', res)) return;
+
         const platform = configCache.getPlatform() || {};
         const defaultLang = platform?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
