@@ -16,6 +16,7 @@
 
 import { promises as fs } from 'fs';
 import path from 'path';
+import matter from 'gray-matter';
 import { throttledFetch } from '../../requestThrottler.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { validateCatalog } from '../../validators/catalogSchema.js';
@@ -514,6 +515,34 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
 }
 
 // ---------------------------------------------------------------------------
+// Helpers — markdown link rewriting
+// ---------------------------------------------------------------------------
+
+/**
+ * Rewrite relative markdown links in a document to point to the GitHub source.
+ * Leaves absolute URLs, anchor links, and mailto: links untouched.
+ *
+ * @param {string} markdown - Markdown content to process
+ * @param {string|undefined} sourceUrl - Raw GitHub SKILL.md URL used to derive the GitHub blob base
+ * @returns {string} Markdown with relative links rewritten to GitHub blob URLs
+ */
+function rewriteRelativeLinks(markdown, sourceUrl) {
+  if (!sourceUrl || !markdown) return markdown;
+  const match = sourceUrl.match(
+    /^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\/(.+)\/SKILL\.md$/
+  );
+  if (!match) return markdown;
+  const [, owner, repo, ref, dirPath] = match;
+  const githubBase = `https://github.com/${owner}/${repo}/blob/${ref}/${dirPath}`;
+
+  // Replace [text](relative/path) but not absolute URLs, anchors, or mailto:
+  return markdown.replace(
+    /\[([^\]]*)\]\((?!https?:\/\/|#|mailto:)([^)]+)\)/g,
+    (_, text, href) => `[${text}](${githubBase}/${href})`
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Helpers — catalog format normalisation
 // ---------------------------------------------------------------------------
 
@@ -878,6 +907,29 @@ class RegistryService {
       }
     }
 
+    // Parse YAML frontmatter from SKILL.md content previews so the client
+    // can render it as a metadata table rather than raw --- delimiters
+    if (typeof contentPreview === 'string') {
+      try {
+        const parsed = matter(contentPreview);
+        if (parsed.data && Object.keys(parsed.data).length > 0) {
+          contentPreview = { body: parsed.content.trim(), frontmatter: parsed.data };
+        }
+      } catch {
+        // Keep as plain string if parsing fails
+      }
+    }
+
+    // Rewrite relative markdown links to point to the GitHub source
+    if (typeof contentPreview === 'object' && contentPreview?.body !== undefined) {
+      contentPreview = {
+        ...contentPreview,
+        body: rewriteRelativeLinks(contentPreview.body, item.source?.url)
+      };
+    } else if (typeof contentPreview === 'string') {
+      contentPreview = rewriteRelativeLinks(contentPreview, item.source?.url);
+    }
+
     return {
       ...item,
       registryId,
@@ -997,6 +1049,44 @@ class RegistryService {
   async listRegistries() {
     const { registries } = await this._getRegistriesData();
     return registries.map(r => ({ ...r, auth: redactAuth(r.auth) }));
+  }
+
+  /**
+   * Rewrite relative markdown links to GitHub blob view URLs.
+   * Public wrapper around the module-level rewriteRelativeLinks helper,
+   * for use by routes that serve installed-skill content.
+   *
+   * @param {string} markdown - Markdown content to process
+   * @param {string|undefined} sourceUrl - Raw GitHub SKILL.md URL
+   * @returns {string} Markdown with relative links rewritten
+   */
+  rewriteSkillLinks(markdown, sourceUrl) {
+    return rewriteRelativeLinks(markdown, sourceUrl);
+  }
+
+  /**
+   * Discover companion files for a skill at install time by fetching the GitHub tree.
+   * Used as a fallback when the cached catalog item has no companions array (stale cache).
+   *
+   * @param {string} skillMdUrl - Raw GitHub URL of the SKILL.md file
+   * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
+   * @returns {Promise<string[]>} Relative paths of companion files, or [] on failure
+   */
+  async discoverCompanions(skillMdUrl, authHeaders = {}) {
+    const ghInfo = parseGitHubUrl(skillMdUrl);
+    if (!ghInfo) return [];
+
+    // Strip the raw.githubusercontent.com base URL prefix and the ref segment to get the dir path
+    const urlPrefix = `https://raw.githubusercontent.com/${ghInfo.owner}/${ghInfo.repo}/`;
+    let dirPath = skillMdUrl.replace(urlPrefix, '');
+    // Remove the ref segment (refs/heads/main/... or main/...)
+    dirPath = dirPath.replace(/^(?:refs\/heads\/)?[^/]+\//, '');
+    // Remove the trailing /SKILL.md
+    dirPath = dirPath.replace(/\/SKILL\.md$/, '');
+    if (!dirPath) return [];
+
+    const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
+    return findCompanionFiles(tree, `${dirPath}/`);
   }
 
   /**

@@ -10,6 +10,29 @@ import {
 } from '../../../../api/adminApi';
 
 /**
+ * Flatten a potentially nested YAML frontmatter object to dot-path key/value pairs.
+ * E.g. { metadata: { author: "foo" } } → [["metadata.author", "foo"]]
+ *
+ * @param {object} obj - Frontmatter object
+ * @param {string} [prefix=''] - Key prefix for nested objects
+ * @returns {Array<[string, string]>} Flat [key, value] pairs
+ */
+function flattenFrontmatter(obj, prefix = '') {
+  const result = [];
+  for (const [key, val] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {
+      result.push(...flattenFrontmatter(val, fullKey));
+    } else if (Array.isArray(val)) {
+      result.push([fullKey, val.join(', ')]);
+    } else {
+      result.push([fullKey, String(val)]);
+    }
+  }
+  return result;
+}
+
+/**
  * Color classes for each item type badge.
  * Matches the type colors used in MarketplaceItemCard for visual consistency.
  */
@@ -328,7 +351,25 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
           {!loading && activeTab === 'content' && (
             <div className="p-6">
               {item?.contentPreview ? (
-                typeof item.contentPreview === 'string' ? (
+                item.contentPreview.body !== undefined ? (
+                  // Structured skill preview: frontmatter metadata table + markdown body
+                  <div className="space-y-4">
+                    {item.contentPreview.frontmatter &&
+                      Object.keys(item.contentPreview.frontmatter).length > 0 && (
+                        <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-2">
+                          {flattenFrontmatter(item.contentPreview.frontmatter).map(([key, val]) => (
+                            <div key={key} className="flex justify-between text-sm gap-4">
+                              <span className="text-gray-500 dark:text-gray-400 shrink-0">{key}</span>
+                              <span className="text-gray-900 dark:text-white text-right">{val}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    <div className="prose dark:prose-invert max-w-none text-sm">
+                      <StreamingMarkdown content={item.contentPreview.body} />
+                    </div>
+                  </div>
+                ) : typeof item.contentPreview === 'string' ? (
                   <div className="prose dark:prose-invert max-w-none text-sm">
                     <StreamingMarkdown content={item.contentPreview} />
                   </div>

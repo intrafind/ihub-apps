@@ -231,7 +231,21 @@ async function fetchItemContent(registryId, type, name) {
  * @returns {Promise<string|{ files: Record<string, string> }>}
  */
 async function buildSkillContent(item, skillMd, authHeaders) {
-  const companions = item.source?.companions;
+  let companions = item.source?.companions;
+
+  // Fallback: discover companions at install time if cache is stale (no companions field)
+  if (
+    (!companions || companions.length === 0) &&
+    item.source?.type === 'url' &&
+    item.source.url?.endsWith('/SKILL.md')
+  ) {
+    try {
+      companions = await registryService.discoverCompanions(item.source.url, authHeaders);
+    } catch (err) {
+      logger.warn(`Companion discovery fallback failed: ${err.message}`, { component: COMPONENT });
+    }
+  }
+
   if (!companions || companions.length === 0) return skillMd;
 
   // Derive skill directory URL from the SKILL.md URL (strip the filename)
@@ -334,7 +348,8 @@ class ContentInstaller {
       installedAt: new Date().toISOString(),
       installedBy,
       updatedAt: null,
-      updateAvailable: null
+      updateAvailable: null,
+      sourceUrl: item.source?.url || null
     };
 
     installations.installations[key] = manifest;
