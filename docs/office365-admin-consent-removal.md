@@ -86,14 +86,24 @@ After this change, the Office 365 integration requires these delegated permissio
 
 ### ⚠️ Migration Notes
 
+**Update (2026-02-24): Automatic Migration Implemented**
+
+The system now automatically detects and handles old tokens for a seamless migration:
+
 **For existing connected users:**
-- Existing connections will continue to work
-- The old `Group.Read.All` permission will remain granted until users disconnect and reconnect
-- Users do not need to take any action unless they want to reduce their granted permissions
+- On their next request to access Teams drives, the system will detect old tokens with `Group.Read.All`
+- Old tokens are automatically invalidated with a clear message: "Office 365 permissions have been updated. Please reconnect your account to continue accessing Teams drives."
+- Users simply need to click "Connect Office 365 Account" again to re-authenticate
+- After reconnecting, Teams drives will work correctly with the new permission set
+- **This is a one-time action** - once reconnected, users won't see this message again
 
 **For new connections:**
 - Users will only be prompted for the new, reduced set of permissions
 - No admin approval required in any scenario
+- Teams drives work immediately after connecting
+
+**Why reconnection is needed:**
+OAuth tokens are bound to the specific permission set granted during authorization. When we removed `Group.Read.All`, existing tokens retained the old scope combination which prevented proper Teams enumeration. Re-authentication ensures all users have tokens with the correct, minimal permission set.
 
 ## Azure AD App Configuration
 
@@ -156,3 +166,5 @@ With delegated permissions, the API only returns teams that the signed-in user i
 ## Related Changes
 
 This change supersedes the previous scope update documented in `office365-scope-update.md` which added `Group.Read.All`. That permission has now been removed in favor of a more user-friendly approach.
+
+**Update (2026-02-24)**: Automatic token migration implemented to handle existing users with old tokens. See `concepts/2026-02-24 Office 365 Teams Drive Empty After Admin Rights Removal Fix.md` for details.
