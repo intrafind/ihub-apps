@@ -72,3 +72,6 @@ attachments/
 
 # Auto-generated secrets
 contents/.jwt-secret
+
+# Git worktrees
+.worktrees/

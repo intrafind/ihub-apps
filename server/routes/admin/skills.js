@@ -8,6 +8,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import { requireFeature } from '../../featureRegistry.js';
 import configCache from '../../configCache.js';
+import registryService from '../../services/marketplace/RegistryService.js';
 import {
   getSkillContent,
   getSkillResource,
@@ -109,9 +110,17 @@ export default function registerAdminSkillsRoutes(app) {
         const content = await getSkillContent(req.params.name);
         const files = await listSkillFiles(skill.path);
 
+        // Look up marketplace source URL from installation manifest for relative link rewriting
+        const { data: installationsData } = configCache.getInstallations();
+        const installations = installationsData?.installations || {};
+        const installation = installations[`skill:${req.params.name}`];
+        const sourceUrl = installation?.sourceUrl || null;
+
+        const body = registryService.rewriteSkillLinks(content?.body || '', sourceUrl);
+
         res.json({
           ...skill,
-          body: content?.body || '',
+          body,
           frontmatter: content?.frontmatter || {},
           references: content?.references || [],
           scripts: content?.scripts || [],

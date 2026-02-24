@@ -504,7 +504,7 @@ const AdminSkillEditPage = () => {
               </div>
 
               {/* SKILL.md content */}
-              {skill.skillMd && (
+              {skill.body && (
                 <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                     <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -514,7 +514,7 @@ const AdminSkillEditPage = () => {
                   <div className="px-6 py-4">
                     <div
                       className="prose dark:prose-invert max-w-none text-sm"
-                      dangerouslySetInnerHTML={{ __html: renderMarkdown(skill.skillMd) }}
+                      dangerouslySetInnerHTML={{ __html: renderMarkdown(skill.body) }}
                     />
                   </div>
                 </div>
