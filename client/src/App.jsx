@@ -426,13 +426,13 @@ function App() {
                         element={<LazyAdminRoute component={AdminFeaturesPage} />}
                       />
                     )}
-                    {featureFlags.isEnabled('marketplace', false) && (
+                    {featureFlags.isEnabled('marketplace', true) && (
                       <Route
                         path="admin/marketplace"
                         element={<LazyAdminRoute component={AdminMarketplacePage} />}
                       />
                     )}
-                    {featureFlags.isEnabled('marketplace', false) && (
+                    {featureFlags.isEnabled('marketplace', true) && (
                       <Route
                         path="admin/marketplace/registries"
                         element={<LazyAdminRoute component={AdminMarketplaceRegistriesPage} />}
