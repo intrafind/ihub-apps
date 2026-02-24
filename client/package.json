@@ -44,7 +44,7 @@
     "turndown": "^7.2.0",
     "utif2": "^4.1.0",
     "uuid": "^11.1.0",
-    "write-excel-file": "^2.3.10"
+    "write-excel-file": "^3.0.2"
   },
   "devDependencies": {
     "@types/react": "^18.0.28",
