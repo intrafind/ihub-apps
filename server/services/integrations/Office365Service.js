@@ -748,9 +748,9 @@ class Office365Service {
       logger.info('🔍 Fetching joined teams from /me/joinedTeams...', {
         component: 'Office 365'
       });
-      
+
       const teams = await this._fetchAllPages('/me/joinedTeams', userId);
-      
+
       logger.info(`👥 /me/joinedTeams returned ${teams.length} teams`, {
         component: 'Office 365',
         teamsCount: teams.length

@@ -19,13 +19,14 @@ async function testOldTokenDetection() {
   // Test 1: Old token with Group.Read.All should be detected and invalidated
   console.log('Test 1: Old token with Group.Read.All');
   let deleteCount = 0;
-  
+
   tokenStorage.getUserTokens = async (userId, serviceName) => {
     return {
       accessToken: 'old-access-token',
       refreshToken: 'old-refresh-token',
       expiresIn: 3600,
-      scope: 'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All Group.Read.All offline_access',
+      scope:
+        'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All Group.Read.All offline_access',
       providerId: 'test-provider'
     };
   };
@@ -53,13 +54,14 @@ async function testOldTokenDetection() {
 
   // Test 2: New token without Group.Read.All should pass through
   console.log('\nTest 2: New token without Group.Read.All');
-  
+
   tokenStorage.getUserTokens = async (userId, serviceName) => {
     return {
       accessToken: 'new-access-token',
       refreshToken: 'new-refresh-token',
       expiresIn: 3600,
-      scope: 'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All offline_access',
+      scope:
+        'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All offline_access',
       providerId: 'test-provider'
     };
   };
@@ -77,7 +79,7 @@ async function testOldTokenDetection() {
 
   // Test 3: Token without scope field should pass through
   console.log('\nTest 3: Token without scope field');
-  
+
   tokenStorage.getUserTokens = async (userId, serviceName) => {
     return {
       accessToken: 'no-scope-token',
@@ -100,7 +102,7 @@ async function testOldTokenDetection() {
 
   // Test 4: Old token with Group.Read.All in different position
   console.log('\nTest 4: Old token with Group.Read.All at start of scope');
-  
+
   tokenStorage.getUserTokens = async (userId, serviceName) => {
     return {
       accessToken: 'old-access-token-2',
