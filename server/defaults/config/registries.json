@@ -1,1 +1,14 @@
-{ "registries": [] }
+{
+  "registries": [
+    {
+      "id": "ihub-official",
+      "name": "iHub Official Marketplace",
+      "description": "Official collection of apps, models, workflows, prompts, and skills for iHub Apps",
+      "source": "https://raw.githubusercontent.com/intrafind/ihub-marketplace/main/catalog.json",
+      "auth": { "type": "none" },
+      "enabled": true,
+      "autoRefresh": false,
+      "refreshIntervalHours": 24
+    }
+  ]
+}
