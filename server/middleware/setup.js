@@ -2,6 +2,7 @@ import cors from 'cors';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import session from 'express-session';
+import createMemoryStore from 'memorystore';
 import { proxyAuth } from './proxyAuth.js';
 import localAuthMiddleware from './localAuth.js';
 import { initializePassport, configureOidcProviders } from './oidcAuth.js';
@@ -179,23 +180,32 @@ function setupSessionMiddleware(app, platformConfig) {
 
   const needsIntegrationSessions = jiraEnabled || cloudStorageEnabled; // || microsoftEnabled || googleEnabled;
 
+  // Use memorystore instead of the default MemoryStore to avoid memory leaks.
+  // The default MemoryStore never prunes expired entries; memorystore runs a
+  // periodic check and removes stale sessions automatically.
+  const MemoryStore = createMemoryStore(session);
+
+  const sessionSecret =
+    config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret';
+
   // Setup OIDC user authentication sessions
   if (needsOidcSessions) {
     logger.info('🔐 Enabling session middleware for OIDC user authentication', {
       component: 'Middleware'
     });
+    const oidcMaxAge = 30 * 60 * 1000; // 30 minutes for user auth
     app.use(
       '/api/auth/oidc',
       session({
-        secret:
-          config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
+        store: new MemoryStore({ checkPeriod: oidcMaxAge }),
+        secret: sessionSecret,
         resave: false,
         saveUninitialized: false, // Only create session when needed for OIDC
         name: 'oidc.session',
         cookie: {
           secure: config.USE_HTTPS === 'true',
           httpOnly: true,
-          maxAge: 30 * 60 * 1000, // 30 minutes for user auth
+          maxAge: oidcMaxAge,
           sameSite: 'lax',
           path: '/api/auth/oidc'
         }
@@ -215,17 +225,19 @@ function setupSessionMiddleware(app, platformConfig) {
       : '🔗 Enabling session middleware for OAuth integrations (ready for dynamic configuration)',
     { component: 'Middleware' }
   );
+  const integrationMaxAge = 15 * 60 * 1000; // 15 minutes for OAuth flows
   app.use(
     '/api/integrations',
     session({
-      secret: config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
+      store: new MemoryStore({ checkPeriod: integrationMaxAge }),
+      secret: sessionSecret,
       resave: false,
       saveUninitialized: true, // Required for OAuth2 PKCE state persistence
       name: 'integration.session',
       cookie: {
         secure: config.USE_HTTPS === 'true',
         httpOnly: true,
-        maxAge: 15 * 60 * 1000, // 15 minutes for OAuth flows
+        maxAge: integrationMaxAge,
         sameSite: 'lax',
         path: '/api/integrations'
       }
@@ -240,17 +252,18 @@ function setupSessionMiddleware(app, platformConfig) {
       logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication', {
         component: 'Middleware'
       });
+      const appMaxAge = 24 * 60 * 60 * 1000; // 24 hours for regular app sessions
       app.use(
         session({
-          secret:
-            config.JWT_SECRET || tokenStorageService.getJwtSecret() || 'fallback-session-secret',
+          store: new MemoryStore({ checkPeriod: appMaxAge }),
+          secret: sessionSecret,
           resave: false,
           saveUninitialized: false,
           name: 'app.session',
           cookie: {
             secure: config.USE_HTTPS === 'true',
             httpOnly: true,
-            maxAge: 24 * 60 * 60 * 1000, // 24 hours for regular app sessions
+            maxAge: appMaxAge,
             sameSite: 'lax'
           }
         })
