@@ -25,6 +25,7 @@ import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
+import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import jiraRoutes from './routes/integrations/jira.js';
@@ -167,6 +168,7 @@ if (cluster.isPrimary && workerCount > 1) {
     const tokenStorageService = (await import('./services/TokenStorageService.js')).default;
     await tokenStorageService.initializeEncryptionKey();
     await tokenStorageService.initializeJwtSecret();
+    await tokenStorageService.initializeRSAKeyPair();
   } catch (err) {
     console.error('Failed to initialize encryption key or JWT secret:', err);
     console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
@@ -247,6 +249,7 @@ if (cluster.isPrimary && workerCount > 1) {
 
   registerAuthRoutes(app);
   registerOAuthRoutes(app);
+  registerWellKnownRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
   registerToolRoutes(app);

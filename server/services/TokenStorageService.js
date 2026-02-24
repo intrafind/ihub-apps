@@ -22,6 +22,11 @@ class TokenStorageService {
     // JWT secret for token signing
     this.jwtSecret = null;
     this.jwtSecretFilePath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-secret');
+
+    // RSA key pair for RS256 signing
+    this.rsaKeyPair = null;
+    this.rsaPublicKeyPath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-public-key.pem');
+    this.rsaPrivateKeyPath = path.join(getRootDir(), config.CONTENTS_DIR, '.jwt-private-key.pem');
   }
 
   /**
@@ -577,6 +582,110 @@ class TokenStorageService {
     }
 
     return false;
+  }
+
+  /**
+   * Initialize or load RSA key pair for RS256 JWT signing
+   * Priority:
+   * 1. Use keys from environment variables if set
+   * 2. Use persisted keys from disk if they exist
+   * 3. Generate new key pair and persist it
+   */
+  async initializeRSAKeyPair() {
+    // Priority 1: Environment variables
+    if (process.env.JWT_PUBLIC_KEY && process.env.JWT_PRIVATE_KEY) {
+      this.rsaKeyPair = {
+        publicKey: process.env.JWT_PUBLIC_KEY,
+        privateKey: process.env.JWT_PRIVATE_KEY
+      };
+      logger.info('Using RSA key pair from environment variables', {
+        component: 'TokenStorage'
+      });
+      return;
+    }
+
+    // Priority 2: Try to load persisted keys
+    try {
+      const publicKey = await fs.readFile(this.rsaPublicKeyPath, 'utf8');
+      const privateKey = await fs.readFile(this.rsaPrivateKeyPath, 'utf8');
+
+      if (publicKey && privateKey) {
+        this.rsaKeyPair = { publicKey, privateKey };
+        logger.info('Using persisted RSA key pair from disk', { component: 'TokenStorage' });
+        return;
+      }
+    } catch (error) {
+      if (error.code !== 'ENOENT') {
+        logger.error('Error reading RSA key pair files:', {
+          component: 'TokenStorage',
+          error: error.message
+        });
+      }
+      // Files don't exist or error reading, will generate new pair
+    }
+
+    // Priority 3: Generate new key pair and persist it
+    logger.info('Generating new RSA key pair for JWT signing', { component: 'TokenStorage' });
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('rsa', {
+      modulusLength: 2048,
+      publicKeyEncoding: {
+        type: 'spki',
+        format: 'pem'
+      },
+      privateKeyEncoding: {
+        type: 'pkcs8',
+        format: 'pem'
+      }
+    });
+
+    this.rsaKeyPair = { publicKey, privateKey };
+
+    // Persist the keys
+    try {
+      const contentsDir = path.dirname(this.rsaPublicKeyPath);
+      await fs.mkdir(contentsDir, { recursive: true });
+
+      await fs.writeFile(this.rsaPublicKeyPath, publicKey, { mode: 0o644 });
+      await fs.writeFile(this.rsaPrivateKeyPath, privateKey, { mode: 0o600 });
+
+      logger.info('RSA key pair persisted to disk', { component: 'TokenStorage' });
+      logger.info(
+        'IMPORTANT: Back up these key files. Losing them will invalidate all existing JWT tokens.',
+        { component: 'TokenStorage' }
+      );
+    } catch (error) {
+      logger.error('Failed to persist RSA key pair:', {
+        component: 'TokenStorage',
+        error: error.message
+      });
+      logger.warn('RSA key pair is not persisted. Keys will change on server restart.', {
+        component: 'TokenStorage'
+      });
+    }
+  }
+
+  /**
+   * Get the RSA key pair for RS256 signing
+   * @returns {{publicKey: string, privateKey: string}|null} The RSA key pair or null if not initialized
+   */
+  getRSAKeyPair() {
+    return this.rsaKeyPair;
+  }
+
+  /**
+   * Get the RSA public key for RS256 verification
+   * @returns {string|null} The RSA public key or null if not initialized
+   */
+  getRSAPublicKey() {
+    return this.rsaKeyPair?.publicKey || null;
+  }
+
+  /**
+   * Get the RSA private key for RS256 signing
+   * @returns {string|null} The RSA private key or null if not initialized
+   */
+  getRSAPrivateKey() {
+    return this.rsaKeyPair?.privateKey || null;
   }
 }
 

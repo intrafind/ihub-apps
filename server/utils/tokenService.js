@@ -10,6 +10,49 @@ import logger from './logger.js';
  */
 
 /**
+ * Get JWT signing algorithm from configuration
+ * @returns {string} Algorithm (HS256 or RS256)
+ */
+export function getJwtAlgorithm() {
+  const platform = configCache.getPlatform() || {};
+  return platform.jwt?.algorithm || 'HS256';
+}
+
+/**
+ * Get JWT signing key based on algorithm
+ * For HS256: Returns secret key
+ * For RS256: Returns private key
+ * @returns {string|null} Signing key or null if not available
+ */
+export function getJwtSigningKey() {
+  const algorithm = getJwtAlgorithm();
+  
+  if (algorithm === 'RS256') {
+    return tokenStorageService.getRSAPrivateKey();
+  }
+  
+  // Default to HS256
+  return resolveJwtSecret();
+}
+
+/**
+ * Get JWT verification key based on algorithm
+ * For HS256: Returns secret key
+ * For RS256: Returns public key
+ * @returns {string|null} Verification key or null if not available
+ */
+export function getJwtVerificationKey() {
+  const algorithm = getJwtAlgorithm();
+  
+  if (algorithm === 'RS256') {
+    return tokenStorageService.getRSAPublicKey();
+  }
+  
+  // Default to HS256
+  return resolveJwtSecret();
+}
+
+/**
  * Resolve the JWT secret from available sources
  * Resolution chain: env var > platform config (non-placeholder) > TokenStorageService
  * @returns {string|null} The JWT secret or null if not available
@@ -47,11 +90,12 @@ export function generateJwt(user, options = {}) {
   }
 
   const platform = configCache.getPlatform() || {};
-  const jwtSecret = resolveJwtSecret();
+  const algorithm = getJwtAlgorithm();
+  const signingKey = getJwtSigningKey();
 
-  if (!jwtSecret) {
+  if (!signingKey) {
     throw new Error(
-      `JWT secret not configured for ${options.authMode || 'unknown'} authentication`
+      `JWT signing key not configured for ${options.authMode || 'unknown'} authentication with ${algorithm}`
     );
   }
 
@@ -95,11 +139,11 @@ export function generateJwt(user, options = {}) {
     tokenPayload.domain = user.domain;
   }
 
-  const token = jwt.sign(tokenPayload, jwtSecret, {
+  const token = jwt.sign(tokenPayload, signingKey, {
     expiresIn: `${expiresIn}s`,
     issuer: 'ihub-apps',
     audience: 'ihub-apps',
-    algorithm: 'HS256'
+    algorithm: algorithm
   });
 
   return { token, expiresIn };
@@ -112,16 +156,18 @@ export function generateJwt(user, options = {}) {
  */
 export function verifyJwt(token) {
   try {
-    const jwtSecret = resolveJwtSecret();
+    const algorithm = getJwtAlgorithm();
+    const verificationKey = getJwtVerificationKey();
 
-    if (!jwtSecret) {
-      logger.warn('JWT secret not configured for token verification');
+    if (!verificationKey) {
+      logger.warn(`JWT verification key not configured for ${algorithm}`);
       return null;
     }
 
-    return jwt.verify(token, jwtSecret, {
+    return jwt.verify(token, verificationKey, {
       issuer: 'ihub-apps',
-      audience: 'ihub-apps'
+      audience: 'ihub-apps',
+      algorithms: [algorithm]
     });
   } catch (error) {
     logger.warn('JWT verification failed:', error.message);
