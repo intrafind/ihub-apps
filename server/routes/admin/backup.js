@@ -8,6 +8,7 @@ import { dirname } from 'path';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -93,7 +94,15 @@ function extractZip(zipPath, extractPath) {
 
         // Extract the relative path within contents/
         const relativePath = contentsMatch[1];
-        const entryPath = path.join(extractPath, 'contents', relativePath);
+        const contentsBase = path.join(extractPath, 'contents');
+        const entryPath = resolveAndValidatePath(relativePath, contentsBase);
+
+        // Prevent ZIP slip: skip entries that would escape the extract directory
+        if (!entryPath) {
+          logger.warn(`⚠️  Skipping ZIP entry with path traversal: ${entry.fileName}`);
+          zipfile.readEntry();
+          return;
+        }
 
         logger.info(`✅ Extracting: ${entry.fileName} -> contents/${relativePath}`);
 

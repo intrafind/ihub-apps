@@ -1,12 +1,17 @@
 import { loadText } from '../configLoader.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { validateIdForPath, sanitizeLanguageCode } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 
 export default function registerPageRoutes(app) {
   app.get(buildServerPath('/api/pages/:pageId'), async (req, res) => {
     const { pageId } = req.params;
-    const lang = req.query.lang || 'en';
+
+    // Validate pageId to prevent path traversal
+    if (!validateIdForPath(pageId, 'page', res)) return;
+
+    const lang = sanitizeLanguageCode(req.query.lang);
     try {
       // Try to get UI config from cache first
       let { data: uiConfig } = configCache.getUI();

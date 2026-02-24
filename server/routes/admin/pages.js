@@ -6,7 +6,7 @@ import { atomicWriteFile, atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, validateLanguageKeys } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminPagesRoutes(app) {
@@ -91,6 +91,14 @@ export default function registerAdminPagesRoutes(app) {
       if (uiConfig.pages[id]) {
         return res.status(409).json({ error: 'Page with this ID already exists' });
       }
+      // Validate language keys in content and title to prevent path traversal
+      if (Object.keys(content).length > 0 && !validateLanguageKeys(content)) {
+        return res.status(400).json({ error: 'Invalid language code in content keys' });
+      }
+      if (Object.keys(title).length > 0 && !validateLanguageKeys(title)) {
+        return res.status(400).json({ error: 'Invalid language code in title keys' });
+      }
+
       uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {
@@ -140,6 +148,14 @@ export default function registerAdminPagesRoutes(app) {
       pageEntry.authRequired = authRequired;
       pageEntry.allowedGroups = allowedGroups;
       pageEntry.contentType = contentType;
+      // Validate language keys in content and title to prevent path traversal
+      if (Object.keys(content).length > 0 && !validateLanguageKeys(content)) {
+        return res.status(400).json({ error: 'Invalid language code in content keys' });
+      }
+      if (Object.keys(title).length > 0 && !validateLanguageKeys(title)) {
+        return res.status(400).json({ error: 'Invalid language code in title keys' });
+      }
+
       pageEntry.filePath = pageEntry.filePath || {};
       const fileExtension = contentType === 'react' ? 'jsx' : 'md';
       for (const [lang, contentText] of Object.entries(content)) {

@@ -8,6 +8,7 @@ import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminUIRoutes(app) {
@@ -178,14 +179,10 @@ export default function registerAdminUIRoutes(app) {
     try {
       const { id } = req.params;
       const assetsDir = join(getRootDir(), 'contents/uploads/assets');
-      const assetsDirResolved = path.resolve(assetsDir);
-      const assetsDirWithSep = assetsDirResolved.endsWith(path.sep)
-        ? assetsDirResolved
-        : assetsDirResolved + path.sep;
-      const filepath = path.resolve(assetsDirResolved, id);
 
-      // Ensure the resolved path is within the assets directory
-      if (!filepath.startsWith(assetsDirWithSep)) {
+      // Validate path stays within assets directory (prevents traversal)
+      const filepath = resolveAndValidatePath(id, assetsDir);
+      if (!filepath) {
         return res.status(400).json({
           success: false,
           message: 'Invalid asset id'
