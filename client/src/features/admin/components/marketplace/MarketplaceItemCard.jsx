@@ -142,7 +142,7 @@ const MarketplaceItemCard = ({ item, onClick, onAction }) => {
           {installing
             ? '...'
             : isInstalled
-              ? '&#x2713; ' + t('admin.marketplace.installed', 'Installed')
+              ? '\u2713 ' + t('admin.marketplace.installed', 'Installed')
               : hasUpdate
                 ? t('admin.marketplace.update', 'Update')
                 : t('admin.marketplace.install', 'Install')}

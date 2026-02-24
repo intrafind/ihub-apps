@@ -203,8 +203,8 @@ async function fetchItemContent(registryId, type, name) {
   try {
     responseData = JSON.parse(text);
   } catch {
-    // Non-JSON content (e.g., SKILL.md markdown) — return as string
-    return { item, content: text };
+    // Non-JSON content (e.g., SKILL.md markdown) — check for companion files
+    return { item, content: await buildSkillContent(item, text, authHeaders) };
   }
 
   // GitHub Contents API wraps file content in base64
@@ -213,11 +213,60 @@ async function fetchItemContent(registryId, type, name) {
     try {
       return { item, content: JSON.parse(decoded) };
     } catch {
-      return { item, content: decoded };
+      return { item, content: await buildSkillContent(item, decoded, authHeaders) };
     }
   }
 
   return { item, content: responseData };
+}
+
+/**
+ * Build the skill content object, fetching companion files if the item source
+ * lists them. Returns a `{ files: {...} }` map when companions are present,
+ * or the bare markdown string when there are none.
+ *
+ * @param {object} item - Catalog item descriptor (may have source.companions)
+ * @param {string} skillMd - Raw SKILL.md content
+ * @param {Record<string, string>} authHeaders - Auth headers for companion fetches
+ * @returns {Promise<string|{ files: Record<string, string> }>}
+ */
+async function buildSkillContent(item, skillMd, authHeaders) {
+  const companions = item.source?.companions;
+  if (!companions || companions.length === 0) return skillMd;
+
+  // Derive skill directory URL from the SKILL.md URL (strip the filename)
+  const skillDirUrl = item.source.url.replace(/\/SKILL\.md$/, '');
+
+  const files = { 'SKILL.md': skillMd };
+
+  const { throttledFetch } = await import('../../requestThrottler.js');
+
+  await Promise.all(
+    companions.map(async relativePath => {
+      const companionUrl = `${skillDirUrl}/${relativePath}`;
+      try {
+        const res = await throttledFetch('marketplace-installer', companionUrl, {
+          headers: {
+            Accept: 'text/plain, application/vnd.github.raw+json, */*',
+            ...authHeaders
+          }
+        });
+        if (res.ok) {
+          files[relativePath] = await res.text();
+        } else {
+          logger.warn(`Companion file not found (${res.status}): ${companionUrl}`, {
+            component: COMPONENT
+          });
+        }
+      } catch (err) {
+        logger.warn(`Failed to fetch companion file ${relativePath}: ${err.message}`, {
+          component: COMPONENT
+        });
+      }
+    })
+  );
+
+  return { files };
 }
 
 // ---------------------------------------------------------------------------
@@ -445,6 +494,8 @@ class ContentInstaller {
           if (!resolvedPath.startsWith(path.resolve(skillDir))) {
             throw new Error(`Path traversal detected in skill file: ${filename}`);
           }
+          // Ensure parent directory exists (companion files may live in subdirs)
+          await fs.mkdir(path.dirname(filePath), { recursive: true });
           const fileData =
             typeof fileContent === 'string' ? fileContent : JSON.stringify(fileContent, null, 2);
           await fs.writeFile(filePath, fileData, 'utf8');

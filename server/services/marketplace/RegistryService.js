@@ -333,13 +333,37 @@ async function fetchGitHubTree(owner, repo, ref, authHeaders = {}) {
 }
 
 /**
+ * Collect companion files (non-SKILL.md blobs) within a skill directory prefix.
+ *
+ * @param {Array<{ path: string, type: string }>} tree - GitHub tree entries
+ * @param {string} dirPrefix - Directory prefix to scan (e.g. "skills/ab-test-setup/")
+ * @returns {string[]} Relative paths of companion files (e.g. ["references/phase-1.md"])
+ */
+function findCompanionFiles(tree, dirPrefix) {
+  const companions = [];
+  for (const entry of tree) {
+    if (entry.type !== 'blob') continue;
+    if (!entry.path.startsWith(dirPrefix)) continue;
+    const relative = entry.path.slice(dirPrefix.length);
+    if (relative === 'SKILL.md') continue;
+    companions.push(relative);
+  }
+  return companions;
+}
+
+/**
  * Resolve a plugins-format catalog to individual skill items.
  *
  * Two-phase approach:
  * - Phase 1: Plugins with an explicit `skills` array get SKILL.md URLs constructed
- *   directly from the listed paths — no tree API call required.
+ *   directly from the listed paths.
  * - Phase 2: Plugins without a `skills` array fall back to the GitHub Trees API
  *   scan for SKILL.md files matching {pluginDir}/skills/{name}/SKILL.md.
+ *
+ * The GitHub tree is always fetched for GitHub registries so that companion files
+ * (references/, scripts/, templates/, etc.) can be discovered and annotated on
+ * each skill's source descriptor. ContentInstaller uses this to copy companion
+ * files alongside SKILL.md during installation.
  *
  * Falls back to one-item-per-plugin for non-GitHub registries.
  *
@@ -374,6 +398,9 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
     .replace(/\/marketplace\.json$/, '')
     .replace(/\/$/, '');
 
+  // Fetch the full tree once for companion file discovery and Phase 2 scanning
+  const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
+
   const items = [];
   let needsTreeScan = false;
 
@@ -384,6 +411,7 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
         const cleanPath = skillPath.replace(/^\.\//, '');
         const skillDir = cleanPath.split('/').pop();
         const skillUrl = `${rawBase}/${cleanPath}/SKILL.md`;
+        const companions = findCompanionFiles(tree, `${cleanPath}/`);
 
         // Humanize directory names: "ab-test-setup" → "Ab Test Setup"
         const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -402,7 +430,7 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
           author: plugin.author?.name || owner?.name,
           category: displayPluginName,
           tags: [plugin.name],
-          source: { type: 'url', url: skillUrl }
+          source: { type: 'url', url: skillUrl, companions, rawBase }
         });
       }
     } else {
@@ -412,7 +440,6 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
 
   // Phase 2: tree scan for plugins without explicit skills (Anthropic-style)
   if (needsTreeScan) {
-    const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
     const treePaths = new Set(tree.filter(e => e.type === 'blob').map(e => e.path));
 
     // Build maps — separate direct-skill plugins from Anthropic-style nested plugins
@@ -426,6 +453,7 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
       if (treePaths.has(`${dir}/SKILL.md`)) {
         const skillDir = dir.split('/').pop();
         const skillUrl = `${rawBase}/${dir}/SKILL.md`;
+        const companions = findCompanionFiles(tree, `${dir}/`);
         const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         const displayPluginName = (plugin.category || plugin.name || '')
           .replace(/-/g, ' ')
@@ -440,7 +468,7 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
           author: plugin.author?.name || owner?.name,
           category: displayPluginName,
           tags: [plugin.category || plugin.name],
-          source: { type: 'url', url: skillUrl }
+          source: { type: 'url', url: skillUrl, companions, rawBase }
         });
       } else {
         // Phase 2b: Anthropic-style — scan for nested skills below
@@ -460,7 +488,9 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
       const plugin = pluginDirs.get(pluginDir);
       if (!plugin) continue;
 
+      const dirPrefix = `${pluginDir}/skills/${skillDir}/`;
       const skillUrl = `${rawBase}/${pluginDir}/skills/${skillDir}/SKILL.md`;
+      const companions = findCompanionFiles(tree, dirPrefix);
 
       // Humanize directory names: "canned-responses" → "Canned Responses"
       const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
@@ -475,7 +505,7 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
         author: plugin.author?.name,
         category: displayPluginName,
         tags: [pluginDir],
-        source: { type: 'url', url: skillUrl }
+        source: { type: 'url', url: skillUrl, companions, rawBase }
       });
     }
   }
@@ -733,6 +763,10 @@ class RegistryService {
     const registries = registriesData?.registries || [];
     const installations = installationsData?.installations || {};
 
+    // Build a set of skill names already present on disk (from defaults or manual copy)
+    const { data: diskSkills } = cc.getSkills();
+    const diskSkillNames = new Set((diskSkills || []).map(s => s.name));
+
     const allItems = [];
 
     for (const registry of registries) {
@@ -745,12 +779,13 @@ class RegistryService {
       for (const item of items) {
         const key = `${item.type}:${item.name}`;
         const installation = installations[key];
+        const onDisk = item.type === 'skill' && diskSkillNames.has(item.name);
 
         allItems.push({
           ...item,
           registryId: registry.id,
           registryName: registry.name,
-          installationStatus: installation ? 'installed' : 'available',
+          installationStatus: installation || onDisk ? 'installed' : 'available',
           installation: installation || null
         });
       }
@@ -810,6 +845,10 @@ class RegistryService {
     const { data: installationsData } = cc.getInstallations();
     const installations = installationsData?.installations || {};
 
+    // Check if skill is present on disk even if not tracked in installations.json
+    const { data: diskSkills } = cc.getSkills();
+    const diskSkillNames = new Set((diskSkills || []).map(s => s.name));
+
     const cached = await this.getCachedCatalogAsync(registryId);
     if (!cached) throw new Error(`No cached catalog for registry '${registryId}'`);
 
@@ -818,6 +857,7 @@ class RegistryService {
 
     const key = `${type}:${name}`;
     const installation = installations[key];
+    const onDisk = type === 'skill' && diskSkillNames.has(name);
 
     // Look up the registry config so we can fetch a content preview
     const { data: registriesData } = cc.getRegistries();
@@ -842,7 +882,7 @@ class RegistryService {
       ...item,
       registryId,
       registryName: registry?.name,
-      installationStatus: installation ? 'installed' : 'available',
+      installationStatus: installation || onDisk ? 'installed' : 'available',
       installation: installation || null,
       contentPreview
     };

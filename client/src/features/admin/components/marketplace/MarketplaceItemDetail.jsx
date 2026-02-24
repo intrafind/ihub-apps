@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import StreamingMarkdown from '../../../chat/components/StreamingMarkdown';
 import {
   fetchMarketplaceItemDetail,
   installMarketplaceItem,
@@ -207,7 +208,7 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
 
         {/* Tab navigation */}
         <div className="flex border-b border-gray-200 dark:border-gray-700 px-6">
-          {['overview', 'configuration'].map(tab => (
+          {['overview', 'content'].map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
@@ -265,6 +266,26 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
 
               {/* Metadata table */}
               <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-3">
+                {item?.source?.url && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-500 dark:text-gray-400">
+                      {t('admin.marketplace.detail.source', 'Source')}
+                    </span>
+                    <a
+                      href={item.source.url
+                        .replace(
+                          /^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/([^/]+)\/(.+)$/,
+                          'https://github.com/$1/$2/blob/$3/$4'
+                        )
+                        .replace(/\/refs\/heads\/([^/]+)\//, '/$1/')}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 dark:text-blue-400 hover:underline truncate max-w-xs"
+                    >
+                      GitHub
+                    </a>
+                  </div>
+                )}
                 {item?.registryName && (
                   <div className="flex justify-between text-sm">
                     <span className="text-gray-500 dark:text-gray-400">
@@ -303,16 +324,22 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
             </div>
           )}
 
-          {/* Configuration tab - JSON preview of item content */}
-          {!loading && activeTab === 'configuration' && (
+          {/* Content tab - markdown or JSON preview of item content */}
+          {!loading && activeTab === 'content' && (
             <div className="p-6">
               {item?.contentPreview ? (
-                <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">
-                  {JSON.stringify(item.contentPreview, null, 2)}
-                </pre>
+                typeof item.contentPreview === 'string' ? (
+                  <div className="prose dark:prose-invert max-w-none text-sm">
+                    <StreamingMarkdown content={item.contentPreview} />
+                  </div>
+                ) : (
+                  <pre className="text-xs bg-gray-50 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700 whitespace-pre-wrap">
+                    {JSON.stringify(item.contentPreview, null, 2)}
+                  </pre>
+                )
               ) : (
                 <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.marketplace.detail.noPreview', 'No configuration preview available.')}
+                  {t('admin.marketplace.detail.noPreview', 'No content preview available.')}
                 </p>
               )}
             </div>

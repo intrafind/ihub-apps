@@ -31,7 +31,11 @@ const catalogSourceSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     type: z.literal('url'),
-    url: z.string().url()
+    url: z.string().url(),
+    /** Relative paths of companion files alongside SKILL.md (e.g. "references/phase-1.md") */
+    companions: z.array(z.string()).optional(),
+    /** Raw content base URL used to construct companion file URLs during installation */
+    rawBase: z.string().optional()
   })
 ]);
 
