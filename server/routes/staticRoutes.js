@@ -10,7 +10,7 @@ import {
   getRelativeRequestPath
 } from '../utils/basePath.js';
 
-export default function registerStaticRoutes(app, { isPackaged, rootDir }) {
+export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath }) {
   // Only serve static files in production or packaged mode
   // In development, Vite serves the frontend directly
   if (isPackaged || config.NODE_ENV === 'production') {
