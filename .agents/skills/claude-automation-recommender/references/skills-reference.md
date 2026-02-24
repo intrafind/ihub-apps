@@ -12,53 +12,53 @@ Some pre-built skills are available through official plugins (install via `/plug
 
 ### Plugin Development (plugin-dev)
 
-| Skill | Best For |
-|-------|----------|
-| **skill-development** | Creating new skills with proper structure |
-| **hook-development** | Building hooks for automation |
-| **command-development** | Creating slash commands |
-| **agent-development** | Building specialized subagents |
-| **mcp-integration** | Integrating MCP servers into plugins |
-| **plugin-structure** | Understanding plugin architecture |
+| Skill                   | Best For                                  |
+| ----------------------- | ----------------------------------------- |
+| **skill-development**   | Creating new skills with proper structure |
+| **hook-development**    | Building hooks for automation             |
+| **command-development** | Creating slash commands                   |
+| **agent-development**   | Building specialized subagents            |
+| **mcp-integration**     | Integrating MCP servers into plugins      |
+| **plugin-structure**    | Understanding plugin architecture         |
 
 ### Git Workflows (commit-commands)
 
-| Skill | Best For |
-|-------|----------|
-| **commit** | Creating git commits with proper messages |
-| **commit-push-pr** | Full commit, push, and PR workflow |
+| Skill              | Best For                                  |
+| ------------------ | ----------------------------------------- |
+| **commit**         | Creating git commits with proper messages |
+| **commit-push-pr** | Full commit, push, and PR workflow        |
 
 ### Frontend (frontend-design)
 
-| Skill | Best For |
-|-------|----------|
+| Skill               | Best For                        |
+| ------------------- | ------------------------------- |
 | **frontend-design** | Creating polished UI components |
 
 **Value**: Creates distinctive, high-quality UI instead of generic AI aesthetics.
 
 ### Automation Rules (hookify)
 
-| Skill | Best For |
-|-------|----------|
+| Skill             | Best For                              |
+| ----------------- | ------------------------------------- |
 | **writing-rules** | Creating hookify rules for automation |
 
 ### Feature Development (feature-dev)
 
-| Skill | Best For |
-|-------|----------|
+| Skill           | Best For                                |
+| --------------- | --------------------------------------- |
 | **feature-dev** | End-to-end feature development workflow |
 
 ---
 
 ## Quick Reference: Official Plugin Skills
 
-| Codebase Signal | Skill | Plugin |
-|-----------------|-------|--------|
-| Building plugins | skill-development | plugin-dev |
-| Git commits | commit | commit-commands |
-| React/Vue/Angular | frontend-design | frontend-design |
-| Automation rules | writing-rules | hookify |
-| Feature planning | feature-dev | feature-dev |
+| Codebase Signal   | Skill             | Plugin          |
+| ----------------- | ----------------- | --------------- |
+| Building plugins  | skill-development | plugin-dev      |
+| Git commits       | commit            | commit-commands |
+| React/Vue/Angular | frontend-design   | frontend-design |
+| Automation rules  | writing-rules     | hookify         |
+| Feature planning  | feature-dev       | feature-dev     |
 
 ---
 
@@ -84,21 +84,21 @@ Create project-specific skills in `.claude/skills/<name>/SKILL.md`.
 ---
 name: skill-name
 description: What this skill does and when to use it
-disable-model-invocation: true  # Only user can invoke (for side effects)
-user-invocable: false           # Only Claude can invoke (for background knowledge)
+disable-model-invocation: true # Only user can invoke (for side effects)
+user-invocable: false # Only Claude can invoke (for background knowledge)
 allowed-tools: Read, Grep, Glob # Restrict tool access
-context: fork                   # Run in isolated subagent
-agent: Explore                  # Which agent type when forked
+context: fork # Run in isolated subagent
+agent: Explore # Which agent type when forked
 ---
 ```
 
 ### Invocation Control
 
-| Setting | User | Claude | Use for |
-|---------|------|--------|---------|
-| (default) | ✓ | ✓ | General-purpose skills |
-| `disable-model-invocation: true` | ✓ | ✗ | Side effects (deploy, send) |
-| `user-invocable: false` | ✗ | ✓ | Background knowledge |
+| Setting                          | User | Claude | Use for                     |
+| -------------------------------- | ---- | ------ | --------------------------- |
+| (default)                        | ✓    | ✓      | General-purpose skills      |
+| `disable-model-invocation: true` | ✓    | ✗      | Side effects (deploy, send) |
+| `user-invocable: false`          | ✗    | ✓      | Background knowledge        |
 
 ---
 
@@ -115,12 +115,12 @@ Apply a YAML template to generate consistent API docs:
 ```
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: api-doc
 description: Generate OpenAPI documentation for an endpoint. Use when documenting API routes.
 ---
-
 Generate OpenAPI documentation for the endpoint at $ARGUMENTS.
 
 Use the template in [openapi-template.yaml](openapi-template.yaml) as the structure.
@@ -132,20 +132,21 @@ Use the template in [openapi-template.yaml](openapi-template.yaml) as the struct
 ```
 
 **openapi-template.yaml:**
+
 ```yaml
 paths:
   /{path}:
-    {method}:
-      summary: ""
-      description: ""
+    { method }:
+      summary: ''
+      description: ''
       parameters: []
       requestBody:
         content:
           application/json:
             schema: {}
       responses:
-        "200":
-          description: ""
+        '200':
+          description: ''
           content:
             application/json:
               schema: {}
@@ -165,6 +166,7 @@ Generate and validate migrations using a bundled script:
 ```
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: create-migration
@@ -182,6 +184,7 @@ Create a migration for: $ARGUMENTS
 ```
 
 **scripts/validate-migration.sh:**
+
 ```bash
 #!/bin/bash
 # Validate migration syntax
@@ -203,6 +206,7 @@ Generate tests following project patterns:
 ```
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: gen-test
@@ -238,6 +242,7 @@ Scaffold new components from a template:
 ```
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: new-component
@@ -269,6 +274,7 @@ Review PRs against a project-specific checklist:
 ```
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: pr-check
@@ -287,6 +293,7 @@ For each item, mark ✅ or ❌ with explanation.
 ```
 
 **checklist.md:**
+
 ```markdown
 ## PR Checklist
 
@@ -304,6 +311,7 @@ For each item, mark ✅ or ❌ with explanation.
 Generate release notes from git history:
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: release-notes
@@ -329,13 +337,13 @@ Generate release notes:
 Background knowledge Claude applies automatically:
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: project-conventions
 description: Code style and patterns for this project. Apply when writing or reviewing code.
 user-invocable: false
 ---
-
 ## Naming Conventions
 - React components: PascalCase
 - Utilities: camelCase
@@ -367,6 +375,7 @@ Onboard new developers with setup script:
 ```
 
 **SKILL.md:**
+
 ```yaml
 ---
 name: setup-dev
@@ -389,8 +398,8 @@ Report any issues encountered.
 
 ## Argument Patterns
 
-| Pattern | Meaning | Example |
-|---------|---------|---------|
+| Pattern      | Meaning            | Example                       |
+| ------------ | ------------------ | ----------------------------- |
 | `$ARGUMENTS` | All args as string | `/deploy staging` → "staging" |
 
 Arguments are appended as `ARGUMENTS: <value>` if `$ARGUMENTS` isn't in the skill.
