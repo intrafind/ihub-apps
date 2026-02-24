@@ -661,10 +661,12 @@ class Office365Service {
       const teamsBatch = teams.slice(i, i + batchSize);
 
       // Create batch requests
+      // Note: Use /groups/ endpoint because Teams are backed by Microsoft 365 Groups
+      // The /teams/{id}/drive endpoint does not exist in Microsoft Graph API
       const requests = teamsBatch.map(team => ({
         id: team.id,
         method: 'GET',
-        url: `/teams/${team.id}/drive`
+        url: `/groups/${team.id}/drive`
       }));
 
       logger.info(
