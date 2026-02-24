@@ -319,6 +319,28 @@ class Office365Service {
    */
   async getUserTokens(userId) {
     try {
+      // First, get the tokens to check their scope
+      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+
+      // Check if tokens have old scope (Group.Read.All) from before admin rights removal
+      // These tokens need to be invalidated so user can re-authenticate with new scopes
+      if (tokens.scope && tokens.scope.includes('Group.Read.All')) {
+        logger.warn(
+          `⚠️ Detected old Office 365 token with Group.Read.All scope for user ${userId}. Invalidating tokens to force re-authentication with new scopes.`,
+          {
+            component: 'Office 365',
+            oldScope: tokens.scope
+          }
+        );
+
+        // Delete the old tokens
+        await this.deleteUserTokens(userId);
+
+        throw new Error(
+          'Office 365 permissions have been updated. Please reconnect your account to continue accessing Teams drives.'
+        );
+      }
+
       // Check if tokens are expired
       const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
 
@@ -328,9 +350,7 @@ class Office365Service {
         });
 
         try {
-          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-
-          if (!expiredTokens.refreshToken) {
+          if (!tokens.refreshToken) {
             logger.error('❌ No refresh token available for user:', {
               component: 'Office 365',
               userId
@@ -341,8 +361,8 @@ class Office365Service {
           }
 
           const refreshedTokens = await this.refreshAccessToken(
-            expiredTokens.providerId,
-            expiredTokens.refreshToken
+            tokens.providerId,
+            tokens.refreshToken
           );
 
           // Store the refreshed tokens
@@ -364,10 +384,15 @@ class Office365Service {
         }
       }
 
-      return await tokenStorage.getUserTokens(userId, this.serviceName);
+      return tokens;
     } catch (error) {
-      if (error.message.includes('not authenticated')) {
-        throw new Error('User not authenticated with Office 365');
+      // Don't wrap specific error messages - pass them through
+      if (
+        error.message.includes('not authenticated') ||
+        error.message.includes('permissions have been updated') ||
+        error.message.includes('authentication expired')
+      ) {
+        throw error;
       }
       logger.error('❌ Error retrieving user tokens:', {
         component: 'Office 365',
@@ -636,10 +661,12 @@ class Office365Service {
       const teamsBatch = teams.slice(i, i + batchSize);
 
       // Create batch requests
+      // Note: Use /groups/ endpoint because Teams are backed by Microsoft 365 Groups
+      // The /teams/{id}/drive endpoint does not exist in Microsoft Graph API
       const requests = teamsBatch.map(team => ({
         id: team.id,
         method: 'GET',
-        url: `/teams/${team.id}/drive`
+        url: `/groups/${team.id}/drive`
       }));
 
       logger.info(
@@ -718,19 +745,32 @@ class Office365Service {
   async listTeamsDrives(userId) {
     try {
       // Get all joined teams
-      const teams = await this._fetchAllPages('/me/joinedTeams', userId);
-      logger.info(`👥 Loading ${teams.length} Microsoft Teams drives...`, {
+      logger.info('🔍 Fetching joined teams from /me/joinedTeams...', {
         component: 'Office 365'
       });
 
+      const teams = await this._fetchAllPages('/me/joinedTeams', userId);
+
+      logger.info(`👥 /me/joinedTeams returned ${teams.length} teams`, {
+        component: 'Office 365',
+        teamsCount: teams.length
+      });
+
       if (teams.length === 0) {
+        logger.warn(
+          '⚠️ No teams returned from /me/joinedTeams. This could mean: 1) User is not a member of any Teams, 2) API permissions issue, or 3) API bug. Verify user has Teams memberships and token has Team.ReadBasic.All scope.',
+          {
+            component: 'Office 365',
+            userId
+          }
+        );
         return [];
       }
 
       // Use batch API to get team drives (no per-team limit needed)
       const teamsDrives = await this._batchGetGroupDrives(teams, userId);
 
-      logger.info(`✅ Loaded ${teamsDrives.length} Teams drives`, {
+      logger.info(`✅ Loaded ${teamsDrives.length} Teams drives from ${teams.length} teams`, {
         component: 'Office 365'
       });
 
@@ -738,7 +778,8 @@ class Office365Service {
     } catch (error) {
       logger.error('❌ Error listing Teams drives:', {
         component: 'Office 365',
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
       return []; // Return empty array on error to not block other drives
     }
