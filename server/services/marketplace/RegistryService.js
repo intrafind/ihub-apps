@@ -235,7 +235,7 @@ function resolveItemUrl(itemSource, registrySource) {
  */
 async function fetchContent(url, authHeaders = {}) {
   const headers = {
-    Accept: 'application/json, application/vnd.github.raw+json',
+    Accept: 'application/json, text/plain, application/vnd.github.raw+json',
     ...authHeaders
   };
 
@@ -245,15 +245,148 @@ async function fetchContent(url, authHeaders = {}) {
     throw new Error(`HTTP ${response.status}: ${response.statusText}`);
   }
 
-  const data = await response.json();
+  const text = await response.text();
 
-  // GitHub Contents API wraps file content in base64
-  if (data && data.content && data.encoding === 'base64') {
-    const decoded = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8');
-    return JSON.parse(decoded);
+  // Try JSON first, fall back to raw text (e.g. SKILL.md files)
+  try {
+    const data = JSON.parse(text);
+
+    // GitHub Contents API wraps file content in base64
+    if (data && data.content && data.encoding === 'base64') {
+      const decoded = Buffer.from(data.content.replace(/\n/g, ''), 'base64').toString('utf8');
+      try {
+        return JSON.parse(decoded);
+      } catch {
+        return decoded;
+      }
+    }
+
+    return data;
+  } catch {
+    return text;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers — GitHub API utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Parse a raw.githubusercontent.com URL to extract owner, repo, and ref.
+ *
+ * Supports:
+ * - https://raw.githubusercontent.com/{owner}/{repo}/refs/heads/{ref}/{path}
+ * - https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}
+ *
+ * @param {string} url
+ * @returns {{ owner: string, repo: string, ref: string }|null}
+ */
+function parseGitHubRawUrl(url) {
+  const match = url.match(
+    /^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\//
+  );
+  if (!match) return null;
+  return { owner: match[1], repo: match[2], ref: match[3] };
+}
+
+/**
+ * Fetch the recursive file tree for a GitHub repository via the Trees API.
+ *
+ * @param {string} owner - GitHub repository owner
+ * @param {string} repo - GitHub repository name
+ * @param {string} ref - Branch, tag, or commit SHA
+ * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
+ * @returns {Promise<Array<{ path: string, type: string }>>} Tree entries
+ * @throws {Error} When the API call fails
+ */
+async function fetchGitHubTree(owner, repo, ref, authHeaders = {}) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${ref}?recursive=1`;
+  const response = await throttledFetch('marketplace-registry', url, {
+    headers: { Accept: 'application/json', ...authHeaders }
+  });
+  if (!response.ok) throw new Error(`GitHub tree API: HTTP ${response.status}`);
+  const data = await response.json();
+  return data.tree || [];
+}
+
+/**
+ * Resolve a plugins-format catalog to individual skill items by enumerating
+ * SKILL.md files in each plugin's skills/ subdirectory via the GitHub Trees API.
+ *
+ * Falls back to the previous plugin-as-item behavior for non-GitHub registries.
+ *
+ * @param {string} registrySource - Registry source URL (marketplace.json URL)
+ * @param {Array} plugins - Plugin entries from marketplace.json
+ * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
+ * @returns {Promise<Array>} Catalog items — one per individual skill
+ */
+async function resolvePluginSkills(registrySource, plugins, authHeaders = {}) {
+  const ghInfo = parseGitHubRawUrl(registrySource);
+
+  if (!ghInfo) {
+    // Non-GitHub registry: fall back to one item per plugin (current behavior)
+    return plugins.map(plugin => ({
+      type: 'skill',
+      name: plugin.name,
+      displayName: { en: plugin.name },
+      description:
+        typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
+      author: plugin.author?.name,
+      tags: plugin.tags || [],
+      source: plugin.source
+        ? { type: 'relative', path: plugin.source.replace(/^\.\//, '') }
+        : { type: 'relative', path: plugin.name }
+    }));
   }
 
-  return data;
+  const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
+
+  // Build a map of plugin directory names to plugin metadata
+  const pluginDirs = new Map();
+  for (const plugin of plugins) {
+    const dir = (plugin.source || `./${plugin.name}`).replace(/^\.\//, '');
+    pluginDirs.set(dir, plugin);
+  }
+
+  // Base URL for constructing raw SKILL.md URLs (strip the marketplace.json filename)
+  const rawBase = registrySource
+    .replace(/\/.claude-plugin\/marketplace\.json$/, '')
+    .replace(/\/marketplace\.json$/, '')
+    .replace(/\/$/, '');
+
+  // Find all SKILL.md files matching {pluginDir}/skills/{skillName}/SKILL.md
+  const skillRegex = /^([^/]+)\/skills\/([^/]+)\/SKILL\.md$/;
+  const items = [];
+
+  for (const entry of tree) {
+    if (entry.type !== 'blob') continue;
+    const match = entry.path.match(skillRegex);
+    if (!match) continue;
+
+    const [, pluginDir, skillDir] = match;
+    const plugin = pluginDirs.get(pluginDir);
+    if (!plugin) continue;
+
+    const skillUrl = `${rawBase}/${pluginDir}/skills/${skillDir}/SKILL.md`;
+
+    // Humanize directory names: "canned-responses" → "Canned Responses"
+    const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    const displayPluginName = pluginDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+    items.push({
+      type: 'skill',
+      name: `${pluginDir}-${skillDir}`,
+      displayName: { en: displaySkillName },
+      description:
+        typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
+      author: plugin.author?.name,
+      category: displayPluginName,
+      tags: [pluginDir],
+      source: { type: 'url', url: skillUrl }
+    });
+  }
+
+  return items;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +513,19 @@ class RegistryService {
     logger.info(`Fetching catalog from ${catalogUrl}`, { component: COMPONENT });
 
     const rawData = await fetchContent(catalogUrl, authHeaders);
+
+    // Plugins format: resolve each plugin to its individual skills via GitHub tree API
+    if (rawData && Array.isArray(rawData.plugins)) {
+      const items = await resolvePluginSkills(registry.source, rawData.plugins, authHeaders);
+      const catalog = {
+        name: rawData.name,
+        description: rawData.description,
+        items
+      };
+      const validation = validateCatalog(catalog);
+      return validation.success ? validation.data : catalog;
+    }
+
     const mapped = mapClaudeCodeCatalog(rawData);
     const validation = validateCatalog(mapped);
 
@@ -442,11 +588,8 @@ class RegistryService {
    */
   async testRegistry(registryConfig) {
     try {
-      const catalogUrl = getCatalogUrl(registryConfig.source);
-      const authHeaders = buildAuthHeaders(registryConfig.auth);
-      const rawData = await fetchContent(catalogUrl, authHeaders);
-      const mapped = mapClaudeCodeCatalog(rawData);
-      const itemCount = (mapped?.items || []).length;
+      const catalog = await this.fetchCatalog(registryConfig);
+      const itemCount = (catalog?.items || []).length;
       return {
         success: true,
         itemCount,

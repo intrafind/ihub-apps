@@ -190,19 +190,31 @@ async function fetchItemContent(registryId, type, name) {
 
   const response = await throttledFetch('marketplace-installer', itemUrl, {
     headers: {
-      Accept: 'application/json, application/vnd.github.raw+json',
+      Accept: 'application/json, text/plain, application/vnd.github.raw+json',
       ...authHeaders
     }
   });
 
   if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
-  const responseData = await response.json();
+  const text = await response.text();
+
+  let responseData;
+  try {
+    responseData = JSON.parse(text);
+  } catch {
+    // Non-JSON content (e.g., SKILL.md markdown) — return as string
+    return { item, content: text };
+  }
 
   // GitHub Contents API wraps file content in base64
   if (responseData && responseData.content && responseData.encoding === 'base64') {
     const decoded = Buffer.from(responseData.content.replace(/\n/g, ''), 'base64').toString('utf8');
-    return { item, content: JSON.parse(decoded) };
+    try {
+      return { item, content: JSON.parse(decoded) };
+    } catch {
+      return { item, content: decoded };
+    }
   }
 
   return { item, content: responseData };
