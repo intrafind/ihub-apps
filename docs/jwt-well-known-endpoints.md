@@ -91,50 +91,56 @@ curl https://your-ihub-domain.com/.well-known/jwks.json
 
 ### JWT Signing Algorithm
 
+iHub Apps uses **RS256** (RSA with SHA-256) as the default JWT signing algorithm. This allows public key sharing via the JWKS endpoint, enabling external applications to validate JWT tokens.
+
 Configure the JWT signing algorithm in `contents/config/platform.json`:
 
 ```json
 {
   "jwt": {
-    "algorithm": "HS256"
+    "algorithm": "RS256"
   }
 }
 ```
 
 **Supported Algorithms**:
 
-- **HS256** (default): HMAC with SHA-256 (symmetric)
+- **RS256** (default): RSA with SHA-256 (asymmetric)
+  - Public key can be shared for verification
+  - Required for external token validation
+  - Enables JWKS endpoint
+  - Suitable for federated authentication and external integrations
+
+- **HS256**: HMAC with SHA-256 (symmetric)
   - Faster performance
   - Lower computational overhead
   - Secret key cannot be shared publicly
-  - Suitable for internal systems
+  - Suitable only for internal systems without external validation needs
 
-- **RS256**: RSA with SHA-256 (asymmetric)
-  - Public key can be shared for verification
-  - Required for external token validation
-  - Higher computational overhead
-  - Suitable for federated authentication
+### Switching to HS256 (Not Recommended)
 
-### Switching to RS256
-
-To enable public key sharing via JWKS endpoint:
+If you need to use HS256 for legacy systems:
 
 1. Update `contents/config/platform.json`:
    ```json
    {
      "jwt": {
-       "algorithm": "RS256"
+       "algorithm": "HS256"
      }
    }
    ```
 
-2. Restart the server to generate RSA key pair
+2. Restart the server
 
-3. The server will automatically:
-   - Generate a 2048-bit RSA key pair
-   - Store private key at `contents/.jwt-private-key.pem` (mode 600)
-   - Store public key at `contents/.jwt-public-key.pem` (mode 644)
-   - Expose public key via `/.well-known/jwks.json`
+Note: JWKS endpoint will return empty keys with an informational message when using HS256.
+
+### RSA Key Management
+
+When using RS256 (default), the server will automatically:
+- Generate a 2048-bit RSA key pair on first startup
+- Store private key at `contents/.jwt-private-key.pem` (mode 600)
+- Store public key at `contents/.jwt-public-key.pem` (mode 644)
+- Expose public key via `/.well-known/jwks.json`
 
 ### Environment Variables
 
@@ -253,16 +259,16 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 ### Algorithm Selection
 
-- **Use HS256** for:
-  - Internal APIs where all services share the same secret
-  - Development and testing environments
-  - Single-application scenarios
+**RS256 is the default and recommended algorithm** for all deployments as it enables:
+- External token validation via JWKS
+- Federated authentication scenarios
+- Multi-application environments
+- Public API integrations
 
-- **Use RS256** for:
-  - External token validation
-  - Federated authentication scenarios
-  - Multi-application environments
-  - Public API integrations
+**Use HS256 only** for legacy systems that:
+- Require symmetric key signing for compatibility
+- Have no external token validation requirements
+- Are internal-only with no federated authentication needs
 
 ## Troubleshooting
 
@@ -272,7 +278,7 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 **Cause**: JWT signing algorithm is set to HS256 (symmetric)
 
-**Solution**: Configure RS256 algorithm in platform.json and restart server
+**Solution**: HS256 is not recommended for production. Switch to RS256 (default) in platform.json
 
 ### External Application Cannot Verify Tokens
 

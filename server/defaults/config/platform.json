@@ -53,7 +53,9 @@
   },
   "anonymousAuth": {
     "enabled": true,
-    "defaultGroups": ["anonymous"]
+    "defaultGroups": [
+      "anonymous"
+    ]
   },
   "proxyAuth": {
     "enabled": false
@@ -109,5 +111,8 @@
       "maxSize": 10485760,
       "maxFiles": 5
     }
+  },
+  "jwt": {
+    "algorithm": "RS256"
   }
 }

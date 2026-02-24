@@ -27,31 +27,38 @@ Enhanced `TokenStorageService` to support RSA key pairs for RS256 signing:
 - Environment variable support for custom keys (`JWT_PUBLIC_KEY`, `JWT_PRIVATE_KEY`)
 - Key pair initialization at server startup
 
-### 3. Dual Algorithm Support
+### 3. Default Algorithm Changed to RS256
 
-Updated `tokenService.js` to support both HS256 and RS256:
+Updated default JWT algorithm from HS256 to RS256:
 
-- **HS256 (default)**: HMAC with SHA-256 (symmetric, faster, secret cannot be shared)
-- **RS256**: RSA with SHA-256 (asymmetric, public key can be shared for external validation)
+- **RS256 (now default)**: RSA with SHA-256 (asymmetric, public key can be shared for external validation)
+- **HS256**: HMAC with SHA-256 (symmetric, faster, secret cannot be shared) - available for legacy use
 
 New functions:
-- `getJwtAlgorithm()` - Get configured algorithm from platform.json
+- `getJwtAlgorithm()` - Get configured algorithm from platform.json (defaults to RS256)
 - `getJwtSigningKey()` - Get appropriate signing key based on algorithm
 - `getJwtVerificationKey()` - Get appropriate verification key based on algorithm
 
 ### 4. Configuration
 
-Added JWT configuration to `platform.json`:
+Added JWT configuration to `platform.json` with RS256 as default:
 
 ```json
 {
   "jwt": {
-    "algorithm": "HS256"  // or "RS256"
+    "algorithm": "RS256"  // Default (or "HS256" for legacy)
   }
 }
 ```
 
-### 5. Documentation
+### 5. Migration for Existing Installations
+
+Created migration `V005__jwt_rs256_algorithm.js` to:
+- Automatically switch existing installations to RS256
+- Note: This invalidates existing JWT tokens (users need to login again)
+- This is acceptable for improved security and external token validation
+
+### 6. Documentation
 
 Created comprehensive documentation at `docs/jwt-well-known-endpoints.md`:
 
@@ -66,13 +73,16 @@ Created comprehensive documentation at `docs/jwt-well-known-endpoints.md`:
 ### New Files
 
 - `server/routes/wellKnown.js` - Well-known endpoints implementation
+- `server/migrations/V005__jwt_rs256_algorithm.js` - Migration to switch existing installations to RS256
 - `docs/jwt-well-known-endpoints.md` - Complete documentation
+- `concepts/2026-02-24 JWT Well-Known Endpoints Implementation.md` - This summary
 
 ### Modified Files
 
 - `server/server.js` - Register well-known routes, initialize RSA keys
 - `server/services/TokenStorageService.js` - Add RSA key pair management
-- `server/utils/tokenService.js` - Add dual algorithm support
+- `server/utils/tokenService.js` - Add dual algorithm support, change default to RS256
+- `server/defaults/config/platform.json` - Add jwt.algorithm: "RS256" default
 - `docs/SUMMARY.md` - Add new documentation link
 
 ## Testing
@@ -101,15 +111,23 @@ The documentation includes examples for:
 
 ## Migration
 
-No migration is required. The implementation:
-- Defaults to HS256 (existing behavior)
-- Automatically generates RSA keys when RS256 is configured
-- Maintains backward compatibility with existing installations
+Migration `V005__jwt_rs256_algorithm.js` is included to automatically:
+- Switch existing installations from HS256 to RS256
+- Add JWT configuration to platform.json if missing
+- Log that existing JWT tokens will be invalidated
 
-To enable RS256:
-1. Add `{"jwt": {"algorithm": "RS256"}}` to `platform.json`
+**Impact**: Users will need to login again after the migration runs. This is acceptable as:
+- It enables external token validation (the primary goal)
+- Improves security with asymmetric key signing
+- Allows public key sharing via JWKS endpoint
+
+Fresh installations:
+- Already default to RS256 via `server/defaults/config/platform.json`
+- Skip the migration automatically
+
+To revert to HS256 (not recommended):
+1. Manually set `{"jwt": {"algorithm": "HS256"}}` in `platform.json`
 2. Restart the server
-3. RSA keys will be generated automatically
 
 ## Security Considerations
 

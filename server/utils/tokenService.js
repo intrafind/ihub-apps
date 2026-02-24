@@ -15,7 +15,7 @@ import logger from './logger.js';
  */
 export function getJwtAlgorithm() {
   const platform = configCache.getPlatform() || {};
-  return platform.jwt?.algorithm || 'HS256';
+  return platform.jwt?.algorithm || 'RS256';
 }
 
 /**
