@@ -32,10 +32,10 @@ async function pemToJwk(publicKeyPem) {
   try {
     // Import the PEM key using jose
     const key = await jose.importSPKI(publicKeyPem, 'RS256');
-    
+
     // Export as JWK
     const jwk = await jose.exportJWK(key);
-    
+
     return jwk;
   } catch (error) {
     logger.error('Failed to convert PEM to JWK:', {
@@ -95,7 +95,7 @@ export default function registerWellKnownRoutes(app) {
       const baseUrl = getBaseUrl(req);
       const platform = configCache.getPlatform() || {};
       const algorithm = getJwtAlgorithm();
-      
+
       // Build OpenID Connect Discovery response
       const discovery = {
         issuer: 'ihub-apps',
@@ -109,13 +109,13 @@ export default function registerWellKnownRoutes(app) {
         grant_types_supported: ['client_credentials', 'authorization_code'],
         scopes_supported: ['openid', 'profile', 'email']
       };
-      
+
       logger.info('Served OpenID Connect Discovery', {
         component: 'WellKnown',
         algorithm,
         baseUrl
       });
-      
+
       res.json(discovery);
     } catch (error) {
       logger.error('Error serving OpenID Connect Discovery:', {
@@ -156,23 +156,23 @@ export default function registerWellKnownRoutes(app) {
   app.get('/.well-known/jwks.json', async (req, res) => {
     try {
       const algorithm = getJwtAlgorithm();
-      
+
       if (algorithm === 'HS256') {
         // For symmetric algorithms, we cannot expose the secret key
         // Return information about the algorithm but not the key
         logger.warn('JWKS endpoint called but HS256 (symmetric) algorithm is in use', {
           component: 'WellKnown'
         });
-        
+
         return res.status(200).json({
           keys: [],
           note: 'JWKS not available for HS256 (symmetric) algorithm. Public key sharing requires RS256 (asymmetric) algorithm. Configure "jwt.algorithm": "RS256" in platform.json to enable public key sharing.'
         });
       }
-      
+
       // For RS256, return the public key in JWK format
       const keyPair = tokenStorageService.getRSAKeyPair();
-      
+
       if (!keyPair || !keyPair.publicKey) {
         logger.error('No RSA key pair available for JWKS', { component: 'WellKnown' });
         return res.status(501).json({
@@ -180,21 +180,25 @@ export default function registerWellKnownRoutes(app) {
           message: 'RSA key pair not initialized. Server may need to be restarted.'
         });
       }
-      
+
       // Convert PEM to JWK
       const jwk = await pemToJwk(keyPair.publicKey);
-      
+
       // Add standard JWK fields
       jwk.use = 'sig';
-      jwk.kid = crypto.createHash('sha256').update(keyPair.publicKey).digest('hex').substring(0, 16);
+      jwk.kid = crypto
+        .createHash('sha256')
+        .update(keyPair.publicKey)
+        .digest('hex')
+        .substring(0, 16);
       jwk.alg = 'RS256';
-      
+
       logger.info('Served JWKS endpoint', {
         component: 'WellKnown',
         algorithm: 'RS256',
         kid: jwk.kid
       });
-      
+
       res.json({ keys: [jwk] });
     } catch (error) {
       logger.error('Error serving JWKS:', {

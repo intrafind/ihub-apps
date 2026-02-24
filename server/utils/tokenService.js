@@ -26,11 +26,11 @@ export function getJwtAlgorithm() {
  */
 export function getJwtSigningKey() {
   const algorithm = getJwtAlgorithm();
-  
+
   if (algorithm === 'RS256') {
     return tokenStorageService.getRSAPrivateKey();
   }
-  
+
   // Default to HS256
   return resolveJwtSecret();
 }
@@ -43,11 +43,11 @@ export function getJwtSigningKey() {
  */
 export function getJwtVerificationKey() {
   const algorithm = getJwtAlgorithm();
-  
+
   if (algorithm === 'RS256') {
     return tokenStorageService.getRSAPublicKey();
   }
-  
+
   // Default to HS256
   return resolveJwtSecret();
 }

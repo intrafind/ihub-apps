@@ -53,9 +53,7 @@
   },
   "anonymousAuth": {
     "enabled": true,
-    "defaultGroups": [
-      "anonymous"
-    ]
+    "defaultGroups": ["anonymous"]
   },
   "proxyAuth": {
     "enabled": false
