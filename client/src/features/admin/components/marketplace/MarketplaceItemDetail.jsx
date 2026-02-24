@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import StreamingMarkdown from '../../../chat/components/StreamingMarkdown';
 import {
@@ -62,6 +63,7 @@ const TYPE_COLORS = {
  */
 const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
   const { t, i18n } = useTranslation();
+  const navigate = useNavigate();
   const [item, setItem] = useState(initialItem);
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(null);
@@ -179,6 +181,17 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
           )}
           {isInstalled && (
             <>
+              {item?.type === 'skill' && (
+                <button
+                  onClick={() => {
+                    onClose();
+                    navigate(`/admin/skills/${item.name}`);
+                  }}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+                >
+                  {t('admin.marketplace.viewSkill', 'View Skill')}
+                </button>
+              )}
               <button
                 onClick={() => setConfirmAction('uninstall')}
                 disabled={!!actionLoading}

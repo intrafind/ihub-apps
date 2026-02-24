@@ -9,6 +9,9 @@ import { validateIdForPath } from '../../utils/pathSecurity.js';
 import { requireFeature } from '../../featureRegistry.js';
 import configCache from '../../configCache.js';
 import registryService from '../../services/marketplace/RegistryService.js';
+import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import { getRootDir } from '../../pathUtils.js';
+import config from '../../config.js';
 import {
   getSkillContent,
   getSkillResource,
@@ -164,6 +167,28 @@ export default function registerAdminSkillsRoutes(app) {
 
         await fs.rm(skillPathResolved, { recursive: true, force: true });
         await configCache.refreshSkillsCache();
+
+        // Clean up marketplace installation tracking if this skill was marketplace-installed
+        try {
+          const { data: installationsData } = configCache.getInstallations();
+          const installations = installationsData || { installations: {} };
+          const key = `skill:${req.params.name}`;
+          if (installations.installations[key]) {
+            delete installations.installations[key];
+            const installationsPath = path.join(
+              getRootDir(),
+              config.CONTENTS_DIR,
+              'config',
+              'installations.json'
+            );
+            await atomicWriteJSON(installationsPath, installations);
+            await configCache.refreshInstallationsCache();
+          }
+        } catch (err) {
+          logger.warn(
+            `Failed to clean up installation tracking for skill '${req.params.name}': ${err.message}`
+          );
+        }
 
         res.json({ success: true });
       } catch (error) {
