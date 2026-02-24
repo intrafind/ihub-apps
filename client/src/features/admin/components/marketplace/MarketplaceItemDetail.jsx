@@ -359,8 +359,12 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
                         <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 space-y-2">
                           {flattenFrontmatter(item.contentPreview.frontmatter).map(([key, val]) => (
                             <div key={key} className="flex justify-between text-sm gap-4">
-                              <span className="text-gray-500 dark:text-gray-400 shrink-0">{key}</span>
-                              <span className="text-gray-900 dark:text-white text-right">{val}</span>
+                              <span className="text-gray-500 dark:text-gray-400 shrink-0">
+                                {key}
+                              </span>
+                              <span className="text-gray-900 dark:text-white text-right">
+                                {val}
+                              </span>
                             </div>
                           ))}
                         </div>

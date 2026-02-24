@@ -185,9 +185,7 @@ async function ensureCacheDir() {
  * @returns {string}
  */
 function toRawGitHubUrl(url) {
-  const match = url.match(
-    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
-  );
+  const match = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/);
   if (!match) return url;
   return `https://raw.githubusercontent.com/${match[1]}/${match[2]}/${match[3]}/${match[4]}`;
 }
@@ -230,9 +228,7 @@ function resolveItemUrl(itemSource, registrySource) {
   }
 
   if (itemSource.type === 'relative') {
-    const baseUrl = registrySource
-      .replace(/\/(catalog|marketplace)\.json$/, '')
-      .replace(/\/$/, '');
+    const baseUrl = registrySource.replace(/\/(catalog|marketplace)\.json$/, '').replace(/\/$/, '');
     return `${baseUrl}/${itemSource.path}`;
   }
 
@@ -465,7 +461,9 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
           name: plugin.name,
           displayName: { en: displaySkillName },
           description:
-            typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
+            typeof plugin.description === 'string'
+              ? { en: plugin.description }
+              : plugin.description,
           author: plugin.author?.name || owner?.name,
           category: displayPluginName,
           tags: [plugin.category || plugin.name],
@@ -669,7 +667,12 @@ class RegistryService {
 
     // Plugins format: resolve each plugin to its individual skills via GitHub tree API
     if (rawData && Array.isArray(rawData.plugins)) {
-      const items = await resolvePluginSkills(registry.source, rawData.plugins, rawData.owner, authHeaders);
+      const items = await resolvePluginSkills(
+        registry.source,
+        rawData.plugins,
+        rawData.owner,
+        authHeaders
+      );
       const catalog = {
         name: rawData.name,
         description: rawData.description,
