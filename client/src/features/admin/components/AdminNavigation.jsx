@@ -138,6 +138,17 @@ const AdminNavigation = () => {
                 current: location.pathname.startsWith('/admin/workflows')
               }
             ]
+          : []),
+        ...(featureFlags.isEnabled('marketplace', false)
+          ? [
+              {
+                key: 'marketplace',
+                name: t('admin.nav.marketplace', 'Marketplace'),
+                href: '/admin/marketplace',
+                // icon: 'shopping-bag',
+                current: location.pathname.startsWith('/admin/marketplace')
+              }
+            ]
           : [])
       ]
     },

@@ -925,11 +925,95 @@
       "note5": "Authentication debug logging is separate and requires restart"
     },
     "nav": {
-      "logging": "Logging"
+      "logging": "Logging",
+      "marketplace": "Marketplace"
     },
     "home": {
       "sections": {
-        "loggingDesc": "Configure logging levels, components, metadata, and debug settings"
+        "loggingDesc": "Configure logging levels, components, metadata, and debug settings",
+        "marketplaceDesc": "Discover and install apps, models, prompts, skills, and workflows from registries"
+      }
+    },
+    "marketplace": {
+      "subtitle": "Discover and install content from registries",
+      "manageRegistries": "Manage Registries",
+      "install": "Install",
+      "installed": "Installed",
+      "update": "Update",
+      "uninstall": "Uninstall",
+      "detach": "Detach",
+      "allRegistries": "All Registries",
+      "statusAll": "All Status",
+      "statusAvailable": "Available",
+      "statusInstalled": "Installed",
+      "searchPlaceholder": "Search items...",
+      "noResults": "No items found. Try adjusting your filters or refreshing your registries.",
+      "confirmUninstall": "Are you sure you want to uninstall this item? This will delete the files.",
+      "confirmDetach": "Detach this item from marketplace tracking? Files will be kept.",
+      "noRegistries": {
+        "title": "No registries configured",
+        "description": "Add a marketplace registry to discover and install content.",
+        "cta": "Add Registry"
+      },
+      "types": {
+        "all": "All",
+        "app": "App",
+        "apps": "Apps",
+        "model": "Model",
+        "models": "Models",
+        "prompt": "Prompt",
+        "prompts": "Prompts",
+        "skill": "Skill",
+        "skills": "Skills",
+        "workflow": "Workflow",
+        "workflows": "Workflows"
+      },
+      "registries": {
+        "title": "Marketplace Registries",
+        "subtitle": "Manage content registries to discover and install apps, models, prompts, skills, and workflows.",
+        "addRegistry": "Add Registry",
+        "addFirst": "Add your first registry",
+        "empty": "No registries configured yet.",
+        "neverSynced": "Never",
+        "confirmDelete": "Delete this registry? This will remove all cached catalog data.",
+        "columns": {
+          "name": "Name",
+          "source": "Source",
+          "items": "Items",
+          "lastSynced": "Last Synced"
+        },
+        "auth": {
+          "none": "None",
+          "bearer": "Bearer Token",
+          "basic": "Basic Auth",
+          "header": "Custom Header"
+        },
+        "form": {
+          "addTitle": "Add Registry",
+          "editTitle": "Edit Registry",
+          "id": "Registry ID",
+          "idRequired": "ID is required",
+          "idInvalid": "ID must contain only lowercase letters, numbers, and hyphens",
+          "name": "Name",
+          "nameRequired": "Name is required",
+          "description": "Description",
+          "source": "Catalog URL",
+          "sourceRequired": "Source URL is required",
+          "authType": "Authentication",
+          "testing": "Testing...",
+          "testConnection": "Test Connection",
+          "autoRefresh": "Auto Refresh",
+          "hours": "hours"
+        }
+      },
+      "detail": {
+        "description": "Description",
+        "tags": "Tags",
+        "registry": "Registry",
+        "category": "Category",
+        "license": "License",
+        "installedAt": "Installed",
+        "noPreview": "No configuration preview available."
       }
     },
     "apps": {

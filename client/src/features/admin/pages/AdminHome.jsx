@@ -113,7 +113,21 @@ const AdminHome = () => {
       ),
       href: '/admin/features',
       color: 'bg-cyan-500'
-    }
+    },
+    ...(featureFlags.isEnabled('marketplace', false)
+      ? [
+          {
+            key: 'marketplace',
+            title: t('admin.nav.marketplace', 'Marketplace'),
+            description: t(
+              'admin.home.sections.marketplaceDesc',
+              'Discover and install apps, models, prompts, skills, and workflows from registries'
+            ),
+            href: '/admin/marketplace',
+            color: 'bg-indigo-500'
+          }
+        ]
+      : [])
   ];
 
   return (

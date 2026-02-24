@@ -1112,11 +1112,95 @@
       "note5": "Authentifizierungs-Debug-Logging ist separat und erfordert Neustart"
     },
     "nav": {
-      "logging": "Logging"
+      "logging": "Logging",
+      "marketplace": "Marktplatz"
     },
     "home": {
       "sections": {
-        "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren"
+        "loggingDesc": "Logging-Level, Komponenten, Metadaten und Debug-Einstellungen konfigurieren",
+        "marketplaceDesc": "Apps, Modelle, Prompts, Skills und Workflows aus Registries entdecken und installieren"
+      }
+    },
+    "marketplace": {
+      "subtitle": "Inhalte aus Registries entdecken und installieren",
+      "manageRegistries": "Registries verwalten",
+      "install": "Installieren",
+      "installed": "Installiert",
+      "update": "Aktualisieren",
+      "uninstall": "Deinstallieren",
+      "detach": "Trennen",
+      "allRegistries": "Alle Registries",
+      "statusAll": "Alle Status",
+      "statusAvailable": "Verfügbar",
+      "statusInstalled": "Installiert",
+      "searchPlaceholder": "Elemente suchen...",
+      "noResults": "Keine Elemente gefunden. Passen Sie Ihre Filter an oder aktualisieren Sie Ihre Registries.",
+      "confirmUninstall": "Sind Sie sicher, dass Sie dieses Element deinstallieren möchten? Die Dateien werden gelöscht.",
+      "confirmDetach": "Dieses Element von der Marktplatz-Verfolgung trennen? Die Dateien bleiben erhalten.",
+      "noRegistries": {
+        "title": "Keine Registries konfiguriert",
+        "description": "Fügen Sie eine Marktplatz-Registry hinzu, um Inhalte zu entdecken und zu installieren.",
+        "cta": "Registry hinzufügen"
+      },
+      "types": {
+        "all": "Alle",
+        "app": "App",
+        "apps": "Apps",
+        "model": "Modell",
+        "models": "Modelle",
+        "prompt": "Prompt",
+        "prompts": "Prompts",
+        "skill": "Skill",
+        "skills": "Skills",
+        "workflow": "Workflow",
+        "workflows": "Workflows"
+      },
+      "registries": {
+        "title": "Marktplatz-Registries",
+        "subtitle": "Inhalts-Registries verwalten, um Apps, Modelle, Prompts, Skills und Workflows zu entdecken und zu installieren.",
+        "addRegistry": "Registry hinzufügen",
+        "addFirst": "Erste Registry hinzufügen",
+        "empty": "Noch keine Registries konfiguriert.",
+        "neverSynced": "Nie",
+        "confirmDelete": "Diese Registry löschen? Alle zwischengespeicherten Katalogdaten werden entfernt.",
+        "columns": {
+          "name": "Name",
+          "source": "Quelle",
+          "items": "Elemente",
+          "lastSynced": "Zuletzt synchronisiert"
+        },
+        "auth": {
+          "none": "Keine",
+          "bearer": "Bearer-Token",
+          "basic": "Basic Auth",
+          "header": "Benutzerdefinierter Header"
+        },
+        "form": {
+          "addTitle": "Registry hinzufügen",
+          "editTitle": "Registry bearbeiten",
+          "id": "Registry-ID",
+          "idRequired": "ID ist erforderlich",
+          "idInvalid": "ID darf nur Kleinbuchstaben, Zahlen und Bindestriche enthalten",
+          "name": "Name",
+          "nameRequired": "Name ist erforderlich",
+          "description": "Beschreibung",
+          "source": "Katalog-URL",
+          "sourceRequired": "Quell-URL ist erforderlich",
+          "authType": "Authentifizierung",
+          "testing": "Teste...",
+          "testConnection": "Verbindung testen",
+          "autoRefresh": "Automatische Aktualisierung",
+          "hours": "Stunden"
+        }
+      },
+      "detail": {
+        "description": "Beschreibung",
+        "tags": "Tags",
+        "registry": "Registry",
+        "category": "Kategorie",
+        "license": "Lizenz",
+        "installedAt": "Installiert",
+        "noPreview": "Keine Konfigurationsvorschau verfügbar."
       }
     },
     "apps": {

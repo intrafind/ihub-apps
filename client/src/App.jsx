@@ -70,6 +70,12 @@ const AdminUICustomization = React.lazy(
 );
 const AdminLoggingPage = React.lazy(() => import('./features/admin/pages/AdminLoggingPage'));
 const AdminFeaturesPage = React.lazy(() => import('./features/admin/pages/AdminFeaturesPage'));
+const AdminMarketplacePage = React.lazy(
+  () => import('./features/admin/pages/AdminMarketplacePage')
+);
+const AdminMarketplaceRegistriesPage = React.lazy(
+  () => import('./features/admin/pages/AdminMarketplaceRegistriesPage')
+);
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
@@ -418,6 +424,18 @@ function App() {
                       <Route
                         path="admin/features"
                         element={<LazyAdminRoute component={AdminFeaturesPage} />}
+                      />
+                    )}
+                    {featureFlags.isEnabled('marketplace', false) && (
+                      <Route
+                        path="admin/marketplace"
+                        element={<LazyAdminRoute component={AdminMarketplacePage} />}
+                      />
+                    )}
+                    {featureFlags.isEnabled('marketplace', false) && (
+                      <Route
+                        path="admin/marketplace/registries"
+                        element={<LazyAdminRoute component={AdminMarketplaceRegistriesPage} />}
                       />
                     )}
                     <Route

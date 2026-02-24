@@ -589,6 +589,215 @@ export const exportSkill = skillName => {
   window.open(`${baseURL}/admin/skills/${encodeURIComponent(skillName)}/export`, '_blank');
 };
 
+// Marketplace - Registry management
+
+/**
+ * Fetches all marketplace registries configured by the admin.
+ *
+ * @returns {Promise<Array>} Array of registry objects
+ */
+export const fetchMarketplaceRegistries = async () => {
+  const response = await makeAdminApiCall('/admin/marketplace/registries');
+  return response.data;
+};
+
+/**
+ * Creates a new marketplace registry.
+ *
+ * @param {Object} data - Registry configuration data
+ * @returns {Promise<Object>} The created registry object
+ */
+export const createMarketplaceRegistry = async data => {
+  const response = await makeAdminApiCall('/admin/marketplace/registries', {
+    method: 'POST',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Updates an existing marketplace registry by ID.
+ *
+ * @param {string} id - The registry ID
+ * @param {Object} data - Updated registry configuration data
+ * @returns {Promise<Object>} The updated registry object
+ */
+export const updateMarketplaceRegistry = async (id, data) => {
+  const response = await makeAdminApiCall(`/admin/marketplace/registries/${id}`, {
+    method: 'PUT',
+    body: data
+  });
+  return response.data;
+};
+
+/**
+ * Deletes a marketplace registry and removes its cached catalog data.
+ *
+ * @param {string} id - The registry ID to delete
+ * @returns {Promise<Object>} Confirmation of deletion
+ */
+export const deleteMarketplaceRegistry = async id => {
+  const response = await makeAdminApiCall(`/admin/marketplace/registries/${id}`, {
+    method: 'DELETE'
+  });
+  return response.data;
+};
+
+/**
+ * Triggers a manual refresh of a marketplace registry's catalog.
+ *
+ * @param {string} id - The registry ID to refresh
+ * @returns {Promise<Object>} Result of the refresh operation
+ */
+export const refreshMarketplaceRegistry = async id => {
+  const response = await makeAdminApiCall(`/admin/marketplace/registries/${id}/_refresh`, {
+    method: 'POST'
+  });
+  return response.data;
+};
+
+/**
+ * Tests connectivity to a registry URL before saving.
+ *
+ * @param {Object} data - Connection data including source URL and auth config
+ * @returns {Promise<Object>} Test result with success flag and message
+ */
+export const testMarketplaceRegistry = async data => {
+  const response = await makeAdminApiCall('/admin/marketplace/registries/_test', {
+    method: 'POST',
+    body: data
+  });
+  return response.data;
+};
+
+// Marketplace - Browse
+
+/**
+ * Browses all marketplace items across configured registries with optional filtering.
+ *
+ * @param {Object} [params] - Filter and pagination parameters
+ * @param {string} [params.type] - Filter by item type (app, model, prompt, skill, workflow)
+ * @param {string} [params.search] - Search query string
+ * @param {string} [params.registry] - Filter by registry ID
+ * @param {string} [params.status] - Filter by installation status (available, installed)
+ * @param {number} [params.page] - Page number for pagination
+ * @param {number} [params.limit] - Number of items per page
+ * @returns {Promise<Object>} Paginated result with items, total, and totalPages
+ */
+export const browseMarketplace = async (params = {}) => {
+  const query = new URLSearchParams(
+    Object.fromEntries(
+      Object.entries(params).filter(([, v]) => v != null && v !== '' && v !== 'all')
+    )
+  ).toString();
+  const response = await makeAdminApiCall(`/admin/marketplace${query ? `?${query}` : ''}`);
+  return response.data;
+};
+
+/**
+ * Fetches detailed information for a single marketplace item.
+ *
+ * @param {string} registryId - The registry ID the item belongs to
+ * @param {string} type - The item type (app, model, prompt, skill, workflow)
+ * @param {string} name - The item name identifier
+ * @returns {Promise<Object>} Detailed item object including contentPreview
+ */
+export const fetchMarketplaceItemDetail = async (registryId, type, name) => {
+  const response = await makeAdminApiCall(
+    `/admin/marketplace/registries/${registryId}/items/${type}/${name}`
+  );
+  return response.data;
+};
+
+// Marketplace - Item actions
+
+/**
+ * Installs a marketplace item into the local iHub instance.
+ *
+ * @param {string} registryId - The registry ID the item belongs to
+ * @param {string} type - The item type (app, model, prompt, skill, workflow)
+ * @param {string} name - The item name identifier
+ * @returns {Promise<Object>} Result of the install operation
+ */
+export const installMarketplaceItem = async (registryId, type, name) => {
+  const response = await makeAdminApiCall(
+    `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_install`,
+    { method: 'POST' }
+  );
+  return response.data;
+};
+
+/**
+ * Updates an already-installed marketplace item to the latest version.
+ *
+ * @param {string} registryId - The registry ID the item belongs to
+ * @param {string} type - The item type (app, model, prompt, skill, workflow)
+ * @param {string} name - The item name identifier
+ * @returns {Promise<Object>} Result of the update operation
+ */
+export const updateMarketplaceItem = async (registryId, type, name) => {
+  const response = await makeAdminApiCall(
+    `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_update`,
+    { method: 'POST' }
+  );
+  return response.data;
+};
+
+/**
+ * Uninstalls a marketplace item, removing its files from the local instance.
+ *
+ * @param {string} registryId - The registry ID the item belongs to
+ * @param {string} type - The item type (app, model, prompt, skill, workflow)
+ * @param {string} name - The item name identifier
+ * @returns {Promise<Object>} Result of the uninstall operation
+ */
+export const uninstallMarketplaceItem = async (registryId, type, name) => {
+  const response = await makeAdminApiCall(
+    `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_uninstall`,
+    { method: 'POST' }
+  );
+  return response.data;
+};
+
+/**
+ * Detaches an item from marketplace tracking without deleting its files.
+ * Use this when you want to keep the item but stop tracking updates from the registry.
+ *
+ * @param {string} registryId - The registry ID the item belongs to
+ * @param {string} type - The item type (app, model, prompt, skill, workflow)
+ * @param {string} name - The item name identifier
+ * @returns {Promise<Object>} Result of the detach operation
+ */
+export const detachMarketplaceItem = async (registryId, type, name) => {
+  const response = await makeAdminApiCall(
+    `/admin/marketplace/registries/${registryId}/items/${type}/${name}/_detach`,
+    { method: 'POST' }
+  );
+  return response.data;
+};
+
+// Marketplace - Tracking
+
+/**
+ * Fetches a list of all currently installed marketplace items.
+ *
+ * @returns {Promise<Array>} Array of installation tracking records
+ */
+export const fetchMarketplaceInstallations = async () => {
+  const response = await makeAdminApiCall('/admin/marketplace/installations');
+  return response.data;
+};
+
+/**
+ * Fetches marketplace items that have updates available for installed content.
+ *
+ * @returns {Promise<Array>} Array of items with available updates
+ */
+export const fetchMarketplaceUpdates = async () => {
+  const response = await makeAdminApiCall('/admin/marketplace/updates');
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -659,5 +868,21 @@ export const adminApi = {
   toggleSkill,
   deleteSkill,
   importSkill,
-  exportSkill
+  exportSkill,
+
+  // Marketplace functions
+  fetchMarketplaceRegistries,
+  createMarketplaceRegistry,
+  updateMarketplaceRegistry,
+  deleteMarketplaceRegistry,
+  refreshMarketplaceRegistry,
+  testMarketplaceRegistry,
+  browseMarketplace,
+  fetchMarketplaceItemDetail,
+  installMarketplaceItem,
+  updateMarketplaceItem,
+  uninstallMarketplaceItem,
+  detachMarketplaceItem,
+  fetchMarketplaceInstallations,
+  fetchMarketplaceUpdates
 };

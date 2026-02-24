@@ -200,7 +200,9 @@ class ConfigCache {
       'config/sources.json',
       'config/providers.json',
       'config/mimetypes.json',
-      'config/features.json'
+      'config/features.json',
+      'config/registries.json',
+      'config/installations.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -1079,6 +1081,72 @@ class ConfigCache {
       return true;
     } catch (error) {
       logger.error('❌ Failed to refresh providers cache:', { component: 'ConfigCache', error });
+      return false;
+    }
+  }
+
+  /**
+   * Get registries configuration
+   * @returns {{ data: { registries: Array }, etag: string|null }}
+   */
+  getRegistries() {
+    const cached = this.get('config/registries.json');
+    if (!cached || !cached.data) {
+      return { data: { registries: [] }, etag: null };
+    }
+    return cached;
+  }
+
+  /**
+   * Get installations manifest tracking all marketplace-installed content
+   * @returns {{ data: { installations: Object }, etag: string|null }}
+   */
+  getInstallations() {
+    const cached = this.get('config/installations.json');
+    if (!cached || !cached.data) {
+      return { data: { installations: {} }, etag: null };
+    }
+    return cached;
+  }
+
+  /**
+   * Refresh registries cache from disk.
+   * Should be called when registries are added, updated, or removed.
+   * @returns {Promise<boolean>} True on success, false on failure
+   */
+  async refreshRegistriesCache() {
+    logger.info('Refreshing registries cache...', { component: 'ConfigCache' });
+    try {
+      await this.refreshCacheEntry('config/registries.json');
+      const { data } = this.getRegistries();
+      logger.info(
+        `Registries cache refreshed: ${(data?.registries || []).length} registries loaded`,
+        { component: 'ConfigCache' }
+      );
+      return true;
+    } catch (error) {
+      logger.error('Failed to refresh registries cache:', { component: 'ConfigCache', error });
+      return false;
+    }
+  }
+
+  /**
+   * Refresh installations cache from disk.
+   * Should be called when items are installed, updated, or removed via the marketplace.
+   * @returns {Promise<boolean>} True on success, false on failure
+   */
+  async refreshInstallationsCache() {
+    logger.info('Refreshing installations cache...', { component: 'ConfigCache' });
+    try {
+      await this.refreshCacheEntry('config/installations.json');
+      const { data } = this.getInstallations();
+      const count = Object.keys(data?.installations || {}).length;
+      logger.info(`Installations cache refreshed: ${count} installations loaded`, {
+        component: 'ConfigCache'
+      });
+      return true;
+    } catch (error) {
+      logger.error('Failed to refresh installations cache:', { component: 'ConfigCache', error });
       return false;
     }
   }
