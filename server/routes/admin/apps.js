@@ -13,6 +13,7 @@ import {
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
 /**
  * Find the actual filename for an app ID
@@ -1004,6 +1005,7 @@ export default function registerAdminAppsRoutes(app) {
       }
       await fs.unlink(appFilePath);
       await configCache.refreshAppsCache();
+      await removeMarketplaceInstallation('app', appId);
       res.json({ message: 'App deleted successfully' });
     } catch (error) {
       logger.error('Error deleting app:', error);

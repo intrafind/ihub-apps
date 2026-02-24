@@ -12,6 +12,7 @@ import {
   resolveAndValidatePath
 } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
 /**
  * @swagger
@@ -1015,6 +1016,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       await fs.unlink(normalizedPromptFilePath);
       await configCache.refreshPromptsCache();
+      await removeMarketplaceInstallation('prompt', promptId);
       res.json({ message: 'Prompt deleted successfully' });
     } catch (error) {
       logger.error('Error deleting prompt:', error);

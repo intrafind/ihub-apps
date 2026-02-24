@@ -31,6 +31,7 @@ import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 import { requireFeature } from '../../featureRegistry.js';
+import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
 const checkWorkflowsFeature = requireFeature('workflows');
 
@@ -682,6 +683,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         // Refresh workflow cache after successful deletion
         configCache.refreshWorkflowsCache?.();
+        await removeMarketplaceInstallation('workflow', id);
       } catch (error) {
         sendFailedOperationError(res, 'delete workflow', error);
       }

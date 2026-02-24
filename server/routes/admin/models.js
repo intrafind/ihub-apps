@@ -9,6 +9,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -410,6 +411,7 @@ export default function registerAdminModelsRoutes(app) {
       }
       await fs.unlink(modelFilePath);
       await configCache.refreshModelsCache();
+      await removeMarketplaceInstallation('model', modelId);
       res.json({ message: 'Model deleted successfully' });
     } catch (error) {
       logger.error('Error deleting model:', error);
