@@ -1,15 +1,14 @@
 import { createCompletionRequest } from '../../adapters/index.js';
-import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction, getErrorDetails } from '../../utils.js';
 import { runTool } from '../../toolLoader.js';
 import { normalizeToolName } from '../../adapters/toolCalling/index.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
-import { createParser } from 'eventsource-parser';
-import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
-import StreamingHandler from './StreamingHandler.js';
-import { redactUrl } from '../../utils/logRedactor.js';
+import StreamResponseCollector from './utils/StreamResponseCollector.js';
+import { logLLMRequest, executeLLMRequest } from './utils/llmRequestExecutor.js';
+import RequestLifecycle from './utils/requestLifecycle.js';
+import { emitImages, emitThinking, emitGroundingMetadata } from './utils/resultEmitters.js';
 import logger from '../../utils/logger.js';
 import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../../tools/askUser.js';
 
@@ -22,7 +21,6 @@ const MAX_CLARIFICATIONS = MAX_CLARIFICATIONS_PER_CONVERSATION;
 class ToolExecutor {
   constructor() {
     this.errorHandler = new ErrorHandler();
-    this.streamingHandler = new StreamingHandler();
     /**
      * Map to track clarification counts per conversation
      * @type {Map<string, number>}
@@ -712,200 +710,49 @@ class ToolExecutor {
       userFileDataFileName: userFileData?.fileName || 'none'
     });
 
-    const controller = new AbortController();
-
-    if (activeRequests.has(chatId)) {
-      const existingController = activeRequests.get(chatId);
-      existingController.abort();
-    }
-    activeRequests.set(chatId, controller);
-
-    let timeoutId;
-    const setupTimeout = () => {
-      timeoutId = setTimeout(async () => {
-        if (activeRequests.has(chatId)) {
-          controller.abort();
-          const errorMessage = await getLocalizedError(
-            'requestTimeout',
-            { timeout: DEFAULT_TIMEOUT / 1000 },
-            clientLanguage
-          );
-          actionTracker.trackError(chatId, { message: errorMessage });
-          if (activeRequests.get(chatId) === controller) {
-            activeRequests.delete(chatId);
-          }
-        }
-      }, DEFAULT_TIMEOUT);
-    };
-    setupTimeout();
-
-    try {
-      // Debug logging for LLM request (tool execution)
-      logger.debug(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (with tools)`);
-      logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-      logger.debug(
-        `[LLM REQUEST DEBUG] Headers:`,
-        JSON.stringify(
-          {
-            ...request.headers,
-            Authorization: request.headers.Authorization ? '[REDACTED]' : undefined
-          },
-          null,
-          2
-        )
-      );
-      logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
-
-      const llmResponse = await throttledFetch(model.id, request.url, {
-        method: 'POST',
-        headers: request.headers,
-        body: JSON.stringify(request.body),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      if (!llmResponse.ok) {
-        const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
-          llmResponse,
-          model,
+    const lifecycle = new RequestLifecycle(chatId, {
+      timeout: DEFAULT_TIMEOUT,
+      onTimeout: async () => {
+        const errorMessage = await getLocalizedError(
+          'requestTimeout',
+          { timeout: DEFAULT_TIMEOUT / 1000 },
           clientLanguage
         );
-
-        throw Object.assign(new Error(errorInfo.message), {
-          code: errorInfo.code,
-          details: errorInfo.details
-        });
+        actionTracker.trackError(chatId, { message: errorMessage });
       }
+    });
 
-      // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-      const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-      const reader = readableStream.getReader();
-      const decoder = new TextDecoder();
-      const events = [];
-      const parser = createParser({ onEvent: e => events.push(e) });
+    try {
+      logLLMRequest(request, { label: 'with tools', chatId, modelId: model.id });
 
-      let assistantContent = '';
-      const collectedToolCalls = [];
-      let finishReason = null;
-      let done = false;
+      const llmResponse = await executeLLMRequest({
+        request,
+        model,
+        signal: lifecycle.signal,
+        language: clientLanguage
+      });
 
-      while (!done) {
-        const { value, done: readerDone } = await reader.read();
-        if (readerDone || !activeRequests.has(chatId)) {
-          if (!activeRequests.has(chatId)) reader.cancel();
-          break;
-        }
+      lifecycle.clearTimeout();
 
-        const chunk = decoder.decode(value, { stream: true });
-        parser.feed(chunk);
-
-        while (events.length > 0) {
-          const evt = events.shift();
-          const result = convertResponseToGeneric(evt.data, model.provider);
-
-          if (result.error) {
-            throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-              code: 'PROCESSING_ERROR'
-            });
-          }
-
-          // logger.info(`Result for chat ID ${chatId}:`, result);
-          if (result.content?.length > 0) {
-            for (const text of result.content) {
-              assistantContent += text;
-              actionTracker.trackChunk(chatId, { content: text });
-            }
-          }
-
-          // Process images (important for image generation with tools like google_search)
-          this.streamingHandler.processImages(result, chatId);
-
-          // Process thinking content
-          this.streamingHandler.processThinking(result, chatId);
-
-          // Process grounding metadata (for Google Search grounding)
-          this.streamingHandler.processGroundingMetadata(result, chatId);
-
-          // logger.info(`Tool calls for chat ID ${chatId}:`, result.tool_calls);
-          if (result.tool_calls?.length > 0) {
-            result.tool_calls.forEach(call => {
-              let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-              if (existingCall) {
-                // Merge properties into the existing tool call
-                if (call.id) existingCall.id = call.id;
-                if (call.type) existingCall.type = call.type;
-                // Preserve metadata (critical for thoughtSignature in Gemini 3)
-                if (call.metadata) existingCall.metadata = call.metadata;
-                if (call.function) {
-                  if (call.function.name) existingCall.function.name = call.function.name;
-
-                  // Handle arguments accumulation for streaming
-                  let callArgs = call.function.arguments;
-                  if (call.arguments && call.arguments.__raw_arguments) {
-                    callArgs = call.arguments.__raw_arguments;
-                  }
-                  if (callArgs) {
-                    // Smart concatenation: avoid empty {} + real args pattern
-                    const existing = existingCall.function.arguments;
-                    if (!existing || existing === '{}' || existing.trim() === '') {
-                      // If existing is empty or just {}, replace it entirely
-                      existingCall.function.arguments = callArgs;
-                    } else if (callArgs !== '{}' && callArgs.trim() !== '') {
-                      // Only concatenate if new args aren't empty
-                      existingCall.function.arguments += callArgs;
-                    }
-                  }
-                }
-              } else if (call.index !== undefined) {
-                // Create a new tool call if it doesn't exist
-                let initialArgs = call.function?.arguments || '';
-                if (call.arguments && call.arguments.__raw_arguments) {
-                  initialArgs = call.arguments.__raw_arguments;
-                }
-
-                // Clean up initial args - avoid starting with empty {}
-                if (initialArgs === '{}' || initialArgs.trim() === '') {
-                  initialArgs = '';
-                }
-
-                collectedToolCalls.push({
-                  index: call.index,
-                  id: call.id || null,
-                  type: call.type || 'function',
-                  metadata: call.metadata || {}, // Preserve metadata (critical for thoughtSignature)
-                  function: {
-                    name: call.function?.name || '',
-                    arguments: initialArgs
-                  }
-                });
-              }
-            });
-          }
-
-          // logger.info(`Finish Reason for chat ID ${chatId}:`, finishReason);
-          if (result.finishReason) {
-            finishReason = result.finishReason;
-          }
-
-          // logger.info(
-          //   `Completed processing for chat ID ${chatId} - done? ${done}:`,
-          //   JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
-          // );
-          if (result.complete) {
-            done = true;
-            break;
-          }
-        }
-      }
+      // Process streaming response using shared collector
+      const collector = new StreamResponseCollector(model.provider);
+      const {
+        content: assistantContent,
+        toolCalls: collectedToolCalls,
+        finishReason
+      } = await collector.collect(llmResponse, {
+        isAborted: () => !activeRequests.has(chatId),
+        onContent: text => actionTracker.trackChunk(chatId, { content: text }),
+        onImages: result => emitImages(result, chatId),
+        onThinking: result => emitThinking(result, chatId),
+        onGrounding: result => emitGroundingMetadata(result, chatId)
+      });
 
       if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
         logger.info(
           `No tool calls to process for chat ID ${chatId}:`,
           JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
         );
-        clearTimeout(timeoutId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
           'chat_response',
@@ -914,9 +761,7 @@ class ToolExecutor {
             response: assistantContent.substring(0, 1000)
           })
         );
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
+        lifecycle.cleanup();
         return;
       }
 
@@ -927,7 +772,7 @@ class ToolExecutor {
 
       if (validToolCalls.length === 0) {
         logger.info(`No valid tool calls to process for chat ID ${chatId} after filtering`);
-        clearTimeout(timeoutId);
+        lifecycle.cleanup();
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
           'chat_response',
@@ -936,9 +781,6 @@ class ToolExecutor {
             response: assistantContent.substring(0, 1000)
           })
         );
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
         return;
       }
 
@@ -1024,19 +866,13 @@ class ToolExecutor {
 
       // If we had a clarification request, stop here and wait for user input
       if (hasClarificationRequest) {
-        clearTimeout(timeoutId);
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
+        lifecycle.cleanup();
         return;
       }
 
       // If we had streaming tools, don't continue with LLM - wait for next user input
       if (hasStreamingTools) {
-        clearTimeout(timeoutId);
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
+        lifecycle.cleanup();
         return;
       }
 
@@ -1060,7 +896,7 @@ class ToolExecutor {
         userFileData
       });
     } catch (error) {
-      clearTimeout(timeoutId);
+      lifecycle.cleanup();
 
       if (error.name !== 'AbortError') {
         const errorDetails = getErrorDetails(error, model);
@@ -1080,10 +916,6 @@ class ToolExecutor {
         };
 
         actionTracker.trackError(chatId, { ...errMsg });
-      }
-
-      if (activeRequests.get(chatId) === controller) {
-        activeRequests.delete(chatId);
       }
     }
   }
@@ -1123,174 +955,54 @@ class ToolExecutor {
         chatId
       });
 
-      const controller = new AbortController();
-
-      if (activeRequests.has(chatId)) {
-        const existingController = activeRequests.get(chatId);
-        existingController.abort();
-      }
-      activeRequests.set(chatId, controller);
-
-      let timeoutId = setTimeout(async () => {
-        if (activeRequests.has(chatId)) {
-          controller.abort();
+      const iterLifecycle = new RequestLifecycle(chatId, {
+        timeout: DEFAULT_TIMEOUT,
+        onTimeout: async () => {
           const errorMessage = await getLocalizedError(
             'requestTimeout',
             { timeout: DEFAULT_TIMEOUT / 1000 },
             clientLanguage
           );
           actionTracker.trackError(chatId, { message: errorMessage });
-          if (activeRequests.get(chatId) === controller) {
-            activeRequests.delete(chatId);
-          }
         }
-      }, DEFAULT_TIMEOUT);
+      });
 
       try {
-        // Determine HTTP method and body based on adapter requirements
-        const fetchOptions = {
-          method: followRequest.method || 'POST',
-          headers: followRequest.headers,
-          signal: controller.signal
-        };
+        logLLMRequest(followRequest, {
+          label: `tool continuation, iteration ${iteration}`,
+          chatId,
+          modelId: model.id
+        });
 
-        // Only add body for POST requests
-        if (fetchOptions.method === 'POST' && followRequest.body) {
-          fetchOptions.body = JSON.stringify(followRequest.body);
-        }
+        const llmResponse = await executeLLMRequest({
+          request: followRequest,
+          model,
+          signal: iterLifecycle.signal,
+          language: clientLanguage
+        });
 
-        // Debug logging for LLM request (tool continuation)
-        logger.debug(
-          `[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id} (tool continuation, iteration ${iteration})`
-        );
-        logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(followRequest.url)}`);
-        logger.debug(
-          `[LLM REQUEST DEBUG] Headers:`,
-          JSON.stringify(
-            {
-              ...followRequest.headers,
-              Authorization: followRequest.headers.Authorization ? '[REDACTED]' : undefined
-            },
-            null,
-            2
-          )
-        );
-        if (followRequest.body) {
-          logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(followRequest.body, null, 2));
-        }
+        iterLifecycle.clearTimeout();
 
-        const llmResponse = await throttledFetch(model.id, followRequest.url, fetchOptions);
+        // Process streaming response using shared collector
+        const collector = new StreamResponseCollector(model.provider);
+        const collectedThoughtSignatures = [];
+        const {
+          content: assistantContent,
+          toolCalls: collectedToolCalls,
+          thoughtSignatures,
+          finishReason
+        } = await collector.collect(llmResponse, {
+          isAborted: () => !activeRequests.has(chatId),
+          onContent: text => actionTracker.trackChunk(chatId, { content: text })
+        });
 
-        clearTimeout(timeoutId);
-
-        if (!llmResponse.ok) {
-          const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
-            llmResponse,
-            model,
-            clientLanguage
-          );
-
-          throw Object.assign(new Error(errorInfo.message), {
-            code: errorInfo.code,
-            details: errorInfo.details
-          });
-        }
-
-        // Use getReadableStream to handle both native fetch (Web Streams) and node-fetch (Node.js streams)
-        const readableStream = this.streamingHandler.getReadableStream(llmResponse);
-        const reader = readableStream.getReader();
-        const decoder = new TextDecoder();
-        const events = [];
-        const parser = createParser({ onEvent: e => events.push(e) });
-
-        let assistantContent = '';
-        const collectedToolCalls = [];
-        const collectedThoughtSignatures = []; // Collect all thoughtSignatures from response
-        let finishReason = null;
-        let done = false;
-
-        while (!done) {
-          const { value, done: readerDone } = await reader.read();
-          if (readerDone || !activeRequests.has(chatId)) {
-            if (!activeRequests.has(chatId)) reader.cancel();
-            break;
-          }
-
-          const chunk = decoder.decode(value, { stream: true });
-          parser.feed(chunk);
-
-          while (events.length > 0) {
-            const evt = events.shift();
-            const result = convertResponseToGeneric(evt.data, model.provider);
-
-            if (result.error) {
-              throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
-                code: 'PROCESSING_ERROR'
-              });
-            }
-
-            if (result.content?.length > 0) {
-              for (const text of result.content) {
-                assistantContent += text;
-                actionTracker.trackChunk(chatId, { content: text });
-              }
-            }
-
-            if (result.tool_calls?.length > 0) {
-              result.tool_calls.forEach(call => {
-                let existingCall = collectedToolCalls.find(c => c.index === call.index);
-
-                if (existingCall) {
-                  if (call.id) existingCall.id = call.id;
-                  if (call.type) existingCall.type = call.type;
-                  if (call.function) {
-                    if (call.function.name) existingCall.function.name = call.function.name;
-                    if (call.function.arguments)
-                      existingCall.function.arguments += call.function.arguments;
-                  }
-                  // Merge metadata (important for Gemini thoughtSignatures)
-                  if (call.metadata) {
-                    existingCall.metadata = { ...existingCall.metadata, ...call.metadata };
-                  }
-                } else if (call.index !== undefined) {
-                  const toolCall = {
-                    index: call.index,
-                    id: call.id || null,
-                    type: call.type || 'function',
-                    function: {
-                      name: call.function?.name || '',
-                      arguments: call.function?.arguments || ''
-                    },
-                    // Preserve metadata for provider-specific requirements (e.g., Gemini thoughtSignatures)
-                    metadata: call.metadata || {}
-                  };
-                  collectedToolCalls.push(toolCall);
-                }
-              });
-            }
-
-            // Collect thoughtSignatures for Google Gemini thinking models
-            if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
-              collectedThoughtSignatures.push(...result.thoughtSignatures);
-              console.log(
-                `[ToolExecutor] Collected ${result.thoughtSignatures.length} thoughtSignature(s) from response`
-              );
-            }
-
-            if (result.finishReason) {
-              finishReason = result.finishReason;
-            }
-
-            if (result.complete) {
-              done = true;
-              break;
-            }
-          }
+        if (thoughtSignatures.length > 0) {
+          collectedThoughtSignatures.push(...thoughtSignatures);
         }
 
         // If no tool calls, this is the final response - stream it back to client
         if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
-          clearTimeout(timeoutId);
+          iterLifecycle.cleanup();
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
             'chat_response',
@@ -1299,9 +1011,6 @@ class ToolExecutor {
               response: assistantContent.substring(0, 1000)
             })
           );
-          if (activeRequests.get(chatId) === controller) {
-            activeRequests.delete(chatId);
-          }
           return; // Exit the loop, we have the final response
         }
 
@@ -1344,10 +1053,7 @@ class ToolExecutor {
             });
 
             // Exit the iteration and function - we need user input
-            clearTimeout(timeoutId);
-            if (activeRequests.get(chatId) === controller) {
-              activeRequests.delete(chatId);
-            }
+            iterLifecycle.cleanup();
             return;
           } else if (toolResult.passthrough) {
             // For streaming tools, add the result as assistant message and stop processing
@@ -1371,10 +1077,7 @@ class ToolExecutor {
             });
 
             // Exit the iteration and function - we don't continue with more tools or LLM
-            clearTimeout(timeoutId);
-            if (activeRequests.get(chatId) === controller) {
-              activeRequests.delete(chatId);
-            }
+            iterLifecycle.cleanup();
             return;
           } else {
             // Regular tool result
@@ -1387,7 +1090,7 @@ class ToolExecutor {
         logger.info(`--- Tool execution iteration ${iteration} complete ---`);
         // Continue the loop for the next iteration
       } catch (error) {
-        clearTimeout(timeoutId);
+        iterLifecycle.cleanup();
 
         if (error.name !== 'AbortError') {
           const errorDetails = getErrorDetails(error, model);
@@ -1409,9 +1112,6 @@ class ToolExecutor {
           actionTracker.trackError(chatId, { ...errMsg });
         }
 
-        if (activeRequests.get(chatId) === controller) {
-          activeRequests.delete(chatId);
-        }
         throw error; // Re-throw to let the calling method handle it
       }
     }
