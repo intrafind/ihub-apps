@@ -176,18 +176,36 @@ async function ensureCacheDir() {
 // ---------------------------------------------------------------------------
 
 /**
+ * Convert a github.com/blob/ URL to a raw.githubusercontent.com URL so that
+ * fetch calls receive the raw file content instead of an HTML page.
+ * Other URLs are returned unchanged.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+function toRawGitHubUrl(url) {
+  const match = url.match(
+    /^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\/(.+)$/
+  );
+  if (!match) return url;
+  return `https://raw.githubusercontent.com/${match[1]}/${match[2]}/${match[3]}/${match[4]}`;
+}
+
+/**
  * Derive the full URL of a catalog.json from a registry source URL.
- * If the source URL already ends with "catalog.json" it is used as-is;
- * otherwise "/catalog.json" is appended to the base URL.
+ * Normalises github.com/blob/ URLs to raw.githubusercontent.com first.
+ * If the source URL already ends with "catalog.json" or "marketplace.json"
+ * it is used as-is; otherwise "/catalog.json" is appended to the base URL.
  *
  * @param {string} registrySource - Registry source URL from config
  * @returns {string} Full catalog.json URL
  */
 function getCatalogUrl(registrySource) {
-  if (registrySource.endsWith('catalog.json') || registrySource.endsWith('marketplace.json')) {
-    return registrySource;
+  const normalized = toRawGitHubUrl(registrySource);
+  if (normalized.endsWith('catalog.json') || normalized.endsWith('marketplace.json')) {
+    return normalized;
   }
-  return registrySource.replace(/\/$/, '') + '/catalog.json';
+  return normalized.replace(/\/$/, '') + '/catalog.json';
 }
 
 /**
@@ -272,21 +290,26 @@ async function fetchContent(url, authHeaders = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * Parse a raw.githubusercontent.com URL to extract owner, repo, and ref.
+ * Parse a GitHub URL to extract owner, repo, and ref.
  *
  * Supports:
  * - https://raw.githubusercontent.com/{owner}/{repo}/refs/heads/{ref}/{path}
  * - https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{path}
+ * - https://github.com/{owner}/{repo}/blob/{ref}/{path}
  *
  * @param {string} url
  * @returns {{ owner: string, repo: string, ref: string }|null}
  */
-function parseGitHubRawUrl(url) {
-  const match = url.match(
+function parseGitHubUrl(url) {
+  // raw.githubusercontent.com format
+  let match = url.match(
     /^https?:\/\/raw\.githubusercontent\.com\/([^/]+)\/([^/]+)\/(?:refs\/heads\/)?([^/]+)\//
   );
-  if (!match) return null;
-  return { owner: match[1], repo: match[2], ref: match[3] };
+  if (match) return { owner: match[1], repo: match[2], ref: match[3] };
+  // github.com/blob/ format
+  match = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/]+)\/blob\/([^/]+)\//);
+  if (match) return { owner: match[1], repo: match[2], ref: match[3] };
+  return null;
 }
 
 /**
@@ -310,18 +333,24 @@ async function fetchGitHubTree(owner, repo, ref, authHeaders = {}) {
 }
 
 /**
- * Resolve a plugins-format catalog to individual skill items by enumerating
- * SKILL.md files in each plugin's skills/ subdirectory via the GitHub Trees API.
+ * Resolve a plugins-format catalog to individual skill items.
  *
- * Falls back to the previous plugin-as-item behavior for non-GitHub registries.
+ * Two-phase approach:
+ * - Phase 1: Plugins with an explicit `skills` array get SKILL.md URLs constructed
+ *   directly from the listed paths — no tree API call required.
+ * - Phase 2: Plugins without a `skills` array fall back to the GitHub Trees API
+ *   scan for SKILL.md files matching {pluginDir}/skills/{name}/SKILL.md.
+ *
+ * Falls back to one-item-per-plugin for non-GitHub registries.
  *
  * @param {string} registrySource - Registry source URL (marketplace.json URL)
  * @param {Array} plugins - Plugin entries from marketplace.json
+ * @param {object|undefined} owner - Top-level owner object from marketplace.json (for author fallback)
  * @param {Record<string, string>} [authHeaders={}] - Optional auth headers
  * @returns {Promise<Array>} Catalog items — one per individual skill
  */
-async function resolvePluginSkills(registrySource, plugins, authHeaders = {}) {
-  const ghInfo = parseGitHubRawUrl(registrySource);
+async function resolvePluginSkills(registrySource, plugins, owner, authHeaders = {}) {
+  const ghInfo = parseGitHubUrl(registrySource);
 
   if (!ghInfo) {
     // Non-GitHub registry: fall back to one item per plugin (current behavior)
@@ -339,51 +368,90 @@ async function resolvePluginSkills(registrySource, plugins, authHeaders = {}) {
     }));
   }
 
-  const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
-
-  // Build a map of plugin directory names to plugin metadata
-  const pluginDirs = new Map();
-  for (const plugin of plugins) {
-    const dir = (plugin.source || `./${plugin.name}`).replace(/^\.\//, '');
-    pluginDirs.set(dir, plugin);
-  }
-
   // Base URL for constructing raw SKILL.md URLs (strip the marketplace.json filename)
-  const rawBase = registrySource
+  const rawBase = toRawGitHubUrl(registrySource)
     .replace(/\/.claude-plugin\/marketplace\.json$/, '')
     .replace(/\/marketplace\.json$/, '')
     .replace(/\/$/, '');
 
-  // Find all SKILL.md files matching {pluginDir}/skills/{skillName}/SKILL.md
-  const skillRegex = /^([^/]+)\/skills\/([^/]+)\/SKILL\.md$/;
   const items = [];
+  let needsTreeScan = false;
 
-  for (const entry of tree) {
-    if (entry.type !== 'blob') continue;
-    const match = entry.path.match(skillRegex);
-    if (!match) continue;
+  // Phase 1: plugins with explicit skills arrays → direct URL construction
+  for (const plugin of plugins) {
+    if (Array.isArray(plugin.skills) && plugin.skills.length > 0) {
+      for (const skillPath of plugin.skills) {
+        const cleanPath = skillPath.replace(/^\.\//, '');
+        const skillDir = cleanPath.split('/').pop();
+        const skillUrl = `${rawBase}/${cleanPath}/SKILL.md`;
 
-    const [, pluginDir, skillDir] = match;
-    const plugin = pluginDirs.get(pluginDir);
-    if (!plugin) continue;
+        // Humanize directory names: "ab-test-setup" → "Ab Test Setup"
+        const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const displayPluginName = (plugin.name || '')
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
 
-    const skillUrl = `${rawBase}/${pluginDir}/skills/${skillDir}/SKILL.md`;
+        items.push({
+          type: 'skill',
+          name: `${plugin.name}-${skillDir}`,
+          displayName: { en: displaySkillName },
+          description:
+            typeof plugin.description === 'string'
+              ? { en: plugin.description }
+              : plugin.description,
+          author: plugin.author?.name || owner?.name,
+          category: displayPluginName,
+          tags: [plugin.name],
+          source: { type: 'url', url: skillUrl }
+        });
+      }
+    } else {
+      needsTreeScan = true;
+    }
+  }
 
-    // Humanize directory names: "canned-responses" → "Canned Responses"
-    const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-    const displayPluginName = pluginDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  // Phase 2: tree scan for plugins without explicit skills (Anthropic-style)
+  if (needsTreeScan) {
+    const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
 
-    items.push({
-      type: 'skill',
-      name: `${pluginDir}-${skillDir}`,
-      displayName: { en: displaySkillName },
-      description:
-        typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
-      author: plugin.author?.name,
-      category: displayPluginName,
-      tags: [pluginDir],
-      source: { type: 'url', url: skillUrl }
-    });
+    // Build a map of plugin directory names to plugin metadata (skip plugins handled in phase 1)
+    const pluginDirs = new Map();
+    for (const plugin of plugins) {
+      if (Array.isArray(plugin.skills) && plugin.skills.length > 0) continue;
+      const dir = (plugin.source || `./${plugin.name}`).replace(/^\.\//, '');
+      if (dir) pluginDirs.set(dir, plugin);
+    }
+
+    // Find all SKILL.md files matching {pluginDir}/skills/{skillName}/SKILL.md
+    const skillRegex = /^([^/]+)\/skills\/([^/]+)\/SKILL\.md$/;
+
+    for (const entry of tree) {
+      if (entry.type !== 'blob') continue;
+      const match = entry.path.match(skillRegex);
+      if (!match) continue;
+
+      const [, pluginDir, skillDir] = match;
+      const plugin = pluginDirs.get(pluginDir);
+      if (!plugin) continue;
+
+      const skillUrl = `${rawBase}/${pluginDir}/skills/${skillDir}/SKILL.md`;
+
+      // Humanize directory names: "canned-responses" → "Canned Responses"
+      const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const displayPluginName = pluginDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+
+      items.push({
+        type: 'skill',
+        name: `${pluginDir}-${skillDir}`,
+        displayName: { en: displaySkillName },
+        description:
+          typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
+        author: plugin.author?.name,
+        category: displayPluginName,
+        tags: [pluginDir],
+        source: { type: 'url', url: skillUrl }
+      });
+    }
   }
 
   return items;
@@ -516,7 +584,7 @@ class RegistryService {
 
     // Plugins format: resolve each plugin to its individual skills via GitHub tree API
     if (rawData && Array.isArray(rawData.plugins)) {
-      const items = await resolvePluginSkills(registry.source, rawData.plugins, authHeaders);
+      const items = await resolvePluginSkills(registry.source, rawData.plugins, rawData.owner, authHeaders);
       const catalog = {
         name: rawData.name,
         description: rawData.description,
