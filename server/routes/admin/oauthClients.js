@@ -114,7 +114,7 @@ export default function registerAdminOAuthRoutes(app) {
       const { clientId } = req.params;
 
       // Validate clientId
-      validateIdForPath(clientId, 'clientId');
+      if (!validateIdForPath(clientId, 'client', res)) return;
 
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
       const clientsConfig = loadOAuthClients(clientsFilePath);
@@ -314,7 +314,7 @@ export default function registerAdminOAuthRoutes(app) {
       const { clientId } = req.params;
 
       // Validate clientId
-      validateIdForPath(clientId, 'clientId');
+      if (!validateIdForPath(clientId, 'client', res)) return;
 
       const updates = req.body;
 
@@ -392,7 +392,7 @@ export default function registerAdminOAuthRoutes(app) {
       const { clientId } = req.params;
 
       // Validate clientId
-      validateIdForPath(clientId, 'clientId');
+      if (!validateIdForPath(clientId, 'client', res)) return;
 
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
       const deletedBy = req.user?.id || 'admin';
@@ -459,7 +459,7 @@ export default function registerAdminOAuthRoutes(app) {
         const { clientId } = req.params;
 
         // Validate clientId
-        validateIdForPath(clientId, 'clientId');
+        if (!validateIdForPath(clientId, 'client', res)) return;
 
         const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
         const rotatedBy = req.user?.id || 'admin';
@@ -541,7 +541,7 @@ export default function registerAdminOAuthRoutes(app) {
         const { expirationDays = 365 } = req.body;
 
         // Validate clientId
-        validateIdForPath(clientId, 'clientId');
+        if (!validateIdForPath(clientId, 'client', res)) return;
 
         // Validate expiration
         if (expirationDays < 1 || expirationDays > 3650) {
@@ -638,7 +638,7 @@ export default function registerAdminOAuthRoutes(app) {
         const { token } = req.body;
 
         // Validate clientId
-        validateIdForPath(clientId, 'clientId');
+        if (!validateIdForPath(clientId, 'client', res)) return;
 
         if (!token || typeof token !== 'string') {
           return res.status(400).json({
