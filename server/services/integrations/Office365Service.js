@@ -386,8 +386,13 @@ class Office365Service {
 
       return tokens;
     } catch (error) {
-      if (error.message.includes('not authenticated')) {
-        throw new Error('User not authenticated with Office 365');
+      // Don't wrap specific error messages - pass them through
+      if (
+        error.message.includes('not authenticated') ||
+        error.message.includes('permissions have been updated') ||
+        error.message.includes('authentication expired')
+      ) {
+        throw error;
       }
       logger.error('❌ Error retrieving user tokens:', {
         component: 'Office 365',
