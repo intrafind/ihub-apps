@@ -187,6 +187,27 @@ export default function registerAdminMarketplaceRoutes(app) {
   );
 
   /**
+   * POST /api/admin/marketplace/registries/_test
+   * Test an unsaved / draft registry config from the request body.
+   * Must be registered BEFORE /:registryId/_test so Express doesn't capture
+   * "_test" as the registryId parameter.
+   */
+  app.post(
+    buildServerPath('/api/admin/marketplace/registries/_test'),
+    adminAuth,
+    featureGuard,
+    async (req, res) => {
+      try {
+        const result = await registryService.testRegistry(req.body);
+        res.json(result);
+      } catch (error) {
+        logger.error('Error testing registry', { component: COMPONENT, error: error.message });
+        res.json({ success: false, itemCount: 0, message: error.message });
+      }
+    }
+  );
+
+  /**
    * POST /api/admin/marketplace/registries/:registryId/_test
    * Test connectivity to a registry.
    * If the request body contains a `source` URL, tests that config directly

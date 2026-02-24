@@ -184,7 +184,9 @@ async function ensureCacheDir() {
  * @returns {string} Full catalog.json URL
  */
 function getCatalogUrl(registrySource) {
-  if (registrySource.endsWith('catalog.json')) return registrySource;
+  if (registrySource.endsWith('catalog.json') || registrySource.endsWith('marketplace.json')) {
+    return registrySource;
+  }
   return registrySource.replace(/\/$/, '') + '/catalog.json';
 }
 
@@ -209,7 +211,9 @@ function resolveItemUrl(itemSource, registrySource) {
   }
 
   if (itemSource.type === 'relative') {
-    const baseUrl = registrySource.replace(/\/catalog\.json$/, '').replace(/\/$/, '');
+    const baseUrl = registrySource
+      .replace(/\/(catalog|marketplace)\.json$/, '')
+      .replace(/\/$/, '');
     return `${baseUrl}/${itemSource.path}`;
   }
 
@@ -283,6 +287,26 @@ function mapClaudeCodeCatalog(data) {
         author: skill.author,
         tags: skill.tags || [],
         source: skill.source || { type: 'relative', path: skill.id }
+      }))
+    };
+  }
+
+  // Claude Code plugins format with a top-level `plugins` array (e.g. Anthropic knowledge-work-plugins)
+  if (data && Array.isArray(data.plugins)) {
+    return {
+      name: data.name,
+      description: data.description,
+      items: data.plugins.map(plugin => ({
+        type: 'skill',
+        name: plugin.name,
+        displayName: { en: plugin.name },
+        description:
+          typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
+        author: plugin.author?.name || data.owner?.name,
+        tags: plugin.tags || [],
+        source: plugin.source
+          ? { type: 'relative', path: plugin.source.replace(/^\.\//, '') }
+          : { type: 'relative', path: plugin.name }
       }))
     };
   }
