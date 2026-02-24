@@ -413,13 +413,39 @@ async function resolvePluginSkills(registrySource, plugins, owner, authHeaders =
   // Phase 2: tree scan for plugins without explicit skills (Anthropic-style)
   if (needsTreeScan) {
     const tree = await fetchGitHubTree(ghInfo.owner, ghInfo.repo, ghInfo.ref, authHeaders);
+    const treePaths = new Set(tree.filter(e => e.type === 'blob').map(e => e.path));
 
-    // Build a map of plugin directory names to plugin metadata (skip plugins handled in phase 1)
+    // Build maps — separate direct-skill plugins from Anthropic-style nested plugins
     const pluginDirs = new Map();
     for (const plugin of plugins) {
       if (Array.isArray(plugin.skills) && plugin.skills.length > 0) continue;
       const dir = (plugin.source || `./${plugin.name}`).replace(/^\.\//, '');
-      if (dir) pluginDirs.set(dir, plugin);
+      if (!dir) continue;
+
+      // Phase 2a: plugin source directly contains SKILL.md → single skill
+      if (treePaths.has(`${dir}/SKILL.md`)) {
+        const skillDir = dir.split('/').pop();
+        const skillUrl = `${rawBase}/${dir}/SKILL.md`;
+        const displaySkillName = skillDir.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const displayPluginName = (plugin.category || plugin.name || '')
+          .replace(/-/g, ' ')
+          .replace(/\b\w/g, c => c.toUpperCase());
+
+        items.push({
+          type: 'skill',
+          name: plugin.name,
+          displayName: { en: displaySkillName },
+          description:
+            typeof plugin.description === 'string' ? { en: plugin.description } : plugin.description,
+          author: plugin.author?.name || owner?.name,
+          category: displayPluginName,
+          tags: [plugin.category || plugin.name],
+          source: { type: 'url', url: skillUrl }
+        });
+      } else {
+        // Phase 2b: Anthropic-style — scan for nested skills below
+        pluginDirs.set(dir, plugin);
+      }
     }
 
     // Find all SKILL.md files matching {pluginDir}/skills/{skillName}/SKILL.md
