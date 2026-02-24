@@ -6,7 +6,11 @@ import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.js';
+import {
+  validateIdForPath,
+  validateIdsForPath,
+  resolveAndValidatePath
+} from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -1001,13 +1005,8 @@ export default function registerAdminPromptsRoutes(app) {
 
       const rootDir = getRootDir();
       const promptsDir = join(rootDir, 'contents', 'prompts');
-      const candidatePath = join(promptsDir, `${promptId}.json`);
-      const normalizedPromptsDir = resolve(promptsDir);
-      const normalizedPromptFilePath = resolve(candidatePath);
-
-      // Ensure the resolved path is within the prompts directory
-      const relativePath = path.relative(normalizedPromptsDir, normalizedPromptFilePath);
-      if (relativePath.startsWith('..') || path.isAbsolute(relativePath) || !relativePath) {
+      const normalizedPromptFilePath = resolveAndValidatePath(`${promptId}.json`, promptsDir);
+      if (!normalizedPromptFilePath) {
         return res.status(400).json({ error: 'Invalid prompt path' });
       }
 

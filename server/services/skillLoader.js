@@ -4,6 +4,7 @@ import matter from 'gray-matter';
 import { getRootDir } from '../pathUtils.js';
 import config from '../config.js';
 import logger from '../utils/logger.js';
+import { resolveAndValidatePath, resolveAndValidateRealPath } from '../utils/pathSecurity.js';
 
 // Agent Skills spec constraints
 const SKILL_NAME_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -222,13 +223,8 @@ export async function getSkillContent(skillName, customDir) {
   }
 
   const skillsDir = getSkillsDirectory(customDir);
-  // Resolve the skill path against the skills directory and ensure it stays within it
-  const resolvedSkillPath = path.resolve(skillsDir, skillName);
-  const normalizedSkillsDir = path.resolve(skillsDir);
-  if (
-    resolvedSkillPath !== normalizedSkillsDir &&
-    !resolvedSkillPath.startsWith(normalizedSkillsDir + path.sep)
-  ) {
+  const resolvedSkillPath = resolveAndValidatePath(skillName, skillsDir);
+  if (!resolvedSkillPath) {
     logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
     return null;
   }
@@ -288,40 +284,22 @@ export async function getSkillResource(skillName, filePath, customDir) {
   }
 
   const skillsDir = getSkillsDirectory(customDir);
-  // Resolve the skill path against the skills directory and ensure it stays within it
-  const resolvedSkillPath = path.resolve(skillsDir, skillName);
-  const normalizedSkillsDir = path.resolve(skillsDir);
-  if (
-    resolvedSkillPath !== normalizedSkillsDir &&
-    !resolvedSkillPath.startsWith(normalizedSkillsDir + path.sep)
-  ) {
+  const resolvedSkillPath = resolveAndValidatePath(skillName, skillsDir);
+  if (!resolvedSkillPath) {
     logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
     return null;
   }
 
-  // Reject absolute paths and obvious traversal sequences for the file path
-  if (filePath.includes('..') || path.isAbsolute(filePath)) {
+  // Validate the file path stays within the skill directory (handles ".." and absolute paths)
+  const resolvedFilePath = resolveAndValidatePath(filePath, resolvedSkillPath);
+  if (!resolvedFilePath) {
     logger.warn(`Path traversal attempt blocked for skill '${skillName}': ${filePath}`);
     return null;
   }
 
-  const resolvedPath = path.resolve(resolvedSkillPath, filePath);
-
   // Resolve real paths (follows symlinks) to detect symlink-based traversal
-  let realResolvedPath;
-  let realSkillPath;
-  try {
-    realSkillPath = await fs.realpath(resolvedSkillPath);
-    realResolvedPath = await fs.realpath(resolvedPath);
-  } catch {
-    // Target doesn't exist or symlink target is missing
-    return null;
-  }
-
-  const normalizedSkillPath = realSkillPath.endsWith(path.sep)
-    ? realSkillPath
-    : realSkillPath + path.sep;
-  if (realResolvedPath !== realSkillPath && !realResolvedPath.startsWith(normalizedSkillPath)) {
+  const realResolvedPath = await resolveAndValidateRealPath(filePath, resolvedSkillPath);
+  if (!realResolvedPath) {
     logger.warn(`Symlink-based path traversal blocked for skill '${skillName}': ${filePath}`);
     return null;
   }

@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import SourceHandler from './SourceHandler.js';
 import { getRootDir } from '../pathUtils.js';
+import { isValidId, isValidLanguageCode } from '../utils/pathSecurity.js';
 
 /**
  * Page Source Handler
@@ -222,13 +223,11 @@ class PageHandler extends SourceHandler {
       return false;
     }
 
-    // Validate pageId format (alphanumeric, hyphens, underscores)
-    if (!/^[a-zA-Z0-9_-]+$/.test(pageId)) {
+    if (!isValidId(pageId)) {
       return false;
     }
 
-    // Validate language if provided
-    if (language && (typeof language !== 'string' || !/^[a-z]{2}(-[A-Z]{2})?$/.test(language))) {
+    if (language && !isValidLanguageCode(language)) {
       return false;
     }
 
@@ -296,7 +295,7 @@ class PageHandler extends SourceHandler {
       const languages = [];
 
       for (const entry of entries) {
-        if (entry.isDirectory() && /^[a-z]{2}(-[A-Z]{2})?$/.test(entry.name)) {
+        if (entry.isDirectory() && isValidLanguageCode(entry.name)) {
           languages.push(entry.name);
         }
       }

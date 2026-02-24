@@ -7,6 +7,7 @@
  */
 
 import path from 'path';
+import { promises as fs } from 'fs';
 
 /**
  * Regular expression that allows only safe characters for IDs:
@@ -177,4 +178,52 @@ export function validateLanguageKeys(obj) {
     return false;
   }
   return Object.keys(obj).every(key => isValidLanguageCode(key));
+}
+
+/**
+ * Async variant of resolveAndValidatePath that follows symlinks via fs.realpath()
+ * before checking the boundary. Prevents symlink-based path traversal attacks.
+ *
+ * @param {string} filePath - The file path to validate (can be relative)
+ * @param {string} baseDir - The base directory that the real path must stay within
+ * @returns {Promise<string|null>} - The real resolved path if safe, null if traversal detected or target missing
+ */
+export async function resolveAndValidateRealPath(filePath, baseDir) {
+  if (!filePath || typeof filePath !== 'string') {
+    return null;
+  }
+
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedFull = path.resolve(resolvedBase, filePath);
+
+  let realBase;
+  let realFull;
+  try {
+    realBase = await fs.realpath(resolvedBase);
+    realFull = await fs.realpath(resolvedFull);
+  } catch {
+    // Target doesn't exist or symlink target is missing
+    return null;
+  }
+
+  const baseWithSep = realBase.endsWith(path.sep) ? realBase : realBase + path.sep;
+  if (realFull !== realBase && !realFull.startsWith(baseWithSep)) {
+    return null;
+  }
+
+  return realFull;
+}
+
+/**
+ * Strips leading slashes from a relative path to prevent it from being treated
+ * as absolute by path.resolve(). Replaces the repeated `.replace(/^\/+/, '')` pattern.
+ *
+ * @param {string} filePath - The relative path to sanitize
+ * @returns {string} - The cleaned path with leading slashes removed
+ */
+export function sanitizeRelativePath(filePath) {
+  if (!filePath || typeof filePath !== 'string') {
+    return '';
+  }
+  return filePath.replace(/^[/\\]+/, '');
 }

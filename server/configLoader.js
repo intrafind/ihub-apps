@@ -3,18 +3,21 @@ import path from 'path';
 import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 import logger from './utils/logger.js';
+import { resolveAndValidatePath } from './utils/pathSecurity.js';
 
 const cache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
 function resolvePath(relativePath) {
   const rootDir = getRootDir();
-
   const contentsDir = config.CONTENTS_DIR;
-
-  const normalized = path.normalize(relativePath).replace(/^(\.\.(?:[\\/]|$))+/, '');
-
-  return path.join(rootDir, contentsDir, normalized);
+  const baseDir = path.join(rootDir, contentsDir);
+  const resolved = resolveAndValidatePath(relativePath, baseDir);
+  if (!resolved) {
+    logger.warn(`Path traversal blocked in configLoader: ${relativePath}`);
+    return path.join(baseDir, path.basename(relativePath));
+  }
+  return resolved;
 }
 
 async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) {
@@ -62,8 +65,12 @@ export function loadText(relativePath, options = {}) {
 export async function loadBuiltinLocaleJson(relativePath) {
   try {
     const rootDir = getRootDir();
-    const normalized = path.normalize(relativePath).replace(/^(\.\.(?:[\\/]|$))+/, '');
-    const filePath = path.join(rootDir, 'shared', 'i18n', normalized);
+    const baseDir = path.join(rootDir, 'shared', 'i18n');
+    const filePath = resolveAndValidatePath(relativePath, baseDir);
+    if (!filePath) {
+      logger.warn(`Path traversal blocked in loadBuiltinLocaleJson: ${relativePath}`);
+      return null;
+    }
     const data = await fs.readFile(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {

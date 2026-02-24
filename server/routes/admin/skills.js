@@ -5,7 +5,7 @@ import JSZip from 'jszip';
 import archiver from 'archiver';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { requireFeature } from '../../featureRegistry.js';
 import configCache from '../../configCache.js';
 import registryService from '../../services/marketplace/RegistryService.js';
@@ -33,18 +33,9 @@ async function safeExtractZip(zipBuffer, targetDir) {
   const zip = await JSZip.loadAsync(zipBuffer);
 
   for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-    // Normalise and reject traversal sequences
     const normalised = path.normalize(relativePath).replace(/\\/g, '/');
-    if (normalised.startsWith('..') || path.isAbsolute(normalised)) {
-      throw new Error(`Zip contains unsafe path: ${relativePath}`);
-    }
-
-    const destPath = path.join(targetDir, normalised);
-
-    // Guard: resolved destination must stay inside targetDir
-    const resolvedDest = path.resolve(destPath);
-    const resolvedTarget = path.resolve(targetDir);
-    if (!resolvedDest.startsWith(resolvedTarget + path.sep) && resolvedDest !== resolvedTarget) {
+    const destPath = resolveAndValidatePath(normalised, targetDir);
+    if (!destPath) {
       throw new Error(`Zip path escapes target directory: ${relativePath}`);
     }
 
@@ -146,15 +137,9 @@ export default function registerAdminSkillsRoutes(app) {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
         const skillsDir = getSkillsDirectory();
-        const skillsDirResolved = path.resolve(skillsDir);
-        const skillPath = getSkillPath(req.params.name);
-        const skillPathResolved = path.resolve(skillPath);
-
-        // Ensure the resolved skill path is within the skills directory (path traversal protection)
-        if (!skillPathResolved.startsWith(skillsDirResolved + path.sep)) {
-          logger.warn(
-            `Path traversal attempt blocked when deleting skill '${req.params.name}': ${skillPathResolved}`
-          );
+        const skillPathResolved = resolveAndValidatePath(req.params.name, skillsDir);
+        if (!skillPathResolved) {
+          logger.warn(`Path traversal attempt blocked when deleting skill '${req.params.name}'`);
           return res.status(400).json({ error: 'Invalid skill path' });
         }
 
@@ -192,19 +177,9 @@ export default function registerAdminSkillsRoutes(app) {
           return res.json({ valid: false, errors: [nameValidation.error] });
         }
 
-        // Ensure the resolved skill path stays within the skills root directory
         const skillsRoot = getSkillsDirectory();
-        const candidateSkillPath = getSkillPath(skillName);
-        const resolvedSkillsRoot = path.resolve(skillsRoot);
-        const resolvedSkillPath = path.resolve(candidateSkillPath);
-        const normalizedRootWithSep = resolvedSkillsRoot.endsWith(path.sep)
-          ? resolvedSkillsRoot
-          : resolvedSkillsRoot + path.sep;
-
-        if (
-          !resolvedSkillPath.startsWith(normalizedRootWithSep) ||
-          path.basename(resolvedSkillPath) !== skillName
-        ) {
+        const resolvedSkillPath = resolveAndValidatePath(skillName, skillsRoot);
+        if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
           logger.warn(
             `Skill directory validation blocked for invalid path derived from name '${skillName}'`
           );
@@ -232,19 +207,9 @@ export default function registerAdminSkillsRoutes(app) {
         const skillName = req.params.name;
         if (!validateIdForPath(skillName, 'skill', res)) return;
 
-        // Ensure the resolved skill path stays within the skills root directory
         const skillsRoot = getSkillsDirectory();
-        const candidateSkillPath = getSkillPath(skillName);
-        const resolvedSkillsRoot = path.resolve(skillsRoot);
-        const resolvedSkillPath = path.resolve(candidateSkillPath);
-        const normalizedRootWithSep = resolvedSkillsRoot.endsWith(path.sep)
-          ? resolvedSkillsRoot
-          : resolvedSkillsRoot + path.sep;
-
-        if (
-          !resolvedSkillPath.startsWith(normalizedRootWithSep) ||
-          path.basename(resolvedSkillPath) !== skillName
-        ) {
+        const resolvedSkillPath = resolveAndValidatePath(skillName, skillsRoot);
+        if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
           logger.warn(`Skill export blocked for invalid path derived from name '${skillName}'`);
           return res.status(400).json({ error: 'Invalid skill path' });
         }
