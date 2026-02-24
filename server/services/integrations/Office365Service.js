@@ -743,19 +743,32 @@ class Office365Service {
   async listTeamsDrives(userId) {
     try {
       // Get all joined teams
-      const teams = await this._fetchAllPages('/me/joinedTeams', userId);
-      logger.info(`👥 Loading ${teams.length} Microsoft Teams drives...`, {
+      logger.info('🔍 Fetching joined teams from /me/joinedTeams...', {
         component: 'Office 365'
+      });
+      
+      const teams = await this._fetchAllPages('/me/joinedTeams', userId);
+      
+      logger.info(`👥 /me/joinedTeams returned ${teams.length} teams`, {
+        component: 'Office 365',
+        teamsCount: teams.length
       });
 
       if (teams.length === 0) {
+        logger.warn(
+          '⚠️ No teams returned from /me/joinedTeams. This could mean: 1) User is not a member of any Teams, 2) API permissions issue, or 3) API bug. Verify user has Teams memberships and token has Team.ReadBasic.All scope.',
+          {
+            component: 'Office 365',
+            userId
+          }
+        );
         return [];
       }
 
       // Use batch API to get team drives (no per-team limit needed)
       const teamsDrives = await this._batchGetGroupDrives(teams, userId);
 
-      logger.info(`✅ Loaded ${teamsDrives.length} Teams drives`, {
+      logger.info(`✅ Loaded ${teamsDrives.length} Teams drives from ${teams.length} teams`, {
         component: 'Office 365'
       });
 
@@ -763,7 +776,8 @@ class Office365Service {
     } catch (error) {
       logger.error('❌ Error listing Teams drives:', {
         component: 'Office 365',
-        error: error.message
+        error: error.message,
+        stack: error.stack
       });
       return []; // Return empty array on error to not block other drives
     }
