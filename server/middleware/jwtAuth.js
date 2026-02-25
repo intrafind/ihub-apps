@@ -1,7 +1,6 @@
-import jwt from 'jsonwebtoken';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
-import { resolveJwtSecret } from '../utils/tokenService.js';
+import { verifyJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -34,20 +33,15 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next(); // No token, continue as anonymous
   }
 
-  const jwtSecret = resolveJwtSecret();
-
-  if (!jwtSecret) {
-    logger.warn('🔐 JWT Auth: No JWT secret configured');
-    return next(); // No JWT secret configured
-  }
-
   const platform = configCache.getPlatform() || {};
 
   try {
-    const decoded = jwt.verify(token, jwtSecret, {
-      issuer: 'ihub-apps',
-      maxAge: '7d'
-    });
+    const decoded = verifyJwt(token);
+
+    if (!decoded) {
+      logger.warn('🔐 JWT Auth: Token verification failed');
+      return next(); // Invalid token, continue as anonymous
+    }
 
     // Debug: Log JWT payload in development
     if (process.env.NODE_ENV === 'development') {
