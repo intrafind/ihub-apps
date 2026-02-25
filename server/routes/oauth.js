@@ -473,7 +473,11 @@ export default function registerOAuthRoutes(app) {
         throw error;
       }
     } catch (error) {
-      logger.error('[OAuth] Token endpoint error:', error);
+      logger.error('[OAuth] Token endpoint error:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       sendOAuthError(res, 500, 'server_error', 'An internal error occurred');
     }
   });
@@ -704,7 +708,7 @@ export default function registerOAuthRoutes(app) {
           .json({ error: 'invalid_request', error_description: 'OAuth is not enabled' });
       }
 
-      // Extract Bearer token from Authorization header
+      // Require a Bearer token in the Authorization header
       const authHeader = req.headers.authorization;
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res
@@ -712,10 +716,12 @@ export default function registerOAuthRoutes(app) {
           .json({ error: 'invalid_token', error_description: 'Bearer token required' });
       }
 
-      const token = authHeader.substring(7);
-      const decoded = verifyJwt(token);
+      // Use req.user set by jwtAuth middleware — it already verified the token
+      // (without audience check, which is correct for OAuth tokens whose aud is the client_id).
+      // Calling verifyJwt() here again would fail because it checks audience: 'ihub-apps'.
+      const user = req.user;
 
-      if (!decoded || !decoded.sub) {
+      if (!user || !user.id) {
         return res
           .status(401)
           .json({ error: 'invalid_token', error_description: 'Token is invalid or expired' });
@@ -723,7 +729,7 @@ export default function registerOAuthRoutes(app) {
 
       // Only user-delegated tokens (authorization_code) can access userinfo.
       // Client credentials tokens have no associated user and must be rejected.
-      if (decoded.authMode !== 'oauth_authorization_code') {
+      if (user.authMode !== 'oauth_authorization_code') {
         return res.status(403).json({
           error: 'insufficient_scope',
           error_description: 'UserInfo endpoint requires user-delegated token'
@@ -731,14 +737,14 @@ export default function registerOAuthRoutes(app) {
       }
 
       const userInfo = {
-        sub: decoded.sub,
-        name: decoded.name,
-        email: decoded.email,
-        groups: decoded.groups || []
+        sub: user.id,
+        name: user.name,
+        email: user.email,
+        groups: user.groups || []
       };
 
       logger.info(
-        `[OAuth] UserInfo served | sub=${decoded.sub} | client=${decoded.client_id || 'unknown'}`
+        `[OAuth] UserInfo served | sub=${user.id} | client=${user.clientId || 'unknown'}`
       );
       res.json(userInfo);
     } catch (error) {

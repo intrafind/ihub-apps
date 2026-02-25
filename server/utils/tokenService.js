@@ -103,6 +103,10 @@ export function generateJwt(user, options = {}) {
   const expiresInMinutes = options.expiresInMinutes || platform.auth?.sessionTimeoutMinutes || 480;
   const expiresIn = expiresInMinutes * 60; // Convert to seconds
 
+  // Extract aud from additionalClaims if present — jsonwebtoken forbids setting both
+  // the payload `aud` property and the `audience` option simultaneously.
+  const { aud: audienceClaim, ...remainingClaims } = options.additionalClaims || {};
+
   // Base token payload
   const tokenPayload = {
     sub: user.id,
@@ -113,8 +117,8 @@ export function generateJwt(user, options = {}) {
     authMode: options.authMode || user.authMethod,
     authProvider: options.authProvider || user.provider,
     iat: Math.floor(Date.now() / 1000),
-    // Include additional authentication-specific data
-    ...options.additionalClaims
+    // Include additional authentication-specific data (aud excluded, handled via jwt options)
+    ...remainingClaims
   };
 
   // Add auth method specific claims
@@ -142,7 +146,7 @@ export function generateJwt(user, options = {}) {
   const token = jwt.sign(tokenPayload, signingKey, {
     expiresIn: `${expiresIn}s`,
     issuer: 'ihub-apps',
-    audience: 'ihub-apps',
+    audience: audienceClaim || 'ihub-apps',
     algorithm: algorithm
   });
 

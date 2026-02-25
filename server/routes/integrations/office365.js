@@ -126,7 +126,8 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     }
 
     // Validate state parameter
-    const storedAuth = req.session.office365Auth;
+    const sessionKey = `oauth_office365_${providerId}`;
+    const storedAuth = req.session[sessionKey];
     if (!storedAuth || storedAuth.state !== state) {
       logger.error('❌ Invalid Office 365 OAuth state parameter', {
         component: 'Office 365',
@@ -178,7 +179,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     await Office365Service.storeUserTokens(storedAuth.userId, tokens);
 
     // Clear session data
-    delete req.session.office365Auth;
+    delete req.session[sessionKey];
 
     logger.info(`✅ Office 365 OAuth completed for user ${storedAuth.userId}`, {
       component: 'Office 365',
@@ -196,7 +197,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
 
     // Clear session data on error
     if (req.session) {
-      delete req.session.office365Auth;
+      delete req.session[`oauth_office365_${req.params.providerId}`];
     }
 
     res.redirect(`/settings/integrations?office365_error=${encodeURIComponent(error.message)}`);
