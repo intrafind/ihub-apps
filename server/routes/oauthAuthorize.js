@@ -297,8 +297,8 @@ export default function registerOAuthAuthorizeRoutes(app) {
           };
         }
 
-        const baseUrl = getBaseUrl(req);
-        const loginUrl = `${baseUrl}/login?returnUrl=${encodeURIComponent(req.originalUrl)}`;
+        const basePath = buildServerPath('').replace(/\/$/, '');
+        const loginUrl = `${basePath}/login?returnUrl=${encodeURIComponent(req.originalUrl)}`;
         logger.info(
           `[OAuth Authorize] User not logged in, redirecting to login | client=${client_id}`
         );

@@ -12,7 +12,7 @@
  * (which already include jwt.algorithm: "RS256") before migrations run.
  */
 
-export const version = '005';
+export const version = '009';
 export const description = 'Switch JWT algorithm to RS256 for public key sharing';
 
 export async function precondition(ctx) {
