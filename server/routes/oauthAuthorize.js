@@ -251,9 +251,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       }
 
       if (!isValidRedirectUri(redirect_uri, client.redirectUris || [])) {
-        return res
-          .status(400)
-          .send('invalid_request: redirect_uri not registered for this client');
+        return res.status(400).send('invalid_request: redirect_uri not registered for this client');
       }
 
       // Public clients MUST use PKCE with S256 (RFC 7636 §4.4.1)

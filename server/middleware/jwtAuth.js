@@ -182,9 +182,7 @@ export default function jwtAuthMiddleware(req, res, next) {
           const userRecord = usersConfig.users?.[userId];
 
           if (userRecord && !isUserActive(userRecord)) {
-            logger.warn(
-              `[OAuth] Token rejected: user account disabled | user_id=${userId}`
-            );
+            logger.warn(`[OAuth] Token rejected: user account disabled | user_id=${userId}`);
             return res.status(403).json({
               error: 'access_denied',
               error_description: 'User account has been disabled'

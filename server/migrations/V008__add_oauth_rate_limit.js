@@ -58,7 +58,6 @@ export async function up(ctx) {
   await ctx.writeJson('config/platform.json', platform);
 
   ctx.log(
-    'Added rateLimit.oauthApi defaults ' +
-      '(windowMs=900000, limit=50, skipFailedRequests=false)'
+    'Added rateLimit.oauthApi defaults ' + '(windowMs=900000, limit=50, skipFailedRequests=false)'
   );
 }

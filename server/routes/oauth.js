@@ -1,5 +1,9 @@
 import crypto from 'crypto';
-import { validateClientCredentials, findClientById, loadOAuthClients } from '../utils/oauthClientManager.js';
+import {
+  validateClientCredentials,
+  findClientById,
+  loadOAuthClients
+} from '../utils/oauthClientManager.js';
 import { generateOAuthToken, introspectOAuthToken } from '../utils/oauthTokenService.js';
 import { buildServerPath } from '../utils/basePath.js';
 import configCache from '../configCache.js';
@@ -739,7 +743,9 @@ export default function registerOAuthRoutes(app) {
       res.json(userInfo);
     } catch (error) {
       logger.error('[OAuth] UserInfo endpoint error:', error);
-      res.status(500).json({ error: 'server_error', error_description: 'An internal error occurred' });
+      res
+        .status(500)
+        .json({ error: 'server_error', error_description: 'An internal error occurred' });
     }
   });
 }

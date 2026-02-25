@@ -404,10 +404,7 @@ const AdminOAuthClientEditPage = () => {
             {/* Client Type & Grant Types */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 mb-4">
-                {t(
-                  'admin.auth.oauth.authCodeSection',
-                  'OAuth 2.0 Authorization Code Flow'
-                )}
+                {t('admin.auth.oauth.authCodeSection', 'OAuth 2.0 Authorization Code Flow')}
               </h3>
               <div className="space-y-4">
                 <div>
@@ -532,10 +529,7 @@ const AdminOAuthClientEditPage = () => {
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {t(
-                          'admin.auth.oauth.postLogoutRedirectUris',
-                          'Post-Logout Redirect URIs'
-                        )}
+                        {t('admin.auth.oauth.postLogoutRedirectUris', 'Post-Logout Redirect URIs')}
                       </label>
                       <div className="space-y-2">
                         {(formData.postLogoutRedirectUris || []).map((uri, i) => (
@@ -545,9 +539,7 @@ const AdminOAuthClientEditPage = () => {
                             </code>
                             <button
                               type="button"
-                              onClick={() =>
-                                handleRedirectUriRemove('postLogoutRedirectUris', i)
-                              }
+                              onClick={() => handleRedirectUriRemove('postLogoutRedirectUris', i)}
                               className="text-red-500 hover:text-red-700"
                             >
                               &times;
@@ -567,10 +559,7 @@ const AdminOAuthClientEditPage = () => {
                             onKeyDown={e => {
                               if (e.key === 'Enter') {
                                 e.preventDefault();
-                                handleRedirectUriAdd(
-                                  'postLogoutRedirectUris',
-                                  postLogoutUriInput
-                                );
+                                handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
                                 setPostLogoutUriInput('');
                               }
                             }}
@@ -578,10 +567,7 @@ const AdminOAuthClientEditPage = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              handleRedirectUriAdd(
-                                'postLogoutRedirectUris',
-                                postLogoutUriInput
-                              );
+                              handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
                               setPostLogoutUriInput('');
                             }}
                             className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
@@ -606,10 +592,7 @@ const AdminOAuthClientEditPage = () => {
                           htmlFor="consentRequired"
                           className="ml-2 block text-sm text-gray-900"
                         >
-                          {t(
-                            'admin.auth.oauth.consentRequired',
-                            'Require user consent screen'
-                          )}
+                          {t('admin.auth.oauth.consentRequired', 'Require user consent screen')}
                         </label>
                       </div>
                       <div className="flex items-center">

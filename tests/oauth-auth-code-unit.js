@@ -192,7 +192,11 @@ await test('storeCode() + consumeCode() round-trip returns the original payload'
   storeCode(code, payload);
   const retrieved = consumeCode(code);
 
-  assert.deepEqual(retrieved, payload, 'consumeCode() must return the exact payload passed to storeCode()');
+  assert.deepEqual(
+    retrieved,
+    payload,
+    'consumeCode() must return the exact payload passed to storeCode()'
+  );
 });
 
 await test('Authorization codes are single-use: second consumeCode() call returns null', () => {
@@ -223,7 +227,11 @@ await test('cleanup() removes expired entries without affecting valid ones', () 
   cleanup();
 
   const result = consumeCode(freshCode);
-  assert.deepEqual(result, freshPayload, 'cleanup() must not remove codes that have not yet expired');
+  assert.deepEqual(
+    result,
+    freshPayload,
+    'cleanup() must not remove codes that have not yet expired'
+  );
 });
 
 // ---------------------------------------------------------------------------
@@ -240,11 +248,7 @@ await test('cleanup() removes expired entries without affecting valid ones', () 
 // Instead we test the public API by writing to the real path in a temp dir
 // backup-and-restore pattern.
 
-import {
-  hasConsent,
-  grantConsent,
-  revokeConsent
-} from '../server/utils/consentStore.js';
+import { hasConsent, grantConsent, revokeConsent } from '../server/utils/consentStore.js';
 
 section('Consent Store');
 
@@ -311,7 +315,11 @@ await test('grantConsent() + hasConsent() round-trip: granted scopes are recogni
   await grantConsent('my_client', 'user_001', ['openid', 'email'], 90);
 
   const covered = hasConsent('my_client', 'user_001', ['openid', 'email']);
-  assert.equal(covered, true, 'hasConsent() must return true for fully-covered scopes after grantConsent()');
+  assert.equal(
+    covered,
+    true,
+    'hasConsent() must return true for fully-covered scopes after grantConsent()'
+  );
 });
 
 await test('hasConsent() returns true when a subset of previously granted scopes is requested', async () => {
@@ -431,10 +439,7 @@ await test('wellKnown.js declares S256 as the only supported PKCE method', () =>
 section('Route Registration (server.js)');
 
 await test('server.js registers registerOAuthAuthorizeRoutes', () => {
-  const serverSource = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'server', 'server.js'),
-    'utf8'
-  );
+  const serverSource = fs.readFileSync(path.join(PROJECT_ROOT, 'server', 'server.js'), 'utf8');
   assert.ok(
     serverSource.includes('registerOAuthAuthorizeRoutes'),
     'server.js must import and call registerOAuthAuthorizeRoutes'
@@ -442,10 +447,7 @@ await test('server.js registers registerOAuthAuthorizeRoutes', () => {
 });
 
 await test('server.js registers registerOAuthRoutes (token endpoint)', () => {
-  const serverSource = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'server', 'server.js'),
-    'utf8'
-  );
+  const serverSource = fs.readFileSync(path.join(PROJECT_ROOT, 'server', 'server.js'), 'utf8');
   assert.ok(
     serverSource.includes('registerOAuthRoutes'),
     'server.js must import and call registerOAuthRoutes'
@@ -453,10 +455,7 @@ await test('server.js registers registerOAuthRoutes (token endpoint)', () => {
 });
 
 await test('server.js registers registerWellKnownRoutes', () => {
-  const serverSource = fs.readFileSync(
-    path.join(PROJECT_ROOT, 'server', 'server.js'),
-    'utf8'
-  );
+  const serverSource = fs.readFileSync(path.join(PROJECT_ROOT, 'server', 'server.js'), 'utf8');
   assert.ok(
     serverSource.includes('registerWellKnownRoutes'),
     'server.js must import and call registerWellKnownRoutes'
