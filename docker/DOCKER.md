@@ -212,12 +212,12 @@ ghcr.io/intrafind/ihub-apps:main
 
 ```bash
 # Pull and run latest image
+# Note: JWT_SECRET is optional - auto-generated if not provided
 docker run -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e JWT_SECRET=your-secret \
   ghcr.io/intrafind/ihub-apps:latest
 
-# Use specific version
+# Use specific version with custom JWT secret
 docker run -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
   -e JWT_SECRET=your-secret \
@@ -258,15 +258,23 @@ npm run docker:test
 ### Required Environment Variables
 
 ```bash
-# Security (REQUIRED)
-JWT_SECRET=your-secure-jwt-secret
-ADMIN_SECRET=your-admin-secret
-
-# LLM API Keys (at least one required)
+# LLM API Keys (at least one required for AI functionality)
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 GOOGLE_API_KEY=your-google-key
 MISTRAL_API_KEY=your-mistral-key
+```
+
+### Optional Environment Variables
+
+```bash
+# Security Configuration
+# JWT_SECRET: Auto-generated and persisted if not set
+# Only required for multi-node deployments to share the same secret
+JWT_SECRET=your-secure-jwt-secret
+
+# Admin Configuration
+ADMIN_SECRET=your-admin-secret
 ```
 
 ### Optional Services

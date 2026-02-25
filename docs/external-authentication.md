@@ -151,7 +151,7 @@ Authentication is configured in `contents/config/platform.json`:
     "enabled": false,
     "usersFile": "contents/config/users.json",
     "sessionTimeoutMinutes": 480,
-    "jwtSecret": "${JWT_SECRET}"
+    "jwtSecret": "${JWT_SECRET}"  // Optional - auto-generated if not provided
   }
 }
 ```
@@ -176,7 +176,7 @@ PROXY_AUTH_ANONYMOUS_GROUP=anonymous
 # Local authentication
 LOCAL_AUTH_ENABLED=true|false
 LOCAL_AUTH_SESSION_TIMEOUT=480
-JWT_SECRET=your-secret-key
+# JWT_SECRET=your-secret-key  # Optional - auto-generated if not provided
 
 # OIDC authentication
 OIDC_AUTH_ENABLED=true|false
