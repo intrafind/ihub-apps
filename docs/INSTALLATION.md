@@ -172,14 +172,16 @@ Set environment variables for API keys:
 
 **Windows (PowerShell):**
 ```powershell
-$env:JWT_SECRET="your-secure-secret-here"
+# JWT_SECRET is optional - auto-generated if not provided
+# $env:JWT_SECRET="your-secure-secret-here"
 $env:OPENAI_API_KEY="your-openai-key"
 $env:ANTHROPIC_API_KEY="your-anthropic-key"
 ```
 
 **macOS/Linux:**
 ```bash
-export JWT_SECRET="your-secure-secret-here"
+# JWT_SECRET is optional - auto-generated if not provided
+# export JWT_SECRET="your-secure-secret-here"
 export OPENAI_API_KEY="your-openai-key" 
 export ANTHROPIC_API_KEY="your-anthropic-key"
 ```
@@ -187,7 +189,8 @@ export ANTHROPIC_API_KEY="your-anthropic-key"
 Or create a `.env` file in the application directory:
 ```bash
 # .env file
-JWT_SECRET=your-secure-secret-here
+# JWT_SECRET is optional - auto-generated if not provided
+# JWT_SECRET=your-secure-secret-here
 OPENAI_API_KEY=your-openai-key
 ANTHROPIC_API_KEY=your-anthropic-key
 PORT=3000
@@ -256,7 +259,6 @@ docker run -d \
   --name ihub-apps \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e JWT_SECRET=your-secure-secret \
   -e OPENAI_API_KEY=your-openai-key \
   -e ANTHROPIC_API_KEY=your-anthropic-key \
   --restart unless-stopped \
@@ -295,7 +297,6 @@ docker run -d \
   --name ihub-apps-custom \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e JWT_SECRET=your-secure-secret \
   ihub-apps:prod
 ```
 
@@ -643,7 +644,7 @@ For detailed configuration documentation, see the main README.md Configuration s
 |----------|-------------|---------|----------|
 | `PORT` | Server port | 3000 | No |
 | `HOST` | Bind address | 0.0.0.0 | No |
-| `JWT_SECRET` | JWT signing key | - | Yes* |
+| `JWT_SECRET` | JWT signing key (auto-generated if not set) | - | No* |
 | `ADMIN_SECRET` | Admin access key | - | No |
 | `OPENAI_API_KEY` | OpenAI API key | - | No |
 | `ANTHROPIC_API_KEY` | Anthropic API key | - | No |
@@ -723,7 +724,6 @@ docker run -d \
   --name ihub-apps \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e JWT_SECRET=your-secret \
   --restart unless-stopped \
   ghcr.io/intrafind/ihub-apps:latest
 ```

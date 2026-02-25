@@ -70,7 +70,8 @@ The authentication system processes requests in this order:
 ```bash
 NTLM_LDAP_USER="CN=Service,OU=Users,DC=example,DC=com"
 NTLM_LDAP_PASSWORD="password123"
-JWT_SECRET="your-secret-key"
+# JWT_SECRET is optional - auto-generated if not provided
+# JWT_SECRET="your-secret-key"
 ```
 
 ### Enable Local Authentication
@@ -443,8 +444,8 @@ Documentation:
 NTLM_LDAP_USER="CN=Service,OU=Users,DC=example,DC=com"
 NTLM_LDAP_PASSWORD="password123"
 
-# JWT
-JWT_SECRET="secret-key-minimum-32-characters"
+# JWT (optional - auto-generated if not provided)
+# JWT_SECRET="secret-key-minimum-32-characters"
 
 # Proxy Auth
 PROXY_AUTH_ENABLED=true
@@ -521,7 +522,7 @@ npm run dev
 
 ## Production Checklist
 
-- [ ] JWT_SECRET configured and strong (min 32 chars)
+- [ ] JWT_SECRET configured for multi-node deployments (auto-generated for single node)
 - [ ] CORS origins properly configured
 - [ ] HTTPS enabled
 - [ ] NTLM domain controller accessible (if using NTLM)

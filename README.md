@@ -39,10 +39,10 @@ Deploy with Docker (recommended for production):
 
 ```bash
 # Quick start with Docker
+# Note: JWT_SECRET is optional - auto-generated and persisted if not provided
 docker run -d \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e JWT_SECRET=your-secure-secret \
   -e OPENAI_API_KEY=your-key \
   --name ihub-apps \
   ghcr.io/intrafind/ihub-apps:latest
@@ -272,7 +272,8 @@ npm run setup:dev
 # Edit .env with your API keys, then run: npm run dev
 
 # Docker Installation (Production-ready)
-docker run -p 3000:3000 -e JWT_SECRET=your-secret ghcr.io/intrafind/ihub-apps:latest
+# JWT_SECRET is auto-generated if not provided
+docker run -p 3000:3000 ghcr.io/intrafind/ihub-apps:latest
 
 # Binary Installation (Standalone)
 # Download from: https://github.com/intrafind/ihub-apps/releases
@@ -392,10 +393,10 @@ npm run install:all && npm run electron:dev
 
    ```bash
    # Pull and run the latest version
+   # Note: JWT_SECRET is optional - auto-generated if not provided
    docker run -d \
      -p 3000:3000 \
      -v $(pwd)/contents:/app/contents \
-     -e JWT_SECRET=your-secure-secret \
      --name ihub-apps \
      ghcr.io/intrafind/ihub-apps:latest
    ```
@@ -468,10 +469,12 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
    ./ihub-apps-v*-linux
    ```
 
-3. **Configure environment variables (optional):**
+3. **Configure environment variables:**
 
    ```bash
-   export JWT_SECRET=your-secure-secret
+   # JWT_SECRET is optional - auto-generated if not provided
+   # Only set for multi-node deployments
+   # export JWT_SECRET=your-secure-secret
    export OPENAI_API_KEY=your-openai-key
    export PORT=3000
    ```
@@ -724,7 +727,6 @@ docker rm ihub-apps
 docker run -d \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e JWT_SECRET=your-secure-secret \
   --name ihub-apps \
   ghcr.io/intrafind/ihub-apps:latest
 
@@ -832,7 +834,7 @@ All users have full access to all apps and features by default.
 ```bash
 # Set environment variables
 export LOCAL_AUTH_ENABLED=true
-export JWT_SECRET=your-secure-secret
+# JWT_SECRET is auto-generated if not provided
 
 # Or edit contents/config/platform.json
 {

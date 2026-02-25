@@ -55,22 +55,17 @@ wait_for_service() {
 
 # Function to validate required environment variables
 validate_env_vars() {
-    local missing_vars=""
-    
-    # Check for JWT_SECRET
+    # JWT_SECRET is now optional - the application auto-generates and persists it
+    # For multi-node deployments, set JWT_SECRET explicitly to share across nodes
     if [ -z "$JWT_SECRET" ]; then
-        missing_vars="$missing_vars JWT_SECRET"
+        log_info "JWT_SECRET not set - application will auto-generate and persist a secret"
+    else
+        log_info "Using JWT_SECRET from environment variable"
     fi
     
     # Warn about missing API keys (not critical for startup)
     if [ -z "$OPENAI_API_KEY" ] && [ -z "$ANTHROPIC_API_KEY" ] && [ -z "$GOOGLE_API_KEY" ] && [ -z "$MISTRAL_API_KEY" ]; then
         log_warn "No LLM API keys found. Some functionality may be limited."
-    fi
-    
-    if [ -n "$missing_vars" ]; then
-        log_error "Required environment variables not set:$missing_vars"
-        log_error "Please check your environment configuration"
-        exit 1
     fi
     
     log_success "Environment validation passed"

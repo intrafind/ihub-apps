@@ -51,7 +51,8 @@ docker build -f docker/Dockerfile -t ihub-apps:dev --target development .
 docker build -f docker/Dockerfile -t ihub-apps:prod --target production .
 
 # Test your local build
-docker run --rm -p 3000:3000 -v $(pwd)/contents:/app/contents -e JWT_SECRET=test ihub-apps:dev
+# Quick start with Docker (no JWT_SECRET required)
+docker run --rm -p 3000:3000 -v $(pwd)/contents:/app/contents ihub-apps:dev
 ```
 
 ## Other Useful Commands

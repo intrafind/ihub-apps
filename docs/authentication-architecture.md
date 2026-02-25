@@ -713,8 +713,8 @@ NTLM_LDAP_USER=CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de
 NTLM_LDAP_PASSWORD=password123
 LDAP_ADMIN_PASSWORD=password123
 
-# JWT
-JWT_SECRET=your-secret-key
+# JWT (optional - auto-generated if not provided)
+# JWT_SECRET=your-secret-key
 
 # Base Path
 BASE_PATH=/subpath                    # Optional, for subpath deployment
