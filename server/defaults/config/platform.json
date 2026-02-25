@@ -49,7 +49,14 @@
     "enabled": false,
     "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
-    "maxTokenExpirationMinutes": 1440
+    "maxTokenExpirationMinutes": 1440,
+    "authorizationCodeEnabled": false,
+    "issuer": "",
+    "authorizationCodeExpirationSeconds": 600,
+    "refreshTokenEnabled": false,
+    "refreshTokenExpirationDays": 30,
+    "consentRequired": true,
+    "consentMemoryDays": 90
   },
   "anonymousAuth": {
     "enabled": true,
@@ -89,6 +96,11 @@
     "authApi": {
       "windowMs": 900000,
       "limit": 30,
+      "skipFailedRequests": false
+    },
+    "oauthApi": {
+      "windowMs": 900000,
+      "limit": 50,
       "skipFailedRequests": false
     },
     "inferenceApi": {

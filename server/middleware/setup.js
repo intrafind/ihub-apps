@@ -244,6 +244,32 @@ function setupSessionMiddleware(app, platformConfig) {
     })
   );
 
+  // OAuth Authorization Code Flow requires session state for PKCE/CSRF across login redirect
+  const oauthConfig = platformConfig.oauth || {};
+  if (oauthConfig.enabled || oauthConfig.authorizationCodeEnabled) {
+    logger.info('🔐 Enabling session middleware for OAuth Authorization Code Flow', {
+      component: 'Middleware'
+    });
+    const oauthMaxAge = 15 * 60 * 1000; // 15 minutes - auth code flow is short-lived
+    app.use(
+      '/api/oauth',
+      session({
+        store: new MemoryStore({ checkPeriod: oauthMaxAge }),
+        secret: sessionSecret,
+        resave: false,
+        saveUninitialized: true, // Required to save OAuth params before login redirect
+        name: 'oauth.session',
+        cookie: {
+          secure: config.USE_HTTPS === 'true',
+          httpOnly: true,
+          maxAge: oauthMaxAge,
+          sameSite: 'lax',
+          path: '/api/oauth'
+        }
+      })
+    );
+  }
+
   // If no specific session middleware is needed, but we still have some auth method,
   // we might need basic session support for other features
   if (!needsOidcSessions && !needsIntegrationSessions) {
@@ -352,6 +378,9 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Admin API rate limiter for administrative endpoints (most restrictive)
   app.use('/api/admin', rateLimiters.adminApiLimiter);
+
+  // OAuth API rate limiter for authorization/token endpoints (protect against brute force)
+  app.use('/api/oauth', rateLimiters.oauthApiLimiter);
 
   // Setup session middleware for different use cases
   setupSessionMiddleware(app, platformConfig);

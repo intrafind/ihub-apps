@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
-import { resolveJwtSecret } from '../utils/tokenService.js';
+import { getJwtVerificationKey, getJwtAlgorithm } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -34,18 +34,19 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next(); // No token, continue as anonymous
   }
 
-  const jwtSecret = resolveJwtSecret();
+  const jwtVerificationKey = getJwtVerificationKey();
 
-  if (!jwtSecret) {
-    logger.warn('🔐 JWT Auth: No JWT secret configured');
-    return next(); // No JWT secret configured
+  if (!jwtVerificationKey) {
+    logger.warn('🔐 JWT Auth: No JWT verification key configured');
+    return next(); // No JWT key configured
   }
 
   const platform = configCache.getPlatform() || {};
 
   try {
-    const decoded = jwt.verify(token, jwtSecret, {
+    const decoded = jwt.verify(token, jwtVerificationKey, {
       issuer: 'ihub-apps',
+      algorithms: [getJwtAlgorithm()],
       maxAge: '7d'
     });
 
@@ -164,6 +165,53 @@ export default function jwtAuthMiddleware(req, res, next) {
       } else {
         // OAuth not enabled, but token is OAuth type - reject
         logger.warn('[OAuth] Token rejected: OAuth not enabled');
+        return res.status(401).json({
+          error: 'invalid_token',
+          error_description: 'OAuth authentication is not enabled'
+        });
+      }
+    } else if (decoded.authMode === 'oauth_authorization_code') {
+      // OAuth authorization code - this is a user-delegated token
+      // The token carries user identity, validate the user is still active
+      const oauthConfig = platform.oauth || {};
+      if (oauthConfig.enabled) {
+        try {
+          const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
+          const usersConfig = loadUsers(usersFilePath);
+          const userId = decoded.sub || decoded.username || decoded.id;
+          const userRecord = usersConfig.users?.[userId];
+
+          if (userRecord && !isUserActive(userRecord)) {
+            logger.warn(
+              `[OAuth] Token rejected: user account disabled | user_id=${userId}`
+            );
+            return res.status(403).json({
+              error: 'access_denied',
+              error_description: 'User account has been disabled'
+            });
+          }
+
+          user = {
+            id: userId,
+            username: decoded.username || decoded.preferred_username || userId,
+            name: decoded.name || decoded.username || userId,
+            email: decoded.email || '',
+            groups: decoded.groups || [],
+            authMode: 'oauth_authorization_code',
+            timestamp: Date.now(),
+            isOAuthAuthCode: true,
+            clientId: decoded.client_id || null,
+            scopes: decoded.scopes || []
+          };
+        } catch (loadError) {
+          logger.error('[OAuth] Failed to validate user for auth code token:', loadError);
+          return res.status(503).json({
+            error: 'service_unavailable',
+            error_description: 'Unable to validate user credentials. Please try again later.'
+          });
+        }
+      } else {
+        logger.warn('[OAuth] Auth code token rejected: OAuth not enabled');
         return res.status(401).json({
           error: 'invalid_token',
           error_description: 'OAuth authentication is not enabled'

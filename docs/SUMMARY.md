@@ -21,6 +21,8 @@
     - [JWT Authentication](jwt-authentication.md)
     - [JWT Well-Known Endpoints](jwt-well-known-endpoints.md)
     - [OIDC Authentication](oidc-authentication.md)
+    - [OAuth Authorization Code Flow](oauth-authorization-code.md)
+    - [Using iHub as OIDC Identity Provider](ihub-as-oidc-idp.md)
     - [LDAP/NTLM Authentication](ldap-ntlm-authentication.md)
     - [Value Encryption Tool](value-encryption-tool.md)
     - [Security Guide](security.md)

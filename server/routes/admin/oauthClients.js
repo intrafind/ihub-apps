@@ -206,7 +206,13 @@ export default function registerAdminOAuthRoutes(app) {
         allowedApps,
         allowedModels,
         tokenExpirationMinutes,
-        metadata
+        metadata,
+        clientType,
+        grantTypes,
+        redirectUris,
+        postLogoutRedirectUris,
+        consentRequired,
+        trusted
       } = req.body;
 
       // Validate required fields
@@ -234,7 +240,13 @@ export default function registerAdminOAuthRoutes(app) {
         allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
         tokenExpirationMinutes:
           tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
-        metadata: metadata || {}
+        metadata: metadata || {},
+        clientType: clientType || 'confidential',
+        grantTypes: Array.isArray(grantTypes) ? grantTypes : ['client_credentials'],
+        redirectUris: Array.isArray(redirectUris) ? redirectUris : [],
+        postLogoutRedirectUris: Array.isArray(postLogoutRedirectUris) ? postLogoutRedirectUris : [],
+        consentRequired: consentRequired !== false,
+        trusted: trusted === true
       };
 
       const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
@@ -258,7 +270,13 @@ export default function registerAdminOAuthRoutes(app) {
           tokenExpirationMinutes: newClient.tokenExpirationMinutes,
           active: newClient.active,
           createdAt: newClient.createdAt,
-          createdBy: newClient.createdBy
+          createdBy: newClient.createdBy,
+          clientType: newClient.clientType,
+          grantTypes: newClient.grantTypes,
+          redirectUris: newClient.redirectUris,
+          postLogoutRedirectUris: newClient.postLogoutRedirectUris,
+          consentRequired: newClient.consentRequired,
+          trusted: newClient.trusted
         }
       });
     } catch (error) {

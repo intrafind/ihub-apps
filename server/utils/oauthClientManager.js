@@ -235,7 +235,28 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     createdBy: createdBy || 'system',
     lastUsed: null,
     lastRotated: now,
-    metadata: clientData.metadata || {}
+    metadata: clientData.metadata || {},
+    // Authorization Code Flow fields
+    // clientType: 'confidential' | 'public'
+    //   confidential – can keep a client secret (server-side apps, daemons)
+    //   public       – cannot keep a secret (SPAs, native apps); must use PKCE
+    clientType: clientData.clientType || 'confidential',
+    // grantTypes: which OAuth 2.0 grant types this client may use.
+    //   Allowed values: 'client_credentials', 'authorization_code', 'refresh_token'
+    grantTypes: clientData.grantTypes || ['client_credentials'],
+    // redirectUris: explicit allowlist of redirect_uri values accepted during
+    //   the authorization code flow. An empty array means the flow is disabled.
+    redirectUris: clientData.redirectUris || [],
+    // postLogoutRedirectUris: allowlist of URIs the server may redirect to
+    //   after the user completes an RP-initiated logout.
+    postLogoutRedirectUris: clientData.postLogoutRedirectUris || [],
+    // consentRequired: when true the user sees a consent screen before the
+    //   server issues an authorization code (overrides the platform default
+    //   per client).
+    consentRequired: clientData.consentRequired !== false,
+    // trusted: when true the client is pre-approved and bypasses the consent
+    //   screen even when consentRequired is true at the platform level.
+    trusted: clientData.trusted || false
   };
 
   clientsConfig.clients[clientId] = newClient;
@@ -270,7 +291,10 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
     throw new Error(`OAuth client not found: ${clientId}`);
   }
 
-  // Apply updates (excluding clientId, clientSecret, id)
+  // Apply updates (excluding clientId, clientSecret, id).
+  // Authorization Code Flow fields (clientType, grantTypes, redirectUris,
+  // postLogoutRedirectUris, consentRequired, trusted) are intentionally
+  // included so the admin UI can manage them without rotating the secret.
   const allowedUpdates = [
     'name',
     'description',
@@ -279,7 +303,13 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
     'allowedModels',
     'tokenExpirationMinutes',
     'active',
-    'metadata'
+    'metadata',
+    'clientType',
+    'grantTypes',
+    'redirectUris',
+    'postLogoutRedirectUris',
+    'consentRequired',
+    'trusted'
   ];
 
   for (const key of allowedUpdates) {

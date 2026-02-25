@@ -25,6 +25,7 @@ import registerShortLinkRoutes from './routes/shortLinkRoutes.js';
 import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
+import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
@@ -249,6 +250,7 @@ if (cluster.isPrimary && workerCount > 1) {
 
   registerAuthRoutes(app);
   registerOAuthRoutes(app);
+  registerOAuthAuthorizeRoutes(app);
   registerWellKnownRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });

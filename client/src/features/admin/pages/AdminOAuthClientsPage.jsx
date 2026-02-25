@@ -417,6 +417,16 @@ const AdminOAuthClientsPage = () => {
                                 ? t('admin.auth.oauth.active', 'Active')
                                 : t('admin.auth.oauth.suspended', 'Suspended')}
                             </span>
+                            {client.clientType && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                {client.clientType}
+                              </span>
+                            )}
+                            {(client.grantTypes || []).includes('authorization_code') && (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                {t('admin.auth.oauth.badgeAuthCode', 'auth-code')}
+                              </span>
+                            )}
                           </div>
                           <div className="mt-2 flex items-center text-sm text-gray-500">
                             <code className="bg-gray-100 px-2 py-1 rounded text-xs mr-4">
