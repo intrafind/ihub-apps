@@ -1161,10 +1161,16 @@ class ConfigCache {
       const customDir = platformConfig?.skills?.skillsDirectory || undefined;
       const discoveredSkills = await loadSkillsMetadata(customDir);
       const skills = [...discoveredSkills.values()];
-      this.setCacheEntry('skills', skills);
-      logger.info(`✓ Cached: skills (${skills.length} skills discovered)`, {
-        component: 'ConfigCache'
-      });
+
+      // Only update cache and log if content has changed (same pattern as other caches)
+      const newEtag = this.generateETag(skills);
+      const existing = this.cache.get('skills');
+      if (!existing || existing.etag !== newEtag) {
+        this.setCacheEntry('skills', skills);
+        logger.info(`✓ Cached: skills (${skills.length} skills discovered)`, {
+          component: 'ConfigCache'
+        });
+      }
     } catch (error) {
       logger.error('Error loading skills from filesystem:', {
         component: 'ConfigCache',
