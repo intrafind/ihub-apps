@@ -4,26 +4,25 @@
     "de": "iHub Apps"
   },
   "header": {
-    "title": {
-      "en": "iHub Apps",
-      "de": "iHub Apps"
+    "titleLight": {
+      "en": "iHub",
+      "de": "iHub"
+    },
+    "titleBold": {
+      "en": " Apps",
+      "de": " Apps"
     },
     "defaultColor": "rgb(0, 53, 87)",
     "logo": {
-      "url": "/header_company_logo.svg",
+      "url": "/icons/apps-svg-logo.svg",
       "alt": {
         "en": "iHub Apps Logo",
         "de": "iHub Apps Logo"
-      },
-      "containerStyle": {
-        "backgroundColor": "#ffffff",
-        "borderBottomRightRadius": "16px",
-        "justifyContent": "center",
-        "padding": "0 8px"
-      },
-      "imageStyle": {
-        "maxHeight": "20%"
       }
+    },
+    "tagline": {
+      "en": "by IntraFind",
+      "de": "von IntraFind"
     },
     "links": [
       {

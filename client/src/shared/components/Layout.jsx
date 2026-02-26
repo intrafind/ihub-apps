@@ -90,35 +90,42 @@ const Layout = () => {
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
           <div className="relative flex items-stretch h-16">
-            {/* Logo section - positioned absolutely to be flush with left edge */}
-            {uiConfig?.header?.logo?.url && (
-              <div
-                className="absolute left-0 h-full flex items-center"
-                style={uiConfig.header.logo.containerStyle}
-              >
-                <img
-                  src={buildAssetUrl(uiConfig.header.logo.url)}
-                  alt={
-                    getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) ||
-                    'Organization Logo'
-                  }
-                  className="h-full w-auto"
-                  style={uiConfig.header.logo.imageStyle}
-                />
-              </div>
-            )}
-
             <div className="container mx-auto px-4 flex justify-between items-center">
               <div className="flex items-center h-full">
-                {/* Add padding-left if logo exists to prevent overlap */}
-                <Link
-                  to="/"
-                  onClick={resetHeaderColor}
-                  className={'text-2xl font-bold flex items-center py-4'}
-                >
-                  {uiConfig?.header?.title
-                    ? getLocalizedContent(uiConfig.header.title, currentLanguage)
-                    : 'iHub Apps'}
+                <Link to="/" onClick={resetHeaderColor} className="flex items-center gap-2.5 py-2">
+                  {uiConfig?.header?.logo?.url && (
+                    <img
+                      src={buildAssetUrl(uiConfig.header.logo.url)}
+                      alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'}
+                      className="h-7 w-7 flex-shrink-0"
+                    />
+                  )}
+                  <div className="flex flex-col leading-tight">
+                    <span className="text-lg tracking-tight">
+                      {uiConfig?.header?.titleLight && (
+                        <span className="font-light">
+                          {getLocalizedContent(uiConfig.header.titleLight, currentLanguage)}
+                        </span>
+                      )}
+                      {uiConfig?.header?.titleBold && (
+                        <span className="font-bold">
+                          {getLocalizedContent(uiConfig.header.titleBold, currentLanguage)}
+                        </span>
+                      )}
+                      {!uiConfig?.header?.titleLight && !uiConfig?.header?.titleBold && (
+                        <span className="font-semibold">
+                          {uiConfig?.header?.title
+                            ? getLocalizedContent(uiConfig.header.title, currentLanguage)
+                            : 'iHub Apps'}
+                        </span>
+                      )}
+                    </span>
+                    {uiConfig?.header?.tagline && (
+                      <span className="text-[9px] text-white/60 font-normal">
+                        {getLocalizedContent(uiConfig.header.tagline, currentLanguage)}
+                      </span>
+                    )}
+                  </div>
                 </Link>
               </div>
 
