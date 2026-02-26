@@ -7,6 +7,7 @@ import FooterCustomization from '../components/FooterCustomization';
 import AssetManager from '../components/AssetManager';
 import StyleEditor from '../components/StyleEditor';
 import ContentEditor from '../components/ContentEditor';
+import PwaCustomization from '../components/PwaCustomization';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -116,7 +117,8 @@ const AdminUICustomization = () => {
     { id: 'footer', label: t('admin.ui.tabs.footer', 'Footer'), icon: '📄' },
     { id: 'assets', label: t('admin.ui.tabs.assets', 'Assets'), icon: '🖼️' },
     { id: 'styles', label: t('admin.ui.tabs.styles', 'Styles'), icon: '🎯' },
-    { id: 'content', label: t('admin.ui.tabs.content', 'Content'), icon: '📝' }
+    { id: 'content', label: t('admin.ui.tabs.content', 'Content'), icon: '📝' },
+    { id: 'pwa', label: t('admin.ui.tabs.pwa', 'PWA'), icon: '📱' }
   ];
 
   if (loading) {
@@ -303,6 +305,13 @@ const AdminUICustomization = () => {
             {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
             {activeTab === 'content' && (
               <ContentEditor config={config} onUpdate={setConfig} t={t} />
+            )}
+            {activeTab === 'pwa' && (
+              <PwaCustomization
+                config={config.pwa || {}}
+                onUpdate={updates => updateConfig('pwa', updates)}
+                t={t}
+              />
             )}
           </div>
         </div>

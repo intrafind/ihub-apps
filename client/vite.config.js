@@ -33,7 +33,7 @@ export default defineConfig({
       const proxyConfig = {};
 
       // Define the paths that need proxying
-      const pathsToProxy = ['/api/', '/s/', '/docs', '/uploads'];
+      const pathsToProxy = ['/api/', '/s/', '/docs', '/uploads', '/manifest.json', '/sw.js'];
 
       pathsToProxy.forEach(path => {
         // Handle both root paths and subpath
