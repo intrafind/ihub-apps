@@ -212,7 +212,8 @@ const ChatInput = ({
         // Calculate the new height based on content
         const scrollHeight = textarea.scrollHeight;
         const minHeight = inputRows * 1.5 * 16; // Convert em to px (assuming 16px base font size)
-        const maxHeight = (multilineMode ? 12 : 3) * 1.5 * 16 + 24; // 12 lines + padding (1.5rem = 24px)
+        // Max height: 150px (approx 5 lines) for single-line mode, 12 lines for multiline mode
+        const maxHeight = multilineMode ? 12 * 1.5 * 16 + 24 : 150;
 
         // Set the height to fit content, but respect min/max limits
         const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);

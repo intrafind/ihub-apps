@@ -10,7 +10,7 @@ import { fetchAppDetails } from '../../api/api';
  * based on UI configuration, current language, and current page/app
  */
 const DocumentTitle = () => {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const { uiConfig, isLoading } = useUIConfig();
   const location = useLocation();
   const currentLanguage = i18n.language || 'en';
@@ -42,26 +42,44 @@ const DocumentTitle = () => {
       return;
     }
 
-    let title = 'iHub Apps'; // Default fallback
-
-    // Use the configurable title if available
+    // Get platform name from config
+    let platformName = 'iHub Apps'; // Default fallback
     if (uiConfig?.title) {
       const localizedTitle = getLocalizedContent(uiConfig.title, currentLanguage);
       if (localizedTitle) {
-        title = localizedTitle;
+        platformName = localizedTitle;
       }
     }
 
-    // If we're on an app page and have app data, append the app name
-    if (isAppPage && currentApp) {
+    // Route-to-title mapping for cleaner route detection
+    const routeTitleMap = {
+      '/admin': 'documentTitle.admin',
+      '/settings': 'documentTitle.settings',
+      '/workflows': 'documentTitle.workflows',
+      '/prompts': 'documentTitle.prompts'
+    };
+
+    // Determine page-specific prefix based on route
+    let pagePrefix = '';
+    const pathname = location.pathname;
+
+    // Check route mappings
+    const matchedRoute = Object.keys(routeTitleMap).find(route => pathname.startsWith(route));
+    if (matchedRoute) {
+      const translationKey = routeTitleMap[matchedRoute];
+      const defaultValue = translationKey.split('.')[1]; // Extract default from key
+      pagePrefix = t(translationKey, defaultValue.charAt(0).toUpperCase() + defaultValue.slice(1));
+    } else if (isAppPage && currentApp) {
+      // App-specific page
       const appName = getLocalizedContent(currentApp.name, currentLanguage) || currentApp.id;
-      if (appName) {
-        title = `${title} - ${appName}`;
-      }
+      pagePrefix = appName;
     }
+
+    // Construct final title
+    const title = pagePrefix ? `${pagePrefix} | ${platformName}` : platformName;
 
     document.title = title;
-  }, [uiConfig, currentLanguage, isAppPage, currentApp, isLoading]);
+  }, [uiConfig, currentLanguage, isAppPage, currentApp, isLoading, location.pathname, t]);
 
   // This component doesn't render anything visible
   return null;

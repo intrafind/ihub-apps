@@ -1413,5 +1413,11 @@
     "generated": "Generated",
     "failed": "Failed",
     "cancelled": "Cancelled"
+  },
+  "documentTitle": {
+    "admin": "Admin",
+    "settings": "Settings",
+    "workflows": "Workflows",
+    "prompts": "Prompts"
   }
 }
