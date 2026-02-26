@@ -229,7 +229,7 @@ const AdminSourceEditPage = () => {
   if (loading) {
     return (
       <AdminAuth>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
           <AdminNavigation />
           <div className="max-w-7xl mx-auto py-6 px-4">
             <div className="flex items-center justify-center h-64">
@@ -238,7 +238,7 @@ const AdminSourceEditPage = () => {
                   name="arrow-path"
                   className="animate-spin h-8 w-8 text-gray-400 mx-auto mb-4"
                 />
-                <p className="text-gray-500">{t('common.loading', 'Loading...')}</p>
+                <p className="text-gray-500 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
               </div>
             </div>
           </div>
@@ -250,15 +250,15 @@ const AdminSourceEditPage = () => {
   if (!source) {
     return (
       <AdminAuth>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
           <AdminNavigation />
           <div className="max-w-7xl mx-auto py-6 px-4">
             <div className="text-center py-12">
               <Icon name="x-circle" className="h-12 w-12 text-red-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.sources.notFound', 'Source not found')}
               </h3>
-              <p className="text-gray-500 mb-4">
+              <p className="text-gray-500 dark:text-gray-400 mb-4">
                 {t('admin.sources.notFoundDescription', 'The requested source could not be found.')}
               </p>
               <button
@@ -276,28 +276,28 @@ const AdminSourceEditPage = () => {
 
   return (
     <AdminAuth>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <AdminNavigation />
         <div className="max-w-7xl mx-auto py-6 px-4">
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <nav className="flex items-center space-x-2 text-sm text-gray-500 mb-2">
+                <nav className="flex items-center space-x-2 text-sm text-gray-500 dark:text-gray-400 mb-2">
                   <button
                     onClick={() => navigate('/admin/sources')}
-                    className="hover:text-gray-700"
+                    className="hover:text-gray-700 dark:hover:text-gray-300"
                   >
                     {t('admin.navigation.sources', 'Sources')}
                   </button>
                   <Icon name="chevron-right" className="h-4 w-4" />
-                  <span className="font-medium text-gray-900">
+                  <span className="font-medium text-gray-900 dark:text-gray-100">
                     {isEditing
                       ? t('admin.sources.editSource', 'Edit Source')
                       : t('admin.sources.createNew', 'Create Source')}
                   </span>
                 </nav>
-                <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
                   <Icon name="database" className="h-6 w-6 mr-2" />
                   {isEditing
                     ? source.name?.en || source.id
@@ -327,13 +327,13 @@ const AdminSourceEditPage = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
               <div className="flex items-center">
                 <Icon name="x-circle" className="h-5 w-5 text-red-400 mr-2" />
-                <p className="text-red-800">{error}</p>
+                <p className="text-red-800 dark:text-red-200">{error}</p>
                 <button
                   onClick={() => setError(null)}
-                  className="ml-auto text-red-600 hover:text-red-800"
+                  className="ml-auto text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
                 >
                   <Icon name="x-mark" className="h-4 w-4" />
                 </button>
@@ -343,7 +343,7 @@ const AdminSourceEditPage = () => {
 
           <div className="space-y-6">
             {/* Main Form */}
-            <div className="bg-white rounded-lg shadow-sm">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm">
               <div className="p-6">
                 <SourceConfigForm
                   source={source}
@@ -357,8 +357,8 @@ const AdminSourceEditPage = () => {
 
             {/* Test Results */}
             {testResult && (
-              <div className="bg-white rounded-lg shadow-sm p-6">
-                <h3 className="text-lg font-medium text-gray-900 mb-4 flex items-center">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4 flex items-center">
                   <Icon name="beaker" className="h-5 w-5 mr-2" />
                   {t('admin.sources.testResults', 'Test Results')}
                 </h3>
@@ -366,8 +366,8 @@ const AdminSourceEditPage = () => {
                 <div
                   className={`p-4 rounded-lg ${
                     testResult.success
-                      ? 'bg-green-50 border border-green-200'
-                      : 'bg-red-50 border border-red-200'
+                      ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                      : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
                   }`}
                 >
                   <div className="flex items-center mb-2">
@@ -379,7 +379,7 @@ const AdminSourceEditPage = () => {
                     />
                     <span
                       className={`font-medium ${
-                        testResult.success ? 'text-green-800' : 'text-red-800'
+                        testResult.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
                       }`}
                     >
                       {testResult.success
@@ -389,11 +389,11 @@ const AdminSourceEditPage = () => {
                   </div>
 
                   {testResult.error && (
-                    <p className="text-red-700 text-sm mb-2">{testResult.error}</p>
+                    <p className="text-red-700 dark:text-red-300 text-sm mb-2">{testResult.error}</p>
                   )}
 
                   {testResult.duration && (
-                    <p className="text-sm text-gray-600">
+                    <p className="text-sm text-gray-600 dark:text-gray-400">
                       {t('admin.sources.testDuration', 'Duration: {{duration}}ms', {
                         duration: testResult.duration
                       })}
@@ -401,7 +401,7 @@ const AdminSourceEditPage = () => {
                   )}
 
                   {testResult.result && (
-                    <pre className="mt-2 text-xs text-gray-600 bg-white p-2 rounded border overflow-auto max-h-32">
+                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 bg-white dark:bg-gray-900 p-2 rounded border dark:border-gray-700 overflow-auto max-h-32">
                       {JSON.stringify(testResult.result, null, 2)}
                     </pre>
                   )}

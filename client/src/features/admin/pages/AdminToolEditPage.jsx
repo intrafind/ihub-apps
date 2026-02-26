@@ -188,17 +188,17 @@ const AdminToolEditPage = () => {
 
   return (
     <AdminAuth>
-      <div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <AdminNavigation />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="md:flex md:items-center md:justify-between mb-6">
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {isNewTool
                   ? t('admin.tools.createNew', 'Create New Tool')
                   : t('admin.tools.editTool', 'Edit Tool')}
               </h1>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {isNewTool
                   ? t('admin.tools.createDescription', 'Create a new AI tool / function')
                   : t('admin.tools.editDescription', 'Edit tool configuration and script')}
@@ -207,7 +207,7 @@ const AdminToolEditPage = () => {
             <div className="mt-4 flex md:mt-0 md:ml-4">
               <button
                 onClick={() => navigate('/admin/tools')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="arrow-left" className="h-4 w-4 mr-2" />
                 {t('common.back', 'Back')}
@@ -216,26 +216,26 @@ const AdminToolEditPage = () => {
           </div>
 
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+            <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
               <div className="flex">
                 <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800">{t('common.error', 'Error')}</h3>
-                  <p className="mt-1 text-sm text-red-700">{error}</p>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{t('common.error', 'Error')}</h3>
+                  <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
                 </div>
               </div>
             </div>
           )}
 
           {/* Tabs */}
-          <div className="border-b border-gray-200 mb-6">
+          <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab('config')}
                 className={`${
                   activeTab === 'config'
-                    ? 'border-indigo-500 text-indigo-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                 } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
               >
                 <Icon name="cog" className="h-4 w-4 inline mr-2" />
@@ -246,8 +246,8 @@ const AdminToolEditPage = () => {
                   onClick={() => setActiveTab('script')}
                   className={`${
                     activeTab === 'script'
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   } whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm`}
                 >
                   <Icon name="code" className="h-4 w-4 inline mr-2" />
@@ -290,7 +290,7 @@ const AdminToolEditPage = () => {
             <div className="mt-6 flex justify-end space-x-3">
               <button
                 onClick={() => navigate('/admin/tools')}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
@@ -316,14 +316,14 @@ const AdminToolEditPage = () => {
 
           {/* Script Editor Tab */}
           {activeTab === 'script' && !isNewTool && toolData.script && (
-            <div className="bg-white shadow rounded-lg p-6">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
               <div className="mb-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-gray-600 dark:text-gray-400">
                   {t(
                     'admin.tools.scriptEditorInfo',
                     'Edit the JavaScript code for this tool. Changes will be saved to server/tools/'
                   )}{' '}
-                  <code className="bg-gray-100 px-2 py-1 rounded text-xs">{toolData.script}</code>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">{toolData.script}</code>
                 </p>
               </div>
 
@@ -332,7 +332,7 @@ const AdminToolEditPage = () => {
                   value={scriptContent}
                   onChange={e => setScriptContent(e.target.value)}
                   rows={25}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   style={{ fontFamily: 'monospace' }}
                 />
               </div>
@@ -340,7 +340,7 @@ const AdminToolEditPage = () => {
               <div className="flex justify-end space-x-3">
                 <button
                   onClick={() => setActiveTab('config')}
-                  className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   {t('common.cancel', 'Cancel')}
                 </button>
