@@ -97,7 +97,7 @@ const JiraConfig = () => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
@@ -106,18 +106,18 @@ const JiraConfig = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
         <div className="flex-shrink-0 mt-1">
-          <div className="p-3 rounded-full bg-blue-100">
-            <Icon name="ticket" size="lg" className="text-blue-600" />
+          <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
+            <Icon name="ticket" size="lg" className="text-blue-600 dark:text-blue-400" />
           </div>
         </div>
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
             {t('admin.jira.title', 'Jira Integration')}
           </h3>
-          <p className="text-gray-600 mb-4">
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
             {t(
               'admin.jira.subtitle',
               'Configure Atlassian Jira OAuth credentials for ticket management integration.'
@@ -125,14 +125,14 @@ const JiraConfig = () => {
           </p>
 
           {/* Info Card */}
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4 mb-4">
             <div className="flex">
               <Icon name="info" size="md" className="text-blue-500 mt-0.5 mr-3" />
               <div>
-                <h4 className="text-sm font-medium text-blue-800">
+                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
                   {t('admin.jira.info.title', 'Atlassian Cloud OAuth 2.0')}
                 </h4>
-                <p className="text-sm text-blue-700 mt-1">
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                   {t(
                     'admin.jira.info.description',
                     'Create an OAuth 2.0 (3LO) app in your Atlassian Developer Console to obtain the Client ID and Secret. Set the redirect URI to match your deployment URL.'
@@ -149,9 +149,9 @@ const JiraConfig = () => {
               id="jiraEnabled"
               checked={config.enabled}
               onChange={handleToggleEnabled}
-              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
             />
-            <label htmlFor="jiraEnabled" className="ml-2 block text-sm text-gray-900">
+            <label htmlFor="jiraEnabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
               {config.enabled
                 ? t('admin.jira.enabled', 'Jira integration enabled')
                 : t('admin.jira.disabled', 'Jira integration disabled')}
@@ -162,59 +162,59 @@ const JiraConfig = () => {
           {config.enabled && (
             <div className="space-y-4 mb-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t('admin.jira.baseUrl', 'Jira Site URL')}
                 </label>
                 <input
                   type="url"
                   value={config.baseUrl}
                   onChange={e => handleFieldChange('baseUrl', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="https://your-company.atlassian.net"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t('admin.jira.baseUrlHelp', 'Your Atlassian Cloud site URL (for reference)')}
                 </p>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t('admin.jira.clientId', 'Client ID')} *
                 </label>
                 <input
                   type="text"
                   value={config.clientId}
                   onChange={e => handleFieldChange('clientId', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="your-oauth-client-id"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t('admin.jira.clientSecret', 'Client Secret')} *
                 </label>
                 <input
                   type="password"
                   value={config.clientSecret}
                   onChange={e => handleFieldChange('clientSecret', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="your-oauth-client-secret"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {t('admin.jira.redirectUri', 'Redirect URI')}
                 </label>
                 <input
                   type="url"
                   value={config.redirectUri}
                   onChange={e => handleFieldChange('redirectUri', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                   placeholder="https://your-app.com/api/integrations/jira/callback"
                 />
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.jira.redirectUriHelp',
                     'Must match the callback URL registered in your Atlassian OAuth app'
@@ -229,8 +229,8 @@ const JiraConfig = () => {
             <div
               className={`p-4 rounded-md mb-4 ${
                 message.type === 'success'
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-red-50 border border-red-200'
+                  ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
               }`}
             >
               <div className="flex">
@@ -243,7 +243,7 @@ const JiraConfig = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700' : 'text-red-700'
+                    message.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}

@@ -183,7 +183,7 @@ const CloudStorageConfig = () => {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="flex items-center justify-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
         </div>
@@ -192,28 +192,28 @@ const CloudStorageConfig = () => {
   }
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
         <div className="flex-shrink-0 mt-1">
-          <div className="p-3 rounded-full bg-indigo-100">
-            <Icon name="cloud" size="lg" className="text-indigo-600" />
+          <div className="p-3 rounded-full bg-indigo-100 dark:bg-indigo-900/50">
+            <Icon name="cloud" size="lg" className="text-indigo-600 dark:text-indigo-400" />
           </div>
         </div>
         <div className="flex-1">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
             {t('admin.cloudStorage.title')}
           </h3>
-          <p className="text-gray-600 mb-4">{t('admin.cloudStorage.subtitle')}</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">{t('admin.cloudStorage.subtitle')}</p>
 
           {/* Info Card */}
-          <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4 mb-4">
             <div className="flex">
               <Icon name="info" size="md" className="text-blue-500 mt-0.5 mr-3" />
               <div>
-                <h4 className="text-sm font-medium text-blue-800">
+                <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
                   {t('admin.cloudStorage.info.title')}
                 </h4>
-                <p className="text-sm text-blue-700 mt-1">
+                <p className="text-sm text-blue-700 dark:text-blue-300 mt-1">
                   {t('admin.cloudStorage.info.description')}
                 </p>
               </div>
@@ -227,9 +227,9 @@ const CloudStorageConfig = () => {
               id="cloudStorageEnabled"
               checked={config.enabled}
               onChange={handleToggleEnabled}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
             />
-            <label htmlFor="cloudStorageEnabled" className="ml-2 block text-sm text-gray-900">
+            <label htmlFor="cloudStorageEnabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
               {config.enabled ? t('admin.cloudStorage.enabled') : t('admin.cloudStorage.disabled')}
             </label>
           </div>
@@ -238,7 +238,7 @@ const CloudStorageConfig = () => {
           {config.enabled && (
             <div className="mb-4">
               <div className="flex justify-between items-center mb-3">
-                <h4 className="text-sm font-medium text-gray-900">
+                <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {t('admin.cloudStorage.providers')}
                 </h4>
                 <button
@@ -251,7 +251,7 @@ const CloudStorageConfig = () => {
               </div>
 
               {config.providers.length === 0 ? (
-                <p className="text-sm text-gray-500 italic">
+                <p className="text-sm text-gray-500 dark:text-gray-400 italic">
                   {t('admin.cloudStorage.noProviders')}
                 </p>
               ) : (
@@ -259,7 +259,7 @@ const CloudStorageConfig = () => {
                   {config.providers.map(provider => (
                     <div
                       key={provider.id}
-                      className="flex items-center justify-between p-3 border border-gray-200 rounded-md hover:bg-gray-50"
+                      className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       <div className="flex items-center space-x-3">
                         <Icon
@@ -268,10 +268,10 @@ const CloudStorageConfig = () => {
                           className="text-gray-400"
                         />
                         <div>
-                          <p className="text-sm font-medium text-gray-900">
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {provider.displayName}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 dark:text-gray-400">
                             {provider.type === 'office365'
                               ? t('admin.cloudStorage.office365')
                               : t('admin.cloudStorage.googledrive')}
@@ -285,13 +285,13 @@ const CloudStorageConfig = () => {
                       <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleEditProvider(provider)}
-                          className="text-indigo-600 hover:text-indigo-900 text-sm font-medium"
+                          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 text-sm font-medium"
                         >
                           {t('common.edit')}
                         </button>
                         <button
                           onClick={() => handleDeleteProvider(provider.id)}
-                          className="text-red-600 hover:text-red-900 text-sm font-medium"
+                          className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 text-sm font-medium"
                         >
                           {t('common.delete')}
                         </button>
@@ -305,10 +305,10 @@ const CloudStorageConfig = () => {
 
           {/* Provider Editor Modal */}
           {showAddProvider && editingProvider && (
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-              <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
+            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto m-4">
                 <div className="p-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                     {editingProvider.id
                       ? t('admin.cloudStorage.editProvider')
                       : t('admin.cloudStorage.addProvider')}
@@ -317,7 +317,7 @@ const CloudStorageConfig = () => {
                   <div className="space-y-4">
                     {/* Provider ID */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         {t('admin.cloudStorage.name')} *
                       </label>
                       <input
@@ -330,14 +330,14 @@ const CloudStorageConfig = () => {
                             name: e.target.value // Keep name in sync with id
                           })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="office365-main"
                       />
                     </div>
 
                     {/* Display Name */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         {t('admin.cloudStorage.displayName')} *
                       </label>
                       <input
@@ -346,14 +346,14 @@ const CloudStorageConfig = () => {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, displayName: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="Company Office 365"
                       />
                     </div>
 
                     {/* Provider Type */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         {t('admin.cloudStorage.providerType')} *
                       </label>
                       <select
@@ -361,7 +361,7 @@ const CloudStorageConfig = () => {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, type: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       >
                         <option value="office365">{t('admin.cloudStorage.office365')}</option>
                         <option value="googledrive">{t('admin.cloudStorage.googledrive')}</option>
@@ -372,7 +372,7 @@ const CloudStorageConfig = () => {
                     {editingProvider.type === 'office365' && (
                       <>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.tenantId')} *
                           </label>
                           <input
@@ -381,13 +381,13 @@ const CloudStorageConfig = () => {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, tenantId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-tenant-id"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.clientId')} *
                           </label>
                           <input
@@ -396,13 +396,13 @@ const CloudStorageConfig = () => {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.clientSecret')} *
                           </label>
                           <input
@@ -414,13 +414,13 @@ const CloudStorageConfig = () => {
                                 clientSecret: e.target.value
                               })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-secret"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.siteUrl')}
                           </label>
                           <input
@@ -429,13 +429,13 @@ const CloudStorageConfig = () => {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, siteUrl: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="https://yourcompany.sharepoint.com"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.driveId')}
                           </label>
                           <input
@@ -444,7 +444,7 @@ const CloudStorageConfig = () => {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, driveId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="drive-id"
                           />
                         </div>
@@ -524,7 +524,7 @@ const CloudStorageConfig = () => {
                     {editingProvider.type === 'googledrive' && (
                       <>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.clientId')} *
                           </label>
                           <input
@@ -533,13 +533,13 @@ const CloudStorageConfig = () => {
                             onChange={e =>
                               setEditingProvider({ ...editingProvider, clientId: e.target.value })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-id.apps.googleusercontent.com"
                           />
                         </div>
 
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             {t('admin.cloudStorage.clientSecret')} *
                           </label>
                           <input
@@ -551,7 +551,7 @@ const CloudStorageConfig = () => {
                                 clientSecret: e.target.value
                               })
                             }
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-secret"
                           />
                         </div>
@@ -560,7 +560,7 @@ const CloudStorageConfig = () => {
 
                     {/* Redirect URI (optional for all) */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         {t('admin.cloudStorage.redirectUri')}
                       </label>
                       <input
@@ -569,7 +569,7 @@ const CloudStorageConfig = () => {
                         onChange={e =>
                           setEditingProvider({ ...editingProvider, redirectUri: e.target.value })
                         }
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="https://your-app.com/auth/callback"
                       />
                     </div>
