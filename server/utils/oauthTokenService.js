@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { resolveJwtSecret } from './tokenService.js';
+import { verifyJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';
 import logger from './logger.js';
 
 /**
@@ -25,10 +25,11 @@ export function generateOAuthToken(client, options = {}) {
     throw new Error('Client object with clientId is required for OAuth token generation');
   }
 
-  const jwtSecret = resolveJwtSecret();
+  const algorithm = getJwtAlgorithm();
+  const signingKey = getJwtSigningKey();
 
-  if (!jwtSecret) {
-    throw new Error('JWT secret not configured for OAuth authentication');
+  if (!signingKey) {
+    throw new Error(`JWT signing key not configured for OAuth authentication with ${algorithm}`);
   }
 
   // Determine scopes for this token
@@ -66,11 +67,11 @@ export function generateOAuthToken(client, options = {}) {
     groups: ['oauth_clients'] // Special group for OAuth clients
   };
 
-  const token = jwt.sign(tokenPayload, jwtSecret, {
+  const token = jwt.sign(tokenPayload, signingKey, {
     expiresIn: `${expiresIn}s`,
     issuer: 'ihub-apps',
     audience: 'ihub-apps',
-    algorithm: 'HS256'
+    algorithm: algorithm
   });
 
   return {
@@ -88,17 +89,12 @@ export function generateOAuthToken(client, options = {}) {
  */
 export function verifyOAuthToken(token) {
   try {
-    const jwtSecret = resolveJwtSecret();
+    const decoded = verifyJwt(token);
 
-    if (!jwtSecret) {
-      logger.warn('[OAuth] JWT secret not configured for token verification');
+    if (!decoded) {
+      logger.warn('[OAuth] Token verification failed');
       return null;
     }
-
-    const decoded = jwt.verify(token, jwtSecret, {
-      issuer: 'ihub-apps',
-      audience: 'ihub-apps'
-    });
 
     // Verify it's an OAuth token
     if (decoded.authMode !== 'oauth_client_credentials') {
@@ -108,10 +104,6 @@ export function verifyOAuthToken(token) {
 
     return decoded;
   } catch (error) {
-    if (error.name === 'TokenExpiredError') {
-      logger.warn('[OAuth] Token expired');
-      return { error: 'token_expired', expired: true };
-    }
     logger.warn('[OAuth] Token verification failed:', error.message);
     return null;
   }
@@ -183,10 +175,11 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     throw new Error('Client object with clientId is required for API key generation');
   }
 
-  const jwtSecret = resolveJwtSecret();
+  const algorithm = getJwtAlgorithm();
+  const signingKey = getJwtSigningKey();
 
-  if (!jwtSecret) {
-    throw new Error('JWT secret not configured for API key generation');
+  if (!signingKey) {
+    throw new Error(`JWT signing key not configured for API key generation with ${algorithm}`);
   }
 
   // Static API key has longer expiration
@@ -208,11 +201,11 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     static_key: true
   };
 
-  const token = jwt.sign(tokenPayload, jwtSecret, {
+  const token = jwt.sign(tokenPayload, signingKey, {
     expiresIn: `${expiresInSeconds}s`,
     issuer: 'ihub-apps',
     audience: 'ihub-apps',
-    algorithm: 'HS256'
+    algorithm: algorithm
   });
 
   logger.info(
