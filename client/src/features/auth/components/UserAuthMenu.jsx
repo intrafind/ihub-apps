@@ -78,25 +78,24 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
     return null;
   }
 
-  // If anonymous access is not allowed and user is not authenticated, show login modal
+  // If anonymous access is not allowed and user is not authenticated,
+  // delegate to the auth gate (which handles all login flows).
   if (!allowAnonymous && !isAuthenticated) {
-    return createPortal(
-      <div
-        className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
-        style={{ zIndex: 2147483647 }}
-      >
-        <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
-          <LoginForm />
-        </div>
-      </div>,
-      document.body
-    );
+    if (window.__authGate && !window.__authGate.isVisible()) {
+      window.__authGate.show();
+    }
+    return null;
   }
 
   const handleLoginClick = () => {
-    setShowLoginModal(true);
     setShowDropdown(false);
     setShowAllGroups(false);
+    // Delegate to auth gate when available (supports all auth methods)
+    if (window.__authGate) {
+      window.__authGate.show({ overlay: true });
+    } else {
+      setShowLoginModal(true);
+    }
   };
 
   const handleLogout = () => {

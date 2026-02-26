@@ -624,7 +624,17 @@ export default function registerAuthRoutes(app) {
         enabled: Boolean(
           platform.jira?.enabled && platform.jira?.clientId && platform.jira?.clientSecret
         )
-      }
+      },
+      // UI hints for the pre-auth gate (no sensitive data)
+      gateUI: (() => {
+        const uiConfig = configCache.getUI()?.data || {};
+        const lang = req.headers['accept-language']?.split(',')[0]?.split('-')[0] || 'en';
+        const title = uiConfig.title || {};
+        const appName = title[lang] || title.en || 'iHub Apps';
+        const logoUrl = uiConfig.header?.logo?.url || null;
+        const headerColor = uiConfig.header?.defaultColor || null;
+        return { appName, logoUrl, primaryColor: headerColor };
+      })()
     };
 
     res.json(status);
