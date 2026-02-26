@@ -11,6 +11,16 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Global rate limiter to protect all routes, including those that access the filesystem.
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true, // return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // disable the `X-RateLimit-*` headers
+});
+
+app.use(globalLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -107,7 +117,14 @@ app.get('/', (req, res) => {
  * practices). The difference is that confidential clients also present a
  * client_secret at the token endpoint.
  */
-app.get('/login', (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 30, // limit each IP to 30 login attempts per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.get('/login', loginLimiter, (req, res) => {
   const state = randomBase64url(16);
   const nonce = randomBase64url(16);
 
