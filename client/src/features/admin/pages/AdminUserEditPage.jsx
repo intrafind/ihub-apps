@@ -37,7 +37,6 @@ const AdminUserEditPage = () => {
         fullName: '',
         name: '',
         password: '',
-        groups: [],
         internalGroups: [],
         authMethods: ['local'],
         enabled: true,
@@ -105,7 +104,7 @@ const AdminUserEditPage = () => {
         username: data.username,
         email: data.email || null,
         name: data.fullName || data.name || '',
-        internalGroups: data.groups || data.internalGroups || [],
+        internalGroups: data.internalGroups || [],
         active: data.enabled !== false,
         authMethods: data.authMethods || ['local']
       };

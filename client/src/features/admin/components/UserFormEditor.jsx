@@ -121,7 +121,7 @@ const UserFormEditor = ({
       .map(g => g.trim())
       .filter(g => g.length > 0);
 
-    handleInputChange('groups', groupsArray);
+    handleInputChange('internalGroups', groupsArray);
   };
 
   if (!user) {
@@ -403,7 +403,7 @@ const UserFormEditor = ({
               </label>
               <input
                 type="text"
-                value={(user.groups || []).join(', ')}
+                value={(user.internalGroups || []).join(', ')}
                 onChange={e => handleGroupsChange(e.target.value)}
                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 placeholder="admin, users, editors"
@@ -413,11 +413,11 @@ const UserFormEditor = ({
                 groups.
               </p>
 
-              {user.groups && user.groups.length > 0 && (
+              {user.internalGroups && user.internalGroups.length > 0 && (
                 <div className="mt-3">
                   <p className="text-sm font-medium text-gray-700 mb-2">Current Groups:</p>
                   <div className="flex flex-wrap gap-2">
-                    {user.groups.map((group, index) => (
+                    {user.internalGroups.map((group, index) => (
                       <span
                         key={index}
                         className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800"
