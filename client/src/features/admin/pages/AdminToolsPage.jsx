@@ -181,24 +181,24 @@ const AdminToolsPage = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
+      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
         <div className="flex">
           <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">
+            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
               {t('admin.tools.loadError', 'Error loading tools')}
             </h3>
-            <p className="mt-1 text-sm text-red-700">{error}</p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 hover:text-red-500"
+              className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
             >
               {t('common.retry', 'Retry')}
             </button>
@@ -215,10 +215,10 @@ const AdminToolsPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center">
             <div className="sm:flex-auto">
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {t('admin.tools.title', 'Tool Management')}
               </h1>
-              <p className="mt-2 text-sm text-gray-700">
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                 {t(
                   'admin.tools.subtitle',
                   'Create, edit, and manage AI tools / function calling for your iHub Apps'
@@ -244,7 +244,7 @@ const AdminToolsPage = () => {
                   />
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={uploading}
                     title={t('admin.tools.uploadConfig', 'Upload Tool Config')}
                   >
@@ -270,7 +270,7 @@ const AdminToolsPage = () => {
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder={t('admin.tools.searchPlaceholder', 'Search tools...')}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -281,7 +281,7 @@ const AdminToolsPage = () => {
               <select
                 value={filterEnabled}
                 onChange={e => setFilterEnabled(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="all">{t('admin.tools.filterAll', 'All Tools')}</option>
                 <option value="enabled">{t('admin.tools.filterEnabled', 'Enabled Only')}</option>
@@ -292,7 +292,7 @@ const AdminToolsPage = () => {
               <select
                 value={filterType}
                 onChange={e => setFilterType(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="all">{t('admin.tools.filterAllTypes', 'All Types')}</option>
                 <option value="regular">{t('admin.tools.filterRegular', 'Regular Tools')}</option>
@@ -308,37 +308,37 @@ const AdminToolsPage = () => {
           <div className="mt-8 flex flex-col">
             <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.tools.table.name', 'Name')}
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.tools.table.type', 'Type')}
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.tools.table.description', 'Description')}
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.tools.table.script', 'Script')}
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.tools.table.status', 'Status')}
                         </th>
@@ -349,17 +349,17 @@ const AdminToolsPage = () => {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                       {sortedTools.map(tool => (
                         <tr
                           key={tool.id}
-                          className="hover:bg-gray-50 cursor-pointer"
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
                           onClick={() => navigate(`/admin/tools/${tool.id}`)}
                         >
                           <td className="px-6 py-4">
                             <div className="flex items-center">
                               <div className="flex-shrink-0 h-8 w-8">
-                                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
+                                <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
                                   <Icon
                                     name={
                                       tool.functions
@@ -368,43 +368,43 @@ const AdminToolsPage = () => {
                                           ? 'star'
                                           : 'wrench'
                                     }
-                                    className="h-4 w-4 text-indigo-600"
+                                    className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
                                   />
                                 </div>
                               </div>
                               <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {getLocalizedContent(tool.name, currentLanguage)}
                                 </div>
-                                <div className="text-sm text-gray-500">{tool.id}</div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">{tool.id}</div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4">
                             {getToolType(tool) === 'special' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
                                 {t('admin.tools.typeSpecial', 'Special')}
                               </span>
                             ) : getToolType(tool) === 'multi-function' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300">
                                 {t('admin.tools.typeMultiFunction', 'Multi-Function')}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
                                 {t('admin.tools.typeRegular', 'Regular')}
                               </span>
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <div className="text-sm text-gray-900 max-w-xs truncate">
+                            <div className="text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
                               {tool.description
                                 ? getLocalizedContent(tool.description, currentLanguage)
                                 : '-'}
                             </div>
                           </td>
-                          <td className="px-6 py-4 text-sm text-gray-900">
+                          <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                             {tool.script ? (
-                              <code className="text-xs bg-gray-100 px-2 py-1 rounded">
+                              <code className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">
                                 {tool.script}
                               </code>
                             ) : tool.provider ? (
@@ -417,8 +417,8 @@ const AdminToolsPage = () => {
                             <span
                               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                 tool.enabled !== false
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
+                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                               }`}
                             >
                               {tool.enabled !== false
@@ -435,8 +435,8 @@ const AdminToolsPage = () => {
                                 }}
                                 className={`p-2 rounded-full ${
                                   tool.enabled !== false
-                                    ? 'text-red-600 hover:bg-red-50'
-                                    : 'text-green-600 hover:bg-green-50'
+                                    ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50'
+                                    : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50'
                                 }`}
                                 title={
                                   tool.enabled !== false
@@ -454,7 +454,7 @@ const AdminToolsPage = () => {
                                   e.stopPropagation();
                                   handleCloneTool(tool);
                                 }}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
                                 title={t('admin.tools.clone', 'Clone')}
                               >
                                 <Icon name="copy" className="h-4 w-4" />
@@ -464,7 +464,7 @@ const AdminToolsPage = () => {
                                   e.stopPropagation();
                                   downloadToolConfig(tool.id);
                                 }}
-                                className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                                className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full"
                                 title={t('admin.tools.download', 'Download Config')}
                               >
                                 <Icon name="download" className="h-4 w-4" />
@@ -474,7 +474,7 @@ const AdminToolsPage = () => {
                                   e.stopPropagation();
                                   navigate(`/admin/tools/${tool.id}`);
                                 }}
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
                                 title={t('admin.tools.edit', 'Edit')}
                               >
                                 <Icon name="pencil" className="h-4 w-4" />
@@ -484,7 +484,7 @@ const AdminToolsPage = () => {
                                   e.stopPropagation();
                                   handleDeleteTool(tool.id);
                                 }}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                                className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
                                 title={t('admin.tools.delete', 'Delete')}
                               >
                                 <Icon name="trash" className="h-4 w-4" />
@@ -496,12 +496,12 @@ const AdminToolsPage = () => {
                     </tbody>
                   </table>
                   {sortedTools.length === 0 && (
-                    <div className="text-center py-12 bg-gray-50">
+                    <div className="text-center py-12 bg-gray-50 dark:bg-gray-800">
                       <Icon name="wrench" className="mx-auto h-12 w-12 text-gray-400" />
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">
+                      <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                         {t('admin.tools.noTools', 'No tools found')}
                       </h3>
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                         {t('admin.tools.noToolsDescription', 'Get started by creating a new tool.')}
                       </p>
                     </div>

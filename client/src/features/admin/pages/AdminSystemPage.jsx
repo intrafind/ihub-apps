@@ -269,16 +269,16 @@ const AdminSystemPage = () => {
   return (
     <AdminAuth>
       <AdminNavigation />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                   {t('admin.system.title', 'System Administration')}
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {t('admin.system.description', 'Manage system-wide settings and maintenance')}
                 </p>
               </div>
@@ -290,32 +290,32 @@ const AdminSystemPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="space-y-8">
             {/* Force Refresh Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
-                  <div className="p-3 rounded-full bg-orange-100">
-                    <Icon name="refresh" size="lg" className="text-orange-600" />
+                  <div className="p-3 rounded-full bg-orange-100 dark:bg-orange-900/50">
+                    <Icon name="refresh" size="lg" className="text-orange-600 dark:text-orange-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     {t('admin.system.forceTitle', 'Force Client Refresh')}
                   </h3>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
                     {t(
                       'admin.system.forceDesc',
                       'Trigger a force refresh for all clients. This will clear all browser caches, localStorage, and force clients to reload all assets (JS, CSS, fonts, configurations) without using browser cache. The disclaimer acceptance will be preserved.'
                     )}
                   </p>
 
-                  <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
+                  <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-4 mb-4">
                     <div className="flex">
                       <Icon name="warning" size="md" className="text-amber-500 mt-0.5 mr-3" />
                       <div>
-                        <h4 className="text-sm font-medium text-amber-800">
+                        <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200">
                           {t('admin.system.warningTitle', 'Warning')}
                         </h4>
-                        <p className="text-sm text-amber-700 mt-1">
+                        <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
                           {t(
                             'admin.system.warningDesc',
                             'This action will force all connected clients to reload their browsers on their next page interaction. Use this when deploying critical updates or when clients need to clear cached data.'
@@ -329,8 +329,8 @@ const AdminSystemPage = () => {
                     <div
                       className={`p-4 rounded-md mb-4 ${
                         forceRefreshMessage.type === 'success'
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-red-50 border border-red-200'
+                          ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                          : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
                       }`}
                     >
                       <div className="flex">
@@ -346,8 +346,8 @@ const AdminSystemPage = () => {
                         <p
                           className={`text-sm ${
                             forceRefreshMessage.type === 'success'
-                              ? 'text-green-700'
-                              : 'text-red-700'
+                              ? 'text-green-700 dark:text-green-300'
+                              : 'text-red-700 dark:text-red-300'
                           }`}
                         >
                           {forceRefreshMessage.text}
@@ -405,25 +405,25 @@ const AdminSystemPage = () => {
             </div>
 
             {/* Value Encryption Tool Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
-                  <div className="p-3 rounded-full bg-blue-100">
-                    <Icon name="shield-check" size="lg" className="text-blue-600" />
+                  <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
+                    <Icon name="shield-check" size="lg" className="text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     {t('admin.system.encryptTitle', 'Value Encryption Tool')}
                   </h3>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
                     {t(
                       'admin.system.encryptDesc',
                       'Encrypt sensitive values (passwords, API keys, secrets) to store them securely in .env files or configuration. The encrypted values will be automatically decrypted when loaded by the application.'
                     )}
                   </p>
 
-                  <div className="bg-amber-50 border border-amber-200 rounded-md p-4 mb-4">
+                  <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-md p-4 mb-4">
                     <div className="flex">
                       <Icon
                         name="information-circle"
@@ -431,10 +431,10 @@ const AdminSystemPage = () => {
                         className="text-amber-500 mt-0.5 mr-3"
                       />
                       <div>
-                        <h4 className="text-sm font-medium text-amber-800">
+                        <h4 className="text-sm font-medium text-amber-800 dark:text-amber-200">
                           {t('admin.system.encryptInfoTitle', 'Usage Instructions')}
                         </h4>
-                        <ul className="text-sm text-amber-700 mt-1 space-y-1">
+                        <ul className="text-sm text-amber-700 dark:text-amber-300 mt-1 space-y-1">
                           <li>
                             {t(
                               'admin.system.encryptInfo1',

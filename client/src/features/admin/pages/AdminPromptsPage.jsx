@@ -361,7 +361,7 @@ const AdminPromptsPage = () => {
                   className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                     selectedCategory === category.id
                       ? 'text-white shadow-lg transform scale-105'
-                      : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+                      : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
                   }`}
                   style={{
                     backgroundColor: selectedCategory === category.id ? category.color : undefined

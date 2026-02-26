@@ -159,7 +159,7 @@ const AdminPromptEditPage = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
@@ -167,17 +167,17 @@ const AdminPromptEditPage = () => {
   if (error) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
             <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
             <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
                 {t('admin.prompts.edit.loadError', 'Error loading prompt')}
               </h3>
-              <p className="mt-1 text-sm text-red-700">{error}</p>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
               <button
                 onClick={() => navigate('/admin/prompts')}
-                className="mt-2 text-sm text-red-600 hover:text-red-500"
+                className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
               >
                 {t('admin.prompts.edit.backToList', 'Back to Prompts')}
               </button>
@@ -195,12 +195,12 @@ const AdminPromptEditPage = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {isNewPrompt
                   ? t('admin.prompts.edit.createTitle', 'Create New Prompt')
                   : t('admin.prompts.edit.editTitle', 'Edit Prompt')}
               </h1>
-              <p className="mt-1 text-sm text-gray-600">
+              <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                 {isNewPrompt
                   ? t('admin.prompts.edit.createDesc', 'Create a new prompt for your iHub Apps')
                   : t('admin.prompts.edit.editDesc', 'Edit the prompt details and configuration')}
@@ -220,7 +220,7 @@ const AdminPromptEditPage = () => {
                     linkElement.setAttribute('download', exportFileDefaultName);
                     linkElement.click();
                   }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   <Icon name="download" className="h-4 w-4 mr-2" />
                   {t('common.download')}
@@ -228,7 +228,7 @@ const AdminPromptEditPage = () => {
               )}
               <button
                 onClick={() => navigate('/admin/prompts')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="arrow-left" className="h-4 w-4 mr-2" />
                 {t('admin.prompts.edit.backToList', 'Back to Prompts')}
@@ -261,7 +261,7 @@ const AdminPromptEditPage = () => {
             <button
               type="button"
               onClick={() => navigate('/admin/prompts')}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               {t('admin.prompts.edit.cancel', 'Cancel')}
             </button>
