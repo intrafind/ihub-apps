@@ -7,14 +7,11 @@ import crypto from 'crypto';
 import jwt from 'jsonwebtoken';
 
 // Generate RSA key pair for RS256
-const { publicKey: rsaPublicKey, privateKey: rsaPrivateKey } = crypto.generateKeyPairSync(
-  'rsa',
-  {
-    modulusLength: 2048,
-    publicKeyEncoding: { type: 'spki', format: 'pem' },
-    privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
-  }
-);
+const { publicKey: rsaPublicKey, privateKey: rsaPrivateKey } = crypto.generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'pem' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'pem' }
+});
 
 const HS256_SECRET = 'test-jwt-secret-key-12345';
 
