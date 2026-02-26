@@ -10,7 +10,7 @@ import { fetchAppDetails } from '../../api/api';
  * based on UI configuration, current language, and current page/app
  */
 const DocumentTitle = () => {
-  const { i18n } = useTranslation();
+  const { i18n, t } = useTranslation();
   const { uiConfig, isLoading } = useUIConfig();
   const location = useLocation();
   const currentLanguage = i18n.language || 'en';
@@ -42,26 +42,42 @@ const DocumentTitle = () => {
       return;
     }
 
-    let title = 'iHub Apps'; // Default fallback
-
-    // Use the configurable title if available
+    // Get base app name from config
+    let baseAppName = 'iHub Apps'; // Default fallback
     if (uiConfig?.title) {
       const localizedTitle = getLocalizedContent(uiConfig.title, currentLanguage);
       if (localizedTitle) {
-        title = localizedTitle;
+        baseAppName = localizedTitle;
       }
     }
 
-    // If we're on an app page and have app data, append the app name
-    if (isAppPage && currentApp) {
+    // Determine page-specific prefix based on route
+    let pagePrefix = '';
+    const pathname = location.pathname;
+
+    if (pathname.startsWith('/admin')) {
+      // Admin routes
+      pagePrefix = t('documentTitle.admin', 'Admin');
+    } else if (pathname.startsWith('/settings')) {
+      // Settings routes
+      pagePrefix = t('documentTitle.settings', 'Settings');
+    } else if (pathname.startsWith('/workflows')) {
+      // Workflows routes
+      pagePrefix = t('documentTitle.workflows', 'Workflows');
+    } else if (pathname.startsWith('/prompts')) {
+      // Prompts routes
+      pagePrefix = t('documentTitle.prompts', 'Prompts');
+    } else if (isAppPage && currentApp) {
+      // App-specific page
       const appName = getLocalizedContent(currentApp.name, currentLanguage) || currentApp.id;
-      if (appName) {
-        title = `${title} - ${appName}`;
-      }
+      pagePrefix = appName;
     }
+
+    // Construct final title
+    const title = pagePrefix ? `${pagePrefix} | ${baseAppName}` : baseAppName;
 
     document.title = title;
-  }, [uiConfig, currentLanguage, isAppPage, currentApp, isLoading]);
+  }, [uiConfig, currentLanguage, isAppPage, currentApp, isLoading, location.pathname, t]);
 
   // This component doesn't render anything visible
   return null;

@@ -1376,5 +1376,11 @@
     "generated": "Generiert",
     "failed": "Fehlgeschlagen",
     "cancelled": "Abgebrochen"
+  },
+  "documentTitle": {
+    "admin": "Admin",
+    "settings": "Einstellungen",
+    "workflows": "Workflows",
+    "prompts": "Prompts"
   }
 }
