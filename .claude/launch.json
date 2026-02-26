@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Express server",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["-r", "dotenv/config", "server/server.js", "dotenv_config_path=../.env"],
+      "port": 3000
+    },
+    {
+      "name": "Vite dev client",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--host"],
+      "port": 5173
+    }
+  ]
+}
