@@ -122,11 +122,13 @@ const useDarkMode = () => {
       applyDarkMode(dark);
     };
 
-    // Use addEventListener if available, fallback to addListener (deprecated but wider support)
+    // Use addEventListener (modern browsers: Chrome 85+, Safari 14+, Firefox 78+)
+    // Fallback to addListener for older browsers (deprecated but necessary for Safari < 14)
     if (mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', handleChange);
       return () => mediaQuery.removeEventListener('change', handleChange);
     } else if (mediaQuery.addListener) {
+      // Deprecated fallback for older Safari (< 14)
       mediaQuery.addListener(handleChange);
       return () => mediaQuery.removeListener(handleChange);
     }

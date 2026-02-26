@@ -43,7 +43,10 @@ function generateThemeCSS(theme) {
   if (theme.cssVariables && typeof theme.cssVariables === 'object') {
     for (const [name, value] of Object.entries(theme.cssVariables)) {
       if (typeof value === 'string') {
-        css.push(`  --${sanitizeCSSName(name)}: ${sanitizeCSSValue(value)};`);
+        const sanitizedName = sanitizeCSSName(name);
+        if (sanitizedName) {
+          css.push(`  --${sanitizedName}: ${sanitizeCSSValue(value)};`);
+        }
       }
     }
   }
@@ -68,7 +71,10 @@ function generateThemeCSS(theme) {
   if (darkMode.cssVariables && typeof darkMode.cssVariables === 'object') {
     for (const [name, value] of Object.entries(darkMode.cssVariables)) {
       if (typeof value === 'string') {
-        css.push(`  --${sanitizeCSSName(name)}: ${sanitizeCSSValue(value)};`);
+        const sanitizedName = sanitizeCSSName(name);
+        if (sanitizedName) {
+          css.push(`  --${sanitizedName}: ${sanitizeCSSValue(value)};`);
+        }
       }
     }
   }
@@ -106,7 +112,7 @@ function getDefaultThemeCSS() {
 
 /**
  * Darken a hex color by a percentage
- * @param {string} hex - Hex color (e.g., #4f46e5)
+ * @param {string} hex - Hex color (e.g., #4f46e5 or #fff)
  * @param {number} percent - Percentage to darken (default: 10)
  * @returns {string} Darkened hex color
  */
@@ -116,10 +122,25 @@ function darkenColor(hex, percent = 10) {
   // Remove # if present
   hex = hex.replace(/^#/, '');
 
+  // Expand 3-character shorthand to 6-character format
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+
+  // Validate hex length
+  if (hex.length !== 6) {
+    return '#4338ca'; // Return default if invalid
+  }
+
   // Parse RGB values
   let r = parseInt(hex.substring(0, 2), 16);
   let g = parseInt(hex.substring(2, 4), 16);
   let b = parseInt(hex.substring(4, 6), 16);
+
+  // Handle NaN from invalid hex
+  if (isNaN(r) || isNaN(g) || isNaN(b)) {
+    return '#4338ca';
+  }
 
   // Darken each component
   r = Math.max(0, Math.floor(r * (1 - percent / 100)));
@@ -133,11 +154,13 @@ function darkenColor(hex, percent = 10) {
 /**
  * Sanitize CSS variable name to prevent injection
  * @param {string} name - Variable name
- * @returns {string} Sanitized name
+ * @returns {string|null} Sanitized name or null if invalid
  */
 function sanitizeCSSName(name) {
   // Only allow alphanumeric, hyphens, and underscores
-  return String(name).replace(/[^a-zA-Z0-9_-]/g, '');
+  const sanitized = String(name).replace(/[^a-zA-Z0-9_-]/g, '');
+  // Return null if sanitized name is empty
+  return sanitized.length > 0 ? sanitized : null;
 }
 
 /**

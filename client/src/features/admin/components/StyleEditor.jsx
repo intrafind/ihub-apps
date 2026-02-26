@@ -1,10 +1,30 @@
 import { useState } from 'react';
 
+// Validate hex color format (#fff or #ffffff)
+const isValidHexColor = color => {
+  if (!color || typeof color !== 'string') return true; // Allow empty
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color);
+};
+
 const StyleEditor = ({ config, onUpdate, t }) => {
   const [activeSection, setActiveSection] = useState('theme');
+  const [colorErrors, setColorErrors] = useState({});
 
   // Handle theme color changes at the root theme level
   const handleThemeColorChange = (colorKey, color, isDarkMode = false) => {
+    const errorKey = isDarkMode ? `dark-${colorKey}` : colorKey;
+
+    // Validate color format
+    if (color && !isValidHexColor(color)) {
+      setColorErrors(prev => ({ ...prev, [errorKey]: true }));
+    } else {
+      setColorErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[errorKey];
+        return newErrors;
+      });
+    }
+
     const updatedConfig = { ...config };
     if (!updatedConfig.theme) {
       updatedConfig.theme = {};
@@ -241,11 +261,17 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm ${
+                          colorErrors[key] ? 'border-red-500' : 'border-gray-300'
+                        }`}
                         placeholder={defaultColor}
-                        pattern="^#[0-9a-fA-F]{6}$"
                       />
                     </div>
+                    {colorErrors[key] && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {t('theme.colorInvalid', 'Please enter a valid hex color (e.g., #4f46e5)')}
+                      </p>
+                    )}
 
                     {/* Color Presets */}
                     <div className="flex flex-wrap gap-1 mt-2">
@@ -279,6 +305,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {darkModeColors.map(({ key, label, default: defaultColor }) => {
                 const currentColor = config.theme?.darkMode?.[key] || '';
+                const errorKey = `dark-${key}`;
 
                 return (
                   <div key={`dark-${key}`} className="space-y-2">
@@ -295,11 +322,17 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
-                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm ${
+                          colorErrors[errorKey] ? 'border-red-500' : 'border-gray-300'
+                        }`}
                         placeholder={defaultColor}
-                        pattern="^#[0-9a-fA-F]{6}$"
                       />
                     </div>
+                    {colorErrors[errorKey] && (
+                      <p className="text-xs text-red-500 mt-1">
+                        {t('theme.colorInvalid', 'Please enter a valid hex color (e.g., #4f46e5)')}
+                      </p>
+                    )}
 
                     {/* Color Presets */}
                     <div className="flex flex-wrap gap-1 mt-2">
