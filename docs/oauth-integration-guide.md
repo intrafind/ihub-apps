@@ -1,5 +1,8 @@
 # OAuth 2.0 Client Credentials - Integration Guide
 
+> **Note:** This guide covers the OAuth 2.0 Client Credentials flow (machine-to-machine API access).
+> For user login with Authorization Code Flow, see [OAuth Authorization Code Flow](oauth-authorization-code.md).
+
 This guide explains how to use OAuth 2.0 Client Credentials to access iHub Apps APIs programmatically from external applications.
 
 ## Table of Contents

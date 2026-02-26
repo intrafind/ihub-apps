@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - iHub OAuth</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 800px; margin: 40px auto; padding: 0 20px; color: #1f2937; }
+    h1 { font-size: 1.75rem; }
+    .card { background: white; border: 1px solid #e5e7eb; border-radius: 12px; padding: 20px; margin-bottom: 20px; }
+    .label { font-size: 12px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+    pre { background: #f3f4f6; border-radius: 8px; padding: 16px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; word-break: break-all; }
+    .btn { padding: 8px 16px; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; border: none; }
+    .btn-secondary { background: #f3f4f6; color: #374151; }
+    .btn-danger { background: #dc2626; color: white; }
+    .actions { display: flex; gap: 8px; margin-top: 16px; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 9999px; font-size: 12px; font-weight: 500; background: #dbeafe; color: #1d4ed8; }
+    .user-name { font-weight: bold; margin-right: 8px; }
+    .user-meta { display: block; font-size: 12px; color: #6b7280; margin-top: 4px; }
+    #status { padding: 8px 12px; border-radius: 6px; font-size: 14px; display: none; }
+    .success { background: #d1fae5; color: #065f46; }
+    .error { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <h1>Dashboard</h1>
+  <div id="status"></div>
+
+  <div class="card" id="user-card">
+    <div class="label">User Info</div>
+    <div id="user-info">Loading...</div>
+  </div>
+
+  <div class="card">
+    <div class="label">Access Token Claims</div>
+    <pre id="access-token">Loading...</pre>
+  </div>
+
+  <div class="card">
+    <div class="label">ID Token Claims</div>
+    <pre id="id-token">Loading...</pre>
+  </div>
+
+  <div class="card">
+    <div class="label">Actions</div>
+    <div class="actions">
+      <button class="btn btn-secondary" onclick="refreshToken()" id="refresh-btn" style="display:none">Refresh Token</button>
+      <form action="/logout" method="POST" style="display:inline">
+        <button type="submit" class="btn btn-danger">Logout</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    /**
+     * Displays a transient status message above the page content.
+     * Automatically hides after 4 seconds.
+     *
+     * @param {string} msg - The message to display
+     * @param {'success'|'error'} type - Visual style class to apply
+     */
+    function showStatus(msg, type) {
+      const el = document.getElementById('status');
+      el.textContent = msg;
+      el.className = type;
+      el.style.display = 'block';
+      setTimeout(() => { el.style.display = 'none'; }, 4000);
+    }
+
+    /**
+     * Renders the user info section using safe DOM manipulation.
+     * All values are set via textContent to prevent XSS.
+     *
+     * @param {object} userInfo - User profile from /api/oauth/userinfo
+     * @param {string} clientMode - 'confidential' or 'public'
+     */
+    function renderUserInfo(userInfo, clientMode) {
+      const container = document.getElementById('user-info');
+      container.textContent = '';
+
+      const nameLine = document.createElement('span');
+      nameLine.className = 'user-name';
+      nameLine.textContent = userInfo.name || 'Unknown';
+
+      const badge = document.createElement('span');
+      badge.className = 'badge';
+      badge.textContent = userInfo.email || '';
+
+      const meta = document.createElement('small');
+      meta.className = 'user-meta';
+      meta.textContent = `Sub: ${userInfo.sub || '-'} | Mode: ${clientMode}`;
+
+      container.appendChild(nameLine);
+      container.appendChild(badge);
+      container.appendChild(meta);
+    }
+
+    /**
+     * Fetches the current session from the server and populates the dashboard.
+     * Redirects to home if the session has expired or does not exist.
+     */
+    async function loadSession() {
+      const res = await fetch('/api/session');
+      if (!res.ok) { window.location.href = '/'; return; }
+      const data = await res.json();
+
+      const { userInfo, tokens, clientMode } = data;
+
+      renderUserInfo(userInfo, clientMode);
+
+      document.getElementById('access-token').textContent =
+        JSON.stringify(tokens.access_token_decoded, null, 2);
+      document.getElementById('id-token').textContent =
+        JSON.stringify(tokens.id_token_decoded, null, 2);
+
+      if (tokens.has_refresh_token) {
+        document.getElementById('refresh-btn').style.display = 'inline-block';
+      }
+    }
+
+    /**
+     * Calls the /api/refresh endpoint to exchange the refresh token for
+     * a new access token, then reloads session data on success.
+     */
+    async function refreshToken() {
+      const res = await fetch('/api/refresh', { method: 'POST' });
+      if (res.ok) {
+        showStatus('Token refreshed! Reloading...', 'success');
+        setTimeout(() => loadSession(), 1000);
+      } else {
+        const err = await res.json();
+        showStatus(`Refresh failed: ${JSON.stringify(err)}`, 'error');
+      }
+    }
+
+    loadSession();
+  </script>
+</body>
+</html>

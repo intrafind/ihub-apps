@@ -81,10 +81,20 @@ export function createRateLimiters(platformConfig = {}) {
     ...rateLimitConfig.inferenceApi
   };
 
+  // OAuth API configuration - protect token/authorize endpoints from brute force
+  const oauthApiConfig = {
+    ...defaultConfig,
+    limit: 50, // Stricter: 50 requests per 15 min for token endpoint
+    windowMs: 15 * 60 * 1000,
+    skipFailedRequests: false,
+    ...rateLimitConfig.oauthApi
+  };
+
   return {
     adminApiLimiter: createRateLimiter(adminApiConfig, {}, 'admin API'),
     publicApiLimiter: createRateLimiter(publicApiConfig, {}, 'public API'),
     authApiLimiter: createRateLimiter(authApiConfig, {}, 'authentication'),
-    inferenceApiLimiter: createRateLimiter(inferenceApiConfig, {}, 'inference API')
+    inferenceApiLimiter: createRateLimiter(inferenceApiConfig, {}, 'inference API'),
+    oauthApiLimiter: createRateLimiter(oauthApiConfig, {}, 'OAuth API')
   };
 }

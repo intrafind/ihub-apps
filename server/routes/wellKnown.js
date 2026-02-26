@@ -96,18 +96,32 @@ export default function registerWellKnownRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const algorithm = getJwtAlgorithm();
 
-      // Build OpenID Connect Discovery response
+      // Use configured issuer or fall back to dynamic base URL.
+      // OIDC spec (RFC 8414 §2) requires issuer to be a URL starting with https:// or http://.
+      const oauthConfig = platform.oauth || {};
+      const issuer =
+        oauthConfig.issuer && oauthConfig.issuer.startsWith('http') ? oauthConfig.issuer : baseUrl;
+
+      // Build OpenID Connect Discovery response.
+      // Fields follow the OIDC Discovery specification (OpenID Connect Discovery 1.0).
       const discovery = {
-        issuer: 'ihub-apps',
+        issuer,
         jwks_uri: `${baseUrl}/.well-known/jwks.json`,
-        authorization_endpoint: `${baseUrl}/api/auth/oidc`,
+        authorization_endpoint: `${baseUrl}/api/oauth/authorize`,
         token_endpoint: `${baseUrl}/api/oauth/token`,
-        response_types_supported: ['token', 'code'],
+        userinfo_endpoint: `${baseUrl}/api/oauth/userinfo`,
+        revocation_endpoint: `${baseUrl}/api/oauth/revoke`,
+        end_session_endpoint: `${baseUrl}/api/oauth/logout`,
+        response_types_supported: ['code'],
         subject_types_supported: ['public'],
         id_token_signing_alg_values_supported: [algorithm],
         token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
-        grant_types_supported: ['client_credentials', 'authorization_code'],
-        scopes_supported: ['openid', 'profile', 'email']
+        grant_types_supported: ['client_credentials', 'authorization_code', 'refresh_token'],
+        scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
+        code_challenge_methods_supported: ['S256'],
+        claims_supported: ['sub', 'name', 'email', 'groups', 'iss', 'aud', 'exp', 'iat', 'nonce'],
+        request_parameter_supported: false,
+        request_uri_parameter_supported: false
       };
 
       logger.info('Served OpenID Connect Discovery', {

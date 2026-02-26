@@ -17,6 +17,7 @@ import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
 import ServerError from './pages/error/ServerError';
 import UnifiedPage from './pages/UnifiedPage';
+import LoginPage from './pages/LoginPage';
 // Lazy load admin components
 const AdminHome = React.lazy(() => import('./features/admin/pages/AdminHome'));
 const AdminUsageReports = React.lazy(() => import('./features/admin/pages/AdminUsageReports'));
@@ -187,6 +188,9 @@ function App() {
                   <Route path="/teams/tab" element={<Layout />}>
                     <Route index element={<SafeAppsList />} />
                   </Route>
+
+                  {/* Standalone login page — rendered outside Layout (no sidebar/header) */}
+                  <Route path="login" element={<LoginPage />} />
 
                   {/* Regular application routes */}
                   <Route path="/" element={<Layout />}>

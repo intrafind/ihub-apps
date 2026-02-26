@@ -33,24 +33,29 @@ curl https://your-ihub-domain.com/.well-known/openid-configuration
 **Example Response**:
 ```json
 {
-  "issuer": "ihub-apps",
+  "issuer": "https://your-ihub-domain.com",
   "jwks_uri": "https://your-ihub-domain.com/.well-known/jwks.json",
-  "authorization_endpoint": "https://your-ihub-domain.com/api/auth/oidc",
+  "authorization_endpoint": "https://your-ihub-domain.com/api/oauth/authorize",
   "token_endpoint": "https://your-ihub-domain.com/api/oauth/token",
-  "response_types_supported": ["token", "code"],
+  "userinfo_endpoint": "https://your-ihub-domain.com/api/oauth/userinfo",
+  "response_types_supported": ["code"],
   "subject_types_supported": ["public"],
-  "id_token_signing_alg_values_supported": ["HS256"],
+  "id_token_signing_alg_values_supported": ["RS256"],
   "token_endpoint_auth_methods_supported": [
     "client_secret_post",
     "client_secret_basic"
   ],
   "grant_types_supported": [
-    "client_credentials",
-    "authorization_code"
+    "authorization_code",
+    "refresh_token",
+    "client_credentials"
   ],
-  "scopes_supported": ["openid", "profile", "email"]
+  "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "code_challenge_methods_supported": ["S256"]
 }
 ```
+
+> **Note on the authorization endpoint:** The authorization endpoint is `GET /api/oauth/authorize` (the OAuth 2.0 Authorization Code Flow endpoint). This is different from the OIDC provider login endpoint (`/api/auth/oidc/...`) used when iHub itself is configured to authenticate users against an external identity provider.
 
 ### JWKS (JSON Web Key Set)
 
@@ -337,7 +342,9 @@ services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 ## Related Documentation
 
 - [JWT Authentication](jwt-authentication.md) - JWT authentication configuration
-- [OAuth 2.0](oauth.md) - OAuth 2.0 client credentials
+- [OAuth Authorization Code Flow](oauth-authorization-code.md) - User login with Authorization Code Flow
+- [OAuth Integration Guide (Client Credentials)](oauth-integration-guide.md) - Machine-to-machine API access
+- [Using iHub as OIDC Identity Provider](ihub-as-oidc-idp.md) - Configuring external OIDC clients against iHub
 - [External Authentication](external-authentication.md) - External authentication methods
 - [Platform Configuration](platform.md) - Platform configuration reference
 

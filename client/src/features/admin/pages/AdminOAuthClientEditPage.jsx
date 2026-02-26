@@ -22,6 +22,8 @@ const AdminOAuthClientEditPage = () => {
   const [showSecretModal, setShowSecretModal] = useState(false);
   const [availableApps, setAvailableApps] = useState([]);
   const [availableModels, setAvailableModels] = useState([]);
+  const [redirectUriInput, setRedirectUriInput] = useState('');
+  const [postLogoutUriInput, setPostLogoutUriInput] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -29,7 +31,13 @@ const AdminOAuthClientEditPage = () => {
     allowedApps: [],
     allowedModels: [],
     tokenExpirationMinutes: 60,
-    active: true
+    active: true,
+    clientType: 'confidential',
+    grantTypes: ['client_credentials'],
+    redirectUris: [],
+    postLogoutRedirectUris: [],
+    consentRequired: true,
+    trusted: false
   });
 
   useEffect(() => {
@@ -71,7 +79,13 @@ const AdminOAuthClientEditPage = () => {
         allowedApps: data.client.allowedApps || [],
         allowedModels: data.client.allowedModels || [],
         tokenExpirationMinutes: data.client.tokenExpirationMinutes || 60,
-        active: data.client.active !== false
+        active: data.client.active !== false,
+        clientType: data.client.clientType || 'confidential',
+        grantTypes: data.client.grantTypes || ['client_credentials'],
+        redirectUris: data.client.redirectUris || [],
+        postLogoutRedirectUris: data.client.postLogoutRedirectUris || [],
+        consentRequired: data.client.consentRequired !== false,
+        trusted: data.client.trusted || false
       });
     } catch (error) {
       setMessage({
@@ -146,6 +160,56 @@ const AdminOAuthClientEditPage = () => {
       ...prev,
       allowedModels: selectedModels
     }));
+  };
+
+  /**
+   * Adds a redirect URI to the specified field after validating the URI scheme.
+   * Accepts HTTPS URIs for production and HTTP localhost URIs for development.
+   *
+   * @param {'redirectUris'|'postLogoutRedirectUris'} field - The formData field to append to
+   * @param {string} value - The raw URI string entered by the admin
+   */
+  const handleRedirectUriAdd = (field, value) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    // Validate: must be https:// or http://localhost
+    if (!trimmed.startsWith('https://') && !trimmed.match(/^http:\/\/localhost(:\d+)?/)) {
+      alert('Redirect URIs must use HTTPS (or http://localhost for development)');
+      return;
+    }
+    setFormData(prev => ({
+      ...prev,
+      [field]: [...(prev[field] || []), trimmed]
+    }));
+  };
+
+  /**
+   * Removes a redirect URI from the specified field by its index.
+   *
+   * @param {'redirectUris'|'postLogoutRedirectUris'} field - The formData field to remove from
+   * @param {number} index - Zero-based index of the URI to remove
+   */
+  const handleRedirectUriRemove = (field, index) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: prev[field].filter((_, i) => i !== index)
+    }));
+  };
+
+  /**
+   * Toggles a grant type on or off in the grantTypes array.
+   * If the grant type is already present it is removed; otherwise it is added.
+   *
+   * @param {string} grantType - The OAuth 2.0 grant type identifier (e.g. 'authorization_code')
+   */
+  const handleGrantTypeToggle = grantType => {
+    setFormData(prev => {
+      const current = prev.grantTypes || [];
+      const updated = current.includes(grantType)
+        ? current.filter(g => g !== grantType)
+        : [...current, grantType];
+      return { ...prev, grantTypes: updated };
+    });
   };
 
   const copyToClipboard = text => {
@@ -335,6 +399,222 @@ const AdminOAuthClientEditPage = () => {
                 )}
                 allowWildcard={true}
               />
+            </div>
+
+            {/* Client Type & Grant Types */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-4">
+                {t('admin.auth.oauth.authCodeSection', 'OAuth 2.0 Authorization Code Flow')}
+              </h3>
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="clientType" className="block text-sm font-medium text-gray-700">
+                    {t('admin.auth.oauth.clientType', 'Client Type')}
+                  </label>
+                  <select
+                    id="clientType"
+                    name="clientType"
+                    value={formData.clientType}
+                    onChange={handleInputChange}
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                  >
+                    <option value="confidential">
+                      {t(
+                        'admin.auth.oauth.clientTypeConfidential',
+                        'Confidential (server-side apps with client secret)'
+                      )}
+                    </option>
+                    <option value="public">
+                      {t(
+                        'admin.auth.oauth.clientTypePublic',
+                        'Public (SPAs, mobile apps - PKCE required)'
+                      )}
+                    </option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('admin.auth.oauth.grantTypes', 'Grant Types')}
+                  </label>
+                  <div className="space-y-2">
+                    {['client_credentials', 'authorization_code', 'refresh_token'].map(grant => (
+                      <label key={grant} className="flex items-center">
+                        <input
+                          type="checkbox"
+                          checked={(formData.grantTypes || []).includes(grant)}
+                          onChange={() => handleGrantTypeToggle(grant)}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <span className="ml-2 text-sm text-gray-700">
+                          {grant === 'client_credentials' &&
+                            t(
+                              'admin.auth.oauth.grantClientCredentials',
+                              'Client Credentials (machine-to-machine)'
+                            )}
+                          {grant === 'authorization_code' &&
+                            t(
+                              'admin.auth.oauth.grantAuthorizationCode',
+                              'Authorization Code (user login with PKCE)'
+                            )}
+                          {grant === 'refresh_token' &&
+                            t(
+                              'admin.auth.oauth.grantRefreshToken',
+                              'Refresh Token (long-lived sessions)'
+                            )}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {(formData.grantTypes || []).includes('authorization_code') && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('admin.auth.oauth.redirectUris', 'Redirect URIs')}
+                      </label>
+                      <div className="space-y-2">
+                        {(formData.redirectUris || []).map((uri, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <code className="flex-1 bg-gray-100 px-2 py-1 rounded text-sm">
+                              {uri}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => handleRedirectUriRemove('redirectUris', i)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={redirectUriInput}
+                            onChange={e => setRedirectUriInput(e.target.value)}
+                            placeholder={t(
+                              'admin.auth.oauth.redirectUriPlaceholder',
+                              'https://yourapp.com/callback'
+                            )}
+                            className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleRedirectUriAdd('redirectUris', redirectUriInput);
+                                setRedirectUriInput('');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleRedirectUriAdd('redirectUris', redirectUriInput);
+                              setRedirectUriInput('');
+                            }}
+                            className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                          >
+                            {t('common.add', 'Add')}
+                          </button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          {t(
+                            'admin.auth.oauth.redirectUriHint',
+                            'Must use HTTPS (or http://localhost for development)'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        {t('admin.auth.oauth.postLogoutRedirectUris', 'Post-Logout Redirect URIs')}
+                      </label>
+                      <div className="space-y-2">
+                        {(formData.postLogoutRedirectUris || []).map((uri, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <code className="flex-1 bg-gray-100 px-2 py-1 rounded text-sm">
+                              {uri}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => handleRedirectUriRemove('postLogoutRedirectUris', i)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              &times;
+                            </button>
+                          </div>
+                        ))}
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={postLogoutUriInput}
+                            onChange={e => setPostLogoutUriInput(e.target.value)}
+                            placeholder={t(
+                              'admin.auth.oauth.postLogoutUriPlaceholder',
+                              'https://yourapp.com/logged-out'
+                            )}
+                            className="flex-1 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
+                                setPostLogoutUriInput('');
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleRedirectUriAdd('postLogoutRedirectUris', postLogoutUriInput);
+                              setPostLogoutUriInput('');
+                            }}
+                            className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                          >
+                            {t('common.add', 'Add')}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 border-t pt-3">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="consentRequired"
+                          name="consentRequired"
+                          checked={formData.consentRequired}
+                          onChange={handleInputChange}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label
+                          htmlFor="consentRequired"
+                          className="ml-2 block text-sm text-gray-900"
+                        >
+                          {t('admin.auth.oauth.consentRequired', 'Require user consent screen')}
+                        </label>
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          id="trusted"
+                          name="trusted"
+                          checked={formData.trusted}
+                          onChange={handleInputChange}
+                          className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        />
+                        <label htmlFor="trusted" className="ml-2 block text-sm text-gray-900">
+                          {t(
+                            'admin.auth.oauth.trustedClient',
+                            'Trusted client (skip consent screen)'
+                          )}
+                        </label>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
 
             {/* Submit buttons */}
