@@ -46,11 +46,11 @@ const DarkModeToggle = ({ className = '' }) => {
   return (
     <button
       onClick={toggleMode}
-      className={`p-2 rounded-md hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/20 transition-colors ${className}`}
+      className={`flex items-center justify-center px-2 py-1 rounded border border-white/50 hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white transition-colors ${className}`}
       aria-label={nextLabel}
       title={`${label} - ${nextLabel}`}
     >
-      <Icon name={icon} size="md" className="text-current" aria-hidden="true" />
+      <Icon name={icon} size="sm" className="text-current" aria-hidden="true" />
       {preference === 'auto' && (
         <span className="sr-only">
           {t('darkMode.followingSystem', 'Following system preference')}
