@@ -1,9 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import authGatePlugin from './vite-plugins/vite-plugin-auth-gate.js';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), authGatePlugin()],
   base: './', // Use relative paths for all assets - works with dynamic base tag
   envDir: '../',
   build: {

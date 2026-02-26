@@ -356,7 +356,14 @@ export function AuthProvider({ children }) {
       }
 
       // If we reach here, no auto-redirect is configured or it was attempted recently
-      // Dispatch event for UI components to handle
+      // Signal the auth gate to show its overlay for re-authentication
+      window.dispatchEvent(
+        new CustomEvent('showAuthGate', {
+          detail: { reason: 'tokenExpired' }
+        })
+      );
+
+      // Also dispatch sessionExpired for any other UI components listening
       window.dispatchEvent(new CustomEvent('sessionExpired'));
 
       // Logout the user
@@ -365,8 +372,16 @@ export function AuthProvider({ children }) {
 
     window.addEventListener('authTokenExpired', handleTokenExpired);
 
+    // Listen for successful re-authentication from the auth gate overlay
+    const handleAuthGateSuccess = () => {
+      console.log('🔓 Auth gate re-authentication successful - refreshing auth state');
+      loadAuthStatus();
+    };
+    window.addEventListener('authGateSuccess', handleAuthGateSuccess);
+
     return () => {
       window.removeEventListener('authTokenExpired', handleTokenExpired);
+      window.removeEventListener('authGateSuccess', handleAuthGateSuccess);
     };
   }, [handleOidcCallback, loadAuthStatus]);
 

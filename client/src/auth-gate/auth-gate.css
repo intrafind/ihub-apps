@@ -1,0 +1,329 @@
+/* Auth Gate — Standalone styles (no Tailwind dependency) */
+
+:root {
+  --ag-primary: #3b82f6;
+  --ag-primary-hover: #2563eb;
+  --ag-primary-light: #eff6ff;
+  --ag-bg: #f9fafb;
+  --ag-card-bg: #ffffff;
+  --ag-text: #111827;
+  --ag-text-secondary: #6b7280;
+  --ag-text-muted: #9ca3af;
+  --ag-error-bg: #fef2f2;
+  --ag-error-border: #fca5a5;
+  --ag-error-text: #dc2626;
+  --ag-border: #d1d5db;
+  --ag-border-focus: #3b82f6;
+  --ag-radius: 8px;
+  --ag-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
+  --ag-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ag-bg: #111827;
+    --ag-card-bg: #1f2937;
+    --ag-text: #f9fafb;
+    --ag-text-secondary: #9ca3af;
+    --ag-text-muted: #6b7280;
+    --ag-border: #374151;
+    --ag-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    --ag-error-bg: #451a1a;
+    --ag-error-border: #7f1d1d;
+    --ag-error-text: #fca5a5;
+    --ag-primary-light: #1e3a5f;
+  }
+}
+
+#auth-gate-root {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--ag-bg);
+  z-index: 9999;
+  font-family: var(--ag-font);
+  color: var(--ag-text);
+  transition: opacity 0.2s ease-out;
+}
+
+#auth-gate-root.ag-hidden {
+  display: none;
+}
+
+#auth-gate-root.ag-overlay {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(4px);
+}
+
+#auth-gate-root.ag-fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Card */
+.ag-card {
+  background: var(--ag-card-bg);
+  border-radius: 12px;
+  box-shadow: var(--ag-shadow);
+  padding: 32px;
+  width: 100%;
+  max-width: 400px;
+  min-height: 340px;
+  display: flex;
+  flex-direction: column;
+  margin: 16px;
+}
+
+/* Logo / Header */
+.ag-header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+.ag-logo {
+  width: 56px;
+  height: 56px;
+  margin: 0 auto 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ag-logo img {
+  width: 56px;
+  height: 56px;
+  object-fit: contain;
+}
+
+.ag-app-name {
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+  color: var(--ag-text);
+}
+
+.ag-subtitle {
+  font-size: 14px;
+  color: var(--ag-text-secondary);
+  margin: 4px 0 0 0;
+}
+
+/* Error message */
+.ag-error {
+  background: var(--ag-error-bg);
+  border: 1px solid var(--ag-error-border);
+  color: var(--ag-error-text);
+  padding: 10px 14px;
+  border-radius: var(--ag-radius);
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+/* Form elements */
+.ag-form-group {
+  margin-bottom: 16px;
+}
+
+.ag-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ag-text);
+  margin-bottom: 6px;
+}
+
+.ag-input,
+.ag-select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--ag-border);
+  border-radius: var(--ag-radius);
+  font-size: 14px;
+  font-family: var(--ag-font);
+  color: var(--ag-text);
+  background: var(--ag-card-bg);
+  outline: none;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
+  box-sizing: border-box;
+}
+
+.ag-input:focus,
+.ag-select:focus {
+  border-color: var(--ag-border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.ag-input:disabled,
+.ag-select:disabled {
+  background: var(--ag-bg);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Buttons */
+.ag-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  padding: 10px 16px;
+  border-radius: var(--ag-radius);
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--ag-font);
+  cursor: pointer;
+  transition:
+    background-color 0.15s,
+    opacity 0.15s;
+  border: none;
+  box-sizing: border-box;
+}
+
+.ag-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ag-btn-primary {
+  background: var(--ag-primary);
+  color: white;
+}
+
+.ag-btn-primary:hover:not(:disabled) {
+  background: var(--ag-primary-hover);
+}
+
+.ag-btn-outline {
+  background: var(--ag-card-bg);
+  color: var(--ag-text);
+  border: 1px solid var(--ag-border);
+}
+
+.ag-btn-outline:hover:not(:disabled) {
+  background: var(--ag-bg);
+}
+
+.ag-btn-link {
+  background: none;
+  border: none;
+  color: var(--ag-primary);
+  font-size: 13px;
+  padding: 4px 0;
+  width: auto;
+  cursor: pointer;
+}
+
+.ag-btn-link:hover {
+  text-decoration: underline;
+}
+
+.ag-btn + .ag-btn {
+  margin-top: 8px;
+}
+
+.ag-btn-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* Divider */
+.ag-divider {
+  display: flex;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.ag-divider::before,
+.ag-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--ag-border);
+}
+
+.ag-divider-text {
+  padding: 0 12px;
+  font-size: 12px;
+  color: var(--ag-text-muted);
+  text-transform: lowercase;
+}
+
+/* Section label */
+.ag-section-label {
+  font-size: 13px;
+  color: var(--ag-text-secondary);
+  text-align: center;
+  margin-bottom: 12px;
+}
+
+/* Loading spinner */
+.ag-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: ag-spin 0.6s linear infinite;
+  margin-right: 8px;
+}
+
+.ag-spinner-dark {
+  border-color: rgba(0, 0, 0, 0.1);
+  border-top-color: var(--ag-primary);
+}
+
+@keyframes ag-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Loading state (full gate) */
+.ag-loading {
+  text-align: center;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ag-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--ag-border);
+  border-top-color: var(--ag-primary);
+  border-radius: 50%;
+  animation: ag-spin 0.8s linear infinite;
+  margin: 0 auto 12px;
+}
+
+.ag-loading-text {
+  font-size: 14px;
+  color: var(--ag-text-secondary);
+}
+
+/* Demo accounts hint */
+.ag-demo {
+  margin-top: 20px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--ag-text-muted);
+  line-height: 1.6;
+}
+
+/* Provider domain hint */
+.ag-domain-hint {
+  font-size: 11px;
+  color: var(--ag-text-muted);
+  margin-left: 6px;
+}
