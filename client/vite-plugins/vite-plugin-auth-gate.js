@@ -74,7 +74,8 @@ function transformForBuild(html, gateJS, gateCSS, gateI18n) {
   }
 
   // Extract <link rel="stylesheet" href="./assets/..."> tags (Vite-generated CSS)
-  const stylesheetRegex = /<link\s+rel="stylesheet"[^>]*\s+href="(\.[^"]*\/assets\/[^"]+\.css)"[^>]*\/?>/g;
+  const stylesheetRegex =
+    /<link\s+rel="stylesheet"[^>]*\s+href="(\.[^"]*\/assets\/[^"]+\.css)"[^>]*\/?>/g;
   const stylesheets = [];
   while ((match = stylesheetRegex.exec(html)) !== null) {
     stylesheets.push(match[1]);
@@ -142,10 +143,7 @@ function transformForDev(html, gateJS, gateCSS, gateI18n) {
 
   // Inject gate script (no asset data needed in dev - scripts are already in HTML)
   if (result.includes('id="auth-gate-root"')) {
-    result = result.replace(
-      '<div id="root"></div>',
-      `<div id="root"></div>\n${gateScriptTag}`
-    );
+    result = result.replace('<div id="root"></div>', `<div id="root"></div>\n${gateScriptTag}`);
   } else {
     result = result.replace(
       '<div id="root"></div>',

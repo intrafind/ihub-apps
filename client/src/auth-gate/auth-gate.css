@@ -149,7 +149,9 @@
   color: var(--ag-text);
   background: var(--ag-card-bg);
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   box-sizing: border-box;
 }
 
@@ -178,7 +180,9 @@
   font-weight: 500;
   font-family: var(--ag-font);
   cursor: pointer;
-  transition: background-color 0.15s, opacity 0.15s;
+  transition:
+    background-color 0.15s,
+    opacity 0.15s;
   border: none;
   box-sizing: border-box;
 }
@@ -278,7 +282,9 @@
 }
 
 @keyframes ag-spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Loading state (full gate) */

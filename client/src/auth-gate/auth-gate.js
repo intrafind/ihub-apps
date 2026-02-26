@@ -109,7 +109,8 @@
             markAutoRedirectAttempt(data.autoRedirect.provider);
             var returnUrl = window.location.href.split('?')[0];
             var sep = data.autoRedirect.url.indexOf('?') !== -1 ? '&' : '?';
-            window.location.href = data.autoRedirect.url + sep + 'returnUrl=' + encodeURIComponent(returnUrl);
+            window.location.href =
+              data.autoRedirect.url + sep + 'returnUrl=' + encodeURIComponent(returnUrl);
             return;
           }
         }
@@ -127,7 +128,7 @@
   // =========================================================================
 
   function fetchAuthStatus() {
-    var headers = { 'Accept': 'application/json' };
+    var headers = { Accept: 'application/json' };
     var token = getStoredToken();
     if (token) {
       headers['Authorization'] = 'Bearer ' + token;
@@ -149,7 +150,7 @@
       credentials: 'include',
       headers: {
         'Content-Type': 'application/json',
-        'Accept': 'application/json'
+        Accept: 'application/json'
       },
       body: JSON.stringify(body)
     }).then(function (res) {
@@ -380,7 +381,7 @@
     // Logo — use configured logo or fall back to app icon
     var logoDiv = createElement('div', 'ag-logo');
     var img = document.createElement('img');
-    img.src = logoUrl || ((window.__BASE_PATH__ || '') + '/icons/apps-svg-logo.svg');
+    img.src = logoUrl || (window.__BASE_PATH__ || '') + '/icons/apps-svg-logo.svg';
     img.alt = '';
     logoDiv.appendChild(img);
     header.appendChild(logoDiv);
@@ -405,7 +406,11 @@
     }
 
     var methods = authConfig.authMethods;
-    var hasOidc = methods.oidc && methods.oidc.enabled && methods.oidc.providers && methods.oidc.providers.length > 0;
+    var hasOidc =
+      methods.oidc &&
+      methods.oidc.enabled &&
+      methods.oidc.providers &&
+      methods.oidc.providers.length > 0;
     var hasNtlm = methods.ntlm && methods.ntlm.enabled;
     var hasLocal = methods.local && methods.local.enabled;
     var hasLdap = methods.ldap && methods.ldap.enabled;
@@ -603,7 +608,9 @@
         }
 
         // Auto-focus username after render
-        setTimeout(function () { usernameInput.focus(); }, 50);
+        setTimeout(function () {
+          usernameInput.focus();
+        }, 50);
       }
     }
 
@@ -661,7 +668,9 @@
     // Disable inputs
     setFormDisabled(root, true);
 
-    var authMethod = selectedAuthMethod || (authConfig.authMethods.local && authConfig.authMethods.local.enabled ? 'local' : 'ldap');
+    var authMethod =
+      selectedAuthMethod ||
+      (authConfig.authMethods.local && authConfig.authMethods.local.enabled ? 'local' : 'ldap');
     var endpoint = authMethod === 'local' ? '/auth/local/login' : '/auth/ldap/login';
     var body = { username: username, password: password };
     if (authMethod === 'ldap' && provider) {
@@ -702,10 +711,18 @@
   function handleOidcLogin(providerName) {
     // Store return URL
     var returnUrl = window.location.href.split('?')[0];
-    try { sessionStorage.setItem('authReturnUrl', returnUrl); } catch (e) { /* ignore */ }
+    try {
+      sessionStorage.setItem('authReturnUrl', returnUrl);
+    } catch (e) {
+      /* ignore */
+    }
 
-    var url = API_BASE + '/auth/oidc/' + encodeURIComponent(providerName) +
-              '?returnUrl=' + encodeURIComponent(returnUrl);
+    var url =
+      API_BASE +
+      '/auth/oidc/' +
+      encodeURIComponent(providerName) +
+      '?returnUrl=' +
+      encodeURIComponent(returnUrl);
     window.location.href = url;
   }
 
@@ -725,7 +742,7 @@
       var last = sessionStorage.getItem(key);
       if (!last) return true;
       // Only redirect if last attempt was > 5 minutes ago
-      return (Date.now() - parseInt(last, 10)) > 5 * 60 * 1000;
+      return Date.now() - parseInt(last, 10) > 5 * 60 * 1000;
     } catch (e) {
       return true;
     }
@@ -734,7 +751,9 @@
   function markAutoRedirectAttempt(provider) {
     try {
       sessionStorage.setItem('autoRedirect_' + provider, Date.now().toString());
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   // =========================================================================
@@ -752,13 +771,17 @@
   function storeToken(token) {
     try {
       localStorage.setItem('authToken', token);
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   function removeToken() {
     try {
       localStorage.removeItem('authToken');
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      /* ignore */
+    }
   }
 
   // =========================================================================
@@ -767,14 +790,18 @@
 
   function cleanUrlParams(paramsToRemove) {
     var url = new URL(window.location.href);
-    paramsToRemove.forEach(function (p) { url.searchParams.delete(p); });
+    paramsToRemove.forEach(function (p) {
+      url.searchParams.delete(p);
+    });
     var clean = url.pathname + (url.search || '') + (url.hash || '');
     window.history.replaceState({}, document.title, clean);
   }
 
   function setFormDisabled(root, disabled) {
     var inputs = root.querySelectorAll('.ag-input, .ag-select, .ag-btn');
-    inputs.forEach(function (el) { el.disabled = disabled; });
+    inputs.forEach(function (el) {
+      el.disabled = disabled;
+    });
   }
 
   function createElement(tag, className) {
