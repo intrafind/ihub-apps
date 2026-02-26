@@ -170,17 +170,56 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
           }}
         />
 
-        {/* Site Title */}
+        {/* Site Title — light + bold parts concatenated without space */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            {t('admin.ui.header.siteTitle', 'Site Title')}
+          </label>
+          <p className="text-sm text-gray-500 mb-3">
+            {t(
+              'admin.ui.header.siteTitleHint',
+              'Two parts rendered side-by-side: the first in light weight, the second in bold. Concatenated without a space — include leading spaces in the bold part if needed.'
+            )}
+          </p>
+          <div className="space-y-3">
+            <DynamicLanguageEditor
+              label={t('admin.ui.header.titleLight', 'Light part (e.g. "iHub")')}
+              value={config.titleLight || {}}
+              onChange={titleLight => onUpdate({ titleLight })}
+              type="text"
+              placeholder={{
+                en: 'e.g. iHub',
+                de: 'z.B. iHub',
+                es: 'p.ej. iHub',
+                fr: 'ex. iHub'
+              }}
+            />
+            <DynamicLanguageEditor
+              label={t('admin.ui.header.titleBold', 'Bold part (e.g. " Apps")')}
+              value={config.titleBold || {}}
+              onChange={titleBold => onUpdate({ titleBold })}
+              type="text"
+              placeholder={{
+                en: 'e.g.  Apps',
+                de: 'z.B.  Apps',
+                es: 'p.ej.  Apps',
+                fr: 'ex.  Apps'
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Tagline */}
         <DynamicLanguageEditor
-          label={t('admin.ui.header.title', 'Site Title')}
-          value={config.title || {}}
-          onChange={title => onUpdate({ title })}
+          label={t('admin.ui.header.tagline', 'Tagline')}
+          value={config.tagline || {}}
+          onChange={tagline => onUpdate({ tagline })}
           type="text"
           placeholder={{
-            en: 'Site title (en)',
-            de: 'Site title (de)',
-            es: 'Site title (es)',
-            fr: 'Site title (fr)'
+            en: 'e.g. by YourCompany',
+            de: 'z.B. von IhresFirma',
+            es: 'p.ej. por TuEmpresa',
+            fr: 'ex. par VotreEntreprise'
           }}
         />
 
