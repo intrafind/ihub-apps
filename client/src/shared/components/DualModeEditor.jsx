@@ -133,14 +133,14 @@ const DualModeEditor = ({
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
             {allowModeSwitch && (
-              <div className="flex items-center bg-gray-100 rounded-lg p-1">
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-1">
                 <button
                   type="button"
                   onClick={() => handleModeSwitch('form')}
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     editingMode === 'form'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <Icon name="document-text" className="h-4 w-4 mr-2" />
@@ -151,8 +151,8 @@ const DualModeEditor = ({
                   onClick={() => handleModeSwitch('json')}
                   className={`flex items-center px-3 py-2 text-sm font-medium rounded-md transition-colors ${
                     editingMode === 'json'
-                      ? 'bg-white text-gray-900 shadow-sm'
-                      : 'text-gray-500 hover:text-gray-700'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
                   }`}
                 >
                   <Icon name="code-bracket" className="h-4 w-4 mr-2" />
@@ -164,7 +164,7 @@ const DualModeEditor = ({
             {/* Status indicators */}
             <div className="flex items-center space-x-3">
               {hasUnsavedChanges && (
-                <div className="flex items-center text-amber-600">
+                <div className="flex items-center text-amber-600 dark:text-amber-400">
                   <Icon name="exclamation-triangle" className="h-4 w-4 mr-1" />
                   <span className="text-sm">
                     {t('admin.editor.unsavedChanges', 'Unsaved changes')}
@@ -173,7 +173,7 @@ const DualModeEditor = ({
               )}
 
               {!validationState.isValid && (
-                <div className="flex items-center text-red-600">
+                <div className="flex items-center text-red-600 dark:text-red-400">
                   <Icon name="x-circle" className="h-4 w-4 mr-1" />
                   <span className="text-sm">
                     {t('admin.editor.validationErrors', 'Validation errors')}
@@ -182,7 +182,7 @@ const DualModeEditor = ({
               )}
 
               {validationState.isValid && !hasUnsavedChanges && (
-                <div className="flex items-center text-green-600">
+                <div className="flex items-center text-green-600 dark:text-green-400">
                   <Icon name="check-circle" className="h-4 w-4 mr-1" />
                   <span className="text-sm">{t('admin.editor.allValid', 'All valid')}</span>
                 </div>
@@ -196,7 +196,7 @@ const DualModeEditor = ({
               <button
                 type="button"
                 onClick={handleReset}
-                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="arrow-path" className="h-4 w-4 mr-1" />
                 {t('admin.editor.reset', 'Reset')}
@@ -218,7 +218,7 @@ const DualModeEditor = ({
                 {...formProps}
               />
             ) : (
-              <div className="p-8 text-center text-gray-500 bg-gray-50 rounded-lg border-2 border-dashed border-gray-200">
+              <div className="p-8 text-center text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-lg border-2 border-dashed border-gray-200 dark:border-gray-700">
                 <Icon name="document-text" className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                 <p className="text-lg font-medium mb-2">
                   {t('admin.editor.noFormComponent', 'No Form Component')}
@@ -250,14 +250,14 @@ const DualModeEditor = ({
 
       {/* Validation Summary */}
       {showValidationSummary && !validationState.isValid && validationState.errors.length > 0 && (
-        <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-md">
+        <div className="mt-4 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md">
           <div className="flex">
             <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
             <div className="ml-3">
-              <h4 className="text-sm font-medium text-red-800">
+              <h4 className="text-sm font-medium text-red-800 dark:text-red-300">
                 {t('admin.editor.validationSummary', 'Validation Summary')}
               </h4>
-              <div className="mt-2 text-sm text-red-700">
+              <div className="mt-2 text-sm text-red-700 dark:text-red-300">
                 <p>
                   {t('admin.editor.errorCount', '{{count}} error(s) found:', {
                     count: validationState.errors.length
@@ -268,7 +268,7 @@ const DualModeEditor = ({
                     <li key={index}>{error.message}</li>
                   ))}
                   {validationState.errors.length > 5 && (
-                    <li className="text-gray-600">
+                    <li className="text-gray-600 dark:text-gray-400">
                       {t('admin.editor.moreErrors', '... and {{count}} more', {
                         count: validationState.errors.length - 5
                       })}
