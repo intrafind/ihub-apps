@@ -35,10 +35,7 @@ export async function up(ctx) {
     ctx.setDefault(ui, 'header.titleLight', { en: 'iHub', de: 'iHub' });
     ctx.setDefault(ui, 'header.titleBold', { en: ' Apps', de: ' Apps' });
     // Remove the old flat title if it was the default value
-    if (
-      ui.header?.title?.en === 'iHub Apps' &&
-      ui.header?.title?.de === 'iHub Apps'
-    ) {
+    if (ui.header?.title?.en === 'iHub Apps' && ui.header?.title?.de === 'iHub Apps') {
       delete ui.header.title;
     }
     ctx.log('Migrated header.title to titleLight + titleBold');

@@ -96,9 +96,7 @@ const Layout = () => {
                   {uiConfig?.header?.logo?.url && (
                     <img
                       src={buildAssetUrl(uiConfig.header.logo.url)}
-                      alt={
-                        getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'
-                      }
+                      alt={getLocalizedContent(uiConfig.header.logo.alt, currentLanguage) || 'Logo'}
                       className="h-7 w-7 flex-shrink-0"
                     />
                   )}
