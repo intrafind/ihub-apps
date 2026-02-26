@@ -84,14 +84,14 @@ const AdminFeaturesPage = () => {
   return (
     <AdminAuth>
       <AdminNavigation />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-3xl font-bold text-gray-900">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               {t('admin.features.title', 'Features')}
             </h1>
-            <p className="text-gray-600 mt-2">
+            <p className="text-gray-600 dark:text-gray-400 mt-2">
               {t('admin.features.description', 'Enable or disable platform features')}
             </p>
           </div>
@@ -102,28 +102,28 @@ const AdminFeaturesPage = () => {
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600">{t('common.loading', 'Loading...')}</span>
+              <span className="ml-3 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</span>
             </div>
           ) : (
             <div className="space-y-8">
               {groupedFeatures.map(group => (
                 <div key={group.id}>
-                  <h2 className="text-lg font-semibold text-gray-900 mb-4">{group.name}</h2>
-                  <div className="bg-white rounded-lg shadow-sm border border-gray-200 divide-y divide-gray-200">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{group.name}</h2>
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
                     {group.features.map(feature => (
                       <div key={feature.id} className="flex items-center justify-between px-6 py-4">
                         <div className="flex-1 min-w-0 pr-4">
                           <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-gray-900">
+                            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {getLocalizedContent(feature.name, lang)}
                             </span>
                             {feature.preview && (
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
                                 {t('admin.features.preview', 'Preview')}
                               </span>
                             )}
                           </div>
-                          <p className="text-sm text-gray-500 mt-0.5">
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
                             {getLocalizedContent(feature.description, lang)}
                           </p>
                         </div>
@@ -133,7 +133,7 @@ const AdminFeaturesPage = () => {
                           aria-checked={feature.enabled}
                           onClick={() => handleToggle(feature.id, feature.enabled)}
                           className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-600 focus:ring-offset-2 ${
-                            feature.enabled ? 'bg-indigo-600' : 'bg-gray-200'
+                            feature.enabled ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
                           }`}
                         >
                           <span
@@ -154,7 +154,7 @@ const AdminFeaturesPage = () => {
                 <div>
                   {message && (
                     <p
-                      className={`text-sm ${message.includes('Failed') || message.includes('Error') ? 'text-red-600' : 'text-green-600'}`}
+                      className={`text-sm ${message.includes('Failed') || message.includes('Error') ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}
                     >
                       {message}
                     </p>
@@ -166,7 +166,7 @@ const AdminFeaturesPage = () => {
                   className={`px-6 py-2 rounded-lg text-sm font-medium text-white transition-colors ${
                     hasChanges && !saving
                       ? 'bg-indigo-600 hover:bg-indigo-700 cursor-pointer'
-                      : 'bg-gray-300 cursor-not-allowed'
+                      : 'bg-gray-300 dark:bg-gray-600 cursor-not-allowed'
                   }`}
                 >
                   {saving

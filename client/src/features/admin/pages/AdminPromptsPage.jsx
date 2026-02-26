@@ -229,24 +229,24 @@ const AdminPromptsPage = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
+      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
         <div className="flex">
           <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">
+            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
               {t('admin.prompts.loadError', 'Error loading prompts')}
             </h3>
-            <p className="mt-1 text-sm text-red-700">{error}</p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 hover:text-red-500"
+              className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
             >
               {t('common.retry', 'Retry')}
             </button>
@@ -258,7 +258,7 @@ const AdminPromptsPage = () => {
 
   return (
     <AdminAuth>
-      <div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <AdminNavigation />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center">
