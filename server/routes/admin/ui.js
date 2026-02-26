@@ -338,6 +338,29 @@ export default function registerAdminUIRoutes(app) {
       throw new Error('Footer section must be an object');
     }
 
-    // Additional validation can be added here
+    // Validate pwa section if present
+    if (config.pwa !== undefined) {
+      if (typeof config.pwa !== 'object') {
+        throw new Error('pwa section must be an object');
+      }
+      const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+      const VALID_DISPLAYS = ['standalone', 'fullscreen', 'minimal-ui', 'browser'];
+      const { pwa } = config;
+      if (pwa.themeColor && !HEX_COLOR.test(pwa.themeColor)) {
+        throw new Error('pwa.themeColor must be a valid 6-digit hex color (e.g. #003557)');
+      }
+      if (pwa.backgroundColor && !HEX_COLOR.test(pwa.backgroundColor)) {
+        throw new Error('pwa.backgroundColor must be a valid 6-digit hex color');
+      }
+      if (pwa.display && !VALID_DISPLAYS.includes(pwa.display)) {
+        throw new Error(`pwa.display must be one of: ${VALID_DISPLAYS.join(', ')}`);
+      }
+      if (pwa.name && typeof pwa.name !== 'string') {
+        throw new Error('pwa.name must be a string');
+      }
+      if (pwa.shortName && typeof pwa.shortName !== 'string') {
+        throw new Error('pwa.shortName must be a string');
+      }
+    }
   }
 }

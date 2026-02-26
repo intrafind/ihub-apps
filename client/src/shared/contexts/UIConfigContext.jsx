@@ -56,6 +56,21 @@ export const UIConfigProvider = ({ children }) => {
     }
   }, [uiConfig, headerColor]);
 
+  // Register or unregister service worker based on PWA config
+  useEffect(() => {
+    if (uiConfig === null) return;
+
+    if (uiConfig?.pwa?.enabled) {
+      import('../../services/swRegistration').then(({ registerServiceWorker }) => {
+        registerServiceWorker();
+      });
+    } else {
+      import('../../services/swRegistration').then(({ unregisterServiceWorker }) => {
+        unregisterServiceWorker();
+      });
+    }
+  }, [uiConfig?.pwa?.enabled]);
+
   // Inject custom CSS from admin configuration
   useEffect(() => {
     const customCss = uiConfig?.customStyles?.css;

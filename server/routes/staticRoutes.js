@@ -9,6 +9,8 @@ import {
   buildDocsPath,
   getRelativeRequestPath
 } from '../utils/basePath.js';
+import configCache from '../configCache.js';
+import { buildIndexWithPwaTags, resolvePwaConfig } from '../services/pwa/PwaService.js';
 
 export default function registerStaticRoutes(app, { isPackaged, rootDir, basePath }) {
   // Only serve static files in production or packaged mode
@@ -67,6 +69,20 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
       // If they weren't served by the static middleware above, they don't exist
       if (relativePath.match(/\.[a-z0-9]+$/i)) {
         return res.status(404).send('File not found');
+      }
+
+      const uiConfig = configCache.getUI();
+      const rawPwaConfig = uiConfig?.data?.pwa;
+
+      if (rawPwaConfig?.enabled) {
+        const pwaConfig = resolvePwaConfig(rawPwaConfig);
+        const html = buildIndexWithPwaTags(indexPath, pwaConfig);
+        if (html !== null) {
+          res.set('Content-Type', 'text/html; charset=utf-8');
+          res.set('Cache-Control', 'no-cache');
+          return res.send(html);
+        }
+        // buildIndexWithPwaTags logged the error; fall through to sendFile
       }
 
       res.sendFile(indexPath);

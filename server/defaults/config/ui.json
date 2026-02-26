@@ -290,5 +290,19 @@
         "de": "pages/de/nda-guide.md"
       }
     }
+  },
+  "pwa": {
+    "enabled": false,
+    "name": "iHub Apps",
+    "shortName": "iHub",
+    "description": "AI-powered applications platform",
+    "themeColor": "#003557",
+    "backgroundColor": "#ffffff",
+    "display": "standalone",
+    "icons": {
+      "icon192": "/icons/icon-192.png",
+      "icon512": "/icons/icon-512.png",
+      "iconApple": "/icons/icon-192.png"
+    }
   }
 }
