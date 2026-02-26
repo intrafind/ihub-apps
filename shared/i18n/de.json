@@ -1382,5 +1382,37 @@
     "settings": "Einstellungen",
     "workflows": "Workflows",
     "prompts": "Prompts"
+  },
+  "darkMode": {
+    "auto": "Auto (System)",
+    "light": "Heller Modus",
+    "dark": "Dunkler Modus",
+    "switchToLight": "Zu hellem Modus wechseln",
+    "switchToDark": "Zu dunklem Modus wechseln",
+    "switchToAuto": "Zu automatischem Modus wechseln",
+    "followingSystem": "Folgt der Systemeinstellung"
+  },
+  "theme": {
+    "title": "Design & Erscheinung",
+    "description": "Konfigurieren Sie Markenfarben, Dunkelmodus und visuelles Erscheinungsbild",
+    "primaryColor": "Primärfarbe",
+    "primaryColorHint": "Hauptmarkenfarbe für Schaltflächen, Links und Akzente",
+    "primaryDark": "Primärfarbe Dunkel",
+    "primaryDarkHint": "Dunklere Variante für Hover-Zustände und Betonung",
+    "accentColor": "Akzentfarbe",
+    "accentColorHint": "Sekundäre Hervorhebungsfarbe für Erfolgszustände und CTAs",
+    "backgroundColor": "Hintergrundfarbe",
+    "backgroundColorHint": "Seitenhintergrundfarbe",
+    "surfaceColor": "Oberflächenfarbe",
+    "surfaceColorHint": "Hintergrundfarbe für Karten und Panels",
+    "textColor": "Textfarbe",
+    "textColorHint": "Primäre Textfarbe",
+    "textMutedColor": "Gedämpfte Textfarbe",
+    "textMutedColorHint": "Sekundäre/Hilfstext-Farbe",
+    "darkModeSection": "Dunkelmodus-Farben",
+    "darkModeSectionHint": "Farben für den Dunkelmodus überschreiben. Leer lassen um die Hellmodus-Werte zu verwenden.",
+    "preview": "Vorschau",
+    "resetToDefaults": "Auf Standardwerte zurücksetzen",
+    "colorInvalid": "Bitte geben Sie eine gültige Hex-Farbe ein (z.B. #4f46e5)"
   }
 }

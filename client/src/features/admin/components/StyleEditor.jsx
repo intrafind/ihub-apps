@@ -1,19 +1,24 @@
 import { useState } from 'react';
 
 const StyleEditor = ({ config, onUpdate, t }) => {
-  const [activeSection, setActiveSection] = useState('css');
+  const [activeSection, setActiveSection] = useState('theme');
 
-  const handleThemeColorChange = (colorKey, color) => {
-    const updatedConfig = {
-      ...config,
-      theme: {
-        ...config.theme,
-        colors: {
-          ...config.theme?.colors,
-          [colorKey]: color
-        }
+  // Handle theme color changes at the root theme level
+  const handleThemeColorChange = (colorKey, color, isDarkMode = false) => {
+    const updatedConfig = { ...config };
+    if (!updatedConfig.theme) {
+      updatedConfig.theme = {};
+    }
+
+    if (isDarkMode) {
+      if (!updatedConfig.theme.darkMode) {
+        updatedConfig.theme.darkMode = {};
       }
-    };
+      updatedConfig.theme.darkMode[colorKey] = color;
+    } else {
+      updatedConfig.theme[colorKey] = color;
+    }
+
     onUpdate(updatedConfig);
   };
 
@@ -72,33 +77,78 @@ const StyleEditor = ({ config, onUpdate, t }) => {
     onUpdate(updatedConfig);
   };
 
+  // Theme colors configuration with proper key mappings
   const themeColors = [
     {
-      key: 'primary',
-      label: t('admin.ui.styles.primaryColor', 'Primary Color'),
+      key: 'primaryColor',
+      label: t('theme.primaryColor', 'Primary Color'),
+      hint: t('theme.primaryColorHint', 'Main brand color used for buttons, links, and accents'),
       default: '#4f46e5'
     },
     {
-      key: 'secondary',
-      label: t('admin.ui.styles.secondaryColor', 'Secondary Color'),
-      default: '#6b7280'
+      key: 'primaryDark',
+      label: t('theme.primaryDark', 'Primary Dark'),
+      hint: t('theme.primaryDarkHint', 'Darker variant for hover states and emphasis'),
+      default: '#4338ca'
     },
-    { key: 'accent', label: t('admin.ui.styles.accentColor', 'Accent Color'), default: '#10b981' },
     {
-      key: 'background',
-      label: t('admin.ui.styles.backgroundColor', 'Background Color'),
+      key: 'accentColor',
+      label: t('theme.accentColor', 'Accent Color'),
+      hint: t('theme.accentColorHint', 'Secondary highlight color for success states and CTAs'),
+      default: '#10b981'
+    },
+    {
+      key: 'backgroundColor',
+      label: t('theme.backgroundColor', 'Background Color'),
+      hint: t('theme.backgroundColorHint', 'Page background color'),
+      default: '#f5f7f8'
+    },
+    {
+      key: 'surfaceColor',
+      label: t('theme.surfaceColor', 'Surface Color'),
+      hint: t('theme.surfaceColorHint', 'Card and panel background color'),
       default: '#ffffff'
     },
     {
-      key: 'surface',
-      label: t('admin.ui.styles.surfaceColor', 'Surface Color'),
-      default: '#f9fafb'
+      key: 'textColor',
+      label: t('theme.textColor', 'Text Color'),
+      hint: t('theme.textColorHint', 'Primary text color'),
+      default: '#1a1a2e'
     },
-    { key: 'text', label: t('admin.ui.styles.textColor', 'Text Color'), default: '#111827' },
     {
-      key: 'textMuted',
-      label: t('admin.ui.styles.textMutedColor', 'Muted Text Color'),
+      key: 'textMutedColor',
+      label: t('theme.textMutedColor', 'Muted Text Color'),
+      hint: t('theme.textMutedColorHint', 'Secondary/helper text color'),
       default: '#6b7280'
+    }
+  ];
+
+  // Dark mode specific colors
+  const darkModeColors = [
+    {
+      key: 'primaryColor',
+      label: t('theme.primaryColor', 'Primary Color'),
+      default: '#4f46e5'
+    },
+    {
+      key: 'backgroundColor',
+      label: t('theme.backgroundColor', 'Background Color'),
+      default: '#1a1a2e'
+    },
+    {
+      key: 'surfaceColor',
+      label: t('theme.surfaceColor', 'Surface Color'),
+      default: '#16213e'
+    },
+    {
+      key: 'textColor',
+      label: t('theme.textColor', 'Text Color'),
+      default: '#f5f5f5'
+    },
+    {
+      key: 'textMutedColor',
+      label: t('theme.textMutedColor', 'Muted Text Color'),
+      default: '#a0a0a0'
     }
   ];
 
@@ -135,7 +185,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
       <div className="border-b border-gray-200 mb-6">
         <nav className="flex space-x-8" aria-label="Tabs">
           {[
-            // { id: 'theme', label: t('admin.ui.styles.themeColors', 'Theme Colors'), icon: '🎨' },
+            { id: 'theme', label: t('theme.title', 'Theme & Appearance'), icon: '🎨' },
             { id: 'css', label: t('admin.ui.styles.customCss', 'Custom CSS'), icon: '⚙️' },
             {
               id: 'variables',
@@ -159,85 +209,186 @@ const StyleEditor = ({ config, onUpdate, t }) => {
         </nav>
       </div>
 
-      {/* Theme Colors Section - Hidden for now */}
-      {false && activeSection === 'theme' && (
-        <div className="space-y-6">
+      {/* Theme Colors Section */}
+      {activeSection === 'theme' && (
+        <div className="space-y-8">
           <p className="text-sm text-gray-600">
-            {t(
-              'admin.ui.styles.themeDescription',
-              'Configure the main theme colors used throughout the application.'
-            )}
+            {t('theme.description', 'Configure brand colors, dark mode, and visual appearance')}
           </p>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {themeColors.map(({ key, label, default: defaultColor }) => {
-              const currentColor = config.theme?.colors?.[key] || defaultColor;
+          {/* Light Mode Colors */}
+          <div>
+            <h4 className="text-md font-medium text-gray-900 mb-4">
+              {t('admin.ui.styles.lightModeColors', 'Light Mode Colors')}
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {themeColors.map(({ key, label, hint, default: defaultColor }) => {
+                const currentColor = config.theme?.[key] || defaultColor;
 
-              return (
-                <div key={key} className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">{label}</label>
+                return (
+                  <div key={key} className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">{label}</label>
+                    {hint && <p className="text-xs text-gray-500">{hint}</p>}
 
-                  <div className="flex items-center space-x-3">
-                    <div
-                      className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm cursor-pointer"
-                      style={{ backgroundColor: currentColor }}
-                    />
-
-                    <input
-                      type="text"
-                      value={currentColor}
-                      onChange={e => handleThemeColorChange(key, e.target.value)}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
-                      placeholder={defaultColor}
-                    />
-                  </div>
-
-                  {/* Color Presets */}
-                  <div className="flex flex-wrap gap-1 mt-2">
-                    {colorPresets.map(color => (
-                      <button
-                        key={color}
-                        onClick={() => handleThemeColorChange(key, color)}
-                        className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
-                        style={{ backgroundColor: color }}
-                        title={color}
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="color"
+                        value={currentColor}
+                        onChange={e => handleThemeColorChange(key, e.target.value)}
+                        className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm cursor-pointer"
                       />
-                    ))}
+                      <input
+                        type="text"
+                        value={currentColor}
+                        onChange={e => handleThemeColorChange(key, e.target.value)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        placeholder={defaultColor}
+                        pattern="^#[0-9a-fA-F]{6}$"
+                      />
+                    </div>
+
+                    {/* Color Presets */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {colorPresets.map(color => (
+                        <button
+                          key={color}
+                          onClick={() => handleThemeColorChange(key, color)}
+                          className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
-          <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h4 className="text-sm font-medium text-blue-900 mb-2">
-              {t('admin.ui.styles.preview', 'Theme Preview')}
+          {/* Dark Mode Colors */}
+          <div className="border-t border-gray-200 pt-6">
+            <h4 className="text-md font-medium text-gray-900 mb-2">
+              {t('theme.darkModeSection', 'Dark Mode Colors')}
             </h4>
-            <div
-              className="p-4 rounded-md shadow-sm"
-              style={{
-                backgroundColor: config.theme?.colors?.surface || '#f9fafb',
-                color: config.theme?.colors?.text || '#111827'
-              }}
-            >
+            <p className="text-xs text-gray-500 mb-4">
+              {t(
+                'theme.darkModeSectionHint',
+                'Override colors for dark mode. Leave empty to use light mode values.'
+              )}
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {darkModeColors.map(({ key, label, default: defaultColor }) => {
+                const currentColor = config.theme?.darkMode?.[key] || '';
+
+                return (
+                  <div key={`dark-${key}`} className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">{label}</label>
+
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="color"
+                        value={currentColor || defaultColor}
+                        onChange={e => handleThemeColorChange(key, e.target.value, true)}
+                        className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm cursor-pointer"
+                      />
+                      <input
+                        type="text"
+                        value={currentColor}
+                        onChange={e => handleThemeColorChange(key, e.target.value, true)}
+                        className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+                        placeholder={defaultColor}
+                        pattern="^#[0-9a-fA-F]{6}$"
+                      />
+                    </div>
+
+                    {/* Color Presets */}
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {colorPresets.map(color => (
+                        <button
+                          key={color}
+                          onClick={() => handleThemeColorChange(key, color, true)}
+                          className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Theme Preview */}
+          <div className="border-t border-gray-200 pt-6">
+            <h4 className="text-md font-medium text-gray-900 mb-4">
+              {t('theme.preview', 'Preview')}
+            </h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Light Mode Preview */}
               <div
-                className="px-4 py-2 rounded-md text-white mb-2"
-                style={{ backgroundColor: config.theme?.colors?.primary || '#4f46e5' }}
+                className="p-4 rounded-lg shadow-sm border"
+                style={{
+                  backgroundColor: config.theme?.surfaceColor || '#ffffff',
+                  color: config.theme?.textColor || '#1a1a2e'
+                }}
               >
-                {t('admin.ui.styles.primaryButton', 'Primary Button')}
+                <p className="text-xs font-medium mb-3 opacity-60">Light Mode</p>
+                <div
+                  className="px-4 py-2 rounded-md text-white text-sm font-medium mb-2 text-center"
+                  style={{ backgroundColor: config.theme?.primaryColor || '#4f46e5' }}
+                >
+                  Primary Button
+                </div>
+                <div
+                  className="px-4 py-2 rounded-md text-white text-sm font-medium mb-3 text-center"
+                  style={{ backgroundColor: config.theme?.accentColor || '#10b981' }}
+                >
+                  Accent Button
+                </div>
+                <p className="text-sm" style={{ color: config.theme?.textMutedColor || '#6b7280' }}>
+                  This is muted text.
+                </p>
               </div>
+
+              {/* Dark Mode Preview */}
               <div
-                className="px-4 py-2 rounded-md text-white"
-                style={{ backgroundColor: config.theme?.colors?.accent || '#10b981' }}
+                className="p-4 rounded-lg shadow-sm border"
+                style={{
+                  backgroundColor: config.theme?.darkMode?.surfaceColor || '#16213e',
+                  color: config.theme?.darkMode?.textColor || '#f5f5f5'
+                }}
               >
-                {t('admin.ui.styles.accentButton', 'Accent Button')}
+                <p className="text-xs font-medium mb-3 opacity-60">Dark Mode</p>
+                <div
+                  className="px-4 py-2 rounded-md text-white text-sm font-medium mb-2 text-center"
+                  style={{
+                    backgroundColor:
+                      config.theme?.darkMode?.primaryColor ||
+                      config.theme?.primaryColor ||
+                      '#4f46e5'
+                  }}
+                >
+                  Primary Button
+                </div>
+                <div
+                  className="px-4 py-2 rounded-md text-white text-sm font-medium mb-3 text-center"
+                  style={{
+                    backgroundColor:
+                      config.theme?.darkMode?.accentColor || config.theme?.accentColor || '#10b981'
+                  }}
+                >
+                  Accent Button
+                </div>
+                <p
+                  className="text-sm"
+                  style={{
+                    color: config.theme?.darkMode?.textMutedColor || '#a0a0a0'
+                  }}
+                >
+                  This is muted text.
+                </p>
               </div>
-              <p className="mt-3" style={{ color: config.theme?.colors?.textMuted || '#6b7280' }}>
-                {t(
-                  'admin.ui.styles.sampleText',
-                  'This is sample muted text to preview the theme colors.'
-                )}
-              </p>
             </div>
           </div>
         </div>

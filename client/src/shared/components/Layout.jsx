@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from 'react';
 import { Link, useLocation, Outlet, useSearchParams } from 'react-router-dom';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import LanguageSelector from './LanguageSelector';
+import DarkModeToggle from './DarkModeToggle';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import DisclaimerPopup from './DisclaimerPopup';
@@ -151,7 +152,8 @@ const Layout = () => {
                     ))}
               </nav>
 
-              <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <DarkModeToggle />
                 {uiConfig?.header?.languageSelector?.enabled !== false && <LanguageSelector />}
                 <UserAuthMenu />
                 <button
