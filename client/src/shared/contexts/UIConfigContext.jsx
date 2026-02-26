@@ -1,5 +1,6 @@
 import { createContext, useState, useContext, useEffect } from 'react';
 import { fetchUIConfig } from '../../api/api';
+import { buildPath } from '../../utils/runtimeBasePath';
 
 // Default header color as a fallback if config is not loaded
 const FALLBACK_COLOR = '#4f46e5'; // indigo-600
@@ -70,6 +71,41 @@ export const UIConfigProvider = ({ children }) => {
       });
     }
   }, [uiConfig?.pwa?.enabled]);
+
+  // Inject PWA head tags (manifest link + theme-color) for dev and production
+  useEffect(() => {
+    if (uiConfig === null) return;
+
+    if (uiConfig?.pwa?.enabled) {
+      // Manifest link
+      let manifest = document.getElementById('pwa-manifest-link');
+      if (!manifest) {
+        manifest = document.createElement('link');
+        manifest.id = 'pwa-manifest-link';
+        manifest.rel = 'manifest';
+        manifest.href = buildPath('/manifest.json');
+        document.head.appendChild(manifest);
+      }
+
+      // Theme color meta
+      let themeColor = document.getElementById('pwa-theme-color');
+      if (!themeColor) {
+        themeColor = document.createElement('meta');
+        themeColor.id = 'pwa-theme-color';
+        themeColor.name = 'theme-color';
+        document.head.appendChild(themeColor);
+      }
+      themeColor.content = uiConfig.pwa.themeColor || '#4f46e5';
+    } else {
+      document.getElementById('pwa-manifest-link')?.remove();
+      document.getElementById('pwa-theme-color')?.remove();
+    }
+
+    return () => {
+      document.getElementById('pwa-manifest-link')?.remove();
+      document.getElementById('pwa-theme-color')?.remove();
+    };
+  }, [uiConfig?.pwa?.enabled, uiConfig?.pwa?.themeColor]);
 
   // Inject custom CSS from admin configuration
   useEffect(() => {
