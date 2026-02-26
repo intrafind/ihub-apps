@@ -191,7 +191,10 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
               />
             </div>
             <p className="mt-1 text-xs text-gray-400">
-              {t('admin.ui.pwa.backgroundColorHint', 'Splash screen background before the app paints')}
+              {t(
+                'admin.ui.pwa.backgroundColorHint',
+                'Splash screen background before the app paints'
+              )}
             </p>
           </div>
         </div>
@@ -275,9 +278,7 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
       {/* Live manifest link when enabled */}
       {pwa.enabled && (
         <div className="rounded-lg bg-blue-50 border border-blue-200 p-4 text-sm text-blue-800">
-          <p className="font-medium mb-1">
-            {t('admin.ui.pwa.liveNote', 'PWA is active')}
-          </p>
+          <p className="font-medium mb-1">{t('admin.ui.pwa.liveNote', 'PWA is active')}</p>
           <p>
             {t('admin.ui.pwa.manifestNote', 'Manifest is live at')}{' '}
             <a
