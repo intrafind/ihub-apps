@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
@@ -12,6 +13,12 @@ const __dirname = path.dirname(__filename);
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Rate limiter for the dashboard route to protect file system access
+const dashboardLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,                  // limit each IP to 100 dashboard requests per windowMs
+});
 
 // Simple in-memory session store (for demo only - use redis/express-session in production)
 const sessions = new Map();
@@ -217,7 +224,7 @@ app.get('/callback', async (req, res) => {
  * Dashboard - protected page shown after successful login.
  * Redirects to home if the user has no active session.
  */
-app.get('/dashboard', (req, res) => {
+app.get('/dashboard', dashboardLimiter, (req, res) => {
   if (!req.session.tokens) {
     return res.redirect('/');
   }
