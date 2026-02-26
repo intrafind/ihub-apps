@@ -79,7 +79,7 @@ const Layout = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-full w-full">
+    <div className="flex flex-col min-h-screen h-full w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
       {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
@@ -207,7 +207,7 @@ const Layout = () => {
 
       {/* Footer - Only render if enabled (defaults to true) and not on an app page */}
       {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (
-        <footer className="bg-gray-800 text-white py-4">
+        <footer className="bg-gray-800 dark:bg-gray-950 text-white py-4">
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row justify-between items-center">
               <div className="mb-4 md:mb-0">
