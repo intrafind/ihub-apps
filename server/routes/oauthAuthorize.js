@@ -60,18 +60,19 @@ function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl }
   };
 
   const scopeItems = scopes
-    .map(
-      scope => `
+    .map(scope => {
+      const escapedScope = escapeHtml(scope);
+      return `
     <li class="scope-item">
       <svg class="scope-icon" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
       </svg>
       <div>
-        <strong>${scope}</strong>
+        <strong>${escapedScope}</strong>
         ${scopeDescriptions[scope] ? `<br><small>${scopeDescriptions[scope]}</small>` : ''}
       </div>
-    </li>`
-    )
+    </li>`;
+    })
     .join('');
 
   return `<!DOCTYPE html>

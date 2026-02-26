@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
@@ -10,8 +11,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+
+// Global rate limiter to protect all routes, including those that access the filesystem.
+const globalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // limit each IP to 100 requests per windowMs
+  standardHeaders: true, // return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // disable the `X-RateLimit-*` headers
+});
+
+app.use(globalLimiter);
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Rate limiter for the dashboard route to protect file system access
+const dashboardLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100,                  // limit each IP to 100 dashboard requests per windowMs
+});
 
 // Simple in-memory session store (for demo only - use redis/express-session in production)
 const sessions = new Map();
@@ -100,7 +117,14 @@ app.get('/', (req, res) => {
  * practices). The difference is that confidential clients also present a
  * client_secret at the token endpoint.
  */
-app.get('/login', (req, res) => {
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000, // 5 minutes
+  max: 30, // limit each IP to 30 login attempts per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+app.get('/login', loginLimiter, (req, res) => {
   const state = randomBase64url(16);
   const nonce = randomBase64url(16);
 
@@ -217,7 +241,7 @@ app.get('/callback', async (req, res) => {
  * Dashboard - protected page shown after successful login.
  * Redirects to home if the user has no active session.
  */
-app.get('/dashboard', (req, res) => {
+app.get('/dashboard', dashboardLimiter, (req, res) => {
   if (!req.session.tokens) {
     return res.redirect('/');
   }
