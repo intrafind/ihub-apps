@@ -239,7 +239,10 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
 
           <div className="space-y-4">
             {mappedLinks.map((link, index) => (
-              <div key={index} className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+              <div
+                key={index}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+              >
                 <div className="flex items-center justify-between mb-3">
                   <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {t('admin.ui.header.link', 'Link')} {index + 1}

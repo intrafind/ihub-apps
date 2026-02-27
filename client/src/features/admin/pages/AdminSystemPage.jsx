@@ -496,7 +496,9 @@ const AdminSystemPage = () => {
                         />
                         <p
                           className={`text-sm ${
-                            encryptMessage.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                            encryptMessage.type === 'success'
+                              ? 'text-green-700 dark:text-green-300'
+                              : 'text-red-700 dark:text-red-300'
                           }`}
                         >
                           {encryptMessage.text}
@@ -616,7 +618,11 @@ const AdminSystemPage = () => {
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
                   <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/50">
-                    <Icon name="archive-box" size="lg" className="text-green-600 dark:text-green-400" />
+                    <Icon
+                      name="archive-box"
+                      size="lg"
+                      className="text-green-600 dark:text-green-400"
+                    />
                   </div>
                 </div>
                 <div className="flex-1">
@@ -687,7 +693,9 @@ const AdminSystemPage = () => {
                         />
                         <p
                           className={`text-sm ${
-                            importMessage.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                            importMessage.type === 'success'
+                              ? 'text-green-700 dark:text-green-300'
+                              : 'text-red-700 dark:text-red-300'
                           }`}
                         >
                           {importMessage.text}
@@ -816,7 +824,11 @@ const AdminSystemPage = () => {
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
                   <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
-                    <Icon name="information-circle" size="lg" className="text-blue-600 dark:text-blue-400" />
+                    <Icon
+                      name="information-circle"
+                      size="lg"
+                      className="text-blue-600 dark:text-blue-400"
+                    />
                   </div>
                 </div>
                 <div className="flex-1">

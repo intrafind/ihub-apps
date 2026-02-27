@@ -127,7 +127,10 @@ const UserFormEditor = ({
   if (!user) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
+        <Icon
+          name="exclamation-triangle"
+          className="h-12 w-12 mx-auto mb-4 text-gray-400 dark:text-gray-500"
+        />
         <p className="text-lg font-medium">
           {t('admin.users.edit.noUserData', 'No user data available')}
         </p>
@@ -172,7 +175,9 @@ const UserFormEditor = ({
                   placeholder="Enter username"
                 />
                 {validationErrors.username && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.username}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.username}
+                  </p>
                 )}
                 {!isNewUser && (
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -202,7 +207,9 @@ const UserFormEditor = ({
                   placeholder="Enter email address"
                 />
                 {validationErrors.email && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.email}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.email}
+                  </p>
                 )}
               </div>
 
@@ -349,7 +356,9 @@ const UserFormEditor = ({
                     }
                   />
                   {validationErrors.password && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.password}</p>
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                      {validationErrors.password}
+                    </p>
                   )}
                 </div>
 
@@ -369,7 +378,9 @@ const UserFormEditor = ({
                     placeholder="Confirm password"
                   />
                   {validationErrors.confirmPassword && (
-                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.confirmPassword}</p>
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                      {validationErrors.confirmPassword}
+                    </p>
                   )}
                 </div>
 
@@ -415,7 +426,9 @@ const UserFormEditor = ({
 
               {user.internalGroups && user.internalGroups.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Current Groups:</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Current Groups:
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {user.internalGroups.map((group, index) => (
                       <span

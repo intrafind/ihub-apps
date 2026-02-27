@@ -198,7 +198,10 @@ const AdminUserEditPage = () => {
                         'admin.users.edit.createDesc',
                         'Create a new user account with permissions and settings'
                       )
-                    : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
+                    : t(
+                        'admin.users.edit.editDesc',
+                        'Edit user account, permissions, and settings'
+                      )}
                 </p>
               </div>
               <div className="flex space-x-3">
@@ -232,48 +235,48 @@ const AdminUserEditPage = () => {
             </div>
           </div>
 
-        <form onSubmit={handleFormSubmit} className="space-y-8">
-          <DualModeEditor
-            value={user}
-            onChange={handleDataChange}
-            formComponent={UserFormEditor}
-            formProps={{
-              isNewUser,
-              jsonSchema
-            }}
-            jsonSchema={jsonSchema}
-            title={
-              isNewUser
-                ? t('admin.users.edit.createTitle', 'Create New User')
-                : t('admin.users.edit.editTitle', 'Edit User')
-            }
-          />
+          <form onSubmit={handleFormSubmit} className="space-y-8">
+            <DualModeEditor
+              value={user}
+              onChange={handleDataChange}
+              formComponent={UserFormEditor}
+              formProps={{
+                isNewUser,
+                jsonSchema
+              }}
+              jsonSchema={jsonSchema}
+              title={
+                isNewUser
+                  ? t('admin.users.edit.createTitle', 'Create New User')
+                  : t('admin.users.edit.editTitle', 'Edit User')
+              }
+            />
 
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/users')}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {t('admin.users.edit.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.users.edit.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
-              )}
-            </button>
-          </div>
-        </form>
+            {/* Save buttons */}
+            <div className="flex justify-end space-x-4">
+              <button
+                type="button"
+                onClick={() => navigate('/admin/users')}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                {t('admin.users.edit.cancel', 'Cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                    {t('admin.users.edit.saving', 'Saving...')}
+                  </>
+                ) : (
+                  t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
+                )}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </AdminAuth>

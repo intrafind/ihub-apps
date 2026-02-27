@@ -324,3 +324,46 @@ div .markdown-content .code-block-toolbar > div,
     max-height: calc(100vh - 400px);
   }
 }
+
+/* Dark mode for form elements */
+[data-theme='dark'] input[type='text'],
+[data-theme='dark'] input[type='email'],
+[data-theme='dark'] input[type='password'],
+[data-theme='dark'] input[type='number'],
+[data-theme='dark'] input[type='url'],
+[data-theme='dark'] input[type='search'],
+[data-theme='dark'] input[type='tel'],
+[data-theme='dark'] input[type='date'],
+[data-theme='dark'] input[type='time'],
+[data-theme='dark'] input[type='datetime-local'],
+[data-theme='dark'] textarea,
+[data-theme='dark'] select {
+  @apply bg-gray-700 border-gray-600 text-gray-100;
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  @apply text-gray-400;
+}
+
+/* Dark mode for form labels */
+[data-theme='dark'] label {
+  @apply text-gray-300;
+}
+
+/* Dark mode for admin form sections */
+[data-theme='dark'] .bg-white.shadow {
+  @apply bg-gray-800;
+}
+
+/* Dark mode for info boxes and panels */
+[data-theme='dark'] .bg-gray-50 {
+  @apply bg-gray-700/50;
+}
+
+/* Dark mode for disabled inputs */
+[data-theme='dark'] input:disabled,
+[data-theme='dark'] select:disabled,
+[data-theme='dark'] textarea:disabled {
+  @apply bg-gray-800 text-gray-500;
+}

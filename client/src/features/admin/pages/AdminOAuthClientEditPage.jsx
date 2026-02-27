@@ -280,7 +280,9 @@ const AdminOAuthClientEditPage = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                    message.type === 'success'
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}
@@ -289,7 +291,10 @@ const AdminOAuthClientEditPage = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6"
+          >
             {/* Basic Information */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
@@ -297,7 +302,10 @@ const AdminOAuthClientEditPage = () => {
               </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.auth.oauth.name', 'Client Name')} *
                   </label>
                   <input
@@ -312,7 +320,10 @@ const AdminOAuthClientEditPage = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="description"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.auth.oauth.description', 'Description')}
                   </label>
                   <textarea
@@ -408,7 +419,10 @@ const AdminOAuthClientEditPage = () => {
               </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="clientType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="clientType"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.auth.oauth.clientType', 'Client Type')}
                   </label>
                   <select

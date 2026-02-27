@@ -247,7 +247,9 @@ const StyleEditor = ({ config, onUpdate, t }) => {
 
                 return (
                   <div key={key} className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {label}
+                    </label>
                     {hint && <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
 
                     <div className="flex items-center space-x-3">
@@ -262,7 +264,9 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
                         className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                          colorErrors[key] ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                          colorErrors[key]
+                            ? 'border-red-500'
+                            : 'border-gray-300 dark:border-gray-600'
                         }`}
                         placeholder={defaultColor}
                       />
@@ -309,7 +313,9 @@ const StyleEditor = ({ config, onUpdate, t }) => {
 
                 return (
                   <div key={`dark-${key}`} className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {label}
+                    </label>
 
                     <div className="flex items-center space-x-3">
                       <input
@@ -323,7 +329,9 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
                         className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
-                          colorErrors[errorKey] ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
+                          colorErrors[errorKey]
+                            ? 'border-red-500'
+                            : 'border-gray-300 dark:border-gray-600'
                         }`}
                         placeholder={defaultColor}
                       />
@@ -517,8 +525,13 @@ const StyleEditor = ({ config, onUpdate, t }) => {
           <div className="space-y-3">
             {config.theme?.cssVariables ? (
               Object.entries(config.theme.cssVariables).map(([name, value]) => (
-                <div key={name} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-                  <code className="text-sm font-mono text-gray-900 dark:text-gray-100">--{name}:</code>
+                <div
+                  key={name}
+                  className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-md"
+                >
+                  <code className="text-sm font-mono text-gray-900 dark:text-gray-100">
+                    --{name}:
+                  </code>
                   <input
                     type="text"
                     value={value}

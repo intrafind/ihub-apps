@@ -89,7 +89,9 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.name', 'App Name')}
-              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">(max 60 chars)</span>
+              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">
+                (max 60 chars)
+              </span>
             </label>
             <input
               type="text"
@@ -107,7 +109,9 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.shortName', 'Short Name')}
-              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">(max 15 chars)</span>
+              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">
+                (max 15 chars)
+              </span>
             </label>
             <input
               type="text"

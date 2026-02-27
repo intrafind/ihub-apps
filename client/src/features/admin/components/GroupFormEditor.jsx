@@ -107,7 +107,10 @@ const GroupFormEditor = ({
   if (!group) {
     return (
       <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4 text-gray-400 dark:text-gray-500" />
+        <Icon
+          name="exclamation-triangle"
+          className="h-12 w-12 mx-auto mb-4 text-gray-400 dark:text-gray-500"
+        />
         <p className="text-lg font-medium">
           {t('admin.groups.edit.noGroupData', 'No group data available')}
         </p>
@@ -149,7 +152,9 @@ const GroupFormEditor = ({
                   placeholder="Enter unique group ID"
                 />
                 {validationErrors.id && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.id}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.id}
+                  </p>
                 )}
                 {isProtectedGroup(group.id) && (
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
@@ -176,7 +181,9 @@ const GroupFormEditor = ({
                   placeholder="Enter group display name"
                 />
                 {validationErrors.name && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{validationErrors.name}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.name}
+                  </p>
                 )}
               </div>
 
@@ -232,7 +239,9 @@ const GroupFormEditor = ({
       <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">External Group Mappings</h3>
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+              External Group Mappings
+            </h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Map external groups from OIDC, LDAP, or other providers to this internal group
             </p>

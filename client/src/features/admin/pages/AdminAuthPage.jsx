@@ -222,7 +222,9 @@ const AdminAuthPage = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                    message.type === 'success'
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}
