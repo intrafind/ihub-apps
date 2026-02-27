@@ -38,10 +38,10 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
   return (
     <div className="p-6 space-y-8">
       <div>
-        <h3 className="text-lg font-medium text-gray-900 mb-1">
+        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-1">
           {t('admin.ui.pwa.title', 'Progressive Web App (PWA)')}
         </h3>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           {t(
             'admin.ui.pwa.subtitle',
             'Allow users to install iHub Apps on their device home screen and enable offline fallback.'
@@ -50,12 +50,12 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
       </div>
 
       {/* Enable toggle */}
-      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+      <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-800 rounded-lg">
         <div>
-          <p className="text-sm font-medium text-gray-900">
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
             {t('admin.ui.pwa.enable', 'Enable PWA')}
           </p>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
             {t(
               'admin.ui.pwa.enableHint',
               'Injects web app manifest link and meta tags into all pages. Registers a service worker for offline fallback.'
@@ -81,15 +81,15 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
 
       {/* App identity */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {t('admin.ui.pwa.identity', 'App Identity')}
         </legend>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.name', 'App Name')}
-              <span className="ml-1 text-xs font-normal text-gray-400">(max 60 chars)</span>
+              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">(max 60 chars)</span>
             </label>
             <input
               type="text"
@@ -97,17 +97,17 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
               value={pwa.name || ''}
               onChange={e => handleChange('name', e.target.value)}
               placeholder="iHub Apps"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
               {t('admin.ui.pwa.nameHint', 'Shown on install prompt and app list')}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.shortName', 'Short Name')}
-              <span className="ml-1 text-xs font-normal text-gray-400">(max 15 chars)</span>
+              <span className="ml-1 text-xs font-normal text-gray-400 dark:text-gray-500">(max 15 chars)</span>
             </label>
             <input
               type="text"
@@ -115,16 +115,16 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
               value={pwa.shortName || ''}
               onChange={e => handleChange('shortName', e.target.value)}
               placeholder="iHub"
-              className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+              className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
               {t('admin.ui.pwa.shortNameHint', 'Shown under the home screen icon')}
             </p>
           </div>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('admin.ui.pwa.description', 'Description')}
           </label>
           <input
@@ -133,20 +133,20 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
             value={pwa.description || ''}
             onChange={e => handleChange('description', e.target.value)}
             placeholder="AI-powered applications platform"
-            className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
         </div>
       </fieldset>
 
       {/* Colors */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {t('admin.ui.pwa.colors', 'Colors')}
         </legend>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.themeColor', 'Theme Color')}
             </label>
             <div className="flex items-center gap-2">
@@ -154,7 +154,7 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
                 type="color"
                 value={pwa.themeColor || '#003557'}
                 onChange={e => handleChange('themeColor', e.target.value)}
-                className="h-9 w-12 rounded border border-gray-300 cursor-pointer"
+                className="h-9 w-12 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
                 type="text"
@@ -162,16 +162,16 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
                 onChange={e => handleChange('themeColor', e.target.value)}
                 placeholder="#003557"
                 pattern="^#[0-9a-fA-F]{6}$"
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500"
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
               {t('admin.ui.pwa.themeColorHint', 'Browser chrome / status bar color on Android')}
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {t('admin.ui.pwa.backgroundColor', 'Background Color')}
             </label>
             <div className="flex items-center gap-2">
@@ -179,7 +179,7 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
                 type="color"
                 value={pwa.backgroundColor || '#ffffff'}
                 onChange={e => handleChange('backgroundColor', e.target.value)}
-                className="h-9 w-12 rounded border border-gray-300 cursor-pointer"
+                className="h-9 w-12 rounded border border-gray-300 dark:border-gray-600 cursor-pointer"
               />
               <input
                 type="text"
@@ -187,10 +187,10 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
                 onChange={e => handleChange('backgroundColor', e.target.value)}
                 placeholder="#ffffff"
                 pattern="^#[0-9a-fA-F]{6}$"
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500"
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-400">
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
               {t(
                 'admin.ui.pwa.backgroundColorHint',
                 'Splash screen background before the app paints'
@@ -202,7 +202,7 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
 
       {/* Display mode */}
       <fieldset>
-        <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">
           {t('admin.ui.pwa.display', 'Display Mode')}
         </legend>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -214,14 +214,14 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
               className={`px-3 py-2 text-sm rounded-md border font-medium transition-colors ${
                 (pwa.display || 'standalone') === mode
                   ? 'bg-indigo-600 text-white border-indigo-600'
-                  : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               {mode}
             </button>
           ))}
         </div>
-        <p className="mt-2 text-xs text-gray-400">
+        <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
           {t(
             'admin.ui.pwa.displayHint',
             '"standalone" recommended — hides browser chrome for an app-like experience'
@@ -231,10 +231,10 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
 
       {/* Icons */}
       <fieldset className="space-y-4">
-        <legend className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+        <legend className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
           {t('admin.ui.pwa.icons', 'Icons')}
         </legend>
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
           {t(
             'admin.ui.pwa.iconsHint',
             'Upload PNG icons via the Assets tab, then paste the URL below. Default icons are used when left empty.'
@@ -243,7 +243,7 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
 
         {ICON_FIELDS.map(({ key, label, hint, required }) => (
           <div key={key}>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               {label}
               {required && (
                 <span className="ml-2 text-xs bg-yellow-100 text-yellow-700 px-1.5 py-0.5 rounded">
@@ -257,20 +257,20 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
                 value={pwa.icons?.[key] || ''}
                 onChange={e => handleIconChange(key, e.target.value)}
                 placeholder="/uploads/assets/icon-192.png"
-                className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500"
+                className="flex-1 border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm font-mono focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               />
               {pwa.icons?.[key] && (
                 <img
                   src={pwa.icons[key]}
                   alt={`${label} preview`}
-                  className="h-10 w-10 rounded border border-gray-200 object-contain bg-gray-50 flex-shrink-0"
+                  className="h-10 w-10 rounded border border-gray-200 dark:border-gray-600 object-contain bg-gray-50 dark:bg-gray-800 flex-shrink-0"
                   onError={e => {
                     e.target.style.display = 'none';
                   }}
                 />
               )}
             </div>
-            <p className="mt-1 text-xs text-gray-400">{hint}</p>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">{hint}</p>
           </div>
         ))}
       </fieldset>

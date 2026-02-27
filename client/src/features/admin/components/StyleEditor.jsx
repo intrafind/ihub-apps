@@ -197,12 +197,12 @@ const StyleEditor = ({ config, onUpdate, t }) => {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-6">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.styles.title', 'Style Configuration')}
       </h3>
 
       {/* Section Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
         <nav className="flex space-x-8" aria-label="Tabs">
           {[
             { id: 'theme', label: t('theme.title', 'Theme & Appearance'), icon: '🎨' },
@@ -218,8 +218,8 @@ const StyleEditor = ({ config, onUpdate, t }) => {
               onClick={() => setActiveSection(section.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                 activeSection === section.id
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <span>{section.icon}</span>
@@ -232,13 +232,13 @@ const StyleEditor = ({ config, onUpdate, t }) => {
       {/* Theme Colors Section */}
       {activeSection === 'theme' && (
         <div className="space-y-8">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {t('theme.description', 'Configure brand colors, dark mode, and visual appearance')}
           </p>
 
           {/* Light Mode Colors */}
           <div>
-            <h4 className="text-md font-medium text-gray-900 mb-4">
+            <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-4">
               {t('admin.ui.styles.lightModeColors', 'Light Mode Colors')}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -247,28 +247,28 @@ const StyleEditor = ({ config, onUpdate, t }) => {
 
                 return (
                   <div key={key} className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">{label}</label>
-                    {hint && <p className="text-xs text-gray-500">{hint}</p>}
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
+                    {hint && <p className="text-xs text-gray-500 dark:text-gray-400">{hint}</p>}
 
                     <div className="flex items-center space-x-3">
                       <input
                         type="color"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
-                        className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm cursor-pointer"
+                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm cursor-pointer"
                       />
                       <input
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value)}
-                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm ${
-                          colorErrors[key] ? 'border-red-500' : 'border-gray-300'
+                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                          colorErrors[key] ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                         }`}
                         placeholder={defaultColor}
                       />
                     </div>
                     {colorErrors[key] && (
-                      <p className="text-xs text-red-500 mt-1">
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-1">
                         {t('theme.colorInvalid', 'Please enter a valid hex color (e.g., #4f46e5)')}
                       </p>
                     )}
@@ -279,7 +279,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                         <button
                           key={color}
                           onClick={() => handleThemeColorChange(key, color)}
-                          className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                          className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                           style={{ backgroundColor: color }}
                           title={color}
                         />
@@ -292,11 +292,11 @@ const StyleEditor = ({ config, onUpdate, t }) => {
           </div>
 
           {/* Dark Mode Colors */}
-          <div className="border-t border-gray-200 pt-6">
-            <h4 className="text-md font-medium text-gray-900 mb-2">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-2">
               {t('theme.darkModeSection', 'Dark Mode Colors')}
             </h4>
-            <p className="text-xs text-gray-500 mb-4">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">
               {t(
                 'theme.darkModeSectionHint',
                 'Override colors for dark mode. Leave empty to use light mode values.'
@@ -309,27 +309,27 @@ const StyleEditor = ({ config, onUpdate, t }) => {
 
                 return (
                   <div key={`dark-${key}`} className="space-y-2">
-                    <label className="block text-sm font-medium text-gray-700">{label}</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
 
                     <div className="flex items-center space-x-3">
                       <input
                         type="color"
                         value={currentColor || defaultColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
-                        className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm cursor-pointer"
+                        className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm cursor-pointer"
                       />
                       <input
                         type="text"
                         value={currentColor}
                         onChange={e => handleThemeColorChange(key, e.target.value, true)}
-                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm ${
-                          colorErrors[errorKey] ? 'border-red-500' : 'border-gray-300'
+                        className={`flex-1 px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
+                          colorErrors[errorKey] ? 'border-red-500' : 'border-gray-300 dark:border-gray-600'
                         }`}
                         placeholder={defaultColor}
                       />
                     </div>
                     {colorErrors[errorKey] && (
-                      <p className="text-xs text-red-500 mt-1">
+                      <p className="text-xs text-red-500 dark:text-red-400 mt-1">
                         {t('theme.colorInvalid', 'Please enter a valid hex color (e.g., #4f46e5)')}
                       </p>
                     )}
@@ -340,7 +340,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                         <button
                           key={color}
                           onClick={() => handleThemeColorChange(key, color, true)}
-                          className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                          className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                           style={{ backgroundColor: color }}
                           title={color}
                         />
@@ -353,8 +353,8 @@ const StyleEditor = ({ config, onUpdate, t }) => {
           </div>
 
           {/* Theme Preview */}
-          <div className="border-t border-gray-200 pt-6">
-            <h4 className="text-md font-medium text-gray-900 mb-4">
+          <div className="border-t border-gray-200 dark:border-gray-700 pt-6">
+            <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-4">
               {t('theme.preview', 'Preview')}
             </h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -432,10 +432,10 @@ const StyleEditor = ({ config, onUpdate, t }) => {
         <div className="space-y-4">
           <div className="flex items-start justify-between">
             <div>
-              <h4 className="text-md font-medium text-gray-900">
+              <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.ui.styles.customCssTitle', 'Custom CSS')}
               </h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.ui.styles.customCssDescription',
                   'Add custom CSS that will be injected into the page head.'
@@ -458,7 +458,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }`}
               rows={15}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
             />
 
             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4">
@@ -496,10 +496,10 @@ const StyleEditor = ({ config, onUpdate, t }) => {
         <div className="space-y-4">
           <div className="flex items-start justify-between">
             <div>
-              <h4 className="text-md font-medium text-gray-900">
+              <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.ui.styles.cssVariablesTitle', 'CSS Variables')}
               </h4>
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-600 dark:text-gray-400">
                 {t(
                   'admin.ui.styles.cssVariablesDescription',
                   'Define CSS custom properties that can be used in your custom CSS.'
@@ -517,13 +517,13 @@ const StyleEditor = ({ config, onUpdate, t }) => {
           <div className="space-y-3">
             {config.theme?.cssVariables ? (
               Object.entries(config.theme.cssVariables).map(([name, value]) => (
-                <div key={name} className="flex items-center space-x-3 p-3 bg-gray-50 rounded-md">
-                  <code className="text-sm font-mono text-gray-900">--{name}:</code>
+                <div key={name} className="flex items-center space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
+                  <code className="text-sm font-mono text-gray-900 dark:text-gray-100">--{name}:</code>
                   <input
                     type="text"
                     value={value}
                     onChange={e => updateCssVariable(name, e.target.value)}
-                    className="flex-1 px-3 py-1 border border-gray-300 rounded text-sm"
+                    className="flex-1 px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                   />
                   <button
                     onClick={() => removeCssVariable(name)}
@@ -542,7 +542,7 @@ const StyleEditor = ({ config, onUpdate, t }) => {
                 </div>
               ))
             ) : (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <p>{t('admin.ui.styles.noVariables', 'No CSS variables defined')}</p>
                 <p className="text-sm">
                   {t('admin.ui.styles.addFirstVariable', 'Click "Add Variable" to get started')}
