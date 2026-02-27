@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import MonacoJsonEditor from './MonacoJsonEditor';
 import Icon from './Icon';
+import useDarkMode from '../../hooks/useDarkMode';
 
 /**
  * DualModeEditor - A component that provides dual-mode editing (Form + JSON)
@@ -40,6 +41,7 @@ const DualModeEditor = ({
   className = ''
 }) => {
   const { t } = useTranslation();
+  const { isDark } = useDarkMode();
   const [editingMode, setEditingMode] = useState(defaultMode);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
@@ -240,7 +242,7 @@ const DualModeEditor = ({
               onValidationChange={handleValidationChange}
               schema={jsonSchema}
               height="600px"
-              theme="vs"
+              theme={isDark ? 'vs-dark' : 'vs'}
               showMinimap={false}
               wordWrap={true}
             />
