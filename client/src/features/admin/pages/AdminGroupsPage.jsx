@@ -124,7 +124,9 @@ const AdminGroupsPage = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                    message.type === 'success'
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}
@@ -136,7 +138,9 @@ const AdminGroupsPage = () => {
           {/* Groups List */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
             <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Groups ({groupsArray.length})</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                Groups ({groupsArray.length})
+              </h3>
             </div>
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -159,7 +163,10 @@ const AdminGroupsPage = () => {
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {groupsArray.length === 0 ? (
                     <tr>
-                      <td colSpan="4" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                      <td
+                        colSpan="4"
+                        className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
+                      >
                         <Icon name="users" size="lg" className="mx-auto mb-4 text-gray-400" />
                         <p>{t('admin.groups.noGroupsFound', 'No groups found')}</p>
                         <p className="text-sm">
@@ -177,13 +184,23 @@ const AdminGroupsPage = () => {
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
                               <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                                <Icon name="users" size="md" className="text-gray-600 dark:text-gray-300" />
+                                <Icon
+                                  name="users"
+                                  size="md"
+                                  className="text-gray-600 dark:text-gray-300"
+                                />
                               </div>
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{group.name}</div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">{group.description}</div>
-                              <div className="text-xs text-gray-400 dark:text-gray-500">ID: {group.id}</div>
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                {group.name}
+                              </div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {group.description}
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                ID: {group.id}
+                              </div>
                             </div>
                           </div>
                         </td>

@@ -203,7 +203,9 @@ const CloudStorageConfig = () => {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
             {t('admin.cloudStorage.title')}
           </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">{t('admin.cloudStorage.subtitle')}</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-4">
+            {t('admin.cloudStorage.subtitle')}
+          </p>
 
           {/* Info Card */}
           <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4 mb-4">
@@ -229,7 +231,10 @@ const CloudStorageConfig = () => {
               onChange={handleToggleEnabled}
               className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
             />
-            <label htmlFor="cloudStorageEnabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+            <label
+              htmlFor="cloudStorageEnabled"
+              className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+            >
               {config.enabled ? t('admin.cloudStorage.enabled') : t('admin.cloudStorage.disabled')}
             </label>
           </div>

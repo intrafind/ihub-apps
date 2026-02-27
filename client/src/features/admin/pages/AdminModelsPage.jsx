@@ -397,14 +397,19 @@ const AdminModelsPage = () => {
                               <div className="flex items-center">
                                 <div className="flex-shrink-0 h-8 w-8">
                                   <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
-                                    <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+                                    <Icon
+                                      name="cpu-chip"
+                                      className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                    />
                                   </div>
                                 </div>
                                 <div className="ml-4">
                                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {getLocalizedContent(model.name, currentLanguage)}
                                   </div>
-                                  <div className="text-sm text-gray-500 dark:text-gray-400">{model.id}</div>
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {model.id}
+                                  </div>
                                 </div>
                               </div>
                             </td>

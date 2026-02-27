@@ -376,7 +376,9 @@ const AdminToolsPage = () => {
                                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {getLocalizedContent(tool.name, currentLanguage)}
                                 </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">{tool.id}</div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {tool.id}
+                                </div>
                               </div>
                             </div>
                           </td>

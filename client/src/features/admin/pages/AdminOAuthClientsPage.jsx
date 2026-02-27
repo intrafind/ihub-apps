@@ -311,7 +311,9 @@ const AdminOAuthClientsPage = () => {
           <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
             <div className="flex items-center justify-between">
               <div className="flex-1">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">OAuth 2.0 Authentication</h3>
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  OAuth 2.0 Authentication
+                </h3>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {oauthEnabled
                     ? 'OAuth is currently enabled. External applications can authenticate using client credentials.'

@@ -102,13 +102,17 @@ const AdminFeaturesPage = () => {
           {loading ? (
             <div className="flex items-center justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-3 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading...')}</span>
+              <span className="ml-3 text-gray-600 dark:text-gray-400">
+                {t('common.loading', 'Loading...')}
+              </span>
             </div>
           ) : (
             <div className="space-y-8">
               {groupedFeatures.map(group => (
                 <div key={group.id}>
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{group.name}</h2>
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                    {group.name}
+                  </h2>
                   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
                     {group.features.map(feature => (
                       <div key={feature.id} className="flex items-center justify-between px-6 py-4">

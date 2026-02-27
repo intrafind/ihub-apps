@@ -200,7 +200,9 @@ const AdminSourcesPage = () => {
                   name="arrow-path"
                   className="animate-spin h-8 w-8 text-gray-400 mx-auto mb-4"
                 />
-                <p className="text-gray-500 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {t('common.loading', 'Loading...')}
+                </p>
               </div>
             </div>
           </div>
@@ -322,7 +324,10 @@ const AdminSourcesPage = () => {
             <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <Icon name="check-circle" className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2" />
+                  <Icon
+                    name="check-circle"
+                    className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2"
+                  />
                   <span className="text-indigo-800 dark:text-indigo-200 font-medium">
                     {t('admin.sources.selectedCount', '{{count}} sources selected', {
                       count: selectedSources.size
@@ -441,7 +446,9 @@ const AdminSourcesPage = () => {
                             <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {Object.values(source.name || {})[0] || source.id}
                             </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">{source.id}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                              {source.id}
+                            </div>
                             {source.description && Object.values(source.description)[0] && (
                               <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                 {Object.values(source.description)[0]}

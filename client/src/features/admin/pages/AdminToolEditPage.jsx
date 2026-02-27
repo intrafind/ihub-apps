@@ -220,7 +220,9 @@ const AdminToolEditPage = () => {
               <div className="flex">
                 <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
                 <div className="ml-3">
-                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">{t('common.error', 'Error')}</h3>
+                  <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                    {t('common.error', 'Error')}
+                  </h3>
                   <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
                 </div>
               </div>
@@ -323,7 +325,9 @@ const AdminToolEditPage = () => {
                     'admin.tools.scriptEditorInfo',
                     'Edit the JavaScript code for this tool. Changes will be saved to server/tools/'
                   )}{' '}
-                  <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">{toolData.script}</code>
+                  <code className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded text-xs">
+                    {toolData.script}
+                  </code>
                 </p>
               </div>
 

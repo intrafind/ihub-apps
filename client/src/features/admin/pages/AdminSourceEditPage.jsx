@@ -238,7 +238,9 @@ const AdminSourceEditPage = () => {
                   name="arrow-path"
                   className="animate-spin h-8 w-8 text-gray-400 mx-auto mb-4"
                 />
-                <p className="text-gray-500 dark:text-gray-400">{t('common.loading', 'Loading...')}</p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {t('common.loading', 'Loading...')}
+                </p>
               </div>
             </div>
           </div>
@@ -379,7 +381,9 @@ const AdminSourceEditPage = () => {
                     />
                     <span
                       className={`font-medium ${
-                        testResult.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'
+                        testResult.success
+                          ? 'text-green-800 dark:text-green-200'
+                          : 'text-red-800 dark:text-red-200'
                       }`}
                     >
                       {testResult.success
@@ -389,7 +393,9 @@ const AdminSourceEditPage = () => {
                   </div>
 
                   {testResult.error && (
-                    <p className="text-red-700 dark:text-red-300 text-sm mb-2">{testResult.error}</p>
+                    <p className="text-red-700 dark:text-red-300 text-sm mb-2">
+                      {testResult.error}
+                    </p>
                   )}
 
                   {testResult.duration && (

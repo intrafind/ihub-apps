@@ -151,7 +151,10 @@ const JiraConfig = () => {
               onChange={handleToggleEnabled}
               className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 dark:border-gray-600 rounded"
             />
-            <label htmlFor="jiraEnabled" className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+            <label
+              htmlFor="jiraEnabled"
+              className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+            >
               {config.enabled
                 ? t('admin.jira.enabled', 'Jira integration enabled')
                 : t('admin.jira.disabled', 'Jira integration disabled')}
@@ -243,7 +246,9 @@ const JiraConfig = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                    message.type === 'success'
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}

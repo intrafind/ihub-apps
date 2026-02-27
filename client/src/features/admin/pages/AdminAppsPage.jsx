@@ -526,7 +526,9 @@ const AdminAppsPage = () => {
                               <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                 {getLocalizedValue(app.name)}
                               </div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">{app.id}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {app.id}
+                              </div>
                             </div>
                           </div>
                         </td>

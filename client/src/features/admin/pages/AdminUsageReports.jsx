@@ -121,7 +121,9 @@ const AppUsageCard = ({ data }) => {
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
                   {app.replace('-', ' ')}
                 </span>
-                <span className="text-sm text-gray-600 dark:text-gray-400">{percentage.toFixed(1)}%</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {percentage.toFixed(1)}%
+                </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div
@@ -179,7 +181,9 @@ const FeedbackCard = ({ data }) => {
                 <svg
                   key={star}
                   className={`w-6 h-6 ${
-                    star <= Math.round(averageRating) ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'
+                    star <= Math.round(averageRating)
+                      ? 'text-yellow-400'
+                      : 'text-gray-300 dark:text-gray-600'
                   }`}
                   fill="currentColor"
                   viewBox="0 0 20 20"
@@ -188,7 +192,9 @@ const FeedbackCard = ({ data }) => {
                 </svg>
               ))}
             </div>
-            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">{averageRating.toFixed(1)}</span>
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+              {averageRating.toFixed(1)}
+            </span>
           </div>
           <div className="text-center">
             <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
@@ -457,8 +463,13 @@ const AdminUsageReports = () => {
         </h3>
         <div className="space-y-4">
           {Object.entries(tokens.perApp || {}).map(([app, tokenCount]) => (
-            <div key={app} className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
-              <span className="font-medium capitalize dark:text-gray-100">{app.replace('-', ' ')}</span>
+            <div
+              key={app}
+              className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+            >
+              <span className="font-medium capitalize dark:text-gray-100">
+                {app.replace('-', ' ')}
+              </span>
               <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
                 {new Intl.NumberFormat().format(tokenCount)}
               </span>
@@ -511,7 +522,9 @@ const AdminUsageReports = () => {
                 key={app}
                 className="flex justify-between items-center p-3 bg-purple-50 dark:bg-purple-900/30 rounded-lg"
               >
-                <span className="font-medium capitalize dark:text-gray-100">{app.replace('-', ' ')}</span>
+                <span className="font-medium capitalize dark:text-gray-100">
+                  {app.replace('-', ' ')}
+                </span>
                 <span className="text-lg font-bold text-purple-600 dark:text-purple-400">
                   {new Intl.NumberFormat().format(count)}
                 </span>
@@ -539,8 +552,12 @@ const AdminUsageReports = () => {
                 return (
                   <div key={user} className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400 truncate">{user.replace('session-', '')}</span>
-                      <span className="font-medium dark:text-gray-100">{new Intl.NumberFormat().format(tokens)}</span>
+                      <span className="text-gray-600 dark:text-gray-400 truncate">
+                        {user.replace('session-', '')}
+                      </span>
+                      <span className="font-medium dark:text-gray-100">
+                        {new Intl.NumberFormat().format(tokens)}
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
@@ -566,8 +583,12 @@ const AdminUsageReports = () => {
                 return (
                   <div key={user} className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400 truncate">{user.replace('session-', '')}</span>
-                      <span className="font-medium dark:text-gray-100">{new Intl.NumberFormat().format(tokens)}</span>
+                      <span className="text-gray-600 dark:text-gray-400 truncate">
+                        {user.replace('session-', '')}
+                      </span>
+                      <span className="font-medium dark:text-gray-100">
+                        {new Intl.NumberFormat().format(tokens)}
+                      </span>
                     </div>
                     <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
@@ -606,7 +627,9 @@ const AdminUsageReports = () => {
                     <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                       {user.replace('session-', '')}
                     </span>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{totalUserFeedback} responses</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {totalUserFeedback} responses
+                    </span>
                   </div>
                   {totalUserFeedback > 0 && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -626,7 +649,9 @@ const AdminUsageReports = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {averageRating.toFixed(1)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -653,7 +678,9 @@ const AdminUsageReports = () => {
                     <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
                       {app.replace('-', ' ')}
                     </span>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{totalAppFeedback} responses</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {totalAppFeedback} responses
+                    </span>
                   </div>
                   {totalAppFeedback > 0 && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -673,7 +700,9 @@ const AdminUsageReports = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {averageRating.toFixed(1)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -695,7 +724,9 @@ const AdminUsageReports = () => {
                 <div key={model} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex justify-between items-center mb-2">
                     <span className="font-medium text-gray-900 dark:text-gray-100">{model}</span>
-                    <span className="text-sm text-gray-600 dark:text-gray-400">{totalModelFeedback} responses</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {totalModelFeedback} responses
+                    </span>
                   </div>
                   {totalModelFeedback > 0 && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -715,7 +746,9 @@ const AdminUsageReports = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 dark:text-amber-400 font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {averageRating.toFixed(1)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -730,7 +763,9 @@ const AdminUsageReports = () => {
   const renderDetails = () => (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Model Usage Details</h3>
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Model Usage Details
+        </h3>
         <div className="space-y-4">
           {Object.entries(messages.perModel || {}).map(([model, messageCount]) => {
             const tokenCount = tokens.perModel[model] || 0;
@@ -740,14 +775,21 @@ const AdminUsageReports = () => {
               messageCount > 0 ? Math.round(tokenCount / messageCount) : 0;
 
             return (
-              <div key={model} className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700">
+              <div
+                key={model}
+                className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700"
+              >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h4 className="font-semibold text-lg text-gray-900 dark:text-gray-100">{model}</h4>
+                    <h4 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                      {model}
+                    </h4>
                     <p className="text-sm text-gray-600 dark:text-gray-400">AI Model</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{messageCount}</div>
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {messageCount}
+                    </div>
                     <div className="text-sm text-gray-600">messages</div>
                   </div>
                 </div>
@@ -769,10 +811,14 @@ const AdminUsageReports = () => {
                     <div className="text-lg font-bold text-green-600 dark:text-green-400">
                       {new Intl.NumberFormat().format(completionTokens)}
                     </div>
-                    <div className="text-xs text-green-600 dark:text-green-400">Completion Tokens</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">
+                      Completion Tokens
+                    </div>
                   </div>
                   <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
-                    <div className="text-lg font-bold text-amber-600 dark:text-amber-400">{avgTokensPerMessage}</div>
+                    <div className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      {avgTokensPerMessage}
+                    </div>
                     <div className="text-xs text-amber-600 dark:text-amber-400">Avg/Message</div>
                   </div>
                 </div>
@@ -895,13 +941,17 @@ const AdminUsageReports = () => {
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   {t('admin.usage.lastUpdated', 'Last Updated')}
                 </div>
-                <div className="text-sm font-medium dark:text-gray-100">{new Date(lastUpdated).toLocaleString()}</div>
+                <div className="text-sm font-medium dark:text-gray-100">
+                  {new Date(lastUpdated).toLocaleString()}
+                </div>
               </div>
               <div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   {t('admin.usage.lastReset', 'Last Reset')}
                 </div>
-                <div className="text-sm font-medium dark:text-gray-100">{new Date(lastReset).toLocaleString()}</div>
+                <div className="text-sm font-medium dark:text-gray-100">
+                  {new Date(lastReset).toLocaleString()}
+                </div>
               </div>
               <div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">

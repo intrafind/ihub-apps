@@ -215,7 +215,9 @@ const AdminUsersPage = () => {
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex justify-between items-center">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">User Management</h1>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                  User Management
+                </h1>
                 <p className="text-gray-600 dark:text-gray-400 mt-1">
                   Manage local authentication users and their permissions
                 </p>
@@ -251,7 +253,9 @@ const AdminUsersPage = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
+                    message.type === 'success'
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}
@@ -290,7 +294,9 @@ const AdminUsersPage = () => {
           <div className="mb-6 bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Auth Method</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Auth Method
+                </label>
                 <select
                   value={authMethodFilter}
                   onChange={e => setAuthMethodFilter(e.target.value)}
@@ -304,7 +310,9 @@ const AdminUsersPage = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Group</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Group
+                </label>
                 <select
                   value={groupFilter}
                   onChange={e => setGroupFilter(e.target.value)}
@@ -320,7 +328,9 @@ const AdminUsersPage = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Status
+                </label>
                 <select
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value)}
@@ -333,7 +343,9 @@ const AdminUsersPage = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Last Active</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Last Active
+                </label>
                 <select
                   value={lastActiveDaysFilter}
                   onChange={e => setLastActiveDaysFilter(e.target.value)}
@@ -408,7 +420,10 @@ const AdminUsersPage = () => {
                 <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {sortedUsers.length === 0 ? (
                     <tr>
-                      <td colSpan="6" className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                      <td
+                        colSpan="6"
+                        className="px-6 py-8 text-center text-gray-500 dark:text-gray-400"
+                      >
                         <Icon name="users" size="lg" className="mx-auto mb-4 text-gray-400" />
                         {searchTerm ? (
                           <>
@@ -430,15 +445,23 @@ const AdminUsersPage = () => {
                           <div className="flex items-center">
                             <div className="flex-shrink-0 h-10 w-10">
                               <div className="h-10 w-10 rounded-full bg-gray-300 dark:bg-gray-600 flex items-center justify-center">
-                                <Icon name="user" size="md" className="text-gray-600 dark:text-gray-300" />
+                                <Icon
+                                  name="user"
+                                  size="md"
+                                  className="text-gray-600 dark:text-gray-300"
+                                />
                               </div>
                             </div>
                             <div className="ml-4">
                               <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                 {user.name || user.username}
                               </div>
-                              <div className="text-sm text-gray-500 dark:text-gray-400">{user.email}</div>
-                              <div className="text-xs text-gray-400 dark:text-gray-500">@{user.username}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {user.email}
+                              </div>
+                              <div className="text-xs text-gray-400 dark:text-gray-500">
+                                @{user.username}
+                              </div>
                             </div>
                           </div>
                         </td>
@@ -477,7 +500,9 @@ const AdminUsersPage = () => {
                               </div>
                             )}
                             {user.proxyData && (
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">Proxy</div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                                Proxy
+                              </div>
                             )}
                           </div>
                         </td>
@@ -492,7 +517,9 @@ const AdminUsersPage = () => {
                               </span>
                             ))}
                             {(!user.internalGroups || user.internalGroups.length === 0) && (
-                              <span className="text-sm text-gray-400 dark:text-gray-500">No groups</span>
+                              <span className="text-sm text-gray-400 dark:text-gray-500">
+                                No groups
+                              </span>
                             )}
                           </div>
                         </td>

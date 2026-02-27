@@ -445,7 +445,9 @@ const AdminPromptsPage = () => {
                                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                   {getLocalizedContent(prompt.name, currentLanguage)}
                                 </div>
-                                <div className="text-sm text-gray-500 dark:text-gray-400">{prompt.id}</div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  {prompt.id}
+                                </div>
                               </div>
                             </div>
                           </td>

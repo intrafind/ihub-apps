@@ -50,7 +50,11 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
             <Icon name={prompt.icon || 'clipboard'} className="w-6 h-6 mr-2" />
             {prompt.name}
           </h2>
-          <button onClick={onClose} aria-label={t('common.cancel', 'Cancel')} className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200">
+          <button
+            onClick={onClose}
+            aria-label={t('common.cancel', 'Cancel')}
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          >
             <Icon name="x" />
           </button>
         </div>
