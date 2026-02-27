@@ -267,10 +267,10 @@ const AdminModelsPage = () => {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center">
             <div className="sm:flex-auto">
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {t('admin.models.title', 'Model Management')}
               </h1>
-              <p className="mt-2 text-sm text-gray-700">
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                 {t('admin.models.subtitle', 'Configure and manage AI models for your applications')}
               </p>
             </div>
@@ -293,7 +293,7 @@ const AdminModelsPage = () => {
                   />
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled={uploading}
                     title={t('admin.models.uploadConfig', 'Upload Model Config')}
                   >
@@ -308,14 +308,14 @@ const AdminModelsPage = () => {
                 </div>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
                   onClick={enableAllModels}
                 >
                   {t('admin.common.enableAll', 'Enable All')}
                 </button>
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
                   onClick={disableAllModels}
                 >
                   {t('admin.common.disableAll', 'Disable All')}
@@ -333,7 +333,7 @@ const AdminModelsPage = () => {
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                  className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                   placeholder={t('admin.models.searchPlaceholder', 'Search models...')}
                   value={searchTerm}
                   onChange={e => setSearchTerm(e.target.value)}
@@ -344,7 +344,7 @@ const AdminModelsPage = () => {
               <select
                 value={filterEnabled}
                 onChange={e => setFilterEnabled(e.target.value)}
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
               >
                 <option value="all">{t('admin.models.filterAll', 'All Models')}</option>
                 <option value="enabled">{t('admin.models.filterEnabled', 'Enabled Only')}</option>
@@ -359,25 +359,25 @@ const AdminModelsPage = () => {
           <div className="mt-8 flex flex-col">
             <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.models.name', 'Name')}
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.models.provider', 'Provider')}
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.models.table.status', 'Status')}
                         </th>
@@ -386,29 +386,34 @@ const AdminModelsPage = () => {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                       {filteredModels.map(model => (
                         <React.Fragment key={model.id}>
                           <tr
-                            className="hover:bg-gray-50 cursor-pointer"
+                            className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
                             onClick={() => handleModelClick(model)}
                           >
                             <td className="px-6 py-4 whitespace-nowrap">
                               <div className="flex items-center">
                                 <div className="flex-shrink-0 h-8 w-8">
-                                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                                    <Icon name="cpu-chip" className="h-4 w-4 text-indigo-600" />
+                                  <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                                    <Icon
+                                      name="cpu-chip"
+                                      className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                    />
                                   </div>
                                 </div>
                                 <div className="ml-4">
-                                  <div className="text-sm font-medium text-gray-900">
+                                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                     {getLocalizedContent(model.name, currentLanguage)}
                                   </div>
-                                  <div className="text-sm text-gray-500">{model.id}</div>
+                                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                                    {model.id}
+                                  </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                               {model.provider || '-'}
                             </td>
                             <td className="px-6 py-4 whitespace-nowrap">
@@ -416,8 +421,8 @@ const AdminModelsPage = () => {
                                 <span
                                   className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                                     model.enabled
-                                      ? 'bg-green-100 text-green-800'
-                                      : 'bg-gray-100 text-gray-800'
+                                      ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                                   }`}
                                 >
                                   {model.enabled
@@ -425,7 +430,7 @@ const AdminModelsPage = () => {
                                     : t('admin.models.disabled', 'Disabled')}
                                 </span>
                                 {model.default && (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
                                     {t('admin.models.default', 'Default')}
                                   </span>
                                 )}
@@ -439,7 +444,7 @@ const AdminModelsPage = () => {
                                     testModel(model.id);
                                   }}
                                   disabled={testingModel === model.id}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full disabled:opacity-50"
+                                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full disabled:opacity-50"
                                   title={t('admin.models.test', 'Test')}
                                 >
                                   <Icon name="play" className="h-4 w-4" />
@@ -451,8 +456,8 @@ const AdminModelsPage = () => {
                                   }}
                                   className={`p-2 rounded-full ${
                                     model.enabled
-                                      ? 'text-red-600 hover:bg-red-50'
-                                      : 'text-green-600 hover:bg-green-50'
+                                      ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50'
+                                      : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50'
                                   }`}
                                   title={
                                     model.enabled
@@ -470,7 +475,7 @@ const AdminModelsPage = () => {
                                     e.stopPropagation();
                                     navigate(`/admin/models/${model.id}`);
                                   }}
-                                  className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                  className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
                                   title={t('common.edit', 'Edit')}
                                 >
                                   <Icon name="pencil" className="h-4 w-4" />
@@ -480,7 +485,7 @@ const AdminModelsPage = () => {
                                     e.stopPropagation();
                                     handleCloneModel(model);
                                   }}
-                                  className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
                                   title={t('admin.models.clone', 'Clone')}
                                 >
                                   <Icon name="copy" className="h-4 w-4" />
@@ -490,7 +495,7 @@ const AdminModelsPage = () => {
                                     e.stopPropagation();
                                     downloadModelConfig(model.id);
                                   }}
-                                  className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                                  className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full"
                                   title={t('admin.models.download', 'Download Config')}
                                 >
                                   <Icon name="download" className="h-4 w-4" />
@@ -500,7 +505,7 @@ const AdminModelsPage = () => {
                                     e.stopPropagation();
                                     handleDeleteModel(model.id);
                                   }}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
                                   title={t('admin.models.delete', 'Delete')}
                                 >
                                   <Icon name="trash" className="h-4 w-4" />
@@ -511,7 +516,7 @@ const AdminModelsPage = () => {
                           {/* Test result row */}
                           {testResults[model.id] && (
                             <tr key={`${model.id}-test-result`}>
-                              <td colSpan="4" className="px-6 py-3 bg-gray-50">
+                              <td colSpan="4" className="px-6 py-3 bg-gray-50 dark:bg-gray-800">
                                 <div className="flex items-start space-x-3">
                                   {testResults[model.id].success ? (
                                     <>
@@ -520,10 +525,10 @@ const AdminModelsPage = () => {
                                         className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5"
                                       />
                                       <div className="flex-1">
-                                        <div className="text-sm font-medium text-green-800">
+                                        <div className="text-sm font-medium text-green-800 dark:text-green-300">
                                           {t('admin.models.test.success', 'Test Successful')}
                                         </div>
-                                        <div className="text-sm text-gray-700 mt-1">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                           {testResults[model.id].response}
                                         </div>
                                       </div>

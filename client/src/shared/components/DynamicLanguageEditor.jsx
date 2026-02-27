@@ -262,14 +262,14 @@ const DynamicLanguageEditor = ({
   return (
     <div className={`space-y-4 ${className}`}>
       <div className="flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700">
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label}
           {required && <span className="text-red-500 ml-1">*</span>}
         </label>
         <button
           type="button"
           onClick={() => setShowAddLanguage(!showAddLanguage)}
-          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          className="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-900/50 hover:bg-indigo-200 dark:hover:bg-indigo-900 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
         >
           <Icon name="plus-circle" className="w-3 h-3 mr-1" />
           {t('admin.apps.edit.addLanguage', 'Add Language')}
@@ -277,12 +277,12 @@ const DynamicLanguageEditor = ({
       </div>
 
       {showAddLanguage && (
-        <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
           <div className="flex items-center space-x-2">
             <select
               value={newLanguageCode}
               onChange={e => setNewLanguageCode(e.target.value)}
-              className="block w-32 rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+              className="block w-32 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             >
               <option value="">{t('admin.apps.edit.selectLanguage', 'Select...')}</option>
               {availableLanguages.map(lang => (
@@ -296,7 +296,7 @@ const DynamicLanguageEditor = ({
               value={newLanguageCode}
               onChange={e => setNewLanguageCode(e.target.value.toLowerCase())}
               placeholder={t('admin.apps.edit.languageCode', 'Language code (e.g., en, de, es)')}
-              className="flex-1 block rounded-lg border border-gray-300 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
+              className="flex-1 block rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-3 py-2 focus:border-indigo-500 focus:ring-indigo-500"
             />
             <button
               type="button"
@@ -314,7 +314,7 @@ const DynamicLanguageEditor = ({
         {languages.map(lang => (
           <div key={lang} className="flex items-start space-x-2">
             <div className="flex-shrink-0 w-12 pt-2">
-              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
                 {lang.toUpperCase()}
               </span>
             </div>
@@ -325,8 +325,10 @@ const DynamicLanguageEditor = ({
                   onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
                   rows={3}
-                  className={`block w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                    error ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+                  className={`block w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                    error
+                      ? 'border-red-300 focus:border-red-500'
+                      : 'border-gray-300 dark:border-gray-600'
                   }`}
                   required={required && lang === 'en'}
                 />
@@ -336,8 +338,10 @@ const DynamicLanguageEditor = ({
                   value={currentValue[lang] || ''}
                   onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
-                  className={`block w-full rounded-lg border px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
-                    error ? 'border-red-300 focus:border-red-500' : 'border-gray-300'
+                  className={`block w-full rounded-lg border px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 ${
+                    error
+                      ? 'border-red-300 focus:border-red-500'
+                      : 'border-gray-300 dark:border-gray-600'
                   }`}
                   required={required && lang === 'en'}
                 />
@@ -347,7 +351,7 @@ const DynamicLanguageEditor = ({
               <button
                 type="button"
                 onClick={() => handleTranslate(lang)}
-                className="p-1 text-indigo-500 hover:text-indigo-700"
+                className="p-1 text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300"
                 title={t('admin.translateField', 'Translate')}
               >
                 <Icon name="globe" className="w-4 h-4" />
@@ -355,7 +359,7 @@ const DynamicLanguageEditor = ({
               <button
                 type="button"
                 onClick={() => handleRemoveLanguage(lang)}
-                className="p-1 text-red-500 hover:text-red-700"
+                className="p-1 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
                 disabled={lang === 'en'}
               >
                 <Icon name="x" className="w-4 h-4" />
@@ -366,7 +370,7 @@ const DynamicLanguageEditor = ({
       </div>
 
       {languages.length === 0 && (
-        <div className="text-sm text-gray-500 italic">
+        <div className="text-sm text-gray-500 dark:text-gray-400 italic">
           {t(
             'admin.apps.edit.noLanguages',
             'No languages configured. Add a language to get started.'
@@ -374,7 +378,7 @@ const DynamicLanguageEditor = ({
         </div>
       )}
 
-      {error && <div className="mt-1 text-sm text-red-600">{error}</div>}
+      {error && <div className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</div>}
     </div>
   );
 };

@@ -66,7 +66,10 @@ import {
   ServerIcon,
   TableCellsIcon as OutlineTableCellsIcon,
   DocumentDuplicateIcon as OutlineDocumentDuplicateIcon,
-  PresentationChartBarIcon as OutlinePresentationChartBarIcon
+  PresentationChartBarIcon as OutlinePresentationChartBarIcon,
+  SunIcon as OutlineSunIcon,
+  MoonIcon as OutlineMoonIcon,
+  ComputerDesktopIcon as OutlineComputerDesktopIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -117,7 +120,10 @@ import {
   ServerIcon as SolidServerIcon,
   TableCellsIcon as SolidTableCellsIcon,
   DocumentDuplicateIcon as SolidDocumentDuplicateIcon,
-  PresentationChartBarIcon as SolidPresentationChartBarIcon
+  PresentationChartBarIcon as SolidPresentationChartBarIcon,
+  SunIcon as SolidSunIcon,
+  MoonIcon as SolidMoonIcon,
+  ComputerDesktopIcon as SolidComputerDesktopIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -224,7 +230,11 @@ const iconMap = {
   },
   // Aliases for export formats
   'file-text': { outline: OutlineDocumentTextIcon, solid: SolidDocumentTextIcon },
-  table: { outline: OutlineTableCellsIcon, solid: SolidTableCellsIcon }
+  table: { outline: OutlineTableCellsIcon, solid: SolidTableCellsIcon },
+  // Dark mode toggle icons
+  sun: { outline: OutlineSunIcon, solid: SolidSunIcon },
+  moon: { outline: OutlineMoonIcon, solid: SolidMoonIcon },
+  'computer-desktop': { outline: OutlineComputerDesktopIcon, solid: SolidComputerDesktopIcon }
 };
 
 const sizeClasses = {

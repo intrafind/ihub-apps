@@ -1419,5 +1419,37 @@
     "settings": "Settings",
     "workflows": "Workflows",
     "prompts": "Prompts"
+  },
+  "darkMode": {
+    "auto": "Auto (system)",
+    "light": "Light mode",
+    "dark": "Dark mode",
+    "switchToLight": "Switch to light mode",
+    "switchToDark": "Switch to dark mode",
+    "switchToAuto": "Switch to auto mode",
+    "followingSystem": "Following system preference"
+  },
+  "theme": {
+    "title": "Theme & Appearance",
+    "description": "Configure brand colors, dark mode, and visual appearance",
+    "primaryColor": "Primary Color",
+    "primaryColorHint": "Main brand color used for buttons, links, and accents",
+    "primaryDark": "Primary Dark",
+    "primaryDarkHint": "Darker variant for hover states and emphasis",
+    "accentColor": "Accent Color",
+    "accentColorHint": "Secondary highlight color for success states and CTAs",
+    "backgroundColor": "Background Color",
+    "backgroundColorHint": "Page background color",
+    "surfaceColor": "Surface Color",
+    "surfaceColorHint": "Card and panel background color",
+    "textColor": "Text Color",
+    "textColorHint": "Primary text color",
+    "textMutedColor": "Muted Text Color",
+    "textMutedColorHint": "Secondary/helper text color",
+    "darkModeSection": "Dark Mode Colors",
+    "darkModeSectionHint": "Override colors for dark mode. Leave empty to use light mode values.",
+    "preview": "Preview",
+    "resetToDefaults": "Reset to Defaults",
+    "colorInvalid": "Please enter a valid hex color (e.g., #4f46e5)"
   }
 }

@@ -191,7 +191,7 @@ const AdminSourcesPage = () => {
   if (loading) {
     return (
       <AdminAuth>
-        <div className="min-h-screen bg-gray-50">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
           <AdminNavigation />
           <div className="max-w-7xl mx-auto py-6 px-4">
             <div className="flex items-center justify-center h-64">
@@ -200,7 +200,9 @@ const AdminSourcesPage = () => {
                   name="arrow-path"
                   className="animate-spin h-8 w-8 text-gray-400 mx-auto mb-4"
                 />
-                <p className="text-gray-500">{t('common.loading', 'Loading...')}</p>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {t('common.loading', 'Loading...')}
+                </p>
               </div>
             </div>
           </div>
@@ -211,18 +213,18 @@ const AdminSourcesPage = () => {
 
   return (
     <AdminAuth>
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <AdminNavigation />
         <div className="max-w-7xl mx-auto py-6 px-4">
           {/* Header */}
           <div className="mb-8">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-semibold text-gray-900 flex items-center">
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100 flex items-center">
                   <Icon name="database" className="h-6 w-6 mr-2" />
                   {t('admin.navigation.sources', 'Sources')}
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {t('admin.sources.description', 'Manage data sources for your applications')}
                 </p>
               </div>
@@ -238,13 +240,13 @@ const AdminSourcesPage = () => {
 
           {/* Error Message */}
           {error && (
-            <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+            <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
               <div className="flex items-center">
                 <Icon name="x-circle" className="h-5 w-5 text-red-400 mr-2" />
-                <p className="text-red-800">{error}</p>
+                <p className="text-red-800 dark:text-red-200">{error}</p>
                 <button
                   onClick={() => setError(null)}
-                  className="ml-auto text-red-600 hover:text-red-800"
+                  className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
                 >
                   <Icon name="x-mark" className="h-4 w-4" />
                 </button>
@@ -253,10 +255,10 @@ const AdminSourcesPage = () => {
           )}
 
           {/* Filters */}
-          <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('admin.sources.search', 'Search')}
                 </label>
                 <div className="relative">
@@ -269,19 +271,19 @@ const AdminSourcesPage = () => {
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
                     placeholder={t('admin.sources.searchPlaceholder', 'Search sources...')}
-                    className="pl-10 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                    className="pl-10 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('admin.sources.filterType', 'Type')}
                 </label>
                 <select
                   value={typeFilter}
                   onChange={e => setTypeFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="all">{t('admin.sources.allTypes', 'All Types')}</option>
                   <option value="filesystem">{t('admin.sources.filesystem', 'Filesystem')}</option>
@@ -291,13 +293,13 @@ const AdminSourcesPage = () => {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('admin.sources.filterStatus', 'Status')}
                 </label>
                 <select
                   value={statusFilter}
                   onChange={e => setStatusFilter(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 >
                   <option value="all">{t('admin.sources.allStatuses', 'All Statuses')}</option>
                   <option value="enabled">{t('common.enabled', 'Enabled')}</option>
@@ -308,7 +310,7 @@ const AdminSourcesPage = () => {
               <div className="flex items-end">
                 <button
                   onClick={loadSources}
-                  className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-2 rounded-lg font-medium flex items-center"
+                  className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg font-medium flex items-center"
                 >
                   <Icon name="arrow-path" className="h-4 w-4 mr-2" />
                   {t('common.refresh', 'Refresh')}
@@ -319,11 +321,14 @@ const AdminSourcesPage = () => {
 
           {/* Bulk Operations */}
           {selectedSources.size > 0 && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4 mb-6">
+            <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 mb-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <Icon name="check-circle" className="h-5 w-5 text-indigo-600 mr-2" />
-                  <span className="text-indigo-800 font-medium">
+                  <Icon
+                    name="check-circle"
+                    className="h-5 w-5 text-indigo-600 dark:text-indigo-400 mr-2"
+                  />
+                  <span className="text-indigo-800 dark:text-indigo-200 font-medium">
                     {t('admin.sources.selectedCount', '{{count}} sources selected', {
                       count: selectedSources.size
                     })}
@@ -360,16 +365,16 @@ const AdminSourcesPage = () => {
           )}
 
           {/* Sources Table */}
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
             {filteredSources.length === 0 ? (
               <div className="text-center py-12">
                 <Icon name="database" className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <h3 className="text-lg font-medium text-gray-900 mb-2">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                   {(Array.isArray(sources) ? sources.length : 0) === 0
                     ? t('admin.sources.noSources', 'No sources configured')
                     : t('admin.sources.noFilteredSources', 'No sources match your filters')}
                 </h3>
-                <p className="text-gray-500 mb-4">
+                <p className="text-gray-500 dark:text-gray-400 mb-4">
                   {(Array.isArray(sources) ? sources.length : 0) === 0
                     ? t(
                         'admin.sources.createFirstSource',
@@ -388,8 +393,8 @@ const AdminSourcesPage = () => {
               </div>
             ) : (
               <div className="overflow-x-auto">
-                <table className="min-w-full divide-y divide-gray-200">
-                  <thead className="bg-gray-50">
+                <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-900">
                     <tr>
                       <th className="px-6 py-3 text-left">
                         <input
@@ -405,45 +410,47 @@ const AdminSourcesPage = () => {
                               setSelectedSources(new Set());
                             }
                           }}
-                          className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
                         />
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('admin.sources.name', 'Name')}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('admin.sources.type', 'Type')}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('admin.sources.status', 'Status')}
                       </th>
-                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('admin.sources.updated', 'Updated')}
                       </th>
-                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                         {t('admin.sources.actions', 'Actions')}
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredSources.map(source => (
-                      <tr key={source.id} className="hover:bg-gray-50">
+                      <tr key={source.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <input
                             type="checkbox"
                             checked={selectedSources.has(source.id)}
                             onChange={e => handleSourceSelection(source.id, e.target.checked)}
-                            className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                            className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
                           />
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div>
-                            <div className="text-sm font-medium text-gray-900">
+                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                               {Object.values(source.name || {})[0] || source.id}
                             </div>
-                            <div className="text-sm text-gray-500 font-mono">{source.id}</div>
+                            <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">
+                              {source.id}
+                            </div>
                             {source.description && Object.values(source.description)[0] && (
-                              <div className="text-xs text-gray-400 mt-1">
+                              <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
                                 {Object.values(source.description)[0]}
                               </div>
                             )}
@@ -451,7 +458,7 @@ const AdminSourcesPage = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">{getTypeBadge(source.type)}</td>
                         <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(source)}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                           {source.updated ? new Date(source.updated).toLocaleDateString() : '-'}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -459,7 +466,7 @@ const AdminSourcesPage = () => {
                             <button
                               onClick={() => handleTestSource(source.id)}
                               disabled={testingSource === source.id}
-                              className="text-indigo-600 hover:text-indigo-900 disabled:opacity-50"
+                              className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
                               title={t('admin.sources.testSource', 'Test Source')}
                             >
                               <Icon
@@ -469,14 +476,14 @@ const AdminSourcesPage = () => {
                             </button>
                             <button
                               onClick={() => navigate(`/admin/sources/${source.id}`)}
-                              className="text-gray-600 hover:text-gray-900"
+                              className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
                               title={t('admin.sources.editSource', 'Edit Source')}
                             >
                               <Icon name="pencil" className="h-4 w-4" />
                             </button>
                             <button
                               onClick={() => handleSourceToggle(source.id)}
-                              className={`${source.enabled !== false ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}`}
+                              className={`${source.enabled !== false ? 'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300' : 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300'}`}
                               title={
                                 source.enabled !== false
                                   ? t('common.disable', 'Disable')
@@ -490,7 +497,7 @@ const AdminSourcesPage = () => {
                             </button>
                             <button
                               onClick={() => handleDeleteSource(source.id)}
-                              className="text-red-600 hover:text-red-900"
+                              className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
                               title={t('admin.sources.deleteSource', 'Delete Source')}
                             >
                               <Icon name="trash" className="h-4 w-4" />
@@ -506,7 +513,7 @@ const AdminSourcesPage = () => {
           </div>
 
           {/* Summary */}
-          <div className="mt-6 text-center text-sm text-gray-500">
+          <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
             {t('admin.sources.summary', 'Showing {{filtered}} of {{total}} sources', {
               filtered: filteredSources.length,
               total: Array.isArray(sources) ? sources.length : 0

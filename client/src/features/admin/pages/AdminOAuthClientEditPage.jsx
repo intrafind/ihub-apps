@@ -225,7 +225,7 @@ const AdminOAuthClientEditPage = () => {
     return (
       <AdminAuth>
         <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <LoadingSpinner size="lg" />
         </div>
       </AdminAuth>
@@ -235,24 +235,24 @@ const AdminOAuthClientEditPage = () => {
   return (
     <AdminAuth>
       <AdminNavigation />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div className="flex items-center">
               <button
                 onClick={() => navigate('/admin/oauth/clients')}
-                className="mr-4 text-gray-400 hover:text-gray-600"
+                className="mr-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <Icon name="arrow-left" size="md" />
               </button>
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                   {isNew
                     ? t('admin.auth.oauth.createClient', 'Create OAuth Client')
                     : t('admin.auth.oauth.editClient', 'Edit OAuth Client')}
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   Configure client credentials and permissions for external API access
                 </p>
               </div>
@@ -266,8 +266,8 @@ const AdminOAuthClientEditPage = () => {
             <div
               className={`mb-6 p-4 rounded-md ${
                 message.type === 'success'
-                  ? 'bg-green-50 border border-green-200'
-                  : 'bg-red-50 border border-red-200'
+                  ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
               }`}
             >
               <div className="flex">
@@ -280,7 +280,9 @@ const AdminOAuthClientEditPage = () => {
                 />
                 <p
                   className={`text-sm ${
-                    message.type === 'success' ? 'text-green-700' : 'text-red-700'
+                    message.type === 'success'
+                      ? 'text-green-700 dark:text-green-300'
+                      : 'text-red-700 dark:text-red-300'
                   }`}
                 >
                   {message.text}
@@ -289,15 +291,21 @@ const AdminOAuthClientEditPage = () => {
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="bg-white shadow rounded-lg p-6 space-y-6">
+          <form
+            onSubmit={handleSubmit}
+            className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-6"
+          >
             {/* Basic Information */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 {t('common.basicInfo', 'Basic Information')}
               </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.auth.oauth.name', 'Client Name')} *
                   </label>
                   <input
@@ -312,7 +320,10 @@ const AdminOAuthClientEditPage = () => {
                 </div>
 
                 <div>
-                  <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="description"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.auth.oauth.description', 'Description')}
                   </label>
                   <textarea
@@ -328,7 +339,7 @@ const AdminOAuthClientEditPage = () => {
                 <div>
                   <label
                     htmlFor="tokenExpirationMinutes"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.auth.oauth.tokenExpiration', 'Token Expiration (minutes)')}
                   </label>
@@ -342,7 +353,7 @@ const AdminOAuthClientEditPage = () => {
                     onChange={handleInputChange}
                     className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                   />
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     Default: 60 minutes, Maximum: 1440 minutes (24 hours)
                   </p>
                 </div>
@@ -365,7 +376,7 @@ const AdminOAuthClientEditPage = () => {
 
             {/* Allowed Apps */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.auth.oauth.allowedApps', 'Allowed Apps')}
               </h3>
               <ResourceSelector
@@ -384,7 +395,7 @@ const AdminOAuthClientEditPage = () => {
 
             {/* Allowed Models */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.auth.oauth.allowedModels', 'Allowed Models')}
               </h3>
               <ResourceSelector
@@ -403,12 +414,15 @@ const AdminOAuthClientEditPage = () => {
 
             {/* Client Type & Grant Types */}
             <div>
-              <h3 className="text-lg font-medium text-gray-900 mb-4">
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.auth.oauth.authCodeSection', 'OAuth 2.0 Authorization Code Flow')}
               </h3>
               <div className="space-y-4">
                 <div>
-                  <label htmlFor="clientType" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="clientType"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.auth.oauth.clientType', 'Client Type')}
                   </label>
                   <select
@@ -434,7 +448,7 @@ const AdminOAuthClientEditPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {t('admin.auth.oauth.grantTypes', 'Grant Types')}
                   </label>
                   <div className="space-y-2">
@@ -471,7 +485,7 @@ const AdminOAuthClientEditPage = () => {
                 {(formData.grantTypes || []).includes('authorization_code') && (
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         {t('admin.auth.oauth.redirectUris', 'Redirect URIs')}
                       </label>
                       <div className="space-y-2">
@@ -518,7 +532,7 @@ const AdminOAuthClientEditPage = () => {
                             {t('common.add', 'Add')}
                           </button>
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.auth.oauth.redirectUriHint',
                             'Must use HTTPS (or http://localhost for development)'
@@ -528,7 +542,7 @@ const AdminOAuthClientEditPage = () => {
                     </div>
 
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         {t('admin.auth.oauth.postLogoutRedirectUris', 'Post-Logout Redirect URIs')}
                       </label>
                       <div className="space-y-2">
@@ -618,11 +632,11 @@ const AdminOAuthClientEditPage = () => {
             </div>
 
             {/* Submit buttons */}
-            <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200">
+            <div className="flex justify-end space-x-4 pt-6 border-t border-gray-200 dark:border-gray-700">
               <button
                 type="button"
                 onClick={() => navigate('/admin/oauth/clients')}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
@@ -644,21 +658,21 @@ const AdminOAuthClientEditPage = () => {
 
       {/* Secret Modal */}
       {showSecretModal && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
-          <div className="relative bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-gray-900 dark:bg-opacity-75 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+          <div className="relative bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
             <div className="p-6">
               <div className="flex items-center mb-4">
                 <Icon name="check" className="h-6 w-6 text-green-500 mr-3" />
-                <h3 className="text-lg font-medium text-gray-900">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
                   {t('admin.auth.oauth.createSuccess', 'OAuth client created successfully')}
                 </h3>
               </div>
 
-              <div className="bg-yellow-50 border border-yellow-200 rounded-md p-4 mb-4">
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4 mb-4">
                 <div className="flex">
                   <Icon name="warning" className="h-5 w-5 text-yellow-400 mr-3 mt-0.5" />
                   <div>
-                    <h4 className="text-sm font-medium text-yellow-800">
+                    <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
                       {t(
                         'admin.auth.oauth.clientSecretWarning',
                         'Save this secret now. It will not be shown again.'
@@ -670,17 +684,17 @@ const AdminOAuthClientEditPage = () => {
 
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {t('admin.auth.oauth.clientId', 'Client ID')}
                   </label>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm break-all">
+                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded text-sm break-all text-gray-900 dark:text-gray-100">
                       {newClientId}
                     </code>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(newClientId)}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
                     >
                       <Icon name="clipboard" size="sm" />
                     </button>
@@ -688,17 +702,17 @@ const AdminOAuthClientEditPage = () => {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     {t('admin.auth.oauth.clientSecret', 'Client Secret')}
                   </label>
                   <div className="flex gap-2">
-                    <code className="flex-1 bg-gray-100 px-3 py-2 rounded text-sm break-all">
+                    <code className="flex-1 bg-gray-100 dark:bg-gray-700 px-3 py-2 rounded text-sm break-all text-gray-900 dark:text-gray-100">
                       {newClientSecret}
                     </code>
                     <button
                       type="button"
                       onClick={() => copyToClipboard(newClientSecret)}
-                      className="px-3 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50"
+                      className="px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
                     >
                       <Icon name="clipboard" size="sm" />
                     </button>

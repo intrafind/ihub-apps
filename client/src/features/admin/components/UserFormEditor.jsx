@@ -126,8 +126,11 @@ const UserFormEditor = ({
 
   if (!user) {
     return (
-      <div className="p-8 text-center text-gray-500">
-        <Icon name="exclamation-triangle" className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+      <div className="p-8 text-center text-gray-500 dark:text-gray-400">
+        <Icon
+          name="exclamation-triangle"
+          className="h-12 w-12 mx-auto mb-4 text-gray-400 dark:text-gray-500"
+        />
         <p className="text-lg font-medium">
           {t('admin.users.edit.noUserData', 'No user data available')}
         </p>
@@ -138,13 +141,13 @@ const UserFormEditor = ({
   return (
     <div className="user-form-editor space-y-6">
       {/* Basic Information */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.users.basicInformation', 'Basic Information')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t(
                 'admin.users.basicUserConfiguration',
                 'Basic user configuration and contact information'
@@ -154,7 +157,7 @@ const UserFormEditor = ({
           <div className="mt-5 md:col-span-2 md:mt-0">
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.users.username', 'Username')}
                   {isFieldRequired('username', jsonSchema) && (
                     <span className="text-red-500 ml-1">*</span>
@@ -166,16 +169,18 @@ const UserFormEditor = ({
                   value={user.username || ''}
                   onChange={e => handleInputChange('username', e.target.value)}
                   disabled={!isNewUser}
-                  className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 ${
+                  className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 ${
                     validationErrors.username ? 'border-red-300' : ''
                   }`}
                   placeholder="Enter username"
                 />
                 {validationErrors.username && (
-                  <p className="mt-1 text-sm text-red-600">{validationErrors.username}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.username}
+                  </p>
                 )}
                 {!isNewUser && (
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.users.usernameCannotBeChanged',
                       'Username cannot be changed after creation'
@@ -185,7 +190,7 @@ const UserFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.users.email', 'Email')}
                   {isFieldRequired('email', jsonSchema) && (
                     <span className="text-red-500 ml-1">*</span>
@@ -196,25 +201,27 @@ const UserFormEditor = ({
                   required={isFieldRequired('email', jsonSchema)}
                   value={user.email || ''}
                   onChange={e => handleInputChange('email', e.target.value)}
-                  className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                  className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                     validationErrors.email ? 'border-red-300' : ''
                   }`}
                   placeholder="Enter email address"
                 />
                 {validationErrors.email && (
-                  <p className="mt-1 text-sm text-red-600">{validationErrors.email}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.email}
+                  </p>
                 )}
               </div>
 
               <div className="col-span-6">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.users.fullName', 'Full Name')}
                 </label>
                 <input
                   type="text"
                   value={user.fullName || ''}
                   onChange={e => handleInputChange('fullName', e.target.value)}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   placeholder="Enter full name"
                 />
               </div>
@@ -228,20 +235,20 @@ const UserFormEditor = ({
                       handleInputChange('enabled', e.target.checked);
                       handleInputChange('active', e.target.checked);
                     }}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-900">
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.users.enabled', 'Enabled')}
                   </label>
                 </div>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   Disabled users cannot log in or access the system
                 </p>
               </div>
 
               {/* Auth Methods - selector for new users, read-only for existing */}
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.users.authMethods', 'Authentication Method')}
                 </label>
                 {isNewUser ? (
@@ -249,7 +256,7 @@ const UserFormEditor = ({
                     <select
                       value={user.authMethods?.[0] || 'local'}
                       onChange={e => handleInputChange('authMethods', [e.target.value])}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                     >
                       <option value="local">
                         {t('admin.users.authMethod.local', 'Local (Username/Password)')}
@@ -265,7 +272,7 @@ const UserFormEditor = ({
                         {t('admin.users.authMethod.proxy', 'Proxy (Header-based)')}
                       </option>
                     </select>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {t(
                         'admin.users.authMethodHelp',
                         'How this user will authenticate. Local users need a password.'
@@ -284,7 +291,7 @@ const UserFormEditor = ({
                         </span>
                       ))}
                     </div>
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {t(
                         'admin.users.authMethodReadOnly',
                         'Authentication method cannot be changed after creation'
@@ -292,7 +299,7 @@ const UserFormEditor = ({
                     </p>
                   </>
                 ) : (
-                  <p className="mt-2 text-sm text-gray-500">
+                  <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     {t('admin.users.noAuthMethod', 'No authentication method set')}
                   </p>
                 )}
@@ -304,13 +311,13 @@ const UserFormEditor = ({
 
       {/* Password Settings - only show for local auth users or new users */}
       {(isLocalAuthUser || isNewUser) && (
-        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                 {t('admin.users.passwordSettings', 'Password Settings')}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {hasExternalAuth
                   ? t(
                       'admin.users.passwordOptionalExternal',
@@ -324,7 +331,7 @@ const UserFormEditor = ({
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="grid grid-cols-6 gap-6">
                 <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {isNewUser
                       ? t('admin.users.password', 'Password')
                       : t('admin.users.newPassword', 'New Password')}
@@ -337,7 +344,7 @@ const UserFormEditor = ({
                     required={isNewUser && isLocalAuthUser && !hasExternalAuth}
                     value={user.password || ''}
                     onChange={e => handleInputChange('password', e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                       validationErrors.password ? 'border-red-300' : ''
                     }`}
                     placeholder={
@@ -349,12 +356,14 @@ const UserFormEditor = ({
                     }
                   />
                   {validationErrors.password && (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.password}</p>
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                      {validationErrors.password}
+                    </p>
                   )}
                 </div>
 
                 <div className="col-span-6 sm:col-span-3">
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.users.confirmPassword', 'Confirm Password')}
                     {user.password && <span className="text-red-500 ml-1">*</span>}
                   </label>
@@ -363,18 +372,20 @@ const UserFormEditor = ({
                     required={!!user.password}
                     value={confirmPassword}
                     onChange={e => setConfirmPassword(e.target.value)}
-                    className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
+                    className={`mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                       validationErrors.confirmPassword ? 'border-red-300' : ''
                     }`}
                     placeholder="Confirm password"
                   />
                   {validationErrors.confirmPassword && (
-                    <p className="mt-1 text-sm text-red-600">{validationErrors.confirmPassword}</p>
+                    <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                      {validationErrors.confirmPassword}
+                    </p>
                   )}
                 </div>
 
                 <div className="col-span-6">
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Password must be at least 6 characters long and should contain a mix of letters,
                     numbers, and special characters.
                   </p>
@@ -386,36 +397,38 @@ const UserFormEditor = ({
       )}
 
       {/* Group Membership */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.users.groupMembership', 'Group Membership')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               Assign this user to groups to control their permissions and access levels
             </p>
           </div>
           <div className="mt-5 md:col-span-2 md:mt-0">
             <div>
-              <label className="block text-sm font-medium text-gray-700">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                 Groups (comma-separated)
               </label>
               <input
                 type="text"
                 value={(user.internalGroups || []).join(', ')}
                 onChange={e => handleGroupsChange(e.target.value)}
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 placeholder="admin, users, editors"
               />
-              <p className="mt-1 text-xs text-gray-500">
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                 Enter group names separated by commas. Users inherit permissions from all assigned
                 groups.
               </p>
 
               {user.internalGroups && user.internalGroups.length > 0 && (
                 <div className="mt-3">
-                  <p className="text-sm font-medium text-gray-700 mb-2">Current Groups:</p>
+                  <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Current Groups:
+                  </p>
                   <div className="flex flex-wrap gap-2">
                     {user.internalGroups.map((group, index) => (
                       <span

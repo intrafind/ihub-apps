@@ -7,13 +7,13 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
   const { t, i18n } = useTranslation();
 
   return (
-    <div className="text-center text-gray-500 space-y-6 w-full">
+    <div className="text-center text-gray-500 dark:text-gray-400 space-y-6 w-full">
       <div className="space-y-2">
         <Icon name="light-bulb" size="2xl" className="mx-auto mb-3 text-indigo-400" />
-        <h3 className="text-xl font-semibold text-gray-700 mb-1">
+        <h3 className="text-xl font-semibold text-gray-700 dark:text-gray-200 mb-1">
           {t('pages.appChat.starterPromptsTitle', 'Starter Prompts')}
         </h3>
-        <p className="text-sm text-gray-500 max-w-md mx-auto md:px-4">
+        <p className="text-sm text-gray-500 dark:text-gray-400 max-w-md mx-auto md:px-4">
           {t(
             'pages.appChat.starterPromptsSubtitle',
             'Choose a prompt below to get started quickly'
@@ -25,7 +25,7 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
           <button
             key={idx}
             type="button"
-            className="group relative p-4 text-left bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:-translate-y-0.5 h-full min-h-[100px] flex flex-col"
+            className="group relative p-4 text-left bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 transform hover:-translate-y-0.5 h-full min-h-[100px] flex flex-col"
             onClick={() =>
               onSelectPrompt &&
               onSelectPrompt({
@@ -35,15 +35,15 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
             }
           >
             <div className="flex items-start space-x-3 h-full">
-              <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors mt-0.5">
-                <Icon name="sparkles" size="sm" className="text-indigo-600" />
+              <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors mt-0.5">
+                <Icon name="sparkles" size="sm" className="text-indigo-600 dark:text-indigo-400" />
               </div>
               <div className="flex-1 min-w-0 flex flex-col justify-start">
-                <p className="font-semibold text-gray-900 text-sm leading-5 mb-1">
+                <p className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-5 mb-1">
                   {getLocalizedContent(sp.title, i18n.language)}
                 </p>
                 <p
-                  className="text-xs text-gray-500 leading-4 overflow-hidden"
+                  className="text-xs text-gray-500 dark:text-gray-400 leading-4 overflow-hidden"
                   style={{
                     display: '-webkit-box',
                     WebkitLineClamp: 2,
@@ -54,7 +54,7 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
                 </p>
               </div>
             </div>
-            <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 transition-colors pointer-events-none"></div>
+            <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 dark:group-hover:border-indigo-700 transition-colors pointer-events-none"></div>
           </button>
         ))}
       </div>

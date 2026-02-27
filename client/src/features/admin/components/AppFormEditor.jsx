@@ -285,20 +285,20 @@ const AppFormEditor = ({
   return (
     <div className="app-form-editor space-y-6">
       {/* Basic Information */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.apps.edit.basicInfo', 'Basic Information')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t('admin.apps.edit.basicInfoDesc', 'Basic app configuration and metadata')}
             </p>
           </div>
           <div className="mt-5 md:col-span-2 md:mt-0">
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.appId', 'App ID')}
                   {isFieldRequired('id', jsonSchema) && (
                     <span className="text-red-500 ml-1">*</span>
@@ -314,12 +314,14 @@ const AppFormEditor = ({
                   }`}
                 />
                 {validationErrors.id && (
-                  <p className="mt-1 text-sm text-red-600">{validationErrors.id}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.id}
+                  </p>
                 )}
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.appType', 'App Type')}
                   <span className="text-red-500 ml-1">*</span>
                 </label>
@@ -332,7 +334,7 @@ const AppFormEditor = ({
                   <option value="iframe">{t('admin.apps.edit.typeIframe', 'Iframe')}</option>
                   <option value="redirect">{t('admin.apps.edit.typeRedirect', 'Redirect')}</option>
                 </select>
-                <p className="mt-1 text-xs text-gray-500">
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.appTypeHint',
                     'Chat apps use AI models, Iframe apps embed external content, Redirect apps open external links'
@@ -341,7 +343,7 @@ const AppFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.order', 'Order')}
                 </label>
                 <input
@@ -353,7 +355,7 @@ const AppFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.category', 'Category')}
                 </label>
                 <select
@@ -414,7 +416,7 @@ const AppFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.color', 'Color')}
                   <span className="text-red-500 ml-1">*</span>
                 </label>
@@ -427,12 +429,14 @@ const AppFormEditor = ({
                   }`}
                 />
                 {validationErrors.color && (
-                  <p className="mt-1 text-sm text-red-600">{validationErrors.color}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.color}
+                  </p>
                 )}
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.icon', 'Icon')}
                   <span className="text-red-500 ml-1">*</span>
                 </label>
@@ -445,7 +449,7 @@ const AppFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.preferredModel', 'Preferred Model')}
                 </label>
                 <select
@@ -463,7 +467,7 @@ const AppFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.temperature', 'Temperature')}
                 </label>
                 <input
@@ -480,7 +484,7 @@ const AppFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.tokenLimit', 'Token Limit')}
                   {isFieldRequired('tokenLimit', jsonSchema) && (
                     <span className="text-red-500 ml-1">*</span>
@@ -497,12 +501,14 @@ const AppFormEditor = ({
                   required={isFieldRequired('tokenLimit', jsonSchema)}
                 />
                 {validationErrors.tokenLimit && (
-                  <p className="mt-1 text-sm text-red-600">{validationErrors.tokenLimit}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.tokenLimit}
+                  </p>
                 )}
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.apps.edit.outputFormat', 'Output Format')}
                 </label>
                 <select
@@ -522,9 +528,9 @@ const AppFormEditor = ({
                     type="checkbox"
                     checked={app.enabled !== false}
                     onChange={e => handleInputChange('enabled', e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-900">
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.enabled', 'Enabled')}
                   </label>
                 </div>
@@ -538,13 +544,13 @@ const AppFormEditor = ({
                       type="checkbox"
                       checked={app.autoStart === true}
                       onChange={e => handleInputChange('autoStart', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.autoStart', 'Auto-start conversation')}
                     </label>
                   </div>
-                  <p className="mt-1 ml-6 text-xs text-gray-500">
+                  <p className="mt-1 ml-6 text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.apps.edit.autoStartHelp',
                       'When enabled, the app will automatically start the conversation when the chat is opened or reset'
@@ -561,13 +567,13 @@ const AppFormEditor = ({
       {(app.type === 'chat' || !app.type) && (
         <>
           {/* System Instructions - Only for chat apps */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.systemInstructions', 'System Instructions')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.systemInstructionsDesc',
                     'System prompts that define the app behavior'
@@ -622,20 +628,20 @@ const AppFormEditor = ({
 
       {/* Iframe Configuration - Only for iframe apps */}
       {app.type === 'iframe' && (
-        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.iframeConfig', 'Iframe Configuration')}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {t('admin.apps.edit.iframeConfigDesc', 'Configure the embedded iframe content')}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.apps.edit.iframeUrl', 'Iframe URL')}
                     <span className="text-red-500 ml-1">*</span>
                   </label>
@@ -662,9 +668,9 @@ const AppFormEditor = ({
                         allowFullscreen: e.target.checked
                       })
                     }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-900">
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.allowFullscreen', 'Allow Fullscreen')}
                   </label>
                 </div>
@@ -749,7 +755,7 @@ const AppFormEditor = ({
                                 sandbox: newSandbox
                               });
                             }}
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
                           <label className="ml-2 block text-sm text-gray-700">
                             {permission.label}
@@ -767,20 +773,20 @@ const AppFormEditor = ({
 
       {/* Redirect Configuration - Only for redirect apps */}
       {app.type === 'redirect' && (
-        <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+        <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
           <div className="md:grid md:grid-cols-3 md:gap-6">
             <div className="md:col-span-1">
-              <h3 className="text-lg font-medium leading-6 text-gray-900">
+              <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                 {t('admin.apps.edit.redirectConfig', 'Redirect Configuration')}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {t('admin.apps.edit.redirectConfigDesc', 'Configure the redirect behavior')}
               </p>
             </div>
             <div className="mt-5 md:col-span-2 md:mt-0">
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.apps.edit.redirectUrl', 'Redirect URL')}
                     <span className="text-red-500 ml-1">*</span>
                   </label>
@@ -807,9 +813,9 @@ const AppFormEditor = ({
                         openInNewTab: e.target.checked
                       })
                     }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-900">
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.openInNewTab', 'Open in New Tab')}
                   </label>
                 </div>
@@ -823,9 +829,9 @@ const AppFormEditor = ({
                         showWarning: e.target.checked
                       })
                     }
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
-                  <label className="ml-2 block text-sm text-gray-900">
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.showWarning', 'Show Warning Before Redirect')}
                   </label>
                 </div>
@@ -839,13 +845,13 @@ const AppFormEditor = ({
       {(app.type === 'chat' || !app.type) && (
         <>
           {/* Tools Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.tools', 'Tools')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.toolsDesc',
                     'Configure which tools are available for this app'
@@ -863,13 +869,13 @@ const AppFormEditor = ({
 
           {/* Skills Configuration */}
           {featureFlags.isEnabled('skills', false) && (
-            <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
               <div className="md:grid md:grid-cols-3 md:gap-6">
                 <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.skills', 'Skills')}
                   </h3>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.apps.edit.skillsDesc',
                       'Configure which agent skills are available for this app'
@@ -887,13 +893,13 @@ const AppFormEditor = ({
           )}
 
           {/* Variables Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.variables', 'Variables')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.variablesDesc',
                     'Configure input variables for dynamic prompts'
@@ -903,7 +909,10 @@ const AppFormEditor = ({
               <div className="mt-5 md:col-span-2 md:mt-0">
                 <div className="space-y-4">
                   {(app.variables || []).map((variable, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div
+                      key={index}
+                      className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
+                    >
                       <div className="flex justify-between items-start mb-4">
                         <h4 className="text-sm font-medium text-gray-900">
                           {t('admin.apps.edit.variable', 'Variable')} {index + 1}
@@ -919,7 +928,7 @@ const AppFormEditor = ({
 
                       <div className="grid grid-cols-6 gap-4">
                         <div className="col-span-6 sm:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.apps.edit.variableName', 'Name')}
                           </label>
                           <input
@@ -931,7 +940,7 @@ const AppFormEditor = ({
                         </div>
 
                         <div className="col-span-6 sm:col-span-2">
-                          <label className="block text-sm font-medium text-gray-700">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.apps.edit.variableType', 'Type')}
                           </label>
                           <select
@@ -961,9 +970,9 @@ const AppFormEditor = ({
                               onChange={e =>
                                 handleVariableChange(index, 'required', e.target.checked)
                               }
-                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                             />
-                            <label className="ml-2 block text-sm text-gray-900">
+                            <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                               {t('admin.apps.edit.required', 'Required')}
                             </label>
                           </div>
@@ -1084,13 +1093,13 @@ const AppFormEditor = ({
           </div>
 
           {/* Starter Prompts */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.starterPrompts', 'Starter Prompts')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.starterPromptsDesc',
                     'Pre-defined prompts to help users get started'
@@ -1100,7 +1109,10 @@ const AppFormEditor = ({
               <div className="mt-5 md:col-span-2 md:mt-0">
                 <div className="space-y-4">
                   {(app.starterPrompts || []).map((prompt, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg p-4">
+                    <div
+                      key={index}
+                      className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
+                    >
                       <div className="flex justify-between items-start mb-4">
                         <h4 className="text-sm font-medium text-gray-900">
                           {t('admin.apps.edit.starterPrompt', 'Starter Prompt')} {index + 1}
@@ -1143,9 +1155,9 @@ const AppFormEditor = ({
                             onChange={e =>
                               handleStarterPromptChange(index, 'autoSend', e.target.checked)
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
-                          <label className="ml-2 block text-sm text-gray-900">
+                          <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                             {t('admin.apps.edit.autoSendPrompt', 'Send immediately when clicked')}
                           </label>
                         </div>
@@ -1167,13 +1179,13 @@ const AppFormEditor = ({
           </div>
 
           {/* Upload Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.upload', 'Upload Configuration')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.apps.edit.uploadDesc', 'Configure file and image upload capabilities')}
                 </p>
               </div>
@@ -1186,9 +1198,9 @@ const AppFormEditor = ({
                       onChange={e =>
                         handleInputChange('upload', { ...app.upload, enabled: e.target.checked })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableUpload', 'Enable Upload')}
                     </label>
                   </div>
@@ -1205,9 +1217,9 @@ const AppFormEditor = ({
                               allowMultiple: e.target.checked
                             })
                           }
-                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                          className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                         />
-                        <label className="ml-2 block text-sm text-gray-900">
+                        <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                           {t('admin.apps.edit.allowMultiple', 'Allow Multiple Files')}
                         </label>
                       </div>
@@ -1226,7 +1238,7 @@ const AppFormEditor = ({
                                 }
                               })
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
                           <label className="ml-2 block text-sm font-medium text-gray-900">
                             {t('admin.apps.edit.enableImageUpload', 'Enable Image Upload')}
@@ -1268,7 +1280,7 @@ const AppFormEditor = ({
                                     }
                                   })
                                 }
-                                className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                                className="h-3 w-3 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                               />
                               <label className="ml-2 block text-xs text-gray-700">
                                 {t('admin.apps.edit.resizeImages', 'Resize Images')}
@@ -1325,7 +1337,7 @@ const AppFormEditor = ({
                                 fileUpload: { ...app.upload.fileUpload, enabled: e.target.checked }
                               })
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
                           <label className="ml-2 block text-sm font-medium text-gray-900">
                             {t('admin.apps.edit.enableFileUpload', 'Enable File Upload')}
@@ -1407,7 +1419,7 @@ const AppFormEditor = ({
                                 }
                               })
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
                           <label className="ml-2 block text-sm font-medium text-gray-900">
                             {t('admin.apps.edit.enableAudioUpload', 'Enable Audio Upload')}
@@ -1490,7 +1502,7 @@ const AppFormEditor = ({
                                 }
                               })
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
                           <label className="ml-2 block text-sm font-medium text-gray-900">
                             {t(
@@ -1501,7 +1513,7 @@ const AppFormEditor = ({
                         </div>
                         {app.upload?.cloudStorageUpload?.enabled && (
                           <div className="ml-6">
-                            <p className="text-xs text-gray-500">
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
                               {t(
                                 'admin.apps.edit.cloudStorageUploadDesc',
                                 'Allow users to select files from configured cloud storage providers (Office 365, Google Drive). Global cloud storage must be enabled in Providers settings.'
@@ -1518,13 +1530,13 @@ const AppFormEditor = ({
           </div>
 
           {/* Magic Prompt Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.magicPrompt', 'Magic Prompt')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.apps.edit.magicPromptDesc', 'AI-powered prompt enhancement feature')}
                 </p>
               </div>
@@ -1540,9 +1552,9 @@ const AppFormEditor = ({
                           magicPrompt: { ...app.features?.magicPrompt, enabled: e.target.checked }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableMagicPrompt', 'Enable Magic Prompt')}
                     </label>
                   </div>
@@ -1550,7 +1562,7 @@ const AppFormEditor = ({
                   {app.features?.magicPrompt?.enabled && (
                     <div className="space-y-4 pl-6">
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           {t('admin.apps.edit.magicPromptModel', 'Magic Prompt Model')}
                         </label>
                         <select
@@ -1578,7 +1590,7 @@ const AppFormEditor = ({
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           {t(
                             'admin.apps.edit.magicPromptInstructions',
                             'Magic Prompt Instructions'
@@ -1599,7 +1611,7 @@ const AppFormEditor = ({
                           className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                           placeholder="Enter instructions for the magic prompt feature..."
                         />
-                        <p className="mt-1 text-xs text-gray-500">
+                        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.apps.edit.magicPromptPlaceholder',
                             "Use {{prompt}} to reference the user's original prompt"
@@ -1614,13 +1626,13 @@ const AppFormEditor = ({
           </div>
 
           {/* Input Mode & Microphone Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.inputMode', 'Input Mode & Microphone')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.apps.edit.inputModeDesc',
                     'Configure input methods and voice recognition'
@@ -1630,7 +1642,7 @@ const AppFormEditor = ({
               <div className="mt-5 md:col-span-2 md:mt-0">
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       {t('admin.apps.edit.inputType', 'Input Type')}
                     </label>
                     <select
@@ -1654,7 +1666,7 @@ const AppFormEditor = ({
 
                   {app.inputMode?.type === 'multiline' && (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t('admin.apps.edit.textareaRows', 'Textarea Rows')}
                       </label>
                       <input
@@ -1684,7 +1696,7 @@ const AppFormEditor = ({
                             microphone: { ...app.inputMode?.microphone, enabled: e.target.checked }
                           })
                         }
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                       />
                       <label className="ml-2 block text-sm font-medium text-gray-900">
                         {t('admin.apps.edit.enableMicrophone', 'Enable Microphone')}
@@ -1694,7 +1706,7 @@ const AppFormEditor = ({
                     {app.inputMode?.microphone?.enabled && (
                       <div className="space-y-3 pl-6">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700">
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.apps.edit.microphoneMode', 'Microphone Mode')}
                           </label>
                           <select
@@ -1729,9 +1741,9 @@ const AppFormEditor = ({
                                 }
                               })
                             }
-                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                            className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                           />
-                          <label className="ml-2 block text-sm text-gray-900">
+                          <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                             {t('admin.apps.edit.showTranscript', 'Show Transcript')}
                           </label>
                         </div>
@@ -1740,7 +1752,7 @@ const AppFormEditor = ({
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                       {t('admin.apps.edit.speechRecognitionService', 'Speech Recognition Service')}
                     </label>
                     <select
@@ -1767,7 +1779,7 @@ const AppFormEditor = ({
 
                   {app.settings?.speechRecognition?.service === 'custom' && (
                     <div className="pl-6">
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t('admin.apps.edit.customServiceHost', 'Custom Service Host')}
                       </label>
                       <input
@@ -1794,13 +1806,13 @@ const AppFormEditor = ({
 
           {/* Sources Configuration - Only show if sources feature is enabled */}
           {isSourcesEnabled && (
-            <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
               <div className="md:grid md:grid-cols-3 md:gap-6">
                 <div className="md:col-span-1">
-                  <h3 className="text-lg font-medium leading-6 text-gray-900">
+                  <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                     {t('admin.apps.edit.sources', 'Sources Configuration')}
                   </h3>
-                  <p className="mt-1 text-sm text-gray-500">
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.apps.edit.sourcesDesc',
                       'Configure data sources that provide content to this app'
@@ -1871,13 +1883,13 @@ const AppFormEditor = ({
           )}
 
           {/* Settings Configuration */}
-          <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
               <div className="md:col-span-1">
-                <h3 className="text-lg font-medium leading-6 text-gray-900">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
                   {t('admin.apps.edit.settings', 'User Settings')}
                 </h3>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.apps.edit.settingsDesc', 'Configure which settings users can modify')}
                 </p>
               </div>
@@ -1893,9 +1905,9 @@ const AppFormEditor = ({
                           model: { enabled: e.target.checked }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableModelSelection', 'Enable Model Selection')}
                     </label>
                   </div>
@@ -1910,9 +1922,9 @@ const AppFormEditor = ({
                           temperature: { enabled: e.target.checked }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableTemperatureControl', 'Enable Temperature Control')}
                     </label>
                   </div>
@@ -1927,9 +1939,9 @@ const AppFormEditor = ({
                           outputFormat: { enabled: e.target.checked }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableOutputFormat', 'Enable Output Format Selection')}
                     </label>
                   </div>
@@ -1944,9 +1956,9 @@ const AppFormEditor = ({
                           chatHistory: { enabled: e.target.checked }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableChatHistory', 'Enable Chat History Control')}
                     </label>
                   </div>
@@ -1961,9 +1973,9 @@ const AppFormEditor = ({
                           style: { enabled: e.target.checked }
                         })
                       }
-                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                     />
-                    <label className="ml-2 block text-sm text-gray-900">
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                       {t('admin.apps.edit.enableStyleControl', 'Enable Style Control')}
                     </label>
                   </div>

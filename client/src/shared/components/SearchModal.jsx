@@ -96,10 +96,10 @@ const SearchModal = ({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-lg w-full max-w-xl mt-20">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-xl mt-20">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Icon name="search" className="text-gray-400" />
+            <Icon name="search" className="text-gray-400 dark:text-gray-500" />
           </div>
           <input
             ref={inputRef}
@@ -108,7 +108,7 @@ const SearchModal = ({
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyNav}
             placeholder={placeholder}
-            className="w-full pl-12 pr-12 py-3 border rounded-lg text-base focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="w-full pl-12 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg text-base bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 placeholder-gray-400 dark:placeholder-gray-500"
             autoComplete="off"
             data-lpignore="true"
             data-1p-ignore="true"
@@ -117,7 +117,7 @@ const SearchModal = ({
             <button
               type="button"
               onClick={() => setQuery('')}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600"
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
               aria-label={t('common.clear', 'Clear')}
             >
               <Icon name="x" className="w-5 h-5" />
@@ -128,7 +128,7 @@ const SearchModal = ({
           {results.map((item, idx) => (
             <li
               key={idx}
-              className={`p-3 cursor-pointer border-b border-gray-100 last:border-b-0 hover:bg-gray-50 ${idx === selectedIndex ? 'bg-indigo-50 border-indigo-200' : ''}`}
+              className={`p-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700 ${idx === selectedIndex ? 'bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : ''}`}
               onMouseDown={() => onSelect(item)}
             >
               {renderResult ? renderResult(item) : JSON.stringify(item)}

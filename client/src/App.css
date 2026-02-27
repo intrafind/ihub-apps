@@ -17,13 +17,25 @@
   border-radius: 10px;
 }
 
+[data-theme='dark'] ::-webkit-scrollbar-track {
+  background: #374151;
+}
+
 ::-webkit-scrollbar-thumb {
   background: #c5c5c5;
   border-radius: 10px;
 }
 
+[data-theme='dark'] ::-webkit-scrollbar-thumb {
+  background: #4b5563;
+}
+
 ::-webkit-scrollbar-thumb:hover {
   background: #a8a8a8;
+}
+
+[data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
+  background: #6b7280;
 }
 
 /* Animation for chat bubble typing */
@@ -46,6 +58,10 @@
 /* Markdown content styling */
 .markdown-content {
   @apply text-gray-800;
+}
+
+[data-theme='dark'] .markdown-content {
+  @apply text-gray-200;
 }
 
 .markdown-content h1 {
@@ -154,8 +170,16 @@ div .markdown-content .code-block-toolbar > div,
   @apply pl-4 border-l-4 border-gray-300 italic my-4;
 }
 
+[data-theme='dark'] .markdown-content blockquote {
+  @apply border-gray-600;
+}
+
 .markdown-content a {
   @apply text-indigo-600 hover:underline;
+}
+
+[data-theme='dark'] .markdown-content a {
+  @apply text-indigo-400;
 }
 
 .markdown-content table {
@@ -166,14 +190,26 @@ div .markdown-content .code-block-toolbar > div,
   @apply border px-4 py-2 bg-gray-100;
 }
 
+[data-theme='dark'] .markdown-content th {
+  @apply bg-gray-800 border-gray-700;
+}
+
 .markdown-content td {
   @apply border px-4 py-2;
   word-break: break-word;
 }
 
+[data-theme='dark'] .markdown-content td {
+  @apply border-gray-700;
+}
+
 /* Rendered HTML content styling */
 .rendered-html-content {
   @apply text-gray-800;
+}
+
+[data-theme='dark'] .rendered-html-content {
+  @apply text-gray-200;
 }
 
 .rendered-html-content h1 {
@@ -208,6 +244,10 @@ div .markdown-content .code-block-toolbar > div,
   @apply text-indigo-600 hover:underline;
 }
 
+[data-theme='dark'] .rendered-html-content a {
+  @apply text-indigo-400;
+}
+
 .rendered-html-content table {
   @apply border-collapse table-auto w-full mb-4;
 }
@@ -216,9 +256,17 @@ div .markdown-content .code-block-toolbar > div,
   @apply border px-4 py-2 bg-gray-100;
 }
 
+[data-theme='dark'] .rendered-html-content th {
+  @apply bg-gray-800 border-gray-700;
+}
+
 .rendered-html-content td {
   @apply border px-4 py-2;
   word-break: break-word;
+}
+
+[data-theme='dark'] .rendered-html-content td {
+  @apply border-gray-700;
 }
 
 .rendered-html-content img {
@@ -233,10 +281,20 @@ div .markdown-content .code-block-toolbar > div,
   @apply p-4 border border-gray-300 rounded-lg mb-4;
 }
 
+[data-theme='dark'] .rendered-html-content form {
+  @apply border-gray-700;
+}
+
 .rendered-html-content input,
 .rendered-html-content select,
 .rendered-html-content textarea {
   @apply border border-gray-300 rounded px-3 py-2 mb-2 w-full;
+}
+
+[data-theme='dark'] .rendered-html-content input,
+[data-theme='dark'] .rendered-html-content select,
+[data-theme='dark'] .rendered-html-content textarea {
+  @apply border-gray-600 bg-gray-800 text-gray-100;
 }
 
 /* Add specific mobile fixes for the input area */
@@ -250,6 +308,11 @@ div .markdown-content .code-block-toolbar > div,
     z-index: 10;
   }
 
+  [data-theme='dark'] .chat-widget-input,
+  [data-theme='dark'] form {
+    background: #1f2937;
+  }
+
   /* Ensure that the chat container doesn't grow beyond viewport */
   .flex-1.overflow-y-auto {
     flex: 1 1 0%;
@@ -260,4 +323,32 @@ div .markdown-content .code-block-toolbar > div,
   .md:hidden.mb-4.p-4.bg-gray-50.rounded-lg + div .flex-1.overflow-y-auto {
     max-height: calc(100vh - 400px);
   }
+}
+
+/* Dark mode for form elements */
+[data-theme='dark'] input[type='text'],
+[data-theme='dark'] input[type='email'],
+[data-theme='dark'] input[type='password'],
+[data-theme='dark'] input[type='number'],
+[data-theme='dark'] input[type='url'],
+[data-theme='dark'] input[type='search'],
+[data-theme='dark'] input[type='tel'],
+[data-theme='dark'] input[type='date'],
+[data-theme='dark'] input[type='time'],
+[data-theme='dark'] input[type='datetime-local'],
+[data-theme='dark'] textarea,
+[data-theme='dark'] select {
+  @apply bg-gray-700 border-gray-600 text-gray-100;
+}
+
+[data-theme='dark'] input::placeholder,
+[data-theme='dark'] textarea::placeholder {
+  @apply text-gray-400;
+}
+
+/* Dark mode for disabled inputs */
+[data-theme='dark'] input:disabled,
+[data-theme='dark'] select:disabled,
+[data-theme='dark'] textarea:disabled {
+  @apply bg-gray-800 text-gray-500;
 }

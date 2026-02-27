@@ -215,8 +215,10 @@ const PromptsList = () => {
 
   return (
     <div className="py-8 flex flex-col items-center">
-      <h1 className="text-3xl font-bold mb-2">{t('pages.promptsList.title', 'Prompts')}</h1>
-      <p className="text-gray-600 mb-6">
+      <h1 className="text-3xl font-bold mb-2 text-gray-900 dark:text-gray-100">
+        {t('pages.promptsList.title', 'Prompts')}
+      </h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
         {t('pages.promptsList.subtitle', 'Browse available prompts')}
       </p>
 
@@ -228,7 +230,7 @@ const PromptsList = () => {
             </div>
             <input
               type="text"
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={t('pages.promptsList.searchPlaceholder', 'Search prompts...')}
               value={searchTerm}
               onChange={handleSearchChange}
@@ -253,7 +255,7 @@ const PromptsList = () => {
           {sortConfig.enabled && (
             <div className="flex-shrink-0">
               <select
-                className="h-full border rounded-lg py-2 px-3 w-full sm:w-auto"
+                className="h-full border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
                 onChange={e => {
                   setSortMethod(e.target.value);
@@ -281,7 +283,7 @@ const PromptsList = () => {
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 selectedCategory === category.id
                   ? 'text-white shadow-lg transform scale-105'
-                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+                  : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
               style={{
                 backgroundColor: selectedCategory === category.id ? category.color : undefined
@@ -294,14 +296,16 @@ const PromptsList = () => {
       )}
 
       {filteredPrompts.length === 0 ? (
-        <p className="text-gray-500">{t('pages.promptsList.noPrompts', 'No prompts found')}</p>
+        <p className="text-gray-500 dark:text-gray-400">
+          {t('pages.promptsList.noPrompts', 'No prompts found')}
+        </p>
       ) : (
         <>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto w-full">
             {pagePrompts.map(p => (
               <div
                 key={p.id}
-                className="group relative bg-white border border-gray-200 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
+                className="group relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 dark:hover:border-indigo-600 transition-all duration-200 transform hover:-translate-y-0.5 cursor-pointer"
                 onClick={() => setSelectedPrompt(p)}
               >
                 <div className="p-4 h-full flex flex-col">
@@ -310,7 +314,7 @@ const PromptsList = () => {
                       e.stopPropagation();
                       handleToggleFavorite(e, p.id);
                     }}
-                    className="absolute top-3 right-3 z-10 p-1.5 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+                    className="absolute top-3 right-3 z-10 p-1.5 bg-white dark:bg-gray-700 bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
                     title={
                       favoritePromptIds.includes(p.id)
                         ? t('pages.promptsList.unfavorite')
@@ -332,11 +336,14 @@ const PromptsList = () => {
                   </button>
 
                   <div className="flex items-start space-x-3 mb-3">
-                    <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 transition-colors">
-                      <Icon name={p.icon || 'clipboard'} className="w-4 h-4 text-indigo-600" />
+                    <div className="flex-shrink-0 w-8 h-8 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center group-hover:bg-indigo-200 dark:group-hover:bg-indigo-800/50 transition-colors">
+                      <Icon
+                        name={p.icon || 'clipboard'}
+                        className="w-4 h-4 text-indigo-600 dark:text-indigo-400"
+                      />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-gray-900 text-sm leading-5 mb-1 flex items-center flex-wrap">
+                      <h3 className="font-semibold text-gray-900 dark:text-gray-100 text-sm leading-5 mb-1 flex items-center flex-wrap">
                         {p.name}
                         {favoritePromptIds.includes(p.id) && (
                           <span
@@ -353,11 +360,16 @@ const PromptsList = () => {
                             aria-label={t('pages.promptsList.recent')}
                             title={t('pages.promptsList.recent')}
                           >
-                            <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                            <Icon
+                              name="clock"
+                              size="sm"
+                              className="text-indigo-600 dark:text-indigo-400"
+                              solid={true}
+                            />
                           </span>
                         )}
                         {p.appId && (
-                          <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 bg-indigo-50 rounded-full">
+                          <span className="ml-1 px-1.5 py-0.5 text-xs text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/50 rounded-full">
                             {t('common.promptSearch.appSpecific', 'app')}
                           </span>
                         )}
@@ -366,7 +378,7 @@ const PromptsList = () => {
                   </div>
 
                   <p
-                    className="text-xs text-gray-500 leading-4 flex-grow overflow-hidden mb-4"
+                    className="text-xs text-gray-500 dark:text-gray-400 leading-4 flex-grow overflow-hidden mb-4"
                     style={{
                       display: '-webkit-box',
                       WebkitLineClamp: 3,
@@ -417,7 +429,7 @@ const PromptsList = () => {
                     )}
                   </div>
                 </div>
-                <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 transition-colors pointer-events-none"></div>
+                <div className="absolute inset-0 rounded-xl border border-transparent group-hover:border-indigo-200 dark:group-hover:border-indigo-700 transition-colors pointer-events-none"></div>
               </div>
             ))}
           </div>
@@ -427,11 +439,11 @@ const PromptsList = () => {
               <button
                 onClick={handlePrev}
                 disabled={page === 0}
-                className="px-3 py-1 border rounded text-indigo-600 disabled:opacity-50"
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
               >
                 {t('pages.promptsList.previous', 'Previous')}
               </button>
-              <span className="text-sm text-gray-600">
+              <span className="text-sm text-gray-600 dark:text-gray-400">
                 {t('pages.promptsList.pageOfTotal', {
                   defaultValue: 'Page {{current}} of {{total}}',
                   current: page + 1,
@@ -441,7 +453,7 @@ const PromptsList = () => {
               <button
                 onClick={handleNext}
                 disabled={page >= totalPages - 1}
-                className="px-3 py-1 border rounded text-indigo-600 disabled:opacity-50"
+                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded text-indigo-600 dark:text-indigo-400 disabled:opacity-50"
               >
                 {t('pages.promptsList.next', 'Next')}
               </button>
