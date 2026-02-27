@@ -482,8 +482,8 @@ const AdminSystemPage = () => {
                     <div
                       className={`p-4 rounded-md mb-4 ${
                         encryptMessage.type === 'success'
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-red-50 border border-red-200'
+                          ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                          : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
                       }`}
                     >
                       <div className="flex">
@@ -496,7 +496,7 @@ const AdminSystemPage = () => {
                         />
                         <p
                           className={`text-sm ${
-                            encryptMessage.type === 'success' ? 'text-green-700' : 'text-red-700'
+                            encryptMessage.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                           }`}
                         >
                           {encryptMessage.text}
@@ -509,7 +509,7 @@ const AdminSystemPage = () => {
                     <div>
                       <label
                         htmlFor="encryptValue"
-                        className="block text-sm font-medium text-gray-700 mb-2"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2"
                       >
                         {t('admin.system.encryptInputLabel', 'Plaintext Value to Encrypt')}
                       </label>
@@ -523,7 +523,7 @@ const AdminSystemPage = () => {
                             handleEncryptValue();
                           }
                         }}
-                        className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                        className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                         placeholder={t(
                           'admin.system.encryptInputPlaceholder',
                           'Enter value to encrypt (password, API key, etc.)'
@@ -579,26 +579,26 @@ const AdminSystemPage = () => {
 
                     {encryptedResult && (
                       <div className="space-y-2">
-                        <label className="block text-sm font-medium text-gray-700">
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                           {t('admin.system.encryptedValueLabel', 'Encrypted Value')}
                         </label>
                         <div className="relative">
                           <textarea
                             readOnly
                             value={encryptedResult}
-                            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm bg-gray-50 font-mono text-xs sm:text-sm"
+                            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 font-mono text-xs sm:text-sm"
                             rows={4}
                             onClick={e => e.target.select()}
                           />
                           <button
                             onClick={handleCopyEncrypted}
-                            className="absolute top-2 right-2 inline-flex items-center px-3 py-1 border border-gray-300 shadow-sm text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                            className="absolute top-2 right-2 inline-flex items-center px-3 py-1 border border-gray-300 dark:border-gray-600 shadow-sm text-xs font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                           >
                             <Icon name="clipboard" size="sm" className="mr-1" />
                             {t('admin.system.copyButton', 'Copy')}
                           </button>
                         </div>
-                        <p className="text-xs text-gray-500">
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.system.encryptedValueHint',
                             'Use this encrypted value in your .env file or configuration. It will be automatically decrypted at runtime.'
@@ -612,25 +612,25 @@ const AdminSystemPage = () => {
             </div>
 
             {/* Backup/Import Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
-                  <div className="p-3 rounded-full bg-green-100">
-                    <Icon name="archive-box" size="lg" className="text-green-600" />
+                  <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/50">
+                    <Icon name="archive-box" size="lg" className="text-green-600 dark:text-green-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     {t('admin.system.backupTitle', 'Configuration Backup & Import')}
                   </h3>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
                     {t(
                       'admin.system.backupDesc',
                       'Export your complete configuration as a ZIP file for disaster recovery, or import a configuration backup to restore your system. This includes all apps, models, groups, custom pages, and frontend customizations (CSS, HTML, etc.).'
                     )}
                   </p>
 
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-4 mb-4">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-md p-4 mb-4">
                     <div className="flex">
                       <Icon
                         name="information-circle"
@@ -638,10 +638,10 @@ const AdminSystemPage = () => {
                         className="text-blue-500 mt-0.5 mr-3"
                       />
                       <div>
-                        <h4 className="text-sm font-medium text-blue-800">
+                        <h4 className="text-sm font-medium text-blue-800 dark:text-blue-200">
                           {t('admin.system.backupInfoTitle', "What's included in backups")}
                         </h4>
-                        <ul className="text-sm text-blue-700 mt-1 list-disc list-inside space-y-1">
+                        <ul className="text-sm text-blue-700 dark:text-blue-300 mt-1 list-disc list-inside space-y-1">
                           <li>
                             {t(
                               'admin.system.backupInfo1',
@@ -673,8 +673,8 @@ const AdminSystemPage = () => {
                     <div
                       className={`p-4 rounded-md mb-4 ${
                         importMessage.type === 'success'
-                          ? 'bg-green-50 border border-green-200'
-                          : 'bg-red-50 border border-red-200'
+                          ? 'bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800'
+                          : 'bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800'
                       }`}
                     >
                       <div className="flex">
@@ -687,7 +687,7 @@ const AdminSystemPage = () => {
                         />
                         <p
                           className={`text-sm ${
-                            importMessage.type === 'success' ? 'text-green-700' : 'text-red-700'
+                            importMessage.type === 'success' ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'
                           }`}
                         >
                           {importMessage.text}
@@ -756,12 +756,12 @@ const AdminSystemPage = () => {
                       <button
                         disabled={importLoading}
                         className={`
-                          inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium 
-                          rounded-md shadow-sm text-gray-700 bg-white 
+                          inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium 
+                          rounded-md shadow-sm text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 
                           ${
                             importLoading
                               ? 'cursor-not-allowed opacity-50'
-                              : 'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
+                              : 'hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500'
                           }
                         `}
                       >
@@ -799,7 +799,7 @@ const AdminSystemPage = () => {
                     </div>
                   </div>
 
-                  <div className="mt-4 text-sm text-gray-500">
+                  <div className="mt-4 text-sm text-gray-500 dark:text-gray-400">
                     <p>
                       {t(
                         'admin.system.backupNote',
@@ -812,18 +812,18 @@ const AdminSystemPage = () => {
             </div>
 
             {/* Version Information Section */}
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
               <div className="flex items-start space-x-4">
                 <div className="flex-shrink-0 mt-1">
-                  <div className="p-3 rounded-full bg-blue-100">
-                    <Icon name="information-circle" size="lg" className="text-blue-600" />
+                  <div className="p-3 rounded-full bg-blue-100 dark:bg-blue-900/50">
+                    <Icon name="information-circle" size="lg" className="text-blue-600 dark:text-blue-400" />
                   </div>
                 </div>
                 <div className="flex-1">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     {t('admin.system.versionTitle', 'Version Information')}
                   </h3>
-                  <p className="text-gray-600 mb-4">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
                     {t(
                       'admin.system.versionDesc',
                       'Current version information for the application, frontend, and backend components.'
@@ -835,16 +835,16 @@ const AdminSystemPage = () => {
                     updateInfo &&
                     updateInfo.updateAvailable &&
                     !updateInfo.error && (
-                      <div className="mb-4 bg-green-50 border border-green-200 rounded-md p-4">
+                      <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
                         <div className="flex items-start">
                           <div className="flex-shrink-0">
                             <Icon name="check-circle" size="md" className="text-green-500 mt-0.5" />
                           </div>
                           <div className="ml-3 flex-1">
-                            <h4 className="text-sm font-medium text-green-800">
+                            <h4 className="text-sm font-medium text-green-800 dark:text-green-200">
                               {t('admin.system.updateCheckTitle', 'Update Available')}
                             </h4>
-                            <div className="mt-2 text-sm text-green-700">
+                            <div className="mt-2 text-sm text-green-700 dark:text-green-300">
                               <p>
                                 {t(
                                   'admin.system.updateAvailable',
@@ -871,7 +871,7 @@ const AdminSystemPage = () => {
                                 href={updateInfo.releaseUrl}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 bg-green-100 hover:bg-green-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-green-700 dark:text-green-200 bg-green-100 dark:bg-green-800/50 hover:bg-green-200 dark:hover:bg-green-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
                               >
                                 <Icon name="external-link" size="sm" className="mr-1.5" />
                                 {t('admin.system.viewRelease', 'View Release on GitHub')}
@@ -883,7 +883,7 @@ const AdminSystemPage = () => {
                     )}
 
                   {versionLoading ? (
-                    <div className="flex items-center text-gray-600">
+                    <div className="flex items-center text-gray-600 dark:text-gray-400">
                       <svg
                         className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-600"
                         xmlns="http://www.w3.org/2000/svg"
@@ -907,10 +907,10 @@ const AdminSystemPage = () => {
                       {t('admin.system.versionLoading', 'Loading version information...')}
                     </div>
                   ) : versionError ? (
-                    <div className="p-4 rounded-md bg-red-50 border border-red-200">
+                    <div className="p-4 rounded-md bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800">
                       <div className="flex">
                         <Icon name="warning" size="md" className="text-red-500 mt-0.5 mr-3" />
-                        <p className="text-sm text-red-700">
+                        <p className="text-sm text-red-700 dark:text-red-300">
                           {t('admin.system.versionError', 'Failed to load version information')}:{' '}
                           {versionError}
                         </p>
@@ -918,42 +918,42 @@ const AdminSystemPage = () => {
                     </div>
                   ) : versionInfo ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.system.versionApp', 'Application Version')}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                             {versionInfo.app}
                           </span>
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.system.versionClient', 'Frontend Version')}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                             {versionInfo.client}
                           </span>
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.system.versionServer', 'Backend Version')}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                             {versionInfo.server}
                           </span>
                         </div>
                       </div>
-                      <div className="bg-gray-50 rounded-md p-4 border border-gray-200">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-md p-4 border border-gray-200 dark:border-gray-600">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm font-medium text-gray-700">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
                             {t('admin.system.versionNode', 'Node.js Version')}
                           </span>
-                          <span className="text-sm font-semibold text-gray-900">
+                          <span className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                             {versionInfo.node}
                           </span>
                         </div>

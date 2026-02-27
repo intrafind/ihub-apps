@@ -138,13 +138,13 @@ const SharedAppHeader = ({
       {/* Configuration Panel */}
       {showConfig && (
         <div
-          className={`relative flex-shrink-0 bg-white p-4 rounded-lg mb-4 shadow-sm border border-gray-200 ${
-            mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100'
+          className={`relative flex-shrink-0 bg-white dark:bg-gray-800 p-4 rounded-lg mb-4 shadow-sm border border-gray-200 dark:border-gray-700 ${
+            mode === 'canvas' ? 'canvas-config-panel' : 'bg-gray-100 dark:bg-gray-800'
           }`}
         >
           <button
             onClick={onToggleConfig}
-            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 p-1"
+            className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
             aria-label={t('common.close', 'Close')}
           >
             <Icon name="close" size="lg" className="text-current" />
