@@ -346,21 +346,6 @@ div .markdown-content .code-block-toolbar > div,
   @apply text-gray-400;
 }
 
-/* Dark mode for form labels */
-[data-theme='dark'] label {
-  @apply text-gray-300;
-}
-
-/* Dark mode for admin form sections */
-[data-theme='dark'] .bg-white.shadow {
-  @apply bg-gray-800;
-}
-
-/* Dark mode for info boxes and panels */
-[data-theme='dark'] .bg-gray-50 {
-  @apply bg-gray-700/50;
-}
-
 /* Dark mode for disabled inputs */
 [data-theme='dark'] input:disabled,
 [data-theme='dark'] select:disabled,
