@@ -248,7 +248,9 @@ export default function registerSessionRoutes(
         llmMessages: prep.llmMessages,
         DEFAULT_TIMEOUT,
         getLocalizedError,
-        clientLanguage
+        clientLanguage,
+        user,
+        app: prep.app
       });
     } else {
       return await chatService.processNonStreamingChat({

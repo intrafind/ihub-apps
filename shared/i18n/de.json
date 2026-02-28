@@ -338,7 +338,9 @@
     "imageQualityHelp": "Wählen Sie die Qualitätsstufe für generierte Bilder",
     "qualityLow": "Niedrig (1K)",
     "qualityMedium": "Mittel (2K)",
-    "qualityHigh": "Hoch (4K)"
+    "qualityHigh": "Hoch (4K)",
+    "imageWatermark": "Bildwasserzeichen",
+    "imageWatermarkHelp": "Fügen Sie automatisch Wasserzeichen und Metadaten zu generierten Bildern hinzu"
   },
   "chatMessage": {
     "user": "Du",
@@ -1216,6 +1218,30 @@
       "loadError": "Fehler beim Laden der Funktionen",
       "saveError": "Fehler beim Speichern der Funktionen",
       "saved": "Funktionen erfolgreich aktualisiert"
+    },
+    "watermark": {
+      "enabled": "Wasserzeichen aktivieren",
+      "enabledHelp": "Wasserzeichen auf alle generierten Bilder anwenden",
+      "text": "Wasserzeichen-Text",
+      "textPlaceholder": "Wasserzeichen-Text eingeben",
+      "logo": "Logo (SVG oder PNG)",
+      "logoHelp": "SVG- oder PNG-Logo hochladen (wird als base64 gespeichert)",
+      "position": "Position",
+      "opacity": "Deckkraft",
+      "textColor": "Textfarbe",
+      "includeUser": "Benutzername im Wasserzeichen einschließen",
+      "includeTimestamp": "Zeitstempel im Wasserzeichen einschließen",
+      "enableC2PA": "C2PA-Herkunftssignierung aktivieren",
+      "installationId": "Installations-ID (Optional)",
+      "installationIdPlaceholder": "z.B. production-01",
+      "preview": "Live-Vorschau",
+      "title": "Wasserzeichen-Konfiguration",
+      "platformLevel": "Platform-Wasserzeichen",
+      "platformLevelHelp": "Globale Wasserzeichen-Einstellungen für alle Apps",
+      "appLevel": "App-spezifische Wasserzeichen-Überschreibung",
+      "appLevelHelp": "Platform-Einstellungen für diese spezifische App überschreiben",
+      "saveSuccess": "Wasserzeichen-Konfiguration erfolgreich gespeichert",
+      "saveError": "Fehler beim Speichern der Wasserzeichen-Konfiguration"
     }
   },
   "components": {
