@@ -14,7 +14,7 @@ import useDarkMode from '../../hooks/useDarkMode';
 
 const DarkModeToggle = ({ className = '' }) => {
   const { t } = useTranslation();
-  const { preference, isDark, toggleMode } = useDarkMode();
+  const { preference, toggleMode } = useDarkMode();
 
   // Get the icon and label based on current preference
   const getIconAndLabel = () => {
@@ -34,7 +34,7 @@ const DarkModeToggle = ({ className = '' }) => {
       case 'auto':
       default:
         return {
-          icon: isDark ? 'moon' : 'sun',
+          icon: 'computer-desktop',
           label: t('darkMode.auto', 'Auto (system)'),
           nextLabel: t('darkMode.switchToLight', 'Switch to light mode')
         };
