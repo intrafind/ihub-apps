@@ -7,16 +7,16 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
-  <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
     <div className="flex items-center justify-between">
       <div>
-        <p className="text-sm font-medium text-gray-600">{title}</p>
-        <p className="text-3xl font-bold text-gray-900">
+        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
+        <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
           {typeof value === 'number' ? new Intl.NumberFormat().format(value) : value}
         </p>
         {change && (
           <p
-            className={`text-sm ${changeType === 'positive' ? 'text-green-600' : 'text-red-600'} mt-1`}
+            className={`text-sm ${changeType === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} mt-1`}
           >
             {changeType === 'positive' ? '↗' : '↘'} {change}
           </p>
@@ -38,8 +38,8 @@ const TopUsersCard = ({ title, data, color, showRating = false }) => {
     .slice(0, 5);
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{title}</h3>
       <div className="space-y-3">
         {sortedData.map(([key, value], index) => {
           const displayValue =
@@ -62,10 +62,10 @@ const TopUsersCard = ({ title, data, color, showRating = false }) => {
                   {index + 1}
                 </div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                     {key.replace('session-', '')}
                   </p>
-                  <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mt-1">
                     <div
                       className={`h-2 rounded-full ${color}`}
                       style={{ width: `${percentage}%` }}
@@ -74,11 +74,11 @@ const TopUsersCard = ({ title, data, color, showRating = false }) => {
                 </div>
               </div>
               <div className="text-right ml-3">
-                <div className="text-sm font-semibold text-gray-900">
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                   {new Intl.NumberFormat().format(displayValue)}
                 </div>
                 {showRating && averageRating > 0 && (
-                  <div className="flex items-center text-xs text-amber-600">
+                  <div className="flex items-center text-xs text-amber-600 dark:text-amber-400">
                     <svg className="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
                       <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                     </svg>
@@ -105,8 +105,8 @@ const AppUsageCard = ({ data }) => {
   );
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         {t('admin.usage.appUsageDistribution', 'App Usage Distribution')}
       </h3>
       <div className="space-y-4">
@@ -118,18 +118,20 @@ const AppUsageCard = ({ data }) => {
           return (
             <div key={app} className="space-y-2">
               <div className="flex justify-between items-center">
-                <span className="text-sm font-medium text-gray-700 capitalize">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300 capitalize">
                   {app.replace('-', ' ')}
                 </span>
-                <span className="text-sm text-gray-600">{percentage.toFixed(1)}%</span>
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  {percentage.toFixed(1)}%
+                </span>
               </div>
-              <div className="w-full bg-gray-200 rounded-full h-3">
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
                 <div
                   className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full transition-all duration-300"
                   style={{ width: `${percentage}%` }}
                 ></div>
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs text-gray-500 dark:text-gray-400">
                 {new Intl.NumberFormat().format(displayValue)} uses
               </div>
             </div>
@@ -166,20 +168,22 @@ const FeedbackCard = ({ data }) => {
   const averageRating = totalStarRatings > 0 ? weightedSum / totalStarRatings : 0;
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         {t('admin.dashboard.feedbackOverview', 'Feedback Overview')}
       </h3>
 
       {totalStarRatings > 0 ? (
-        <div className="p-4 bg-amber-50 rounded-lg">
+        <div className="p-4 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
           <div className="flex items-center justify-center space-x-2 mb-3">
             <div className="flex items-center">
               {[1, 2, 3, 4, 5].map(star => (
                 <svg
                   key={star}
                   className={`w-6 h-6 ${
-                    star <= Math.round(averageRating) ? 'text-yellow-400' : 'text-gray-300'
+                    star <= Math.round(averageRating)
+                      ? 'text-yellow-400'
+                      : 'text-gray-300 dark:text-gray-600'
                   }`}
                   fill="currentColor"
                   viewBox="0 0 20 20"
@@ -188,10 +192,12 @@ const FeedbackCard = ({ data }) => {
                 </svg>
               ))}
             </div>
-            <span className="text-2xl font-bold text-amber-600">{averageRating.toFixed(1)}</span>
+            <span className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+              {averageRating.toFixed(1)}
+            </span>
           </div>
           <div className="text-center">
-            <div className="text-sm text-amber-600 font-medium">
+            <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
               Average Rating ({totalStarRatings} ratings)
             </div>
           </div>
@@ -203,23 +209,23 @@ const FeedbackCard = ({ data }) => {
               const percentage = totalStarRatings > 0 ? (count / totalStarRatings) * 100 : 0;
               return (
                 <div key={star} className="flex items-center space-x-2 text-sm">
-                  <span className="w-8 text-gray-600">{star}★</span>
-                  <div className="flex-1 bg-gray-200 rounded-full h-2">
+                  <span className="w-8 text-gray-600 dark:text-gray-400">{star}★</span>
+                  <div className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div
                       className="bg-yellow-400 h-2 rounded-full transition-all duration-300"
                       style={{ width: `${percentage}%` }}
                     />
                   </div>
-                  <span className="w-8 text-gray-600 text-xs">{count}</span>
+                  <span className="w-8 text-gray-600 dark:text-gray-400 text-xs">{count}</span>
                 </div>
               );
             })}
           </div>
         </div>
       ) : (
-        <div className="text-center p-8 text-gray-500">
+        <div className="text-center p-8 text-gray-500 dark:text-gray-400">
           <svg
-            className="w-12 h-12 mx-auto mb-4 text-gray-300"
+            className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -230,7 +236,7 @@ const FeedbackCard = ({ data }) => {
         </div>
       )}
 
-      <div className="text-center text-sm text-gray-600 mt-4">
+      <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
         Total feedback: {totalStarRatings} responses
       </div>
     </div>
@@ -301,13 +307,13 @@ const AdminUsageReports = () => {
   if (loading) return <LoadingSpinner />;
   if (!usage)
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="text-red-500 text-6xl mb-4">⚠️</div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
             {t('admin.usage.noDataTitle', 'No Data Available')}
           </h2>
-          <p className="text-gray-600">
+          <p className="text-gray-600 dark:text-gray-400">
             {t('admin.usage.noDataDesc', 'Unable to load usage statistics.')}
           </p>
         </div>
@@ -381,34 +387,34 @@ const AdminUsageReports = () => {
 
       {/* Token Breakdown */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.tokenDistribution', 'Token Distribution')}
           </h3>
           <div className="space-y-4">
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">
+              <span className="text-gray-600 dark:text-gray-400">
                 {t('admin.usage.promptTokens', 'Prompt Tokens')}
               </span>
-              <span className="font-semibold">
+              <span className="font-semibold dark:text-gray-100">
                 {new Intl.NumberFormat().format(tokens.prompt.total)}
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
                 className="bg-blue-500 h-3 rounded-l-full"
                 style={{ width: `${(tokens.prompt.total / tokens.total) * 100}%` }}
               ></div>
             </div>
             <div className="flex justify-between items-center">
-              <span className="text-gray-600">
+              <span className="text-gray-600 dark:text-gray-400">
                 {t('admin.usage.completionTokens', 'Completion Tokens')}
               </span>
-              <span className="font-semibold">
+              <span className="font-semibold dark:text-gray-100">
                 {new Intl.NumberFormat().format(tokens.completion.total)}
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-3">
+            <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3">
               <div
                 className="bg-green-500 h-3 rounded-l-full"
                 style={{ width: `${(tokens.completion.total / tokens.total) * 100}%` }}
@@ -451,15 +457,20 @@ const AdminUsageReports = () => {
   const renderApps = () => (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
       <AppUsageCard data={messages.perApp} />
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.usage.appTokenUsage', 'App Token Usage')}
         </h3>
         <div className="space-y-4">
           {Object.entries(tokens.perApp || {}).map(([app, tokenCount]) => (
-            <div key={app} className="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
-              <span className="font-medium capitalize">{app.replace('-', ' ')}</span>
-              <span className="text-lg font-bold text-gray-900">
+            <div
+              key={app}
+              className="flex justify-between items-center p-3 bg-gray-50 dark:bg-gray-700 rounded-lg"
+            >
+              <span className="font-medium capitalize dark:text-gray-100">
+                {app.replace('-', ' ')}
+              </span>
+              <span className="text-lg font-bold text-gray-900 dark:text-gray-100">
                 {new Intl.NumberFormat().format(tokenCount)}
               </span>
             </div>
@@ -501,18 +512,20 @@ const AdminUsageReports = () => {
           color="bg-purple-500"
         />
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.appUsage', 'App Usage')}
           </h3>
           <div className="space-y-4">
             {Object.entries(magicPrompt.perApp || {}).map(([app, count]) => (
               <div
                 key={app}
-                className="flex justify-between items-center p-3 bg-purple-50 rounded-lg"
+                className="flex justify-between items-center p-3 bg-purple-50 dark:bg-purple-900/30 rounded-lg"
               >
-                <span className="font-medium capitalize">{app.replace('-', ' ')}</span>
-                <span className="text-lg font-bold text-purple-600">
+                <span className="font-medium capitalize dark:text-gray-100">
+                  {app.replace('-', ' ')}
+                </span>
+                <span className="text-lg font-bold text-purple-600 dark:text-purple-400">
                   {new Intl.NumberFormat().format(count)}
                 </span>
               </div>
@@ -522,13 +535,13 @@ const AdminUsageReports = () => {
       </div>
 
       {/* Token Efficiency */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.usage.sections.tokenEfficiency', 'Token Efficiency')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <h4 className="font-medium text-gray-700 mb-3">
+            <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">
               {t('admin.usage.sections.inputTokenDistribution', 'Input Token Distribution')}
             </h4>
             <div className="space-y-3">
@@ -539,10 +552,14 @@ const AdminUsageReports = () => {
                 return (
                   <div key={user} className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 truncate">{user.replace('session-', '')}</span>
-                      <span className="font-medium">{new Intl.NumberFormat().format(tokens)}</span>
+                      <span className="text-gray-600 dark:text-gray-400 truncate">
+                        {user.replace('session-', '')}
+                      </span>
+                      <span className="font-medium dark:text-gray-100">
+                        {new Intl.NumberFormat().format(tokens)}
+                      </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
                         className="bg-blue-500 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${percentage}%` }}
@@ -555,7 +572,7 @@ const AdminUsageReports = () => {
           </div>
 
           <div>
-            <h4 className="font-medium text-gray-700 mb-3">
+            <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-3">
               {t('admin.usage.sections.outputTokenDistribution', 'Output Token Distribution')}
             </h4>
             <div className="space-y-3">
@@ -566,10 +583,14 @@ const AdminUsageReports = () => {
                 return (
                   <div key={user} className="space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 truncate">{user.replace('session-', '')}</span>
-                      <span className="font-medium">{new Intl.NumberFormat().format(tokens)}</span>
+                      <span className="text-gray-600 dark:text-gray-400 truncate">
+                        {user.replace('session-', '')}
+                      </span>
+                      <span className="font-medium dark:text-gray-100">
+                        {new Intl.NumberFormat().format(tokens)}
+                      </span>
                     </div>
-                    <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                       <div
                         className="bg-green-500 h-2 rounded-full transition-all duration-300"
                         style={{ width: `${percentage}%` }}
@@ -591,8 +612,8 @@ const AdminUsageReports = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <FeedbackCard data={feedback} />
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.userFeedbackActivity', 'User Feedback Activity')}
           </h3>
           <div className="space-y-4">
@@ -601,12 +622,14 @@ const AdminUsageReports = () => {
               const averageRating = userFeedback.averageRating || 0;
 
               return (
-                <div key={user} className="p-3 bg-gray-50 rounded-lg">
+                <div key={user} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-gray-900 truncate">
+                    <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                       {user.replace('session-', '')}
                     </span>
-                    <span className="text-sm text-gray-600">{totalUserFeedback} responses</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {totalUserFeedback} responses
+                    </span>
                   </div>
                   {totalUserFeedback > 0 && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -617,7 +640,7 @@ const AdminUsageReports = () => {
                             className={`w-3 h-3 ${
                               star <= Math.round(averageRating)
                                 ? 'text-yellow-400'
-                                : 'text-gray-300'
+                                : 'text-gray-300 dark:text-gray-600'
                             }`}
                             fill="currentColor"
                             viewBox="0 0 20 20"
@@ -626,7 +649,9 @@ const AdminUsageReports = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {averageRating.toFixed(1)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -638,8 +663,8 @@ const AdminUsageReports = () => {
 
       {/* App Feedback Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.feedbackByApplication', 'Feedback by Application')}
           </h3>
           <div className="space-y-4">
@@ -648,12 +673,14 @@ const AdminUsageReports = () => {
               const averageRating = appFeedback.averageRating || 0;
 
               return (
-                <div key={app} className="p-3 bg-gray-50 rounded-lg">
+                <div key={app} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-gray-900 capitalize">
+                    <span className="font-medium text-gray-900 dark:text-gray-100 capitalize">
                       {app.replace('-', ' ')}
                     </span>
-                    <span className="text-sm text-gray-600">{totalAppFeedback} responses</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {totalAppFeedback} responses
+                    </span>
                   </div>
                   {totalAppFeedback > 0 && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -664,7 +691,7 @@ const AdminUsageReports = () => {
                             className={`w-3 h-3 ${
                               star <= Math.round(averageRating)
                                 ? 'text-yellow-400'
-                                : 'text-gray-300'
+                                : 'text-gray-300 dark:text-gray-600'
                             }`}
                             fill="currentColor"
                             viewBox="0 0 20 20"
@@ -673,7 +700,9 @@ const AdminUsageReports = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {averageRating.toFixed(1)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -682,8 +711,8 @@ const AdminUsageReports = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             {t('admin.usage.sections.feedbackByModel', 'Feedback by Model')}
           </h3>
           <div className="space-y-4">
@@ -692,10 +721,12 @@ const AdminUsageReports = () => {
               const averageRating = modelFeedback.averageRating || 0;
 
               return (
-                <div key={model} className="p-3 bg-gray-50 rounded-lg">
+                <div key={model} className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
                   <div className="flex justify-between items-center mb-2">
-                    <span className="font-medium text-gray-900">{model}</span>
-                    <span className="text-sm text-gray-600">{totalModelFeedback} responses</span>
+                    <span className="font-medium text-gray-900 dark:text-gray-100">{model}</span>
+                    <span className="text-sm text-gray-600 dark:text-gray-400">
+                      {totalModelFeedback} responses
+                    </span>
                   </div>
                   {totalModelFeedback > 0 && (
                     <div className="flex items-center space-x-2 text-sm">
@@ -706,7 +737,7 @@ const AdminUsageReports = () => {
                             className={`w-3 h-3 ${
                               star <= Math.round(averageRating)
                                 ? 'text-yellow-400'
-                                : 'text-gray-300'
+                                : 'text-gray-300 dark:text-gray-600'
                             }`}
                             fill="currentColor"
                             viewBox="0 0 20 20"
@@ -715,7 +746,9 @@ const AdminUsageReports = () => {
                           </svg>
                         ))}
                       </div>
-                      <span className="text-amber-600 font-medium">{averageRating.toFixed(1)}</span>
+                      <span className="text-amber-600 dark:text-amber-400 font-medium">
+                        {averageRating.toFixed(1)}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -729,8 +762,10 @@ const AdminUsageReports = () => {
 
   const renderDetails = () => (
     <div className="space-y-6">
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Model Usage Details</h3>
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Model Usage Details
+        </h3>
         <div className="space-y-4">
           {Object.entries(messages.perModel || {}).map(([model, messageCount]) => {
             const tokenCount = tokens.perModel[model] || 0;
@@ -740,46 +775,57 @@ const AdminUsageReports = () => {
               messageCount > 0 ? Math.round(tokenCount / messageCount) : 0;
 
             return (
-              <div key={model} className="p-4 border rounded-lg bg-gray-50">
+              <div
+                key={model}
+                className="p-4 border dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700"
+              >
                 <div className="flex justify-between items-start mb-4">
                   <div>
-                    <h4 className="font-semibold text-lg text-gray-900">{model}</h4>
-                    <p className="text-sm text-gray-600">AI Model</p>
+                    <h4 className="font-semibold text-lg text-gray-900 dark:text-gray-100">
+                      {model}
+                    </h4>
+                    <p className="text-sm text-gray-600 dark:text-gray-400">AI Model</p>
                   </div>
                   <div className="text-right">
-                    <div className="text-2xl font-bold text-blue-600">{messageCount}</div>
+                    <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                      {messageCount}
+                    </div>
                     <div className="text-sm text-gray-600">messages</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div className="text-center p-3 bg-white rounded-lg">
-                    <div className="text-lg font-bold text-gray-900">
+                  <div className="text-center p-3 bg-white dark:bg-gray-600 rounded-lg">
+                    <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
                       {new Intl.NumberFormat().format(tokenCount)}
                     </div>
-                    <div className="text-xs text-gray-600">Total Tokens</div>
+                    <div className="text-xs text-gray-600 dark:text-gray-300">Total Tokens</div>
                   </div>
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600">
+                  <div className="text-center p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                    <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
                       {new Intl.NumberFormat().format(promptTokens)}
                     </div>
-                    <div className="text-xs text-blue-600">Prompt Tokens</div>
+                    <div className="text-xs text-blue-600 dark:text-blue-400">Prompt Tokens</div>
                   </div>
-                  <div className="text-center p-3 bg-green-50 rounded-lg">
-                    <div className="text-lg font-bold text-green-600">
+                  <div className="text-center p-3 bg-green-50 dark:bg-green-900/30 rounded-lg">
+                    <div className="text-lg font-bold text-green-600 dark:text-green-400">
                       {new Intl.NumberFormat().format(completionTokens)}
                     </div>
-                    <div className="text-xs text-green-600">Completion Tokens</div>
+                    <div className="text-xs text-green-600 dark:text-green-400">
+                      Completion Tokens
+                    </div>
                   </div>
-                  <div className="text-center p-3 bg-amber-50 rounded-lg">
-                    <div className="text-lg font-bold text-amber-600">{avgTokensPerMessage}</div>
-                    <div className="text-xs text-amber-600">Avg/Message</div>
+                  <div className="text-center p-3 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
+                    <div className="text-lg font-bold text-amber-600 dark:text-amber-400">
+                      {avgTokensPerMessage}
+                    </div>
+                    <div className="text-xs text-amber-600 dark:text-amber-400">Avg/Message</div>
                   </div>
                 </div>
 
                 {/* Token Distribution Visual */}
                 <div className="mt-4">
-                  <div className="flex justify-between text-sm text-gray-600 mb-1">
+                  <div className="flex justify-between text-sm text-gray-600 dark:text-gray-400 mb-1">
                     <span>Token Distribution</span>
                     <span>
                       {tokenCount > 0 ? ((promptTokens / tokenCount) * 100).toFixed(1) : 0}% prompt
@@ -787,7 +833,7 @@ const AdminUsageReports = () => {
                       completion
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden">
+                  <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-3 overflow-hidden">
                     <div className="h-full flex">
                       <div
                         className="bg-blue-500"
@@ -811,40 +857,40 @@ const AdminUsageReports = () => {
       </div>
 
       {/* System Overview */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.usage.overview.systemOverview', 'System Overview')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-blue-50 rounded-lg">
-            <div className="text-2xl font-bold text-blue-600">
+          <div className="text-center p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+            <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
               {Object.keys(messages.perUser || {}).length}
             </div>
-            <div className="text-sm text-blue-600 font-medium">
+            <div className="text-sm text-blue-600 dark:text-blue-400 font-medium">
               {t('admin.usage.overview.activeUsers', 'Active Users')}
             </div>
           </div>
-          <div className="text-center p-4 bg-green-50 rounded-lg">
-            <div className="text-2xl font-bold text-green-600">
+          <div className="text-center p-4 bg-green-50 dark:bg-green-900/30 rounded-lg">
+            <div className="text-2xl font-bold text-green-600 dark:text-green-400">
               {Object.keys(messages.perApp || {}).length}
             </div>
-            <div className="text-sm text-green-600 font-medium">
+            <div className="text-sm text-green-600 dark:text-green-400 font-medium">
               {t('admin.usage.overview.activeApps', 'Active Apps')}
             </div>
           </div>
-          <div className="text-center p-4 bg-purple-50 rounded-lg">
-            <div className="text-2xl font-bold text-purple-600">
+          <div className="text-center p-4 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
+            <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
               {Object.keys(messages.perModel || {}).length}
             </div>
-            <div className="text-sm text-purple-600 font-medium">
+            <div className="text-sm text-purple-600 dark:text-purple-400 font-medium">
               {t('admin.usage.overview.modelsUsed', 'Models Used')}
             </div>
           </div>
-          <div className="text-center p-4 bg-amber-50 rounded-lg">
-            <div className="text-2xl font-bold text-amber-600">
+          <div className="text-center p-4 bg-amber-50 dark:bg-amber-900/30 rounded-lg">
+            <div className="text-2xl font-bold text-amber-600 dark:text-amber-400">
               {messages.total > 0 ? Math.round(tokens.total / messages.total) : 0}
             </div>
-            <div className="text-sm text-amber-600 font-medium">
+            <div className="text-sm text-amber-600 dark:text-amber-400 font-medium">
               {t('admin.usage.overview.avgTokensPerMsg', 'Avg Tokens/Msg')}
             </div>
           </div>
@@ -856,23 +902,23 @@ const AdminUsageReports = () => {
   return (
     <AdminAuth>
       <AdminNavigation />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center py-6">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                   {t('admin.usage.title', 'Admin Dashboard')}
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {t('admin.usage.subtitle', 'Usage analytics and system overview')}
                 </p>
               </div>
               <div className="flex space-x-3">
                 <button
                   onClick={downloadCsv}
-                  className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   {t('admin.usage.downloadCsv', 'Download CSV')}
                 </button>
@@ -888,34 +934,38 @@ const AdminUsageReports = () => {
         </div>
 
         {/* Stats Bar */}
-        <div className="bg-white border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   {t('admin.usage.lastUpdated', 'Last Updated')}
                 </div>
-                <div className="text-sm font-medium">{new Date(lastUpdated).toLocaleString()}</div>
+                <div className="text-sm font-medium dark:text-gray-100">
+                  {new Date(lastUpdated).toLocaleString()}
+                </div>
               </div>
               <div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   {t('admin.usage.lastReset', 'Last Reset')}
                 </div>
-                <div className="text-sm font-medium">{new Date(lastReset).toLocaleString()}</div>
+                <div className="text-sm font-medium dark:text-gray-100">
+                  {new Date(lastReset).toLocaleString()}
+                </div>
               </div>
               <div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   {t('admin.usage.activeUsers', 'Active Users')}
                 </div>
-                <div className="text-sm font-medium">
+                <div className="text-sm font-medium dark:text-gray-100">
                   {Object.keys(messages.perUser || {}).length}
                 </div>
               </div>
               <div>
-                <div className="text-sm text-gray-600">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
                   {t('admin.usage.activeApps', 'Active Apps')}
                 </div>
-                <div className="text-sm font-medium">
+                <div className="text-sm font-medium dark:text-gray-100">
                   {Object.keys(messages.perApp || {}).length}
                 </div>
               </div>
@@ -924,7 +974,7 @@ const AdminUsageReports = () => {
         </div>
 
         {/* Navigation Tabs */}
-        <div className="bg-white border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <nav className="-mb-px flex space-x-8">
               {tabs.map(tab => (
@@ -933,8 +983,8 @@ const AdminUsageReports = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`inline-flex items-center space-x-2 py-4 px-1 border-b-2 font-medium text-sm ${
                     activeTab === tab.id
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   {tab.icon}

@@ -43,21 +43,21 @@ const ChatActionsMenu = ({
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="bg-gray-200 hover:bg-gray-300 text-gray-800 p-2 rounded-full flex items-center justify-center h-10 w-10"
+        className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
         title={t('common.menu', 'Menu')}
         aria-label={t('common.menu', 'Menu')}
       >
         <Icon name="menu" size="sm" />
       </button>
       {open && (
-        <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-20 min-w-40">
+        <div className="absolute right-0 mt-2 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded shadow-lg z-20 min-w-40">
           {user?.isAdmin && appId && (
             <button
               onClick={() => {
                 navigate(`/admin/apps/${appId}`);
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="edit" size="sm" /> {t('pages.appChat.editApp', 'Edit App')}
             </button>
@@ -68,7 +68,7 @@ const ChatActionsMenu = ({
                 onToggleConfig?.();
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="settings" size="sm" /> {t('settings.title')}
             </button>
@@ -79,7 +79,7 @@ const ChatActionsMenu = ({
                 onToggleCanvas?.();
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="document-text" size="sm" /> {t('pages.appChat.canvas', 'Canvas')}
             </button>
@@ -90,7 +90,7 @@ const ChatActionsMenu = ({
                 onToggleParameters?.();
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="document-chart-bar" size="sm" />{' '}
               {parametersVisible
@@ -104,7 +104,7 @@ const ChatActionsMenu = ({
                 onClearChat?.();
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="trash" size="sm" /> {t('pages.appChat.clear')}
             </button>
@@ -115,20 +115,20 @@ const ChatActionsMenu = ({
                 onShare?.();
                 setOpen(false);
               }}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+              className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
             </button>
           )}
           {messages && messages.length > 0 && exportSettings && (
             <>
-              <div className="border-t border-gray-200 my-1"></div>
+              <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
               <button
                 onClick={() => {
                   setShowExportDialog(true);
                   setOpen(false);
                 }}
-                className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center gap-2 whitespace-nowrap"
+                className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
               >
                 <Icon name="download" size="sm" /> {t('common.export', 'Export')}
               </button>

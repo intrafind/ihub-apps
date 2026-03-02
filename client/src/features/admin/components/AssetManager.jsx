@@ -163,20 +163,22 @@ const AssetManager = ({ t }) => {
     return (
       <div className="p-6 text-center">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
-        <p className="mt-2 text-gray-600">{t('admin.ui.assets.loading', 'Loading assets...')}</p>
+        <p className="mt-2 text-gray-600 dark:text-gray-400">
+          {t('admin.ui.assets.loading', 'Loading assets...')}
+        </p>
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-6">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.assets.title', 'Asset Management')}
       </h3>
 
       {/* Status Messages */}
       {error && (
-        <div className="mb-4 bg-red-50 border border-red-200 rounded-md p-4">
+        <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -188,12 +190,12 @@ const AssetManager = ({ t }) => {
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm text-red-800 dark:text-red-300">{error}</p>
             </div>
             <div className="ml-auto pl-3">
               <button
                 onClick={() => setError(null)}
-                className="inline-flex text-red-400 hover:text-red-600"
+                className="inline-flex text-red-400 hover:text-red-600 dark:hover:text-red-300"
               >
                 <span className="sr-only">Dismiss</span>
                 <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -210,7 +212,7 @@ const AssetManager = ({ t }) => {
       )}
 
       {successMessage && (
-        <div className="mb-4 bg-green-50 border border-green-200 rounded-md p-4">
+        <div className="mb-4 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4">
           <div className="flex">
             <div className="flex-shrink-0">
               <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -222,7 +224,7 @@ const AssetManager = ({ t }) => {
               </svg>
             </div>
             <div className="ml-3">
-              <p className="text-sm text-green-800">{successMessage}</p>
+              <p className="text-sm text-green-800 dark:text-green-300">{successMessage}</p>
             </div>
           </div>
         </div>
@@ -231,10 +233,10 @@ const AssetManager = ({ t }) => {
       {/* Upload Section - Collapsible */}
       {showUpload && (
         <div className="mb-8">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-6">
+          <div className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 bg-white dark:bg-gray-800">
             <div className="text-center">
               <svg
-                className="mx-auto h-12 w-12 text-gray-400"
+                className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
                 stroke="currentColor"
                 fill="none"
                 viewBox="0 0 48 48"
@@ -248,12 +250,12 @@ const AssetManager = ({ t }) => {
               </svg>
               <div className="mt-4">
                 <label htmlFor="file-upload" className="cursor-pointer">
-                  <span className="mt-2 block text-sm font-medium text-gray-900">
+                  <span className="mt-2 block text-sm font-medium text-gray-900 dark:text-gray-100">
                     {uploading
                       ? t('admin.ui.assets.uploading', 'Uploading...')
                       : t('admin.ui.assets.uploadPrompt', 'Upload a new asset')}
                   </span>
-                  <p className="mt-1 text-sm text-gray-600">
+                  <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                     {t('admin.ui.assets.supportedFormats', 'SVG, PNG, JPG, ICO files up to 2MB')}
                   </p>
                 </label>
@@ -271,7 +273,7 @@ const AssetManager = ({ t }) => {
               <div className="mt-4">
                 <button
                   onClick={() => setShowUpload(false)}
-                  className="text-sm text-gray-500 hover:text-gray-700"
+                  className="text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 >
                   {t('admin.ui.cancel', 'Cancel')}
                 </button>
@@ -285,7 +287,7 @@ const AssetManager = ({ t }) => {
       <div className="mb-6">
         <button
           onClick={() => setShowDocumentation(!showDocumentation)}
-          className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 text-sm font-medium"
+          className="flex items-center space-x-2 text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 text-sm font-medium"
         >
           <svg
             className={`h-4 w-4 transform transition-transform ${showDocumentation ? 'rotate-90' : ''}`}
@@ -299,8 +301,8 @@ const AssetManager = ({ t }) => {
         </button>
 
         {showDocumentation && (
-          <div className="mt-3 bg-blue-50 border border-blue-200 rounded-lg p-6">
-            <div className="space-y-3 text-sm text-blue-800">
+          <div className="mt-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-6">
+            <div className="space-y-3 text-sm text-blue-800 dark:text-blue-300">
               <div>
                 <h5 className="font-medium">
                   {t('admin.ui.assets.usage.headerLogo', '1. Header Logo:')}
@@ -332,7 +334,7 @@ const AssetManager = ({ t }) => {
                   )}
                 </p>
               </div>
-              <div className="mt-3 p-3 bg-blue-100 rounded">
+              <div className="mt-3 p-3 bg-blue-100 dark:bg-blue-900/50 rounded">
                 <p className="font-mono text-xs">
                   {t(
                     'admin.ui.assets.usage.example',
@@ -349,10 +351,10 @@ const AssetManager = ({ t }) => {
       <div className="space-y-4">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h4 className="text-md font-medium text-gray-900">
+            <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
               {t('admin.ui.assets.uploaded', 'Uploaded Assets')} ({assets.length})
             </h4>
-            <p className="mt-1 text-sm text-gray-700">
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-400">
               {t(
                 'admin.ui.assets.description',
                 'Manage your uploaded assets and copy their URLs for use in your application'
@@ -380,9 +382,9 @@ const AssetManager = ({ t }) => {
         </div>
 
         {assets.length === 0 ? (
-          <div className="text-center py-12 bg-gray-50 rounded-lg">
+          <div className="text-center py-12 bg-gray-50 dark:bg-gray-800 rounded-lg">
             <svg
-              className="mx-auto h-12 w-12 text-gray-400"
+              className="mx-auto h-12 w-12 text-gray-400 dark:text-gray-500"
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -394,47 +396,47 @@ const AssetManager = ({ t }) => {
                 d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
               />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {t('admin.ui.assets.noAssets', 'No assets uploaded yet')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t('admin.ui.assets.uploadFirst', 'Upload your first asset above to get started')}
             </p>
           </div>
         ) : (
           <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                <table className="min-w-full divide-y divide-gray-300">
-                  <thead className="bg-gray-50">
+              <div className="overflow-hidden shadow ring-1 ring-black dark:ring-gray-700 ring-opacity-5 md:rounded-lg">
+                <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.ui.assets.filename', 'Filename')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.ui.assets.type', 'Type')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.ui.assets.size', 'Size')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.ui.assets.url', 'URL')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.ui.assets.uploaded', 'Uploaded')}
                       </th>
@@ -443,29 +445,29 @@ const AssetManager = ({ t }) => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                     {assets.map(asset => {
                       return (
-                        <tr key={asset.id} className="hover:bg-gray-50">
+                        <tr key={asset.id} className="hover:bg-gray-50 dark:hover:bg-gray-800">
                           <td className="px-6 py-4">
                             <div className="flex items-center space-x-3">
                               <span className="text-lg">{getFileIcon(asset.mimetype)}</span>
                               <div className="min-w-0">
-                                <div className="text-sm font-medium text-gray-900 truncate max-w-xs">
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate max-w-xs">
                                   {asset.originalName}
                                 </div>
-                                <div className="text-xs text-gray-500 font-mono truncate max-w-xs">
+                                <div className="text-xs text-gray-500 dark:text-gray-400 font-mono truncate max-w-xs">
                                   {asset.filename}
                                 </div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
+                            <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200">
                               {asset.assetType || 'general'}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {formatFileSize(asset.size)}
                           </td>
                           <td className="px-6 py-4">
@@ -474,11 +476,11 @@ const AssetManager = ({ t }) => {
                                 type="text"
                                 value={asset.publicUrl}
                                 readOnly
-                                className="flex-1 text-xs bg-gray-50 border border-gray-300 rounded px-2 py-1 font-mono min-w-0"
+                                className="flex-1 text-xs bg-gray-50 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded px-2 py-1 font-mono min-w-0 text-gray-900 dark:text-gray-100"
                               />
                               <button
                                 onClick={() => copyToClipboard(asset.publicUrl)}
-                                className="flex-shrink-0 inline-flex items-center px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="flex-shrink-0 inline-flex items-center px-2 py-1 text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 title={t('admin.ui.assets.copyUrl', 'Copy URL')}
                               >
                                 <svg
@@ -497,13 +499,13 @@ const AssetManager = ({ t }) => {
                               </button>
                             </div>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                             {new Date(asset.uploadedAt).toLocaleDateString()}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <button
                               onClick={() => handleDeleteAsset(asset.id)}
-                              className="text-red-600 hover:text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 rounded p-1"
+                              className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300 focus:outline-none focus:ring-2 focus:ring-red-500 rounded p-1"
                               title={t('admin.ui.assets.delete', 'Delete asset')}
                             >
                               <svg

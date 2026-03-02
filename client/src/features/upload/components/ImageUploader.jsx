@@ -234,8 +234,8 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
                 disabled={disabled || isProcessing}
                 className={`flex items-center justify-center w-full p-3 border-2 border-dashed rounded-lg ${
                   disabled || isProcessing
-                    ? 'border-gray-300 bg-gray-100 text-gray-400 cursor-not-allowed'
-                    : 'border-gray-400 hover:border-indigo-500 hover:text-indigo-500'
+                    ? 'border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                    : 'border-gray-400 dark:border-gray-500 hover:border-indigo-500 dark:hover:border-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-400 bg-white dark:bg-gray-800'
                 }`}
               >
                 <Icon name="camera" className="mr-2" />
@@ -244,7 +244,7 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
 
               {error && <div className="text-red-500 text-sm mt-1">{getErrorMessage(error)}</div>}
 
-              <div className="text-xs text-gray-500 mt-1 text-center">
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-center">
                 {t(
                   'components.imageUploader.supportedFormats',
                   'Supported: JPG, PNG, GIF, WebP (max {{maxSize}}MB)',

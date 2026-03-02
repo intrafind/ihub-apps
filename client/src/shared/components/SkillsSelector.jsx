@@ -117,12 +117,12 @@ const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
             return (
               <span
                 key={skillName}
-                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 text-indigo-800"
+                className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-sm font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300"
               >
                 {displayName}
                 <button
                   onClick={() => handleRemoveSkill(skillName)}
-                  className="ml-1 flex-shrink-0 text-indigo-600 hover:text-indigo-800"
+                  className="ml-1 flex-shrink-0 text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300"
                   aria-label={`Remove ${displayName}`}
                 >
                   <Icon name="x" className="w-3 h-3" />
@@ -137,7 +137,7 @@ const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
       <div className="relative" ref={dropdownRef}>
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon name="search" className="h-5 w-5 text-gray-400" />
+            <Icon name="search" className="h-5 w-5 text-gray-400 dark:text-gray-500" />
           </div>
           <input
             ref={searchInputRef}
@@ -147,16 +147,16 @@ const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
             onChange={handleSearchChange}
             onKeyDown={handleSearchKeyDown}
             onFocus={() => setIsDropdownOpen(true)}
-            className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
             autoComplete="off"
           />
         </div>
 
         {/* Dropdown */}
         {isDropdownOpen && (
-          <div className="absolute z-10 mt-1 w-full bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-auto">
+          <div className="absolute z-10 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg shadow-lg max-h-60 overflow-auto">
             {isLoading ? (
-              <div className="px-3 py-2 text-sm text-gray-500">
+              <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                 {t('common.loading', 'Loading...')}
               </div>
             ) : filteredSkills.length > 0 ? (
@@ -164,18 +164,18 @@ const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
                 <button
                   key={skill.name}
                   onClick={() => handleAddSkill(skill)}
-                  className="w-full text-left px-3 py-3 text-sm text-gray-700 hover:bg-gray-100 focus:bg-gray-100 focus:outline-none border-b border-gray-100 last:border-b-0"
+                  className="w-full text-left px-3 py-3 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 focus:bg-gray-100 dark:focus:bg-gray-700 focus:outline-none border-b border-gray-100 dark:border-gray-700 last:border-b-0"
                 >
-                  <div className="font-medium text-gray-900">{skill.name}</div>
+                  <div className="font-medium text-gray-900 dark:text-gray-100">{skill.name}</div>
                   {skill.description && (
-                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-2">
                       {skill.description}
                     </div>
                   )}
                 </button>
               ))
             ) : (
-              <div className="px-3 py-2 text-sm text-gray-500">
+              <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
                 {searchTerm
                   ? t('admin.apps.edit.skills.noResults', 'No skills match your search')
                   : t('admin.apps.edit.skills.noSkills', 'No skills available')}
@@ -186,7 +186,7 @@ const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
       </div>
 
       {/* Helper text */}
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-gray-500 dark:text-gray-400">
         {t(
           'admin.apps.edit.skillsHelper',
           'Search and select skills to add to this app. Click on selected skills to remove them.'

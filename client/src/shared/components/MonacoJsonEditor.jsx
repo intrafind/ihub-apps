@@ -197,16 +197,19 @@ const MonacoJsonEditor = ({
   return (
     <div className={`monaco-json-editor ${className}`}>
       {/* Editor Toolbar */}
-      <div className="flex items-center justify-between p-2 bg-gray-50 border-b border-gray-200 rounded-t-md">
+      <div className="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 rounded-t-md">
         <div className="flex items-center space-x-2">
-          <Icon name="document-text" className="h-4 w-4 text-gray-500" />
-          <span className="text-sm font-medium text-gray-700">
+          <Icon name="document-text" className="h-4 w-4 text-gray-500 dark:text-gray-400" />
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
             {t('admin.editor.jsonEditor', 'JSON Editor')}
           </span>
           {!isValidJson && (
             <div className="flex items-center space-x-1">
-              <Icon name="exclamation-triangle" className="h-4 w-4 text-red-500" />
-              <span className="text-sm text-red-600">
+              <Icon
+                name="exclamation-triangle"
+                className="h-4 w-4 text-red-500 dark:text-red-400"
+              />
+              <span className="text-sm text-red-600 dark:text-red-400">
                 {t('admin.editor.invalidJson', 'Invalid JSON')}
               </span>
             </div>
@@ -218,7 +221,7 @@ const MonacoJsonEditor = ({
             type="button"
             onClick={formatJson}
             disabled={readOnly}
-            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
             title={t('admin.editor.formatJson', 'Format JSON')}
           >
             <Icon name="sparkles" className="h-3 w-3 mr-1" />
@@ -228,7 +231,7 @@ const MonacoJsonEditor = ({
           <button
             type="button"
             onClick={validateJson}
-            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center px-2 py-1 text-xs font-medium rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600"
             title={t('admin.editor.validateJson', 'Validate JSON')}
           >
             <Icon name="check-circle" className="h-3 w-3 mr-1" />
@@ -238,7 +241,7 @@ const MonacoJsonEditor = ({
       </div>
 
       {/* Monaco Editor */}
-      <div className="border border-gray-300 rounded-b-md overflow-hidden">
+      <div className="border border-gray-300 dark:border-gray-600 rounded-b-md overflow-hidden">
         <Editor
           height={height}
           language="json"
@@ -269,9 +272,9 @@ const MonacoJsonEditor = ({
             }
           }}
           loading={
-            <div className="flex items-center justify-center h-full">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-              <span className="ml-2 text-gray-600">
+            <div className="flex items-center justify-center h-full bg-white dark:bg-gray-800">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+              <span className="ml-2 text-gray-600 dark:text-gray-400">
                 {t('admin.editor.loadingEditor', 'Loading editor...')}
               </span>
             </div>
@@ -281,14 +284,17 @@ const MonacoJsonEditor = ({
 
       {/* Validation Errors Display */}
       {validationErrors.length > 0 && (
-        <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-md">
+        <div className="mt-2 p-3 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md">
           <div className="flex items-start">
-            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400 mt-0.5" />
+            <Icon
+              name="exclamation-triangle"
+              className="h-5 w-5 text-red-400 dark:text-red-500 mt-0.5"
+            />
             <div className="ml-2">
-              <h4 className="text-sm font-medium text-red-800">
+              <h4 className="text-sm font-medium text-red-800 dark:text-red-300">
                 {t('admin.editor.validationErrors', 'Validation Errors')}
               </h4>
-              <div className="mt-1 text-sm text-red-700">
+              <div className="mt-1 text-sm text-red-700 dark:text-red-400">
                 <ul className="list-disc list-inside space-y-1">
                   {validationErrors.map((error, index) => (
                     <li key={index}>

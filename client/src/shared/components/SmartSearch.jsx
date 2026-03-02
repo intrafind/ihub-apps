@@ -66,12 +66,15 @@ const SmartSearch = () => {
       placeholder={t('smartSearch.placeholder', 'Search apps...')}
       renderResult={app => (
         <div className="flex items-start space-x-3">
-          <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-lg flex items-center justify-center">
-            <Icon name={app.icon || 'lightning-bolt'} className="w-3.5 h-3.5 text-indigo-600" />
+          <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 dark:bg-indigo-900/50 rounded-lg flex items-center justify-center">
+            <Icon
+              name={app.icon || 'lightning-bolt'}
+              className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400"
+            />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center flex-wrap mb-1">
-              <span className="font-medium text-gray-900 text-sm mr-1">
+              <span className="font-medium text-gray-900 dark:text-gray-100 text-sm mr-1">
                 {getLocalizedContent(app.name, currentLanguage) || app.id}
               </span>
               {favoriteApps.includes(app.id) && (
@@ -89,12 +92,17 @@ const SmartSearch = () => {
                   aria-label={t('common.recent', 'Recent')}
                   title={t('common.recent', 'Recent')}
                 >
-                  <Icon name="clock" size="sm" className="text-indigo-600" solid={true} />
+                  <Icon
+                    name="clock"
+                    size="sm"
+                    className="text-indigo-600 dark:text-indigo-400"
+                    solid={true}
+                  />
                 </span>
               )}
             </div>
             <p
-              className="text-xs text-gray-500 leading-4 overflow-hidden"
+              className="text-xs text-gray-500 dark:text-gray-400 leading-4 overflow-hidden"
               style={{
                 display: '-webkit-box',
                 WebkitLineClamp: 2,

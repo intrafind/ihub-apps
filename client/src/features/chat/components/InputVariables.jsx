@@ -14,7 +14,7 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
     <div className={`space-y-3 ${className}`}>
       {localizedVariables.map(variable => (
         <div key={variable.name} className="flex flex-col">
-          <label className="mb-1 text-sm font-medium text-gray-700">
+          <label className="mb-1 text-sm font-medium text-gray-700 dark:text-gray-300">
             {variable.localizedLabel}
             {variable.required && <span className="text-red-500 ml-1">*</span>}
           </label>
@@ -27,7 +27,7 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
                   [variable.name]: e.target.value
                 })
               }
-              className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
               required={variable.required}
             >
               <option value="">
@@ -52,7 +52,7 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
                 })
               }
               rows={4}
-              className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
                 variable.localizedPlaceholder ||
                 t('variables.enterLabel', { label: variable.localizedLabel })
@@ -72,7 +72,7 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
                   [variable.name]: e.target.value
                 })
               }
-              className="p-2 border rounded focus:ring-indigo-500 focus:border-indigo-500"
+              className="p-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 rounded focus:ring-indigo-500 focus:border-indigo-500"
               placeholder={
                 variable.localizedPlaceholder ||
                 t('variables.enterLabel', { label: variable.localizedLabel })
@@ -81,7 +81,9 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
             />
           )}
           {variable.localizedDescription && (
-            <p className="mt-1 text-xs text-gray-500">{variable.localizedDescription}</p>
+            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+              {variable.localizedDescription}
+            </p>
           )}
         </div>
       ))}

@@ -45,9 +45,22 @@
   border-bottom-left-radius: 4px;
 }
 
+/* Dark mode: Assistant message styling */
+[data-theme='dark'] .chat-widget-message.assistant .chat-widget-message-content {
+  background-color: #374151; /* gray-700 */
+  color: #e5e7eb; /* gray-200 */
+  border-color: #4b5563; /* gray-600 */
+}
+
 /* Error message styling */
 .chat-widget-message-content.error {
   background-color: #fee2e2;
   color: #b91c1c;
   border-radius: 12px;
+}
+
+/* Dark mode: Error message styling */
+[data-theme='dark'] .chat-widget-message-content.error {
+  background-color: #7f1d1d; /* red-900 */
+  color: #fecaca; /* red-200 */
 }

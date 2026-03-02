@@ -126,6 +126,33 @@ export const UIConfigProvider = ({ children }) => {
     }
   }, [uiConfig?.customStyles?.css]);
 
+  // Inject theme CSS link for CSS custom properties
+  useEffect(() => {
+    // Create or update the theme CSS link
+    let themeLink = document.getElementById('ih-theme-css');
+    if (!themeLink) {
+      themeLink = document.createElement('link');
+      themeLink.id = 'ih-theme-css';
+      themeLink.rel = 'stylesheet';
+      // Insert at the beginning of head to ensure Tailwind can override if needed
+      const firstStylesheet = document.head.querySelector('link[rel="stylesheet"], style');
+      if (firstStylesheet) {
+        document.head.insertBefore(themeLink, firstStylesheet);
+      } else {
+        document.head.appendChild(themeLink);
+      }
+    }
+
+    // Set href with cache-busting timestamp when config changes
+    const timestamp = Date.now();
+    themeLink.href = buildPath(`/api/theme.css?v=${timestamp}`);
+
+    return () => {
+      // Cleanup on unmount
+      document.getElementById('ih-theme-css')?.remove();
+    };
+  }, [uiConfig?.theme, uiConfig?.customStyles?.css]);
+
   const resetHeaderColor = () => {
     setHeaderColor(defaultHeaderColor);
   };

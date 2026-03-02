@@ -482,7 +482,7 @@ const AppsList = () => {
             ? getLocalizedContent(uiConfig.appsList.title, currentLanguage)
             : t('pages.appsList.title')}
         </h1>
-        <p className="text-gray-600">
+        <p className="text-gray-600 dark:text-gray-400">
           {uiConfig?.appsList?.subtitle
             ? getLocalizedContent(uiConfig.appsList.subtitle, currentLanguage)
             : t('pages.appsList.subtitle')}
@@ -508,7 +508,7 @@ const AppsList = () => {
               }
               value={searchTerm}
               onChange={handleSearchChange}
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               autoComplete="off"
               data-lpignore="true"
               data-1p-ignore="true"
@@ -526,7 +526,7 @@ const AppsList = () => {
           {sortConfig.enabled && (
             <div className="flex-shrink-0">
               <select
-                className="h-full border rounded-lg py-2 px-3 w-full sm:w-auto"
+                className="h-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
                 onChange={e => setSortMethod(e.target.value)}
               >
@@ -549,7 +549,7 @@ const AppsList = () => {
               className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                 selectedCategory === category.id
                   ? 'text-white shadow-lg transform scale-105'
-                  : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+                  : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700'
               }`}
               style={{
                 backgroundColor: selectedCategory === category.id ? category.color : undefined
@@ -563,7 +563,7 @@ const AppsList = () => {
 
       {displayedApps.length === 0 ? (
         <div className="text-center py-8">
-          <p className="text-gray-500">{t('pages.appsList.noApps')}</p>
+          <p className="text-gray-500 dark:text-gray-400">{t('pages.appsList.noApps')}</p>
           {searchConfig.enabled && apps.length > 3 && searchTerm ? (
             <button
               onClick={() => {
@@ -593,12 +593,12 @@ const AppsList = () => {
               {displayedApps.map(app => (
                 <div
                   key={app.id}
-                  className="relative bg-white rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
+                  className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
                   role="listitem"
                 >
                   <button
                     onClick={e => handleToggleFavorite(e, app.id)}
-                    className="absolute top-2 right-2 z-10 p-1 bg-white bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
+                    className="absolute top-2 right-2 z-10 p-1 bg-white dark:bg-gray-700 bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
                     title={
                       favoriteApps.includes(app.id)
                         ? t('pages.appsList.unfavorite')
@@ -674,7 +674,7 @@ const AppsList = () => {
                             </span>
                           )}
                         </h3>
-                        <p className="text-gray-600 text-sm flex-grow">
+                        <p className="text-gray-600 dark:text-gray-400 text-sm flex-grow">
                           {getLocalizedContent(app.description, currentLanguage) || ''}
                         </p>
                       </div>
@@ -690,11 +690,11 @@ const AppsList = () => {
             <div className="text-center mt-6">
               <button
                 onClick={handleLoadMore}
-                className="bg-white hover:bg-gray-50 text-indigo-600 font-medium py-2 px-4 border border-indigo-500 rounded shadow-sm transition-colors"
+                className="bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-indigo-600 dark:text-indigo-400 font-medium py-2 px-4 border border-indigo-500 rounded shadow-sm transition-colors"
               >
                 {t('pages.appsList.loadMore', 'Load More')}
               </button>
-              <p className="text-gray-500 text-sm mt-2">
+              <p className="text-gray-500 dark:text-gray-400 text-sm mt-2">
                 {t('pages.appsList.showingCountOfTotal', {
                   defaultValue: 'Showing {{displayed}} of {{total}} apps',
                   displayed: displayedApps.length,

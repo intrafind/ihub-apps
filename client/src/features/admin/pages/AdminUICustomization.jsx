@@ -125,10 +125,10 @@ const AdminUICustomization = () => {
     return (
       <AdminAuth>
         <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <div className="text-center">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600">
+            <p className="mt-2 text-gray-600 dark:text-gray-400">
               {t('admin.ui.loading', 'Loading UI configuration...')}
             </p>
           </div>
@@ -141,9 +141,9 @@ const AdminUICustomization = () => {
     return (
       <AdminAuth>
         <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <div className="text-center">
-            <p className="text-red-600">
+            <p className="text-red-600 dark:text-red-400">
               {error || t('admin.ui.error', 'Failed to load configuration')}
             </p>
           </div>
@@ -155,16 +155,16 @@ const AdminUICustomization = () => {
   return (
     <AdminAuth>
       <AdminNavigation />
-      <div className="min-h-screen bg-gray-50">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
-        <div className="bg-white shadow-sm border-b border-gray-200">
+        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <div className="sm:flex sm:items-center sm:justify-between">
               <div>
-                <h1 className="text-3xl font-bold text-gray-900">
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                   {t('admin.ui.title', 'UI Customization')}
                 </h1>
-                <p className="text-gray-600 mt-1">
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   {t(
                     'admin.ui.description',
                     'Customize the appearance and branding of your iHub Apps'
@@ -174,7 +174,7 @@ const AdminUICustomization = () => {
               <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
                 <button
                   onClick={handleBackup}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
                   {t('admin.ui.backup', 'Backup Config')}
                 </button>
@@ -196,7 +196,7 @@ const AdminUICustomization = () => {
 
         {/* Status Messages */}
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mx-4 mt-4">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4 mx-4 mt-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
@@ -208,12 +208,12 @@ const AdminUICustomization = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-red-800">{error}</p>
+                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
               </div>
               <div className="ml-auto pl-3">
                 <button
                   onClick={() => setError(null)}
-                  className="inline-flex text-red-400 hover:text-red-600"
+                  className="inline-flex text-red-400 hover:text-red-600 dark:hover:text-red-300"
                 >
                   <span className="sr-only">Dismiss</span>
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -230,7 +230,7 @@ const AdminUICustomization = () => {
         )}
 
         {successMessage && (
-          <div className="bg-green-50 border border-green-200 rounded-md p-4 mx-4 mt-4">
+          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 mx-4 mt-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
@@ -242,12 +242,12 @@ const AdminUICustomization = () => {
                 </svg>
               </div>
               <div className="ml-3">
-                <p className="text-sm text-green-800">{successMessage}</p>
+                <p className="text-sm text-green-800 dark:text-green-200">{successMessage}</p>
               </div>
               <div className="ml-auto pl-3">
                 <button
                   onClick={() => setSuccessMessage('')}
-                  className="inline-flex text-green-400 hover:text-green-600"
+                  className="inline-flex text-green-400 hover:text-green-600 dark:hover:text-green-300"
                 >
                   <span className="sr-only">Dismiss</span>
                   <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
@@ -266,7 +266,7 @@ const AdminUICustomization = () => {
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Tab Navigation */}
-          <div className="border-b border-gray-200 mb-8">
+          <div className="border-b border-gray-200 dark:border-gray-700 mb-8">
             <nav className="flex space-x-8" aria-label="Tabs">
               {tabs.map(tab => (
                 <button
@@ -274,8 +274,8 @@ const AdminUICustomization = () => {
                   onClick={() => setActiveTab(tab.id)}
                   className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                     activeTab === tab.id
-                      ? 'border-indigo-500 text-indigo-600'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
                   <span>{tab.icon}</span>
@@ -286,7 +286,7 @@ const AdminUICustomization = () => {
           </div>
 
           {/* Tab Content */}
-          <div className="bg-white rounded-lg shadow">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
             {activeTab === 'header' && (
               <HeaderCustomization
                 config={config.header || {}}

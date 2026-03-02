@@ -30,12 +30,12 @@ const ContentEditor = ({ config, onUpdate }) => {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-6">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.content.title', 'Content Management')}
       </h3>
 
       {/* Section Tabs */}
-      <div className="border-b border-gray-200 mb-6">
+      <div className="border-b border-gray-200 dark:border-gray-700 mb-6">
         <nav className="flex space-x-8" aria-label="Tabs">
           {[
             { id: 'title', label: t('admin.ui.content.siteTitle', 'Site Title'), icon: '📝' },
@@ -47,8 +47,8 @@ const ContentEditor = ({ config, onUpdate }) => {
               onClick={() => setActiveSection(section.id)}
               className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
                 activeSection === section.id
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
               }`}
             >
               <span>{section.icon}</span>
@@ -61,7 +61,7 @@ const ContentEditor = ({ config, onUpdate }) => {
       {/* Site Title Section */}
       {activeSection === 'title' && (
         <div className="space-y-6">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {t(
               'admin.ui.content.titleDescription',
               'Configure the main site title displayed in the browser tab and header.'
@@ -81,7 +81,7 @@ const ContentEditor = ({ config, onUpdate }) => {
                 fr: 'Site title (fr)'
               }}
             />
-            <p className="mt-2 text-sm text-gray-500">
+            <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
               {t(
                 'admin.ui.content.titleHint',
                 'This title appears in the browser tab and header. Leave empty to use default.'
@@ -90,12 +90,12 @@ const ContentEditor = ({ config, onUpdate }) => {
           </div>
 
           {/* Title Preview */}
-          <div className="p-4 bg-gray-50 border border-gray-200 rounded-md">
-            <h4 className="text-sm font-medium text-gray-900 mb-2">
+          <div className="p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
               {t('admin.ui.content.preview', 'Preview')}
             </h4>
-            <div className="bg-white p-3 rounded border">
-              <div className="flex items-center space-x-2 text-gray-600 text-sm">
+            <div className="bg-white dark:bg-gray-700 p-3 rounded border dark:border-gray-600">
+              <div className="flex items-center space-x-2 text-gray-600 dark:text-gray-400 text-sm">
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
                     strokeLinecap="round"
@@ -114,7 +114,7 @@ const ContentEditor = ({ config, onUpdate }) => {
       {/* Disclaimer Section */}
       {activeSection === 'disclaimer' && (
         <div className="space-y-6">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {t(
               'admin.ui.content.disclaimerDescription',
               'Configure the disclaimer popup that appears when users first visit the site.'
@@ -128,13 +128,13 @@ const ContentEditor = ({ config, onUpdate }) => {
                 type="checkbox"
                 checked={config.disclaimer?.enabled !== false}
                 onChange={e => updateDisclaimer({ enabled: e.target.checked })}
-                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
               />
-              <label className="ml-2 block text-sm text-gray-900">
+              <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                 {t('admin.ui.content.disclaimerEnabled', 'Enable Disclaimer Popup')}
               </label>
             </div>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t(
                 'admin.ui.content.disclaimerEnabledHint',
                 'Show disclaimer popup to first-time visitors'
@@ -174,7 +174,7 @@ const ContentEditor = ({ config, onUpdate }) => {
                     fr: 'Disclaimer content (fr)'
                   }}
                 />
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.ui.content.disclaimerTextHint',
                     'This text appears in the disclaimer popup. HTML tags are allowed for formatting.'
@@ -184,7 +184,7 @@ const ContentEditor = ({ config, onUpdate }) => {
 
               {/* Disclaimer Version */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('admin.ui.content.disclaimerVersion', 'Disclaimer Version')}
                 </label>
                 <input
@@ -192,9 +192,9 @@ const ContentEditor = ({ config, onUpdate }) => {
                   value={config.disclaimer?.version || ''}
                   onChange={e => updateDisclaimer({ version: e.target.value })}
                   placeholder="1.0"
-                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.ui.content.disclaimerVersionHint',
                     'Update this to show the disclaimer again to users who have already seen it'
@@ -204,16 +204,16 @@ const ContentEditor = ({ config, onUpdate }) => {
 
               {/* Last Updated */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   {t('admin.ui.content.disclaimerUpdated', 'Last Updated')}
                 </label>
                 <input
                   type="date"
                   value={config.disclaimer?.updated || ''}
                   onChange={e => updateDisclaimer({ updated: e.target.value })}
-                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                  className="block w-full max-w-xs px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                 />
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.ui.content.disclaimerUpdatedHint',
                     'Date when the disclaimer was last updated'
@@ -228,7 +228,7 @@ const ContentEditor = ({ config, onUpdate }) => {
       {/* Page Content Section */}
       {activeSection === 'pages' && (
         <div className="space-y-6">
-          <p className="text-sm text-gray-600">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {t(
               'admin.ui.content.pagesDescription',
               'Configure content for main application pages like the apps list.'
@@ -236,8 +236,8 @@ const ContentEditor = ({ config, onUpdate }) => {
           </p>
 
           {/* Apps List Page */}
-          <div className="border border-gray-200 rounded-lg p-4">
-            <h4 className="text-md font-medium text-gray-900 mb-4">
+          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+            <h4 className="text-md font-medium text-gray-900 dark:text-gray-100 mb-4">
               {t('admin.ui.content.appsListPage', 'Apps List Page')}
             </h4>
 
@@ -285,9 +285,9 @@ const ContentEditor = ({ config, onUpdate }) => {
                         search: { ...config.appsList?.search, enabled: e.target.checked }
                       })
                     }
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="ml-2 text-sm text-gray-900">
+                  <span className="ml-2 text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.ui.content.enableSearch', 'Enable Search')}
                   </span>
                 </label>
@@ -303,9 +303,9 @@ const ContentEditor = ({ config, onUpdate }) => {
                         categories: { ...config.appsList?.categories, enabled: e.target.checked }
                       })
                     }
-                    className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                    className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                   />
-                  <span className="ml-2 text-sm text-gray-900">
+                  <span className="ml-2 text-sm text-gray-900 dark:text-gray-100">
                     {t('admin.ui.content.enableCategories', 'Enable Categories')}
                   </span>
                 </label>

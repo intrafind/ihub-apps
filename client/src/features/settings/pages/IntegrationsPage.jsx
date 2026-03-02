@@ -253,26 +253,32 @@ const IntegrationsPage = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <Icon name="lock" className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
-          <p className="text-gray-600">Please log in to manage your integrations.</p>
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            Authentication Required
+          </h2>
+          <p className="text-gray-600 dark:text-gray-400">
+            Please log in to manage your integrations.
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-6">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 py-6">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="bg-white shadow rounded-lg">
+        <div className="bg-white dark:bg-gray-800 shadow rounded-lg">
           {/* Header */}
-          <div className="px-6 py-4 border-b border-gray-200">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <div className="flex items-center justify-between">
               <div>
-                <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
-                <p className="text-gray-600 mt-1">
+                <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                  Integrations
+                </h1>
+                <p className="text-gray-600 dark:text-gray-400 mt-1">
                   Connect your external accounts to enhance your AI applications
                 </p>
               </div>
@@ -320,13 +326,15 @@ const IntegrationsPage = () => {
             {loading ? (
               <div className="flex items-center justify-center py-8">
                 <Icon name="spinner" className="w-8 h-8 animate-spin text-blue-600" />
-                <span className="ml-3 text-gray-600">Loading integrations...</span>
+                <span className="ml-3 text-gray-600 dark:text-gray-400">
+                  Loading integrations...
+                </span>
               </div>
             ) : (
               <div className="space-y-6">
                 {/* JIRA Integration — only shown when Jira is configured server-side */}
                 {jiraEnabled && (
-                  <div className="border border-gray-200 rounded-lg p-6">
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
                     <div className="flex items-start space-x-4">
                       <div className="flex-shrink-0">
                         <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
@@ -337,8 +345,10 @@ const IntegrationsPage = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900">JIRA</h3>
-                            <p className="text-gray-600 text-sm">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                              JIRA
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400 text-sm">
                               Atlassian JIRA integration for ticket management and project insights
                             </p>
                           </div>
@@ -347,8 +357,8 @@ const IntegrationsPage = () => {
                             <span
                               className={`px-3 py-1 text-xs font-medium rounded-full ${
                                 integrations.jira?.connected
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
+                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                               }`}
                             >
                               {integrations.jira?.connected ? 'Connected' : 'Not Connected'}
@@ -357,13 +367,13 @@ const IntegrationsPage = () => {
                         </div>
 
                         {integrations.jira?.connected && integrations.jira.userInfo && (
-                          <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                            <div className="flex items-center text-sm text-gray-700">
+                          <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md">
+                            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
                               <Icon name="user" className="w-4 h-4 mr-2" />
                               <span className="font-medium">
                                 {integrations.jira.userInfo.displayName}
                               </span>
-                              <span className="ml-2 text-gray-500">
+                              <span className="ml-2 text-gray-500 dark:text-gray-400">
                                 ({integrations.jira.userInfo.emailAddress})
                               </span>
                             </div>
@@ -401,10 +411,10 @@ const IntegrationsPage = () => {
 
                         {integrations.jira?.connected && (
                           <div className="mt-3">
-                            <h4 className="text-sm font-medium text-gray-900 mb-2">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
                               Available Features:
                             </h4>
-                            <ul className="text-sm text-gray-700 space-y-1">
+                            <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
                               <li className="flex items-center">
                                 <Icon
                                   name="check"
@@ -443,7 +453,10 @@ const IntegrationsPage = () => {
 
                 {/* Cloud Storage Integrations */}
                 {cloudProviders.map(provider => (
-                  <div key={provider.id} className="border border-gray-200 rounded-lg p-6">
+                  <div
+                    key={provider.id}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-6"
+                  >
                     <div className="flex items-start space-x-4">
                       <div className="flex-shrink-0">
                         <div className="w-12 h-12 bg-gradient-to-br from-purple-600 to-teal-500 rounded-lg flex items-center justify-center">
@@ -454,10 +467,10 @@ const IntegrationsPage = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                               {provider.displayName}
                             </h3>
-                            <p className="text-gray-600 text-sm">
+                            <p className="text-gray-600 dark:text-gray-400 text-sm">
                               {provider.type === 'office365'
                                 ? 'Microsoft Office 365 integration for cloud file access'
                                 : 'Google Drive integration for cloud file access'}
@@ -468,8 +481,8 @@ const IntegrationsPage = () => {
                             <span
                               className={`px-3 py-1 text-xs font-medium rounded-full ${
                                 integrations[provider.id]?.connected
-                                  ? 'bg-green-100 text-green-800'
-                                  : 'bg-gray-100 text-gray-800'
+                                  ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
                               }`}
                             >
                               {integrations[provider.id]?.connected ? 'Connected' : 'Not Connected'}
@@ -479,13 +492,13 @@ const IntegrationsPage = () => {
 
                         {integrations[provider.id]?.connected &&
                           integrations[provider.id].userInfo && (
-                            <div className="mt-3 p-3 bg-gray-50 rounded-md">
-                              <div className="flex items-center text-sm text-gray-700">
+                            <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-900/50 rounded-md">
+                              <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
                                 <Icon name="user" className="w-4 h-4 mr-2" />
                                 <span className="font-medium">
                                   {integrations[provider.id].userInfo.displayName}
                                 </span>
-                                <span className="ml-2 text-gray-500">
+                                <span className="ml-2 text-gray-500 dark:text-gray-400">
                                   (
                                   {integrations[provider.id].userInfo.mail ||
                                     integrations[provider.id].userInfo.emailAddress}
@@ -493,7 +506,7 @@ const IntegrationsPage = () => {
                                 </span>
                               </div>
                               {integrations[provider.id].tokenInfo?.isExpiring && (
-                                <div className="mt-2 flex items-center text-sm text-amber-600">
+                                <div className="mt-2 flex items-center text-sm text-amber-600 dark:text-amber-400">
                                   <Icon name="exclamationTriangle" className="w-4 h-4 mr-2" />
                                   <span>Token expires soon - consider reconnecting</span>
                                 </div>
@@ -523,10 +536,10 @@ const IntegrationsPage = () => {
 
                         {integrations[provider.id]?.connected && (
                           <div className="mt-3">
-                            <h4 className="text-sm font-medium text-gray-900 mb-2">
+                            <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
                               Available Features:
                             </h4>
-                            <ul className="text-sm text-gray-700 space-y-1">
+                            <ul className="text-sm text-gray-700 dark:text-gray-300 space-y-1">
                               <li className="flex items-center">
                                 <Icon
                                   name="check"
@@ -560,12 +573,12 @@ const IntegrationsPage = () => {
 
                 {/* Empty state when no integrations are configured */}
                 {!jiraEnabled && cloudProviders.length === 0 && (
-                  <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <h3 className="text-lg font-medium text-gray-500 mb-1">
+                    <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
                       No Integrations Configured
                     </h3>
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 dark:text-gray-500 text-sm">
                       Contact your administrator to enable external integrations.
                     </p>
                   </div>
@@ -573,12 +586,12 @@ const IntegrationsPage = () => {
 
                 {/* Placeholder for future integrations */}
                 {(jiraEnabled || cloudProviders.length > 0) && (
-                  <div className="border border-dashed border-gray-300 rounded-lg p-6 text-center">
+                  <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <h3 className="text-lg font-medium text-gray-500 mb-1">
+                    <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
                       More Integrations Coming Soon
                     </h3>
-                    <p className="text-gray-400 text-sm">
+                    <p className="text-gray-400 dark:text-gray-500 text-sm">
                       We're working on adding more integrations to enhance your AI applications
                     </p>
                   </div>

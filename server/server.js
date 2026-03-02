@@ -30,6 +30,7 @@ import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
+import registerThemeRoutes from './routes/themeRoutes.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import office365Routes from './routes/integrations/office365.js';
 import { setDefaultLanguage } from '../shared/localize.js';
@@ -283,6 +284,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // PWA routes (manifest + SW) must be registered before static file serving
   // so the extension guard in staticRoutes does not 404 them
   registerPwaRoutes(app);
+  registerThemeRoutes(app);
 
   // Register static file and SPA routes after API routes
   registerStaticRoutes(app, { isPackaged, rootDir, basePath });

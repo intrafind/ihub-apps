@@ -117,14 +117,14 @@ const UnifiedPage = () => {
             t: t, // Provide translation function
             navigate: navigate // Provide navigation function
           }}
-          className="prose prose-sm sm:prose lg:prose-lg mx-auto"
+          className="prose prose-sm sm:prose lg:prose-lg mx-auto dark:prose-invert"
         />
       );
     } else {
       // Default to markdown rendering
       const parsedContent = marked(pageContent || '');
       return (
-        <div className="prose prose-sm sm:prose lg:prose-lg mx-auto">
+        <div className="prose prose-sm sm:prose lg:prose-lg mx-auto dark:prose-invert">
           <div
             className="markdown-content"
             dangerouslySetInnerHTML={{ __html: parsedContent }}
@@ -134,7 +134,7 @@ const UnifiedPage = () => {
     }
   };
 
-  return <div className="container">{renderContent()}</div>;
+  return <div className="container text-gray-900 dark:text-gray-100">{renderContent()}</div>;
 };
 
 export default UnifiedPage;

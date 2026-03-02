@@ -128,13 +128,13 @@ const PromptFormEditor = ({
   return (
     <div className="space-y-8">
       {/* Basic Information */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.prompts.edit.basicInfo', 'Basic Information')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t('admin.prompts.edit.basicInfoDesc', 'Basic prompt identification and metadata')}
             </p>
           </div>
@@ -142,7 +142,10 @@ const PromptFormEditor = ({
             <div className="grid grid-cols-6 gap-6">
               {/* ID */}
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="id" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="id"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.prompts.edit.id', 'ID')}
                   {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
                 </label>
@@ -153,7 +156,7 @@ const PromptFormEditor = ({
                   onChange={e => handleChange('id', e.target.value)}
                   disabled={!isNewPrompt}
                   required={isFieldRequired('id', jsonSchema)}
-                  className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 ${
+                  className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                     validationErrors.id || errors.id
                       ? 'border-red-300 text-red-900 placeholder-red-300'
                       : ''
@@ -162,9 +165,11 @@ const PromptFormEditor = ({
                   autoComplete="off"
                 />
                 {(validationErrors.id || errors.id) && (
-                  <p className="mt-2 text-sm text-red-600">{validationErrors.id || errors.id}</p>
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.id || errors.id}
+                  </p>
                 )}
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.prompts.edit.idDesc',
                     'Unique identifier using lowercase letters, numbers, and hyphens'
@@ -174,7 +179,10 @@ const PromptFormEditor = ({
 
               {/* Icon */}
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="icon" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="icon"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.prompts.edit.icon', 'Icon')}
                 </label>
                 <input
@@ -182,21 +190,26 @@ const PromptFormEditor = ({
                   id="icon"
                   value={data.icon || ''}
                   onChange={e => handleChange('icon', e.target.value)}
-                  className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                  className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                     errors.icon ? 'border-red-300 text-red-900' : ''
                   }`}
                   placeholder="clipboard"
                   autoComplete="off"
                 />
-                {errors.icon && <p className="mt-2 text-sm text-red-600">{errors.icon}</p>}
-                <p className="mt-2 text-sm text-gray-500">
+                {errors.icon && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.icon}</p>
+                )}
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.prompts.edit.iconDesc', 'Heroicon name for the prompt')}
                 </p>
               </div>
 
               {/* Order */}
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="order" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="order"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.prompts.edit.order', 'Order')}
                 </label>
                 <input
@@ -205,28 +218,33 @@ const PromptFormEditor = ({
                   name="order"
                   value={data.order || ''}
                   onChange={handleInputChange}
-                  className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                  className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                     errors.order ? 'border-red-300 text-red-900' : ''
                   }`}
                   placeholder="0"
                   autoComplete="off"
                 />
-                {errors.order && <p className="mt-2 text-sm text-red-600">{errors.order}</p>}
-                <p className="mt-2 text-sm text-gray-500">
+                {errors.order && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.order}</p>
+                )}
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.prompts.edit.orderDesc', 'Display order in the prompts list')}
                 </p>
               </div>
 
               {/* Category */}
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="category" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="category"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.prompts.edit.category', 'Category')}
                 </label>
                 <select
                   id="category"
                   value={data.category || ''}
                   onChange={e => handleChange('category', e.target.value)}
-                  className={`mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                  className={`mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                     errors.category ? 'border-red-300 text-red-900' : ''
                   }`}
                 >
@@ -241,15 +259,20 @@ const PromptFormEditor = ({
                       </option>
                     ))}
                 </select>
-                {errors.category && <p className="mt-2 text-sm text-red-600">{errors.category}</p>}
-                <p className="mt-2 text-sm text-gray-500">
+                {errors.category && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.category}</p>
+                )}
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.prompts.edit.categoryDesc', 'Category for organizing prompts')}
                 </p>
               </div>
 
               {/* App ID */}
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="appId" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="appId"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.prompts.edit.appId', 'Linked App')}
                 </label>
                 <div className="mt-1">
@@ -261,8 +284,10 @@ const PromptFormEditor = ({
                     currentLanguage={currentLanguage}
                   />
                 </div>
-                {errors.appId && <p className="mt-2 text-sm text-red-600">{errors.appId}</p>}
-                <p className="mt-2 text-sm text-gray-500">
+                {errors.appId && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.appId}</p>
+                )}
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.prompts.edit.appIdDesc', 'Link this prompt to a specific app')}
                 </p>
               </div>
@@ -276,13 +301,16 @@ const PromptFormEditor = ({
                     type="checkbox"
                     checked={data.enabled !== false}
                     onChange={handleInputChange}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                   />
-                  <label htmlFor="enabled" className="ml-2 block text-sm text-gray-900">
+                  <label
+                    htmlFor="enabled"
+                    className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                  >
                     {t('admin.prompts.edit.enabled', 'Enabled')}
                   </label>
                 </div>
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t('admin.prompts.edit.enabledDesc', 'Whether this prompt is visible to users')}
                 </p>
               </div>
@@ -292,13 +320,13 @@ const PromptFormEditor = ({
       </div>
 
       {/* Localized Content */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.prompts.edit.content', 'Content')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t('admin.prompts.edit.contentDesc', 'Localized content for different languages')}
             </p>
           </div>
@@ -352,13 +380,13 @@ const PromptFormEditor = ({
       </div>
 
       {/* Variables */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.prompts.edit.variables', 'Variables')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t(
                 'admin.prompts.edit.variablesDesc',
                 'Define variables that can be prefilled when using this prompt'
@@ -368,9 +396,12 @@ const PromptFormEditor = ({
           <div className="mt-5 md:col-span-2 md:mt-0">
             <div className="space-y-4">
               {data.variables?.map((variable, index) => (
-                <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <div
+                  key={index}
+                  className="border border-gray-200 dark:border-gray-600 rounded-lg p-4"
+                >
                   <div className="flex justify-between items-start mb-4">
-                    <h4 className="text-sm font-medium text-gray-900">
+                    <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                       {t('admin.prompts.edit.variable', 'Variable {{index}}', {
                         index: index + 1
                       })}
@@ -378,33 +409,33 @@ const PromptFormEditor = ({
                     <button
                       type="button"
                       onClick={() => removeVariable(index)}
-                      className="text-red-600 hover:text-red-900"
+                      className="text-red-600 dark:text-red-400 hover:text-red-900 dark:hover:text-red-300"
                     >
                       <Icon name="x" className="w-5 h-5" />
                     </button>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t('admin.prompts.edit.variableName', 'Name')} *
                       </label>
                       <input
                         type="text"
                         value={variable.name || ''}
                         onChange={e => handleVariableChange(index, 'name', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         placeholder="variable_name"
                         autoComplete="off"
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t('admin.prompts.edit.variableType', 'Type')}
                       </label>
                       <select
                         value={variable.type || 'string'}
                         onChange={e => handleVariableChange(index, 'type', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       >
                         {variableTypes.map(type => (
                           <option key={type.value} value={type.value}>
@@ -427,14 +458,14 @@ const PromptFormEditor = ({
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                         {t('admin.prompts.edit.variableDefault', 'Default Value')}
                       </label>
                       <input
                         type="text"
                         value={variable.defaultValue || ''}
                         onChange={e => handleVariableChange(index, 'defaultValue', e.target.value)}
-                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                        className="mt-1 block w-full border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         placeholder="Default value"
                         autoComplete="off"
                       />
@@ -446,9 +477,9 @@ const PromptFormEditor = ({
                         type="checkbox"
                         checked={variable.required || false}
                         onChange={e => handleVariableChange(index, 'required', e.target.checked)}
-                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
                       />
-                      <label className="ml-2 block text-sm text-gray-900">
+                      <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
                         {t('admin.prompts.edit.variableRequired', 'Required')}
                       </label>
                     </div>
@@ -458,7 +489,7 @@ const PromptFormEditor = ({
               <button
                 type="button"
                 onClick={addVariable}
-                className="w-full flex justify-center py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="w-full flex justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="plus" className="w-5 h-5 mr-2" />
                 {t('admin.prompts.edit.addVariable', 'Add Variable')}

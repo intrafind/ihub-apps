@@ -151,7 +151,7 @@ const AdminUserEditPage = () => {
     return (
       <AdminAuth>
         <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
           <LoadingSpinner size="lg" />
         </div>
       </AdminAuth>
@@ -163,14 +163,14 @@ const AdminUserEditPage = () => {
       <AdminAuth>
         <AdminNavigation />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
             <div className="flex">
               <div className="flex-shrink-0">
                 <Icon name="warning" size="md" className="text-red-400" />
               </div>
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">Error</h3>
-                <div className="mt-2 text-sm text-red-700">{error}</div>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-200">Error</h3>
+                <div className="mt-2 text-sm text-red-700 dark:text-red-300">{error}</div>
               </div>
             </div>
           </div>
@@ -182,97 +182,102 @@ const AdminUserEditPage = () => {
   return (
     <AdminAuth>
       <AdminNavigation />
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold text-gray-900">
-                {isNewUser
-                  ? t('admin.users.edit.createTitle', 'Create New User')
-                  : t('admin.users.edit.editTitle', 'Edit User')}
-              </h1>
-              <p className="mt-1 text-sm text-gray-600">
-                {isNewUser
-                  ? t(
-                      'admin.users.edit.createDesc',
-                      'Create a new user account with permissions and settings'
-                    )
-                  : t('admin.users.edit.editDesc', 'Edit user account, permissions, and settings')}
-              </p>
-            </div>
-            <div className="flex space-x-3">
-              {!isNewUser && (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="mb-8">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+                  {isNewUser
+                    ? t('admin.users.edit.createTitle', 'Create New User')
+                    : t('admin.users.edit.editTitle', 'Edit User')}
+                </h1>
+                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+                  {isNewUser
+                    ? t(
+                        'admin.users.edit.createDesc',
+                        'Create a new user account with permissions and settings'
+                      )
+                    : t(
+                        'admin.users.edit.editDesc',
+                        'Edit user account, permissions, and settings'
+                      )}
+                </p>
+              </div>
+              <div className="flex space-x-3">
+                {!isNewUser && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const dataStr = JSON.stringify(user, null, 2);
+                      const dataUri =
+                        'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+                      const exportFileDefaultName = `user-${user.username}.json`;
+                      const linkElement = document.createElement('a');
+                      linkElement.setAttribute('href', dataUri);
+                      linkElement.setAttribute('download', exportFileDefaultName);
+                      linkElement.click();
+                    }}
+                    className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  >
+                    <Icon name="download" className="h-4 w-4 mr-2" />
+                    {t('common.download')}
+                  </button>
+                )}
                 <button
-                  type="button"
-                  onClick={() => {
-                    const dataStr = JSON.stringify(user, null, 2);
-                    const dataUri =
-                      'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
-                    const exportFileDefaultName = `user-${user.username}.json`;
-                    const linkElement = document.createElement('a');
-                    linkElement.setAttribute('href', dataUri);
-                    linkElement.setAttribute('download', exportFileDefaultName);
-                    linkElement.click();
-                  }}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  onClick={() => navigate('/admin/users')}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 >
-                  <Icon name="download" className="h-4 w-4 mr-2" />
-                  {t('common.download')}
+                  <Icon name="arrow-left" className="h-4 w-4 mr-2" />
+                  {t('admin.users.edit.backToList', 'Back to Users')}
                 </button>
-              )}
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleFormSubmit} className="space-y-8">
+            <DualModeEditor
+              value={user}
+              onChange={handleDataChange}
+              formComponent={UserFormEditor}
+              formProps={{
+                isNewUser,
+                jsonSchema
+              }}
+              jsonSchema={jsonSchema}
+              title={
+                isNewUser
+                  ? t('admin.users.edit.createTitle', 'Create New User')
+                  : t('admin.users.edit.editTitle', 'Edit User')
+              }
+            />
+
+            {/* Save buttons */}
+            <div className="flex justify-end space-x-4">
               <button
+                type="button"
                 onClick={() => navigate('/admin/users')}
-                className="inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                <Icon name="arrow-left" className="h-4 w-4 mr-2" />
-                {t('admin.users.edit.backToList', 'Back to Users')}
+                {t('admin.users.edit.cancel', 'Cancel')}
+              </button>
+              <button
+                type="submit"
+                disabled={saving}
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
+                    {t('admin.users.edit.saving', 'Saving...')}
+                  </>
+                ) : (
+                  t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
+                )}
               </button>
             </div>
-          </div>
+          </form>
         </div>
-
-        <form onSubmit={handleFormSubmit} className="space-y-8">
-          <DualModeEditor
-            value={user}
-            onChange={handleDataChange}
-            formComponent={UserFormEditor}
-            formProps={{
-              isNewUser,
-              jsonSchema
-            }}
-            jsonSchema={jsonSchema}
-            title={
-              isNewUser
-                ? t('admin.users.edit.createTitle', 'Create New User')
-                : t('admin.users.edit.editTitle', 'Edit User')
-            }
-          />
-
-          {/* Save buttons */}
-          <div className="flex justify-end space-x-4">
-            <button
-              type="button"
-              onClick={() => navigate('/admin/users')}
-              className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              {t('admin.users.edit.cancel', 'Cancel')}
-            </button>
-            <button
-              type="submit"
-              disabled={saving}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2 inline-block"></div>
-                  {t('admin.users.edit.saving', 'Saving...')}
-                </>
-              ) : (
-                t('admin.users.edit.save', isNewUser ? 'Create User' : 'Save User')
-              )}
-            </button>
-          </div>
-        </form>
       </div>
     </AdminAuth>
   );

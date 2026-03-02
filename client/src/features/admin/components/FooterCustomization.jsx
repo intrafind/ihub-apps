@@ -54,7 +54,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-6">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.footer.title', 'Footer Configuration')}
       </h3>
 
@@ -66,13 +66,13 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
               type="checkbox"
               checked={config.enabled !== false}
               onChange={e => onUpdate({ enabled: e.target.checked })}
-              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
             />
-            <label className="ml-2 block text-sm text-gray-900">
+            <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
               {t('admin.ui.footer.enabled', 'Enable Footer')}
             </label>
           </div>
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t('admin.ui.footer.enabledHint', 'Uncheck to hide the footer from all pages')}
           </p>
         </div>
@@ -93,7 +93,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                   fr: 'Footer text (fr)'
                 }}
               />
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {t(
                   'admin.ui.footer.textHint',
                   'This text will appear in the footer. You can use basic HTML tags.'
@@ -104,7 +104,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
             {/* Footer Links */}
             <div>
               <div className="flex items-center justify-between mb-4">
-                <label className="block text-sm font-medium text-gray-700">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   {t('admin.ui.footer.links', 'Footer Links')}
                 </label>
                 <button
@@ -117,9 +117,12 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
 
               <div className="space-y-4">
                 {mappedLinks.map((link, index) => (
-                  <div key={index} className="border border-gray-200 rounded-lg p-4">
+                  <div
+                    key={index}
+                    className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+                  >
                     <div className="flex items-center justify-between mb-3">
-                      <h4 className="text-sm font-medium text-gray-900">
+                      <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {t('admin.ui.footer.link', 'Link')} {index + 1}
                       </h4>
                       <button
@@ -150,7 +153,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
 
                       {/* Link URL */}
                       <div>
-                        <label className="block text-sm font-medium text-gray-600 mb-1">
+                        <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
                           {t('admin.ui.footer.linkUrl', 'URL')}
                         </label>
                         <input
@@ -158,7 +161,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                           value={link.href || ''}
                           onChange={e => updateFooterLink(index, { href: e.target.value })}
                           placeholder="/page-url or https://external.com"
-                          className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                          className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                         />
                         <div className="mt-2 flex items-center space-x-4">
                           <label className="flex items-center">
@@ -166,16 +169,16 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                               type="checkbox"
                               checked={link.enabled !== false}
                               onChange={e => updateFooterLink(index, { enabled: e.target.checked })}
-                              className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                              className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                             />
-                            <span className="ml-2 text-sm text-gray-600">
+                            <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
                               {t('admin.ui.footer.linkEnabled', 'Enabled')}
                             </span>
                           </label>
                           <select
                             value={link.target || '_self'}
                             onChange={e => updateFooterLink(index, { target: e.target.value })}
-                            className="text-sm border border-gray-300 rounded px-2 py-1"
+                            className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                           >
                             <option value="_self">
                               {t('admin.ui.footer.samePage', 'Same Page')}
@@ -191,7 +194,7 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
                 ))}
 
                 {(!mappedLinks || mappedLinks.length === 0) && (
-                  <div className="text-center py-8 text-gray-500">
+                  <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                     <p>{t('admin.ui.footer.noLinks', 'No footer links configured')}</p>
                     <p className="text-sm">
                       {t('admin.ui.footer.addFirstLink', 'Click "Add Link" to get started')}

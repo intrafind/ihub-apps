@@ -544,7 +544,7 @@ const UnifiedUploader = ({
             {/* Drag overlay */}
             {isDragging && (
               <div
-                className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 pointer-events-none"
+                className="fixed inset-0 z-50 flex items-center justify-center bg-blue-500 bg-opacity-20 dark:bg-blue-500/30 pointer-events-none"
                 role="alert"
                 aria-live="polite"
                 aria-label={t(
@@ -552,10 +552,10 @@ const UnifiedUploader = ({
                   'Drop zone active. Release to upload files.'
                 )}
               >
-                <div className="bg-white rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
+                <div className="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-8 border-4 border-blue-500 border-dashed">
                   <div className="text-center">
                     <div className="text-6xl mb-4">📎</div>
-                    <p className="text-xl font-semibold text-blue-600">
+                    <p className="text-xl font-semibold text-blue-600 dark:text-blue-400">
                       {t('components.uploader.dropFileHere', 'Drop file here')}
                     </p>
                   </div>

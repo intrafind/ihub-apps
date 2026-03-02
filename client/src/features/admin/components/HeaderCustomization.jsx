@@ -68,20 +68,20 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
 
   return (
     <div className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 mb-6">
+      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
         {t('admin.ui.header.title', 'Header Configuration')}
       </h3>
 
       <div className="space-y-6">
         {/* Header Color */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {t('admin.ui.header.color', 'Header Color')}
           </label>
 
           <div className="flex items-center space-x-3">
             <div
-              className="w-10 h-10 rounded-md border-2 border-gray-300 shadow-sm"
+              className="w-10 h-10 rounded-md border-2 border-gray-300 dark:border-gray-600 shadow-sm"
               style={{ backgroundColor: config.defaultColor || 'rgb(0, 53, 87)' }}
             />
 
@@ -89,7 +89,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
               type="text"
               value={config.defaultColor || ''}
               onChange={e => handleColorChange(e.target.value)}
-              className="flex-1 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+              className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
               placeholder="rgb(0, 53, 87)"
             />
           </div>
@@ -114,14 +114,14 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
               <button
                 key={color}
                 onClick={() => handleColorChange(color)}
-                className="w-6 h-6 rounded border border-gray-300 hover:scale-110 transition-transform"
+                className="w-6 h-6 rounded border border-gray-300 dark:border-gray-600 hover:scale-110 transition-transform"
                 style={{ backgroundColor: color }}
                 title={color}
               />
             ))}
           </div>
 
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
               'admin.ui.header.colorHint',
               'Use hex colors (#4f46e5) or rgb values (rgb(79, 70, 229))'
@@ -131,7 +131,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
 
         {/* Logo Configuration */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             {t('admin.ui.header.logoUrl', 'Logo URL')}
           </label>
           <input
@@ -139,9 +139,9 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
             value={config.logo?.url || ''}
             onChange={e => handleLogoUrlChange(e.target.value)}
             placeholder="/header_company_logo.svg"
-            className="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
           />
-          <p className="mt-1 text-sm text-gray-500">
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
             {t(
               'admin.ui.header.logoUrlHint',
               'Enter the path to your logo file (e.g., /header_company_logo.svg)'
@@ -172,10 +172,10 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
 
         {/* Site Title — light + bold parts concatenated without space */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
             {t('admin.ui.header.siteTitle', 'Site Title')}
           </label>
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
             {t(
               'admin.ui.header.siteTitleHint',
               'Two parts rendered side-by-side: the first in light weight, the second in bold. Concatenated without a space — include leading spaces in the bold part if needed.'
@@ -226,7 +226,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
         {/* Navigation Links */}
         <div>
           <div className="flex items-center justify-between mb-4">
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
               {t('admin.ui.header.navigationLinks', 'Navigation Links')}
             </label>
             <button
@@ -239,9 +239,12 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
 
           <div className="space-y-4">
             {mappedLinks.map((link, index) => (
-              <div key={index} className="border border-gray-200 rounded-lg p-4">
+              <div
+                key={index}
+                className="border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+              >
                 <div className="flex items-center justify-between mb-3">
-                  <h4 className="text-sm font-medium text-gray-900">
+                  <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {t('admin.ui.header.link', 'Link')} {index + 1}
                   </h4>
                   <button
@@ -272,7 +275,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
 
                   {/* Link URL */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-600 mb-1">
+                    <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-1">
                       {t('admin.ui.header.linkUrl', 'URL')}
                     </label>
                     <input
@@ -280,7 +283,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                       value={link.href || ''}
                       onChange={e => updateNavigationLink(index, { href: e.target.value })}
                       placeholder="/page-url"
-                      className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
+                      className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                     />
                     <div className="mt-2 flex items-center space-x-4">
                       <label className="flex items-center">
@@ -288,16 +291,16 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
                           type="checkbox"
                           checked={link.enabled !== false}
                           onChange={e => updateNavigationLink(index, { enabled: e.target.checked })}
-                          className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                          className="rounded border-gray-300 dark:border-gray-600 text-indigo-600 focus:ring-indigo-500"
                         />
-                        <span className="ml-2 text-sm text-gray-600">
+                        <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">
                           {t('admin.ui.header.linkEnabled', 'Enabled')}
                         </span>
                       </label>
                       <select
                         value={link.target || '_self'}
                         onChange={e => updateNavigationLink(index, { target: e.target.value })}
-                        className="text-sm border border-gray-300 rounded px-2 py-1"
+                        className="text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
                       >
                         <option value="_self">{t('admin.ui.header.samePage', 'Same Page')}</option>
                         <option value="_blank">{t('admin.ui.header.newPage', 'New Page')}</option>
@@ -309,7 +312,7 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
             ))}
 
             {(!mappedLinks || mappedLinks.length === 0) && (
-              <div className="text-center py-8 text-gray-500">
+              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
                 <p>{t('admin.ui.header.noLinks', 'No navigation links configured')}</p>
                 <p className="text-sm">
                   {t('admin.ui.header.addFirstLink', 'Click "Add Link" to get started')}

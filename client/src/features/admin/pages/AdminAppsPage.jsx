@@ -276,10 +276,10 @@ const AdminAppsPage = () => {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="sm:flex sm:items-center">
           <div className="sm:flex-auto">
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {t('admin.apps.title', 'Apps Administration')}
             </h1>
-            <p className="mt-2 text-sm text-gray-700">
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
               {t('admin.apps.subtitle', 'Manage your iHub applications')}
             </p>
           </div>
@@ -303,7 +303,7 @@ const AdminAppsPage = () => {
                 />
                 <button
                   type="button"
-                  className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   disabled={uploading}
                   title={t('admin.apps.uploadConfig', 'Upload App Config')}
                 >
@@ -318,14 +318,14 @@ const AdminAppsPage = () => {
               </div>
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
                 onClick={enableAllApps}
               >
                 {t('admin.common.enableAll', 'Enable All')}
               </button>
               <button
                 type="button"
-                className="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
                 onClick={disableAllApps}
               >
                 {t('admin.common.disableAll', 'Disable All')}
@@ -345,13 +345,13 @@ const AdminAppsPage = () => {
               placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="block w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+              className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               autoComplete="off"
             />
             {searchTerm && (
               <button
                 onClick={clearSearch}
-                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600"
+                className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 aria-label={t('common.clearSearch', 'Clear search')}
               >
                 <Icon name="x" className="h-5 w-5" />
@@ -362,7 +362,7 @@ const AdminAppsPage = () => {
             <select
               value={filterEnabled}
               onChange={e => setFilterEnabled(e.target.value)}
-              className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3"
+              className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3"
             >
               <option value="all">{t('admin.apps.filterAll', 'All Apps')}</option>
               <option value="enabled">{t('admin.apps.filterEnabled', 'Enabled Only')}</option>
@@ -381,7 +381,7 @@ const AdminAppsPage = () => {
                 className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
                   selectedCategory === category.id
                     ? 'text-white shadow-lg transform scale-105'
-                    : 'text-gray-600 bg-gray-100 hover:bg-gray-200'
+                    : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
                 }`}
                 style={{
                   backgroundColor: selectedCategory === category.id ? category.color : undefined
@@ -466,37 +466,37 @@ const AdminAppsPage = () => {
         <div className="mt-8 flex flex-col">
           <div className="-my-2 -mx-4 sm:-mx-6 lg:-mx-8">
             <div className="inline-block w-full py-2 align-middle md:px-6 lg:px-8">
-              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                <table className="w-full divide-y divide-gray-300">
-                  <thead className="bg-gray-50">
+              <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
+                <table className="w-full divide-y divide-gray-300 dark:divide-gray-700">
+                  <thead className="bg-gray-50 dark:bg-gray-800">
                     <tr>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.apps.table.app', 'App')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.apps.table.category', 'Category')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.apps.table.status', 'Status')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.apps.table.order', 'Order')}
                       </th>
                       <th
                         scope="col"
-                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wide"
+                        className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
                       >
                         {t('admin.apps.table.model', 'Model')}
                       </th>
@@ -505,11 +505,11 @@ const AdminAppsPage = () => {
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="bg-white divide-y divide-gray-200">
+                  <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                     {filteredApps.map(app => (
                       <tr
                         key={app.id}
-                        className="hover:bg-gray-50 cursor-pointer"
+                        className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
                         onClick={() => handleAppClick(app)}
                       >
                         <td className="px-6 py-4 whitespace-nowrap">
@@ -523,16 +523,18 @@ const AdminAppsPage = () => {
                               </div>
                             </div>
                             <div className="ml-4">
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                                 {getLocalizedValue(app.name)}
                               </div>
-                              <div className="text-sm text-gray-500">{app.id}</div>
+                              <div className="text-sm text-gray-500 dark:text-gray-400">
+                                {app.id}
+                              </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           {app.category ? (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 text-indigo-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
                               {uiConfig?.appsList?.categories?.list?.find(
                                 cat => cat.id === app.category
                               )?.name
@@ -554,8 +556,8 @@ const AdminAppsPage = () => {
                           <span
                             className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
                               app.enabled
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-red-100 text-red-800'
+                                ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                                : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
                             }`}
                           >
                             {app.enabled
@@ -563,10 +565,10 @@ const AdminAppsPage = () => {
                               : t('admin.apps.status.disabled', 'Disabled')}
                           </span>
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                           {app.order ?? t('common.notAvailable', 'N/A')}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                           {app.preferredModel || t('common.notAvailable', 'N/A')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -578,8 +580,8 @@ const AdminAppsPage = () => {
                               }}
                               className={`p-2 rounded-full ${
                                 app.enabled
-                                  ? 'text-red-600 hover:bg-red-50'
-                                  : 'text-green-600 hover:bg-green-50'
+                                  ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50'
+                                  : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50'
                               }`}
                               title={
                                 app.enabled
@@ -594,7 +596,7 @@ const AdminAppsPage = () => {
                                 e.stopPropagation();
                                 handleCloneApp(app);
                               }}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                              className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
                               title={t('admin.apps.actions.clone', 'Clone')}
                             >
                               <Icon name="copy" className="h-4 w-4" />
@@ -604,7 +606,7 @@ const AdminAppsPage = () => {
                                 e.stopPropagation();
                                 downloadAppConfig(app.id);
                               }}
-                              className="p-2 text-green-600 hover:bg-green-50 rounded-full"
+                              className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full"
                               title={t('admin.apps.actions.download', 'Download Config')}
                             >
                               <Icon name="download" className="h-4 w-4" />
@@ -614,7 +616,7 @@ const AdminAppsPage = () => {
                                 e.stopPropagation();
                                 navigate(`/admin/apps/${app.id}`);
                               }}
-                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                              className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
                               title={t('admin.apps.actions.edit', 'Edit')}
                             >
                               <Icon name="pencil" className="h-4 w-4" />
@@ -624,7 +626,7 @@ const AdminAppsPage = () => {
                                 e.stopPropagation();
                                 deleteApp(app.id);
                               }}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                              className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
                               title={t('admin.apps.actions.delete', 'Delete')}
                             >
                               <Icon name="trash" className="h-4 w-4" />
@@ -655,10 +657,10 @@ const AdminAppsPage = () => {
                 d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
               />
             </svg>
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
               {t('admin.apps.noApps', 'No apps found')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t('admin.apps.noAppsDescription', 'Try adjusting your search or filter criteria.')}
             </p>
           </div>

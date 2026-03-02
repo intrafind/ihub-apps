@@ -152,20 +152,23 @@ const ModelFormEditor = ({
   return (
     <div className="space-y-6">
       {/* Basic Information */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.models.edit.basicInfo')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t('admin.models.edit.basicInfoDesc', 'Basic information about the model')}
             </p>
           </div>
           <div className="mt-5 md:mt-0 md:col-span-2">
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="id" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="id"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.id')}
                   {isFieldRequired('id', jsonSchema) && <span className="text-red-500"> *</span>}
                 </label>
@@ -176,7 +179,7 @@ const ModelFormEditor = ({
                   value={data.id || ''}
                   onChange={handleInputChange}
                   disabled={!isNewModel}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md disabled:bg-gray-100 ${
+                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 rounded-md disabled:bg-gray-100 dark:disabled:bg-gray-700 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 ${
                     validationErrors.id || errors.id
                       ? 'border-red-300 text-red-900 placeholder-red-300'
                       : ''
@@ -184,9 +187,13 @@ const ModelFormEditor = ({
                   required={isFieldRequired('id', jsonSchema)}
                 />
                 {(validationErrors.id || errors.id) && (
-                  <p className="mt-2 text-sm text-red-600">{validationErrors.id || errors.id}</p>
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {validationErrors.id || errors.id}
+                  </p>
                 )}
-                <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.modelId')}</p>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {t('admin.models.hints.modelId')}
+                </p>
               </div>
 
               <div className="col-span-6 sm:col-span-3">
@@ -211,7 +218,10 @@ const ModelFormEditor = ({
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="provider" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="provider"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.provider')} <span className="text-red-500">*</span>
                 </label>
                 <select
@@ -219,7 +229,7 @@ const ModelFormEditor = ({
                   name="provider"
                   value={data.provider || ''}
                   onChange={handleInputChange}
-                  className={`mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
+                  className={`mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm ${
                     errors.provider ? 'border-red-300 text-red-900' : ''
                   }`}
                   required
@@ -231,11 +241,16 @@ const ModelFormEditor = ({
                     </option>
                   ))}
                 </select>
-                {errors.provider && <p className="mt-2 text-sm text-red-600">{errors.provider}</p>}
+                {errors.provider && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.provider}</p>
+                )}
               </div>
 
               <div className="col-span-6 sm:col-span-3">
-                <label htmlFor="modelId" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="modelId"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.modelId')}
                 </label>
                 <input
@@ -245,16 +260,23 @@ const ModelFormEditor = ({
                   value={data.modelId || ''}
                   onChange={handleInputChange}
                   placeholder={t('admin.models.placeholders.apiModelId')}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
+                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                     errors.modelId ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                   }`}
                 />
-                {errors.modelId && <p className="mt-2 text-sm text-red-600">{errors.modelId}</p>}
-                <p className="mt-2 text-sm text-gray-500">{t('admin.models.hints.apiModelId')}</p>
+                {errors.modelId && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.modelId}</p>
+                )}
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                  {t('admin.models.hints.apiModelId')}
+                </p>
               </div>
 
               <div className="col-span-6">
-                <label htmlFor="url" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="url"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.url')} <span className="text-red-500">*</span>
                 </label>
                 <input
@@ -264,24 +286,29 @@ const ModelFormEditor = ({
                   value={data.url || ''}
                   onChange={handleInputChange}
                   placeholder={t('admin.models.placeholders.apiUrl')}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
+                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                     errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
                   }`}
                   required
                 />
-                {errors.url && <p className="mt-2 text-sm text-red-600">{errors.url}</p>}
+                {errors.url && (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
+                )}
               </div>
 
               <div className="col-span-6">
                 <div className="flex items-center gap-2">
-                  <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
+                  <label
+                    htmlFor="apiKey"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.models.fields.apiKey', 'API Key')}
                   </label>
                   {apiKeyTooltip && (
                     <Icon
                       name="information-circle"
                       size="sm"
-                      className="text-gray-400 cursor-help"
+                      className="text-gray-400 dark:text-gray-500 cursor-help"
                       title={apiKeyTooltip}
                     />
                   )}
@@ -304,17 +331,17 @@ const ModelFormEditor = ({
                             'Enter API key (optional - will use environment variable if not set)'
                           )
                     }
-                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 rounded-md"
+                    className="focus:ring-indigo-500 focus:border-indigo-500 block w-full pr-10 sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                   />
                 </div>
-                <p className="mt-2 text-sm text-gray-500">
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                   {t(
                     'admin.models.hints.apiKey',
                     'API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.'
                   )}
                 </p>
                 {data.apiKeySet && (
-                  <p className="mt-2 text-sm text-blue-600">
+                  <p className="mt-2 text-sm text-blue-600 dark:text-blue-400">
                     {t('admin.models.hints.apiKeySet', '✓ API key is configured for this model')}
                   </p>
                 )}
@@ -325,13 +352,13 @@ const ModelFormEditor = ({
       </div>
 
       {/* Configuration */}
-      <div className="bg-white shadow px-4 py-5 sm:rounded-lg sm:p-6">
+      <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
           <div className="md:col-span-1">
-            <h3 className="text-lg font-medium leading-6 text-gray-900">
+            <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
               {t('admin.models.edit.configuration')}
             </h3>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {t(
                 'admin.models.edit.configurationDesc',
                 'Advanced configuration options for the model'
@@ -341,7 +368,10 @@ const ModelFormEditor = ({
           <div className="mt-5 md:mt-0 md:col-span-2">
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-2">
-                <label htmlFor="tokenLimit" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="tokenLimit"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.tokenLimit')}
                   {isFieldRequired('tokenLimit', jsonSchema) && (
                     <span className="text-red-500"> *</span>
@@ -354,18 +384,21 @@ const ModelFormEditor = ({
                   value={data.tokenLimit || ''}
                   onChange={handleInputChange}
                   min="1"
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
+                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                     errors.tokenLimit ? 'border-red-300 text-red-900' : ''
                   }`}
                   required={isFieldRequired('tokenLimit', jsonSchema)}
                 />
                 {errors.tokenLimit && (
-                  <p className="mt-2 text-sm text-red-600">{errors.tokenLimit}</p>
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.tokenLimit}</p>
                 )}
               </div>
 
               <div className="col-span-6 sm:col-span-2">
-                <label htmlFor="concurrency" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="concurrency"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.concurrency')}
                 </label>
                 <input
@@ -375,17 +408,22 @@ const ModelFormEditor = ({
                   value={data.concurrency || ''}
                   onChange={handleInputChange}
                   min="1"
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
+                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                     errors.concurrency ? 'border-red-300 text-red-900' : ''
                   }`}
                 />
                 {errors.concurrency && (
-                  <p className="mt-2 text-sm text-red-600">{errors.concurrency}</p>
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {errors.concurrency}
+                  </p>
                 )}
               </div>
 
               <div className="col-span-6 sm:col-span-2">
-                <label htmlFor="requestDelayMs" className="block text-sm font-medium text-gray-700">
+                <label
+                  htmlFor="requestDelayMs"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                >
                   {t('admin.models.fields.requestDelay')}
                 </label>
                 <input
@@ -395,18 +433,22 @@ const ModelFormEditor = ({
                   value={data.requestDelayMs || ''}
                   onChange={handleInputChange}
                   min="0"
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md ${
+                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
                     errors.requestDelayMs ? 'border-red-300 text-red-900' : ''
                   }`}
                 />
                 {errors.requestDelayMs && (
-                  <p className="mt-2 text-sm text-red-600">{errors.requestDelayMs}</p>
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {errors.requestDelayMs}
+                  </p>
                 )}
               </div>
 
               <div className="col-span-6">
                 <fieldset>
-                  <legend className="text-base font-medium text-gray-900">Options</legend>
+                  <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                    Options
+                  </legend>
                   <div className="mt-4 space-y-4">
                     <div className="flex items-start">
                       <div className="flex items-center h-5">
@@ -416,11 +458,14 @@ const ModelFormEditor = ({
                           type="checkbox"
                           checked={data.supportsTools || false}
                           onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
                         />
                       </div>
                       <div className="ml-3 text-sm">
-                        <label htmlFor="supportsTools" className="font-medium text-gray-700">
+                        <label
+                          htmlFor="supportsTools"
+                          className="font-medium text-gray-700 dark:text-gray-300"
+                        >
                           {t('admin.models.fields.supportsTools')}
                         </label>
                       </div>
@@ -433,11 +478,14 @@ const ModelFormEditor = ({
                           type="checkbox"
                           checked={data.enabled !== false}
                           onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
                         />
                       </div>
                       <div className="ml-3 text-sm">
-                        <label htmlFor="enabled" className="font-medium text-gray-700">
+                        <label
+                          htmlFor="enabled"
+                          className="font-medium text-gray-700 dark:text-gray-300"
+                        >
                           {t('admin.models.fields.enabled')}
                         </label>
                       </div>
@@ -450,11 +498,14 @@ const ModelFormEditor = ({
                           type="checkbox"
                           checked={data.default || false}
                           onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
                         />
                       </div>
                       <div className="ml-3 text-sm">
-                        <label htmlFor="default" className="font-medium text-gray-700">
+                        <label
+                          htmlFor="default"
+                          className="font-medium text-gray-700 dark:text-gray-300"
+                        >
                           {t('admin.models.fields.defaultModel')}
                         </label>
                       </div>
@@ -467,20 +518,20 @@ const ModelFormEditor = ({
                           type="checkbox"
                           checked={data.supportsImageGeneration || false}
                           onChange={handleInputChange}
-                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
                         />
                       </div>
                       <div className="ml-3 text-sm">
                         <label
                           htmlFor="supportsImageGeneration"
-                          className="font-medium text-gray-700"
+                          className="font-medium text-gray-700 dark:text-gray-300"
                         >
                           {t(
                             'admin.models.fields.supportsImageGeneration',
                             'Supports Image Generation'
                           )}
                         </label>
-                        <p className="text-gray-500">
+                        <p className="text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.models.hints.supportsImageGeneration',
                             'Enable if this model can generate images (e.g., Gemini Image models)'
@@ -496,14 +547,14 @@ const ModelFormEditor = ({
               {data.supportsImageGeneration && (
                 <div className="col-span-6">
                   <fieldset>
-                    <legend className="text-base font-medium text-gray-900">
+                    <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
                       {t('admin.models.sections.imageGeneration', 'Image Generation Settings')}
                     </legend>
                     <div className="mt-4 grid grid-cols-6 gap-6">
                       <div className="col-span-6 sm:col-span-3">
                         <label
                           htmlFor="imageGeneration.aspectRatio"
-                          className="block text-sm font-medium text-gray-700"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                         >
                           {t('admin.models.fields.aspectRatio', 'Aspect Ratio')}
                         </label>
@@ -516,7 +567,7 @@ const ModelFormEditor = ({
                               aspectRatio: e.target.value
                             })
                           }
-                          className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         >
                           <option value="1:1">1:1 (Square)</option>
                           <option value="16:9">16:9 (Landscape)</option>
@@ -531,7 +582,7 @@ const ModelFormEditor = ({
                       <div className="col-span-6 sm:col-span-3">
                         <label
                           htmlFor="imageGeneration.imageSize"
-                          className="block text-sm font-medium text-gray-700"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                         >
                           {t('admin.models.fields.imageSize', 'Image Size')}
                         </label>
@@ -544,7 +595,7 @@ const ModelFormEditor = ({
                               imageSize: e.target.value
                             })
                           }
-                          className="mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                          className="mt-1 block w-full py-2 px-3 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                         >
                           <option value="1K">1K (1024px)</option>
                           <option value="2K">2K (2048px)</option>
@@ -555,7 +606,7 @@ const ModelFormEditor = ({
                       <div className="col-span-6 sm:col-span-3">
                         <label
                           htmlFor="imageGeneration.maxReferenceImages"
-                          className="block text-sm font-medium text-gray-700"
+                          className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                         >
                           {t('admin.models.fields.maxReferenceImages', 'Max Reference Images')}
                         </label>
@@ -571,9 +622,9 @@ const ModelFormEditor = ({
                           }
                           min="1"
                           max="14"
-                          className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                          className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                         />
-                        <p className="mt-2 text-sm text-gray-500">
+                        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                           {t(
                             'admin.models.hints.maxReferenceImages',
                             'Maximum number of reference images (1-14)'

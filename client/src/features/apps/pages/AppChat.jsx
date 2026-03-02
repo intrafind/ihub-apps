@@ -1436,12 +1436,14 @@ const AppChat = ({ preloadedApp = null }) => {
             }
           }}
         >
-          <div className="w-full bg-white rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
-            <div className="flex justify-between items-center p-4 border-b flex-shrink-0">
-              <h3 className="font-medium">{t('pages.appChat.inputParameters')}</h3>
+          <div className="w-full bg-white dark:bg-gray-800 rounded-lg max-h-[90vh] overflow-hidden flex flex-col shadow-xl">
+            <div className="flex justify-between items-center p-4 border-b dark:border-gray-700 flex-shrink-0">
+              <h3 className="font-medium text-gray-900 dark:text-gray-100">
+                {t('pages.appChat.inputParameters')}
+              </h3>
               <button
                 onClick={handleParametersCancel}
-                className="text-gray-500 hover:text-gray-700 p-1"
+                className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 p-1"
               >
                 <Icon name="close" size="lg" className="text-current" />
               </button>
@@ -1453,10 +1455,10 @@ const AppChat = ({ preloadedApp = null }) => {
                 localizedVariables={localizedVariables}
               />
             </div>
-            <div className="flex gap-3 p-4 border-t bg-gray-50 flex-shrink-0">
+            <div className="flex gap-3 p-4 border-t dark:border-gray-700 bg-gray-50 dark:bg-gray-900 flex-shrink-0">
               <button
                 onClick={handleParametersCancel}
-                className="flex-1 px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                className="flex-1 px-4 py-2 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 font-medium"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
@@ -1480,7 +1482,7 @@ const AppChat = ({ preloadedApp = null }) => {
               <div className="flex flex-col h-full md:hidden">
                 <div className="flex-1 overflow-hidden flex flex-col">
                   {messages.length > 0 ? (
-                    <div className="w-full h-full overflow-y-auto bg-gray-50 rounded-lg flex flex-col">
+                    <div className="w-full h-full overflow-y-auto bg-gray-50 dark:bg-gray-800/50 rounded-lg flex flex-col">
                       <ChatMessageList
                         messages={messages}
                         outputFormat={selectedOutputFormat}
@@ -1615,8 +1617,10 @@ const AppChat = ({ preloadedApp = null }) => {
         </div>
 
         {app?.variables && app.variables.length > 0 && (
-          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 rounded-lg flex-shrink-0">
-            <h3 className="font-medium mb-3">{t('pages.appChat.inputParameters')}</h3>
+          <div className="hidden md:block w-80 lg:w-96 overflow-y-auto p-4 bg-gray-50 dark:bg-gray-800 rounded-lg flex-shrink-0">
+            <h3 className="font-medium mb-3 text-gray-900 dark:text-gray-100">
+              {t('pages.appChat.inputParameters')}
+            </h3>
             <InputVariables
               variables={variables}
               setVariables={setVariables}

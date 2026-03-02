@@ -297,13 +297,15 @@ const AdminNavigation = () => {
     );
 
     const className = isDropdownItem
-      ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 ${
-          item.current ? 'bg-indigo-50 text-indigo-600 font-medium' : 'text-gray-700'
+      ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+          item.current
+            ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-medium'
+            : 'text-gray-700 dark:text-gray-300'
         }`
       : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
           item.current
-            ? 'border-indigo-500 text-indigo-600'
-            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+            ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+            : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
         }`;
 
     if (item.external) {
@@ -332,13 +334,13 @@ const AdminNavigation = () => {
   };
 
   const GroupHeader = ({ groupName }) => (
-    <div className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider bg-gray-50 border-b border-gray-200">
+    <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
       {groupName}
     </div>
   );
 
   return (
-    <nav className="bg-white shadow-sm border-b border-gray-200">
+    <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-center">
           <div className="flex items-center space-x-8">
@@ -374,7 +376,7 @@ const AdminNavigation = () => {
 
                   {/* Desktop dropdown menu */}
                   {showMoreMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
                       {navGroups.map((group, groupIndex) => {
                         const groupItems = group.items.filter(
                           item =>
@@ -432,7 +434,7 @@ const AdminNavigation = () => {
 
                   {/* Mobile dropdown menu */}
                   {showMoreMenu && (
-                    <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
+                    <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
                       {navGroups.map((group, groupIndex) => {
                         const groupItems = group.items.filter(
                           item =>

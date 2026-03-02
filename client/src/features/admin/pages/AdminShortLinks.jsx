@@ -106,24 +106,24 @@ const AdminShortLinks = () => {
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-md p-4">
+      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
         <div className="flex">
           <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
           <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800">
+            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
               {t('admin.shortlinks.loadError', 'Error loading short links')}
             </h3>
-            <p className="mt-1 text-sm text-red-700">{error}</p>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 hover:text-red-500"
+              className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
             >
               {t('common.retry', 'Retry')}
             </button>
@@ -135,15 +135,15 @@ const AdminShortLinks = () => {
 
   return (
     <AdminAuth>
-      <div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         <AdminNavigation />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center">
             <div className="sm:flex-auto">
-              <h1 className="text-2xl font-semibold text-gray-900">
+              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
                 {t('admin.shortlinks.title', 'Short Links Management')}
               </h1>
-              <p className="mt-2 text-sm text-gray-700">
+              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
                 {t(
                   'admin.shortlinks.subtitle',
                   'Manage and monitor short links for your applications'
@@ -166,7 +166,7 @@ const AdminShortLinks = () => {
             <div className="flex-1">
               <input
                 type="text"
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder={t('admin.shortlinks.filterByAppId', 'Filter by App ID')}
                 value={appIdFilter}
                 onChange={e => setAppIdFilter(e.target.value)}
@@ -175,7 +175,7 @@ const AdminShortLinks = () => {
             <div className="flex-1">
               <input
                 type="text"
-                className="block w-full px-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                 placeholder={t('admin.shortlinks.filterByUser', 'Filter by User')}
                 value={userFilter}
                 onChange={e => setUserFilter(e.target.value)}
@@ -195,14 +195,14 @@ const AdminShortLinks = () => {
           <div className="mt-8 flex flex-col">
             <div className="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
               <div className="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">
-                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg">
-                  <table className="min-w-full divide-y divide-gray-300">
-                    <thead className="bg-gray-50">
+                <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
+                  <table className="min-w-full divide-y divide-gray-300 dark:divide-gray-700">
+                    <thead className="bg-gray-50 dark:bg-gray-800">
                       <tr>
                         <th
                           scope="col"
                           onClick={() => handleSort('code')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                         >
                           {t('admin.shortlinks.code', 'Code')}
                           {sortField === 'code' && (
@@ -215,7 +215,7 @@ const AdminShortLinks = () => {
                         <th
                           scope="col"
                           onClick={() => handleSort('appId')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                         >
                           {t('admin.shortlinks.appId', 'App ID')}
                           {sortField === 'appId' && (
@@ -228,7 +228,7 @@ const AdminShortLinks = () => {
                         <th
                           scope="col"
                           onClick={() => handleSort('userId')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                         >
                           {t('admin.shortlinks.userId', 'User ID')}
                           {sortField === 'userId' && (
@@ -241,7 +241,7 @@ const AdminShortLinks = () => {
                         <th
                           scope="col"
                           onClick={() => handleSort('usage')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                         >
                           {t('admin.shortlinks.usage', 'Usage')}
                           {sortField === 'usage' && (
@@ -253,14 +253,14 @@ const AdminShortLinks = () => {
                         </th>
                         <th
                           scope="col"
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
                         >
                           {t('admin.shortlinks.createdAt', 'Created')}
                         </th>
                         <th
                           scope="col"
                           onClick={() => handleSort('expiresAt')}
-                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer"
+                          className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer"
                         >
                           {t('admin.shortlinks.expiresAt', 'Expires')}
                           {sortField === 'expiresAt' && (
@@ -277,41 +277,48 @@ const AdminShortLinks = () => {
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="bg-white divide-y divide-gray-200">
+                    <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                       {sortedLinks.map(link => (
                         <tr
                           key={link.code}
-                          className="hover:bg-gray-50 cursor-pointer"
+                          className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
                           onClick={() => handleRowClick(link)}
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
                               <div className="flex-shrink-0 h-8 w-8">
-                                <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center">
-                                  <Icon name="link" className="h-4 w-4 text-indigo-600" />
+                                <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                                  <Icon
+                                    name="link"
+                                    className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+                                  />
                                 </div>
                               </div>
                               <div className="ml-4">
-                                <div className="text-sm font-medium text-gray-900">{link.code}</div>
-                                <div className="text-sm text-gray-500">/s/{link.code}</div>
+                                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                                  {link.code}
+                                </div>
+                                <div className="text-sm text-gray-500 dark:text-gray-400">
+                                  /s/{link.code}
+                                </div>
                               </div>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300">
                               {link.appId}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {link.userId || '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {link.usage || 0}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {link.createdAt ? new Date(link.createdAt).toLocaleDateString() : '-'}
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                             {link.expiresAt ? new Date(link.expiresAt).toLocaleDateString() : '-'}
                           </td>
                           <td
@@ -321,7 +328,7 @@ const AdminShortLinks = () => {
                             <div className="flex items-center justify-end gap-2">
                               <button
                                 onClick={() => handleCopyLink(link.code)}
-                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                className="p-2 text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
                                 title={t('admin.shortlinks.copyLink', 'Copy link')}
                               >
                                 {copiedLink === link.code ? (
@@ -332,14 +339,14 @@ const AdminShortLinks = () => {
                               </button>
                               <button
                                 onClick={() => handleTestLink(link.code)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-full"
+                                className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
                                 title={t('admin.shortlinks.testLink', 'Test link')}
                               >
                                 <Icon name="external-link" className="h-4 w-4" />
                               </button>
                               <button
                                 onClick={() => handleDelete(link.code)}
-                                className="p-2 text-red-600 hover:bg-red-50 rounded-full"
+                                className="p-2 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
                                 title={t('admin.shortlinks.delete', 'Delete')}
                               >
                                 <Icon name="trash" className="h-4 w-4" />
@@ -358,10 +365,10 @@ const AdminShortLinks = () => {
           {sortedLinks.length === 0 && (
             <div className="text-center py-12">
               <Icon name="link" className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900">
+              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.shortlinks.noLinks', 'No short links found')}
               </h3>
-              <p className="mt-1 text-sm text-gray-500">
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                 {t(
                   'admin.shortlinks.noLinksDesc',
                   'Short links will appear here when created by users.'
