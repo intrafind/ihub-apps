@@ -1589,16 +1589,16 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
       {/* OIDC Provider Selection Modal */}
       {showProviderModal && (
-        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
-            <div className="px-6 py-4 border-b border-gray-200">
+        <div className="fixed inset-0 bg-gray-500 bg-opacity-75 dark:bg-gray-900/80 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
               <div className="flex justify-between items-center">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   {t('admin.auth.selectOidcProvider', 'Select OIDC Provider')}
                 </h3>
                 <button
                   onClick={() => setShowProviderModal(false)}
-                  className="text-gray-400 hover:text-gray-500"
+                  className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
                 >
                   <Icon name="close" size="md" />
                 </button>
@@ -1615,11 +1615,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 {/* Auth0 */}
                 <button
                   onClick={() => addOidcProvider('auth0')}
-                  className="flex items-start p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                  className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
                   <div className="flex-shrink-0 mt-1">
-                    <div className="w-10 h-10 bg-orange-100 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-orange-600" />
+                    <div className="w-10 h-10 bg-orange-100 dark:bg-orange-900/30 rounded-lg flex items-center justify-center">
+                      <Icon name="key" size="md" className="text-orange-600 dark:text-orange-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -1635,11 +1635,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 {/* Google */}
                 <button
                   onClick={() => addOidcProvider('google')}
-                  className="flex items-start p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                  className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
                   <div className="flex-shrink-0 mt-1">
-                    <div className="w-10 h-10 bg-red-100 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-red-600" />
+                    <div className="w-10 h-10 bg-red-100 dark:bg-red-900/30 rounded-lg flex items-center justify-center">
+                      <Icon name="key" size="md" className="text-red-600 dark:text-red-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -1655,11 +1655,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 {/* Microsoft */}
                 <button
                   onClick={() => addOidcProvider('microsoft')}
-                  className="flex items-start p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                  className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
                   <div className="flex-shrink-0 mt-1">
-                    <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-blue-600" />
+                    <div className="w-10 h-10 bg-blue-100 dark:bg-blue-900/30 rounded-lg flex items-center justify-center">
+                      <Icon name="key" size="md" className="text-blue-600 dark:text-blue-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -1678,11 +1678,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 {/* Keycloak */}
                 <button
                   onClick={() => addOidcProvider('keycloak')}
-                  className="flex items-start p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left"
+                  className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left"
                 >
                   <div className="flex-shrink-0 mt-1">
-                    <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                      <Icon name="key" size="md" className="text-green-600" />
+                    <div className="w-10 h-10 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center">
+                      <Icon name="key" size="md" className="text-green-600 dark:text-green-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -1698,11 +1698,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 {/* Custom */}
                 <button
                   onClick={() => addOidcProvider('custom')}
-                  className="flex items-start p-4 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all text-left md:col-span-2"
+                  className="flex items-start p-4 border-2 border-gray-200 dark:border-gray-600 rounded-lg hover:border-blue-500 dark:hover:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-all text-left md:col-span-2"
                 >
                   <div className="flex-shrink-0 mt-1">
-                    <div className="w-10 h-10 bg-gray-100 rounded-lg flex items-center justify-center">
-                      <Icon name="cog" size="md" className="text-gray-600" />
+                    <div className="w-10 h-10 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center">
+                      <Icon name="cog" size="md" className="text-gray-600 dark:text-gray-400" />
                     </div>
                   </div>
                   <div className="ml-3">
@@ -1719,10 +1719,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 </button>
               </div>
             </div>
-            <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end rounded-b-lg">
+            <div className="px-6 py-4 bg-gray-50 dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 flex justify-end rounded-b-lg">
               <button
                 onClick={() => setShowProviderModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
