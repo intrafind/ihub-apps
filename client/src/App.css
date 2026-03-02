@@ -336,7 +336,7 @@ div .markdown-content .code-block-toolbar > div,
 [data-theme='dark'] input[type='date'],
 [data-theme='dark'] input[type='time'],
 [data-theme='dark'] input[type='datetime-local'],
-[data-theme='dark'] textarea,
+[data-theme='dark'] textarea:not(.bg-transparent),
 [data-theme='dark'] select {
   @apply bg-gray-700 border-gray-600 text-gray-100;
 }
