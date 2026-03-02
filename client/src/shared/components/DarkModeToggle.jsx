@@ -46,7 +46,7 @@ const DarkModeToggle = ({ className = '' }) => {
   return (
     <button
       onClick={toggleMode}
-      className={`flex items-center justify-center px-2 py-1 rounded border border-white/50 hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white transition-colors ${className}`}
+      className={`flex items-center justify-center px-2 py-1.5 rounded border border-white/50 hover:bg-white/10 focus:outline-none focus:ring-1 focus:ring-white transition-colors text-sm ${className}`}
       aria-label={nextLabel}
       title={`${label} - ${nextLabel}`}
     >
