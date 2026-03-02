@@ -236,7 +236,11 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
                         setShowAllGroups(false);
                       }}
                     >
-                      <Icon name="link" size="sm" className="mr-3 text-gray-400 dark:text-gray-500" />
+                      <Icon
+                        name="link"
+                        size="sm"
+                        className="mr-3 text-gray-400 dark:text-gray-500"
+                      />
                       {t('auth.menu.integrations', 'Integrations')}
                     </Link>
                   )}

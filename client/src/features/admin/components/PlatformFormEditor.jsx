@@ -313,9 +313,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
   return (
     <div className="platform-form-editor space-y-8">
       {/* Primary Authentication Mode Selection */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Primary Authentication Mode</h3>
-        <p className="text-sm text-gray-600 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+          Primary Authentication Mode
+        </h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           Select the primary authentication mode for default behavior and routing.
         </p>
         <div className="space-y-4">
@@ -356,8 +358,8 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 key={modeOption.mode}
                 className={`p-4 border-2 rounded-lg cursor-pointer transition-colors ${
                   config.auth?.mode === modeOption.mode
-                    ? 'border-blue-500 bg-blue-50'
-                    : 'border-gray-200 hover:border-gray-300'
+                    ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/30'
+                    : 'border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500'
                 }`}
                 onClick={() => updateAuthMode(modeOption.mode)}
               >
@@ -368,9 +370,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     onChange={() => updateAuthMode(modeOption.mode)}
                     className="mr-2"
                   />
-                  <h4 className="font-medium text-gray-900">{modeOption.title}</h4>
+                  <h4 className="font-medium text-gray-900 dark:text-gray-100">
+                    {modeOption.title}
+                  </h4>
                 </div>
-                <p className="text-sm text-gray-600">{modeOption.desc}</p>
+                <p className="text-sm text-gray-600 dark:text-gray-400">{modeOption.desc}</p>
               </div>
             ))}
           </div>
@@ -378,11 +382,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
       </div>
 
       {/* Multiple Authentication Methods */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.auth.methods', 'Authentication Methods')}
         </h3>
-        <p className="text-sm text-gray-600 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
           Enable multiple authentication methods simultaneously. Users can choose their preferred
           login method.
         </p>
@@ -401,7 +405,9 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 <label className="text-sm font-medium text-gray-900">
                   Proxy/JWT Authentication
                 </label>
-                <p className="text-xs text-gray-500">Headers or JWT tokens from reverse proxy</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Headers or JWT tokens from reverse proxy
+                </p>
               </div>
             </div>
 
@@ -416,7 +422,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               </div>
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-900">Local Authentication</label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   {t('admin.auth.builtInSystem', 'Built-in username/password system')}
                 </p>
               </div>
@@ -433,7 +439,9 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               </div>
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-900">OIDC Authentication</label>
-                <p className="text-xs text-gray-500">OpenID Connect providers (Google, etc.)</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  OpenID Connect providers (Google, etc.)
+                </p>
               </div>
             </div>
 
@@ -448,7 +456,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               </div>
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-900">LDAP Authentication</label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   LDAP/Active Directory authentication with multiple providers
                 </p>
               </div>
@@ -465,7 +473,9 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               </div>
               <div className="flex-1">
                 <label className="text-sm font-medium text-gray-900">NTLM Authentication</label>
-                <p className="text-xs text-gray-500">Windows Integrated Authentication (NTLM)</p>
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  Windows Integrated Authentication (NTLM)
+                </p>
               </div>
             </div>
 
@@ -482,7 +492,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 <label className="text-sm font-medium text-gray-900">
                   {t('admin.auth.anonymousAccess', 'Anonymous Access')}
                 </label>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
                   Allow users to access without authentication
                 </p>
               </div>
@@ -492,13 +502,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
       </div>
 
       {/* General Authentication Settings */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
           {t('admin.auth.defaultGroups', 'Default Groups')}
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Authenticated Groups
             </label>
             <input
@@ -508,12 +518,14 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="authenticated"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Group automatically assigned to all authenticated users
             </p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Anonymous Groups</label>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Anonymous Groups
+            </label>
             <input
               type="text"
               value={
@@ -534,7 +546,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
               placeholder="anonymous, guest"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Groups assigned to users who access without authentication (comma-separated)
             </p>
           </div>
@@ -543,18 +555,20 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
       {/* Proxy Auth Configuration */}
       {config.proxyAuth?.enabled && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Proxy/JWT Authentication Settings
           </h3>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Configure header-based authentication from reverse proxy and/or JWT token validation for
             pure JWT authentication.
           </p>
           <div className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">User Header</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  User Header
+                </label>
                 <input
                   type="text"
                   value={config.proxyAuth?.userHeader || ''}
@@ -564,7 +578,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Groups Header
                 </label>
                 <input
@@ -590,7 +604,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 />
                 <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Allow new users to register automatically through proxy authentication. If disabled,
                 new users must be added manually by administrators.
               </p>
@@ -600,10 +614,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
             <div>
               <div className="flex justify-between items-center mb-4">
                 <div>
-                  <h4 className="text-md font-medium text-gray-900">
+                  <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
                     {t('admin.auth.jwtProviders', 'JWT Providers')}
                   </h4>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
                     Configure JWT token validation for pure JWT authentication (no headers required)
                   </p>
                 </div>
@@ -674,13 +688,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
       {/* Local Auth Configuration */}
       {config.localAuth?.enabled && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
             Local Authentication Settings
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Users File Path
               </label>
               <input
@@ -692,7 +706,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Session Timeout (minutes)
               </label>
               <input
@@ -706,7 +720,9 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               />
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">JWT Secret</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                JWT Secret
+              </label>
               <input
                 type="text"
                 value={config.localAuth?.jwtSecret || ''}
@@ -714,7 +730,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="${JWT_SECRET}"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Use environment variable ${'{JWT_SECRET}'} for security
               </p>
             </div>
@@ -732,7 +748,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                   Show Demo Accounts in Login Form
                 </span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Display demo account credentials on the login form for development/testing
               </p>
             </div>
@@ -742,9 +758,11 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
       {/* OIDC Configuration */}
       {config.oidcAuth?.enabled && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">OIDC Authentication Settings</h3>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              OIDC Authentication Settings
+            </h3>
             <button
               type="button"
               onClick={() => setShowProviderModal(true)}
@@ -766,7 +784,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               />
               <span className="text-sm font-medium text-gray-700">Allow Self-Signup</span>
             </label>
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Allow new users to register automatically through OIDC authentication. If disabled,
               new users must be added manually by administrators.
             </p>
@@ -792,7 +810,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                         onChange={e => updateOidcProvider(index, 'enabled', e.target.checked)}
                         className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
                       />
-                      <h4 className="text-md font-medium text-gray-900">
+                      <h4 className="text-md font-medium text-gray-900 dark:text-gray-100">
                         {provider.displayName || provider.name || `Provider ${index + 1}`}
                       </h4>
                       {provider.enabled === false && (
@@ -813,7 +831,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className={`grid grid-cols-1 md:grid-cols-2 gap-4 ${provider.enabled === false ? 'opacity-50 pointer-events-none' : ''}`}
                   >
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Provider Name
                       </label>
                       <input
@@ -825,7 +843,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Display Name
                       </label>
                       <input
@@ -837,7 +855,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Client ID
                       </label>
                       <input
@@ -849,7 +867,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Client Secret
                       </label>
                       <input
@@ -861,7 +879,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Authorization URL
                       </label>
                       <input
@@ -875,7 +893,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Token URL
                       </label>
                       <input
@@ -887,7 +905,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         User Info URL
                       </label>
                       <input
@@ -899,7 +917,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Groups Attribute
                       </label>
                       <input
@@ -911,7 +929,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Scope (comma-separated)
                       </label>
                       <input
@@ -929,7 +947,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                       />
                     </div>
                     <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Default Groups (comma-separated)
                       </label>
                       <input
@@ -972,7 +990,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                         />
                         <span className="text-sm font-medium text-gray-700">Auto-redirect</span>
                       </label>
-                      <p className="text-xs text-gray-500 mt-1">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                         Automatically redirect users to this provider when it's the only auth method
                         enabled
                       </p>
@@ -987,10 +1005,12 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
       {/* LDAP Configuration */}
       {config.ldapAuth?.enabled && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">LDAP Authentication Settings</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                LDAP Authentication Settings
+              </h3>
               <p className="text-sm text-gray-600 mt-1">
                 Configure LDAP/Active Directory authentication providers
               </p>
@@ -1017,7 +1037,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
             <div key={index} className="mb-6 p-6 border border-gray-200 rounded-lg">
               <div className="flex justify-between items-start mb-4">
                 <div className="flex items-center space-x-2">
-                  <h4 className="text-md font-semibold text-gray-900">
+                  <h4 className="text-md font-semibold text-gray-900 dark:text-gray-100">
                     LDAP Provider {index + 1}
                     {provider.displayName && `: ${provider.displayName}`}
                   </h4>
@@ -1033,7 +1053,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Provider Name
                   </label>
                   <input
@@ -1043,13 +1063,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="corporate-ldap"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Internal identifier for this provider
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Display Name
                   </label>
                   <input
@@ -1059,11 +1079,15 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="Corporate LDAP"
                   />
-                  <p className="text-xs text-gray-500 mt-1">User-friendly name shown in login</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    User-friendly name shown in login
+                  </p>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">LDAP URL</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    LDAP URL
+                  </label>
                   <input
                     type="text"
                     value={provider.url || ''}
@@ -1071,14 +1095,16 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="ldap://ldap.example.com:389"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     LDAP server URL (e.g., ldap://ldap.example.com:389 or
                     ldaps://ldap.example.com:636)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Admin DN</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Admin DN
+                  </label>
                   <input
                     type="text"
                     value={provider.adminDn || ''}
@@ -1086,11 +1112,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="cn=admin,dc=example,dc=org"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Admin Distinguished Name for binding</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Admin Distinguished Name for binding
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Admin Password
                   </label>
                   <input
@@ -1100,13 +1128,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="${LDAP_ADMIN_PASSWORD}"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Password for admin DN (use env vars for security)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     User Search Base
                   </label>
                   <input
@@ -1116,11 +1144,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="ou=people,dc=example,dc=org"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Base DN for user searches</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Base DN for user searches
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Username Attribute
                   </label>
                   <input
@@ -1130,13 +1160,15 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="uid"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     LDAP attribute for username (uid or sAMAccountName)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">User DN</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    User DN
+                  </label>
                   <input
                     type="text"
                     value={provider.userDn || ''}
@@ -1144,13 +1176,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="uid={{username}},ou=people,dc=example,dc=org"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     User DN template (use {'{{username}}'} placeholder)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Group Search Base
                   </label>
                   <input
@@ -1160,11 +1192,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="ou=groups,dc=example,dc=org"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Base DN for group searches</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    Base DN for group searches
+                  </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Group Class
                   </label>
                   <input
@@ -1174,13 +1208,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="groupOfNames"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     LDAP group object class (groupOfNames or group for AD)
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Session Timeout (minutes)
                   </label>
                   <input
@@ -1192,11 +1226,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="480"
                   />
-                  <p className="text-xs text-gray-500 mt-1">JWT token expiration time</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    JWT token expiration time
+                  </p>
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Default Groups (comma-separated)
                   </label>
                   <input
@@ -1217,7 +1253,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                     placeholder="ldap-users, employees"
                   />
-                  <p className="text-xs text-gray-500 mt-1">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     Groups automatically assigned to LDAP users
                   </p>
                 </div>
@@ -1229,14 +1265,18 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
 
       {/* NTLM Configuration */}
       {config.ntlmAuth?.enabled && (
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">NTLM Authentication Settings</h3>
-          <p className="text-sm text-gray-600 mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            NTLM Authentication Settings
+          </h3>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Configure Windows Integrated Authentication (NTLM) for domain users.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Domain Name</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Domain Name
+              </label>
               <input
                 type="text"
                 value={config.ntlmAuth?.domain || ''}
@@ -1244,10 +1284,12 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="EXAMPLE"
               />
-              <p className="text-xs text-gray-500 mt-1">Windows domain name (e.g., EXAMPLE, MUC)</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                Windows domain name (e.g., EXAMPLE, MUC)
+              </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Domain Controller URL
               </label>
               <input
@@ -1257,12 +1299,12 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="ldap://dc.example.com:389"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 LDAP URL of domain controller (e.g., ldap://dc.example.com:389)
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Domain Controller User
               </label>
               <input
@@ -1274,12 +1316,12 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="admin@EXAMPLE.COM"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Domain controller admin username (optional, for retrieving user info/groups)
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Domain Controller Password
               </label>
               <input
@@ -1291,13 +1333,13 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="${NTLM_DC_PASSWORD}"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Password for domain controller user (encrypted automatically, use env vars for
                 security)
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Authentication Type
               </label>
               <select
@@ -1308,12 +1350,12 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 <option value="ntlm">NTLM</option>
                 <option value="negotiate">Negotiate</option>
               </select>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Protocol to use for Windows authentication
               </p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Session Timeout (minutes)
               </label>
               <input
@@ -1325,10 +1367,12 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="480"
               />
-              <p className="text-xs text-gray-500 mt-1">JWT token expiration time</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                JWT token expiration time
+              </p>
             </div>
             <div className="md:col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Default Groups (comma-separated)
               </label>
               <input
@@ -1351,7 +1395,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                 placeholder="ntlm-users, domain-users"
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Groups automatically assigned to NTLM authenticated users
               </p>
             </div>
@@ -1365,7 +1409,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 />
                 <span className="text-sm font-medium text-gray-700">Enable Debug Logging</span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Log detailed NTLM authentication information
               </p>
             </div>
@@ -1379,7 +1423,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 />
                 <span className="text-sm font-medium text-gray-700">Get User Info</span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Retrieve additional user information from domain
               </p>
             </div>
@@ -1393,7 +1437,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 />
                 <span className="text-sm font-medium text-gray-700">Get Groups</span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Retrieve user group memberships from domain
               </p>
             </div>
@@ -1409,7 +1453,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                 />
                 <span className="text-sm font-medium text-gray-700">Generate JWT Token</span>
               </label>
-              <p className="text-xs text-gray-500 mt-1">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Generate JWT tokens for API access after NTLM authentication
               </p>
             </div>
@@ -1418,9 +1462,9 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
       )}
 
       {/* Authentication Debug Settings */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
         <div className="mb-4">
-          <h3 className="text-lg font-semibold text-gray-900">Debug Settings</h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Debug Settings</h3>
           <p className="text-sm text-gray-600 mt-1">
             Enable detailed logging for authentication providers to troubleshoot issues.
             <span className="text-amber-600 font-medium ml-1">
@@ -1443,7 +1487,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               <label className="text-sm font-medium text-gray-900">
                 Enable Authentication Debug Logging
               </label>
-              <p className="text-xs text-gray-500">
+              <p className="text-xs text-gray-500 dark:text-gray-400">
                 Log authentication events, token exchanges, and user information for troubleshooting
               </p>
             </div>
@@ -1462,7 +1506,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     />
                     <span className="text-sm font-medium text-gray-700">Mask Tokens</span>
                   </label>
-                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
                     Hide sensitive parts of access tokens and secrets
                   </p>
                 </div>
@@ -1477,7 +1521,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     />
                     <span className="text-sm font-medium text-gray-700">Redact Passwords</span>
                   </label>
-                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
                     Remove passwords and credentials from logs
                   </p>
                 </div>
@@ -1492,7 +1536,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     />
                     <span className="text-sm font-medium text-gray-700">Console Logging</span>
                   </label>
-                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
                     Also output debug logs to console
                   </p>
                 </div>
@@ -1507,7 +1551,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     />
                     <span className="text-sm font-medium text-gray-700">Include Raw Data</span>
                   </label>
-                  <p className="text-xs text-gray-500 mt-1 ml-6">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-6">
                     Include unsanitized raw data (security risk)
                   </p>
                 </div>
@@ -1534,7 +1578,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-gray-500 mt-2">
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
                   Enable debug logging per authentication provider
                 </p>
               </div>
@@ -1549,7 +1593,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4">
             <div className="px-6 py-4 border-b border-gray-200">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg font-semibold text-gray-900">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   {t('admin.auth.selectOidcProvider', 'Select OIDC Provider')}
                 </h3>
                 <button
@@ -1561,7 +1605,7 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
               </div>
             </div>
             <div className="px-6 py-4">
-              <p className="text-sm text-gray-600 mb-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 {t(
                   'admin.auth.selectProviderDescription',
                   'Choose a preconfigured provider template or create a custom configuration'
@@ -1579,8 +1623,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     </div>
                   </div>
                   <div className="ml-3">
-                    <h4 className="text-sm font-semibold text-gray-900">Auth0</h4>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Auth0
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {t('admin.auth.auth0Description', 'Enterprise identity platform')}
                     </p>
                   </div>
@@ -1597,8 +1643,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     </div>
                   </div>
                   <div className="ml-3">
-                    <h4 className="text-sm font-semibold text-gray-900">Google</h4>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Google
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {t('admin.auth.googleDescription', 'Sign in with Google accounts')}
                     </p>
                   </div>
@@ -1615,8 +1663,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     </div>
                   </div>
                   <div className="ml-3">
-                    <h4 className="text-sm font-semibold text-gray-900">Microsoft</h4>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Microsoft
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {t(
                         'admin.auth.microsoftDescription',
                         'Sign in with Microsoft/Azure AD accounts'
@@ -1636,8 +1686,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     </div>
                   </div>
                   <div className="ml-3">
-                    <h4 className="text-sm font-semibold text-gray-900">Keycloak</h4>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                      Keycloak
+                    </h4>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {t('admin.auth.keycloakDescription', 'Open source identity management')}
                     </p>
                   </div>
@@ -1654,10 +1706,10 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
                     </div>
                   </div>
                   <div className="ml-3">
-                    <h4 className="text-sm font-semibold text-gray-900">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {t('admin.auth.customProvider', 'Custom Provider')}
                     </h4>
-                    <p className="text-xs text-gray-500 mt-1">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                       {t(
                         'admin.auth.customProviderDescription',
                         'Configure a custom OIDC provider with your own settings'
