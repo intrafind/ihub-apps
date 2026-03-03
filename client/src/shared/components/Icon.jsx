@@ -246,7 +246,14 @@ const sizeClasses = {
   '2xl': 'w-12 h-12'
 };
 
-// Note: iconBaseUrl is now handled by buildAssetPath utility
+// Check if a value is a direct path or URL (not a short icon name)
+const isDirectPath = value => {
+  if (!value || typeof value !== 'string') return false;
+  if (value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://'))
+    return true;
+  if (/\.(svg|png|jpe?g|webp)$/i.test(value)) return true;
+  return false;
+};
 
 const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest }) => {
   const [imgError, setImgError] = useState(false);
@@ -273,10 +280,13 @@ const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest
     return null;
   }
 
+  // Direct paths/URLs are used as-is; short names resolve to /icons/{name}.svg
+  const iconSrc = isDirectPath(name) ? buildAssetUrl(name) : buildAssetUrl(`icons/${name}.svg`);
+
   return (
     <img
-      src={buildAssetUrl(`icons/${name}.svg`)}
-      alt={name}
+      src={iconSrc}
+      alt={title || name}
       onError={() => setImgError(true)}
       className={`${sizeClasses[size] || sizeClasses.md} ${className}`}
       title={title}

@@ -28,6 +28,17 @@ const ContentEditor = ({ config, onUpdate }) => {
     onUpdate(updatedConfig);
   };
 
+  const updateIconsConfig = updates => {
+    const updatedConfig = {
+      ...config,
+      icons: {
+        ...config.icons,
+        ...updates
+      }
+    };
+    onUpdate(updatedConfig);
+  };
+
   return (
     <div className="p-6">
       <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-6">
@@ -271,6 +282,50 @@ const ContentEditor = ({ config, onUpdate }) => {
                   fr: 'Apps page subtitle (fr)'
                 }}
               />
+            </div>
+
+            {/* Apps List Logo */}
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                {t('admin.ui.content.appsListLogo', 'Page Logo')}
+              </label>
+              <input
+                type="text"
+                value={config.icons?.appsListLogo || ''}
+                onChange={e => updateIconsConfig({ appsListLogo: e.target.value })}
+                placeholder={t(
+                  'admin.ui.content.appsListLogoPlaceholder',
+                  '/uploads/assets/my-logo.svg'
+                )}
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+              />
+              <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                {t(
+                  'admin.ui.content.appsListLogoHint',
+                  'Upload an icon in the Assets tab, then paste the URL here. Leave empty for the default icon.'
+                )}
+              </p>
+              {config.icons?.appsListLogo && (
+                <div className="mt-3 p-3 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md">
+                  <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+                    {t('admin.ui.content.preview', 'Preview')}
+                  </p>
+                  <div className="flex items-center justify-center bg-white dark:bg-gray-700 p-3 rounded">
+                    <img
+                      src={config.icons.appsListLogo}
+                      alt="Apps List Logo"
+                      className="w-16 h-16 object-contain"
+                      onError={e => {
+                        e.target.style.display = 'none';
+                        e.target.nextElementSibling.style.display = 'block';
+                      }}
+                    />
+                    <p className="hidden text-sm text-red-500 dark:text-red-400">
+                      {t('admin.ui.content.iconPreviewError', 'Failed to load icon preview')}
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Search Configuration */}

@@ -168,14 +168,23 @@ The `icons` section allows overriding which icon is used for certain UI elements
 ```json
 "icons": {
   "assistantMessage": "apps-svg-logo",
-  "userMessage": "user"
+  "userMessage": "user",
+  "appsListLogo": "/uploads/assets/my-custom-logo.svg"
 }
 ```
 
-| Property           | Type   | Description                                     |
-| ------------------ | ------ | ----------------------------------------------- |
-| `assistantMessage` | String | Icon identifier for messages from the assistant |
-| `userMessage`      | String | Icon identifier for user messages               |
+| Property           | Type   | Description                                                        |
+| ------------------ | ------ | ------------------------------------------------------------------ |
+| `assistantMessage` | String | Icon identifier for messages from the assistant                    |
+| `userMessage`      | String | Icon identifier for user messages                                  |
+| `appsListLogo`     | String | Icon identifier for the logo displayed on the apps list/home page  |
+
+Icon values accept two formats:
+
+- **Short name** (e.g., `"apps-svg-logo"`) — resolves to `/icons/{name}.svg` via the `Icon` component. Custom SVGs can be placed under `public/icons/`.
+- **Direct path or URL** (e.g., `"/uploads/assets/my-logo.svg"`) — used as-is. Upload icons via the Assets tab in the admin panel and paste the URL directly.
+
+The `appsListLogo` can also be configured from the admin panel under **UI Customization > Content > Page Content**.
 
 ### Apps List Configuration
 
