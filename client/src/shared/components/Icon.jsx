@@ -246,7 +246,23 @@ const sizeClasses = {
   '2xl': 'w-12 h-12'
 };
 
-// Note: iconBaseUrl is now handled by buildAssetPath utility
+// Check if a value is a direct path or URL (not a short icon name)
+const isDirectPath = value => {
+  if (!value || typeof value !== 'string') return false;
+  if (value.startsWith('/') || value.startsWith('http://') || value.startsWith('https://'))
+    return true;
+  if (/\.(svg|png|jpe?g|webp)$/i.test(value)) return true;
+  return false;
+};
+
+// Validate that a URL is safe for use in img src (no javascript:, data:, vbscript:, etc.)
+const isSafeImgSrc = url => {
+  if (!url || typeof url !== 'string') return false;
+  if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) return true;
+  if (url.startsWith('http://') || url.startsWith('https://')) return true;
+  // Relative paths without protocol are safe (e.g., "icons/foo.svg")
+  return !url.includes(':');
+};
 
 const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest }) => {
   const [imgError, setImgError] = useState(false);
@@ -273,10 +289,17 @@ const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest
     return null;
   }
 
+  // Direct paths/URLs are used as-is; short names resolve to /icons/{name}.svg
+  const iconSrc = isDirectPath(name) ? buildAssetUrl(name) : buildAssetUrl(`icons/${name}.svg`);
+
+  if (!isSafeImgSrc(iconSrc)) {
+    return null;
+  }
+
   return (
     <img
-      src={buildAssetUrl(`icons/${name}.svg`)}
-      alt={name}
+      src={iconSrc}
+      alt={title || name}
       onError={() => setImgError(true)}
       className={`${sizeClasses[size] || sizeClasses.md} ${className}`}
       title={title}
