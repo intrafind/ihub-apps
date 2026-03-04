@@ -158,6 +158,14 @@ export default function jwtAuthMiddleware(req, res, next) {
       } else {
         // OAuth not enabled, but token is OAuth type - reject
         logger.warn('[OAuth] Token rejected: OAuth not enabled');
+        res.clearCookie('authToken', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        });
+        if (req.path === '/api/auth/status') {
+          return next(); // Continue as anonymous — let status endpoint return available auth methods
+        }
         return res.status(401).json({
           error: 'invalid_token',
           error_description: 'OAuth authentication is not enabled'
@@ -203,6 +211,14 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         logger.warn('[OAuth] Auth code token rejected: OAuth not enabled');
+        res.clearCookie('authToken', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        });
+        if (req.path === '/api/auth/status') {
+          return next();
+        }
         return res.status(401).json({
           error: 'invalid_token',
           error_description: 'OAuth authentication is not enabled'
@@ -258,6 +274,14 @@ export default function jwtAuthMiddleware(req, res, next) {
       } else {
         // Local auth not enabled, but token is local type - reject
         logger.warn('[JWT Auth] Token rejected: Local authentication is not enabled');
+        res.clearCookie('authToken', {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === 'production',
+          sameSite: 'lax'
+        });
+        if (req.path === '/api/auth/status') {
+          return next(); // Continue as anonymous — let status endpoint return available auth methods
+        }
         return res.status(401).json({
           error: 'invalid_token',
           error_description: 'Local authentication is not enabled'

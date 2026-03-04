@@ -86,8 +86,11 @@ const addResponseInterceptor = client => {
           localStorage.removeItem('authToken');
         }
 
-        // Dispatch custom event for auth context to handle (will handle cookie clearing via logout API)
-        window.dispatchEvent(new CustomEvent('authTokenExpired'));
+        // Don't trigger token-expired handling for /auth/status — it's called by
+        // the handler itself, so re-dispatching would cause an infinite loop
+        if (!originalRequest.url?.includes('/auth/status')) {
+          window.dispatchEvent(new CustomEvent('authTokenExpired'));
+        }
 
         // Don't retry auth requests to avoid infinite loops
         return Promise.reject(error);

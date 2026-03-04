@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
 import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
 
@@ -285,6 +285,9 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Guard to prevent concurrent/recursive execution of the token-expired handler
+  const isHandlingTokenExpired = useRef(false);
+
   // Load authentication status on mount and handle OIDC callback
   useEffect(() => {
     // Check if this is an OIDC callback
@@ -297,77 +300,84 @@ export function AuthProvider({ children }) {
 
     // Listen for token expiration events from API client
     const handleTokenExpired = async () => {
-      console.log('🔐 Session expired - handling automatic relogin');
+      if (isHandlingTokenExpired.current) return;
+      isHandlingTokenExpired.current = true;
 
-      // Clear the expired token
-      const currentToken = localStorage.getItem('authToken');
-      if (currentToken) {
-        localStorage.removeItem('authToken');
-      }
-
-      // Store the current URL for return after re-authentication
-      const currentUrl = window.location.href;
-      const urlParams = new URLSearchParams(window.location.search);
-      const isLogoutPage = urlParams.get('logout') === 'true';
-
-      // Only store return URL if not on logout page
-      if (!isLogoutPage) {
-        sessionStorage.setItem('authReturnUrl', currentUrl);
-        console.log('📍 Stored return URL for post-authentication redirect:', currentUrl);
-      }
-
-      // Try to get fresh auth config to check for auto-redirect
       try {
-        const response = await apiClient.get('/auth/status');
-        const data = response.data;
+        console.log('🔐 Session expired - handling automatic relogin');
 
-        // If auto-redirect is configured, redirect to the auth provider
-        if (data.autoRedirect && !isLogoutPage) {
-          const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
-          const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);
-          const now = Date.now();
-
-          // Only redirect if we haven't attempted recently (prevent loops)
-          if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
-            console.log(
-              `🔀 Session expired - auto-redirecting to ${data.autoRedirect.provider} provider`
-            );
-            sessionStorage.setItem(redirectAttemptKey, now.toString());
-
-            // Dispatch event for components to show reconnecting UI
-            window.dispatchEvent(
-              new CustomEvent('sessionExpiredReconnecting', {
-                detail: { provider: data.autoRedirect.provider }
-              })
-            );
-
-            // Redirect to auth provider with return URL
-            const returnUrl = sessionStorage.getItem('authReturnUrl') || currentUrl;
-            const authUrl = data.autoRedirect.url;
-            const separator = authUrl.includes('?') ? '&' : '?';
-            const redirectUrl = `${authUrl}${separator}returnUrl=${encodeURIComponent(returnUrl)}`;
-
-            window.location.href = redirectUrl;
-            return; // Don't logout, we're redirecting for re-auth
-          }
+        // Clear the expired token
+        const currentToken = localStorage.getItem('authToken');
+        if (currentToken) {
+          localStorage.removeItem('authToken');
         }
-      } catch (error) {
-        console.error('Failed to check auto-redirect on session expiry:', error);
+
+        // Store the current URL for return after re-authentication
+        const currentUrl = window.location.href;
+        const urlParams = new URLSearchParams(window.location.search);
+        const isLogoutPage = urlParams.get('logout') === 'true';
+
+        // Only store return URL if not on logout page
+        if (!isLogoutPage) {
+          sessionStorage.setItem('authReturnUrl', currentUrl);
+          console.log('📍 Stored return URL for post-authentication redirect:', currentUrl);
+        }
+
+        // Try to get fresh auth config to check for auto-redirect
+        try {
+          const response = await apiClient.get('/auth/status');
+          const data = response.data;
+
+          // If auto-redirect is configured, redirect to the auth provider
+          if (data.autoRedirect && !isLogoutPage) {
+            const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
+            const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);
+            const now = Date.now();
+
+            // Only redirect if we haven't attempted recently (prevent loops)
+            if (!lastRedirectAttempt || now - parseInt(lastRedirectAttempt) > 5 * 60 * 1000) {
+              console.log(
+                `🔀 Session expired - auto-redirecting to ${data.autoRedirect.provider} provider`
+              );
+              sessionStorage.setItem(redirectAttemptKey, now.toString());
+
+              // Dispatch event for components to show reconnecting UI
+              window.dispatchEvent(
+                new CustomEvent('sessionExpiredReconnecting', {
+                  detail: { provider: data.autoRedirect.provider }
+                })
+              );
+
+              // Redirect to auth provider with return URL
+              const returnUrl = sessionStorage.getItem('authReturnUrl') || currentUrl;
+              const authUrl = data.autoRedirect.url;
+              const separator = authUrl.includes('?') ? '&' : '?';
+              const redirectUrl = `${authUrl}${separator}returnUrl=${encodeURIComponent(returnUrl)}`;
+
+              window.location.href = redirectUrl;
+              return; // Don't logout, we're redirecting for re-auth
+            }
+          }
+        } catch (error) {
+          console.error('Failed to check auto-redirect on session expiry:', error);
+        }
+
+        // If we reach here, no auto-redirect is configured or it was attempted recently
+        // Signal the auth gate to show its overlay for re-authentication
+        window.dispatchEvent(
+          new CustomEvent('showAuthGate', {
+            detail: { reason: 'tokenExpired' }
+          })
+        );
+
+        // Also dispatch sessionExpired for any other UI components listening
+        window.dispatchEvent(new CustomEvent('sessionExpired'));
+
+        // Logout the user
+        dispatch({ type: AUTH_ACTIONS.LOGOUT });
+      } finally {
+        isHandlingTokenExpired.current = false;
       }
-
-      // If we reach here, no auto-redirect is configured or it was attempted recently
-      // Signal the auth gate to show its overlay for re-authentication
-      window.dispatchEvent(
-        new CustomEvent('showAuthGate', {
-          detail: { reason: 'tokenExpired' }
-        })
-      );
-
-      // Also dispatch sessionExpired for any other UI components listening
-      window.dispatchEvent(new CustomEvent('sessionExpired'));
-
-      // Logout the user
-      dispatch({ type: AUTH_ACTIONS.LOGOUT });
     };
 
     window.addEventListener('authTokenExpired', handleTokenExpired);
