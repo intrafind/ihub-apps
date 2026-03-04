@@ -255,6 +255,15 @@ const isDirectPath = value => {
   return false;
 };
 
+// Validate that a URL is safe for use in img src (no javascript:, data:, vbscript:, etc.)
+const isSafeImgSrc = url => {
+  if (!url || typeof url !== 'string') return false;
+  if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) return true;
+  if (url.startsWith('http://') || url.startsWith('https://')) return true;
+  // Relative paths without protocol are safe (e.g., "icons/foo.svg")
+  return !url.includes(':');
+};
+
 const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest }) => {
   const [imgError, setImgError] = useState(false);
 
@@ -282,6 +291,10 @@ const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest
 
   // Direct paths/URLs are used as-is; short names resolve to /icons/{name}.svg
   const iconSrc = isDirectPath(name) ? buildAssetUrl(name) : buildAssetUrl(`icons/${name}.svg`);
+
+  if (!isSafeImgSrc(iconSrc)) {
+    return null;
+  }
 
   return (
     <img
