@@ -1,4 +1,5 @@
 import globals from 'globals';
+import { fixupPluginRules } from '@eslint/compat';
 import reactPlugin from 'eslint-plugin-react';
 import reactHooksPlugin from 'eslint-plugin-react-hooks';
 
@@ -52,8 +53,8 @@ export default [
   {
     files: ['client/**/*.jsx', 'client/**/*.js'],
     plugins: {
-      react: reactPlugin,
-      'react-hooks': reactHooksPlugin
+      react: fixupPluginRules(reactPlugin),
+      'react-hooks': fixupPluginRules(reactHooksPlugin)
     },
     languageOptions: {
       ecmaVersion: 'latest',
@@ -78,8 +79,7 @@ export default [
       'react/jsx-uses-react': 'off',
       'react/react-in-jsx-scope': 'off',
 
-      // Enable JSX-specific rules to detect usage
-      'react/jsx-uses-vars': 'error',
+      // JSX-specific rules (jsx-uses-vars removed - ESLint 10 natively tracks JSX references)
       'react/jsx-no-undef': 'error',
 
       // React hooks rules
