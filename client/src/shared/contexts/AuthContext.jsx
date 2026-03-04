@@ -1,4 +1,4 @@
-import { createContext, useContext, useReducer, useEffect, useCallback } from 'react';
+import { createContext, useContext, useReducer, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../api/client.js';
 import { buildPath, buildApiUrl } from '../../utils/runtimeBasePath';
 
@@ -85,6 +85,10 @@ const AuthContext = createContext();
 // Auth provider component
 export function AuthProvider({ children }) {
   const [state, dispatch] = useReducer(authReducer, initialState);
+
+  // Guard to prevent concurrent handling of token expiration events
+  // (multiple simultaneous 401 responses can each fire authTokenExpired)
+  const isHandlingTokenExpired = useRef(false);
 
   // Get auth headers for API requests
   const getAuthHeaders = () => {
@@ -297,6 +301,14 @@ export function AuthProvider({ children }) {
 
     // Listen for token expiration events from API client
     const handleTokenExpired = async () => {
+      // Prevent concurrent handling: multiple simultaneous 401 responses can each
+      // dispatch this event, and each would call /auth/status causing a request flood.
+      if (isHandlingTokenExpired.current) {
+        console.log('🔐 Token expiration already being handled, skipping duplicate event');
+        return;
+      }
+      isHandlingTokenExpired.current = true;
+
       console.log('🔐 Session expired - handling automatic relogin');
 
       // Clear the expired token
@@ -375,6 +387,8 @@ export function AuthProvider({ children }) {
     // Listen for successful re-authentication from the auth gate overlay
     const handleAuthGateSuccess = () => {
       console.log('🔓 Auth gate re-authentication successful - refreshing auth state');
+      // Reset the expiry guard so future token expirations are handled correctly
+      isHandlingTokenExpired.current = false;
       loadAuthStatus();
     };
     window.addEventListener('authGateSuccess', handleAuthGateSuccess);

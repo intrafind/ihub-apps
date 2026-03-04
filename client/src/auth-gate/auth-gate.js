@@ -139,6 +139,20 @@
       credentials: 'include',
       headers: headers
     }).then(function (res) {
+      // If the server rejects the token (e.g., token from a now-disabled auth method),
+      // clear the stale token and retry once without it so the client can get the
+      // current auth configuration and show the correct login form.
+      if (res.status === 401 && token) {
+        removeToken();
+        return fetch(API_BASE + '/auth/status', {
+          method: 'GET',
+          credentials: 'include',
+          headers: { Accept: 'application/json' }
+        }).then(function (res2) {
+          if (!res2.ok) throw new Error(t('serverError'));
+          return res2.json();
+        });
+      }
       if (!res.ok) throw new Error(t('serverError'));
       return res.json();
     });
