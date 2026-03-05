@@ -16,5 +16,8 @@ export const UnifiedEvents = {
   CLARIFICATION: 'clarification',
   WORKFLOW_STEP: 'workflow.step',
   WORKFLOW_RESULT: 'workflow.result',
-  SKILL_ACTIVATION: 'skill.activation'
+  SKILL_ACTIVATION: 'skill.activation',
+  SEARCH_STATUS: 'search.status',
+  CONVERSATION_TITLE: 'conversation.title',
+  CONVERSATION_ID: 'conversation.id'
 };

@@ -72,6 +72,7 @@ export const chatPostSchema = {
     enabledTools: z.array(z.string()).optional(),
     imageAspectRatio: z.string().optional(),
     imageQuality: z.string().optional(),
-    requestedSkill: z.string().optional()
+    requestedSkill: z.string().optional(),
+    documentIds: z.array(z.string()).optional()
   })
 };

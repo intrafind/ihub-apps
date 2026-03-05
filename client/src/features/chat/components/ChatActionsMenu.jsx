@@ -101,12 +101,12 @@ const ChatActionsMenu = ({
           {showClearButton && (
             <button
               onClick={() => {
-                onClearChat?.();
                 setOpen(false);
+                onClearChat?.();
               }}
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
-              <Icon name="trash" size="sm" /> {t('pages.appChat.clear')}
+              <Icon name="plus-circle" size="sm" /> {t('pages.appChat.newChat', 'New Chat')}
             </button>
           )}
           {showShareButton && (

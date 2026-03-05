@@ -57,13 +57,23 @@ export const modelConfigSchema = z
       .refine(
         val => val.includes('${') || val.startsWith('http://') || val.startsWith('https://'),
         'URL must be a valid URI format or environment variable reference'
-      ),
+      )
+      .optional(),
     provider: z.enum(
-      ['openai', 'openai-responses', 'anthropic', 'google', 'mistral', 'local', 'iassistant'],
+      [
+        'openai',
+        'openai-responses',
+        'anthropic',
+        'google',
+        'mistral',
+        'local',
+        'iassistant',
+        'iassistant-conversation'
+      ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant, iassistant-conversation'
         })
       }
     ),
@@ -72,6 +82,7 @@ export const modelConfigSchema = z
       .int()
       .min(1, 'Token limit must be at least 1')
       .max(1000000, 'Token limit cannot exceed 1,000,000')
+      .nullable()
       .optional(),
 
     // Optional fields with validation

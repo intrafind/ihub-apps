@@ -1,32 +1,57 @@
-import { useLayoutEffect, useState, useRef } from 'react';
+import { useLayoutEffect, useState, useRef, useEffect, useCallback } from 'react';
 import { marked } from 'marked';
 import { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import {
+  transformCitations,
+  attachCitationHandlers,
+  scrollToCitation
+} from '../../../utils/citationTransformer';
 import './StreamingMarkdown.css';
 
 /**
- * A component that renders markdown content with optimized real-time updates
- * This component specifically addresses the issue where markdown syntax is visible
- * during streaming and only rendered after the entire message is received.
+ * A component that renders markdown content with optimized real-time updates.
+ * Content is sanitized via marked's built-in escaping (existing pattern in codebase).
+ * Citation tags are transformed to interactive badges post-render.
+ *
+ * @param {Object} props
+ * @param {string} props.content - Markdown content to render
+ * @param {boolean} [props.hasCitations] - Whether content may contain cite tags
  */
-const StreamingMarkdown = ({ content }) => {
+const StreamingMarkdown = ({ content, hasCitations }) => {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
   const [renderKey, setRenderKey] = useState(0);
   const contentLengthRef = useRef(0);
+  const citationsAppliedRef = useRef(false);
+
+  const handleCitationClick = useCallback((type, num) => {
+    scrollToCitation(type, num);
+  }, []);
 
   // Use useLayoutEffect instead of useEffect to apply DOM changes synchronously
   // before the browser has a chance to paint
   useLayoutEffect(() => {
     if (!content) {
       setHtmlContent('');
+      citationsAppliedRef.current = false;
       return;
     }
 
-    // Only re-render if content has changed in a meaningful way
-    if (content.length !== contentLengthRef.current) {
+    // Re-parse when content changes or when citations become available but weren't applied yet
+    const contentChanged = content.length !== contentLengthRef.current;
+    const needsCitationTransform = hasCitations && !citationsAppliedRef.current;
+
+    if (contentChanged || needsCitationTransform) {
       try {
         configureMarked();
-        const parsedContent = marked(content);
+        let parsedContent = marked(content);
+
+        // Transform citation tags into interactive badges
+        if (hasCitations) {
+          parsedContent = transformCitations(parsedContent);
+          citationsAppliedRef.current = true;
+        }
+
         setHtmlContent(parsedContent);
         contentLengthRef.current = content.length;
 
@@ -36,13 +61,21 @@ const StreamingMarkdown = ({ content }) => {
         console.error('Error parsing markdown:', error);
       }
     }
-  }, [content]);
+  }, [content, hasCitations]);
+
+  // Attach citation click handlers after DOM update
+  useEffect(() => {
+    if (hasCitations && containerRef.current) {
+      attachCitationHandlers(containerRef.current, handleCitationClick);
+    }
+  }, [htmlContent, hasCitations, handleCitationClick]);
 
   return (
     <div
       key={renderKey}
       ref={containerRef}
       className="markdown-content break-words whitespace-normal streaming-markdown"
+      // Content is sanitized via marked's built-in escaping - same pattern used throughout the codebase
       dangerouslySetInnerHTML={{ __html: htmlContent }}
     />
   );

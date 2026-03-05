@@ -9,6 +9,7 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
 import { redactUrl } from '../../utils/logRedactor.js';
+import conversationStateManager from '../integrations/ConversationStateManager.js';
 import logger from '../../utils/logger.js';
 
 class StreamingHandler {
@@ -37,7 +38,7 @@ class StreamingHandler {
   processThinking(result, chatId) {
     if (result && result.thinking && result.thinking.length > 0) {
       for (const thought of result.thinking) {
-        actionTracker.trackThinking(chatId, { content: thought });
+        actionTracker.trackThinking(chatId, typeof thought === 'object' ? thought : { content: thought });
       }
     }
   }
@@ -63,6 +64,80 @@ class StreamingHandler {
   getReadableStream(response) {
     // Delegate to the shared utility
     return getReadableStream(response);
+  }
+
+  /**
+   * Process conversation-specific events from iassistant-conversation adapter results
+   */
+  processConversationEvents(result, chatId, request) {
+    if (!result) return;
+
+    // Enrich citations with document access links when searchProfile is available
+    if (result.citations && request?._searchProfile) {
+      const searchProfile = request._searchProfile;
+      const enrichItems = items =>
+        items?.map(item => {
+          if (item.document_id && !Array.isArray(item.links)) {
+            return {
+              ...item,
+              links: [
+                {
+                  type: 'ACCESS',
+                  documentId: item.document_id,
+                  searchProfile
+                }
+              ]
+            };
+          }
+          return item;
+        });
+
+      if (result.citations.references) {
+        result.citations.references = enrichItems(result.citations.references);
+      }
+      if (result.citations.resultItems) {
+        result.citations.resultItems = enrichItems(result.citations.resultItems);
+      }
+    }
+
+    // Emit citations (references + result_items)
+    if (result.citations) {
+      actionTracker.trackCitation(chatId, result.citations);
+    }
+
+    // Emit search status events
+    if (result.searchStatus) {
+      actionTracker.trackAction(chatId, {
+        event: 'search.status',
+        ...result.searchStatus
+      });
+    }
+
+    // Emit conversation title
+    if (result.conversationTitle) {
+      actionTracker.trackAction(chatId, {
+        event: 'conversation.title',
+        title: result.conversationTitle
+      });
+    }
+
+    // Emit conversationId so client can persist it
+    const conversationId = request?._conversationId;
+    if (conversationId && result.content?.length > 0) {
+      // Only emit once on first content
+      if (!request._conversationIdEmitted) {
+        actionTracker.trackAction(chatId, {
+          event: 'conversation.id',
+          conversationId
+        });
+        request._conversationIdEmitted = true;
+      }
+    }
+
+    // Update parent ID for next message in conversation
+    if (result.responseMessageId) {
+      conversationStateManager.updateParentId(chatId, result.responseMessageId);
+    }
   }
 
   async executeStreamingResponse({
@@ -115,22 +190,6 @@ class StreamingHandler {
     };
     setupTimeout();
 
-    // Debug logging for LLM request
-    logger.debug(`[LLM REQUEST DEBUG] Chat ID: ${chatId}, Model: ${model.id}`);
-    logger.debug(`[LLM REQUEST DEBUG] URL: ${redactUrl(request.url)}`);
-    logger.debug(
-      `[LLM REQUEST DEBUG] Headers:`,
-      JSON.stringify(
-        {
-          ...request.headers,
-          Authorization: request.headers.Authorization ? '[REDACTED]' : undefined
-        },
-        null,
-        2
-      )
-    );
-    logger.debug(`[LLM REQUEST DEBUG] Body:`, JSON.stringify(request.body, null, 2));
-
     let doneEmitted = false;
     let finishReason = null;
 
@@ -145,16 +204,15 @@ class StreamingHandler {
       clearTimeout(timeoutId);
 
       if (!llmResponse.ok) {
-        logger.error(`StreamingHandler: HTTP error from ${model.provider}:`, {
-          status: llmResponse.status,
-          statusText: llmResponse.statusText,
-          url: redactUrl(request.url)
-        });
-
         const errorInfo = await this.errorHandler.createEnhancedLLMApiError(
           llmResponse,
           model,
           clientLanguage
+        );
+
+        logger.error(
+          `StreamingHandler: HTTP error from ${model.provider}: ${llmResponse.status} ${llmResponse.statusText}`,
+          { url: redactUrl(request.url), details: errorInfo.details, code: errorInfo.code }
         );
 
         await logInteraction(
@@ -201,7 +259,8 @@ class StreamingHandler {
 
       // Check if the adapter needs custom SSE processing (only iAssistant for now)
       const adapter = getAdapter(model.provider);
-      const hasCustomBufferProcessor = model.provider === 'iassistant';
+      const hasCustomBufferProcessor =
+        model.provider === 'iassistant' || model.provider === 'iassistant-conversation';
 
       if (hasCustomBufferProcessor) {
         // For providers like iAssistant with custom SSE format
@@ -266,6 +325,9 @@ class StreamingHandler {
               // Handle grounding metadata (for Google Search)
               this.processGroundingMetadata(result, chatId);
 
+              // Handle conversation-specific events (iassistant-conversation)
+              this.processConversationEvents(result, chatId, request);
+
               if (result && result.error) {
                 await logInteraction(
                   'chat_error',
@@ -327,6 +389,9 @@ class StreamingHandler {
 
           // Handle generated images in remaining buffer
           this.processImages(result, chatId);
+
+          // Handle conversation events in remaining buffer
+          this.processConversationEvents(result, chatId, request);
 
           if (result && result.complete) {
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
@@ -448,7 +513,7 @@ class StreamingHandler {
       if (
         error.message === 'terminated' &&
         error.cause?.code === 'UND_ERR_SOCKET' &&
-        model.provider === 'iassistant'
+        (model.provider === 'iassistant' || model.provider === 'iassistant-conversation')
       ) {
         logger.error('iAssistant: Connection terminated by remote server. This may indicate:');
         logger.error('- Authentication/authorization failure');

@@ -124,5 +124,21 @@
   },
   "jwt": {
     "algorithm": "RS256"
+  },
+  "iFinder": {
+    "enabled": false,
+    "baseUrl": "",
+    "privateKey": "",
+    "algorithm": "RS256",
+    "issuer": "ihub-apps",
+    "audience": "ifinder-api",
+    "tokenExpirationSeconds": 3600,
+    "defaultScope": "fa_index_read",
+    "jwtSubjectField": "email"
+  },
+  "iAssistant": {
+    "baseUrl": "",
+    "defaultProfileId": "",
+    "timeout": 60000
   }
 }

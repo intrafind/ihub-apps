@@ -5,6 +5,7 @@ import useChatMessages from './useChatMessages';
 import useEventSource from '../../../shared/hooks/useEventSource';
 import { sendAppChatMessage } from '../../../api/api';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { setConversationId } from '../../../utils/chatId';
 
 /**
  * High level hook combining chat message management with streaming
@@ -21,6 +22,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
   // This allows the useChatMessages hook to properly react to chatId changes
   const chatId = initialChatId || `chat-${uuidv4()}`;
   const [processing, setProcessing] = useState(false);
+  const [conversationTitle, setConversationTitle] = useState(null);
+  const [searchStatus, setSearchStatus] = useState(null);
 
   // Clarification state - tracks when a clarification question is pending
   const [clarificationPending, setClarificationPending] = useState(false);
@@ -43,7 +46,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     editMessage,
     addSystemMessage,
     clearMessages,
-    getMessagesForApi
+    getMessagesForApi,
+    loadServerMessages,
+    mergeCitations
   } = useChatMessages(chatId); // Now this will properly react to chatId changes
 
   const cleanupEventSourceRef = useRef();
@@ -126,7 +131,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
             const existingThoughts = currentMessage?.thoughts || [];
             updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              thoughts: [...existingThoughts, data?.content]
+              thoughts: [...existingThoughts, data?.name ? { name: data.name, content: data.content } : data?.content]
             });
           }
           break;
@@ -225,6 +230,33 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             });
           }
           break;
+        case 'citation':
+          if (lastMessageIdRef.current && data) {
+            // Use mergeCitations for race-safe merging via functional updater
+            mergeCitations(lastMessageIdRef.current, data);
+          }
+          break;
+        case 'search.status':
+          if (data) {
+            setSearchStatus(data);
+            // Also store on the message for persistence
+            if (lastMessageIdRef.current) {
+              updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+                searchStatus: data
+              });
+            }
+          }
+          break;
+        case 'conversation.title':
+          if (data?.title) {
+            setConversationTitle(data.title);
+          }
+          break;
+        case 'conversation.id':
+          if (data?.conversationId && appId) {
+            setConversationId(appId, data.conversationId);
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message
@@ -256,6 +288,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             }
           }
           setProcessing(false);
+          setSearchStatus(null);
           // Reset clarification state when done normally
           setClarificationPending(false);
           activeClarificationRef.current = null;
@@ -283,7 +316,14 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           console.log('🔍 Unknown event type:', type, data);
       }
     },
-    [pendingMessageDataRef, updateAssistantMessage, onMessageComplete, t, messagesRef]
+    [
+      pendingMessageDataRef,
+      updateAssistantMessage,
+      mergeCitations,
+      onMessageComplete,
+      t,
+      messagesRef
+    ]
   );
 
   const { initEventSource, cleanupEventSource } = useEventSource({
@@ -619,11 +659,18 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     ]
   );
 
+  const resetConversationState = useCallback(() => {
+    setConversationTitle(null);
+    setSearchStatus(null);
+  }, []);
+
   return {
     chatId: chatId,
     messages,
     processing,
     clarificationPending,
+    conversationTitle,
+    searchStatus,
     sendMessage,
     resendMessage,
     deleteMessage,
@@ -631,7 +678,9 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
     clearMessages,
     cancelGeneration,
     addSystemMessage,
-    submitClarificationResponse
+    submitClarificationResponse,
+    loadServerMessages,
+    resetConversationState
   };
 }
 

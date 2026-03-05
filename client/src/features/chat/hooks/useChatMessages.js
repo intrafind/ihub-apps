@@ -353,6 +353,52 @@ function useChatMessages(chatId = 'default') {
   }, []);
 
   /**
+   * Load messages from the conversation API (iAssistant Conversation).
+   * Transforms server message format to iHub chat format.
+   * @param {Array} serverMessages - Messages from the conversation API
+   * @returns {string|null} The last assistant message ID (for parent_id chaining)
+   */
+  const loadServerMessages = useCallback(serverMessages => {
+    if (!serverMessages || serverMessages.length === 0) return null;
+
+    let lastAssistantId = null;
+    const transformed = serverMessages.map(msg => {
+      const id = msg.id || `server-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+      const role = msg.type === 'USER' ? 'user' : msg.type === 'ERROR' ? 'system' : 'assistant';
+
+      if (role === 'assistant') {
+        lastAssistantId = msg.id;
+      }
+
+      const message = {
+        id,
+        role,
+        content: msg.content || '',
+        loading: false,
+        fromServer: true
+      };
+
+      // Map citations
+      if (msg.references || msg.result_items) {
+        message.citations = {
+          references: msg.references || [],
+          resultItems: msg.result_items || []
+        };
+      }
+
+      if (msg.type === 'ERROR') {
+        message.error = true;
+        message.isErrorMessage = true;
+      }
+
+      return message;
+    });
+
+    setMessages(transformed);
+    return lastAssistantId;
+  }, []);
+
+  /**
    * Get messages formatted for API requests (excludes greeting messages)
    * @param {boolean} includeFull - Whether to include the entire message history
    * @param {Object} additionalMessage - An additional message to include
@@ -375,6 +421,30 @@ function useChatMessages(chatId = 'default') {
     });
   }, []); // No dependency on messages anymore
 
+  /**
+   * Merge citation data into a message in a race-safe way.
+   * Uses functional updater so concurrent references/resultItems events
+   * don't overwrite each other.
+   * @param {string} messageId - The ID of the message to update
+   * @param {Object} newCitations - { references?, resultItems? }
+   */
+  const mergeCitations = useCallback((messageId, newCitations) => {
+    setMessages(prev =>
+      prev.map(msg => {
+        if (msg.id !== messageId) return msg;
+        const existing = msg.citations || {};
+        return {
+          ...msg,
+          citations: {
+            references: newCitations.references || existing.references || [],
+            resultItems: newCitations.resultItems || existing.resultItems || []
+          },
+          _timestamp: Date.now()
+        };
+      })
+    );
+  }, []);
+
   return {
     messages,
     messagesRef,
@@ -386,7 +456,9 @@ function useChatMessages(chatId = 'default') {
     editMessage,
     addSystemMessage,
     clearMessages,
-    getMessagesForApi
+    getMessagesForApi,
+    loadServerMessages,
+    mergeCitations
   };
 }
 

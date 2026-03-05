@@ -419,7 +419,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         user = {
           id: decoded.id || decoded.sub,
           username: decoded.username || decoded.userPrincipalName,
-          name: decoded.name || decoded.displayName,
+          name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.userPrincipalName,
           groups: decoded.groups || [],
           authMode: 'teams',
@@ -464,7 +464,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         user = {
           id: decoded.id || decoded.sub,
           username: decoded.username || decoded.id,
-          name: decoded.name || decoded.id,
+          name: decoded.name || decoded.username || decoded.id,
           email: decoded.email || '',
           groups: decoded.groups || [],
           authMode: 'ntlm',
