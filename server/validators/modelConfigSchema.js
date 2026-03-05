@@ -108,6 +108,7 @@ export const modelConfigSchema = z
     supportsVision: z.boolean().optional(),
     supportsAudio: z.boolean().optional(),
     supportsStructuredOutput: z.boolean().optional(),
+    supportsUsageTracking: z.boolean().optional(),
     supportsImageGeneration: z.boolean().optional().default(false),
     imageGeneration: imageGenerationSchema.optional(),
     config: z.record(z.any()).optional(), // Allow provider-specific configuration

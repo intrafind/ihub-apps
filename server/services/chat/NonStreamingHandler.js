@@ -87,13 +87,15 @@ class NonStreamingHandler {
 
       const promptTokens = responseData.usage?.prompt_tokens || 0;
       const completionTokens = responseData.usage?.completion_tokens || 0;
+      const tokenSource = promptTokens > 0 || completionTokens > 0 ? 'provider' : 'estimate';
       const baseLog = buildLogData(false);
 
       await recordChatRequest({
         userId: baseLog.userSessionId,
         appId: baseLog.appId,
         modelId: model.id,
-        tokens: promptTokens
+        tokens: promptTokens,
+        tokenSource
       });
 
       let aiResponse = '';
@@ -111,7 +113,8 @@ class NonStreamingHandler {
         userId: baseLog.userSessionId,
         appId: baseLog.appId,
         modelId: model.id,
-        tokens: completionTokens
+        tokens: completionTokens,
+        tokenSource
       });
 
       return res.json(responseData);

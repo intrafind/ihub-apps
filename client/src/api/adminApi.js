@@ -798,11 +798,25 @@ export const fetchMarketplaceUpdates = async () => {
   return response.data;
 };
 
+export const fetchAdminUsageTimeline = async (range = '30d', granularity) => {
+  const params = new URLSearchParams({ range });
+  if (granularity) params.set('granularity', granularity);
+  const response = await makeAdminApiCall(`/admin/usage/timeline?${params}`);
+  return response.data;
+};
+
+export const fetchAdminUsageMeta = async () => {
+  const response = await makeAdminApiCall('/admin/usage/meta');
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
   makeAdminApiCall,
   fetchAdminUsageData,
+  fetchAdminUsageTimeline,
+  fetchAdminUsageMeta,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,

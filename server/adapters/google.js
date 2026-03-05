@@ -454,7 +454,8 @@ class GoogleAdapterClass extends BaseAdapter {
         complete: false,
         error: false,
         errorMessage: null,
-        finishReason: null
+        finishReason: null,
+        usage: null
       };
 
       if (!data) return result;
@@ -464,6 +465,15 @@ class GoogleAdapterClass extends BaseAdapter {
 
         // Debug: Log the full parsed response to see what metadata we receive
         logger.info('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
+
+        // Extract usage metadata from Google Gemini responses
+        if (parsed.usageMetadata) {
+          result.usage = {
+            promptTokens: parsed.usageMetadata.promptTokenCount || 0,
+            completionTokens: parsed.usageMetadata.candidatesTokenCount || 0,
+            totalTokens: parsed.usageMetadata.totalTokenCount || 0
+          };
+        }
 
         // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
         // OR if the response contains all expected fields for a complete response

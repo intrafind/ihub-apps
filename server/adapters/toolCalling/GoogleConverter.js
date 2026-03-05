@@ -191,6 +191,15 @@ export function convertGoogleResponseToGeneric(data, _streamId = 'default') {
   try {
     const parsed = JSON.parse(data);
 
+    // Extract usage metadata from Google Gemini responses
+    if (parsed.usageMetadata) {
+      result.metadata.usage = {
+        promptTokens: parsed.usageMetadata.promptTokenCount || 0,
+        completionTokens: parsed.usageMetadata.candidatesTokenCount || 0,
+        totalTokens: parsed.usageMetadata.totalTokenCount || 0
+      };
+    }
+
     // Handle full response object (non-streaming) - detect by presence of finishReason at the top level
     if (
       parsed.candidates &&

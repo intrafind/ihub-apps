@@ -12,6 +12,20 @@ import { redactUrl } from '../../utils/logRedactor.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
 import logger from '../../utils/logger.js';
 
+/**
+ * Merge usage data from streaming chunks, preferring non-zero values from incoming data.
+ * Handles Anthropic's split delivery (prompt tokens in message_start, completion in message_delta).
+ */
+function mergeUsage(existing, incoming) {
+  if (!incoming) return existing;
+  if (!existing) return { ...incoming };
+  return {
+    promptTokens: incoming.promptTokens || existing.promptTokens,
+    completionTokens: incoming.completionTokens || existing.completionTokens,
+    totalTokens: incoming.totalTokens || existing.totalTokens
+  };
+}
+
 class StreamingHandler {
   constructor() {
     this.errorHandler = new ErrorHandler();
@@ -173,7 +187,8 @@ class StreamingHandler {
       userId: baseLog.userSessionId,
       appId: baseLog.appId,
       modelId: model.id,
-      tokens: promptTokens
+      tokens: promptTokens,
+      tokenSource: 'estimate'
     });
 
     let timeoutId;
@@ -259,6 +274,7 @@ class StreamingHandler {
       const reader = readableStream.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
+      let accumulatedUsage = null;
 
       // Check if the adapter needs custom SSE processing (only iAssistant for now)
       const adapter = getAdapter(model.provider);
@@ -312,6 +328,11 @@ class StreamingHandler {
               // Keep the remaining incomplete data in buffer
               buffer = remainingData;
 
+              // Accumulate usage data from adapter results
+              if (result?.usage) {
+                accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+              }
+
               if (result && result.content && result.content.length > 0) {
                 for (const textContent of result.content) {
                   actionTracker.trackChunk(chatId, { content: textContent });
@@ -362,12 +383,15 @@ class StreamingHandler {
                   buildLogData(true, { responseType: 'success', response: fullResponse })
                 );
 
-                const completionTokens = estimateTokens(fullResponse);
+                const completionTokens =
+                  accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
+                const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
                 await recordChatResponse({
                   userId: baseLog.userSessionId,
                   appId: baseLog.appId,
                   modelId: model.id,
-                  tokens: completionTokens
+                  tokens: completionTokens,
+                  tokenSource
                 });
                 break;
               }
@@ -382,6 +406,10 @@ class StreamingHandler {
         // Process any remaining data in buffer after stream ends
         if (buffer.trim() && !doneEmitted && finishReason !== 'error') {
           const result = adapter.processResponseBuffer(buffer);
+
+          if (result?.usage) {
+            accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+          }
 
           if (result && result.content && result.content.length > 0) {
             for (const textContent of result.content) {
@@ -404,12 +432,15 @@ class StreamingHandler {
               buildLogData(true, { responseType: 'success', response: fullResponse })
             );
 
-            const completionTokens = estimateTokens(fullResponse);
+            const completionTokens =
+              accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
+            const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
             await recordChatResponse({
               userId: baseLog.userSessionId,
               appId: baseLog.appId,
               modelId: model.id,
-              tokens: completionTokens
+              tokens: completionTokens,
+              tokenSource
             });
           }
         }
@@ -438,6 +469,11 @@ class StreamingHandler {
           while (events.length > 0) {
             const evt = events.shift();
             const result = convertResponseToGeneric(evt.data, model.provider);
+
+            // Accumulate usage data from converter results (via metadata.usage)
+            if (result?.metadata?.usage) {
+              accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+            }
 
             if (result && result.content && result.content.length > 0) {
               for (const textContent of result.content) {
@@ -486,12 +522,15 @@ class StreamingHandler {
                 buildLogData(true, { responseType: 'success', response: fullResponse })
               );
 
-              const completionTokens = estimateTokens(fullResponse);
+              const completionTokens =
+                accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
+              const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
               await recordChatResponse({
                 userId: baseLog.userSessionId,
                 appId: baseLog.appId,
                 modelId: model.id,
-                tokens: completionTokens
+                tokens: completionTokens,
+                tokenSource
               });
               break;
             }

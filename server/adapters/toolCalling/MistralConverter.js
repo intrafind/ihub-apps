@@ -83,6 +83,15 @@ export function convertMistralResponseToGeneric(data, _streamId = 'default') {
   try {
     const parsed = JSON.parse(data);
 
+    // Extract usage data from streaming chunks (requires stream_options.include_usage)
+    if (parsed.usage) {
+      result.metadata.usage = {
+        promptTokens: parsed.usage.prompt_tokens || 0,
+        completionTokens: parsed.usage.completion_tokens || 0,
+        totalTokens: parsed.usage.total_tokens || 0
+      };
+    }
+
     // Handle full response object (non-streaming)
     if (parsed.choices && parsed.choices[0]?.message) {
       const messageContent = parsed.choices[0].message.content;
