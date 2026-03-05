@@ -511,21 +511,9 @@ const AppChat = ({ preloadedApp = null }) => {
       // Reset the chat input to empty
       setInput('');
 
-      // Clear any selected image
-      setSelectedImage(null);
-
-      // Hide the image uploader if it's visible
-      if (showImageUploader) {
-        setShowImageUploader(false);
-      }
-
-      // Clear any selected file
+      // Clear any selected file and hide the uploader
       fileUploadHandler.clearSelectedFile();
-
-      // Hide the file uploader if it's visible
-      if (showFileUploader) {
-        setShowFileUploader(false);
-      }
+      fileUploadHandler.hideUploader();
 
       // Reset variables to their default values when clearing via voice command
       if (app && app.variables) {
@@ -974,21 +962,9 @@ const AppChat = ({ preloadedApp = null }) => {
       // Reset the chat input to empty
       setInput('');
 
-      // Clear any selected image
-      setSelectedImage(null);
-
-      // Hide the image uploader if it's visible
-      if (showImageUploader) {
-        setShowImageUploader(false);
-      }
-
-      // Clear any selected file
+      // Clear any selected file and hide the uploader
       fileUploadHandler.clearSelectedFile();
-
-      // Hide the file uploader if it's visible
-      if (showFileUploader) {
-        setShowFileUploader(false);
-      }
+      fileUploadHandler.hideUploader();
 
       // Reset variables to their default values
       if (app && app.variables) {
