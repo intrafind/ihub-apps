@@ -4,7 +4,8 @@
     "filesCount": "{{count}} Datei(en) angehängt",
     "remove": "Datei entfernen",
     "sourceLocal": "Lokale Datei",
-    "sourceCloud": "Cloud-Datei"
+    "sourceCloud": "Cloud-Datei",
+    "loading": "Dokument wird geladen..."
   },
   "app": {
     "title": "iHub Apps",
@@ -256,7 +257,8 @@
           "dismiss": "Schließen",
           "acknowledge": "Verstanden"
         }
-      }
+      },
+      "newChat": "Neuer Chat"
     }
   },
   "models": {
@@ -1216,6 +1218,34 @@
       "loadError": "Fehler beim Laden der Funktionen",
       "saveError": "Fehler beim Speichern der Funktionen",
       "saved": "Funktionen erfolgreich aktualisiert"
+    },
+    "iFinder": {
+      "title": "iFinder Integration",
+      "loadError": "iFinder-Konfiguration konnte nicht geladen werden",
+      "saveSuccess": "iFinder-Konfiguration erfolgreich gespeichert",
+      "saveError": "iFinder-Konfiguration konnte nicht gespeichert werden",
+      "info": {
+        "title": "iFinder JWT-Authentifizierung"
+      },
+      "enabled": "iFinder-Integration aktiviert",
+      "disabled": "iFinder-Integration deaktiviert",
+      "connectionSection": "iFinder-Verbindung",
+      "baseUrl": "iFinder-Basis-URL",
+      "baseUrlHelp": "URL Ihrer iFinder-Instanz",
+      "privateKey": "Privater Schlüssel (PEM)",
+      "algorithm": "JWT-Algorithmus",
+      "tokenExpiration": "Token-Ablaufzeit (Sekunden)",
+      "issuer": "JWT-Aussteller",
+      "audience": "JWT-Zielgruppe",
+      "defaultScope": "Standard-Scope",
+      "jwtSubjectField": "JWT-Subjekt-Feld",
+      "jwtSubjectTemplate": "Benutzerdefinierte Subjekt-Vorlage",
+      "iAssistantSection": "iAssistant-Einstellungen",
+      "iAssistantBaseUrl": "iAssistant-Basis-URL",
+      "defaultProfileId": "Standard-Profil-ID",
+      "timeout": "Anfrage-Timeout (ms)",
+      "saving": "Wird gespeichert...",
+      "save": "iFinder-Konfiguration speichern"
     }
   },
   "components": {
@@ -1414,5 +1444,57 @@
     "preview": "Vorschau",
     "resetToDefaults": "Auf Standardwerte zurücksetzen",
     "colorInvalid": "Bitte geben Sie eine gültige Hex-Farbe ein (z.B. #4f46e5)"
+  },
+  "citations": {
+    "preview": "Vorschau (PDF)",
+    "download": "Herunterladen",
+    "openInApp": "In App öffnen",
+    "details": "Details",
+    "fileType": "Dateityp",
+    "fileSize": "Dateigröße",
+    "author": "Autor",
+    "source": "Quelle",
+    "modified": "Geändert",
+    "indexed": "Indiziert",
+    "language": "Sprache",
+    "documentDetails": "Dokumentdetails",
+    "loading": "Wird geladen...",
+    "breadcrumbs": "Pfad",
+    "documents": "Dokumente",
+    "untitledDocument": "Dokument",
+    "referenced": "Referenziert",
+    "mentioned": "Erwähnt",
+    "passages": "{{count}} Passage",
+    "passages_plural": "{{count}} Passagen",
+    "openExternal": "Im Browser öffnen"
+  },
+  "thoughts": {
+    "phase": {
+      "assess": "Bewertung",
+      "search": "Suche",
+      "retrieve": "Abruf",
+      "generate": "Generierung",
+      "finalize": "Fertigstellung"
+    },
+    "assess": {
+      "started": "Wissen wird bewertet...",
+      "completed": "Bewertung abgeschlossen"
+    },
+    "search": {
+      "started": "Suche nach Dokumenten...",
+      "completed": "Suche abgeschlossen"
+    },
+    "retrieve": {
+      "started": "Relevante Abschnitte werden gelesen...",
+      "completed": "Lesen abgeschlossen"
+    },
+    "generate": {
+      "started": "Antwort wird generiert...",
+      "completed": "Antwort bereit"
+    },
+    "finalize": {
+      "started": "Antwort wird fertiggestellt...",
+      "completed": "Antwort fertig"
+    }
   }
 }

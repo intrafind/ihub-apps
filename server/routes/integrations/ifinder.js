@@ -38,7 +38,7 @@ router.get('/document', authRequired, async (req, res) => {
     const baseUrl = iFinderConfig.baseUrl.replace(/\/+$/, '');
     const fullUrl = `${baseUrl}/${documentUrl.replace(/^\//, '')}`;
 
-    logger.debug(`iFinder document proxy: ${fullUrl}`);
+    logger.debug(`iFinder document proxy: fetching document ${documentId}`);
 
     const authHeader = getIFinderAuthorizationHeader(req.user);
     const response = await fetch(fullUrl, {
