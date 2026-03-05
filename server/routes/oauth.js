@@ -10,7 +10,7 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
 import { verifyCodeChallenge } from '../utils/pkceUtils.js';
-import { generateJwt, verifyJwt, decodeJwt } from '../utils/tokenService.js';
+import { generateJwt, decodeJwt } from '../utils/tokenService.js';
 import {
   generateRefreshToken,
   storeRefreshToken,
