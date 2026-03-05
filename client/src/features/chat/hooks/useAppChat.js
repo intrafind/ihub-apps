@@ -131,7 +131,10 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
             const existingThoughts = currentMessage?.thoughts || [];
             updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
-              thoughts: [...existingThoughts, data?.name ? { name: data.name, content: data.content } : data?.content]
+              thoughts: [
+                ...existingThoughts,
+                data?.name ? { name: data.name, content: data.content } : data?.content
+              ]
             });
           }
           break;

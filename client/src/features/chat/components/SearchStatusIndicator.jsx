@@ -20,9 +20,7 @@ function SearchStatusIndicator({ status }) {
   const translatedPhase = phase ? t(`thoughts.phase.${phase}`, { defaultValue: '' }) : '';
 
   // Translate status message: t('thoughts.assess.started') → "Analyse des aktuellen Wissens"
-  const translatedMessage = eventName
-    ? t(`thoughts.${eventName}`, { defaultValue: '' })
-    : '';
+  const translatedMessage = eventName ? t(`thoughts.${eventName}`, { defaultValue: '' }) : '';
 
   // Use translated message, fall back to server message, then phase name
   const message = translatedMessage || status.message || translatedPhase;

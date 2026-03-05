@@ -264,11 +264,11 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
           // (previously only search-related events were forwarded)
           if (name) {
             const event = name.startsWith('search')
-              ? (name.includes('started') || name.includes('initializing')
-                  ? 'search.started'
-                  : name.includes('complete') || name.includes('finished')
-                    ? 'search.finished'
-                    : name)
+              ? name.includes('started') || name.includes('initializing')
+                ? 'search.started'
+                : name.includes('complete') || name.includes('finished')
+                  ? 'search.finished'
+                  : name
               : name; // Non-search events: use raw name (e.g. "assess.started")
 
             result.searchStatus = {

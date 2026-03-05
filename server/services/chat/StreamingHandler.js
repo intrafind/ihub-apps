@@ -38,7 +38,10 @@ class StreamingHandler {
   processThinking(result, chatId) {
     if (result && result.thinking && result.thinking.length > 0) {
       for (const thought of result.thinking) {
-        actionTracker.trackThinking(chatId, typeof thought === 'object' ? thought : { content: thought });
+        actionTracker.trackThinking(
+          chatId,
+          typeof thought === 'object' ? thought : { content: thought }
+        );
       }
     }
   }
