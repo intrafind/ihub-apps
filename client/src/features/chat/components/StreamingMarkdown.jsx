@@ -10,7 +10,7 @@ import './StreamingMarkdown.css';
 
 /**
  * A component that renders markdown content with optimized real-time updates.
- * Content is sanitized via marked's built-in escaping (existing pattern in codebase).
+ * Content is rendered via marked with raw HTML allowed (sanitize: false in marked config).
  * Citation tags are transformed to interactive badges post-render.
  *
  * @param {Object} props

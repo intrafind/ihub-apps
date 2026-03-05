@@ -161,7 +161,7 @@ class IFinderService {
       }
 
       const searchUrl = `${baseUrl}?${params.toString()}`;
-      logger.info(`iFinder Search: Constructed search URL: ${searchUrl}`);
+      logger.debug(`iFinder Search: Sending search request to profile "${profileId}"`);
       // Make API request
       const response = await throttledFetch('iFinderSearch', searchUrl, {
         method: 'GET',
@@ -739,11 +739,16 @@ class IFinderService {
     const baseUrl = config.baseUrl.replace(/\/+$/, '');
     const authHeader = getIFinderAuthorizationHeader(user);
 
+    // Validate documentId to prevent query injection: allow only alphanumeric, hyphens, underscores, dots
+    if (!/^[\w.\-]+$/.test(documentId)) {
+      throw new Error(`Invalid document ID format: ${documentId}`);
+    }
+
     const searchUrl =
       `${baseUrl}/internal-api/v2/search?` +
       new URLSearchParams({
         action: 'search',
-        sSearchTerm: `_id:(${documentId})`,
+        sSearchTerm: `_id:"${documentId}"`,
         limit: '1'
       });
 
@@ -773,9 +778,9 @@ class IFinderService {
     const links = result.links || result.document?.links || [];
     const accessLink = links.find(l => l.type === 'ACCESS');
     if (!accessLink?.url) {
+      const linkTypes = links.map(l => l.type).join(', ');
       logger.warn(
-        `iFinder resolveDocumentLink: No ACCESS link found for ${documentId}. Available links:`,
-        JSON.stringify(links)
+        `iFinder resolveDocumentLink: No ACCESS link found for ${documentId}. Available link types: [${linkTypes}]`
       );
       throw new Error(`No download link found for document: ${documentId}`);
     }

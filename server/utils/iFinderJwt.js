@@ -125,8 +125,6 @@ export function generateIFinderJWT(user, options = {}) {
     audience: config.audience || 'ifinder-api'
   });
 
-  logger.debug(`iFinder JWT: ${token}`);
-
   return token;
 }
 
@@ -159,7 +157,10 @@ export function validateIFinderJWT(token) {
  * @returns {string} Authorization header value
  */
 export function getIFinderAuthorizationHeader(user, options = {}) {
-  options.scope = 'fi_index_read'; // Default scope for API access - can be overridden by options
+  if (!options.scope) {
+    const config = getIFinderConfig();
+    options.scope = config.defaultScope || 'fi_index_read';
+  }
   const token = generateIFinderJWT(user, options);
   return `Bearer ${token}`;
 }
