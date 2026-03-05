@@ -1214,6 +1214,29 @@
     "qualityMedium": "Medium (2K)",
     "qualityHigh": "High (4K)"
   },
+  "citations": {
+    "documents": "Documents",
+    "passages": "{{count}} passage",
+    "passages_plural": "{{count}} passages",
+    "referenced": "Referenced",
+    "mentioned": "Mentioned",
+    "openExternal": "Open in browser",
+    "preview": "Preview (PDF)",
+    "download": "Download",
+    "openInApp": "Open in App",
+    "untitledDocument": "Document",
+    "details": "Details",
+    "documentDetails": "Document Details",
+    "author": "Author",
+    "fileSize": "File Size",
+    "modified": "Modified",
+    "indexed": "Indexed",
+    "source": "Source",
+    "fileType": "File Type",
+    "language": "Language",
+    "breadcrumbs": "Path",
+    "loading": "Loading..."
+  },
   "chatMessage": {
     "user": "You",
     "assistant": "Assistant",
@@ -1507,27 +1530,55 @@
   },
   "thoughts": {
     "phase": {
-      "assess": "Assessment",
+      "assess": "Assess",
+      "assess_input": "Analyze Input",
+      "decide": "Decide",
+      "plan": "Plan",
+      "answer": "Answer",
       "search": "Search",
-      "retrieve": "Retrieval",
-      "generate": "Generation",
-      "finalize": "Finalization"
+      "doc_lookup": "Document Lookup",
+      "context": "Context"
     },
     "assess": {
-      "started": "Assessing knowledge...",
-      "completed": "Assessment complete"
+      "started": "Analyzing current knowledge",
+      "initializing": "Creating initial knowledge assessment",
+      "revising": "Updating knowledge assessment with new information",
+      "complete": "Assessment complete",
+      "compressing": "Compressing current knowledge"
+    },
+    "assess_input": {
+      "started": "Analyzing user input",
+      "complete": "Input analysis complete"
+    },
+    "decide": {
+      "started": "Deciding next action",
+      "analyzing": "Analyzing options and making decision",
+      "complete": "Decision made",
+      "compressing": "Compressing current knowledge"
+    },
+    "plan": {
+      "started": "Creating research plan",
+      "creating": "Developing strategic research approach",
+      "revising": "Updating research plan with new information",
+      "complete": "Research plan completed",
+      "compressing": "Compressing research plan"
+    },
+    "answer": {
+      "started": "Generating answer",
+      "complete": "Answer generation complete"
     },
     "search": {
-      "started": "Searching for documents...",
-      "completed": "Search complete"
+      "started": "Starting search",
+      "generating_queries": "Generating search queries",
+      "complete": "Search complete"
     },
-    "retrieve": {
-      "started": "Reading relevant passages...",
-      "completed": "Reading complete"
+    "doc_lookup": {
+      "started": "Starting document lookup",
+      "retrieving": "Retrieving documents",
+      "complete": "Documents retrieved"
     },
-    "generate": {
-      "started": "Generating response...",
-      "completed": "Response ready"
+    "context": {
+      "compression": "Compressing current knowledge"
     },
     "finalize": {
       "started": "Finalizing answer...",
