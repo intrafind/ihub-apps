@@ -74,17 +74,76 @@ The implementation is **very comprehensive** — nearly production-ready. Here's
 
 ---
 
-## What Is Missing / Needs Attention
+## Bugs — Must Fix Before Testing
 
-Based on the review, the implementation appears **feature-complete**. The potential gaps are minor:
+### BUG 1 (Critical): JWT Audience Mismatch Breaks Authorization Code Tokens
+
+**Impact:** Authorization code tokens cannot be verified by the jwtAuth middleware — all protected API calls with OAuth access tokens fail silently (treated as unauthenticated).
+
+**Root cause:** When authorization_code tokens are generated (`server/routes/oauth.js:279-288`), the `additionalClaims` includes `aud: codeData.clientId` (the OAuth client ID). However, `verifyJwt()` in `server/utils/tokenService.js:171-174` always verifies with `audience: 'ihub-apps'`:
+
+```js
+// tokenService.js:171-174
+return jwt.verify(token, verificationKey, {
+  issuer: 'ihub-apps',
+  audience: 'ihub-apps',  // <-- hardcoded, doesn't match clientId
+  algorithms: [algorithm]
+});
+```
+
+Since `aud: clientId` !== `'ihub-apps'`, `jwt.verify()` throws, `verifyJwt()` returns `null`, and jwtAuth treats the request as anonymous.
+
+**Consequence:** The `/api/oauth/userinfo` endpoint returns 401. Any resource server calling iHub APIs with an OAuth access token gets unauthenticated responses. The `oauth_authorization_code` branch in `jwtAuth.js:174` is unreachable.
+
+**Fix:** `verifyJwt()` needs to accept an optional audience parameter, or authorization_code tokens need to use `audience: 'ihub-apps'` like client_credentials tokens do.
+
+### BUG 2: Token Introspection Only Works for client_credentials
+
+**Impact:** Introspection returns `{ active: false }` for valid authorization_code tokens.
+
+**Root cause:** `introspectOAuthToken()` in `server/utils/oauthTokenService.js:100` checks `decoded.authMode !== 'oauth_client_credentials'` and returns null for any other mode.
+
+**Fix:** Add handling for `oauth_authorization_code` authMode in the introspection function.
+
+### BUG 3: `end_session_endpoint` Advertised but Not Implemented
+
+**Impact:** Any OIDC relying party that follows the discovery document to perform RP-initiated logout will get a 404.
+
+**Root cause:** `server/routes/wellKnown.js:114` advertises `end_session_endpoint: ${baseUrl}/api/oauth/logout`, but no `/api/oauth/logout` route exists. The client model already has a `postLogoutRedirectUris` field, suggesting this was planned.
+
+**Fix:** Either implement the endpoint or remove it from the discovery document.
+
+### BUG 4: `client_secret_basic` Advertised but Not Supported
+
+**Impact:** Standard OAuth libraries configured with `client_secret_basic` authentication will fail at the token endpoint.
+
+**Root cause:** The discovery document declares support for `client_secret_basic` (`wellKnown.js:118`), but the token endpoint only reads credentials from `req.body` (client_secret_post). No HTTP Basic `Authorization` header parsing exists.
+
+**Fix:** Either implement Basic auth header parsing in the token endpoint or remove the claim from the discovery document.
+
+---
+
+## Gaps — Should Fix
+
+1. **No scope validation in authorization code flow** — The authorize endpoint accepts any scopes without checking them against the client's registered scopes. The client_credentials flow correctly validates scopes in `oauthTokenService.js:38-48`, but this check is absent from the auth code path.
+
+2. **No `offline_access` scope enforcement** — Refresh tokens are issued whenever the client has `refresh_token` in its `grantTypes` array, regardless of whether the client requested the `offline_access` scope. Per OIDC spec, refresh tokens should only be issued when `offline_access` is explicitly requested.
+
+3. **No rate limiting on public OAuth endpoints** — The public-facing endpoints (`/api/oauth/token`, `/api/oauth/introspect`, `/api/oauth/revoke`, `/api/oauth/authorize`) have no rate limiting. The token endpoint is a brute-force target. (Note: V008 migration adds a rate limit config key, but it's unclear if it's wired up to these routes.)
+
+---
+
+## Minor Issues
 
 1. **OAuth is disabled by default** — `platform.json` has `"oauth.enabled": false` and `"authorizationCodeEnabled": false`. These need to be enabled to test.
 
-2. **No automated integration test suite** — The test files in `tests/` are standalone scripts, not part of a CI test runner. They require a running server.
+2. **In-memory authorization code store** — `authorizationCodeStore.js` is in-memory, so auth codes are lost on server restart. Acceptable for single-instance but not clustered deployments.
 
-3. **In-memory authorization code store** — `authorizationCodeStore.js` is in-memory, so auth codes are lost on server restart. This is acceptable for single-instance deployments but won't work with clustering. (Consent and refresh tokens are file-backed, which is fine.)
+3. **No PKCE downgrade protection for confidential clients** — Confidential clients can skip PKCE. OAuth 2.1 recommends PKCE for all clients.
 
-4. **No PKCE downgrade protection for confidential clients** — The code allows confidential clients to skip PKCE. OAuth 2.1 recommends PKCE for all clients. The example app already uses PKCE for both modes, so this is a minor concern.
+4. **ID token `at_hash` uses string truncation** — `oauth.js:300-303` uses `substring(0, 22)` on base64url instead of byte-level truncation. Could produce incorrect values in edge cases.
+
+5. **Consent store concurrency** — `consentStore.js` reads the entire JSON file on every `hasConsent()` call. Concurrent writes can lose data (last writer wins).
 
 ---
 
@@ -133,6 +192,8 @@ npm start
 
 ### Step 5: Test the Authorization Code flow
 
+> **Note:** Due to BUG 1 (audience mismatch), the userinfo call will fail with 401 after token exchange. The token exchange itself (code → tokens) should succeed, and the dashboard will show decoded JWT claims (client-side decode). But any server-side token verification will fail until BUG 1 is fixed.
+
 1. Open `http://localhost:8080`
 2. Click "Login with iHub"
 3. You'll be redirected to iHub's authorize endpoint
@@ -160,6 +221,8 @@ curl -X POST http://localhost:3000/api/oauth/token \
 
 ## Verdict
 
-The OAuth authorization server implementation is **essentially complete**. All three grant types (`client_credentials`, `authorization_code`, `refresh_token`), admin UI, consent screen, OIDC discovery, JWKS, token introspection/revocation, and the example app are all in place. The main action needed is to **enable it in the config and test it end-to-end**.
+The OAuth authorization server implementation is **structurally complete** — all three grant types, admin UI, consent screen, OIDC discovery, JWKS, token introspection/revocation, and the example app are in place.
 
-No code changes are needed — the implementation is ready for testing.
+However, **the authorization code flow has a critical blocking bug** (JWT audience mismatch) that prevents OAuth access tokens from being verified by the jwtAuth middleware. The client_credentials flow works correctly.
+
+**Before testing the authorization code flow end-to-end**, the 4 bugs listed above need to be fixed. The client_credentials flow can be tested immediately by enabling OAuth in the config.
