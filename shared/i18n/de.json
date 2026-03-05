@@ -4,7 +4,8 @@
     "filesCount": "{{count}} Datei(en) angehängt",
     "remove": "Datei entfernen",
     "sourceLocal": "Lokale Datei",
-    "sourceCloud": "Cloud-Datei"
+    "sourceCloud": "Cloud-Datei",
+    "loading": "Dokument wird geladen..."
   },
   "app": {
     "title": "iHub Apps",
@@ -339,6 +340,29 @@
     "qualityLow": "Niedrig (1K)",
     "qualityMedium": "Mittel (2K)",
     "qualityHigh": "Hoch (4K)"
+  },
+  "citations": {
+    "documents": "Dokumente",
+    "passages": "{{count}} Passage",
+    "passages_plural": "{{count}} Passagen",
+    "referenced": "Referenziert",
+    "mentioned": "Erwähnt",
+    "openExternal": "Im Browser öffnen",
+    "preview": "Vorschau (PDF)",
+    "download": "Herunterladen",
+    "openInApp": "In App öffnen",
+    "untitledDocument": "Dokument",
+    "details": "Details",
+    "documentDetails": "Dokumentdetails",
+    "author": "Autor",
+    "fileSize": "Dateigröße",
+    "modified": "Geändert",
+    "indexed": "Indexiert",
+    "source": "Quelle",
+    "fileType": "Dateityp",
+    "language": "Sprache",
+    "breadcrumbs": "Pfad",
+    "loading": "Laden..."
   },
   "chatMessage": {
     "user": "Du",
@@ -1414,5 +1438,58 @@
     "preview": "Vorschau",
     "resetToDefaults": "Auf Standardwerte zurücksetzen",
     "colorInvalid": "Bitte geben Sie eine gültige Hex-Farbe ein (z.B. #4f46e5)"
+  },
+  "thoughts": {
+    "phase": {
+      "assess": "Bewertung",
+      "assess_input": "Eingabeanalyse",
+      "decide": "Entscheidung",
+      "plan": "Plan",
+      "answer": "Antwort",
+      "search": "Suche",
+      "doc_lookup": "Dokumentensuche",
+      "context": "Kontext"
+    },
+    "assess": {
+      "started": "Analyse des aktuellen Wissens",
+      "initializing": "Erstelle erste Wissensbewertung",
+      "revising": "Aktualisiere Wissensbewertung mit neuen Informationen",
+      "complete": "Bewertung abgeschlossen",
+      "compressing": "Komprimiere aktuelles Wissen"
+    },
+    "assess_input": {
+      "started": "Analyse der Benutzereingabe",
+      "complete": "Eingabeanalyse abgeschlossen"
+    },
+    "decide": {
+      "started": "Entscheide nächste Aktion",
+      "analyzing": "Analysiere Optionen und treffe Entscheidung",
+      "complete": "Entscheidung getroffen",
+      "compressing": "Komprimiere aktuelles Wissen"
+    },
+    "plan": {
+      "started": "Erstelle Rechercheplan",
+      "creating": "Entwickle strategischen Rechercheansatz",
+      "revising": "Aktualisiere Rechercheplan mit neuen Informationen",
+      "complete": "Rechercheplan abgeschlossen",
+      "compressing": "Komprimiere Rechercheplan"
+    },
+    "answer": {
+      "started": "Generiere Antwort",
+      "complete": "Antwortgenerierung abgeschlossen"
+    },
+    "search": {
+      "started": "Starte Suche",
+      "generating_queries": "Generiere Suchanfragen",
+      "complete": "Suche abgeschlossen"
+    },
+    "doc_lookup": {
+      "started": "Starte Dokumentensuche",
+      "retrieving": "Rufe Dokumente ab",
+      "complete": "Dokumente abgerufen"
+    },
+    "context": {
+      "compression": "Komprimiere aktuelles Wissen"
+    }
   }
 }
