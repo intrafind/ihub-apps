@@ -340,7 +340,6 @@ const AppChat = ({ preloadedApp = null }) => {
     addSystemMessage,
     submitClarificationResponse,
     conversationTitle,
-    searchStatus,
     loadServerMessages,
     resetConversationState
   } = useAppChat({
