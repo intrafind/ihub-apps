@@ -123,6 +123,11 @@ function decryptPlatformSecrets(config) {
       config.ntlmAuth.domainControllerPassword
     );
   }
+
+  // iFinder
+  if (config.iFinder?.privateKey) {
+    config.iFinder.privateKey = decryptIfNeeded(config.iFinder.privateKey);
+  }
 }
 
 /**
@@ -170,6 +175,11 @@ function encryptPlatformSecrets(config) {
     config.ntlmAuth.domainControllerPassword = encryptIfNeeded(
       config.ntlmAuth.domainControllerPassword
     );
+  }
+
+  // iFinder
+  if (config.iFinder?.privateKey) {
+    config.iFinder.privateKey = encryptIfNeeded(config.iFinder.privateKey);
   }
 }
 
@@ -408,6 +418,14 @@ export default function registerAdminConfigRoutes(app) {
         };
       }
 
+      // Sanitize iFinder private key
+      if (sanitizedConfig.iFinder?.privateKey) {
+        sanitizedConfig.iFinder = {
+          ...sanitizedConfig.iFinder,
+          privateKey: sanitizeSecret(sanitizedConfig.iFinder.privateKey)
+        };
+      }
+
       res.json(sanitizedConfig);
     } catch (error) {
       logger.error('Error getting platform configuration:', error);
@@ -455,7 +473,9 @@ export default function registerAdminConfigRoutes(app) {
         authorization: newConfig.authorization || existingConfig.authorization,
         oauth: newConfig.oauth || existingConfig.oauth,
         jira: newConfig.jira || existingConfig.jira,
-        cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage
+        cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
+        iFinder: newConfig.iFinder || existingConfig.iFinder,
+        iAssistant: newConfig.iAssistant || existingConfig.iAssistant
       };
 
       // Restore secrets that were redacted in the client
@@ -547,6 +567,15 @@ export default function registerAdminConfigRoutes(app) {
         );
       }
 
+      // Restore iFinder private key
+      if (newConfig.iFinder?.privateKey) {
+        if (!mergedConfig.iFinder) mergedConfig.iFinder = {};
+        mergedConfig.iFinder.privateKey = restoreSecretIfRedacted(
+          newConfig.iFinder.privateKey,
+          existingConfig.iFinder?.privateKey
+        );
+      }
+
       // Encrypt secrets before writing to disk
       encryptPlatformSecrets(mergedConfig);
 
@@ -555,6 +584,25 @@ export default function registerAdminConfigRoutes(app) {
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/platform.json');
+
+      // Reset iFinder/iAssistant service caches so they pick up new config
+      const iFinderChanged =
+        JSON.stringify(existingConfig.iFinder) !== JSON.stringify(newConfig.iFinder);
+      const iAssistantChanged =
+        JSON.stringify(existingConfig.iAssistant) !== JSON.stringify(newConfig.iAssistant);
+      if (iFinderChanged || iAssistantChanged) {
+        try {
+          const { default: iAssistantService } =
+            await import('../../services/integrations/iAssistantService.js');
+          const { default: iFinderService } =
+            await import('../../services/integrations/iFinderService.js');
+          iAssistantService.resetConfig();
+          iFinderService.resetConfig();
+          logger.info('iFinder/iAssistant service caches reset after config change');
+        } catch (err) {
+          logger.warn('Could not reset iFinder/iAssistant service caches:', err.message);
+        }
+      }
 
       // Reconfigure authentication methods dynamically where possible
       const reconfigResults = reconfigureAuthenticationMethods(existingConfig, newConfig);
@@ -607,6 +655,9 @@ export default function registerAdminConfigRoutes(app) {
       }
       if (responseConfig.localAuth?.jwtSecret) {
         responseConfig.localAuth.jwtSecret = sanitizeSecret(responseConfig.localAuth.jwtSecret);
+      }
+      if (responseConfig.iFinder?.privateKey) {
+        responseConfig.iFinder.privateKey = sanitizeSecret(responseConfig.iFinder.privateKey);
       }
 
       res.json({

@@ -125,6 +125,11 @@ function decryptPlatformSecrets(config) {
     );
   }
 
+  // iFinder
+  if (config.iFinder?.privateKey) {
+    config.iFinder.privateKey = decryptIfEncrypted(config.iFinder.privateKey);
+  }
+
   return config;
 }
 

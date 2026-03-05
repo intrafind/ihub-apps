@@ -1,10 +1,17 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
+import {
+  getOrCreateChatId,
+  resetChatId,
+  getConversationId,
+  clearConversationId
+} from '../../../utils/chatId';
+import { getConversationMessages } from '../../../api/endpoints/apps';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { fetchAppDetails } from '../../../api/api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import Icon from '../../../shared/components/Icon';
 import AppShareModal from '../components/AppShareModal';
 
@@ -26,6 +33,7 @@ import SharedAppHeader from '../components/SharedAppHeader';
 import AIDisclaimerBanner from '../../chat/components/AIDisclaimerBanner';
 import { recordAppUsage } from '../../../utils/recentApps';
 import { saveAppSettings, loadAppSettings } from '../../../utils/appSettings';
+import { processDocumentFile } from '../../upload/utils/fileProcessing';
 
 /**
  * Initialize variables with default values from app configuration
@@ -106,6 +114,9 @@ const AppChat = ({ preloadedApp = null }) => {
   const [searchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
   const prefillMessage = searchParams.get('prefill') || '';
+  const documentId = searchParams.get('documentId');
+  const searchProfileParam = searchParams.get('searchProfile');
+  const documentSource = searchParams.get('source');
   const [app, setApp] = useState(preloadedApp);
   const [input, setInput] = useState(prefillMessage);
   const [loading, setLoading] = useState(!preloadedApp);
@@ -327,12 +338,41 @@ const AppChat = ({ preloadedApp = null }) => {
     clearMessages,
     cancelGeneration,
     addSystemMessage,
-    submitClarificationResponse
+    submitClarificationResponse,
+    conversationTitle,
+    searchStatus,
+    loadServerMessages,
+    resetConversationState
   } = useAppChat({
     appId,
     chatId: chatId.current,
     onMessageComplete: handleMessageComplete
   });
+
+  // Resume conversation from conversation API on mount (iAssistant Conversation)
+  const conversationResumed = useRef(false);
+  useEffect(() => {
+    if (conversationResumed.current || !app || messages.length > 0) return;
+
+    const existingConversationId = getConversationId(appId);
+    if (!existingConversationId) return;
+
+    conversationResumed.current = true;
+
+    (async () => {
+      try {
+        const result = await getConversationMessages(appId, existingConversationId);
+        const serverMessages = result?.messages || result;
+        if (Array.isArray(serverMessages) && serverMessages.length > 0) {
+          loadServerMessages(serverMessages);
+        }
+      } catch (err) {
+        // Conversation may have been deleted or expired - clear stored ID
+        console.warn('Failed to load conversation messages, clearing stored ID:', err.message);
+        clearConversationId(appId);
+      }
+    })();
+  }, [app, appId, messages.length, loadServerMessages]);
 
   // Auto-send message if send=true query parameter is present
   const autoSendTriggered = useRef(false);
@@ -361,6 +401,106 @@ const AppChat = ({ preloadedApp = null }) => {
       }, 100);
     }
   }, [app, processing, prefillMessage, searchParams, navigate]);
+
+  // Fetch and attach document when navigated from "Open in App" with source params
+  const documentAttached = useRef(false);
+  useEffect(() => {
+    if (documentAttached.current || !app || !documentSource) return;
+    if (documentSource !== 'ifinder') return;
+
+    documentAttached.current = true;
+
+    const fetchAndAttach = async () => {
+      // Show loading placeholder immediately
+      fileUploadHandler.setSelectedFile({
+        type: 'document',
+        source: 'ifinder',
+        fileName: prefillMessage || t('attachedFiles.loading', 'Loading document...'),
+        fileSize: 0,
+        fileType: 'application/octet-stream',
+        loading: true,
+        displayType: 'iFinder Document'
+      });
+
+      try {
+        let file;
+        let fileName = prefillMessage || 'document';
+
+        if (documentId) {
+          // Fetch binary via iFinder proxy (resolves download link server-side)
+          const proxyParams = new URLSearchParams({ documentId });
+          if (searchProfileParam) proxyParams.set('searchProfile', searchProfileParam);
+          const proxyUrl = buildApiUrl(`integrations/ifinder/document?${proxyParams}`);
+          const resp = await fetch(proxyUrl, { credentials: 'include' });
+
+          if (resp.ok) {
+            const blob = await resp.blob();
+            const contentType = resp.headers.get('content-type') || 'application/octet-stream';
+
+            // Extract filename from content-disposition or use prefill title
+            const disposition = resp.headers.get('content-disposition');
+            if (disposition) {
+              const match = disposition.match(/filename\*?=(?:UTF-8''|"?)([^";]+)/i);
+              if (match) fileName = decodeURIComponent(match[1].replace(/"/g, ''));
+            }
+
+            file = new File([blob], fileName, { type: contentType });
+          } else {
+            // Fallback: fetch text content via content endpoint
+            const contentUrl = buildApiUrl(
+              `integrations/ifinder/document/content?documentId=${encodeURIComponent(documentId)}` +
+                (searchProfileParam
+                  ? `&searchProfile=${encodeURIComponent(searchProfileParam)}`
+                  : '')
+            );
+            const contentResp = await fetch(contentUrl, { credentials: 'include' });
+            if (!contentResp.ok) throw new Error(`Content fetch failed: ${contentResp.status}`);
+
+            const text = await contentResp.text();
+            const txtName = fileName.endsWith('.txt') ? fileName : `${fileName}.txt`;
+            file = new File([text], txtName, { type: 'text/plain' });
+          }
+        } else {
+          return; // No document ID to fetch
+        }
+
+        // Process through the same pipeline as uploaded files
+        const { content, pageImages } = await processDocumentFile(file);
+
+        const fileData = {
+          type: 'document',
+          source: 'ifinder',
+          content,
+          pageImages: pageImages || [],
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          displayType: 'iFinder Document'
+        };
+
+        fileUploadHandler.setSelectedFile(fileData);
+      } catch (err) {
+        console.error('Failed to fetch and attach iFinder document:', err);
+        fileUploadHandler.clearSelectedFile();
+      }
+
+      // Clean source params from URL to prevent re-fetch
+      const newSearch = new URLSearchParams(searchParams);
+      ['documentId', 'searchProfile', 'source'].forEach(k => newSearch.delete(k));
+      navigate(`${window.location.pathname}?${newSearch.toString()}`, { replace: true });
+    };
+
+    fetchAndAttach();
+  }, [
+    app,
+    documentSource,
+    documentId,
+    searchProfileParam,
+    prefillMessage,
+    fileUploadHandler,
+    searchParams,
+    navigate
+  ]);
 
   // Auto-start conversation if app.autoStart is enabled
   const autoStartTriggered = useRef(false);
@@ -506,7 +646,10 @@ const AppChat = ({ preloadedApp = null }) => {
     clearChat: () => {
       cancelGeneration();
       clearMessages();
+      resetConversationState();
       chatId.current = resetChatId(appId);
+      clearConversationId(appId);
+      conversationResumed.current = false;
 
       // Reset the chat input to empty
       setInput('');
@@ -961,6 +1104,62 @@ const AppChat = ({ preloadedApp = null }) => {
     ]
   );
 
+  // Handle citation document actions (openExternal, preview, download, openInApp)
+  const handleDocumentAction = useCallback(
+    (action, item, targetAppId) => {
+      const getMeta = (doc, key) => {
+        const val = doc?.additional_document_metadata?.[key];
+        return Array.isArray(val) && val.length > 0 ? val[0] : val || '';
+      };
+      const deepLink = getMeta(item, 'accessInfo.deepLink');
+
+      // Extract document access info from iFinder links
+      const links = item?.links;
+      const accessLink = Array.isArray(links) ? links.find(l => l.type === 'ACCESS') : null;
+
+      if (action === 'openExternal') {
+        if (deepLink) {
+          window.open(deepLink, '_blank', 'noopener,noreferrer');
+        }
+      } else if (action === 'preview') {
+        if (accessLink?.documentId) {
+          const params = new URLSearchParams({
+            documentId: accessLink.documentId,
+            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
+            convertToPdf: 'true'
+          });
+          window.open(
+            buildApiUrl(`integrations/ifinder/document?${params}`),
+            '_blank',
+            'noopener,noreferrer'
+          );
+        }
+      } else if (action === 'download') {
+        if (accessLink?.documentId) {
+          const params = new URLSearchParams({
+            documentId: accessLink.documentId,
+            ...(accessLink.searchProfile ? { searchProfile: accessLink.searchProfile } : {})
+          });
+          window.open(
+            buildApiUrl(`integrations/ifinder/document?${params}`),
+            '_blank',
+            'noopener,noreferrer'
+          );
+        }
+      } else if (action === 'openInApp' && targetAppId) {
+        const title = item.title || getMeta(item, 'title') || '';
+        const params = new URLSearchParams({
+          prefill: title,
+          documentId: item.document_id || '',
+          ...(accessLink?.searchProfile ? { searchProfile: accessLink.searchProfile } : {}),
+          source: 'ifinder'
+        });
+        navigate(`/apps/${targetAppId}?${params.toString()}`);
+      }
+    },
+    [navigate]
+  );
+
   const clearChat = () => {
     if (
       window.confirm(
@@ -969,7 +1168,10 @@ const AppChat = ({ preloadedApp = null }) => {
     ) {
       cancelGeneration();
       clearMessages();
+      resetConversationState();
       chatId.current = resetChatId(appId);
+      clearConversationId(appId);
+      conversationResumed.current = false;
 
       // Reset the chat input to empty
       setInput('');
@@ -1125,7 +1327,8 @@ const AppChat = ({ preloadedApp = null }) => {
         ? { enabledTools: effectiveEnabledTools }
         : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
-      ...(imageQuality ? { imageQuality } : {})
+      ...(imageQuality ? { imageQuality } : {}),
+      ...(documentId ? { documentIds: [documentId] } : {})
     };
 
     console.log('📤 Sending message with params:', params);
@@ -1424,6 +1627,7 @@ const AppChat = ({ preloadedApp = null }) => {
         showParameters={showParameters}
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled}
+        conversationTitle={conversationTitle}
       />
 
       {app?.variables && app.variables.length > 0 && showParameters && (
@@ -1501,6 +1705,7 @@ const AppChat = ({ preloadedApp = null }) => {
                         models={models}
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
+                        onDocumentAction={handleDocumentAction}
                       />
                     </div>
                   ) : (
@@ -1541,6 +1746,7 @@ const AppChat = ({ preloadedApp = null }) => {
                         models={models}
                         onClarificationSubmit={handleClarificationSubmit}
                         onClarificationSkip={handleClarificationSkip}
+                        onDocumentAction={handleDocumentAction}
                       />
                     </div>
                   ) : (
@@ -1580,6 +1786,7 @@ const AppChat = ({ preloadedApp = null }) => {
                     models={models}
                     onClarificationSubmit={handleClarificationSubmit}
                     onClarificationSkip={handleClarificationSkip}
+                    onDocumentAction={handleDocumentAction}
                   />
                 </div>
                 <div className="flex-shrink-0 px-4 pt-2">{renderChatInput()}</div>
@@ -1608,6 +1815,7 @@ const AppChat = ({ preloadedApp = null }) => {
                   models={models}
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}
+                  onDocumentAction={handleDocumentAction}
                 />
 
                 {renderChatInput()}

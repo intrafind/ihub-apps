@@ -287,7 +287,8 @@ export default function registerSessionRoutes(
           enabledTools,
           imageAspectRatio,
           imageQuality,
-          requestedSkill
+          requestedSkill,
+          documentIds
         } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const clientLanguage =
@@ -419,6 +420,7 @@ export default function registerSessionRoutes(
             imageAspectRatio,
             imageQuality,
             requestedSkill,
+            documentIds,
             res,
             user: req.user,
             chatId
@@ -477,6 +479,7 @@ export default function registerSessionRoutes(
             imageAspectRatio,
             imageQuality,
             requestedSkill,
+            documentIds,
             clientRes,
             user: req.user,
             chatId

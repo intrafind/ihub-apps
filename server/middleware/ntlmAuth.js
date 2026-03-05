@@ -186,6 +186,7 @@ function processNtlmUser(req, ntlmConfig) {
   // Create normalized user object
   const user = {
     id: fullUsername,
+    username: userId,
     name: ntlmUser.DisplayName || ntlmUser.displayName || fullUsername,
     email: ntlmUser.email || ntlmUser.Email || null,
     groups: mappedGroups,
@@ -523,6 +524,7 @@ export async function processNtlmLogin(req, ntlmConfig) {
   return {
     user: {
       id: user.id,
+      username: user.username,
       name: user.name,
       email: user.email,
       groups: user.groups,

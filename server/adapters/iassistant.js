@@ -86,7 +86,7 @@ class IAssistantAdapterClass extends BaseAdapter {
       try {
         // Generate JWT token for the authenticated user
         const authHeader = getIFinderAuthorizationHeader(user, {
-          scope: config.scope || 'fa_index_read'
+          scope: config.scope
         });
         headers['Authorization'] = authHeader;
       } catch (error) {

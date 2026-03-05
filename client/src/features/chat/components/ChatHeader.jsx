@@ -30,7 +30,8 @@ const ChatHeader = ({
   messages = [],
   exportSettings = {},
   appId,
-  chatId
+  chatId,
+  conversationTitle = null
 }) => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -96,6 +97,11 @@ const ChatHeader = ({
                 {typeof description === 'object'
                   ? getLocalizedContent(description, currentLanguage)
                   : description}
+              </p>
+            )}
+            {conversationTitle && (
+              <p className="text-indigo-600 dark:text-indigo-400 text-xs mt-0.5 truncate max-w-xs">
+                {conversationTitle}
               </p>
             )}
             {isMobile && showDescription && (

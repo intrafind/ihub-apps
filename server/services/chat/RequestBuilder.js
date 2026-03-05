@@ -129,6 +129,7 @@ class RequestBuilder {
     imageAspectRatio,
     imageQuality,
     requestedSkill,
+    documentIds,
     processMessageTemplates,
     res,
     clientRes,
@@ -367,7 +368,7 @@ class RequestBuilder {
         }
       }
 
-      const request = createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
+      const request = await createCompletionRequest(model, llmMessages, apiKeyResult.apiKey, {
         temperature: parseFloat(temperature) || app.preferredTemperature || 0.7,
         maxTokens: finalTokens,
         stream: !!clientRes,
@@ -376,6 +377,7 @@ class RequestBuilder {
         responseSchema: app.outputSchema,
         user,
         chatId,
+        appConfig: documentIds ? { ...app, documentIds } : app,
         thinkingEnabled,
         thinkingBudget,
         thinkingThoughts,
@@ -404,7 +406,12 @@ class RequestBuilder {
         stack: error.stack
       });
       const chatError = new Error(error.message || 'Internal server error');
-      chatError.code = 'INTERNAL_ERROR';
+      // Detect auth failures from provider APIs (e.g., "Failed to create conversation (401): ")
+      if (error.message?.includes('(401)') || error.message?.includes('authentication failed')) {
+        chatError.code = 'AUTH_FAILED';
+      } else {
+        chatError.code = 'INTERNAL_ERROR';
+      }
       return { success: false, error: chatError };
     }
   }

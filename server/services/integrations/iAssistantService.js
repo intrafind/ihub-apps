@@ -20,6 +20,14 @@ class IAssistantService {
   }
 
   /**
+   * Reset cached config so it will be reloaded on next access
+   */
+  resetConfig() {
+    this.config = null;
+    this.platform = null;
+  }
+
+  /**
    * Get iAssistant API configuration
    * @returns {Object} iAssistant API configuration
    */
@@ -30,7 +38,10 @@ class IAssistantService {
 
       this.config = {
         baseUrl:
-          config.IASSISTANT_API_URL || process.env.IASSISTANT_API_URL || iAssistantConfig.baseUrl,
+          config.IASSISTANT_API_URL ||
+          process.env.IASSISTANT_API_URL ||
+          iAssistantConfig.baseUrl ||
+          this.platform.iFinder?.baseUrl,
         endpoint: iAssistantConfig.endpoint || '/internal-api/v2/rag/ask',
         defaultProfileId:
           iAssistantConfig.defaultProfileId ||
@@ -143,7 +154,7 @@ class IAssistantService {
     try {
       // Generate JWT token for the user
       const authHeader = getIFinderAuthorizationHeader(user, {
-        scope: scope || 'fa_index_read'
+        scope
       });
 
       // Log authentication header with proper masking

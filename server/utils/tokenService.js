@@ -110,6 +110,7 @@ export function generateJwt(user, options = {}) {
   // Base token payload
   const tokenPayload = {
     sub: user.id,
+    username: user.username,
     name: user.name,
     email: user.email,
     groups: user.groups || [],

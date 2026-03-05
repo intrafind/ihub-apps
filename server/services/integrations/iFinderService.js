@@ -21,6 +21,14 @@ class IFinderService {
   }
 
   /**
+   * Reset cached config so it will be reloaded on next access
+   */
+  resetConfig() {
+    this.config = null;
+    this.platform = null;
+  }
+
+  /**
    * Get iFinder API configuration
    * @returns {Object} iFinder API configuration
    */
@@ -86,8 +94,6 @@ class IFinderService {
       'sourceName',
       'title',
       'navigationTree',
-      'description_texts',
-      'summary_texts',
       'application',
       'url',
       'language',
@@ -135,7 +141,7 @@ class IFinderService {
         '{profileId}',
         encodeURIComponent(profileId)
       );
-      const baseUrl = `${config.baseUrl}${searchEndpoint}`;
+      const baseUrl = `${config.baseUrl.replace(/\/+$/, '')}${searchEndpoint}`;
 
       // Build query parameters
       const params = new URLSearchParams();
@@ -155,7 +161,7 @@ class IFinderService {
       }
 
       const searchUrl = `${baseUrl}?${params.toString()}`;
-
+      logger.info(`iFinder Search: Constructed search URL: ${searchUrl}`);
       // Make API request
       const response = await throttledFetch('iFinderSearch', searchUrl, {
         method: 'GET',
@@ -176,6 +182,20 @@ class IFinderService {
       }
 
       const data = await response.json();
+
+      // Diagnostic logging for metadata queries (_id: lookups)
+      if (query.startsWith('_id:') && data.results?.length > 0) {
+        const rawDoc = data.results[0].document || {};
+        const rawKeys = Object.keys(rawDoc);
+        const emptyKeys = rawKeys.filter(k => {
+          const v = rawDoc[k];
+          return v == null || (Array.isArray(v) && v.length === 0);
+        });
+        logger.info(`iFinder Metadata raw doc keys (${rawKeys.length}): ${rawKeys.join(', ')}`);
+        if (emptyKeys.length > 0) {
+          logger.info(`iFinder Metadata empty keys (${emptyKeys.length}): ${emptyKeys.join(', ')}`);
+        }
+      }
 
       // Process and normalize the results
       const results = {
@@ -321,7 +341,7 @@ class IFinderService {
       const documentEndpoint = config.endpoints.document
         .replace('{profileId}', encodeURIComponent(profileId))
         .replace('{docId}', encodeURIComponent(documentId));
-      const documentUrl = `${config.baseUrl}${documentEndpoint}`;
+      const documentUrl = `${config.baseUrl.replace(/\/+$/, '')}${documentEndpoint}`;
 
       logger.info(
         `iFinder Content: Fetching content for document ${documentId} from profile "${profileId}" as user ${user.email || user.id}`
@@ -437,7 +457,7 @@ class IFinderService {
 
     // Use the search method with _id:documentId query
     const searchResult = await this.search({
-      query: `_id:${documentId}`,
+      query: `_id:\"${documentId}\"`,
       chatId,
       user,
       maxResults: 1,
@@ -452,6 +472,27 @@ class IFinderService {
 
     // Get the single result and enhance it for metadata use case
     const result = searchResult.results[0];
+
+    // Diagnostic logging: which metadata fields survived normalization
+    const metaFields = [
+      'title',
+      'author',
+      'sourceName',
+      'sourceType',
+      'application',
+      'mediaType',
+      'modificationDate',
+      'indexingDate',
+      'language',
+      'size',
+      'filename',
+      'deepLink'
+    ];
+    const present = metaFields.filter(f => result[f] != null && result[f] !== '');
+    const missing = metaFields.filter(f => result[f] == null || result[f] === '');
+    logger.info(
+      `iFinder Metadata for ${documentId}: present=[${present.join(', ')}], missing=[${missing.join(', ')}]`
+    );
 
     // Add metadata-specific fields and logging
     const metadata = {
@@ -510,7 +551,7 @@ class IFinderService {
       const documentEndpoint = config.endpoints.document
         .replace('{profileId}', encodeURIComponent(profileId))
         .replace('{docId}', encodeURIComponent(documentId));
-      const documentUrl = `${config.baseUrl}${documentEndpoint}`;
+      const documentUrl = `${config.baseUrl.replace(/\/+$/, '')}${documentEndpoint}`;
 
       if (action === 'content') {
         // Return document content info without saving
@@ -678,6 +719,69 @@ class IFinderService {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
 
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+  }
+
+  /**
+   * Resolve the download link for a document by searching iFinder's internal API.
+   * The returned URL contains an opaque access token and is NOT the document ID.
+   * @param {Object} params
+   * @param {string} params.documentId - The document ID to look up
+   * @param {Object} params.user - User object for authentication
+   * @param {string} [params.searchProfile] - Optional search profile
+   * @returns {string} Relative URL like "internal-api/v2/docs?action=fetchdocument&id=<token>"
+   */
+  async resolveDocumentLink({ documentId, user, searchProfile: _searchProfile }) {
+    if (!documentId) {
+      throw new Error('Document ID is required');
+    }
+
+    const config = this.getConfig();
+    const baseUrl = config.baseUrl.replace(/\/+$/, '');
+    const authHeader = getIFinderAuthorizationHeader(user);
+
+    const searchUrl =
+      `${baseUrl}/internal-api/v2/search?` +
+      new URLSearchParams({
+        action: 'search',
+        sSearchTerm: `_id:(${documentId})`,
+        limit: '1'
+      });
+
+    logger.info(`iFinder resolveDocumentLink: Searching for document ${documentId}`);
+
+    const response = await throttledFetch('iFinderDocLink', searchUrl, {
+      method: 'GET',
+      headers: { Authorization: authHeader, Accept: 'application/json' },
+      timeout: config.timeout
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`iFinder search failed: ${response.status} ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // The internal search API may return results under various keys — log for debugging
+    logger.debug('iFinder resolveDocumentLink response keys:', Object.keys(data));
+
+    const result = data.documents?.[0] || data.results?.[0] || data[0];
+    if (!result) {
+      throw new Error(`Document not found: ${documentId}`);
+    }
+
+    const links = result.links || result.document?.links || [];
+    const accessLink = links.find(l => l.type === 'ACCESS');
+    if (!accessLink?.url) {
+      logger.warn(
+        `iFinder resolveDocumentLink: No ACCESS link found for ${documentId}. Available links:`,
+        JSON.stringify(links)
+      );
+      throw new Error(`No download link found for document: ${documentId}`);
+    }
+
+    logger.info(`iFinder resolveDocumentLink: Resolved download link for ${documentId}`);
+    return accessLink.url;
   }
 
   /**
