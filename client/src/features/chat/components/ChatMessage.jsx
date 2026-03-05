@@ -788,7 +788,9 @@ const ChatMessage = ({
                   <li key={idx}>
                     {typeof th === 'string'
                       ? th
-                      : t(`thoughts.${th.name}`, { defaultValue: th.content || JSON.stringify(th) })}
+                      : t(`thoughts.${th.name}`, {
+                          defaultValue: th.content || JSON.stringify(th)
+                        })}
                   </li>
                 ))}
               </ul>
