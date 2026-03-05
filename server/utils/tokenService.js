@@ -156,9 +156,11 @@ export function generateJwt(user, options = {}) {
 /**
  * Verify JWT token
  * @param {string} token - JWT token to verify
+ * @param {Object} [options] - Verification options
+ * @param {string|string[]} [options.audience] - Expected audience (defaults to 'ihub-apps')
  * @returns {Object|null} Decoded token payload or null if invalid
  */
-export function verifyJwt(token) {
+export function verifyJwt(token, options = {}) {
   try {
     const algorithm = getJwtAlgorithm();
     const verificationKey = getJwtVerificationKey();
@@ -170,7 +172,7 @@ export function verifyJwt(token) {
 
     return jwt.verify(token, verificationKey, {
       issuer: 'ihub-apps',
-      audience: 'ihub-apps',
+      audience: options.audience !== undefined ? options.audience : 'ihub-apps',
       algorithms: [algorithm]
     });
   } catch (error) {

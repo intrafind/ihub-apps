@@ -1,6 +1,6 @@
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
-import { verifyJwt } from '../utils/tokenService.js';
+import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -36,7 +36,20 @@ export default function jwtAuthMiddleware(req, res, next) {
   const platform = configCache.getPlatform() || {};
 
   try {
-    const decoded = verifyJwt(token);
+    let decoded = verifyJwt(token);
+
+    // If standard verification failed, check if it's an OAuth authorization code token
+    // with a client-specific audience (aud: clientId instead of 'ihub-apps')
+    if (!decoded) {
+      const peeked = decodeJwt(token);
+      if (
+        peeked?.payload?.authMode === 'oauth_authorization_code' &&
+        peeked?.payload?.aud &&
+        peeked.payload.aud !== 'ihub-apps'
+      ) {
+        decoded = verifyJwt(token, { audience: peeked.payload.aud });
+      }
+    }
 
     if (!decoded) {
       logger.warn('🔐 JWT Auth: Token verification failed');

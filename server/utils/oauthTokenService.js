@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { verifyJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';
+import { verifyJwt, decodeJwt, getJwtAlgorithm, getJwtSigningKey } from './tokenService.js';
 import logger from './logger.js';
 
 /**
@@ -83,13 +83,26 @@ export function generateOAuthToken(client, options = {}) {
 }
 
 /**
- * Verify and decode OAuth JWT token
+ * Verify and decode OAuth JWT token (supports both client_credentials and authorization_code)
  * @param {string} token - JWT token to verify
  * @returns {Object|null} Decoded token payload or null if invalid
  */
 export function verifyOAuthToken(token) {
   try {
-    const decoded = verifyJwt(token);
+    // First try standard verification (audience: 'ihub-apps', covers client_credentials)
+    let decoded = verifyJwt(token);
+
+    // If that failed, check if it's an auth code token with client-specific audience
+    if (!decoded) {
+      const peeked = decodeJwt(token);
+      if (
+        peeked?.payload?.authMode === 'oauth_authorization_code' &&
+        peeked?.payload?.aud &&
+        peeked.payload.aud !== 'ihub-apps'
+      ) {
+        decoded = verifyJwt(token, { audience: peeked.payload.aud });
+      }
+    }
 
     if (!decoded) {
       logger.warn('[OAuth] Token verification failed');
@@ -97,8 +110,13 @@ export function verifyOAuthToken(token) {
     }
 
     // Verify it's an OAuth token
-    if (decoded.authMode !== 'oauth_client_credentials') {
-      logger.warn('[OAuth] Token is not an OAuth client credentials token');
+    const validAuthModes = [
+      'oauth_client_credentials',
+      'oauth_authorization_code',
+      'oauth_static_api_key'
+    ];
+    if (!validAuthModes.includes(decoded.authMode)) {
+      logger.warn(`[OAuth] Token is not an OAuth token (authMode: ${decoded.authMode})`);
       return null;
     }
 
@@ -142,18 +160,33 @@ export function introspectOAuthToken(token) {
       };
     }
 
-    return {
+    // Base introspection result
+    const result = {
       active: true,
-      client_id: decoded.client_id,
-      client_name: decoded.client_name,
       scopes: decoded.scopes,
-      allowedApps: decoded.allowedApps,
-      allowedModels: decoded.allowedModels,
       exp: decoded.exp,
       iat: decoded.iat,
       iss: decoded.iss,
-      aud: decoded.aud
+      aud: decoded.aud,
+      token_type: decoded.authMode
     };
+
+    if (decoded.authMode === 'oauth_authorization_code') {
+      // Auth code tokens carry user identity
+      result.sub = decoded.sub;
+      result.name = decoded.name;
+      result.email = decoded.email;
+      result.groups = decoded.groups;
+      result.client_id = decoded.client_id;
+    } else {
+      // Client credentials / static API key tokens
+      result.client_id = decoded.client_id;
+      result.client_name = decoded.client_name;
+      result.allowedApps = decoded.allowedApps;
+      result.allowedModels = decoded.allowedModels;
+    }
+
+    return result;
   } catch (error) {
     logger.error('[OAuth] Token introspection error:', error.message);
     return {

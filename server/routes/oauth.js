@@ -10,7 +10,7 @@ import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { consumeCode } from '../utils/authorizationCodeStore.js';
 import { verifyCodeChallenge } from '../utils/pkceUtils.js';
-import { generateJwt, verifyJwt } from '../utils/tokenService.js';
+import { generateJwt, decodeJwt } from '../utils/tokenService.js';
 import {
   generateRefreshToken,
   storeRefreshToken,
@@ -68,6 +68,34 @@ function sendOAuthError(res, status, error, description) {
     error: error,
     error_description: description
   });
+}
+
+/**
+ * Extract client credentials from Authorization: Basic header (RFC 6749 §2.3.1)
+ * @param {Object} req - Express request object
+ * @returns {{ clientId: string, clientSecret: string } | null}
+ */
+function extractBasicCredentials(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Basic ')) {
+    return null;
+  }
+
+  try {
+    const base64 = authHeader.substring(6);
+    const decoded = Buffer.from(base64, 'base64').toString('utf-8');
+    const colonIndex = decoded.indexOf(':');
+    if (colonIndex === -1) {
+      return null;
+    }
+
+    const clientId = decodeURIComponent(decoded.substring(0, colonIndex));
+    const clientSecret = decodeURIComponent(decoded.substring(colonIndex + 1));
+    return { clientId, clientSecret };
+  } catch (error) {
+    logger.warn('[OAuth] Failed to parse Basic credentials:', error.message);
+    return null;
+  }
 }
 
 export default function registerOAuthRoutes(app) {
@@ -142,7 +170,16 @@ export default function registerOAuthRoutes(app) {
         return sendOAuthError(res, 400, 'invalid_request', 'OAuth is not enabled on this server');
       }
 
-      const { grant_type, client_id, client_secret, scope } = req.body;
+      // Support both client_secret_post (body) and client_secret_basic (header)
+      const basicCreds = extractBasicCredentials(req);
+      const {
+        grant_type,
+        client_id: body_client_id,
+        client_secret: body_client_secret,
+        scope
+      } = req.body;
+      const client_id = body_client_id || basicCreds?.clientId || null;
+      const client_secret = body_client_secret || basicCreds?.clientSecret || null;
 
       // Sanitize inputs
       let sanitizedGrantType, sanitizedClientId, sanitizedClientSecret, sanitizedScope;
@@ -749,6 +786,75 @@ export default function registerOAuthRoutes(app) {
       res.json(userInfo);
     } catch (error) {
       logger.error('[OAuth] UserInfo endpoint error:', error);
+      res
+        .status(500)
+        .json({ error: 'server_error', error_description: 'An internal error occurred' });
+    }
+  });
+
+  /**
+   * RP-Initiated Logout (OIDC RP-Initiated Logout 1.0 - simplified)
+   * GET /api/oauth/logout
+   *
+   * Query params:
+   *   - id_token_hint: the id_token previously issued to the client
+   *   - post_logout_redirect_uri: where to redirect after logout
+   *   - state: opaque value echoed back to the redirect URI
+   */
+  app.get(buildServerPath('/api/oauth/logout'), async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const oauthConfig = platform.oauth || {};
+
+      if (!oauthConfig.enabled) {
+        return sendOAuthError(res, 400, 'invalid_request', 'OAuth is not enabled on this server');
+      }
+
+      const { id_token_hint, post_logout_redirect_uri, state } = req.query;
+
+      // Clear the authToken cookie
+      res.clearCookie('authToken', {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax'
+      });
+
+      // If post_logout_redirect_uri is provided, validate against client config
+      if (post_logout_redirect_uri) {
+        let clientId = null;
+
+        // Extract client_id from id_token_hint
+        if (id_token_hint) {
+          const peeked = decodeJwt(id_token_hint);
+          clientId = peeked?.payload?.client_id || peeked?.payload?.aud;
+        }
+
+        if (clientId) {
+          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          const clientsConfig = loadOAuthClients(clientsFilePath);
+          const client = findClientById(clientsConfig, clientId);
+
+          if (client && (client.postLogoutRedirectUris || []).includes(post_logout_redirect_uri)) {
+            const redirectUrl = new URL(post_logout_redirect_uri);
+            if (state) {
+              redirectUrl.searchParams.set('state', state);
+            }
+            logger.info(
+              `[OAuth] RP-initiated logout | client=${clientId} | redirect=${post_logout_redirect_uri}`
+            );
+            return res.redirect(redirectUrl.toString());
+          }
+        }
+
+        logger.warn(
+          `[OAuth] Logout redirect URI not validated | uri=${post_logout_redirect_uri} | client=${clientId}`
+        );
+      }
+
+      logger.info('[OAuth] Logout completed');
+      res.json({ success: true, message: 'Logged out successfully' });
+    } catch (error) {
+      logger.error('[OAuth] Logout endpoint error:', error);
       res
         .status(500)
         .json({ error: 'server_error', error_description: 'An internal error occurred' });
