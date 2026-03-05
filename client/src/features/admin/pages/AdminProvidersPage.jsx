@@ -6,6 +6,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import CloudStorageConfig from '../components/CloudStorageConfig';
+import IFinderConfig from '../components/IFinderConfig';
 import JiraConfig from '../components/JiraConfig';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -312,6 +313,7 @@ const AdminProvidersPage = () => {
           {/* Integration Configuration Sections — gated by integrations feature flag */}
           {featureFlags.isEnabled('integrations', true) && (
             <div className="mt-8 space-y-6">
+              <IFinderConfig />
               <CloudStorageConfig />
               <JiraConfig />
             </div>

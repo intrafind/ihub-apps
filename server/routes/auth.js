@@ -435,6 +435,7 @@ export default function registerAuthRoutes(app) {
       success: true,
       user: {
         id: req.user.id,
+        username: req.user.username,
         name: req.user.name,
         email: req.user.email,
         groups: req.user.groups,
@@ -575,6 +576,7 @@ export default function registerAuthRoutes(app) {
         req.user && req.user.id !== 'anonymous'
           ? {
               id: req.user.id,
+              username: req.user.username,
               name: req.user.name,
               email: req.user.email,
               groups: req.user.groups,

@@ -263,7 +263,8 @@
           "dismiss": "Dismiss",
           "acknowledge": "I Understand"
         }
-      }
+      },
+      "newChat": "New Chat"
     },
     "authRequired": {
       "title": "Authentication Required",
@@ -1030,6 +1031,34 @@
       "loadError": "Failed to load features",
       "saveError": "Failed to save features",
       "saved": "Features updated successfully"
+    },
+    "iFinder": {
+      "title": "iFinder Integration",
+      "loadError": "Failed to load iFinder configuration",
+      "saveSuccess": "iFinder configuration saved successfully",
+      "saveError": "Failed to save iFinder configuration",
+      "info": {
+        "title": "iFinder JWT Authentication"
+      },
+      "enabled": "iFinder integration enabled",
+      "disabled": "iFinder integration disabled",
+      "connectionSection": "iFinder Connection",
+      "baseUrl": "iFinder Base URL",
+      "baseUrlHelp": "Your iFinder instance URL",
+      "privateKey": "Private Key (PEM)",
+      "algorithm": "JWT Algorithm",
+      "tokenExpiration": "Token Expiration (seconds)",
+      "issuer": "JWT Issuer",
+      "audience": "JWT Audience",
+      "defaultScope": "Default Scope",
+      "jwtSubjectField": "JWT Subject Field",
+      "jwtSubjectTemplate": "Custom Subject Template",
+      "iAssistantSection": "iAssistant Settings",
+      "iAssistantBaseUrl": "iAssistant Base URL",
+      "defaultProfileId": "Default Profile ID",
+      "timeout": "Request Timeout (ms)",
+      "saving": "Saving...",
+      "save": "Save iFinder Configuration"
     }
   },
   "components": {
@@ -1476,6 +1505,29 @@
     "resetToDefaults": "Reset to Defaults",
     "colorInvalid": "Please enter a valid hex color (e.g., #4f46e5)"
   },
+  "citations": {
+    "preview": "Preview (PDF)",
+    "download": "Download",
+    "openInApp": "Open in App",
+    "details": "Details",
+    "fileType": "File Type",
+    "fileSize": "File Size",
+    "author": "Author",
+    "source": "Source",
+    "modified": "Modified",
+    "indexed": "Indexed",
+    "language": "Language",
+    "documentDetails": "Document Details",
+    "loading": "Loading...",
+    "breadcrumbs": "Path",
+    "documents": "Documents",
+    "untitledDocument": "Document",
+    "referenced": "Referenced",
+    "mentioned": "Mentioned",
+    "passages": "{{count}} passage",
+    "passages_plural": "{{count}} passages",
+    "openExternal": "Open in browser"
+  },
   "thoughts": {
     "phase": {
       "assess": "Assess",
@@ -1527,6 +1579,10 @@
     },
     "context": {
       "compression": "Compressing current knowledge"
+    },
+    "finalize": {
+      "started": "Finalizing answer...",
+      "completed": "Answer ready"
     }
   }
 }

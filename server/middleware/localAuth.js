@@ -113,6 +113,7 @@ export async function loginUser(username, password, localAuthConfig) {
   // Create user response object (without sensitive information)
   let userResponse = {
     id: user.id,
+    username: user.username,
     name: user.name,
     email: user.email,
     groups: user.internalGroups || ['user'],

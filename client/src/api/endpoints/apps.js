@@ -48,6 +48,42 @@ export const stopAppChatStream = async (appId, chatId) => {
   );
 };
 
+/**
+ * Get conversation messages from iAssistant Conversation API
+ * @param {string} appId - App ID
+ * @param {string} conversationId - Conversation ID
+ * @param {Object} [options] - Pagination options
+ * @param {number} [options.size] - Page size
+ * @param {string} [options.nextCursor] - Cursor for pagination
+ */
+export const getConversationMessages = async (appId, conversationId, options = {}) => {
+  const params = {};
+  if (options.size) params.size = options.size;
+  if (options.nextCursor) params.next_cursor = options.nextCursor;
+
+  return handleApiResponse(
+    () =>
+      apiClient.get(`/apps/${appId}/conversations/${conversationId}/messages`, {
+        params
+      }),
+    null,
+    null,
+    false
+  );
+};
+
+/**
+ * Delete a conversation
+ */
+export const deleteConversation = async (appId, conversationId) => {
+  return handleApiResponse(
+    () => apiClient.delete(`/apps/${appId}/conversations/${conversationId}`),
+    null,
+    null,
+    false
+  );
+};
+
 export const checkAppChatStatus = async (appId, chatId) => {
   return handleApiResponse(
     () => apiClient.get(`/apps/${appId}/chat/${chatId}/status`),

@@ -1,0 +1,25 @@
+{
+  "id": "iassistant-conversation",
+  "enabled": false,
+  "modelId": "iassistant-conversation",
+  "name": {
+    "en": "iAssistant Conversation",
+    "de": "iAssistant Konversation"
+  },
+  "description": {
+    "en": "iAssistant multi-turn conversation with citations and document references",
+    "de": "iAssistant Mehrfach-Konversation mit Zitaten und Dokumentenreferenzen"
+  },
+  "provider": "iassistant-conversation",
+  "tokenLimit": null,
+  "supportsTools": false,
+  "supportsImages": false,
+  "default": false,
+  "config": {
+    "baseUrl": "",
+    "profileId": "iassistant-workspace",
+    "searchProfile": "searchprofile-standard",
+    "filter": [],
+    "tools": ["ifinder_search"]
+  }
+}

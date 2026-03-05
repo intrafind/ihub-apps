@@ -61,9 +61,31 @@ const AttachedFilesList = ({ files, onRemoveFile, onRemoveAll, disabled = false 
               <Icon name={getSourceIcon(file)} size="sm" />
             </div>
 
-            {/* File type icon */}
+            {/* File type icon or loading spinner */}
             <div className="flex-shrink-0 text-gray-600 dark:text-gray-300">
-              <Icon name={getFileTypeIcon(file)} size="md" />
+              {file.loading ? (
+                <svg
+                  className="animate-spin h-5 w-5 text-indigo-500"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+              ) : (
+                <Icon name={getFileTypeIcon(file)} size="md" />
+              )}
             </div>
 
             {/* File name and size */}
@@ -72,7 +94,9 @@ const AttachedFilesList = ({ files, onRemoveFile, onRemoveAll, disabled = false 
                 {file.fileName}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400">
-                {formatFileSize(file.fileSize)}
+                {file.loading
+                  ? t('attachedFiles.loading', 'Loading document...')
+                  : formatFileSize(file.fileSize)}
               </div>
             </div>
 
@@ -80,7 +104,7 @@ const AttachedFilesList = ({ files, onRemoveFile, onRemoveAll, disabled = false 
             <button
               type="button"
               onClick={() => onRemoveFile(index)}
-              disabled={disabled}
+              disabled={disabled || file.loading}
               className="flex-shrink-0 text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed p-1"
               title={t('attachedFiles.remove', 'Remove file')}
               aria-label={t('attachedFiles.remove', 'Remove file')}

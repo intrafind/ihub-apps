@@ -14,6 +14,8 @@ import {
 } from '../../../utils/markdownUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
+import CitationPanel from './CitationPanel';
+import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import './ChatMessage.css';
 
@@ -34,7 +36,8 @@ const ChatMessage = ({
   app = null, // App configuration for custom response rendering
   models = [], // Available models for determining if model param should be included in link
   onClarificationSubmit = null, // Callback when a clarification response is submitted
-  onClarificationSkip = null // Callback when a clarification is skipped
+  onClarificationSkip = null, // Callback when a clarification is skipped
+  onDocumentAction = null // Callback for citation document actions (preview, download, openInApp)
 }) => {
   const { t } = useTranslation();
 
@@ -487,7 +490,10 @@ const ChatMessage = ({
             : contentToRender;
         return (
           <div className="flex flex-col">
-            <StreamingMarkdown content={mdContent} />
+            <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} />
+            {message.searchStatus && message.loading && (
+              <SearchStatusIndicator status={message.searchStatus} />
+            )}
             <div className="flex mt-2">
               <span className="inline-block w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span>
               <span
@@ -586,7 +592,7 @@ const ChatMessage = ({
         }
         mdContent = `\u0060\u0060\u0060json\n${jsonString}\n\u0060\u0060\u0060`;
       }
-      return <StreamingMarkdown content={mdContent} />;
+      return <StreamingMarkdown content={mdContent} hasCitations={!!message.citations} />;
     }
 
     return (
@@ -779,7 +785,13 @@ const ChatMessage = ({
             {showThoughts && (
               <ul className="list-disc pl-4 mt-1 space-y-1">
                 {message.thoughts.map((th, idx) => (
-                  <li key={idx}>{typeof th === 'string' ? th : JSON.stringify(th)}</li>
+                  <li key={idx}>
+                    {typeof th === 'string'
+                      ? th
+                      : t(`thoughts.${th.name}`, {
+                          defaultValue: th.content || JSON.stringify(th)
+                        })}
+                  </li>
                 ))}
               </ul>
             )}
@@ -793,6 +805,11 @@ const ChatMessage = ({
             onSubmit={onClarificationSubmit}
             onSkip={onClarificationSkip}
           />
+        )}
+
+        {/* Citation panel for iAssistant Conversation */}
+        {!isUser && message.citations && !message.loading && (
+          <CitationPanel citations={message.citations} onDocumentAction={onDocumentAction} />
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}

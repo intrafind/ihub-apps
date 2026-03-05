@@ -30,7 +30,9 @@ const ChatMessageList = ({
   models = [], // Available models to pass to ChatMessage for link generation
   // Clarification handlers
   onClarificationSubmit = null, // Callback when a clarification response is submitted
-  onClarificationSkip = null // Callback when a clarification is skipped
+  onClarificationSkip = null, // Callback when a clarification is skipped
+  // Citation document action handlers
+  onDocumentAction = null
 }) => {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
@@ -152,6 +154,7 @@ const ChatMessageList = ({
                 models={models}
                 onClarificationSubmit={onClarificationSubmit}
                 onClarificationSkip={onClarificationSkip}
+                onDocumentAction={onDocumentAction}
               />
             </div>
           </div>

@@ -55,7 +55,8 @@ const SharedAppHeader = ({
   onToggleParameters,
   showParameters,
   onShare,
-  showShareButton = false
+  showShareButton = false,
+  conversationTitle = null
 }) => {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -132,6 +133,7 @@ const SharedAppHeader = ({
           exportSettings={exportSettings}
           appId={appId}
           chatId={chatId}
+          conversationTitle={conversationTitle}
         />
       </div>
 

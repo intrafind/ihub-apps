@@ -65,6 +65,28 @@ function getIFinderConfig() {
 }
 
 /**
+ * Resolve the JWT subject claim based on the configured jwtSubjectField
+ * @param {Object} user - Authenticated user object
+ * @param {Object} config - iFinder configuration
+ * @returns {string} Resolved subject value
+ */
+function resolveJwtSubject(user, config) {
+  const field = config.jwtSubjectField || 'email';
+
+  switch (field) {
+    case 'email':
+      return user.email || user.username || user.id;
+    case 'username':
+      return user.username || user.email || user.id;
+    case 'domain\\username':
+      return user.domain ? `${user.domain}\\${user.username || user.id}` : user.username || user.id;
+    default:
+      // Custom template: replace ${field} placeholders
+      return field.replace(/\$\{(\w+)\}/g, (_, key) => user[key] || '');
+  }
+}
+
+/**
  * Generate JWT token for iFinder API based on authenticated user
  * @param {Object} user - Authenticated user object
  * @param {Object} options - Additional options for token generation
@@ -85,8 +107,8 @@ export function generateIFinderJWT(user, options = {}) {
 
   // Create JWT payload matching iFinder expected format
   const payload = {
-    sub: user.email || user.id,
-    name: user.name || user.displayName || user.id,
+    sub: resolveJwtSubject(user, config),
+    name: user.name || user.displayName || user.username || user.id,
     iat: Math.floor(Date.now() / 1000),
     scope: scope
   };
@@ -135,6 +157,10 @@ export function validateIFinderJWT(token) {
  * @returns {string} Authorization header value
  */
 export function getIFinderAuthorizationHeader(user, options = {}) {
+  if (!options.scope) {
+    const config = getIFinderConfig();
+    options.scope = config.defaultScope || 'fi_index_read';
+  }
   const token = generateIFinderJWT(user, options);
   return `Bearer ${token}`;
 }

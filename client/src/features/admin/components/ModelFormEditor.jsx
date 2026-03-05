@@ -42,7 +42,7 @@ const getEnvironmentVariableNames = model => {
   if (providerVar) {
     // Known provider - show its env var
     envVars.push(providerVar);
-  } else if (model.provider !== 'iassistant') {
+  } else if (model.provider !== 'iassistant' && model.provider !== 'iassistant-conversation') {
     // Unknown provider - show generic pattern and default fallback
     envVars.push(`${model.provider.toUpperCase()}_API_KEY`);
     envVars.push('DEFAULT_API_KEY');
@@ -131,7 +131,9 @@ const ModelFormEditor = ({
     { value: 'anthropic', label: 'Anthropic' },
     { value: 'google', label: 'Google' },
     { value: 'mistral', label: 'Mistral' },
-    { value: 'local', label: 'Local' }
+    { value: 'local', label: 'Local' },
+    { value: 'iassistant', label: 'iAssistant' },
+    { value: 'iassistant-conversation', label: 'iAssistant Conversation' }
   ];
 
   // Memoize environment variables tooltip text for API Key field
