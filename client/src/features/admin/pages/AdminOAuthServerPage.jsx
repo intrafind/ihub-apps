@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
@@ -10,6 +11,7 @@ import { getBasePath } from '../../../utils/runtimeBasePath.js';
 
 const AdminOAuthServerPage = () => {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -193,6 +195,13 @@ const AdminOAuthServerPage = () => {
         <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
             <div>
+              <button
+                onClick={() => navigate('/admin/oauth')}
+                className="inline-flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-2"
+              >
+                <Icon name="chevron-left" size="sm" className="mr-1" />
+                {t('admin.nav.oauth', 'OAuth')}
+              </button>
               <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
                 {t('admin.auth.oauth.server.title', 'Authorization Server')}
               </h1>
