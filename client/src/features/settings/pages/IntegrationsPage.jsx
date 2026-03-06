@@ -118,7 +118,7 @@ const IntegrationsPage = () => {
       // Use fetch to initiate the OAuth flow so credentials are included
       try {
         // Get current page path as return URL
-        const returnUrl = window.location.pathname + window.location.search;
+        const returnUrl = window.location.origin + window.location.pathname;
         const response = await fetch(
           `/api/integrations/jira/auth?returnUrl=${encodeURIComponent(returnUrl)}`,
           {
@@ -153,7 +153,7 @@ const IntegrationsPage = () => {
   // Handle cloud provider connection
   const handleCloudConnect = provider => {
     // Get current page path as return URL
-    const returnUrl = window.location.pathname + window.location.search;
+    const returnUrl = window.location.origin + window.location.pathname;
     window.location.href = `/api/integrations/${provider.type}/auth?providerId=${encodeURIComponent(provider.id)}&returnUrl=${encodeURIComponent(returnUrl)}`;
   };
 

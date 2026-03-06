@@ -11,6 +11,21 @@ import rateLimit from 'express-rate-limit';
 
 const router = express.Router();
 
+/**
+ * Validate returnUrl to prevent open redirect attacks.
+ * Allows relative paths and absolute URLs on the same hostname (any port).
+ */
+function isValidReturnUrl(returnUrl, req) {
+  if (!returnUrl) return false;
+  if (returnUrl.startsWith('/')) return true;
+  try {
+    const url = new URL(returnUrl);
+    return url.hostname === req.hostname;
+  } catch {
+    return false;
+  }
+}
+
 // Gate all Office 365 routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
 
@@ -60,6 +75,9 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     // Generate PKCE parameters
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
+    // Validate returnUrl to prevent open redirects
+    const validatedReturnUrl = isValidReturnUrl(returnUrl, req) ? returnUrl : '/settings/integrations';
+
     // Store OAuth parameters in session with provider-specific key
     // This allows multiple Office 365 providers to have concurrent OAuth flows
     const sessionKey = `oauth_office365_${providerId}`;
@@ -68,7 +86,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
       codeVerifier,
       providerId,
       userId: req.user?.id || 'fallback-user',
-      returnUrl: returnUrl || '/settings/integrations',
+      returnUrl: validatedReturnUrl,
       timestamp: Date.now()
     };
 
@@ -128,12 +146,17 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     // Validate state parameter
     const sessionKey = `oauth_office365_${providerId}`;
     const storedAuth = req.session[sessionKey];
+
+    // Extract returnUrl early for use in all redirects
+    const returnUrl = storedAuth?.returnUrl || '/settings/integrations';
+    const separator = returnUrl.includes('?') ? '&' : '?';
+
     if (!storedAuth || storedAuth.state !== state) {
       logger.error('❌ Invalid Office 365 OAuth state parameter', {
         component: 'Office 365',
         providerId
       });
-      return res.redirect('/settings/integrations?office365_error=invalid_state');
+      return res.redirect(`${returnUrl}${separator}office365_error=invalid_state`);
     }
 
     // Verify providerId matches
@@ -143,7 +166,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
         urlProviderId: providerId,
         sessionProviderId: storedAuth.providerId
       });
-      return res.redirect('/settings/integrations?office365_error=provider_mismatch');
+      return res.redirect(`${returnUrl}${separator}office365_error=provider_mismatch`);
     }
 
     // Check session timeout (15 minutes)
@@ -152,7 +175,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
         component: 'Office 365',
         providerId
       });
-      return res.redirect('/settings/integrations?office365_error=session_expired');
+      return res.redirect(`${returnUrl}${separator}office365_error=session_expired`);
     }
 
     // Exchange authorization code for tokens (pass request for auto-detection)
@@ -186,8 +209,8 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
       providerId: storedAuth.providerId
     });
 
-    // Redirect back to settings with success
-    res.redirect('/settings/integrations?office365_connected=true');
+    // Redirect back to the original page with success
+    res.redirect(`${returnUrl}${separator}office365_connected=true`);
   } catch (error) {
     logger.error('❌ Error handling Office 365 OAuth callback:', {
       component: 'Office 365',
@@ -195,12 +218,16 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
       providerId: req.params.providerId
     });
 
-    // Clear session data on error
+    // Try to get returnUrl from session before clearing
+    let catchReturnUrl = '/settings/integrations';
     if (req.session) {
-      delete req.session[`oauth_office365_${req.params.providerId}`];
+      const catchKey = `oauth_office365_${req.params.providerId}`;
+      catchReturnUrl = req.session[catchKey]?.returnUrl || catchReturnUrl;
+      delete req.session[catchKey];
     }
 
-    res.redirect(`/settings/integrations?office365_error=${encodeURIComponent(error.message)}`);
+    const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
+    res.redirect(`${catchReturnUrl}${catchSeparator}office365_error=${encodeURIComponent(error.message)}`);
   }
 });
 

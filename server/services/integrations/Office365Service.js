@@ -336,13 +336,6 @@ class Office365Service {
             oldScope: tokens.scope
           }
         );
-
-        // Delete the old tokens
-        await this.deleteUserTokens(userId);
-
-        throw new Error(
-          'Office 365 permissions have been updated. Please reconnect your account to continue accessing Teams drives.'
-        );
       }
 
       // Check if tokens are expired
