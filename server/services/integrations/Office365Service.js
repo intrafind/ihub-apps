@@ -322,11 +322,15 @@ class Office365Service {
       // First, get the tokens to check their scope
       let tokens = await tokenStorage.getUserTokens(userId, this.serviceName);
 
-      // Check if tokens have old scope (Group.Read.All) from before admin rights removal
+      // Check if tokens have old scopes that require admin consent (Group.Read.All, ChannelSettings.Read.All)
       // These tokens need to be invalidated so user can re-authenticate with new scopes
-      if (tokens.scope && tokens.scope.includes('Group.Read.All')) {
+      if (
+        tokens.scope &&
+        (tokens.scope.includes('Group.Read.All') ||
+          tokens.scope.includes('ChannelSettings.Read.All'))
+      ) {
         logger.warn(
-          `⚠️ Detected old Office 365 token with Group.Read.All scope for user ${userId}. Invalidating tokens to force re-authentication with new scopes.`,
+          `⚠️ Detected old Office 365 token with admin-consent scope for user ${userId}. Invalidating tokens to force re-authentication with new scopes.`,
           {
             component: 'Office 365',
             oldScope: tokens.scope

@@ -107,20 +107,28 @@ OAuth tokens are bound to the specific permission set granted during authorizati
 
 ## Azure AD App Configuration
 
-No changes needed to existing Azure AD app registrations. The app registration should have these permissions configured:
+**Important:** Your Azure AD app registration must **only** have the permissions listed below. Any extra permissions that require admin consent (e.g., `Group.Read.All`, `ChannelSettings.Read.All`) will cause Microsoft to show an "Administrator approval required" screen to regular users, even if admin consent was granted globally.
 
-1. Go to **Azure Portal** → **App registrations**
-2. Select your app
-3. Go to **API permissions**
-4. Ensure these Microsoft Graph delegated permissions are present:
-   - User.Read
-   - Files.Read.All
-   - Sites.Read.All
-   - Team.ReadBasic.All
-   - Channel.ReadBasic.All
-   - offline_access
+### Required Steps
 
-**Note:** You can optionally remove `Group.Read.All` from the app registration if it's no longer needed for other purposes.
+1. Go to **Azure Portal** → **App registrations** → Select your app → **API permissions**
+2. **Remove** any permissions **not** in the list below, especially:
+   - `Group.Read.All` (admin consent required — no longer needed)
+   - `ChannelSettings.Read.All` (admin consent required — never needed)
+3. Ensure **only** these Microsoft Graph delegated permissions remain:
+   - `User.Read`
+   - `Files.Read.All`
+   - `Sites.Read.All`
+   - `Team.ReadBasic.All`
+   - `Channel.ReadBasic.All`
+   - `offline_access`
+4. Click **"Grant admin consent for [your organization]"** to apply the updated permission set
+5. Go to **Enterprise applications** → Select your app → **Properties**
+6. Ensure **"User assignment required?"** is set to **No**
+
+### Why Extra Permissions Cause Problems
+
+Even if the iHub Apps code only requests the 6 scopes above, Azure AD evaluates **all permissions registered on the app**. If any registered permission requires admin consent, Microsoft may block the entire OAuth flow for regular users with an "Administrator approval required" error — regardless of whether admin consent was previously granted.
 
 ## Testing
 
