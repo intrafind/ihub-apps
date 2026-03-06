@@ -201,8 +201,8 @@ if (cluster.isPrimary && workerCount > 1) {
   // Start usage rollup scheduler
   try {
     const { startRollupScheduler } = await import('./services/UsageAggregator.js');
-    const features = configCache.getFeatures ? configCache.getFeatures() : {};
-    const retentionConfig = features?.usageTracking || {};
+    const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+    const retentionConfig = platform?.usageTracking || {};
     startRollupScheduler(retentionConfig);
   } catch (err) {
     logger.warn('Failed to start usage rollup scheduler:', err.message);

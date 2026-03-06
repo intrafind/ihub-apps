@@ -1,7 +1,12 @@
+import { promises as fs } from 'fs';
+import { join } from 'path';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { getTrackingMode } from '../../usageTracker.js';
-import { getDailyRollups, getMonthlyRollups } from '../../services/UsageAggregator.js';
+import { getRootDir } from '../../pathUtils.js';
+import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import configCache from '../../configCache.js';
+import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
+import { getDailyRollups, getMonthlyRollups, runRollups } from '../../services/UsageAggregator.js';
 import { readEvents } from '../../services/UsageEventLog.js';
 import logger from '../../utils/logger.js';
 
@@ -33,6 +38,14 @@ function parseRange(range) {
   }
 }
 
+function escapeCsvField(value) {
+  const str = String(value ?? '');
+  if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+    return `"${str.replace(/"/g, '""')}"`;
+  }
+  return str;
+}
+
 export default function registerAdminUsageRoutes(app) {
   // Timeline endpoint - daily or monthly aggregations
   app.get(buildServerPath('/api/admin/usage/timeline'), adminAuth, async (req, res) => {
@@ -62,7 +75,6 @@ export default function registerAdminUsageRoutes(app) {
       const parsed = parseRange(range);
       const rollups = await getDailyRollups(parsed.startDate, parsed.endDate);
 
-      // Aggregate per-user across all days
       const users = {};
       for (const rollup of rollups) {
         for (const [uid, data] of Object.entries(rollup.byUser || {})) {
@@ -131,7 +143,7 @@ export default function registerAdminUsageRoutes(app) {
     }
   });
 
-  // Tracking metadata endpoint
+  // Tracking metadata endpoint - GET
   app.get(buildServerPath('/api/admin/usage/meta'), adminAuth, async (req, res) => {
     try {
       const mode = await getTrackingMode();
@@ -140,6 +152,59 @@ export default function registerAdminUsageRoutes(app) {
       logger.error('Error loading usage meta:', e);
       res.status(500).json({ error: 'Failed to load usage metadata' });
     }
+  });
+
+  // Tracking metadata endpoint - PUT (update tracking mode)
+  app.put(buildServerPath('/api/admin/usage/meta'), adminAuth, async (req, res) => {
+    try {
+      const { trackingMode } = req.body;
+      const validModes = ['anonymous', 'pseudonymous', 'identified'];
+      if (!validModes.includes(trackingMode)) {
+        return res
+          .status(400)
+          .json({ error: `Invalid tracking mode. Must be one of: ${validModes.join(', ')}` });
+      }
+
+      const rootDir = getRootDir();
+      const platformPath = join(rootDir, 'contents', 'config', 'platform.json');
+      let platform = {};
+      try {
+        const data = await fs.readFile(platformPath, 'utf8');
+        platform = JSON.parse(data);
+      } catch {
+        // Start fresh if file doesn't exist
+      }
+
+      if (!platform.features) platform.features = {};
+      platform.features.usageTrackingMode = trackingMode;
+      await atomicWriteJSON(platformPath, platform);
+      await configCache.refreshCacheEntry('config/platform.json');
+      reloadConfig();
+
+      res.json({ trackingMode, message: 'Tracking mode updated successfully' });
+    } catch (e) {
+      logger.error('Error updating tracking mode:', e);
+      res.status(500).json({ error: 'Failed to update tracking mode' });
+    }
+  });
+
+  // On-demand rollup generation
+  app.post(buildServerPath('/api/admin/usage/_rollup'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+      const retentionConfig = platform?.usageTracking || {};
+      await runRollups(retentionConfig);
+      res.json({ message: 'Rollup generation completed successfully' });
+    } catch (e) {
+      logger.error('Error generating rollups:', e);
+      res.status(500).json({ error: 'Failed to generate rollups' });
+    }
+  });
+
+  // GET alias for rollup trigger (convenience)
+  app.get(buildServerPath('/api/admin/usage/_rollup'), adminAuth, (req, res, next) => {
+    req.method = 'POST';
+    app._router.handle(req, res, next);
   });
 
   // Export endpoint
@@ -156,9 +221,17 @@ export default function registerAdminUsageRoutes(app) {
         const headers =
           'timestamp,type,userId,app,model,promptTokens,completionTokens,tokenSource\n';
         const rows = events
-          .map(
-            e =>
-              `${e.ts},${e.type},${e.uid},${e.app},${e.model},${e.pt || 0},${e.ct || 0},${e.src || 'estimate'}`
+          .map(e =>
+            [
+              escapeCsvField(e.ts),
+              escapeCsvField(e.type),
+              escapeCsvField(e.uid),
+              escapeCsvField(e.app),
+              escapeCsvField(e.model),
+              e.pt || 0,
+              e.ct || 0,
+              escapeCsvField(e.src || 'estimate')
+            ].join(',')
           )
           .join('\n');
         res.setHeader('Content-Type', 'text/csv');

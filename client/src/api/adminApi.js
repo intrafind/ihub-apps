@@ -810,6 +810,19 @@ export const fetchAdminUsageMeta = async () => {
   return response.data;
 };
 
+export const updateAdminUsageTrackingMode = async mode => {
+  const response = await makeAdminApiCall('/admin/usage/meta', {
+    method: 'PUT',
+    data: { trackingMode: mode }
+  });
+  return response.data;
+};
+
+export const triggerUsageRollup = async () => {
+  const response = await makeAdminApiCall('/admin/usage/_rollup', { method: 'POST' });
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -817,6 +830,8 @@ export const adminApi = {
   fetchAdminUsageData,
   fetchAdminUsageTimeline,
   fetchAdminUsageMeta,
+  updateAdminUsageTrackingMode,
+  triggerUsageRollup,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,

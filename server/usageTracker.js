@@ -63,11 +63,16 @@ async function loadConfig() {
     const configCache = (await import('./configCache.js')).default;
     const features = configCache.getFeatures();
     trackingEnabled = isFeatureEnabled('usageTracking', features);
-    trackingMode = features?.usageTrackingMode || 'pseudonymous';
+    const platformConfig = configCache.getPlatform();
+    trackingMode = platformConfig?.features?.usageTrackingMode || 'pseudonymous';
   } catch {
     trackingEnabled = true;
   }
   configLoaded = true;
+}
+
+export function reloadConfig() {
+  configLoaded = false;
 }
 
 function migrateLegacyFeedback(feedbackObj) {
@@ -412,11 +417,6 @@ export async function resetUsage() {
   usage.lastReset = now();
   dirty = true;
   await saveUsage();
-}
-
-export async function reloadConfig() {
-  configLoaded = false;
-  await loadConfig();
 }
 
 // Start periodic save interval

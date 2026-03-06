@@ -1,6 +1,12 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { readEvents, getDailyDir, getMonthlyDir, cleanupEvents } from './UsageEventLog.js';
+import {
+  readEvents,
+  getDailyDir,
+  getMonthlyDir,
+  cleanupEvents,
+  flushQueue
+} from './UsageEventLog.js';
 import logger from '../utils/logger.js';
 
 const ROLLUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
@@ -247,6 +253,7 @@ export async function getMonthlyRollups(startMonth, endMonth) {
  * Run all rollup generation and cleanup tasks.
  */
 export async function runRollups(retentionConfig = {}) {
+  await flushQueue();
   await generateDailyRollups();
   await generateMonthlyRollups();
   if (retentionConfig.eventRetentionDays != null) {

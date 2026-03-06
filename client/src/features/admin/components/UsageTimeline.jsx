@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminUsageTimeline } from '../../../api/adminApi';
+import { fetchAdminUsageTimeline, triggerUsageRollup } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 const RANGES = [
@@ -130,22 +130,31 @@ export default function UsageTimeline() {
   const [range, setRange] = useState('30d');
   const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+
+  const loadTimeline = selectedRange => {
+    setLoading(true);
+    return fetchAdminUsageTimeline(selectedRange)
+      .then(data => setTimeline(data))
+      .catch(e => console.error('Failed to load timeline', e))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    fetchAdminUsageTimeline(range)
-      .then(data => {
-        if (!cancelled) setTimeline(data);
-      })
-      .catch(e => console.error('Failed to load timeline', e))
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
+    loadTimeline(range);
   }, [range]);
+
+  const handleGenerateRollup = async () => {
+    try {
+      setGenerating(true);
+      await triggerUsageRollup();
+      await loadTimeline(range);
+    } catch (e) {
+      console.error('Failed to generate rollup', e);
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   const chartData = useMemo(() => {
     if (!timeline?.data) return [];
@@ -179,26 +188,73 @@ export default function UsageTimeline() {
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
           {t('admin.usage.timeline.title', 'Usage Timeline')}
         </h3>
-        <div className="flex gap-1">
-          {RANGES.map(r => (
-            <button
-              key={r.value}
-              onClick={() => setRange(r.value)}
-              className={`px-3 py-1 text-sm rounded-md transition-colors ${
-                range === r.value
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-              }`}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1">
+            {RANGES.map(r => (
+              <button
+                key={r.value}
+                onClick={() => setRange(r.value)}
+                className={`px-3 py-1 text-sm rounded-md transition-colors ${
+                  range === r.value
+                    ? 'bg-blue-500 text-white'
+                    : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={handleGenerateRollup}
+            disabled={generating}
+            className="px-3 py-1 text-sm rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {generating
+              ? t('admin.usage.timeline.generating', 'Generating...')
+              : t('admin.usage.timeline.generateReport', 'Generate Report')}
+          </button>
         </div>
       </div>
 
       {loading ? (
         <div className="flex justify-center py-12">
           <LoadingSpinner />
+        </div>
+      ) : chartData.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-12 text-center">
+          <div className="text-gray-400 dark:text-gray-500 text-5xl mb-4">
+            <svg
+              className="w-16 h-16 mx-auto"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={1.5}
+                d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
+              />
+            </svg>
+          </div>
+          <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
+            {t('admin.usage.timeline.noData', 'No timeline data yet')}
+          </h4>
+          <p className="text-gray-500 dark:text-gray-400 mb-6">
+            {t(
+              'admin.usage.timeline.noDataDesc',
+              'Generate a report to aggregate usage events into the timeline view.'
+            )}
+          </p>
+          <button
+            onClick={handleGenerateRollup}
+            disabled={generating}
+            className="px-6 py-2 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          >
+            {generating
+              ? t('admin.usage.timeline.generating', 'Generating...')
+              : t('admin.usage.timeline.generateReport', 'Generate Report')}
+          </button>
         </div>
       ) : (
         <>

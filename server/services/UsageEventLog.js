@@ -12,7 +12,7 @@ const FLUSH_INTERVAL_MS = 10000;
 let queue = [];
 let flushTimer = null;
 
-async function flushQueue() {
+export async function flushQueue() {
   if (queue.length === 0) return;
   await fs.mkdir(path.dirname(eventFile), { recursive: true });
   const lines = queue.map(entry => JSON.stringify(entry)).join('\n') + '\n';
