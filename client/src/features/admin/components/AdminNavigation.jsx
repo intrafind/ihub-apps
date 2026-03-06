@@ -187,7 +187,7 @@ const AdminNavigation = () => {
         {
           key: 'oauth',
           name: t('admin.nav.oauth', 'OAuth'),
-          href: '/admin/oauth/clients',
+          href: '/admin/oauth',
           // icon: 'key',
           current: location.pathname.startsWith('/admin/oauth')
         },
