@@ -61,6 +61,9 @@ const AdminOAuthClientsPage = React.lazy(
 const AdminOAuthClientEditPage = React.lazy(
   () => import('./features/admin/pages/AdminOAuthClientEditPage')
 );
+const AdminOAuthServerPage = React.lazy(
+  () => import('./features/admin/pages/AdminOAuthServerPage')
+);
 const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
 const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
 const AdminUserViewPage = React.lazy(() => import('./features/admin/pages/AdminUserViewPage'));
@@ -387,6 +390,10 @@ function App() {
                     <Route
                       path="admin/oauth/clients/:clientId"
                       element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+                    />
+                    <Route
+                      path="admin/oauth/server"
+                      element={<LazyAdminRoute component={AdminOAuthServerPage} />}
                     />
                     {showAdminPage('users') && (
                       <Route

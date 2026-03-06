@@ -183,10 +183,10 @@ const AdminNavigation = () => {
           // icon: 'shield-check',
           current: location.pathname === '/admin/auth'
         },
-        // OAuth Clients navigation (always show)
+        // OAuth navigation (always show)
         {
           key: 'oauth',
-          name: t('admin.nav.oauth', 'OAuth Clients'),
+          name: t('admin.nav.oauth', 'OAuth'),
           href: '/admin/oauth/clients',
           // icon: 'key',
           current: location.pathname.startsWith('/admin/oauth')
