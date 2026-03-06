@@ -76,7 +76,9 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     const codeVerifier = crypto.randomBytes(32).toString('base64url');
 
     // Validate returnUrl to prevent open redirects
-    const validatedReturnUrl = isValidReturnUrl(returnUrl, req) ? returnUrl : '/settings/integrations';
+    const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
+      ? returnUrl
+      : '/settings/integrations';
 
     // Store OAuth parameters in session with provider-specific key
     // This allows multiple Office 365 providers to have concurrent OAuth flows
@@ -227,7 +229,9 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     }
 
     const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-    res.redirect(`${catchReturnUrl}${catchSeparator}office365_error=${encodeURIComponent(error.message)}`);
+    res.redirect(
+      `${catchReturnUrl}${catchSeparator}office365_error=${encodeURIComponent(error.message)}`
+    );
   }
 });
 

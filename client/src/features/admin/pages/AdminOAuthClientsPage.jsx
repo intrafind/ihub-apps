@@ -12,7 +12,6 @@ import { getBasePath } from '../../../utils/runtimeBasePath.js';
 const AdminOAuthClientsPage = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [message, setMessage] = useState('');
@@ -144,7 +143,7 @@ const AdminOAuthClientsPage = () => {
           type: 'warning',
           text: t(
             'admin.auth.oauth.disabled',
-            'OAuth is not enabled. Enable it in Authentication settings.'
+            'OAuth is not enabled. Enable it in Authorization Server settings.'
           )
         });
       } else {
@@ -214,56 +213,6 @@ const AdminOAuthClientsPage = () => {
       setMessage({
         type: 'error',
         text: `${t('admin.auth.oauth.updateError', 'Failed to update client')}: ${error.message}`
-      });
-    }
-  };
-
-  const handleToggleOAuth = async () => {
-    const newStatus = !oauthEnabled;
-
-    try {
-      // Load current platform config
-      const response = await makeAdminApiCall('/admin/configs/platform');
-      const platformConfig = response.data;
-
-      // Update OAuth enabled status
-      const updatedConfig = {
-        ...platformConfig,
-        oauth: {
-          ...(platformConfig.oauth || {}),
-          enabled: newStatus,
-          clientsFile: platformConfig.oauth?.clientsFile || 'contents/config/oauth-clients.json',
-          defaultTokenExpirationMinutes: platformConfig.oauth?.defaultTokenExpirationMinutes || 60,
-          maxTokenExpirationMinutes: platformConfig.oauth?.maxTokenExpirationMinutes || 1440
-        }
-      };
-
-      // Save updated config
-      await makeAdminApiCall('/admin/configs/platform', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(updatedConfig)
-      });
-
-      setOAuthEnabled(newStatus);
-      setMessage({
-        type: 'success',
-        text: `OAuth ${newStatus ? 'enabled' : 'disabled'} successfully`
-      });
-
-      // Refresh platform config to update navigation and other components
-      await refreshConfig();
-
-      // Reload clients if enabling
-      if (newStatus) {
-        loadClients();
-      }
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to ${newStatus ? 'enable' : 'disable'} OAuth: ${error.message}`
       });
     }
   };
@@ -402,34 +351,47 @@ const AdminOAuthClientsPage = () => {
 
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* OAuth Enable/Disable Card */}
-          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+          {/* Authorization Server Tile */}
+          <button
+            onClick={() => navigate('/admin/oauth/server')}
+            className="w-full bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 text-left hover:shadow-md transition-shadow duration-200 border border-transparent hover:border-blue-200 dark:hover:border-blue-800"
+          >
             <div className="flex items-center justify-between">
-              <div className="flex-1">
-                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-                  OAuth 2.0 Authentication
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {oauthEnabled
-                    ? 'OAuth is currently enabled. External applications can authenticate using client credentials.'
-                    : 'Enable OAuth to allow external applications to authenticate and access your APIs programmatically.'}
-                </p>
+              <div className="flex items-center">
+                <div className="flex-shrink-0 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                  <Icon name="settings" size="lg" className="text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="ml-4">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                    {t('admin.auth.oauth.server.title', 'Authorization Server')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {oauthEnabled
+                      ? t(
+                          'admin.auth.oauth.server.tileEnabledDesc',
+                          'Authorization server is active. Configure endpoints, token settings, and grant types.'
+                        )
+                      : t(
+                          'admin.auth.oauth.server.tileDisabledDesc',
+                          'Enable and configure the OAuth 2.0 authorization server, JWKS endpoints, and token settings.'
+                        )}
+                  </p>
+                </div>
               </div>
-              <button
-                onClick={handleToggleOAuth}
-                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  oauthEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
-                }`}
-              >
-                <span className="sr-only">Enable OAuth</span>
+              <div className="flex items-center space-x-3">
                 <span
-                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
-                    oauthEnabled ? 'translate-x-5' : 'translate-x-0'
+                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                    oauthEnabled
+                      ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
                   }`}
-                />
-              </button>
+                >
+                  {oauthEnabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
+                </span>
+                <Icon name="chevron-right" size="md" className="text-gray-400 dark:text-gray-500" />
+              </div>
             </div>
-          </div>
+          </button>
 
           {/* Endpoints & Discovery Card */}
           {oauthEnabled && (
