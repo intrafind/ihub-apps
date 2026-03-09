@@ -1,13 +1,14 @@
-import React, { useEffect, Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import React, { useEffect, useState, Suspense } from 'react';
+import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
-import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
+import { initializeBasePath, getBasePath, buildApiUrl } from './utils/runtimeBasePath';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 // Lazy load workflow components
 const WorkflowsPage = React.lazy(() => import('./features/workflows/pages/WorkflowsPage'));
+const SetupWizard = React.lazy(() => import('./features/setup/SetupWizard'));
 const WorkflowExecutionPage = React.lazy(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
@@ -119,6 +120,45 @@ const LazyAdminRoute = ({ component: Component }) => (
   </Suspense>
 );
 
+/**
+ * Checks setup status once per session and redirects to /setup when unconfigured.
+ * Renders children immediately if the session was already checked.
+ */
+const SetupCheck = ({ children }) => {
+  const navigate = useNavigate();
+  // If already checked (or configured) this session, skip the API call
+  const alreadyChecked = !!sessionStorage.getItem('setup_configured');
+  const [done, setDone] = useState(alreadyChecked);
+
+  useEffect(() => {
+    if (alreadyChecked) return;
+
+    fetch(buildApiUrl('/api/setup/status'), { credentials: 'include' })
+      .then(r => r.json())
+      .then(data => {
+        if (data.configured) {
+          sessionStorage.setItem('setup_configured', '1');
+        } else {
+          navigate('/setup', { replace: true });
+        }
+      })
+      .catch(() => {
+        // Network error or server not ready — don't block the app
+      })
+      .finally(() => setDone(true));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (!done) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  return children;
+};
+
 function App() {
   // Use the custom hook for session management
   useSessionManagement();
@@ -196,9 +236,26 @@ function App() {
                   {/* Standalone login page — rendered outside Layout (no sidebar/header) */}
                   <Route path="login" element={<LoginPage />} />
 
+                  {/* First-run setup wizard — rendered outside Layout */}
+                  <Route
+                    path="setup"
+                    element={
+                      <Suspense fallback={<AdminLoading />}>
+                        <SetupWizard />
+                      </Suspense>
+                    }
+                  />
+
                   {/* Regular application routes */}
                   <Route path="/" element={<Layout />}>
-                    <Route index element={<SafeAppsList />} />
+                    <Route
+                      index
+                      element={
+                        <SetupCheck>
+                          <SafeAppsList />
+                        </SetupCheck>
+                      }
+                    />
                     {uiConfig?.promptsList?.enabled !== false &&
                       featureFlags.isEnabled('promptsLibrary', true) && (
                         <Route path="prompts" element={<SafePromptsList />} />
