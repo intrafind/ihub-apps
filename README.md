@@ -41,27 +41,27 @@ That's it. iHub Apps auto-configures itself on first startup — no `.env` requi
 
 19 pre-built AI apps, ready to use out of the box:
 
-| App | Description |
-|-----|-------------|
-| 💬 **Chat** | General-purpose AI chat assistant |
-| 🌐 **Chat with Web** | AI assistant with live web search |
-| 🌍 **Translator** | Multi-language translation |
-| ✉️ **Email Composer** | Draft professional emails |
-| 📝 **Content Summarizer** | Summarize and extract key insights |
-| 💡 **Idea Coach** | Brainstorm and develop ideas |
-| 📊 **Mermaid Diagrams** | Generate diagrams from text |
-| 🖼️ **Image Generator** | AI image generation |
-| 📄 **File Analysis** | Analyze text files and PDFs |
-| 🎵 **Audio Transcription** | Transcribe audio files |
-| 📱 **Social Media** | Create social media content |
-| ⚖️ **NDA Risk Analyzer** | Analyze legal documents |
-| 🔍 **iFinder Document Actions** | Enterprise document search |
-| 🤖 **iAssistant Demo** | Customizable AI assistant demo |
-| 🌐 **IntraFind Websites Bot** | Chat with IntraFind documentation |
-| 🌍 **Wikipedia Assistant** | Explore Wikipedia with AI |
-| 🌐 **External Website Bot** | Chat with any website content |
-| 🎯 **iHub Support Bot** | Self-service support assistant |
-| 📦 **Zoll Tarif Assistant** | Customs tariff lookup assistant |
+| App                             | Description                        |
+| ------------------------------- | ---------------------------------- |
+| 💬 **Chat**                     | General-purpose AI chat assistant  |
+| 🌐 **Chat with Web**            | AI assistant with live web search  |
+| 🌍 **Translator**               | Multi-language translation         |
+| ✉️ **Email Composer**           | Draft professional emails          |
+| 📝 **Content Summarizer**       | Summarize and extract key insights |
+| 💡 **Idea Coach**               | Brainstorm and develop ideas       |
+| 📊 **Mermaid Diagrams**         | Generate diagrams from text        |
+| 🖼️ **Image Generator**          | AI image generation                |
+| 📄 **File Analysis**            | Analyze text files and PDFs        |
+| 🎵 **Audio Transcription**      | Transcribe audio files             |
+| 📱 **Social Media**             | Create social media content        |
+| ⚖️ **NDA Risk Analyzer**        | Analyze legal documents            |
+| 🔍 **iFinder Document Actions** | Enterprise document search         |
+| 🤖 **iAssistant Demo**          | Customizable AI assistant demo     |
+| 🌐 **IntraFind Websites Bot**   | Chat with IntraFind documentation  |
+| 🌍 **Wikipedia Assistant**      | Explore Wikipedia with AI          |
+| 🌐 **External Website Bot**     | Chat with any website content      |
+| 🎯 **iHub Support Bot**         | Self-service support assistant     |
+| 📦 **Zoll Tarif Assistant**     | Customs tariff lookup assistant    |
 
 All apps are fully configurable. Build your own in minutes — [see the guide](docs/apps.md).
 
