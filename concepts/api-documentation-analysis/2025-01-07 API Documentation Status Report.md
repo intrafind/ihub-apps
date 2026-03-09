@@ -1,15 +1,16 @@
 # API Documentation Status Report - iHub Apps
 
 **Analysis Date:** January 7, 2025  
+**Last Updated:** March 9, 2026 – Added missing chat, feedback, and conversation endpoints  
 **Scope:** All API route files in `/server/routes/`  
 **Documentation Standard:** Swagger/OpenAI 3.0 with @swagger JSDoc annotations
 
 ## Executive Summary
 
 **Total Route Files Analyzed:** 29  
-**Files with Complete Documentation:** 4 (13.8%)  
-**Files with Partial Documentation:** 3 (10.3%)  
-**Files with No Documentation:** 22 (75.9%)  
+**Files with Complete Documentation:** 7 (24.1%)  
+**Files with Partial Documentation:** 2 (6.9%)  
+**Files with No Documentation:** 20 (69%)  
 **Total API Endpoints Requiring Documentation:** ~150+ endpoints
 
 ## Documentation Status by Category
@@ -22,14 +23,16 @@
 | `/server/routes/modelRoutes.js` | Models | 2 endpoints | ✅ Complete with full schema |
 | `/server/routes/openaiProxy.js` | OpenAI Compatible | 2 endpoints | ✅ Complete with full schema |
 | `/server/routes/admin/models.js` | Admin - Models | 1 endpoint | ✅ Complete with full schema |
+| `/server/routes/chat/sessionRoutes.js` | Chat | 5 endpoints | ✅ All chat endpoints documented (2026-03-09) |
+| `/server/routes/chat/feedbackRoutes.js` | Chat | 1 endpoint | ✅ Feedback endpoint documented (2026-03-09) |
+| `/server/routes/chat/conversationRoutes.js` | Conversations | 3 endpoints | ✅ All conversation endpoints documented (2026-03-09) |
 
-**Total Documented Endpoints:** 6
+**Total Documented Endpoints:** 15+
 
 ### 🟡 Files with Partial Documentation  
 
 | File | Category | Status | Missing Elements |
 |------|----------|--------|-----------------|
-| `/server/routes/chat/sessionRoutes.js` | Chat | 1/4 endpoints documented | Missing 3 chat endpoints |
 | `/server/routes/admin/configs.js` | Admin - Config | 1/2 endpoints documented | Missing POST endpoint |
 | `/server/routes/swagger.js` | Infrastructure | Implementation only | Not applicable - Swagger setup |
 
@@ -42,7 +45,6 @@
 |------|----------|---------------|-----------------|
 | `/server/routes/generalRoutes.js` | Apps | 2 | **HIGH** - Core app listing/details |
 | `/server/routes/chat/dataRoutes.js` | Configuration | 5 | **HIGH** - Config endpoints |
-| `/server/routes/chat/feedbackRoutes.js` | Chat | 1 | **MEDIUM** - Feedback submission |
 | `/server/routes/toolRoutes.js` | Tools | 2 | **MEDIUM** - Tool execution |
 | `/server/routes/sessionRoutes.js` | Sessions | 1 | **LOW** - Session tracking |
 | `/server/routes/pageRoutes.js` | Pages | 1 | **MEDIUM** - Dynamic pages |

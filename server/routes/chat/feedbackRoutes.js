@@ -10,6 +10,87 @@ import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
+  /**
+   * @swagger
+   * /feedback:
+   *   post:
+   *     summary: Submit message feedback
+   *     description: |
+   *       Records user feedback (thumbs up/down or star rating) for a specific AI
+   *       response. Feedback is stored and used for usage tracking and analytics.
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - messageId
+   *               - appId
+   *               - chatId
+   *               - rating
+   *             properties:
+   *               messageId:
+   *                 type: string
+   *                 description: ID of the message being rated
+   *                 example: "msg-abc123"
+   *               appId:
+   *                 type: string
+   *                 description: ID of the app the message belongs to
+   *                 example: "my-assistant"
+   *               chatId:
+   *                 type: string
+   *                 description: ID of the chat session
+   *                 example: "550e8400-e29b-41d4-a716-446655440000"
+   *               messageContent:
+   *                 type: string
+   *                 description: Snippet of the rated message content (optional)
+   *                 example: "Paris is the capital of France."
+   *               rating:
+   *                 type: number
+   *                 minimum: 0.5
+   *                 maximum: 5
+   *                 multipleOf: 0.5
+   *                 description: Numeric rating in 0.5 increments (0.5–5.0)
+   *                 example: 4.5
+   *               feedback:
+   *                 type: string
+   *                 description: Optional free-text comment
+   *                 example: "Very helpful and concise!"
+   *               modelId:
+   *                 type: string
+   *                 description: ID of the model that generated the response
+   *                 example: "gpt-4o"
+   *     responses:
+   *       200:
+   *         description: Feedback recorded successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                   example: true
+   *       400:
+   *         description: Missing required fields
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *       401:
+   *         description: Authentication required
+   *       500:
+   *         description: Internal server error
+   */
   app.post(
     buildServerPath('/api/feedback'),
     authRequired,

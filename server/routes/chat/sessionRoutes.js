@@ -24,6 +24,136 @@ export default function registerSessionRoutes(
 
   /**
    * @swagger
+   * components:
+   *   schemas:
+   *     ChatMessage:
+   *       type: object
+   *       description: A single chat message
+   *       required:
+   *         - role
+   *         - content
+   *       properties:
+   *         role:
+   *           type: string
+   *           enum: [user, assistant, system]
+   *           description: Role of the message sender
+   *           example: user
+   *         content:
+   *           type: string
+   *           description: Message text content
+   *           example: "What is the capital of France?"
+   *         messageId:
+   *           type: string
+   *           description: Optional client-provided unique message identifier
+   *           example: "msg-abc123"
+   *         fileData:
+   *           type: object
+   *           description: Optional attached file data
+   *         imageData:
+   *           type: object
+   *           description: Optional attached image data
+   *
+   *     ChatRequest:
+   *       type: object
+   *       description: Request body for sending a chat message
+   *       required:
+   *         - messages
+   *       properties:
+   *         messages:
+   *           type: array
+   *           description: Array of chat messages forming the conversation history
+   *           items:
+   *             $ref: '#/components/schemas/ChatMessage'
+   *         modelId:
+   *           type: string
+   *           description: ID of the model to use (overrides app default)
+   *           example: "gpt-4o"
+   *         temperature:
+   *           type: number
+   *           description: Sampling temperature (0–2)
+   *           example: 0.7
+   *         style:
+   *           type: string
+   *           description: Response style identifier
+   *           example: "concise"
+   *         outputFormat:
+   *           type: string
+   *           enum: [markdown, text, json, html]
+   *           description: Desired output format
+   *           example: "markdown"
+   *         language:
+   *           type: string
+   *           description: BCP 47 language code for the response
+   *           example: "en"
+   *         useMaxTokens:
+   *           type: boolean
+   *           description: Whether to use the model's maximum token limit
+   *         bypassAppPrompts:
+   *           type: boolean
+   *           description: Skip the app system prompt (advanced usage)
+   *         thinkingEnabled:
+   *           type: boolean
+   *           description: Enable extended thinking for supported models
+   *         thinkingBudget:
+   *           type: number
+   *           description: Token budget for extended thinking
+   *         thinkingThoughts:
+   *           type: boolean
+   *           description: Include thinking steps in the response
+   *         enabledTools:
+   *           type: array
+   *           items:
+   *             type: string
+   *           description: List of tool IDs to enable for this request
+   *         imageAspectRatio:
+   *           type: string
+   *           description: Aspect ratio for image generation (e.g. "16:9")
+   *           example: "1:1"
+   *         imageQuality:
+   *           type: string
+   *           description: Quality level for image generation
+   *           example: "High"
+   *         requestedSkill:
+   *           type: string
+   *           description: Slash-command skill to activate
+   *         documentIds:
+   *           type: array
+   *           items:
+   *             type: string
+   *           description: IDs of documents to include as context
+   *
+   *     ChatStreamingResponse:
+   *       type: object
+   *       description: Response when the chat is being streamed via SSE
+   *       properties:
+   *         status:
+   *           type: string
+   *           enum: [streaming]
+   *           example: "streaming"
+   *         chatId:
+   *           type: string
+   *           description: The chat session ID
+   *           example: "550e8400-e29b-41d4-a716-446655440000"
+   *
+   *     ChatErrorResponse:
+   *       type: object
+   *       description: Response when an error occurs during chat
+   *       properties:
+   *         status:
+   *           type: string
+   *           enum: [error]
+   *           example: "error"
+   *         message:
+   *           type: string
+   *           description: Localized error message
+   *         code:
+   *           type: string
+   *           description: Machine-readable error code
+   *           example: "MODEL_NOT_FOUND"
+   */
+
+  /**
+   * @swagger
    * /models/{modelId}/chat/test:
    *   get:
    *     summary: Test chat model
@@ -147,6 +277,53 @@ export default function registerSessionRoutes(
     }
   );
 
+  /**
+   * @swagger
+   * /apps/{appId}/chat/{chatId}:
+   *   get:
+   *     summary: Connect to chat SSE stream
+   *     description: |
+   *       Establishes a Server-Sent Events (SSE) connection for receiving real-time chat
+   *       messages and status updates. The client must connect here first, then POST a
+   *       message to the same URL. Events are streamed back over this connection.
+   *       The connection remains open until the client disconnects or the stream is stopped.
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: chatId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Unique chat session ID (e.g. UUID) created by the client
+   *     responses:
+   *       200:
+   *         description: SSE stream established successfully
+   *         content:
+   *           text/event-stream:
+   *             schema:
+   *               type: string
+   *               description: |
+   *                 Newline-delimited Server-Sent Events. Each event is a JSON object.
+   *                 Common event types include `token`, `done`, `error`, and `action`.
+   *             example: |
+   *               data: {"type":"token","content":"Hello"}
+   *
+   *               data: {"type":"done"}
+   *       401:
+   *         description: Authentication required
+   *       500:
+   *         description: Internal server error
+   */
   app.get(
     buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
@@ -265,6 +442,93 @@ export default function registerSessionRoutes(
     }
   }
 
+  /**
+   * @swagger
+   * /apps/{appId}/chat/{chatId}:
+   *   post:
+   *     summary: Send a chat message
+   *     description: |
+   *       Sends a message to the AI chat. If an active SSE connection exists for the
+   *       given `chatId` (established via GET on the same URL), the response streams
+   *       back over that connection and this endpoint returns immediately with
+   *       `{ status: "streaming" }`. Without an SSE connection the response is
+   *       returned directly (non-streaming).
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: chatId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: Unique chat session ID matching the active SSE connection
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             $ref: '#/components/schemas/ChatRequest'
+   *           example:
+   *             messages:
+   *               - role: user
+   *                 content: "What is the capital of France?"
+   *             modelId: "gpt-4o"
+   *             outputFormat: "markdown"
+   *     responses:
+   *       200:
+   *         description: Message accepted and streaming started (or direct response returned)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               oneOf:
+   *                 - $ref: '#/components/schemas/ChatStreamingResponse'
+   *                 - $ref: '#/components/schemas/ChatErrorResponse'
+   *             examples:
+   *               streaming:
+   *                 summary: Chat is streaming via SSE
+   *                 value:
+   *                   status: "streaming"
+   *                   chatId: "550e8400-e29b-41d4-a716-446655440000"
+   *               error:
+   *                 summary: Error during processing
+   *                 value:
+   *                   status: "error"
+   *                   message: "Model not found"
+   *                   code: "MODEL_NOT_FOUND"
+   *       400:
+   *         description: Bad request (missing messages, invalid model, etc.)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *       401:
+   *         description: Authentication required
+   *       404:
+   *         description: App or model not found
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 error:
+   *                   type: string
+   *                 code:
+   *                   type: string
+   *       500:
+   *         description: Internal server error
+   */
   app.post(
     buildServerPath('/api/apps/:appId/chat/:chatId'),
     chatAuthRequired,
@@ -529,6 +793,61 @@ export default function registerSessionRoutes(
     }
   );
 
+  /**
+   * @swagger
+   * /apps/{appId}/chat/{chatId}/stop:
+   *   post:
+   *     summary: Stop a chat stream
+   *     description: |
+   *       Aborts the active LLM request and closes the SSE stream for the given chat
+   *       session. Any in-progress workflow execution triggered by the chat is also
+   *       cancelled.
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: chatId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The chat session ID to stop
+   *     responses:
+   *       200:
+   *         description: Chat stream stopped (or session not found)
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 success:
+   *                   type: boolean
+   *                 message:
+   *                   type: string
+   *             examples:
+   *               stopped:
+   *                 summary: Stream stopped successfully
+   *                 value:
+   *                   success: true
+   *                   message: "Chat stream stopped"
+   *               notFound:
+   *                 summary: Session not found
+   *                 value:
+   *                   success: false
+   *                   message: "Chat session not found"
+   *       401:
+   *         description: Authentication required
+   *       404:
+   *         description: Chat session not found
+   */
   app.post(
     buildServerPath('/api/apps/:appId/chat/:chatId/stop'),
     chatAuthRequired,
@@ -570,6 +889,65 @@ export default function registerSessionRoutes(
     }
   );
 
+  /**
+   * @swagger
+   * /apps/{appId}/chat/{chatId}/status:
+   *   get:
+   *     summary: Get chat session status
+   *     description: |
+   *       Returns the current status of a chat session, including whether the SSE
+   *       connection is active, the timestamp of the last activity, and whether an
+   *       LLM request is currently being processed.
+   *     tags:
+   *       - Chat
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: chatId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The chat session ID
+   *     responses:
+   *       200:
+   *         description: Chat session status
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 active:
+   *                   type: boolean
+   *                   description: Whether the SSE connection is currently open
+   *                 lastActivity:
+   *                   type: string
+   *                   format: date-time
+   *                   description: Timestamp of the last activity on this session
+   *                 processing:
+   *                   type: boolean
+   *                   description: Whether an LLM request is currently in progress
+   *             examples:
+   *               active:
+   *                 summary: Active session with ongoing request
+   *                 value:
+   *                   active: true
+   *                   lastActivity: "2026-01-15T10:30:00.000Z"
+   *                   processing: true
+   *               inactive:
+   *                 summary: No active session
+   *                 value:
+   *                   active: false
+   *       401:
+   *         description: Authentication required
+   */
   app.get(buildServerPath('/api/apps/:appId/chat/:chatId/status'), chatAuthRequired, (req, res) => {
     const { chatId } = req.params;
     if (clients.has(chatId)) {
