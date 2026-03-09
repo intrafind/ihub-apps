@@ -15,6 +15,154 @@ import { createHash } from 'crypto';
 import ApiKeyVerifier from './utils/ApiKeyVerifier.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
+import { deepMerge } from './utils/deepMerge.js';
+
+/**
+ * Programmatic defaults for platform.json.
+ * Applied at load time so server/defaults/config/platform.json stays minimal.
+ * User values in their platform.json always override these defaults.
+ */
+const PLATFORM_DEFAULTS = {
+  skills: {
+    skillsDirectory: 'contents/skills',
+    maxSkillBodyTokens: 5000
+  },
+  globalPromptVariables: {
+    context:
+      "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user. \n"
+  },
+  pdfExport: {
+    defaultTemplate: 'default',
+    watermark: {
+      enabled: true,
+      text: 'iHub Apps',
+      position: 'bottom-right',
+      opacity: 0.5
+    },
+    templates: {
+      default: {
+        name: 'Default',
+        description: 'Standard chat export with colors and branding'
+      },
+      professional: {
+        name: 'Professional',
+        description: 'Clean professional layout suitable for business'
+      },
+      minimal: {
+        name: 'Minimal',
+        description: 'Simple minimal design with clean lines'
+      }
+    }
+  },
+  defaultLanguage: 'en',
+  requestBodyLimitMB: 50,
+  telemetry: {
+    enabled: false,
+    logs: true
+  },
+  requestConcurrency: 5,
+  auth: {
+    mode: 'local',
+    authenticatedGroup: 'authenticated',
+    sessionTimeoutMinutes: 480
+  },
+  oauth: {
+    enabled: false,
+    clientsFile: 'contents/config/oauth-clients.json',
+    defaultTokenExpirationMinutes: 60,
+    maxTokenExpirationMinutes: 1440,
+    authorizationCodeEnabled: false,
+    issuer: '',
+    authorizationCodeExpirationSeconds: 600,
+    refreshTokenEnabled: false,
+    refreshTokenExpirationDays: 30,
+    consentRequired: true,
+    consentMemoryDays: 90
+  },
+  anonymousAuth: {
+    enabled: true,
+    defaultGroups: ['anonymous']
+  },
+  proxyAuth: {
+    enabled: false
+  },
+  localAuth: {
+    enabled: true,
+    usersFile: 'contents/config/users.json',
+    showDemoAccounts: true
+  },
+  swagger: {
+    enabled: true,
+    requireAuth: true
+  },
+  rateLimit: {
+    default: {
+      windowMs: 60000,
+      limit: 100,
+      standardHeaders: true,
+      legacyHeaders: false,
+      skipSuccessfulRequests: false,
+      skipFailedRequests: true
+    },
+    adminApi: {
+      windowMs: 60000,
+      limit: 100,
+      skipFailedRequests: true
+    },
+    publicApi: {
+      windowMs: 60000,
+      limit: 500,
+      skipFailedRequests: true
+    },
+    authApi: {
+      windowMs: 900000,
+      limit: 30,
+      skipFailedRequests: false
+    },
+    oauthApi: {
+      windowMs: 900000,
+      limit: 50,
+      skipFailedRequests: false
+    },
+    inferenceApi: {
+      windowMs: 60000,
+      limit: 500
+    }
+  },
+  ssl: {
+    ignoreInvalidCertificates: false,
+    domainWhitelist: []
+  },
+  logging: {
+    level: 'info',
+    format: 'json',
+    file: {
+      enabled: false,
+      path: 'logs/app.log',
+      maxSize: 10485760,
+      maxFiles: 5
+    }
+  },
+  jwt: {
+    algorithm: 'RS256'
+  },
+  iFinder: {
+    enabled: false,
+    baseUrl: '',
+    privateKey: '',
+    algorithm: 'RS256',
+    issuer: 'ihub-apps',
+    audience: 'ifinder-api',
+    tokenExpirationSeconds: 3600,
+    defaultScope: 'fa_index_read',
+    jwtSubjectField: 'email'
+  },
+  iAssistant: {
+    baseUrl: '',
+    defaultProfileId: '',
+    timeout: 60000
+  }
+};
 
 /**
  * Resolve environment variables in a string
@@ -367,12 +515,13 @@ class ConfigCache {
           return;
         }
 
-        // Special handling for platform.json - decrypt secrets after loading
+        // Special handling for platform.json - apply programmatic defaults, then decrypt secrets
         if (configPath === 'config/platform.json') {
           const platformData = await loadJson(configPath);
           if (platformData !== null) {
-            decryptPlatformSecrets(platformData);
-            this.setCacheEntry(configPath, platformData);
+            const mergedPlatform = deepMerge(PLATFORM_DEFAULTS, platformData);
+            decryptPlatformSecrets(mergedPlatform);
+            this.setCacheEntry(configPath, mergedPlatform);
             logger.info(`✓ Cached: ${configPath}`, { component: 'ConfigCache' });
           } else {
             logger.warn(`⚠️  Failed to load: ${configPath}`, { component: 'ConfigCache' });
@@ -584,15 +733,16 @@ class ConfigCache {
         return;
       }
 
-      // Special handling for platform.json - decrypt secrets after loading
+      // Special handling for platform.json - apply programmatic defaults, then decrypt secrets
       if (key === 'config/platform.json') {
         const platformData = await loadJson(key, { useCache: false });
         if (platformData !== null) {
-          decryptPlatformSecrets(platformData);
-          const newEtag = this.generateETag(platformData);
+          const mergedPlatform = deepMerge(PLATFORM_DEFAULTS, platformData);
+          decryptPlatformSecrets(mergedPlatform);
+          const newEtag = this.generateETag(mergedPlatform);
           const existing = this.cache.get(key);
           if (!existing || existing.etag !== newEtag) {
-            this.setCacheEntry(key, platformData);
+            this.setCacheEntry(key, mergedPlatform);
           }
         }
         return;
