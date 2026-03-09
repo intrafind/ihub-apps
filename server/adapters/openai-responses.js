@@ -246,7 +246,8 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       complete: false,
       error: false,
       errorMessage: null,
-      finishReason: null
+      finishReason: null,
+      usage: null
     };
 
     if (!data) return result;
@@ -260,6 +261,16 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
 
       // Add debugging to see what we're receiving
       logger.debug('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
+
+      // Extract usage from Responses API (available on response.completed or full response)
+      const usageData = parsed.response?.usage || parsed.usage;
+      if (usageData) {
+        result.usage = {
+          promptTokens: usageData.input_tokens || 0,
+          completionTokens: usageData.output_tokens || 0,
+          totalTokens: usageData.total_tokens || 0
+        };
+      }
 
       // Handle full response object (non-streaming)
       if (parsed.output && Array.isArray(parsed.output)) {

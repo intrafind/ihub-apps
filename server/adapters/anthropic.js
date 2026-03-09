@@ -230,15 +230,41 @@ class AnthropicAdapterClass extends BaseAdapter {
       complete: false,
       error: false,
       errorMessage: null,
-      finishReason: null
+      finishReason: null,
+      usage: null
     };
 
     if (!data) return result;
     try {
       const parsed = JSON.parse(data);
-      // logger.info('--- Anthropic Raw Chunk ---');
-      // logger.info(JSON.stringify(parsed, null, 2));
-      // logger.info('--------------------------');
+
+      // Extract usage from message_start (input tokens)
+      if (parsed.type === 'message_start' && parsed.message?.usage) {
+        result.usage = {
+          promptTokens: parsed.message.usage.input_tokens || 0,
+          completionTokens: parsed.message.usage.output_tokens || 0,
+          totalTokens:
+            (parsed.message.usage.input_tokens || 0) + (parsed.message.usage.output_tokens || 0)
+        };
+      }
+
+      // Extract usage from message_delta (final output token count)
+      if (parsed.type === 'message_delta' && parsed.usage) {
+        result.usage = {
+          promptTokens: 0,
+          completionTokens: parsed.usage.output_tokens || 0,
+          totalTokens: parsed.usage.output_tokens || 0
+        };
+      }
+
+      // Extract usage from non-streaming full response
+      if (parsed.usage && !parsed.type) {
+        result.usage = {
+          promptTokens: parsed.usage.input_tokens || 0,
+          completionTokens: parsed.usage.output_tokens || 0,
+          totalTokens: (parsed.usage.input_tokens || 0) + (parsed.usage.output_tokens || 0)
+        };
+      }
 
       // Handle full response object (non-streaming)
       if (parsed.content && Array.isArray(parsed.content) && parsed.content[0]?.text) {

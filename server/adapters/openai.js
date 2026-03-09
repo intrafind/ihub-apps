@@ -83,6 +83,11 @@ class OpenAIAdapterClass extends BaseAdapter {
       max_tokens: maxTokens
     };
 
+    // Request usage data in streaming responses when model supports it
+    if (stream && model.supportsUsageTracking !== false) {
+      body.stream_options = { include_usage: true };
+    }
+
     if (tools && tools.length > 0) body.tools = convertToolsFromGeneric(tools, 'openai');
     if (toolChoice) body.tool_choice = toolChoice;
     if (responseSchema) {
@@ -145,7 +150,8 @@ class OpenAIAdapterClass extends BaseAdapter {
       complete: false,
       error: false,
       errorMessage: null,
-      finishReason: null
+      finishReason: null,
+      usage: null
     };
 
     if (!data) return result;
@@ -156,6 +162,15 @@ class OpenAIAdapterClass extends BaseAdapter {
 
     try {
       const parsed = JSON.parse(data);
+
+      // Extract usage data from any chunk that contains it
+      if (parsed.usage) {
+        result.usage = {
+          promptTokens: parsed.usage.prompt_tokens || 0,
+          completionTokens: parsed.usage.completion_tokens || 0,
+          totalTokens: parsed.usage.total_tokens || 0
+        };
+      }
 
       // Handle full response object (non-streaming)
       if (parsed.choices && parsed.choices[0]?.message) {

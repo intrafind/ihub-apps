@@ -321,6 +321,17 @@ export function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'defau
 
         finishReason = hasToolCalls ? 'tool_calls' : 'stop';
 
+        // Extract usage from completion event
+        const completionMetadata = {};
+        const usageData = parsed.response?.usage || parsed.usage;
+        if (usageData) {
+          completionMetadata.usage = {
+            promptTokens: usageData.input_tokens || 0,
+            completionTokens: usageData.output_tokens || 0,
+            totalTokens: usageData.total_tokens || 0
+          };
+        }
+
         // Don't extract content from completion event - content comes from delta events
         // Just mark the stream as complete
         return createGenericStreamingResponse(
@@ -330,7 +341,8 @@ export function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'defau
           complete,
           false,
           null,
-          normalizeFinishReason(finishReason)
+          normalizeFinishReason(finishReason),
+          completionMetadata
         );
       }
 

@@ -164,6 +164,34 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   try {
     const parsed = JSON.parse(data);
 
+    // Extract usage from message_start (input tokens)
+    if (parsed.type === 'message_start' && parsed.message?.usage) {
+      result.metadata.usage = {
+        promptTokens: parsed.message.usage.input_tokens || 0,
+        completionTokens: parsed.message.usage.output_tokens || 0,
+        totalTokens:
+          (parsed.message.usage.input_tokens || 0) + (parsed.message.usage.output_tokens || 0)
+      };
+    }
+
+    // Extract usage from message_delta (final output token count)
+    if (parsed.type === 'message_delta' && parsed.usage) {
+      result.metadata.usage = {
+        promptTokens: 0,
+        completionTokens: parsed.usage.output_tokens || 0,
+        totalTokens: parsed.usage.output_tokens || 0
+      };
+    }
+
+    // Extract usage from non-streaming full response
+    if (parsed.usage && !parsed.type) {
+      result.metadata.usage = {
+        promptTokens: parsed.usage.input_tokens || 0,
+        completionTokens: parsed.usage.output_tokens || 0,
+        totalTokens: (parsed.usage.input_tokens || 0) + (parsed.usage.output_tokens || 0)
+      };
+    }
+
     // Handle full response object (non-streaming)
     if (parsed.content && Array.isArray(parsed.content)) {
       for (const contentBlock of parsed.content) {

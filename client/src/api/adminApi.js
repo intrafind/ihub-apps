@@ -798,11 +798,58 @@ export const fetchMarketplaceUpdates = async () => {
   return response.data;
 };
 
+export const fetchAdminUsageTimeline = async (range = '30d', granularity) => {
+  const params = new URLSearchParams({ range });
+  if (granularity) params.set('granularity', granularity);
+  const response = await makeAdminApiCall(`/admin/usage/timeline?${params}`);
+  return response.data;
+};
+
+export const fetchAdminUsageMeta = async () => {
+  const response = await makeAdminApiCall('/admin/usage/meta');
+  return response.data;
+};
+
+export const updateAdminUsageTrackingMode = async mode => {
+  const response = await makeAdminApiCall('/admin/usage/meta', {
+    method: 'PUT',
+    data: { trackingMode: mode }
+  });
+  return response.data;
+};
+
+export const triggerUsageRollup = async () => {
+  const response = await makeAdminApiCall('/admin/usage/_rollup', { method: 'POST' });
+  return response.data;
+};
+
+export const fetchAdminUsageUsers = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/users?range=${range}`);
+  return response.data;
+};
+
+export const fetchAdminUsageApps = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/apps?range=${range}`);
+  return response.data;
+};
+
+export const fetchAdminUsageModels = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/models?range=${range}`);
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
   makeAdminApiCall,
   fetchAdminUsageData,
+  fetchAdminUsageTimeline,
+  fetchAdminUsageMeta,
+  updateAdminUsageTrackingMode,
+  triggerUsageRollup,
+  fetchAdminUsageUsers,
+  fetchAdminUsageApps,
+  fetchAdminUsageModels,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,

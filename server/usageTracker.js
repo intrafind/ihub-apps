@@ -4,6 +4,8 @@ import { getRootDir } from './pathUtils.js';
 import config from './config.js';
 
 import { recordTokenUsage } from './telemetry.js';
+import { resolveUserId } from './services/UserFingerprint.js';
+import { logUsageEvent } from './services/UsageEventLog.js';
 import logger from './utils/logger.js';
 
 const contentsDir = config.CONTENTS_DIR;
@@ -13,6 +15,7 @@ const now = () => new Date().toISOString();
 
 let usage = null;
 let trackingEnabled = true;
+let trackingMode = 'pseudonymous';
 let configLoaded = false;
 let dirty = false;
 let saveTimer = null;
@@ -47,6 +50,7 @@ function createDefaultUsage() {
       perApp: {},
       perModel: {}
     },
+    tokenSources: { provider: 0, estimate: 0 },
     lastUpdated: now(),
     lastReset: now()
   };
@@ -57,11 +61,18 @@ async function loadConfig() {
   try {
     const { isFeatureEnabled } = await import('./featureRegistry.js');
     const configCache = (await import('./configCache.js')).default;
-    trackingEnabled = isFeatureEnabled('usageTracking', configCache.getFeatures());
+    const features = configCache.getFeatures();
+    trackingEnabled = isFeatureEnabled('usageTracking', features);
+    const platformConfig = configCache.getPlatform();
+    trackingMode = platformConfig?.features?.usageTrackingMode || 'pseudonymous';
   } catch {
     trackingEnabled = true;
   }
   configLoaded = true;
+}
+
+export function reloadConfig() {
+  configLoaded = false;
 }
 
 function migrateLegacyFeedback(feedbackObj) {
@@ -210,56 +221,96 @@ function incFeedback(map, key, rating) {
 
 export function estimateTokens(text) {
   if (!text) return 0;
-  return text.trim().split(/\s+/).length;
+  return Math.ceil(text.length / 4);
 }
 
-export async function recordChatRequest({ userId, appId, modelId, tokens = 0 }) {
+export async function recordChatRequest({
+  userId,
+  appId,
+  modelId,
+  tokens = 0,
+  tokenSource = 'estimate',
+  user
+}) {
   await loadConfig();
   if (!trackingEnabled) return;
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
   data.messages.total += 1;
-  inc(data.messages.perUser, userId, 1);
+  inc(data.messages.perUser, resolvedUser, 1);
   inc(data.messages.perApp, appId, 1);
   inc(data.messages.perModel, modelId, 1);
 
   data.tokens.total += tokens;
-  inc(data.tokens.perUser, userId, tokens);
+  inc(data.tokens.perUser, resolvedUser, tokens);
   inc(data.tokens.perApp, appId, tokens);
   inc(data.tokens.perModel, modelId, tokens);
-  inc(data.tokens.prompt.perUser, userId, tokens);
+  inc(data.tokens.prompt.perUser, resolvedUser, tokens);
   inc(data.tokens.prompt.perApp, appId, tokens);
   inc(data.tokens.prompt.perModel, modelId, tokens);
   inc(data.tokens.prompt, 'total', tokens);
+  if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
+  data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
   recordTokenUsage(tokens);
+  logUsageEvent({
+    type: 'chat_request',
+    userId: resolvedUser,
+    appId,
+    modelId,
+    promptTokens: tokens,
+    tokenSource
+  });
   dirty = true;
   scheduleSave();
 }
 
-export async function recordChatResponse({ userId, appId, modelId, tokens = 0 }) {
+export async function recordChatResponse({
+  userId,
+  appId,
+  modelId,
+  tokens = 0,
+  tokenSource = 'estimate',
+  user
+}) {
   await loadConfig();
   if (!trackingEnabled) return;
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
   data.messages.total += 1;
-  inc(data.messages.perUser, userId, 1);
+  inc(data.messages.perUser, resolvedUser, 1);
   inc(data.messages.perApp, appId, 1);
   inc(data.messages.perModel, modelId, 1);
 
   data.tokens.total += tokens;
-  inc(data.tokens.perUser, userId, tokens);
+  inc(data.tokens.perUser, resolvedUser, tokens);
   inc(data.tokens.perApp, appId, tokens);
   inc(data.tokens.perModel, modelId, tokens);
-  inc(data.tokens.completion.perUser, userId, tokens);
+  inc(data.tokens.completion.perUser, resolvedUser, tokens);
   inc(data.tokens.completion.perApp, appId, tokens);
   inc(data.tokens.completion.perModel, modelId, tokens);
   inc(data.tokens.completion, 'total', tokens);
+  if (!data.tokenSources) data.tokenSources = { provider: 0, estimate: 0 };
+  data.tokenSources[tokenSource] = (data.tokenSources[tokenSource] || 0) + 1;
   recordTokenUsage(tokens);
+  logUsageEvent({
+    type: 'chat_response',
+    userId: resolvedUser,
+    appId,
+    modelId,
+    completionTokens: tokens,
+    tokenSource
+  });
   dirty = true;
   scheduleSave();
 }
 
-export async function recordFeedback({ userId, appId, modelId, rating }) {
+export async function recordFeedback({ userId, appId, modelId, rating, user }) {
   await loadConfig();
   if (!trackingEnabled) return;
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
 
   // Handle numeric ratings (1-5)
@@ -295,9 +346,16 @@ export async function recordFeedback({ userId, appId, modelId, rating }) {
     data.feedback[r] += 1;
   }
 
-  incFeedback(data.feedback.perUser, userId, rating);
+  incFeedback(data.feedback.perUser, resolvedUser, rating);
   incFeedback(data.feedback.perApp, appId, rating);
   incFeedback(data.feedback.perModel, modelId, rating);
+  logUsageEvent({
+    type: 'feedback',
+    userId: resolvedUser,
+    appId,
+    modelId,
+    rating
+  });
   dirty = true;
   scheduleSave();
 }
@@ -307,27 +365,39 @@ export async function recordMagicPrompt({
   appId,
   modelId,
   inputTokens = 0,
-  outputTokens = 0
+  outputTokens = 0,
+  user
 }) {
   await loadConfig();
   if (!trackingEnabled) return;
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
   data.magicPrompt.total += 1;
-  inc(data.magicPrompt.perUser, userId, 1);
+  inc(data.magicPrompt.perUser, resolvedUser, 1);
   inc(data.magicPrompt.perApp, appId, 1);
   inc(data.magicPrompt.perModel, modelId, 1);
 
-  inc(data.magicPrompt.tokensIn.perUser, userId, inputTokens);
+  inc(data.magicPrompt.tokensIn.perUser, resolvedUser, inputTokens);
   inc(data.magicPrompt.tokensIn.perApp, appId, inputTokens);
   inc(data.magicPrompt.tokensIn.perModel, modelId, inputTokens);
   inc(data.magicPrompt.tokensIn, 'total', inputTokens);
 
-  inc(data.magicPrompt.tokensOut.perUser, userId, outputTokens);
+  inc(data.magicPrompt.tokensOut.perUser, resolvedUser, outputTokens);
   inc(data.magicPrompt.tokensOut.perApp, appId, outputTokens);
   inc(data.magicPrompt.tokensOut.perModel, modelId, outputTokens);
   inc(data.magicPrompt.tokensOut, 'total', outputTokens);
 
   recordTokenUsage(inputTokens + outputTokens);
+  logUsageEvent({
+    type: 'magic_prompt',
+    userId: resolvedUser,
+    appId,
+    modelId,
+    promptTokens: inputTokens,
+    completionTokens: outputTokens,
+    tokenSource: 'estimate'
+  });
 
   dirty = true;
   scheduleSave();
@@ -343,17 +413,17 @@ export async function isTrackingEnabled() {
   return trackingEnabled;
 }
 
+export async function getTrackingMode() {
+  await loadConfig();
+  return trackingMode;
+}
+
 export async function resetUsage() {
   await loadConfig();
   usage = createDefaultUsage();
   usage.lastReset = now();
   dirty = true;
   await saveUsage();
-}
-
-export async function reloadConfig() {
-  configLoaded = false;
-  await loadConfig();
 }
 
 // Start periodic save interval

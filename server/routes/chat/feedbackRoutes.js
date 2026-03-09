@@ -133,7 +133,8 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           userId: userSessionId,
           appId,
           modelId,
-          rating
+          rating,
+          user: req.user
         });
         logger.info(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
         return res.status(200).json({ success: true });

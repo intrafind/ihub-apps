@@ -1,10 +1,15 @@
 import { useEffect, useState } from 'react';
-import { fetchAdminUsageData } from '../../../api/adminApi';
+import {
+  fetchAdminUsageData,
+  fetchAdminUsageMeta,
+  updateAdminUsageTrackingMode
+} from '../../../api/adminApi';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import UsageTimeline from '../components/UsageTimeline';
 
 const StatCard = ({ title, value, icon, color, change, changeType }) => (
   <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -248,6 +253,7 @@ const AdminUsageReports = () => {
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('overview');
+  const [trackingMeta, setTrackingMeta] = useState(null);
 
   const load = async () => {
     try {
@@ -263,6 +269,9 @@ const AdminUsageReports = () => {
 
   useEffect(() => {
     load();
+    fetchAdminUsageMeta()
+      .then(setTrackingMeta)
+      .catch(() => {});
   }, []);
 
   const downloadJson = () => {
@@ -349,6 +358,11 @@ const AdminUsageReports = () => {
       icon: <Icon name="thumbs-up" size="md" />
     },
     {
+      id: 'timeline',
+      label: t('admin.usage.tabs.timeline', 'Timeline'),
+      icon: <Icon name="chart" size="md" />
+    },
+    {
       id: 'details',
       label: t('admin.usage.tabs.details', 'Details'),
       icon: <Icon name="chat" size="md" />
@@ -383,6 +397,97 @@ const AdminUsageReports = () => {
           icon={<Icon name="star" size="lg" className="text-white" />}
           color="bg-amber-500"
         />
+      </div>
+
+      {/* Data Quality & Tracking Mode */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {usage.tokenSources && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              {t('admin.usage.dataQuality', 'Data Quality')}
+            </h4>
+            <div className="flex items-center gap-3">
+              <div className="flex-1">
+                <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mb-1">
+                  <span>{t('admin.usage.providerData', 'Provider')}</span>
+                  <span>{t('admin.usage.estimatedData', 'Estimated')}</span>
+                </div>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 flex overflow-hidden">
+                  <div
+                    className="bg-green-500 h-2"
+                    style={{
+                      width: `${((usage.tokenSources.provider || 0) / Math.max(1, (usage.tokenSources.provider || 0) + (usage.tokenSources.estimate || 0))) * 100}%`
+                    }}
+                  />
+                  <div className="bg-amber-400 h-2 flex-1" />
+                </div>
+              </div>
+              <span className="text-sm font-medium text-green-600 dark:text-green-400 whitespace-nowrap">
+                {Math.round(
+                  ((usage.tokenSources.provider || 0) /
+                    Math.max(
+                      1,
+                      (usage.tokenSources.provider || 0) + (usage.tokenSources.estimate || 0)
+                    )) *
+                    100
+                )}
+                %
+              </span>
+            </div>
+          </div>
+        )}
+        {trackingMeta?.trackingMode && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4">
+            <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              {t('admin.usage.trackingMode', 'Tracking Mode')}
+            </h4>
+            <select
+              value={trackingMeta.trackingMode}
+              onChange={async e => {
+                const newMode = e.target.value;
+                try {
+                  await updateAdminUsageTrackingMode(newMode);
+                  setTrackingMeta(prev => ({ ...prev, trackingMode: newMode }));
+                } catch (err) {
+                  console.error('Failed to update tracking mode', err);
+                }
+              }}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium border-0 cursor-pointer ${
+                trackingMeta.trackingMode === 'anonymous'
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : trackingMeta.trackingMode === 'pseudonymous'
+                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                    : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+              }`}
+            >
+              <option value="anonymous">
+                {t('admin.usage.trackingModes.anonymous', 'Anonymous')}
+              </option>
+              <option value="pseudonymous">
+                {t('admin.usage.trackingModes.pseudonymous', 'Pseudonymous')}
+              </option>
+              <option value="identified">
+                {t('admin.usage.trackingModes.identified', 'Identified')}
+              </option>
+            </select>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              {trackingMeta.trackingMode === 'anonymous'
+                ? t(
+                    'admin.usage.trackingModeDesc.anonymous',
+                    'Users are identified by irreversible fingerprint'
+                  )
+                : trackingMeta.trackingMode === 'pseudonymous'
+                  ? t(
+                      'admin.usage.trackingModeDesc.pseudonymous',
+                      'Users are identified by session ID'
+                    )
+                  : t(
+                      'admin.usage.trackingModeDesc.identified',
+                      'Real usernames/emails are stored'
+                    )}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Token Breakdown */}
@@ -1002,6 +1107,7 @@ const AdminUsageReports = () => {
           {activeTab === 'apps' && renderApps()}
           {activeTab === 'magic' && renderMagic()}
           {activeTab === 'feedback' && renderFeedback()}
+          {activeTab === 'timeline' && <UsageTimeline />}
           {activeTab === 'details' && renderDetails()}
         </div>
       </div>
