@@ -2,6 +2,37 @@
 
 This document provides comprehensive guidance for running iHub Apps in Docker containers for both development and production environments.
 
+## Quickstart (Zero-config)
+
+The fastest way to try iHub Apps — no `.env` file, no pre-configuration required:
+
+```bash
+docker compose -f docker-compose.quickstart.yml up
+```
+
+Then open **http://localhost:3000** and navigate to **Admin → Configuration** to add your LLM API keys via the browser UI.
+
+This uses the pre-built image from the registry and mounts a local `./contents/` folder so your configuration persists between restarts. Nothing else is needed to get started.
+
+### Available Images
+
+Images are published to two registries:
+
+| Registry | Image |
+|---|---|
+| GitHub Container Registry | `ghcr.io/intrafind/ihub-apps:latest` |
+| Docker Hub | `intrafind/ihub-apps:latest` |
+
+```bash
+# Pull from GHCR
+docker pull ghcr.io/intrafind/ihub-apps:latest
+
+# Pull from Docker Hub
+docker pull intrafind/ihub-apps:latest
+```
+
+---
+
 ## Quick Start
 
 ### Development Environment (Automatic Local Contents)
@@ -181,7 +212,7 @@ npm run docker:prod:down
 
 ### Automated Docker Builds
 
-Docker images are automatically built and published to GitHub Container Registry (ghcr.io) in the following scenarios:
+Docker images are automatically built and published to both **GitHub Container Registry (ghcr.io)** and **Docker Hub** in the following scenarios:
 
 1. **On Release Creation**: When you create a GitHub release
 2. **On Version Tags**: When you push a tag starting with `v` (e.g., `v1.0.0`)
@@ -200,22 +231,37 @@ This will automatically start the CI/CD pipeline and publish new images to the r
 
 ### Published Images
 
-Images are available at:
+Images are published to both GitHub Container Registry (GHCR) and Docker Hub:
 
+**GitHub Container Registry:**
 ```
 ghcr.io/intrafind/ihub-apps:latest
 ghcr.io/intrafind/ihub-apps:v1.0.0
 ghcr.io/intrafind/ihub-apps:main
 ```
 
+**Docker Hub:**
+```
+intrafind/ihub-apps:latest
+intrafind/ihub-apps:v1.0.0
+```
+
 ### Using Published Images
 
 ```bash
-# Pull and run latest image
+# Quickstart — zero-config, configure via admin UI after startup
+docker compose -f docker-compose.quickstart.yml up
+
+# Run directly with Docker (GHCR)
 # Note: JWT_SECRET is optional - auto-generated if not provided
 docker run -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
   ghcr.io/intrafind/ihub-apps:latest
+
+# Run directly with Docker (Docker Hub)
+docker run -p 3000:3000 \
+  -v $(pwd)/contents:/app/contents \
+  intrafind/ihub-apps:latest
 
 # Use specific version with custom JWT secret
 docker run -p 3000:3000 \
@@ -502,14 +548,17 @@ The repository includes a comprehensive GitHub Actions workflow that:
 ### Manual Registry Push
 
 ```bash
-# Tag for registry
-docker tag ihub-apps:latest ghcr.io/yourusername/ihub-apps:latest
+# Tag and push to GHCR
+docker tag ihub-apps:latest ghcr.io/intrafind/ihub-apps:latest
+docker push ghcr.io/intrafind/ihub-apps:latest
 
-# Push to registry
-docker push ghcr.io/yourusername/ihub-apps:latest
+# Tag and push to Docker Hub
+docker tag ihub-apps:latest intrafind/ihub-apps:latest
+docker push intrafind/ihub-apps:latest
 
-# Pull from registry
-docker pull ghcr.io/yourusername/ihub-apps:latest
+# Pull from either registry
+docker pull ghcr.io/intrafind/ihub-apps:latest
+docker pull intrafind/ihub-apps:latest
 ```
 
 ## Advanced Configuration
@@ -519,7 +568,7 @@ docker pull ghcr.io/yourusername/ihub-apps:latest
 For customized deployments, you can extend the base Dockerfile:
 
 ```dockerfile
-FROM ghcr.io/yourusername/ihub-apps:latest
+FROM ghcr.io/intrafind/ihub-apps:latest
 
 # Add custom certificates
 COPY custom-ca.crt /usr/local/share/ca-certificates/
