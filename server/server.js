@@ -46,6 +46,7 @@ import {
 } from './serverHelpers.js';
 import { performInitialSetup } from './utils/setupUtils.js';
 import { runConfigMigrations } from './migrations/runner.js';
+import { getProxyConfig } from './utils/httpConfig.js';
 import {
   getBasePath,
   basePathDetectionMiddleware,
@@ -195,6 +196,33 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn({
       component: 'Server',
       message: 'Server will continue with file-based configuration loading'
+    });
+  }
+
+  // Log proxy configuration if configured
+  try {
+    const proxyConfig = getProxyConfig();
+    if (proxyConfig.enabled && (proxyConfig.http || proxyConfig.https)) {
+      logger.info({
+        component: 'Server',
+        message: '🌐 Proxy configuration active',
+        http: proxyConfig.http || '(not set)',
+        https: proxyConfig.https || '(not set)',
+        noProxy: proxyConfig.noProxy || '(not set)',
+        urlPatterns:
+          proxyConfig.urlPatterns?.length > 0 ? proxyConfig.urlPatterns : '(all URLs proxied)'
+      });
+    } else if (!proxyConfig.enabled) {
+      logger.info({
+        component: 'Server',
+        message: 'Proxy is explicitly disabled'
+      });
+    }
+  } catch (err) {
+    logger.warn({
+      component: 'Server',
+      message: 'Failed to read proxy configuration',
+      error: err.message
     });
   }
 
