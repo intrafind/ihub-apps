@@ -222,6 +222,26 @@ export function getErrorDetails(error, model) {
     }
   }
 
+  // Check if it's a DNS resolution error
+  if (
+    error.code === 'ENOTFOUND' ||
+    (error.cause && error.cause.code === 'ENOTFOUND') ||
+    error.message.includes('ENOTFOUND')
+  ) {
+    errorDetails.isConnectionError = true;
+    errorDetails.code = 'ENOTFOUND';
+    const hostname = error.cause?.hostname || error.hostname || '';
+
+    if (model?.provider === 'local') {
+      errorDetails.message = `Could not resolve hostname for local model server (${model.id}). Is the hostname correct?`;
+      errorDetails.recommendation = 'Please check the model URL configuration.';
+    } else {
+      errorDetails.message = `Could not resolve hostname${hostname ? ' ' + hostname : ''} for ${model?.provider || 'unknown'} API (model ${model?.id || 'unknown'}). DNS lookup failed.`;
+      errorDetails.recommendation =
+        'If you are behind a corporate proxy, ensure HTTPS_PROXY or https_proxy environment variable is set. Also verify the model URL is correct.';
+    }
+  }
+
   // Check if it's a timeout error
   if (
     error.code === 'ETIMEDOUT' ||
