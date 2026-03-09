@@ -325,14 +325,6 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
               }
 
               try {
-                // Debug logging for iAssistant
-                if (model.provider === 'iassistant') {
-                  logger.info(
-                    '[OpenAI Proxy] Processing iAssistant data:',
-                    data.substring(0, 200) + '...'
-                  );
-                }
-
                 // Use generic tool calling system to normalize response
                 const genericResult = convertResponseToGeneric(data, model.provider, streamId);
 
