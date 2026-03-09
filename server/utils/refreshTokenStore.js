@@ -26,7 +26,12 @@ import config from '../config.js';
  * @module refreshTokenStore
  */
 
-const STORE_PATH = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'oauth-refresh-tokens.json');
+const STORE_PATH = path.join(
+  getRootDir(),
+  config.CONTENTS_DIR,
+  'data',
+  'oauth-refresh-tokens.json'
+);
 
 /** Default refresh token lifetime in days. */
 const TOKEN_TTL_DAYS = 30;
