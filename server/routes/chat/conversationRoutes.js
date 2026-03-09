@@ -31,8 +31,65 @@ function resolveBaseUrl(app) {
 
 export default function registerConversationRoutes(app) {
   /**
-   * GET /api/apps/:appId/conversations/:conversationId/messages
-   * Load message history for a conversation (paginated)
+   * @swagger
+   * /apps/{appId}/conversations/{conversationId}/messages:
+   *   get:
+   *     summary: Get conversation message history
+   *     description: |
+   *       Loads paginated message history for a conversation from the iAssistant
+   *       Conversation API. Returns messages in reverse-chronological order.
+   *     tags:
+   *       - Conversations
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: conversationId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The conversation ID
+   *       - in: query
+   *         name: size
+   *         schema:
+   *           type: integer
+   *           default: 50
+   *         description: Maximum number of messages to return
+   *       - in: query
+   *         name: next_cursor
+   *         schema:
+   *           type: string
+   *         description: Pagination cursor from a previous response
+   *     responses:
+   *       200:
+   *         description: Message history retrieved successfully
+   *         content:
+   *           application/json:
+   *             schema:
+   *               type: object
+   *               properties:
+   *                 messages:
+   *                   type: array
+   *                   items:
+   *                     type: object
+   *                 next_cursor:
+   *                   type: string
+   *                   description: Cursor for fetching the next page
+   *       400:
+   *         description: No base URL configured for conversation API
+   *       401:
+   *         description: Authentication required
+   *       404:
+   *         description: App not found
+   *       500:
+   *         description: Internal server error
    */
   app.get(
     buildServerPath('apps/:appId/conversations/:conversationId/messages'),
@@ -71,8 +128,46 @@ export default function registerConversationRoutes(app) {
   );
 
   /**
-   * DELETE /api/apps/:appId/conversations/:conversationId/messages/:messageId
-   * Delete a message (e.g. for cancellation)
+   * @swagger
+   * /apps/{appId}/conversations/{conversationId}/messages/{messageId}:
+   *   delete:
+   *     summary: Delete a conversation message
+   *     description: Deletes a specific message from a conversation (e.g. for cancellation).
+   *     tags:
+   *       - Conversations
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: conversationId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The conversation ID
+   *       - in: path
+   *         name: messageId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The message ID to delete
+   *     responses:
+   *       204:
+   *         description: Message deleted successfully
+   *       400:
+   *         description: No base URL configured for conversation API
+   *       401:
+   *         description: Authentication required
+   *       404:
+   *         description: App not found
+   *       500:
+   *         description: Internal server error
    */
   app.delete(
     buildServerPath('apps/:appId/conversations/:conversationId/messages/:messageId'),
@@ -107,8 +202,40 @@ export default function registerConversationRoutes(app) {
   );
 
   /**
-   * DELETE /api/apps/:appId/conversations/:conversationId
-   * Delete an entire conversation
+   * @swagger
+   * /apps/{appId}/conversations/{conversationId}:
+   *   delete:
+   *     summary: Delete a conversation
+   *     description: Deletes an entire conversation and all its messages.
+   *     tags:
+   *       - Conversations
+   *     security:
+   *       - bearerAuth: []
+   *       - sessionAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: appId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The app ID
+   *       - in: path
+   *         name: conversationId
+   *         required: true
+   *         schema:
+   *           type: string
+   *         description: The conversation ID to delete
+   *     responses:
+   *       204:
+   *         description: Conversation deleted successfully
+   *       400:
+   *         description: No base URL configured for conversation API
+   *       401:
+   *         description: Authentication required
+   *       404:
+   *         description: App not found
+   *       500:
+   *         description: Internal server error
    */
   app.delete(
     buildServerPath('apps/:appId/conversations/:conversationId'),
