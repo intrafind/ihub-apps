@@ -4,7 +4,16 @@
   "description": "iHub Applications Platform",
   "type": "module",
   "bin": {
-    "ihub-apps": "./server/sea-server.cjs"
+    "ihub": "./server/sea-server.cjs"
+  },
+  "files": [
+    "server/",
+    "shared/",
+    "public/"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "scripts": {
     "// === DEVELOPMENT ===": "",

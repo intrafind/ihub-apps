@@ -390,19 +390,39 @@ if (cluster.isPrimary && workerCount > 1) {
   // Start server
   server.listen(PORT, HOST, () => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
+    const displayHost = HOST === '0.0.0.0' ? 'localhost' : HOST;
+    const url = `${protocol}://${displayHost}:${PORT}`;
     logger.info({
       component: 'Server',
       message: 'Server is running',
       protocol,
       host: HOST,
       port: PORT,
-      url: `${protocol}://${HOST}:${PORT}`
+      url
     });
     logger.info({
       component: 'Server',
       message: 'Open in browser to use iHub Apps',
-      url: `${protocol}://${HOST}:${PORT}`
+      url
     });
+
+    // Read directly from process.env because sea-server.cjs may set this after
+    // the config module was already frozen (ESM module cache).
+    if (process.env.IHUB_OPEN_BROWSER === '1' || process.env.IHUB_OPEN_BROWSER === 'true') {
+      import('child_process').then(({ exec }) => {
+        const openCmd =
+          process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+        exec(`${openCmd} ${url}`, err => {
+          if (err) {
+            logger.warn({
+              component: 'Server',
+              message: 'Could not open browser automatically',
+              error: err.message
+            });
+          }
+        });
+      });
+    }
   });
 
   const handleShutdownSignal = async () => {

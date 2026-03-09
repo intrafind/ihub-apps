@@ -23,9 +23,19 @@ async function startServer() {
     require('dotenv').config();
     const { default: config } = await import('./config.js');
 
-    const binDir = config.APP_ROOT_DIR || path.dirname(process.execPath);
+    // In SEA mode, APP_ROOT_DIR is set by the shell wrapper (build-sea.cjs).
+    // In npx / regular npm mode it is not set, so fall back to the package root
+    // derived from __dirname (which is the server/ subdirectory).
+    const binDir = config.APP_ROOT_DIR || path.resolve(__dirname, '..');
     console.log(`Running server from directory: ${binDir}`);
     console.log('Initializing iHub Apps server...');
+
+    // Auto-open the browser when running via npx / binary (no APP_ROOT_DIR means
+    // the user is doing a zero-install trial rather than a managed deployment).
+    // Explicit IHUB_OPEN_BROWSER env var always takes precedence.
+    if (process.env.IHUB_OPEN_BROWSER === undefined) {
+      process.env.IHUB_OPEN_BROWSER = config.APP_ROOT_DIR ? '0' : '1';
+    }
 
     const serverPath = path.join(binDir, 'server', 'server.js');
     const serverUrl = url.pathToFileURL(serverPath).href;

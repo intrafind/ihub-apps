@@ -44,7 +44,8 @@ const env = cleanEnv(
     PROXY_AUTH_JWT_HEADER: str({ optional: true }),
     HTTP_PROXY: str({ optional: true }),
     HTTPS_PROXY: str({ optional: true }),
-    NO_PROXY: str({ optional: true })
+    NO_PROXY: str({ optional: true }),
+    IHUB_OPEN_BROWSER: str({ default: '0', optional: true })
   },
   {
     reporter: () => {}, // Disable envalid's default reporter that shows missing variables
@@ -83,7 +84,8 @@ const config = Object.freeze({
   PROXY_AUTH_JWT_HEADER: env.PROXY_AUTH_JWT_HEADER,
   HTTP_PROXY: env.HTTP_PROXY,
   HTTPS_PROXY: env.HTTPS_PROXY,
-  NO_PROXY: env.NO_PROXY
+  NO_PROXY: env.NO_PROXY,
+  IHUB_OPEN_BROWSER: env.IHUB_OPEN_BROWSER
 });
 
 export default config;
