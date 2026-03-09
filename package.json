@@ -8,7 +8,7 @@
   },
   "scripts": {
     "// === DEVELOPMENT ===": "",
-    "setup:dev": "cp .env.example .env && npm run install:all && echo '\\n✅ Setup complete! Edit .env with your API keys, then run: npm run dev'",
+    "setup:dev": "npm run install:all && echo '\\n✅ Dependencies installed\\n✅ Default configuration ready\\n\\nRun: npm run dev\\nThen open http://localhost:3000 to configure your AI providers.'",
     "dev": "cross-env NODE_ENV=development concurrently --kill-others-on-fail \"npm run server\" \"sleep 2 && npm run client\"",
     "server": "cd server && node -r dotenv/config server.js dotenv_config_path=../.env",
     "client": "cd client && npm run dev",
