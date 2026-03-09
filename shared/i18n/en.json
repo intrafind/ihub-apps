@@ -1120,7 +1120,8 @@
     "invalidImage": "Invalid image file",
     "tiffProcessingError": "Error processing TIFF file. The file may be corrupted or in an unsupported TIFF format.",
     "readError": "Error reading file",
-    "fileProcessingError": "Error processing file. Please try again."
+    "fileProcessingError": "Error processing file. Please try again.",
+    "documentTooLarge": "The document is large (~{{estimatedTokens}} estimated tokens) and may exceed the model's context window of {{tokenLimit}} tokens. The request may fail. Consider using a shorter document or selecting a model with a larger context window."
   },
   "toolbar": {
     "bold": "Bold",
