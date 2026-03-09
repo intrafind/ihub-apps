@@ -349,34 +349,23 @@ npm run install:all && npm run electron:dev
 
    ```bash
    npm run setup:dev
-   # This will copy .env.example to .env and install all dependencies
+   # Installs all dependencies and prepares default configuration
    ```
 
-3. **Configure API keys:**
-
-   Edit the `.env` file with your API keys:
-
-   ```bash
-   # Required API keys
-   OPENAI_API_KEY=sk-...
-   CLAUDE_3_SONNET_API_KEY=sk-ant-...
-   GEMINI_API_KEY=AIza...
-   ```
-
-4. **Optional tools setup:**
+3. **Optional tools setup:**
 
    ```bash
    npx playwright install (optional)
    # Selenium tools require Chrome or Chromium in your PATH
    ```
 
-5. **Start the application** (automatically sets up default configuration):
+4. **Start the application:**
 
    ```bash
    npm run dev
    ```
 
-   🎉 **That's it!** The server will automatically create default configuration files on first startup, so you can start using iHub Apps immediately.
+   🎉 **That's it!** Open http://localhost:3000 — you can configure your AI providers (API keys, models) directly in the Admin UI. No `.env` file required.
 
 ### Method 2: Docker Installation (Recommended for Production)
 
