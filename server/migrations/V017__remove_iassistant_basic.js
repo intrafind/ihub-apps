@@ -1,12 +1,12 @@
 /**
- * Migration V016 — Remove old iAssistant (Basic) model and demo app
+ * Migration V017 — Remove old iAssistant (Basic) model and demo app
  *
  * The iAssistant (Basic) one-shot RAG integration has been removed.
  * Only the iAssistant (Workspace) Conversation API integration is supported.
  * This migration removes any deployed iassistant model and iassistant-demo app files.
  */
 
-export const version = '016';
+export const version = '017';
 export const description = 'remove_iassistant_basic';
 
 export async function up(ctx) {
