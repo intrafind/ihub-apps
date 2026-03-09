@@ -43,6 +43,7 @@
     - [Image Upload Feature](image-upload-feature.md)
     - [React Component Feature](react-component-feature.md)
     - [Server Configuration](server-config.md)
+    - [Environment Variables](environment-variables.md)
     - [Electron Desktop Application](electron-app.md)
   - [Development & Deployment]()
     - [Developer Onboarding](developer-onboarding.md)
