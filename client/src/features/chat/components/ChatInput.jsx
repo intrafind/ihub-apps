@@ -59,7 +59,9 @@ const ChatInput = ({
   // Skills slash command gating (when skills feature is enabled and app has skills)
   skillsSlashEnabled = false,
   // Clarification state
-  clarificationPending = false // When true, input is disabled waiting for clarification answer
+  clarificationPending = false, // When true, input is disabled waiting for clarification answer
+  // Document token size warning
+  fileTokenWarning = null
 }) => {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -328,6 +330,18 @@ const ChatInput = ({
           onRemoveAll={handleRemoveAll}
           disabled={isInputDisabled || isProcessing}
         />
+      )}
+
+      {fileTokenWarning && (
+        <div className="mx-2 mb-2 flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-900/20 dark:text-amber-200">
+          <span className="mt-0.5 flex-shrink-0">⚠️</span>
+          <span>
+            {t('errors.documentTooLarge', {
+              estimatedTokens: fileTokenWarning.estimatedTokens.toLocaleString(i18n.language),
+              tokenLimit: fileTokenWarning.tokenLimit.toLocaleString(i18n.language)
+            })}
+          </span>
+        </div>
       )}
 
       <div className="relative">

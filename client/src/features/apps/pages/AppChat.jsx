@@ -236,6 +236,9 @@ const AppChat = ({ preloadedApp = null }) => {
   // State for managing parameter changes on mobile
   const [tempVariables, setTempVariables] = useState({});
 
+  // State for document token size warning
+  const [fileTokenWarning, setFileTokenWarning] = useState(null);
+
   // Record recent usage of this app
   useEffect(() => {
     recordAppUsage(appId);
@@ -244,6 +247,48 @@ const AppChat = ({ preloadedApp = null }) => {
   // Custom hooks for complex functionality
   const fileUploadHandler = useFileUploadHandler();
   const magicPromptHandler = useMagicPrompt();
+
+  // Check document token size against model context window and warn user if needed
+  useEffect(() => {
+    if (!fileUploadHandler.selectedFile) {
+      setFileTokenWarning(null);
+      return;
+    }
+
+    const currentModel = models?.find(m => m.id === selectedModel);
+    if (!currentModel?.tokenLimit) {
+      setFileTokenWarning(null);
+      return;
+    }
+
+    // Collect all document files (single or multiple)
+    const files = Array.isArray(fileUploadHandler.selectedFile)
+      ? fileUploadHandler.selectedFile
+      : [fileUploadHandler.selectedFile];
+
+    const documentFiles = files.filter(f => f.type === 'document' && f.content);
+    if (documentFiles.length === 0) {
+      setFileTokenWarning(null);
+      return;
+    }
+
+    // Estimate token count using chars/4 approximation (standard heuristic for English text;
+    // token-to-character ratios vary for other languages and scripts)
+    const totalEstimatedTokens = documentFiles.reduce(
+      (sum, f) => sum + Math.ceil((f.content?.length || 0) / 4),
+      0
+    );
+
+    // Warn when document content alone would exceed 80% of the model's context window
+    if (totalEstimatedTokens > currentModel.tokenLimit * 0.8) {
+      setFileTokenWarning({
+        estimatedTokens: totalEstimatedTokens,
+        tokenLimit: currentModel.tokenLimit
+      });
+    } else {
+      setFileTokenWarning(null);
+    }
+  }, [fileUploadHandler.selectedFile, selectedModel, models]);
 
   // Integration authentication detection
   const {
@@ -1517,7 +1562,9 @@ const AppChat = ({ preloadedApp = null }) => {
         Array.isArray(app?.skills) &&
         app.skills.length > 0,
       // Clarification state
-      clarificationPending
+      clarificationPending,
+      // Document token size warning
+      fileTokenWarning
     };
 
     // Always use ChatInput (which now has the NextGen design with model selector)
