@@ -2,7 +2,7 @@
 
 # iHub Apps
 
-**A comprehensive platform for building and deploying AI-powered applications with enterprise-grade features.**
+**30+ ready-to-use AI apps for your team. Self-hosted. No prompting expertise needed.**
 
 **iHub Apps** is a full-stack application that provides a unified interface for interacting with multip
 le AI models and integrating various knowledge sources. Built for both individual users and enterprise environments, it offers flexible authentication, powerful source management, and extensive customization capabilities.
@@ -24,11 +24,11 @@ The Software is free-of-use and "AS-IS without warranty of any kind. - Check the
 Get up and running in development mode with hot reload:
 
 ```bash
-git clone <repository-url>
+git clone https://github.com/intrafind/ihub-apps.git
 cd ihub-apps
 npm run setup:dev
-# Edit .env with your API keys (OpenAI, Anthropic, Google)
 npm run dev
+# Open http://localhost:3000 → Add your API keys in Settings → Models
 ```
 
 **📖 Need help?** See [Developer Setup Guide](#method-1-npm-installation-development) | [Complete Documentation](docs/README.md)
@@ -43,9 +43,9 @@ Deploy with Docker (recommended for production):
 docker run -d \
   -p 3000:3000 \
   -v $(pwd)/contents:/app/contents \
-  -e OPENAI_API_KEY=your-key \
   --name ihub-apps \
   ghcr.io/intrafind/ihub-apps:latest
+# Open http://localhost:3000 → Configure API keys in admin UI (Settings → Models)
 ```
 
 **🐳 More options:** [Docker Guide](docker/DOCKER.md) | [Binary Downloads](https://github.com/intrafind/ihub-apps/releases) | [Full Installation Guide](#-installation-overview)
