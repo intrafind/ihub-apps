@@ -560,7 +560,9 @@ class StreamingHandler {
         error.cause?.code === 'UND_ERR_SOCKET' &&
         model.provider === 'iassistant-conversation'
       ) {
-        logger.error('iAssistant Conversation: Connection terminated by remote server. This may indicate:');
+        logger.error(
+          'iAssistant Conversation: Connection terminated by remote server. This may indicate:'
+        );
         logger.error('- Authentication/authorization failure');
         logger.error('- Invalid request format');
         logger.error('- Server-side error');
