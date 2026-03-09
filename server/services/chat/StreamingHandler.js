@@ -576,11 +576,37 @@ class StreamingHandler {
         );
         actionTracker.trackError(chatId, { message: errorMessage });
       } else if (error.name !== 'AbortError') {
-        const errorMessage = await getLocalizedError(
-          'responseStreamError',
-          { error: error.message },
-          clientLanguage
-        );
+        let errorKey = 'responseStreamError';
+        let errorParams = { error: error.message };
+
+        // Detect specific network errors for actionable messages
+        if (error.message?.includes('fetch failed') || error.cause) {
+          const causeCode = error.cause?.code;
+
+          if (causeCode === 'ENOTFOUND') {
+            errorKey = 'dnsResolutionFailed';
+            errorParams = {
+              provider: model.provider,
+              model: model.id,
+              hostname: error.cause?.hostname || 'unknown'
+            };
+          } else if (causeCode === 'ECONNREFUSED') {
+            errorKey = 'connectionRefused';
+            errorParams = { provider: model.provider, model: model.id };
+          } else if (causeCode === 'UND_ERR_CONNECT_TIMEOUT' || causeCode === 'ETIMEDOUT') {
+            errorKey = 'requestTimeout';
+            errorParams = { timeout: DEFAULT_TIMEOUT / 1000 };
+          } else if (causeCode) {
+            errorKey = 'networkError';
+            errorParams = {
+              provider: model.provider,
+              model: model.id,
+              error: error.cause?.message || error.message
+            };
+          }
+        }
+
+        const errorMessage = await getLocalizedError(errorKey, errorParams, clientLanguage);
         actionTracker.trackError(chatId, { message: errorMessage });
       }
     } finally {

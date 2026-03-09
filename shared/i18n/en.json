@@ -1282,6 +1282,8 @@
     "llmApiError": "LLM API request failed with status {status}",
     "responseStreamError": "Error processing response stream: {error}",
     "connectionRefused": "Connection refused when trying to access {provider} API for model {model}. Please check your connection or server configuration.",
+    "dnsResolutionFailed": "Could not resolve hostname for {provider} API (model {model}). DNS lookup failed for {hostname}. If you are behind a corporate proxy, ensure HTTPS_PROXY is configured.",
+    "networkError": "Network error connecting to {provider} API for model {model}: {error}. Check your network connection and proxy configuration.",
     "unauthorized": "Invalid API key",
     "modelAccessDenied": "API key is not allowed to use this model",
     "noModelsAvailable": "No AI models are available for this app. Please contact your administrator to configure models and permissions.",

@@ -133,13 +133,30 @@ export function getProxyConfig() {
   const platformConfig = configCache.getPlatform() || {};
   const proxyConfig = platformConfig.proxy || {};
 
-  return {
+  const result = {
     enabled: proxyConfig.enabled !== false, // Default to true if not explicitly disabled
-    http: proxyConfig.http || config.HTTP_PROXY || process.env.HTTP_PROXY,
-    https: proxyConfig.https || config.HTTPS_PROXY || process.env.HTTPS_PROXY,
-    noProxy: proxyConfig.noProxy || config.NO_PROXY || process.env.NO_PROXY,
+    http: proxyConfig.http || config.HTTP_PROXY || process.env.HTTP_PROXY || process.env.http_proxy,
+    https:
+      proxyConfig.https || config.HTTPS_PROXY || process.env.HTTPS_PROXY || process.env.https_proxy,
+    noProxy: proxyConfig.noProxy || config.NO_PROXY || process.env.NO_PROXY || process.env.no_proxy,
     urlPatterns: proxyConfig.urlPatterns || [] // Array of regex patterns for selective proxy
   };
+
+  // Log proxy configuration on first access for debugging
+  if (!getProxyConfig._logged) {
+    if (result.http || result.https) {
+      logger.info(
+        `Proxy configuration: HTTP=${result.http || 'none'}, HTTPS=${result.https || 'none'}, NO_PROXY=${result.noProxy || 'none'}`
+      );
+    } else {
+      logger.info(
+        'Proxy configuration: No proxy configured. If behind a corporate proxy, set HTTPS_PROXY environment variable.'
+      );
+    }
+    getProxyConfig._logged = true;
+  }
+
+  return result;
 }
 
 /**

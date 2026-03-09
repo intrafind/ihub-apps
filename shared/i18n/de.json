@@ -427,6 +427,8 @@
     "llmApiError": "LLM-API-Anfrage fehlgeschlagen mit Status {status}",
     "responseStreamError": "Fehler bei der Verarbeitung des Antwortstreams: {error}",
     "connectionRefused": "Verbindung verweigert beim Versuch, auf die {provider} API für Modell {model} zuzugreifen. Bitte überprüfen Sie Ihre Verbindung oder Serverkonfiguration.",
+    "dnsResolutionFailed": "Der Hostname für die {provider} API (Modell {model}) konnte nicht aufgelöst werden. DNS-Lookup für {hostname} fehlgeschlagen. Wenn Sie sich hinter einem Firmen-Proxy befinden, stellen Sie sicher, dass HTTPS_PROXY konfiguriert ist.",
+    "networkError": "Netzwerkfehler bei der Verbindung zur {provider} API für Modell {model}: {error}. Überprüfen Sie Ihre Netzwerkverbindung und Proxy-Konfiguration.",
     "unauthorized": "Ungültiger API-Schlüssel",
     "modelAccessDenied": "API-Schlüssel darf dieses Modell nicht verwenden",
     "noModelsAvailable": "Für diese Anwendung sind keine KI-Modelle verfügbar. Bitte wenden Sie sich an Ihren Administrator, um Modelle und Berechtigungen zu konfigurieren.",
