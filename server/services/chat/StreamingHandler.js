@@ -188,7 +188,8 @@ class StreamingHandler {
       appId: baseLog.appId,
       modelId: model.id,
       tokens: promptTokens,
-      tokenSource: 'estimate'
+      tokenSource: 'estimate',
+      user: baseLog.user
     });
 
     let timeoutId;
@@ -391,7 +392,8 @@ class StreamingHandler {
                   appId: baseLog.appId,
                   modelId: model.id,
                   tokens: completionTokens,
-                  tokenSource
+                  tokenSource,
+                  user: baseLog.user
                 });
                 break;
               }
@@ -440,7 +442,8 @@ class StreamingHandler {
               appId: baseLog.appId,
               modelId: model.id,
               tokens: completionTokens,
-              tokenSource
+              tokenSource,
+              user: baseLog.user
             });
           }
         }
@@ -530,7 +533,8 @@ class StreamingHandler {
                 appId: baseLog.appId,
                 modelId: model.id,
                 tokens: completionTokens,
-                tokenSource
+                tokenSource,
+                user: baseLog.user
               });
               break;
             }

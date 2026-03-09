@@ -142,7 +142,10 @@ function buildMonthlyRollup(dailyRollups, month) {
 export async function generateDailyRollups() {
   try {
     const events = await readEvents();
-    if (events.length === 0) return;
+    if (events.length === 0) {
+      logger.info('No usage events found for daily rollup generation');
+      return { eventsProcessed: 0, daysGenerated: 0 };
+    }
 
     // Group events by date
     const byDate = {};
@@ -161,9 +164,12 @@ export async function generateDailyRollups() {
       await fs.writeFile(filePath, JSON.stringify(rollup, null, 2));
     }
 
-    logger.info(`Generated daily rollups for ${Object.keys(byDate).length} days`);
+    const daysGenerated = Object.keys(byDate).length;
+    logger.info(`Generated daily rollups for ${daysGenerated} days`);
+    return { eventsProcessed: events.length, daysGenerated };
   } catch (e) {
     logger.error('Failed to generate daily rollups', e);
+    return { eventsProcessed: 0, daysGenerated: 0 };
   }
 }
 
@@ -180,7 +186,7 @@ export async function generateMonthlyRollups() {
     try {
       files = await fs.readdir(dailyDir);
     } catch {
-      return; // No daily rollups yet
+      return { monthsGenerated: 0 }; // No daily rollups yet
     }
 
     // Group daily files by month
@@ -199,9 +205,12 @@ export async function generateMonthlyRollups() {
       await fs.writeFile(filePath, JSON.stringify(rollup, null, 2));
     }
 
-    logger.info(`Generated monthly rollups for ${Object.keys(byMonth).length} months`);
+    const monthsGenerated = Object.keys(byMonth).length;
+    logger.info(`Generated monthly rollups for ${monthsGenerated} months`);
+    return { monthsGenerated };
   } catch (e) {
     logger.error('Failed to generate monthly rollups', e);
+    return { monthsGenerated: 0 };
   }
 }
 
@@ -253,12 +262,13 @@ export async function getMonthlyRollups(startMonth, endMonth) {
  * Run all rollup generation and cleanup tasks.
  */
 export async function runRollups(retentionConfig = {}) {
-  await flushQueue();
-  await generateDailyRollups();
-  await generateMonthlyRollups();
+  const eventsFlushed = (await flushQueue()) || 0;
+  const { eventsProcessed = 0, daysGenerated = 0 } = (await generateDailyRollups()) || {};
+  const { monthsGenerated = 0 } = (await generateMonthlyRollups()) || {};
   if (retentionConfig.eventRetentionDays != null) {
     await cleanupEvents(retentionConfig.eventRetentionDays);
   }
+  return { eventsFlushed, eventsProcessed, daysGenerated, monthsGenerated };
 }
 
 // Schedule periodic rollup generation

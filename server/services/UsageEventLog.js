@@ -13,11 +13,13 @@ let queue = [];
 let flushTimer = null;
 
 export async function flushQueue() {
-  if (queue.length === 0) return;
+  if (queue.length === 0) return 0;
   await fs.mkdir(path.dirname(eventFile), { recursive: true });
+  const count = queue.length;
   const lines = queue.map(entry => JSON.stringify(entry)).join('\n') + '\n';
   queue = [];
   await fs.appendFile(eventFile, lines, 'utf8');
+  return count;
 }
 
 function scheduleFlush() {
@@ -87,8 +89,16 @@ export async function readEvents({ startDate, endDate } = {}) {
       events = events.filter(e => e.ts >= start);
     }
     if (endDate) {
-      const end = new Date(endDate).toISOString();
-      events = events.filter(e => e.ts <= end);
+      // If endDate is a date-only string (YYYY-MM-DD), include the entire day
+      if (/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+        const nextDay = new Date(endDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+        const end = nextDay.toISOString();
+        events = events.filter(e => e.ts < end);
+      } else {
+        const end = new Date(endDate).toISOString();
+        events = events.filter(e => e.ts <= end);
+      }
     }
     return events;
   } catch {

@@ -76,7 +76,8 @@ export default function registerMagicPromptRoutes(app) {
           appId,
           modelId: selectedModelId,
           inputTokens,
-          outputTokens
+          outputTokens,
+          user: req.user
         });
 
         return res.json({ prompt: newPrompt });

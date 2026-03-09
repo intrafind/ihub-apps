@@ -1,6 +1,12 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { fetchAdminUsageTimeline, triggerUsageRollup } from '../../../api/adminApi';
+import {
+  fetchAdminUsageTimeline,
+  triggerUsageRollup,
+  fetchAdminUsageUsers,
+  fetchAdminUsageApps,
+  fetchAdminUsageModels
+} from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 const RANGES = [
@@ -125,34 +131,139 @@ function SimpleLineChart({ data, dataKeys, height = 200 }) {
   );
 }
 
+function BreakdownTable({ title, data, columns, expanded, onToggle }) {
+  const formatNumber = n => new Intl.NumberFormat().format(n);
+
+  if (!data || data.length === 0) return null;
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <button
+        onClick={onToggle}
+        className="w-full flex items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-750 transition-colors"
+      >
+        <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400">
+          {title} ({data.length})
+        </h4>
+        <svg
+          className={`w-4 h-4 text-gray-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {expanded && (
+        <div className="px-4 pb-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 dark:border-gray-700">
+                {columns.map(col => (
+                  <th
+                    key={col.key}
+                    className={`py-2 px-3 font-medium text-gray-500 dark:text-gray-400 ${col.align === 'right' ? 'text-right' : 'text-left'}`}
+                  >
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((row, i) => (
+                <tr
+                  key={i}
+                  className="border-b border-gray-100 dark:border-gray-700/50 last:border-0"
+                >
+                  {columns.map(col => (
+                    <td
+                      key={col.key}
+                      className={`py-2 px-3 text-gray-700 dark:text-gray-300 ${col.align === 'right' ? 'text-right tabular-nums' : ''}`}
+                    >
+                      {col.format ? col.format(row[col.key]) : formatNumber(row[col.key])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function UsageTimeline() {
   const { t } = useTranslation();
   const [range, setRange] = useState('30d');
   const [timeline, setTimeline] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [rollupMessage, setRollupMessage] = useState(null);
+  const [breakdowns, setBreakdowns] = useState({ users: [], apps: [], models: [] });
+  const [expanded, setExpanded] = useState({ users: false, apps: false, models: false });
 
-  const loadTimeline = selectedRange => {
-    setLoading(true);
-    return fetchAdminUsageTimeline(selectedRange)
-      .then(data => setTimeline(data))
-      .catch(e => console.error('Failed to load timeline', e))
-      .finally(() => setLoading(false));
-  };
+  const loadTimeline = useCallback(
+    selectedRange => {
+      setLoading(true);
+      return Promise.all([
+        fetchAdminUsageTimeline(selectedRange),
+        fetchAdminUsageUsers(selectedRange),
+        fetchAdminUsageApps(selectedRange),
+        fetchAdminUsageModels(selectedRange)
+      ])
+        .then(([timelineData, usersData, appsData, modelsData]) => {
+          setTimeline(timelineData);
+          setBreakdowns({
+            users: toSortedArray(usersData?.users, 'userId'),
+            apps: toSortedArray(appsData?.apps, 'appId'),
+            models: toSortedArray(modelsData?.models, 'modelId')
+          });
+        })
+        .catch(e => console.error('Failed to load timeline', e))
+        .finally(() => setLoading(false));
+    },
+    [setTimeline, setBreakdowns, setLoading]
+  );
 
   useEffect(() => {
     loadTimeline(range);
-  }, [range]);
+  }, [range, loadTimeline]);
 
   const handleGenerateRollup = async () => {
     try {
       setGenerating(true);
-      await triggerUsageRollup();
+      setRollupMessage(null);
+      const result = await triggerUsageRollup();
       await loadTimeline(range);
+
+      if (result.eventsProcessed > 0) {
+        setRollupMessage({
+          type: 'success',
+          text: t(
+            'admin.usage.timeline.rollupSuccess',
+            'Processed {{events}} events into {{days}} daily rollup(s).',
+            { events: result.eventsProcessed, days: result.daysGenerated }
+          )
+        });
+      } else {
+        setRollupMessage({
+          type: 'warning',
+          text: t(
+            'admin.usage.timeline.rollupEmpty',
+            'No usage events found. Make some chat requests first.'
+          )
+        });
+      }
     } catch (e) {
       console.error('Failed to generate rollup', e);
+      setRollupMessage({
+        type: 'error',
+        text: t('admin.usage.timeline.rollupError', 'Failed to generate rollup.')
+      });
     } finally {
       setGenerating(false);
+      setTimeout(() => setRollupMessage(null), 5000);
     }
   };
 
@@ -180,6 +291,64 @@ export default function UsageTimeline() {
   }, [chartData]);
 
   const formatNumber = n => new Intl.NumberFormat().format(n);
+
+  const toggleSection = key => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const userColumns = [
+    {
+      key: 'userId',
+      label: t('admin.usage.breakdown.userId', 'User'),
+      align: 'left',
+      format: v => v
+    },
+    { key: 'messages', label: t('admin.usage.breakdown.messages', 'Messages'), align: 'right' },
+    {
+      key: 'promptTokens',
+      label: t('admin.usage.breakdown.promptTokens', 'Prompt Tokens'),
+      align: 'right'
+    },
+    {
+      key: 'completionTokens',
+      label: t('admin.usage.breakdown.completionTokens', 'Completion Tokens'),
+      align: 'right'
+    },
+    { key: 'days', label: t('admin.usage.breakdown.daysActive', 'Days Active'), align: 'right' }
+  ];
+
+  const appColumns = [
+    { key: 'appId', label: t('admin.usage.breakdown.appId', 'App'), align: 'left', format: v => v },
+    { key: 'messages', label: t('admin.usage.breakdown.messages', 'Messages'), align: 'right' },
+    {
+      key: 'promptTokens',
+      label: t('admin.usage.breakdown.promptTokens', 'Prompt Tokens'),
+      align: 'right'
+    },
+    {
+      key: 'completionTokens',
+      label: t('admin.usage.breakdown.completionTokens', 'Completion Tokens'),
+      align: 'right'
+    }
+  ];
+
+  const modelColumns = [
+    {
+      key: 'modelId',
+      label: t('admin.usage.breakdown.modelId', 'Model'),
+      align: 'left',
+      format: v => v
+    },
+    { key: 'messages', label: t('admin.usage.breakdown.messages', 'Messages'), align: 'right' },
+    {
+      key: 'promptTokens',
+      label: t('admin.usage.breakdown.promptTokens', 'Prompt Tokens'),
+      align: 'right'
+    },
+    {
+      key: 'completionTokens',
+      label: t('admin.usage.breakdown.completionTokens', 'Completion Tokens'),
+      align: 'right'
+    }
+  ];
 
   return (
     <div className="space-y-6">
@@ -215,6 +384,21 @@ export default function UsageTimeline() {
           </button>
         </div>
       </div>
+
+      {/* Rollup feedback banner */}
+      {rollupMessage && (
+        <div
+          className={`px-4 py-3 rounded-lg text-sm ${
+            rollupMessage.type === 'success'
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
+              : rollupMessage.type === 'warning'
+                ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
+          }`}
+        >
+          {rollupMessage.text}
+        </div>
+      )}
 
       {loading ? (
         <div className="flex justify-center py-12">
@@ -328,8 +512,39 @@ export default function UsageTimeline() {
               height={200}
             />
           </div>
+
+          {/* Breakdown tables */}
+          <BreakdownTable
+            title={t('admin.usage.breakdown.topUsers', 'Top Users')}
+            data={breakdowns.users}
+            columns={userColumns}
+            expanded={expanded.users}
+            onToggle={() => toggleSection('users')}
+          />
+          <BreakdownTable
+            title={t('admin.usage.breakdown.topApps', 'Top Apps')}
+            data={breakdowns.apps}
+            columns={appColumns}
+            expanded={expanded.apps}
+            onToggle={() => toggleSection('apps')}
+          />
+          <BreakdownTable
+            title={t('admin.usage.breakdown.topModels', 'Top Models')}
+            data={breakdowns.models}
+            columns={modelColumns}
+            expanded={expanded.models}
+            onToggle={() => toggleSection('models')}
+          />
         </>
       )}
     </div>
   );
+}
+
+/** Convert a { [key]: stats } object into a sorted array with the key as idField */
+function toSortedArray(obj, idField) {
+  if (!obj || typeof obj !== 'object') return [];
+  return Object.entries(obj)
+    .map(([key, val]) => ({ [idField]: key, ...val }))
+    .sort((a, b) => b.messages - a.messages);
 }

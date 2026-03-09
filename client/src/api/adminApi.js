@@ -823,6 +823,21 @@ export const triggerUsageRollup = async () => {
   return response.data;
 };
 
+export const fetchAdminUsageUsers = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/users?range=${range}`);
+  return response.data;
+};
+
+export const fetchAdminUsageApps = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/apps?range=${range}`);
+  return response.data;
+};
+
+export const fetchAdminUsageModels = async (range = '30d') => {
+  const response = await makeAdminApiCall(`/admin/usage/models?range=${range}`);
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -832,6 +847,9 @@ export const adminApi = {
   fetchAdminUsageMeta,
   updateAdminUsageTrackingMode,
   triggerUsageRollup,
+  fetchAdminUsageUsers,
+  fetchAdminUsageApps,
+  fetchAdminUsageModels,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,

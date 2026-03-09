@@ -193,8 +193,8 @@ export default function registerAdminUsageRoutes(app) {
     try {
       const platform = configCache.getPlatform ? configCache.getPlatform() : {};
       const retentionConfig = platform?.usageTracking || {};
-      await runRollups(retentionConfig);
-      res.json({ message: 'Rollup generation completed successfully' });
+      const stats = await runRollups(retentionConfig);
+      res.json({ message: 'Rollup generation completed successfully', ...stats });
     } catch (e) {
       logger.error('Error generating rollups:', e);
       res.status(500).json({ error: 'Failed to generate rollups' });

@@ -229,11 +229,13 @@ export async function recordChatRequest({
   appId,
   modelId,
   tokens = 0,
-  tokenSource = 'estimate'
+  tokenSource = 'estimate',
+  user
 }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser = await resolveUserId(userId, trackingMode);
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
   data.messages.total += 1;
   inc(data.messages.perUser, resolvedUser, 1);
@@ -268,11 +270,13 @@ export async function recordChatResponse({
   appId,
   modelId,
   tokens = 0,
-  tokenSource = 'estimate'
+  tokenSource = 'estimate',
+  user
 }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser = await resolveUserId(userId, trackingMode);
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
   data.messages.total += 1;
   inc(data.messages.perUser, resolvedUser, 1);
@@ -302,10 +306,11 @@ export async function recordChatResponse({
   scheduleSave();
 }
 
-export async function recordFeedback({ userId, appId, modelId, rating }) {
+export async function recordFeedback({ userId, appId, modelId, rating, user }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser = await resolveUserId(userId, trackingMode);
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
 
   // Handle numeric ratings (1-5)
@@ -360,11 +365,13 @@ export async function recordMagicPrompt({
   appId,
   modelId,
   inputTokens = 0,
-  outputTokens = 0
+  outputTokens = 0,
+  user
 }) {
   await loadConfig();
   if (!trackingEnabled) return;
-  const resolvedUser = await resolveUserId(userId, trackingMode);
+  const resolvedUser =
+    trackingMode === 'identified' && user?.id ? user.id : await resolveUserId(userId, trackingMode);
   const data = await loadUsage();
   data.magicPrompt.total += 1;
   inc(data.magicPrompt.perUser, resolvedUser, 1);

@@ -95,7 +95,8 @@ class NonStreamingHandler {
         appId: baseLog.appId,
         modelId: model.id,
         tokens: promptTokens,
-        tokenSource
+        tokenSource,
+        user: baseLog.user
       });
 
       let aiResponse = '';
@@ -114,7 +115,8 @@ class NonStreamingHandler {
         appId: baseLog.appId,
         modelId: model.id,
         tokens: completionTokens,
-        tokenSource
+        tokenSource,
+        user: baseLog.user
       });
 
       return res.json(responseData);
