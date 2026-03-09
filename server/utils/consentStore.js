@@ -1,13 +1,11 @@
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import { atomicWriteJSON } from './atomicWrite.js';
 import logger from './logger.js';
+import { getRootDir } from '../pathUtils.js';
+import config from '../config.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-const STORE_PATH = path.join(__dirname, '../../contents/config/oauth-consent.json');
+const STORE_PATH = path.join(getRootDir(), config.CONTENTS_DIR, 'data', 'oauth-consent.json');
 
 /**
  * Load the consent store from disk.
@@ -36,6 +34,7 @@ function loadStore() {
  */
 async function saveStore(store) {
   try {
+    await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
     await atomicWriteJSON(STORE_PATH, store);
   } catch (error) {
     logger.error('[ConsentStore] Failed to save:', error.message);

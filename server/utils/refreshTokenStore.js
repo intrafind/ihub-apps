@@ -1,13 +1,11 @@
 import crypto from 'crypto';
 import path from 'path';
 import fs from 'fs';
-import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { atomicWriteJSON } from './atomicWrite.js';
 import logger from './logger.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { getRootDir } from '../pathUtils.js';
+import config from '../config.js';
 
 /**
  * File-backed refresh token store for OAuth 2.0 token rotation.
@@ -21,14 +19,19 @@ const __dirname = path.dirname(__filename);
  * - Expired tokens are cleaned up lazily on every write to keep the file small.
  *
  * Persistence:
- * - Stored at `contents/config/oauth-refresh-tokens.json` so it survives server
+ * - Stored at `contents/data/oauth-refresh-tokens.json` so it survives server
  *   restarts (unlike in-memory auth code store). This file must be excluded from
  *   version control and treated as sensitive data.
  *
  * @module refreshTokenStore
  */
 
-const STORE_PATH = path.join(__dirname, '../../contents/config/oauth-refresh-tokens.json');
+const STORE_PATH = path.join(
+  getRootDir(),
+  config.CONTENTS_DIR,
+  'data',
+  'oauth-refresh-tokens.json'
+);
 
 /** Default refresh token lifetime in days. */
 const TOKEN_TTL_DAYS = 30;
@@ -65,6 +68,7 @@ function loadStore() {
  */
 async function saveStore(store) {
   try {
+    await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
     await atomicWriteJSON(STORE_PATH, store);
   } catch (error) {
     logger.error('[RefreshTokenStore] Failed to save:', error.message);
