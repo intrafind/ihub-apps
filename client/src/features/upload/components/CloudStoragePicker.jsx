@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Office365FileBrowser from './Office365FileBrowser';
+import GoogleDriveFileBrowser from './GoogleDriveFileBrowser';
 
 /**
  * Cloud Storage Picker component
@@ -149,28 +150,12 @@ const CloudStoragePicker = ({
                 uploadConfig={uploadConfig}
               />
             ) : selectedProvider.type === 'googledrive' ? (
-              <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-                <Icon
-                  name="information-circle"
-                  size="xl"
-                  className="text-gray-400 dark:text-gray-500 mb-4"
-                />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                  {t('cloudStorage.comingSoon', 'Coming Soon')}
-                </h3>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-6">
-                  {t(
-                    'cloudStorage.googleDriveNotYet',
-                    'Google Drive integration is not yet available. Please use Office 365 or local file upload.'
-                  )}
-                </p>
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600"
-                >
-                  {t('common.close', 'Close')}
-                </button>
-              </div>
+              <GoogleDriveFileBrowser
+                provider={selectedProvider}
+                onFilesProcessed={handleFilesProcessed}
+                onClose={onClose}
+                uploadConfig={uploadConfig}
+              />
             ) : null}
           </div>
         )}

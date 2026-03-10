@@ -618,12 +618,17 @@
       "saveError": "Failed to save cloud storage configuration",
       "deleteSuccess": "Provider deleted successfully",
       "deleteError": "Failed to delete provider",
+      "sources": "Available Sources",
+      "myDrive": "My Drive",
+      "sharedDrives": "Shared Drives",
+      "sharedWithMe": "Shared with Me",
       "validation": {
         "nameRequired": "Name is required",
         "displayNameRequired": "Display name is required",
         "tenantIdRequired": "Tenant ID is required",
         "clientIdRequired": "Client ID is required",
-        "clientSecretRequired": "Client secret is required"
+        "clientSecretRequired": "Client secret is required",
+        "googledriveRequired": "Client ID and Client Secret are required for Google Drive"
       },
       "info": {
         "title": "About Cloud Storage Integration",

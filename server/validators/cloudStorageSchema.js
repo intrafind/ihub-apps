@@ -32,7 +32,7 @@ export const office365ProviderSchema = z.object({
     .default({ personalDrive: true, followedSites: true, teams: true })
 });
 
-// Google Drive provider configuration (for future extensibility)
+// Google Drive provider configuration
 export const googleDriveProviderSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -41,7 +41,15 @@ export const googleDriveProviderSchema = z.object({
   enabled: z.boolean().default(true),
   clientId: z.string(),
   clientSecret: z.string(),
-  redirectUri: optionalUrlField.optional()
+  redirectUri: optionalUrlField.optional(),
+  sources: z
+    .object({
+      myDrive: z.boolean().default(true),
+      sharedDrives: z.boolean().default(true),
+      sharedWithMe: z.boolean().default(true)
+    })
+    .optional()
+    .default({ myDrive: true, sharedDrives: true, sharedWithMe: true })
 });
 
 // Generic cloud storage provider (union of all provider types)

@@ -113,6 +113,19 @@ const CloudStorageConfig = () => {
       }
     }
 
+    if (providerToSave.type === 'googledrive') {
+      if (!providerToSave.clientId || !providerToSave.clientSecret) {
+        setMessage({
+          type: 'error',
+          text: t(
+            'admin.cloudStorage.validation.googledriveRequired',
+            'Client ID and Client Secret are required for Google Drive'
+          )
+        });
+        return;
+      }
+    }
+
     let updatedProviders;
     const existingIndex = config.providers.findIndex(p => p.id === providerToSave.id);
 
@@ -363,9 +376,25 @@ const CloudStorageConfig = () => {
                       </label>
                       <select
                         value={editingProvider.type}
-                        onChange={e =>
-                          setEditingProvider({ ...editingProvider, type: e.target.value })
-                        }
+                        onChange={e => {
+                          const newType = e.target.value;
+                          const newProvider = { ...editingProvider, type: newType };
+                          // Set appropriate default sources when switching type
+                          if (newType === 'googledrive') {
+                            newProvider.sources = {
+                              myDrive: true,
+                              sharedDrives: true,
+                              sharedWithMe: true
+                            };
+                          } else if (newType === 'office365') {
+                            newProvider.sources = {
+                              personalDrive: true,
+                              followedSites: true,
+                              teams: true
+                            };
+                          }
+                          setEditingProvider(newProvider);
+                        }}
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                       >
                         <option value="office365">{t('admin.cloudStorage.office365')}</option>
@@ -559,6 +588,72 @@ const CloudStorageConfig = () => {
                             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                             placeholder="your-client-secret"
                           />
+                        </div>
+
+                        {/* Google Drive Sources configuration */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {t('admin.cloudStorage.sources', 'Available Sources')}
+                          </label>
+                          <div className="space-y-2">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.myDrive !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      myDrive: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                {t('admin.cloudStorage.myDrive', 'My Drive')}
+                              </span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.sharedDrives !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      sharedDrives: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                {t('admin.cloudStorage.sharedDrives', 'Shared Drives')}
+                              </span>
+                            </label>
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.sharedWithMe !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      sharedWithMe: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                {t('admin.cloudStorage.sharedWithMe', 'Shared with Me')}
+                              </span>
+                            </label>
+                          </div>
                         </div>
                       </>
                     )}
