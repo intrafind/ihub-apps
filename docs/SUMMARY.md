@@ -36,6 +36,7 @@
     - [iFinder Quick Reference](iFinder-Quick-Reference.md)
     - [iFinder JWT Key Generation](ifinder-jwt-key-generation.md)
     - [File Upload Feature](file-upload-feature.md)
+    - [Google Drive Integration](google-drive-integration.md)
     - [Audio File Support](audio-file-support.md)
     - [Microphone Feature](microphone-feature.md)
     - [Web Tools](web-tools.md)
