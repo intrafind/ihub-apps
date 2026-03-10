@@ -2,6 +2,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { httpFetch } from '../../utils/httpConfig.js';
+import { compareVersions } from '../../services/updateService.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminVersionRoutes(app) {
@@ -105,39 +106,4 @@ export default function registerAdminVersionRoutes(app) {
       });
     }
   });
-}
-
-/**
- * Compare two semantic versions
- * Returns: 1 if v1 > v2, -1 if v1 < v2, 0 if equal
- * Handles basic semver format (e.g., "1.2.3") and ignores pre-release tags
- */
-function compareVersions(v1, v2) {
-  // Handle null/undefined inputs
-  if (!v1 || !v2) {
-    return 0;
-  }
-
-  // Remove pre-release tags (e.g., "1.0.0-beta" -> "1.0.0")
-  const cleanV1 = v1.split('-')[0];
-  const cleanV2 = v2.split('-')[0];
-
-  const parts1 = cleanV1.split('.').map(part => {
-    const num = parseInt(part, 10);
-    return isNaN(num) ? 0 : num;
-  });
-  const parts2 = cleanV2.split('.').map(part => {
-    const num = parseInt(part, 10);
-    return isNaN(num) ? 0 : num;
-  });
-
-  for (let i = 0; i < Math.max(parts1.length, parts2.length); i++) {
-    const part1 = parts1[i] || 0;
-    const part2 = parts2[i] || 0;
-
-    if (part1 > part2) return 1;
-    if (part1 < part2) return -1;
-  }
-
-  return 0;
 }
