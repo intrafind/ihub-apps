@@ -52,7 +52,10 @@ export default function SetupWizard() {
   const { t } = useTranslation();
   const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const { platformConfig, refreshConfig } = usePlatformConfig();
-  const [step, setStep] = useState(1); // 1=welcome, 2=sign-in, 3=provider, 4=finish
+  const [step, setStep] = useState(() => {
+    const saved = sessionStorage.getItem('setup_wizard_step');
+    return saved ? parseInt(saved, 10) : 1;
+  }); // 1=welcome, 2=sign-in, 3=provider, 4=finish
   const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0]);
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
@@ -64,24 +67,10 @@ export default function SetupWizard() {
 
   const userIsAdmin = user?.isAdmin === true;
 
-  // On mount, check if returning from an OIDC/NTLM redirect
+  // Persist wizard step to survive component remounts and redirects (e.g. OIDC/NTLM)
   useEffect(() => {
-    const savedStep = sessionStorage.getItem('setup_wizard_step');
-    if (savedStep) {
-      const targetStep = parseInt(savedStep, 10);
-      if (!authLoading && isAuthenticated && targetStep > 1) {
-        sessionStorage.removeItem('setup_wizard_step');
-        setStep(targetStep);
-      }
-      // If auth is still loading, wait for next render cycle
-      // If not authenticated, keep saved step for when auth completes
-    }
-  }, [authLoading, isAuthenticated]);
-
-  // When entering the login step, save the next step for OIDC/NTLM redirects
-  useEffect(() => {
-    if (step === 2) {
-      sessionStorage.setItem('setup_wizard_step', '3');
+    if (step > 1 && step < TOTAL_STEPS) {
+      sessionStorage.setItem('setup_wizard_step', String(step));
     } else {
       sessionStorage.removeItem('setup_wizard_step');
     }
@@ -100,9 +89,10 @@ export default function SetupWizard() {
     }
   }, [loginJustCompleted, authLoading, isAuthenticated, user, t]);
 
-  // If already configured, skip the wizard (but not on the finish screen)
+  // If already configured, skip the wizard — but only on the Welcome screen.
+  // Once the user is past Welcome (login, provider config, finish), don't interrupt.
   useEffect(() => {
-    if (step === 4) return;
+    if (step >= 2) return;
     if (platformConfig && (platformConfig.setup?.configured ?? true)) {
       navigate('/', { replace: true });
     }
@@ -188,15 +178,18 @@ export default function SetupWizard() {
   const handleSkip = () => {
     // Remember the skip for this session only so the wizard doesn't interrupt
     // again. Next session/tab will re-check with the server.
+    sessionStorage.removeItem('setup_wizard_step');
     sessionStorage.setItem('setup_skipped', '1');
     navigate('/', { replace: true });
   };
 
   const handleFinish = () => {
+    sessionStorage.removeItem('setup_wizard_step');
     navigate('/', { replace: true });
   };
 
   const handleGoToAdmin = () => {
+    sessionStorage.removeItem('setup_wizard_step');
     navigate('/admin', { replace: true });
   };
 
