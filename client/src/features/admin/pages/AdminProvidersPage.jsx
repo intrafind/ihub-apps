@@ -467,7 +467,17 @@ const AdminProvidersPage = () => {
                                               toggleExpanded(provider.id);
                                             }}
                                             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                                            title={isExpanded ? t('admin.providers.health.hideResults', 'Hide results') : t('admin.providers.health.showResults', 'Show results')}
+                                            title={
+                                              isExpanded
+                                                ? t(
+                                                    'admin.providers.health.hideResults',
+                                                    'Hide results'
+                                                  )
+                                                : t(
+                                                    'admin.providers.health.showResults',
+                                                    'Show results'
+                                                  )
+                                            }
                                           >
                                             <Icon
                                               name={
