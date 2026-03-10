@@ -19,8 +19,7 @@ import {
   getUpdateStatus,
   isBinaryInstallation,
   checkDiskSpace,
-  checkWritePermissions,
-  UPDATE_RESTART_CODE
+  checkWritePermissions
 } from '../services/updateService.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 

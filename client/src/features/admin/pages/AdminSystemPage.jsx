@@ -28,6 +28,9 @@ const AdminSystemPage = () => {
   const [updateStatus, setUpdateStatus] = useState(null);
   const [updateActionLoading, setUpdateActionLoading] = useState(false);
   const [updateActionMessage, setUpdateActionMessage] = useState('');
+  const [updateActionMessageType, setUpdateActionMessageType] = useState('success');
+  const updatePollIntervalRef = useRef(null);
+  const rollbackPollIntervalRef = useRef(null);
 
   // Fetch version information on mount
   useEffect(() => {
@@ -81,9 +84,18 @@ const AdminSystemPage = () => {
     fetchUpdateStatus();
   }, []);
 
+  // Clean up polling intervals on unmount
+  useEffect(() => {
+    return () => {
+      if (updatePollIntervalRef.current) clearInterval(updatePollIntervalRef.current);
+      if (rollbackPollIntervalRef.current) clearInterval(rollbackPollIntervalRef.current);
+    };
+  }, []);
+
   const handleUpdateNow = async () => {
     setUpdateActionLoading(true);
     setUpdateActionMessage('');
+    setUpdateActionMessageType('success');
 
     try {
       // Step 1: Download
@@ -100,16 +112,18 @@ const AdminSystemPage = () => {
       );
 
       // Poll until server comes back
-      const pollInterval = setInterval(async () => {
+      updatePollIntervalRef.current = setInterval(async () => {
         try {
           const response = await makeAdminApiCall('/admin/version', { method: 'GET' });
           if (response.data) {
-            clearInterval(pollInterval);
+            clearInterval(updatePollIntervalRef.current);
+            updatePollIntervalRef.current = null;
             setUpdateActionMessage(
               t('admin.system.updateSuccess', 'Update complete! Now running version {{version}}.', {
                 version: response.data.app
               })
             );
+            setUpdateActionMessageType('success');
             setUpdateActionLoading(false);
             setVersionInfo(response.data);
             setUpdateInfo(prev => (prev ? { ...prev, updateAvailable: false } : prev));
@@ -127,13 +141,19 @@ const AdminSystemPage = () => {
       }, 3000);
 
       // Stop polling after 2 minutes
-      setTimeout(() => clearInterval(pollInterval), 120000);
+      setTimeout(() => {
+        if (updatePollIntervalRef.current) {
+          clearInterval(updatePollIntervalRef.current);
+          updatePollIntervalRef.current = null;
+        }
+      }, 120000);
     } catch (error) {
       setUpdateActionMessage(
         t('admin.system.updateFailed', 'Update failed: {{error}}', {
           error: error.response?.data?.error || error.message
         })
       );
+      setUpdateActionMessageType('error');
       setUpdateActionLoading(false);
     }
   };
@@ -152,6 +172,7 @@ const AdminSystemPage = () => {
 
     setUpdateActionLoading(true);
     setUpdateActionMessage(t('admin.system.rollbackApplying', 'Rolling back...'));
+    setUpdateActionMessageType('success');
 
     try {
       await makeAdminApiCall('/admin/update/rollback', { method: 'POST' });
@@ -161,11 +182,12 @@ const AdminSystemPage = () => {
       );
 
       // Poll until server comes back
-      const pollInterval = setInterval(async () => {
+      rollbackPollIntervalRef.current = setInterval(async () => {
         try {
           const response = await makeAdminApiCall('/admin/version', { method: 'GET' });
           if (response.data) {
-            clearInterval(pollInterval);
+            clearInterval(rollbackPollIntervalRef.current);
+            rollbackPollIntervalRef.current = null;
             setUpdateActionMessage(
               t(
                 'admin.system.rollbackSuccess',
@@ -175,6 +197,7 @@ const AdminSystemPage = () => {
                 }
               )
             );
+            setUpdateActionMessageType('success');
             setUpdateActionLoading(false);
             setVersionInfo(response.data);
             try {
@@ -189,13 +212,19 @@ const AdminSystemPage = () => {
         }
       }, 3000);
 
-      setTimeout(() => clearInterval(pollInterval), 120000);
+      setTimeout(() => {
+        if (rollbackPollIntervalRef.current) {
+          clearInterval(rollbackPollIntervalRef.current);
+          rollbackPollIntervalRef.current = null;
+        }
+      }, 120000);
     } catch (error) {
       setUpdateActionMessage(
         t('admin.system.rollbackFailed', 'Rollback failed: {{error}}', {
           error: error.response?.data?.error || error.message
         })
       );
+      setUpdateActionMessageType('error');
       setUpdateActionLoading(false);
     }
   };
@@ -1057,7 +1086,13 @@ const AdminSystemPage = () => {
                               </a>
                             </div>
                             {updateActionMessage && (
-                              <div className="mt-2 text-sm text-green-700 dark:text-green-300">
+                              <div
+                                className={`mt-2 text-sm ${
+                                  updateActionMessageType === 'error'
+                                    ? 'text-red-700 dark:text-red-300'
+                                    : 'text-green-700 dark:text-green-300'
+                                }`}
+                              >
                                 {updateActionMessage}
                               </div>
                             )}

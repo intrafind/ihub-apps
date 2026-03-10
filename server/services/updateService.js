@@ -5,8 +5,8 @@
  * creates backups, swaps application files, and supports rollback.
  */
 import { promises as fs } from 'fs';
-import { createWriteStream, existsSync, createReadStream } from 'fs';
-import { join, basename } from 'path';
+import { createWriteStream, existsSync, createReadStream, readdirSync, readFileSync } from 'fs';
+import { join } from 'path';
 import { createHash } from 'crypto';
 import { pipeline } from 'stream/promises';
 import { execFile } from 'child_process';
@@ -25,9 +25,6 @@ const UPDATE_BACKUP_DIR = '.update-backup';
 const UPDATE_LOCK_FILE = '.update-lock';
 const UPDATE_RESTART_CODE = 75;
 
-// Files/directories that must be preserved during updates
-const PRESERVE_PATHS = ['contents', 'config.env', 'logs'];
-
 // Files/directories that should be replaced during updates
 const REPLACE_PATHS = ['server', 'shared', 'public', 'docs', 'launcher.cjs', 'node', 'version.txt'];
 
@@ -37,7 +34,7 @@ const REPLACE_PATHS = ['server', 'shared', 'public', 'docs', 'launcher.cjs', 'no
 function detectPlatform() {
   const rootDir = getRootDir();
   try {
-    const files = require('fs').readdirSync(rootDir);
+    const files = readdirSync(rootDir);
     const launcher = files.find(f => /^ihub-apps-v.*-(linux|macos|win\.bat)$/.test(f));
     if (launcher) {
       if (launcher.endsWith('-linux')) return 'linux';
@@ -87,7 +84,7 @@ export function getUpdateStatus() {
     try {
       const bvPath = join(rootDir, UPDATE_BACKUP_DIR, 'version.txt');
       if (existsSync(bvPath)) {
-        backupVersion = require('fs').readFileSync(bvPath, 'utf8').trim();
+        backupVersion = readFileSync(bvPath, 'utf8').trim();
       }
     } catch {
       // ignore
@@ -244,18 +241,25 @@ export async function downloadUpdate(updateInfo) {
 
   await acquireLock();
 
+  const tmpDir = join(rootDir, UPDATE_TMP_DIR);
+  const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
+
   try {
     setState({ status: 'downloading', progress: 0, message: 'Downloading update...', error: null });
 
+    // Sanitize version string to prevent path traversal
+    const safeVersion = updateInfo.latestVersion.replace(/[^a-zA-Z0-9._-]/g, '');
+    if (!safeVersion) {
+      throw new Error('Invalid version string in update info');
+    }
+
     // Clean up any previous staging/tmp
-    const tmpDir = join(rootDir, UPDATE_TMP_DIR);
-    const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
     await fs.rm(tmpDir, { recursive: true, force: true });
     await fs.rm(stagingDir, { recursive: true, force: true });
     await fs.mkdir(tmpDir, { recursive: true });
 
     // Download the archive
-    const archivePath = join(tmpDir, `update-${updateInfo.latestVersion}.tar.gz`);
+    const archivePath = join(tmpDir, `update-${safeVersion}.tar.gz`);
     await downloadFile(updateInfo.assetUrl, archivePath, updateInfo.assetSize);
 
     // Download and verify checksum
@@ -266,6 +270,16 @@ export async function downloadUpdate(updateInfo) {
       await verifyChecksum(archivePath, checksumsPath, updateInfo);
     } else {
       logger.warn('No checksums file available, skipping verification');
+    }
+
+    // Validate archive contents before extraction to prevent path traversal
+    setState({ status: 'extracting', progress: 93, message: 'Validating archive...' });
+    const { stdout: tarList } = await execAsync('tar', ['-tzf', archivePath]);
+    const archiveEntries = tarList.split('\n').filter(Boolean);
+    for (const entry of archiveEntries) {
+      if (entry.startsWith('/') || entry.includes('../')) {
+        throw new Error(`Archive contains unsafe path: ${entry}`);
+      }
     }
 
     // Extract the archive
@@ -316,10 +330,11 @@ export async function downloadUpdate(updateInfo) {
   } catch (error) {
     setState({ status: 'error', error: error.message, message: 'Download failed' });
     // Clean up on failure
-    await fs.rm(join(rootDir, UPDATE_TMP_DIR), { recursive: true, force: true });
-    await fs.rm(join(rootDir, UPDATE_STAGING_DIR), { recursive: true, force: true });
-    await releaseLock();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+    await fs.rm(stagingDir, { recursive: true, force: true });
     throw error;
+  } finally {
+    await releaseLock();
   }
 }
 
@@ -335,6 +350,7 @@ export async function applyUpdate() {
     throw new Error('No staged update found. Download an update first.');
   }
 
+  await acquireLock();
   setState({ status: 'applying', progress: 0, message: 'Applying update...', error: null });
 
   try {
@@ -392,8 +408,6 @@ export async function applyUpdate() {
     setState({ progress: 90, message: 'Cleaning up...' });
     await fs.rm(stagingDir, { recursive: true, force: true });
 
-    await releaseLock();
-
     const newVersion = getAppVersion();
     setState({
       status: 'restarting',
@@ -432,8 +446,9 @@ export async function applyUpdate() {
       });
     }
 
-    await releaseLock();
     throw error;
+  } finally {
+    await releaseLock();
   }
 }
 
@@ -642,8 +657,12 @@ async function verifyChecksum(filePath, checksumsPath, updateInfo) {
 export async function checkDiskSpace() {
   const rootDir = getRootDir();
   try {
-    const { stdout } = await execAsync(`df -k "${rootDir}" | tail -1 | awk '{print $4}'`);
-    const availableKB = parseInt(stdout.trim(), 10);
+    const { stdout } = await execAsync('df', ['-k', rootDir]);
+    const lines = stdout.trim().split('\n');
+    if (lines.length < 2) return { available: null, sufficient: true };
+    // df output: Filesystem 1K-blocks Used Available Use% Mounted on
+    const columns = lines[lines.length - 1].trim().split(/\s+/);
+    const availableKB = parseInt(columns[3], 10);
     if (isNaN(availableKB)) return { available: null, sufficient: true };
 
     // Need at least 500MB for backup + new version
