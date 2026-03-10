@@ -245,4 +245,4 @@ The encryption tool uses the existing `TokenStorageService` which provides:
 - [LDAP/NTLM Authentication](./ldap-ntlm-authentication.md)
 - [Environment Variables](./environment-variables.md)
 - [Security Best Practices](./security.md)
-- [TokenStorageService](./token-storage-service.md)
+- [Encryption Key Management](./encryption-key-management.md)

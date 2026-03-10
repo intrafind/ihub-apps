@@ -68,8 +68,10 @@ Enable OIDC in `contents/config/platform.json`:
 Set the required environment variables:
 
 ```bash
-# JWT Secret (required for token signing)
-JWT_SECRET=your-secure-jwt-secret
+# JWT Algorithm: RS256 (default) uses an auto-generated RSA key pair.
+# No JWT_SECRET is needed for RS256.
+# Set JWT_SECRET only if you have explicitly configured "jwt.algorithm": "HS256".
+# JWT_SECRET=your-secure-jwt-secret  # HS256 only
 
 # OIDC Provider Configuration (optional, overrides platform.json)
 OIDC_AUTH_ENABLED=true
@@ -457,8 +459,8 @@ The AuthContext automatically handles OIDC callbacks:
 ## Security Considerations
 
 1. **HTTPS Required**: Always use HTTPS in production
-2. **Secure Secrets**: Store client secrets securely
-3. **JWT Security**: Use strong JWT secrets (256-bit minimum)
+2. **Secure Secrets**: Store OIDC client secrets securely (use environment variables or the admin UI encryption)
+3. **JWT Algorithm**: iHub defaults to RS256 (asymmetric). RSA keys are auto-generated on first startup and stored in `contents/.jwt-private-key.pem` / `contents/.jwt-public-key.pem`. Set `JWT_SECRET` only if you switch to HS256.
 4. **Token Expiration**: Configure appropriate session timeouts
 5. **PKCE**: Enable PKCE for enhanced security
 6. **Scope Limitation**: Request only necessary OAuth2 scopes
@@ -494,7 +496,7 @@ curl http://localhost:3000/api/auth/oidc/providers
 
 2. **Client Secret Not Found**
    - Error: `JWT secret not configured`
-   - Solution: Set `JWT_SECRET` environment variable
+   - Solution: iHub uses RS256 by default and auto-generates RSA keys on first startup. If you see this error, ensure the server has write access to the `contents/` directory so key files can be created. If you are intentionally using HS256, set the `JWT_SECRET` environment variable.
 
 3. **Provider Not Found**
    - Error: `OIDC provider 'name' not found`

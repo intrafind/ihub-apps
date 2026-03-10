@@ -9,6 +9,7 @@ iHub Apps implements a comprehensive security model designed to protect user dat
 3. [API Security](#api-security)
 4. [LLM Integration Security](#llm-integration-security)
 5. [Data Protection](#data-protection)
+   - [Secret Encryption at Rest](#secret-encryption-at-rest)
 6. [Network Security](#network-security)
 7. [Deployment Security](#deployment-security)
 8. [Operational Security](#operational-security)
@@ -407,6 +408,74 @@ For custom or local LLM endpoints:
 - User data stored with appropriate access controls
 - Logs rotated and archived securely
 - Backup encryption recommended
+- **Integration secrets encrypted in `platform.json`** using AES-256-GCM (see [Secret Encryption at Rest](#secret-encryption-at-rest) below)
+
+### Secret Encryption at Rest
+
+Platform configuration secrets (Jira, OIDC, LDAP, NTLM, Cloud Storage) are automatically encrypted on disk using `TokenStorageService` with AES-256-GCM authenticated encryption. This means even if `platform.json` is read by an unauthorized party, the raw secret values are not exposed.
+
+#### Encrypted Format
+
+Encrypted values use a self-describing format that is easy to identify:
+
+```
+ENC[AES256_GCM,data:<base64>,iv:<base64>,tag:<base64>,type:str]
+```
+
+The format encodes the algorithm, encrypted data, initialization vector, authentication tag, and value type. This makes encrypted values unambiguous and allows safe co-existence with plaintext or environment variable placeholder values.
+
+#### Encryption Key
+
+The AES-256 encryption key is stored at `contents/.encryption-key` with mode `0600` (owner read/write only). If the file does not exist at startup, a new key is generated automatically and persisted.
+
+**Important**: Back up this file securely. Losing it makes all encrypted secrets in `platform.json` unrecoverable without re-entering them through the admin interface.
+
+The key path can be overridden by setting the `TOKEN_ENCRYPTION_KEY` environment variable, which is required for multi-node deployments to ensure all nodes share the same key.
+
+#### Encrypted Fields
+
+The following fields in `platform.json` are encrypted at rest:
+
+| Config Section | Field |
+|----------------|-------|
+| `jira` | `clientSecret` |
+| `cloudStorage.providers[]` (type: `office365`) | `clientSecret`, `tenantId` |
+| `cloudStorage.providers[]` (type: `googledrive`) | `clientSecret` |
+| `oidcAuth.providers[]` | `clientSecret` |
+| `ldapAuth.providers[]` | `adminPassword` |
+| `ntlmAuth` | `domainControllerPassword` |
+| `iFinder` | `privateKey` |
+
+#### Encryption Lifecycle
+
+- **On admin save** (`POST /api/admin/configs/platform`): Secrets are encrypted before writing to `platform.json`
+- **On admin read** (`GET /api/admin/configs/platform`): Secrets are decrypted, then sanitized to `***REDACTED***` before being returned to the browser
+- **At runtime** (`configCache.js`): Secrets are decrypted when the platform config is loaded into the in-memory cache so all consumers receive plaintext values
+
+#### Guard Pattern
+
+The encryption logic uses the following guard pattern to prevent double-encryption and to skip environment variable placeholders:
+
+```javascript
+function encryptIfNeeded(value) {
+  if (!value || typeof value !== 'string') return value;
+  // Skip environment variable placeholders like ${MY_SECRET}
+  if (/^\$\{[^}]+\}$/.test(value)) return value;
+  // Skip already-encrypted values
+  if (tokenStorageService.isEncrypted(value)) return value;
+  return tokenStorageService.encryptString(value);
+}
+```
+
+#### Backward Compatibility
+
+Plaintext secrets already present in `platform.json` are passed through unchanged on read. They are encrypted automatically the next time an admin saves the platform configuration (lazy migration). No migration script is required.
+
+#### Key Files
+
+- `server/services/TokenStorageService.js` — `encryptString()`, `decryptString()`, `isEncrypted()`
+- `server/routes/admin/configs.js` — `encryptPlatformSecrets()`, `decryptPlatformSecrets()`, `encryptIfNeeded()`, `decryptIfNeeded()`
+- `server/configCache.js` — `decryptPlatformSecrets()` applied during platform config loading
 
 ### File Upload Security
 
@@ -925,15 +994,12 @@ async function deleteUserData(userId) {
 
 #### Configuration Auditing
 ```bash
-# Check configuration security
-npm run security:audit:config
+# Audit admin API endpoints for security issues
+npm run security:audit
 
-# Scan for vulnerabilities  
+# Scan npm dependencies for vulnerabilities
 npm audit
 docker scan ihub-apps:latest
-
-# Check dependencies
-npm run security:check:deps
 ```
 
 #### Compliance Reporting

@@ -91,7 +91,7 @@ graph TB
     end
     
     subgraph "Backend" 
-        Node[Node.js 20+]
+        Node[Node.js 24+]
         Express[Express.js]
         Clustering[Node.js Clustering]
     end
@@ -116,7 +116,7 @@ graph TB
 
 ### Prerequisites
 
-- **Node.js 20+**: Download from [nodejs.org](https://nodejs.org)
+- **Node.js 24+**: Download from [nodejs.org](https://nodejs.org)
 - **Git**: Version control
 - **Code Editor**: VS Code recommended with these extensions:
   - ES7+ React/Redux/React-Native snippets
@@ -236,8 +236,8 @@ Start exploring from these important files:
 
 #### Configuration Files
 - **`contents/config/platform.json`** - Core platform settings
-- **`contents/config/apps.json`** - AI application definitions
-- **`contents/config/models.json`** - LLM model configurations
+- **`contents/apps/`** - AI application definitions (individual JSON files per app)
+- **`contents/models/`** - LLM model configurations (individual JSON files per model)
 
 ### 📂 Feature-Based Architecture
 
@@ -290,16 +290,16 @@ The app uses JSON configuration files instead of a database:
 
 ```
 contents/
-├── config/         # Core configuration
+├── apps/          # AI app definitions (individual .json files)
+├── models/        # LLM model configs (individual .json files)
+├── config/        # Core configuration
 │   ├── platform.json  # Server settings, auth config
-│   ├── apps.json      # AI app definitions
-│   ├── models.json    # LLM model configs
 │   ├── groups.json    # User groups & permissions
 │   └── ui.json        # UI customization
-├── pages/          # Static/dynamic page content
-│   ├── en/         # English content
-│   └── de/         # German content
-└── sources/        # Content sources for AI apps
+├── pages/         # Static/dynamic page content
+│   ├── en/        # English content
+│   └── de/        # German content
+└── sources/       # Content sources for AI apps
 ```
 
 ## Development Workflow
@@ -479,7 +479,7 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
 
 ### Adding a New AI Application
 
-1. **Create App Configuration** (`contents/config/apps.json`):
+1. **Create App Configuration** (e.g., `contents/apps/my-new-app.json`):
 ```json
 {
   "id": "my-new-app",
@@ -509,11 +509,11 @@ For detailed architecture information, see [docs/architecture.md](architecture.m
 
 ### Adding a New LLM Model
 
-1. **Create Model Configuration** (`contents/config/models.json`):
+1. **Create Model Configuration** (e.g., `contents/models/my-custom-model.json`):
 ```json
 {
   "id": "my-custom-model",
-  "name": "My Custom Model",
+  "name": { "en": "My Custom Model" },
   "provider": "openai",
   "apiEndpoint": "https://api.example.com/v1/chat/completions",
   "contextWindow": 8000,

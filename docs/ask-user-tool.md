@@ -43,12 +43,12 @@ Add `"ask_user"` to your app's tools array:
 
 | Type | UI Component | Best For |
 |------|--------------|----------|
-| `single_select` | Chips (≤4) or Dropdown (>4) | Choose one option |
-| `multi_select` | Chips with checkmarks | Choose multiple options |
+| `select` | Chips (≤4) or Dropdown (>4) | Choose one option |
+| `multiselect` | Chips with checkmarks | Choose multiple options |
 | `text` | Textarea | Open-ended responses |
+| `confirm` | Yes/No buttons | Boolean confirmation |
 | `number` | Number input | Numeric values |
 | `date` | Date picker | Single date |
-| `date_range` | Two date pickers | Date range |
 
 ## System Prompt Best Practices
 
@@ -60,10 +60,11 @@ When you need to ask the user a clarifying question, use the ask_user tool.
 Guidelines for ask_user:
 1. Keep questions SHORT and DIRECT - don't repeat user input
 2. When there are common choices, ALWAYS provide options
-3. Use input_type "single_select" or "multi_select" with options for choices
+3. Use input_type "select" or "multiselect" with options for choices
 4. Use input_type "text" only for truly open-ended questions
-5. Set allow_other: true if the user might have an option not listed
-6. Use context to explain WHY you're asking (optional)
+5. Use input_type "confirm" for simple yes/no questions
+6. Set allow_other: true if the user might have an option not listed
+7. Use context to explain WHY you're asking (optional)
 
 IMPORTANT: Provide options whenever possible - it's faster for users!
 ```
@@ -77,7 +78,7 @@ IMPORTANT: Provide options whenever possible - it's faster for users!
 You are a translator. When the target language is not specified, ask the user.
 
 When asking for language:
-- Use single_select with common language options
+- Use select with common language options
 - Set allow_other: true for less common languages
 - Keep the question simple: "Which language?"
 ```
@@ -88,7 +89,7 @@ When asking for language:
   "name": "ask_user",
   "arguments": {
     "question": "Which language?",
-    "input_type": "single_select",
+    "input_type": "select",
     "options": [
       { "label": "English", "value": "en" },
       { "label": "French", "value": "fr" },
@@ -119,7 +120,7 @@ When asking for language:
 ```
 You help schedule meetings. Always ask for:
 1. Meeting type (use options)
-2. Attendees (multi_select if known, otherwise text)
+2. Attendees (multiselect if known, otherwise text)
 3. Preferred date (date input)
 ```
 
@@ -129,7 +130,7 @@ You help schedule meetings. Always ask for:
   "name": "ask_user",
   "arguments": {
     "question": "What type of meeting?",
-    "input_type": "single_select",
+    "input_type": "select",
     "options": [
       { "label": "Team Sync", "value": "sync" },
       { "label": "1:1", "value": "one_on_one" },
@@ -159,8 +160,8 @@ You help schedule meetings. Always ask for:
 You help product managers write detailed specifications.
 
 When gathering requirements, ask clarifying questions:
-- Use multi_select for features, audiences, platforms
-- Use single_select for priority, timeline, complexity
+- Use multiselect for features, audiences, platforms
+- Use select for priority, timeline, complexity
 - Use text only for open-ended descriptions
 
 Keep questions focused and provide relevant options based on context.
@@ -172,7 +173,7 @@ Keep questions focused and provide relevant options based on context.
   "name": "ask_user",
   "arguments": {
     "question": "Who is the target audience?",
-    "input_type": "multi_select",
+    "input_type": "multiselect",
     "options": [
       { "label": "Developers", "value": "developers" },
       { "label": "Product Managers", "value": "pm" },
@@ -190,7 +191,7 @@ Keep questions focused and provide relevant options based on context.
   "name": "ask_user",
   "arguments": {
     "question": "What's the priority?",
-    "input_type": "single_select",
+    "input_type": "select",
     "options": [
       { "label": "Critical - Must have", "value": "p0" },
       { "label": "High - Should have", "value": "p1" },

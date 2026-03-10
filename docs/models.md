@@ -1,6 +1,6 @@
 ## Models Configuration
 
-The models configuration defines the AI models available in the iHub application. These settings are managed through the `config/models.json` file, which contains an array of model objects.
+The models configuration defines the AI models available in the iHub application. These settings are managed through individual JSON files in the `contents/models/` directory.
 
 ### Basic Model Structure
 
@@ -10,8 +10,8 @@ Each model is defined with the following properties:
 {
   "id": "gpt-3.5-turbo",
   "modelId": "gpt-3.5-turbo",
-  "name": "GPT-3.5 Turbo",
-  "description": "Fast and efficient model for most everyday tasks and conversations",
+  "name": { "en": "GPT-3.5 Turbo" },
+  "description": { "en": "Fast and efficient model for most everyday tasks and conversations" },
   "url": "https://api.openai.com/v1/chat/completions",
   "provider": "openai",
   "tokenLimit": 4096
@@ -20,24 +20,39 @@ Each model is defined with the following properties:
 
 ### Property Details
 
-| Property         | Type   | Description                                                        |
-| ---------------- | ------ | ------------------------------------------------------------------ |
-| `id`             | String | Unique identifier for referencing the model within the application |
-| `modelId`        | String | The actual model identifier used when calling the provider's API   |
-| `name`           | String | Display name shown in the user interface                           |
-| `description`    | String | Short description of the model's capabilities                      |
-| `url`            | String | API endpoint URL for the model                                     |
-| `provider`       | String | Provider identifier (openai, anthropic, google, etc.)              |
-| `tokenLimit`     | Number | Maximum token capacity of the model's context window               |
-| `requestDelayMs` | Number | Optional delay in milliseconds between API requests for this model |
+| Property                       | Type    | Default  | Description                                                                                    |
+| ------------------------------ | ------- | -------- | ---------------------------------------------------------------------------------------------- |
+| `id`                           | String  | -        | **Required.** Unique identifier for referencing the model within the application               |
+| `modelId`                      | String  | -        | **Required.** The actual model identifier used when calling the provider's API                 |
+| `name`                         | Object  | -        | **Required.** Localized display name (e.g., `{"en": "GPT-4"}`) shown in the user interface    |
+| `description`                  | Object  | -        | **Required.** Localized short description (e.g., `{"en": "..."}`) of the model's capabilities |
+| `provider`                     | String  | -        | **Required.** Provider identifier. See [Providers](#providers) for valid values                |
+| `url`                          | String  | -        | API endpoint URL for the model. Supports environment variable references like `${MY_URL}`      |
+| `tokenLimit`                   | Number  | -        | Maximum token capacity of the model's context window (nullable)                                |
+| `default`                      | Boolean | `false`  | Mark this model as the system-wide default. Only one model should have this set to `true`. See [Model Selection in Apps](#model-selection-in-apps) |
+| `enabled`                      | Boolean | `true`   | Whether the model is visible and selectable. Set to `false` to hide without deleting           |
+| `supportsTools`                | Boolean | `false`  | Whether the model supports tool/function calling                                               |
+| `supportsImages`               | Boolean | -        | Whether the model can process image inputs (deprecated alias for `supportsVision`)             |
+| `supportsVision`               | Boolean | -        | Whether the model supports image input (vision capabilities)                                   |
+| `supportsAudio`                | Boolean | -        | Whether the model can process audio input                                                      |
+| `supportsStructuredOutput`     | Boolean | -        | Whether the model natively supports structured JSON output schemas                             |
+| `supportsUsageTracking`        | Boolean | -        | Whether the model reports token usage in its responses                                         |
+| `supportsImageGeneration`      | Boolean | `false`  | Whether the model can generate images                                                          |
+| `imageGeneration`              | Object  | -        | Default image generation parameters for this model. See [Image Generation Defaults](#image-generation-defaults) below |
+| `apiKey`                       | String  | -        | Per-model API key stored encrypted on the server. Overrides the environment-level API key for this model only |
+| `config`                       | Object  | -        | Provider-specific configuration options passed directly to the adapter (record of any key-value pairs) |
+| `concurrency`                  | Number  | -        | Maximum number of concurrent in-flight requests to this model (1-100). Use to prevent rate-limit errors on low-quota plans |
+| `requestDelayMs`               | Number  | -        | Optional delay in milliseconds between API requests for this model (0-10000)                  |
+| `thinking`                     | Object  | -        | Extended thinking configuration for models that support it. See [Thinking Configuration](#model-thinking-configuration) below |
+| `hint`                         | Object  | -        | Message displayed when this model is selected. See [Model Hints](#model-hints) for full documentation |
 
 ### Tools
 
 Apps can optionally specify a list of tool identifiers via the `tools` property.
-Tool definitions are loaded from `config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `web-search` tool which performs a web search using DuckDuckGo. Additional tools provide direct access to Bing (`bing-search`), Google (`google-search`), and Brave (`brave-search`) when the corresponding API keys are configured.
-For example, the `Chat with DuckDuckGo` app in `config/apps.json` enables the `web-search` tool for its prompts.
+Tool definitions are loaded from `contents/config/tools.json` or discovered from a Model Context Protocol (MCP) server via the `MCP_SERVER_URL` environment variable. Each tool includes a JSON schema for its parameters and the name of the implementation script in `server/tools`. Tools are executed by calling `/api/tools/{id}` with the required parameters. A common example is the built-in `webSearch` tool, which performs a provider-configured web search. Additional tools provide direct access to specific search providers such as Brave (`braveSearch`) and Tavily (`tavilySearch`) when the corresponding API keys are configured.
+For example, an app configured for web browsing can enable the `webSearch` tool for its prompts.
 
-Each entry in `config/tools.json` uses the following fields:
+Each entry in `contents/config/tools.json` uses the following fields:
 
 | Field         | Description                                             |
 | ------------- | ------------------------------------------------------- |
@@ -84,6 +99,56 @@ The system currently supports the following providers:
 6. **Local Models** (can use any provider format they're compatible with)
    - Self-hosted models accessible via localhost or network
    - Example: Local vLLM implementation
+
+7. **iAssistant Conversation** (`provider: "iassistant-conversation"`)
+   - Connects to an IntraFind iAssistant service for retrieval-augmented conversations
+   - Requires `iAssistant.baseUrl` configured in `platform.json`
+   - Uses the iAssistant profile and search settings defined at the platform or app level
+
+### Image Generation Defaults
+
+For models with `supportsImageGeneration: true`, the `imageGeneration` object sets the default parameters:
+
+```json
+{
+  "supportsImageGeneration": true,
+  "imageGeneration": {
+    "aspectRatio": "1:1",
+    "quality": "Medium",
+    "maxReferenceImages": 14
+  }
+}
+```
+
+| Property                          | Type   | Default  | Description                                                                                                                   |
+| --------------------------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `imageGeneration.aspectRatio`     | String | `"1:1"`  | Default aspect ratio. Options: `"1:1"`, `"16:9"`, `"9:16"`, `"5:4"`, `"4:5"`, `"3:2"`, `"2:3"`, `"3:4"`, `"4:3"`, `"21:9"` |
+| `imageGeneration.quality`         | String | `"Medium"` | Default quality level. Options: `"Low"`, `"Medium"`, `"High"`                                                              |
+| `imageGeneration.maxReferenceImages` | Number | `14`  | Maximum number of reference images accepted (1-14)                                                                           |
+
+App-level `imageGeneration` settings (see [Apps documentation](apps.md)) override these model defaults.
+
+### Model Thinking Configuration
+
+For models that support extended thinking (such as Claude claude-3-7-sonnet), the `thinking` object configures the reasoning mode:
+
+```json
+{
+  "thinking": {
+    "enabled": true,
+    "budget": 8000,
+    "thoughts": false
+  }
+}
+```
+
+| Property           | Type    | Description                                                                                                                 |
+| ------------------ | ------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `thinking.enabled` | Boolean | Enable extended thinking mode for this model                                                                                |
+| `thinking.budget`  | Number  | Token budget for internal thinking steps. `0` disables thinking, `-1` lets the model decide dynamically, positive values set a specific budget |
+| `thinking.thoughts`| Boolean | When `true`, the model's internal thinking steps are returned and shown in the response                                     |
+
+App-level `thinking` settings override these model defaults for a specific app.
 
 ### Model Selection in Apps
 

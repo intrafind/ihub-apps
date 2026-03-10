@@ -78,7 +78,7 @@ Example response:
     "client_credentials"
   ],
   "scopes_supported": ["openid", "profile", "email", "offline_access"],
-  "claims_supported": ["sub", "name", "email", "groups"],
+  "claims_supported": ["sub", "name", "email", "groups", "iss", "aud", "exp", "iat", "nonce"],
   "code_challenge_methods_supported": ["S256"]
 }
 ```

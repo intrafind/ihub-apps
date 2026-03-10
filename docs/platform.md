@@ -372,7 +372,7 @@ Core authentication configuration.
 }
 ```
 
-- **mode** (string) – Authentication mode. Options: `"proxy"`, `"local"`, `"oidc"`, `"anonymous"`. Default: `"proxy"`
+- **mode** (string) – Authentication mode. Options: `"proxy"`, `"local"`, `"oidc"`, `"ldap"`, `"ntlm"`, `"anonymous"`. Default: `"local"`
 - **authenticatedGroup** (string) – Group name assigned to authenticated users. Default: `"authenticated"`
 - **sessionTimeoutMinutes** (number) – Session timeout in minutes for local auth. Default: `480`
 - **jwtSecret** (string) – JWT signing secret. Supports environment variables like `"${JWT_SECRET}"`
@@ -487,6 +487,99 @@ OpenID Connect provider configuration.
 - **enabled** (boolean) – Enable this provider. Default: `true`
 - **autoRedirect** (boolean) – Automatically redirect to this provider. Default: `false`
 
+### **ldapAuth**
+LDAP directory authentication configuration. Allows users to log in using their corporate LDAP credentials.
+
+```json
+{
+  "ldapAuth": {
+    "enabled": true,
+    "allowSelfSignup": true,
+    "providers": [
+      {
+        "name": "corporate-ldap",
+        "displayName": "Corporate Directory",
+        "url": "ldap://ldap.company.com:389",
+        "adminDn": "cn=admin,dc=company,dc=com",
+        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
+        "userSearchBase": "ou=users,dc=company,dc=com",
+        "usernameAttribute": "uid",
+        "groupSearchBase": "ou=groups,dc=company,dc=com",
+        "groupClass": "groupOfNames",
+        "groupMemberAttribute": "member",
+        "groupMemberUserAttribute": "dn",
+        "defaultGroups": ["users"],
+        "sessionTimeoutMinutes": 480
+      }
+    ]
+  }
+}
+```
+
+- **enabled** (boolean) – Enable LDAP authentication. Default: `false`
+- **allowSelfSignup** (boolean) – Automatically create user accounts on first login. Default: `true`
+- **providers** (array) – One or more LDAP provider configurations
+
+#### LDAP Provider Configuration
+
+| Property                    | Type   | Default | Description                                                                        |
+| --------------------------- | ------ | ------- | ---------------------------------------------------------------------------------- |
+| `name`                      | String | -       | Internal identifier for this LDAP provider                                         |
+| `displayName`               | String | -       | Human-readable name shown on the login page                                        |
+| `url`                       | String | -       | LDAP server URL (e.g., `ldap://host:389` or `ldaps://host:636`)                   |
+| `adminDn`                   | String | -       | Distinguished name used to bind and search the directory                           |
+| `adminPassword`             | String | -       | Password for the admin DN. Encrypted at rest; supports `${ENV_VAR}` references    |
+| `userSearchBase`            | String | -       | Base DN under which to search for users                                            |
+| `usernameAttribute`         | String | `"uid"` | LDAP attribute containing the username                                             |
+| `userDn`                    | String | -       | DN template for direct bind (alternative to admin search)                          |
+| `groupSearchBase`           | String | -       | Base DN under which to search for groups                                           |
+| `groupClass`                | String | -       | Object class used for group entries (e.g., `groupOfNames`, `posixGroup`)          |
+| `groupMemberAttribute`      | String | -       | Group attribute listing members (e.g., `member`, `memberUid`)                     |
+| `groupMemberUserAttribute`  | String | -       | User attribute referenced by `groupMemberAttribute` (e.g., `dn`, `uid`)           |
+| `defaultGroups`             | Array  | `[]`    | Groups automatically assigned to all LDAP-authenticated users                     |
+| `sessionTimeoutMinutes`     | Number | `480`   | Session lifetime in minutes                                                        |
+| `tlsOptions`                | Object | -       | Node.js TLS options passed to the LDAP client (e.g., `{"rejectUnauthorized": false}`) |
+
+For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).
+
+### **ntlmAuth**
+Windows NTLM/Kerberos authentication for domain-joined environments.
+
+```json
+{
+  "ntlmAuth": {
+    "enabled": true,
+    "domain": "COMPANY",
+    "domainController": "dc.company.com",
+    "type": "ntlm",
+    "debug": false,
+    "getUserInfo": true,
+    "getGroups": true,
+    "defaultGroups": ["users"],
+    "sessionTimeoutMinutes": 480,
+    "generateJwtToken": true
+  }
+}
+```
+
+| Property                    | Type    | Default  | Description                                                                                          |
+| --------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------------------- |
+| `enabled`                   | Boolean | `false`  | Enable NTLM authentication                                                                           |
+| `domain`                    | String  | -        | Windows domain name (NetBIOS format, e.g., `COMPANY`)                                               |
+| `domainController`          | String  | -        | Domain controller hostname or IP address                                                             |
+| `type`                      | String  | `"ntlm"` | Authentication protocol: `"ntlm"` or `"negotiate"` (Kerberos with NTLM fallback)                   |
+| `debug`                     | Boolean | `false`  | Enable verbose NTLM debugging output                                                                 |
+| `getUserInfo`               | Boolean | `true`   | Fetch user display name and email from Active Directory after authentication                         |
+| `getGroups`                 | Boolean | `true`   | Fetch group memberships from Active Directory                                                        |
+| `domainControllerUser`      | String  | -        | Service account username for AD lookups (required when `getUserInfo` or `getGroups` is `true`)      |
+| `domainControllerPassword`  | String  | -        | Service account password. Encrypted at rest; supports `${ENV_VAR}` references                       |
+| `defaultGroups`             | Array   | `[]`     | Groups automatically assigned to all NTLM-authenticated users                                       |
+| `sessionTimeoutMinutes`     | Number  | `480`    | Session lifetime in minutes                                                                          |
+| `generateJwtToken`          | Boolean | `true`   | Issue a JWT token after successful NTLM authentication so subsequent requests use standard auth      |
+| `options`                   | Object  | -        | Additional options passed directly to the underlying NTLM library                                   |
+
+For detailed setup instructions see [LDAP/NTLM Authentication](ldap-ntlm-authentication.md).
+
 ### **authDebug**
 Authentication debugging and logging configuration.
 
@@ -523,19 +616,18 @@ Several platform configuration options support environment variable substitution
 ### Common Environment Variables
 
 ```bash
-# Authentication
+# Authentication (JWT_SECRET is only needed when using HS256 algorithm)
 export JWT_SECRET="your-secret-key-here"
 
-# CORS Configuration  
+# CORS Configuration
 export ALLOWED_ORIGINS="https://yourdomain.com,https://app.yourdomain.com"
 
 # OIDC Configuration
 export OIDC_CLIENT_ID="your-oidc-client-id"
 export OIDC_CLIENT_SECRET="your-oidc-client-secret"
-
-# Database/Storage
-export DATABASE_URL="postgresql://user:pass@localhost/db"
 ```
+
+> **Note:** iHub Apps stores all configuration and runtime data in JSON files. There is no SQL database. The `CONTENTS_DIR` environment variable controls where configuration files are read from, and `DATA_DIR` controls where runtime data (usage logs, etc.) is written. See [Server Configuration](server-config.md) for the full list of environment variables.
 
 ### Configuration Examples
 
@@ -582,3 +674,342 @@ export DATABASE_URL="postgresql://user:pass@localhost/db"
   "anonymousAuth": { "enabled": false }
 }
 ```
+
+## Rate Limiting
+
+iHub Apps enforces rate limits per route category to protect against abuse and ensure fair resource distribution. All limits are configured under the `rateLimit` key.
+
+```json
+{
+  "rateLimit": {
+    "default": {
+      "windowMs": 60000,
+      "limit": 100,
+      "standardHeaders": true,
+      "legacyHeaders": false,
+      "skipSuccessfulRequests": false,
+      "skipFailedRequests": true
+    },
+    "adminApi": {
+      "windowMs": 60000,
+      "limit": 100,
+      "skipFailedRequests": true
+    },
+    "publicApi": {
+      "windowMs": 60000,
+      "limit": 500,
+      "skipFailedRequests": true
+    },
+    "authApi": {
+      "windowMs": 900000,
+      "limit": 30,
+      "skipFailedRequests": false
+    },
+    "oauthApi": {
+      "windowMs": 900000,
+      "limit": 50,
+      "skipFailedRequests": false
+    },
+    "inferenceApi": {
+      "windowMs": 60000,
+      "limit": 500
+    }
+  }
+}
+```
+
+### Rate Limit Categories
+
+| Category       | Applies To                             | Default Window | Default Limit |
+| -------------- | -------------------------------------- | -------------- | ------------- |
+| `default`      | All routes not covered by other groups | 60 s           | 100           |
+| `adminApi`     | `/api/admin/**` admin endpoints        | 60 s           | 100           |
+| `publicApi`    | Public read-only endpoints             | 60 s           | 500           |
+| `authApi`      | `/api/auth/**` login/logout/token      | 900 s (15 min) | 30            |
+| `oauthApi`     | `/api/oauth/**` OAuth server endpoints | 900 s (15 min) | 50            |
+| `inferenceApi` | `/api/chat/**` AI inference calls      | 60 s           | 500           |
+
+### Rate Limit Configuration Fields
+
+Each category accepts the following fields. Partial overrides inherit unset values from `default`:
+
+| Field                    | Type    | Default | Description                                                                     |
+| ------------------------ | ------- | ------- | ------------------------------------------------------------------------------- |
+| `windowMs`               | Number  | 900000  | Time window in milliseconds. Minimum: `1000`                                    |
+| `limit`                  | Number  | 100     | Maximum requests allowed per window per IP. Minimum: `1`                        |
+| `message`                | String  | -       | Custom error message returned when the limit is exceeded                        |
+| `standardHeaders`        | Boolean | `true`  | Include `RateLimit-*` headers in responses                                      |
+| `legacyHeaders`          | Boolean | `false` | Include legacy `X-RateLimit-*` headers                                          |
+| `skipSuccessfulRequests` | Boolean | `false` | Do not count successful (2xx) responses against the limit                       |
+| `skipFailedRequests`     | Boolean | `false` | Do not count failed (4xx/5xx) responses against the limit                       |
+
+For more information see [Rate Limiting](rate-limiting.md).
+
+## SSL Configuration
+
+Controls SSL/TLS certificate validation for outbound requests made by the server.
+
+```json
+{
+  "ssl": {
+    "ignoreInvalidCertificates": false,
+    "domainWhitelist": [
+      "*.internal.company.com",
+      "api.legacy-system.example.com"
+    ]
+  }
+}
+```
+
+| Field                       | Type    | Default | Description                                                                                                                                          |
+| --------------------------- | ------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ignoreInvalidCertificates` | Boolean | `false` | Disable SSL certificate validation for **all** outbound requests. Use only in development; never enable in production                                |
+| `domainWhitelist`           | Array   | `[]`    | Domains or glob patterns for which SSL validation is skipped. Supports exact matches (`api.example.com`) and wildcards (`*.example.com`). Prefer this over `ignoreInvalidCertificates` |
+
+For configuration details see [SSL Certificates](ssl-certificates.md).
+
+## Logging
+
+Configures server-side logging output.
+
+```json
+{
+  "logging": {
+    "level": "info",
+    "format": "json",
+    "file": {
+      "enabled": false,
+      "path": "logs/app.log",
+      "maxSize": 10485760,
+      "maxFiles": 5
+    }
+  }
+}
+```
+
+| Field           | Type    | Default          | Description                                                                                        |
+| --------------- | ------- | ---------------- | -------------------------------------------------------------------------------------------------- |
+| `level`         | String  | `"info"`         | Minimum log level. Options: `"error"`, `"warn"`, `"info"`, `"http"`, `"verbose"`, `"debug"`, `"silly"` |
+| `format`        | String  | `"json"`         | Log output format: `"json"` (structured, for log aggregators) or `"text"` (human-readable)        |
+| `file.enabled`  | Boolean | `false`          | Write logs to a file in addition to stdout                                                         |
+| `file.path`     | String  | `"logs/app.log"` | Path to the log file                                                                               |
+| `file.maxSize`  | Number  | `10485760`       | Maximum file size in bytes before rotation (default: 10 MB)                                        |
+| `file.maxFiles` | Number  | `5`              | Number of rotated log files to keep                                                                |
+
+For detailed guidance see [Logging](logging.md).
+
+## JWT Configuration
+
+Global JWT signing algorithm used when the server issues tokens (local auth, NTLM auth, etc.).
+
+```json
+{
+  "jwt": {
+    "algorithm": "RS256"
+  }
+}
+```
+
+| Field       | Type   | Default   | Description                                                                                                               |
+| ----------- | ------ | --------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `algorithm` | String | `"RS256"` | JWT signing algorithm. `"RS256"` uses RSA public/private key pairs. Other values depend on the `jsonwebtoken` library (e.g., `"HS256"`, `"ES256"`) |
+
+For key generation instructions see [JWT Key Generation](ifinder-jwt-key-generation.md).
+
+## iFinder Integration
+
+Configures integration with the IntraFind iFinder enterprise search platform. When enabled, iHub Apps generates signed JWT tokens to authenticate requests to iFinder on behalf of users.
+
+```json
+{
+  "iFinder": {
+    "enabled": false,
+    "baseUrl": "https://ifinder.company.com",
+    "privateKey": "${IFINDER_PRIVATE_KEY}",
+    "algorithm": "RS256",
+    "issuer": "ihub-apps",
+    "audience": "ifinder-api",
+    "tokenExpirationSeconds": 3600,
+    "defaultScope": "fa_index_read",
+    "jwtSubjectField": "email"
+  }
+}
+```
+
+| Field                    | Type    | Default           | Description                                                                             |
+| ------------------------ | ------- | ----------------- | --------------------------------------------------------------------------------------- |
+| `enabled`                | Boolean | `false`           | Enable the iFinder integration                                                          |
+| `baseUrl`                | String  | `""`              | Base URL of the iFinder instance                                                        |
+| `privateKey`             | String  | `""`              | RSA private key (PEM format) for signing JWT tokens. Use `${ENV_VAR}` for security     |
+| `algorithm`              | String  | `"RS256"`         | JWT signing algorithm                                                                   |
+| `issuer`                 | String  | `"ihub-apps"`     | JWT `iss` claim value                                                                   |
+| `audience`               | String  | `"ifinder-api"`   | JWT `aud` claim value                                                                   |
+| `tokenExpirationSeconds` | Number  | `3600`            | Lifetime of generated JWT tokens in seconds                                             |
+| `defaultScope`           | String  | `"fa_index_read"` | Default OAuth scope included in generated tokens                                        |
+| `jwtSubjectField`        | String  | `"email"`         | User attribute used as the JWT `sub` claim. Options: `"email"`, `"username"`           |
+
+For integration details see [iFinder Integration](iFinder-Integration.md).
+
+## iAssistant Integration
+
+Configures the global connection to an IntraFind iAssistant service. Individual apps can override these settings via their `iassistant` property.
+
+```json
+{
+  "iAssistant": {
+    "baseUrl": "https://iassistant.company.com",
+    "defaultProfileId": "main-search-profile",
+    "timeout": 60000
+  }
+}
+```
+
+| Field              | Type   | Default | Description                                                                              |
+| ------------------ | ------ | ------- | ---------------------------------------------------------------------------------------- |
+| `baseUrl`          | String | `""`    | Base URL of the iAssistant service                                                       |
+| `defaultProfileId` | String | `""`    | Profile ID used when an app does not specify its own `iassistant.profileId`              |
+| `timeout`          | Number | `60000` | Request timeout in milliseconds for iAssistant API calls                                 |
+
+## OAuth Server Configuration
+
+iHub Apps can act as an OAuth 2.0 authorization server, issuing access tokens to registered third-party clients. This enables embedding iHub Apps capabilities into external applications.
+
+```json
+{
+  "oauth": {
+    "enabled": false,
+    "clientsFile": "contents/config/oauth-clients.json",
+    "defaultTokenExpirationMinutes": 60,
+    "maxTokenExpirationMinutes": 1440,
+    "authorizationCodeEnabled": false,
+    "issuer": "https://ihub.company.com",
+    "authorizationCodeExpirationSeconds": 600,
+    "refreshTokenEnabled": false,
+    "refreshTokenExpirationDays": 30,
+    "consentRequired": true,
+    "consentMemoryDays": 90
+  }
+}
+```
+
+| Field                                | Type    | Default                                | Description                                                                             |
+| ------------------------------------ | ------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
+| `enabled`                            | Boolean | `false`                                | Enable the built-in OAuth 2.0 authorization server                                      |
+| `clientsFile`                        | String  | `"contents/config/oauth-clients.json"` | Path to the registered OAuth clients configuration file                                 |
+| `defaultTokenExpirationMinutes`      | Number  | `60`                                   | Default access token lifetime in minutes                                                |
+| `maxTokenExpirationMinutes`          | Number  | `1440`                                 | Maximum allowed access token lifetime in minutes                                        |
+| `authorizationCodeEnabled`           | Boolean | `false`                                | Enable the Authorization Code grant flow                                                |
+| `issuer`                             | String  | `""`                                   | Token issuer (`iss` claim). Should be the public URL of this iHub Apps instance         |
+| `authorizationCodeExpirationSeconds` | Number  | `600`                                  | Lifetime of authorization codes in seconds before they expire                          |
+| `refreshTokenEnabled`                | Boolean | `false`                                | Enable refresh token issuance alongside access tokens                                   |
+| `refreshTokenExpirationDays`         | Number  | `30`                                   | Refresh token lifetime in days                                                          |
+| `consentRequired`                    | Boolean | `true`                                 | Require users to explicitly approve third-party client access                           |
+| `consentMemoryDays`                  | Number  | `90`                                   | Days a user consent decision is remembered before re-prompting                          |
+
+For setup and client registration see [OAuth Integration Guide](oauth-integration-guide.md).
+
+## Cloud Storage Configuration
+
+Configures OAuth-based cloud storage providers that users can browse and attach files from when the `upload.cloudStorageUpload` feature is enabled in an app.
+
+```json
+{
+  "cloudStorage": {
+    "enabled": true,
+    "providers": [
+      {
+        "id": "office365-main",
+        "name": "office365-main",
+        "displayName": "Company SharePoint",
+        "type": "office365",
+        "enabled": true,
+        "tenantId": "${AZURE_TENANT_ID}",
+        "clientId": "${AZURE_CLIENT_ID}",
+        "clientSecret": "${AZURE_CLIENT_SECRET}",
+        "siteUrl": "https://company.sharepoint.com",
+        "sources": {
+          "personalDrive": true,
+          "followedSites": true,
+          "teams": true
+        }
+      },
+      {
+        "id": "google-drive-main",
+        "name": "google-drive-main",
+        "displayName": "Company Google Drive",
+        "type": "googledrive",
+        "enabled": true,
+        "clientId": "${GOOGLE_CLIENT_ID}",
+        "clientSecret": "${GOOGLE_CLIENT_SECRET}",
+        "sources": {
+          "myDrive": true,
+          "sharedDrives": true,
+          "sharedWithMe": true
+        }
+      }
+    ]
+  }
+}
+```
+
+### Cloud Storage Top-Level Fields
+
+| Field      | Type    | Default | Description                             |
+| ---------- | ------- | ------- | --------------------------------------- |
+| `enabled`  | Boolean | `false` | Enable cloud storage file picker        |
+| `providers`| Array   | `[]`    | Array of cloud storage provider configs |
+
+### Office 365 Provider Fields
+
+| Field                     | Type    | Default | Description                                                                         |
+| ------------------------- | ------- | ------- | ----------------------------------------------------------------------------------- |
+| `id`                      | String  | -       | **Required.** Unique identifier for this provider instance                          |
+| `name`                    | String  | -       | **Required.** Internal name                                                         |
+| `displayName`             | String  | -       | **Required.** Name shown to users in the file picker                                |
+| `type`                    | String  | -       | Must be `"office365"`                                                               |
+| `enabled`                 | Boolean | `true`  | Enable or disable this provider                                                     |
+| `tenantId`                | String  | -       | Azure tenant ID. Encrypted at rest; supports `${ENV_VAR}` references               |
+| `clientId`                | String  | -       | Azure app registration client ID                                                    |
+| `clientSecret`            | String  | -       | Azure app registration client secret. Encrypted at rest                             |
+| `siteUrl`                 | String  | -       | SharePoint site URL (e.g., `https://company.sharepoint.com`)                        |
+| `driveId`                 | String  | -       | Specific drive ID. If omitted, the user's default drive is used                    |
+| `redirectUri`             | String  | -       | OAuth redirect URI (must match the Azure app registration)                          |
+| `sources.personalDrive`   | Boolean | `true`  | Show the user's personal OneDrive                                                   |
+| `sources.followedSites`   | Boolean | `true`  | Show SharePoint sites the user follows                                              |
+| `sources.teams`           | Boolean | `true`  | Show files from Microsoft Teams channels                                            |
+
+### Google Drive Provider Fields
+
+| Field                     | Type    | Default | Description                                                         |
+| ------------------------- | ------- | ------- | ------------------------------------------------------------------- |
+| `id`                      | String  | -       | **Required.** Unique identifier for this provider instance          |
+| `name`                    | String  | -       | **Required.** Internal name                                         |
+| `displayName`             | String  | -       | **Required.** Name shown to users in the file picker                |
+| `type`                    | String  | -       | Must be `"googledrive"`                                             |
+| `enabled`                 | Boolean | `true`  | Enable or disable this provider                                     |
+| `clientId`                | String  | -       | Google OAuth 2.0 client ID                                          |
+| `clientSecret`            | String  | -       | Google OAuth 2.0 client secret. Encrypted at rest                   |
+| `redirectUri`             | String  | -       | OAuth redirect URI                                                  |
+| `sources.myDrive`         | Boolean | `true`  | Show the user's personal Google Drive                               |
+| `sources.sharedDrives`    | Boolean | `true`  | Show shared drives (Team Drives)                                    |
+| `sources.sharedWithMe`    | Boolean | `true`  | Show files shared with the user                                     |
+
+For setup instructions see [Google Drive Integration](google-drive-integration.md).
+
+## Skills Configuration
+
+Configures the skills system, which provides reusable AI behaviors that can be attached to apps via the app's `skills` array.
+
+```json
+{
+  "skills": {
+    "skillsDirectory": "contents/skills",
+    "maxSkillBodyTokens": 5000
+  }
+}
+```
+
+| Field                | Type   | Default              | Description                                                                           |
+| -------------------- | ------ | -------------------- | ------------------------------------------------------------------------------------- |
+| `skillsDirectory`    | String | `"contents/skills"` | Directory where skill definition files are stored                                     |
+| `maxSkillBodyTokens` | Number | `5000`               | Maximum token count for the combined skill instructions injected into a conversation  |
