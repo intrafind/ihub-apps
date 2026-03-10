@@ -9,14 +9,14 @@ import { createWriteStream, existsSync, createReadStream } from 'fs';
 import { join, basename } from 'path';
 import { createHash } from 'crypto';
 import { pipeline } from 'stream/promises';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { getRootDir } from '../pathUtils.js';
 import { getAppVersion } from '../utils/versionHelper.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import logger from '../utils/logger.js';
 
-const execAsync = promisify(exec);
+const execAsync = promisify(execFile);
 
 const GITHUB_REPO = 'intrafind/ihub-apps';
 const UPDATE_TMP_DIR = '.update-tmp';
@@ -271,7 +271,7 @@ export async function downloadUpdate(updateInfo) {
     // Extract the archive
     setState({ status: 'extracting', progress: 95, message: 'Extracting update...' });
     await fs.mkdir(stagingDir, { recursive: true });
-    await execAsync(`tar -xzf "${archivePath}" -C "${stagingDir}"`);
+    await execAsync('tar', ['-xzf', archivePath, '-C', stagingDir]);
 
     // Find the extracted content (may be in a subdirectory)
     const entries = await fs.readdir(stagingDir);
