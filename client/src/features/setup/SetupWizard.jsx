@@ -68,11 +68,13 @@ export default function SetupWizard() {
   useEffect(() => {
     const savedStep = sessionStorage.getItem('setup_wizard_step');
     if (savedStep) {
-      sessionStorage.removeItem('setup_wizard_step');
       const targetStep = parseInt(savedStep, 10);
       if (!authLoading && isAuthenticated && targetStep > 1) {
+        sessionStorage.removeItem('setup_wizard_step');
         setStep(targetStep);
       }
+      // If auth is still loading, wait for next render cycle
+      // If not authenticated, keep saved step for when auth completes
     }
   }, [authLoading, isAuthenticated]);
 

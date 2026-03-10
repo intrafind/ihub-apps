@@ -232,10 +232,16 @@ export function AuthProvider({ children }) {
 
         // Check for stored return URL and redirect (for all auth methods)
         const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl && returnUrl !== window.location.href) {
-          console.log('↩️ Redirecting to stored return URL after token login:', returnUrl);
+        if (returnUrl) {
           sessionStorage.removeItem('authReturnUrl');
-          window.location.href = returnUrl;
+          // Only redirect if we're on a different page (e.g., /login → /setup)
+          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
+          const currentPath = window.location.pathname;
+          const returnPath = new URL(returnUrl, window.location.origin).pathname;
+          if (currentPath !== returnPath) {
+            console.log('↩️ Redirecting to stored return URL after token login:', returnUrl);
+            window.location.href = returnUrl;
+          }
         }
 
         return { success: true };
@@ -430,10 +436,16 @@ export function AuthProvider({ children }) {
 
         // Check for stored return URL and redirect
         const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl && returnUrl !== window.location.href) {
-          console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
+        if (returnUrl) {
           sessionStorage.removeItem('authReturnUrl');
-          window.location.href = returnUrl;
+          // Only redirect if we're on a different page (e.g., /login → /setup)
+          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
+          const currentPath = window.location.pathname;
+          const returnPath = new URL(returnUrl, window.location.origin).pathname;
+          if (currentPath !== returnPath) {
+            console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
+            window.location.href = returnUrl;
+          }
         }
 
         return { success: true };
@@ -490,10 +502,16 @@ export function AuthProvider({ children }) {
 
         // Check for stored return URL and redirect
         const returnUrl = sessionStorage.getItem('authReturnUrl');
-        if (returnUrl && returnUrl !== window.location.href) {
-          console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
+        if (returnUrl) {
           sessionStorage.removeItem('authReturnUrl');
-          window.location.href = returnUrl;
+          // Only redirect if we're on a different page (e.g., /login → /setup)
+          // Skip redirect if already on the target page (e.g., embedded login in setup wizard)
+          const currentPath = window.location.pathname;
+          const returnPath = new URL(returnUrl, window.location.origin).pathname;
+          if (currentPath !== returnPath) {
+            console.log('↩️ Redirecting to stored return URL after login:', returnUrl);
+            window.location.href = returnUrl;
+          }
         }
 
         return { success: true };
