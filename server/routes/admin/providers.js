@@ -51,7 +51,7 @@ export default function registerAdminProvidersRoutes(app) {
       res.setHeader('ETag', providersEtag);
       res.json(maskedProviders);
     } catch (error) {
-      logger.error('Error fetching all providers:', error);
+      logger.error('Error fetching all providers:', { component: 'AdminProviders', error });
       res.status(500).json({ error: 'Failed to fetch providers' });
     }
   });
@@ -86,7 +86,7 @@ export default function registerAdminProvidersRoutes(app) {
       res.setHeader('ETag', providersEtag);
       res.json(maskedProvider);
     } catch (error) {
-      logger.error('Error fetching provider:', error);
+      logger.error('Error fetching provider:', { component: 'AdminProviders', error });
       res.status(500).json({ error: 'Failed to fetch provider' });
     }
   });
@@ -118,7 +118,7 @@ export default function registerAdminProvidersRoutes(app) {
           try {
             updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
           } catch (error) {
-            logger.error('Error encrypting API key:', error);
+            logger.error('Error encrypting API key:', { component: 'AdminProviders', error });
             return res.status(500).json({ error: 'Failed to encrypt API key' });
           }
         } else {
@@ -141,7 +141,7 @@ export default function registerAdminProvidersRoutes(app) {
               delete updatedProvider.apiKey;
             }
           } catch (error) {
-            logger.error('Error reading existing providers from disk:', error);
+            logger.error('Error reading existing providers from disk:', { component: 'AdminProviders', error });
             // Fallback to removing the masked placeholder
             delete updatedProvider.apiKey;
           }
@@ -175,7 +175,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       res.json({ message: 'Provider updated successfully', provider: updatedProvider });
     } catch (error) {
-      logger.error('Error updating provider:', error);
+      logger.error('Error updating provider:', { component: 'AdminProviders', error });
       res.status(500).json({ error: 'Failed to update provider' });
     }
   });

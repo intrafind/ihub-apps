@@ -44,7 +44,7 @@ async function findAppFile(appId, appsDir) {
         }
       } catch (err) {
         // Skip files that can't be read or parsed
-        console.debug(`Skipping malformed app file: ${file}`, err.message);
+        logger.debug('Skipping malformed app file', { component: 'AdminApps', file, error: err.message });
         continue;
       }
     }
@@ -724,7 +724,7 @@ export default function registerAdminAppsRoutes(app) {
       await configCache.refreshAppsCache();
       res.json({ message: 'App created successfully', app: newApp });
     } catch (error) {
-      logger.error('Error creating app:', error);
+      logger.error('Error creating app:', { component: 'AdminApps', error });
       res.status(500).json({ error: 'Failed to create app' });
     }
   });
@@ -814,7 +814,7 @@ export default function registerAdminAppsRoutes(app) {
         enabled: newEnabledState
       });
     } catch (error) {
-      logger.error('Error toggling app:', error);
+      logger.error('Error toggling app:', { component: 'AdminApps', error });
       res.status(500).json({ error: 'Failed to toggle app' });
     }
   });
@@ -931,7 +931,7 @@ export default function registerAdminAppsRoutes(app) {
         ids: resolvedIds
       });
     } catch (error) {
-      logger.error('Error toggling apps:', error);
+      logger.error('Error toggling apps:', { component: 'AdminApps', error });
       res.status(500).json({ error: 'Failed to toggle apps' });
     }
   });
@@ -1011,7 +1011,7 @@ export default function registerAdminAppsRoutes(app) {
       await removeMarketplaceInstallation('app', appId);
       res.json({ message: 'App deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting app:', error);
+      logger.error('Error deleting app:', { component: 'AdminApps', error });
       res.status(500).json({ error: 'Failed to delete app' });
     }
   });
