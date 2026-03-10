@@ -34,6 +34,7 @@ import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import office365Routes from './routes/integrations/office365.js';
+import googledriveRoutes from './routes/integrations/googledrive.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
@@ -319,6 +320,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // Note: These must be registered after authentication middleware is set up
   app.use('/api/integrations/jira', jiraRoutes);
   app.use('/api/integrations/office365', office365Routes);
+  app.use('/api/integrations/googledrive', googledriveRoutes);
   app.use('/api/integrations/ifinder', ifinderRoutes);
 
   // --- Session Management handled in sessionRoutes ---

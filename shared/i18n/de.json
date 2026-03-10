@@ -831,12 +831,16 @@
       "saveError": "Fehler beim Speichern der Cloud-Speicher-Konfiguration",
       "deleteSuccess": "Anbieter erfolgreich gelöscht",
       "deleteError": "Fehler beim Löschen des Anbieters",
+      "myDrive": "Meine Ablage",
+      "sharedDrives": "Geteilte Ablagen",
+      "sharedWithMe": "Für mich freigegeben",
       "validation": {
         "nameRequired": "Name ist erforderlich",
         "displayNameRequired": "Anzeigename ist erforderlich",
         "tenantIdRequired": "Mandanten-ID ist erforderlich",
         "clientIdRequired": "Client-ID ist erforderlich",
-        "clientSecretRequired": "Client-Secret ist erforderlich"
+        "clientSecretRequired": "Client-Secret ist erforderlich",
+        "googledriveRequired": "Client-ID und Client-Secret sind für Google Drive erforderlich"
       },
       "info": {
         "title": "Über Cloud-Speicher-Integration",
