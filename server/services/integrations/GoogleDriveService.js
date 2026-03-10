@@ -2,7 +2,7 @@ import 'dotenv/config';
 import axios from 'axios';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
-import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
+import { createAgent } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 
@@ -188,18 +188,12 @@ class GoogleDriveService {
         code_verifier: codeVerifier
       });
 
-      const response = await axios.post(
-        this.tokenUrl,
-        tokenData,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          },
-          this.tokenUrl
-        )
-      );
+      const response = await axios.post(this.tokenUrl, tokenData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        httpsAgent: createAgent(this.tokenUrl)
+      });
 
       const tokens = response.data;
 
@@ -246,18 +240,12 @@ class GoogleDriveService {
         grant_type: 'refresh_token'
       });
 
-      const response = await axios.post(
-        this.tokenUrl,
-        tokenData,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          },
-          this.tokenUrl
-        )
-      );
+      const response = await axios.post(this.tokenUrl, tokenData, {
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        httpsAgent: createAgent(this.tokenUrl)
+      });
 
       const tokens = response.data;
       logger.info('Google Drive token refresh successful', { component: 'Google Drive' });
@@ -434,7 +422,7 @@ class GoogleDriveService {
         config.data = data;
       }
 
-      const enhancedConfig = enhanceAxiosConfig(config, url);
+      const enhancedConfig = { ...config, httpsAgent: createAgent(url) };
       const response = await axios(enhancedConfig);
       return response.data;
     } catch (error) {
@@ -579,11 +567,20 @@ class GoogleDriveService {
    * @returns {Promise<Array>} All items from all pages
    * @private
    */
-  async _fetchAllPages(endpoint, params, userId) {
+  async _fetchAllPages(endpoint, params, userId, maxPages = 10) {
     const allItems = [];
     let pageToken = null;
+    let pageCount = 0;
 
     do {
+      if (pageCount >= maxPages) {
+        logger.warn(`_fetchAllPages: reached maximum page limit (${maxPages} pages)`, {
+          component: 'Google Drive',
+          endpoint
+        });
+        break;
+      }
+
       const queryParams = { ...params };
       if (pageToken) {
         queryParams.pageToken = pageToken;
@@ -600,6 +597,7 @@ class GoogleDriveService {
       }
 
       pageToken = data.nextPageToken || null;
+      pageCount++;
     } while (pageToken);
 
     return allItems;
@@ -613,7 +611,8 @@ class GoogleDriveService {
    */
   async listMyDriveFiles(userId, folderId = null) {
     try {
-      const parentId = folderId || 'root';
+      const rawParentId = folderId || 'root';
+      const parentId = rawParentId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const params = {
         q: `'${parentId}' in parents and trashed=false`,
         fields:
@@ -678,7 +677,8 @@ class GoogleDriveService {
    */
   async listSharedDriveFiles(userId, driveId, folderId = null) {
     try {
-      const parentId = folderId || driveId;
+      const rawParentId = folderId || driveId;
+      const parentId = rawParentId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const params = {
         q: `'${parentId}' in parents and trashed=false`,
         corpora: 'drive',
@@ -743,7 +743,7 @@ class GoogleDriveService {
         return [];
       }
 
-      const escapedQuery = query.replace(/'/g, "\\'");
+      const escapedQuery = query.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
       const params = {
         q: `name contains '${escapedQuery}' and trashed=false`,
         fields:
@@ -778,16 +778,18 @@ class GoogleDriveService {
    */
   async downloadFile(userId, fileId) {
     try {
+      // Retrieve tokens once for all operations in this method
+      const tokens = await this.getUserTokens(userId);
+
       // Get file metadata first
-      const fileInfo = await this.makeApiRequest(
-        `/files/${fileId}?fields=id,name,mimeType,size,webViewLink`,
-        'GET',
-        null,
-        userId
-      );
+      const metadataUrl = `${this.driveApiUrl}/files/${fileId}?fields=id,name,mimeType,size,webViewLink`;
+      const metadataResponse = await axios.get(metadataUrl, {
+        headers: { Authorization: `Bearer ${tokens.accessToken}` },
+        httpsAgent: createAgent(metadataUrl)
+      });
+      const fileInfo = metadataResponse.data;
 
       const isGoogleDoc = GOOGLE_EXPORT_MIME_TYPES[fileInfo.mimeType];
-      const tokens = await this.getUserTokens(userId);
 
       let downloadUrl;
       let resultMimeType;
@@ -807,18 +809,13 @@ class GoogleDriveService {
         resultMimeType = fileInfo.mimeType;
       }
 
-      const response = await axios.get(
-        downloadUrl,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`
-            },
-            responseType: 'arraybuffer'
-          },
-          downloadUrl
-        )
-      );
+      const response = await axios.get(downloadUrl, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`
+        },
+        responseType: 'arraybuffer',
+        httpsAgent: createAgent(downloadUrl)
+      });
 
       return {
         id: fileInfo.id,
@@ -849,7 +846,7 @@ class GoogleDriveService {
     return {
       id: file.id,
       name: file.name,
-      size: file.size ? parseInt(file.size, 10) : isGoogleDoc ? 0 : 0,
+      size: file.size ? parseInt(file.size, 10) : 0,
       createdDateTime: null,
       lastModifiedDateTime: file.modifiedTime,
       webUrl: file.webViewLink,

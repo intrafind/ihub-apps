@@ -48,6 +48,14 @@ const googleDriveAuthLimiter = rateLimit({
   legacyHeaders: false
 });
 
+// Rate limiter for status and other authenticated endpoints
+const googleDriveApiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 /**
  * Initiate Google Drive OAuth2 flow
  * GET /api/integrations/googledrive/auth?providerId=xxx
@@ -237,7 +245,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
  * Get Google Drive connection status for current user
  * GET /api/integrations/googledrive/status
  */
-router.get('/status', authRequired, async (req, res) => {
+router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -334,13 +342,15 @@ router.post('/disconnect', authRequired, async (req, res) => {
  * Get available source categories
  * GET /api/integrations/googledrive/sources?providerId=xxx
  */
-router.get('/sources', authRequired, async (req, res) => {
+router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id) {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    const sources = [
+    const { providerId } = req.query;
+
+    const allSources = [
       {
         id: 'myDrive',
         name: 'My Drive',
@@ -360,6 +370,19 @@ router.get('/sources', authRequired, async (req, res) => {
         icon: 'share'
       }
     ];
+
+    let sources = allSources;
+
+    if (providerId) {
+      try {
+        const provider = GoogleDriveService._getProviderConfig(providerId);
+        if (provider.sources) {
+          sources = allSources.filter(s => provider.sources[s.id] !== false);
+        }
+      } catch {
+        // Provider not found or invalid — return all sources as fallback
+      }
+    }
 
     res.json({
       success: true,

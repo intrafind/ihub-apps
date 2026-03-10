@@ -618,6 +618,7 @@
       "saveError": "Failed to save cloud storage configuration",
       "deleteSuccess": "Provider deleted successfully",
       "deleteError": "Failed to delete provider",
+      "sources": "Available Sources",
       "myDrive": "My Drive",
       "sharedDrives": "Shared Drives",
       "sharedWithMe": "Shared with Me",

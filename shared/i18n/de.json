@@ -831,6 +831,7 @@
       "saveError": "Fehler beim Speichern der Cloud-Speicher-Konfiguration",
       "deleteSuccess": "Anbieter erfolgreich gelöscht",
       "deleteError": "Fehler beim Löschen des Anbieters",
+      "sources": "Verfügbare Quellen",
       "myDrive": "Meine Ablage",
       "sharedDrives": "Geteilte Ablagen",
       "sharedWithMe": "Für mich freigegeben",
