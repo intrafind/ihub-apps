@@ -30,11 +30,11 @@ The Software is free-of-use and "AS-IS" without warranty of any kind. — [Licen
 
 👉 **[Download the latest release](https://github.com/intrafind/ihub-apps/releases)**
 
-| Platform | File |
-|----------|------|
-| 🐧 Linux | `ihub-apps-v*-linux.tar.gz` |
-| 🍎 macOS | `ihub-apps-v*-macos.tar.gz` |
-| 🪟 Windows | `ihub-apps-v*-win.zip` |
+| Platform   | File                        |
+| ---------- | --------------------------- |
+| 🐧 Linux   | `ihub-apps-v*-linux.tar.gz` |
+| 🍎 macOS   | `ihub-apps-v*-macos.tar.gz` |
+| 🪟 Windows | `ihub-apps-v*-win.zip`      |
 
 > **Restricted environment?** Use the `.base64.txt` files: `base64 -d ihub-apps-v*-linux.tar.gz.base64.txt > ihub-apps.tar.gz`
 
@@ -67,56 +67,61 @@ Open **http://localhost:3000** → Go to **Settings → Models** → Add your AP
 iHub ships with a comprehensive library of ready-to-use AI apps covering the most common business workflows:
 
 ### 💬 Chat & Assistants
-| App | Description |
-|-----|-------------|
-| 💬 Basic Chat | Multi-model conversational AI interface |
-| 🌐 Chat with Web | AI assistant with live web search |
+
+| App                    | Description                                       |
+| ---------------------- | ------------------------------------------------- |
+| 💬 Basic Chat          | Multi-model conversational AI interface           |
+| 🌐 Chat with Web       | AI assistant with live web search                 |
 | 🧠 Knowledge Assistant | AI with access to your internal knowledge sources |
-| 🤖 FAQ Bot | Self-service Q&A from your documentation |
-| 🎯 Idea Coach | Guided brainstorming and ideation sessions |
-| 🏋️ Coach Dialog | Personalized coaching conversations |
+| 🤖 FAQ Bot             | Self-service Q&A from your documentation          |
+| 🎯 Idea Coach          | Guided brainstorming and ideation sessions        |
+| 🏋️ Coach Dialog        | Personalized coaching conversations               |
 
 ### ✍️ Content Creation & Writing
-| App | Description |
-|-----|-------------|
-| ✉️ Email Composer | Professional emails in seconds |
-| 📝 Document Writer | Long-form document drafting and editing |
-| 📣 Social Media | Platform-optimized social content |
-| 📋 Summarizer | Summaries with configurable tone and focus |
-| 🌍 Translator | Multi-language translation |
-| 🎤 Dictation | Voice-to-text with AI correction |
+
+| App                | Description                                |
+| ------------------ | ------------------------------------------ |
+| ✉️ Email Composer  | Professional emails in seconds             |
+| 📝 Document Writer | Long-form document drafting and editing    |
+| 📣 Social Media    | Platform-optimized social content          |
+| 📋 Summarizer      | Summaries with configurable tone and focus |
+| 🌍 Translator      | Multi-language translation                 |
+| 🎤 Dictation       | Voice-to-text with AI correction           |
 
 ### 🔍 Research & Analysis
-| App | Description |
-|-----|-------------|
-| 🔬 Deep Researcher | Multi-step web research with synthesis |
-| 📊 Meeting Analyser | Extract actions, decisions, and summaries |
+
+| App                   | Description                                 |
+| --------------------- | ------------------------------------------- |
+| 🔬 Deep Researcher    | Multi-step web research with synthesis      |
+| 📊 Meeting Analyser   | Extract actions, decisions, and summaries   |
 | 🗝️ Key Info Extractor | Pull structured data from unstructured text |
-| 🛡️ NDA Risk Analyzer | Contract risk identification |
-| 📁 File Analysis | Analyze uploaded PDFs and documents |
-| 🖼️ Image Analysis | Visual content understanding |
+| 🛡️ NDA Risk Analyzer  | Contract risk identification                |
+| 📁 File Analysis      | Analyze uploaded PDFs and documents         |
+| 🖼️ Image Analysis     | Visual content understanding                |
 
 ### 🏢 Enterprise & Integration
-| App | Description |
-|-----|-------------|
-| 🔍 iFinder Document Explorer | Enterprise document search and analysis |
-| 👥 People Search | Microsoft Entra / corporate directory search |
-| 🌐 Website Bot | AI assistant for any public or internal website |
-| 🔒 GDPR Anonymizer | Automatically anonymize sensitive data |
-| 📈 OpenSearch Analyser | Analyze and query OpenSearch/Elasticsearch |
-| 🗂️ Multi-Source Bot | Query across multiple knowledge sources at once |
+
+| App                          | Description                                     |
+| ---------------------------- | ----------------------------------------------- |
+| 🔍 iFinder Document Explorer | Enterprise document search and analysis         |
+| 👥 People Search             | Microsoft Entra / corporate directory search    |
+| 🌐 Website Bot               | AI assistant for any public or internal website |
+| 🔒 GDPR Anonymizer           | Automatically anonymize sensitive data          |
+| 📈 OpenSearch Analyser       | Analyze and query OpenSearch/Elasticsearch      |
+| 🗂️ Multi-Source Bot          | Query across multiple knowledge sources at once |
 
 ### 🛠️ Developer & Specialized Tools
-| App | Description |
-|-----|-------------|
-| 🖼️ Image Generator | AI image creation (DALL-E, Stable Diffusion) |
-| 🎵 Audio Transcription | Transcribe audio files to text |
-| 📐 Mermaid Diagrams | Generate diagrams from descriptions |
-| ⚡ Prompt Generator | Create optimized prompts for AI tasks |
-| 🔎 Prompt Insight | Analyze and improve existing prompts |
-| 🏛️ Zoll-Tarif Assistant | Customs tariff classification assistant |
-| 🤝 HR Assistant | HR process support and document handling |
-| 😄 Joker | Entertainment and creative writing |
+
+| App                     | Description                                  |
+| ----------------------- | -------------------------------------------- |
+| 🖼️ Image Generator      | AI image creation (DALL-E, Stable Diffusion) |
+| 🎵 Audio Transcription  | Transcribe audio files to text               |
+| 📐 Mermaid Diagrams     | Generate diagrams from descriptions          |
+| ⚡ Prompt Generator     | Create optimized prompts for AI tasks        |
+| 🔎 Prompt Insight       | Analyze and improve existing prompts         |
+| 🏛️ Zoll-Tarif Assistant | Customs tariff classification assistant      |
+| 🤝 HR Assistant         | HR process support and document handling     |
+| 😄 Joker                | Entertainment and creative writing           |
 
 All apps are **fully configurable** via the admin interface — customize prompts, connect knowledge sources, set model preferences, and control access per user group. New apps can be created without coding.
 
@@ -125,27 +130,35 @@ All apps are **fully configurable** via the admin interface — customize prompt
 ## 🎆 Why Teams Choose iHub Apps
 
 ### 🔒 Full Data Control
+
 Your data never leaves your infrastructure. Deploy on-premise, in your private cloud, or air-gapped. Connect to local LLMs (LM Studio, Jan.ai, vLLM) for complete privacy.
 
 ### 🤖 Any LLM, Unified Interface
+
 One interface for OpenAI GPT-4o, Anthropic Claude, Google Gemini, Mistral, and any OpenAI-compatible model. Switch models per app or let users choose. No vendor lock-in.
 
 ### 📚 Enterprise Knowledge Integration
-Connect your organization's knowledge: local files, SharePoint, enterprise document systems (iFinder), web pages, and databases. AI answers grounded in *your* content.
+
+Connect your organization's knowledge: local files, SharePoint, enterprise document systems (iFinder), web pages, and databases. AI answers grounded in _your_ content.
 
 ### 👤 No Prompting Skills Required
+
 Every app ships with expert-crafted prompts. Your team gets instant value — no AI expertise, no prompt engineering, no training required.
 
 ### 🔐 Enterprise-Grade Security
+
 Multi-mode authentication: Anonymous, Local, OIDC (Google, Microsoft, custom), and proxy auth. Group-based permissions. Hierarchical access control. CORS support for embedded deployments.
 
 ### 🚀 Deploy in Minutes, Scale Infinitely
+
 Standalone binary, Docker, npm, or Electron. Auto-configuration on first run. Multi-worker clustering for production. No database required.
 
 ### 🎨 Modern, Responsive Interface
+
 Clean React SPA with dark/light mode, mobile-friendly design, real-time streaming responses, and full internationalization (English, German, and more).
 
 ### 🛠️ Extensible Without Coding
+
 Add new apps, models, and knowledge sources through the admin UI. JSON-based configuration. REST API for integration. Full source code available for deeper customization.
 
 ---
@@ -217,21 +230,22 @@ Best for: offline usage, desktop integration, kiosk deployments.
 
 ## 🔌 Extend & Customize
 
-| What | Where |
-|------|-------|
-| 📱 Create custom AI apps | [App Creation Guide](docs/apps.md) |
-| 🤖 Add LLM providers | [Model Configuration](docs/models.md) |
-| 📚 Connect knowledge sources | [Sources System](docs/sources.md) |
-| 🔍 Enable web search tools | [Web Tools](docs/web-tools.md) |
-| 🔐 Configure SSO / OIDC | [Authentication Guide](docs/external-authentication.md) |
-| 🖥️ Local LLMs (privacy mode) | [Local LLM Providers](docs/local-llm-providers.md) |
-| 🔧 Full documentation | [docs/README.md](docs/README.md) |
+| What                         | Where                                                   |
+| ---------------------------- | ------------------------------------------------------- |
+| 📱 Create custom AI apps     | [App Creation Guide](docs/apps.md)                      |
+| 🤖 Add LLM providers         | [Model Configuration](docs/models.md)                   |
+| 📚 Connect knowledge sources | [Sources System](docs/sources.md)                       |
+| 🔍 Enable web search tools   | [Web Tools](docs/web-tools.md)                          |
+| 🔐 Configure SSO / OIDC      | [Authentication Guide](docs/external-authentication.md) |
+| 🖥️ Local LLMs (privacy mode) | [Local LLM Providers](docs/local-llm-providers.md)      |
+| 🔧 Full documentation        | [docs/README.md](docs/README.md)                        |
 
 ---
 
 ## ✨ Key Features
 
 ### 🤖 AI & LLM Integration
+
 - **Multi-provider**: OpenAI, Anthropic Claude, Google Gemini, Mistral — unified API
 - **Local LLMs**: LM Studio, Jan.ai, vLLM — complete privacy, zero API costs
 - **Streaming responses**: Real-time token streaming via Server-Sent Events
@@ -240,6 +254,7 @@ Best for: offline usage, desktop integration, kiosk deployments.
 - **Thinking models**: Extended reasoning support (Claude, o1-series)
 
 ### 📚 Knowledge & Sources
+
 - **Filesystem**: Local markdown, text, and JSON files as AI context
 - **Web pages**: Intelligent content extraction from any URL
 - **Enterprise docs**: iFinder document management integration
@@ -247,6 +262,7 @@ Best for: offline usage, desktop integration, kiosk deployments.
 - **Admin interface**: Create, test, and preview sources without coding
 
 ### 🛠️ Tools & Integrations
+
 - **Web search**: Brave Search, Tavily, DuckDuckGo
 - **Web extraction**: Clean content from any webpage
 - **Deep research**: Multi-step iterative research with synthesis
@@ -256,6 +272,7 @@ Best for: offline usage, desktop integration, kiosk deployments.
 - **Jira integration**: Issue tracking and project management
 
 ### 🔐 Security & Authentication
+
 - **Multi-mode auth**: Anonymous, Local, OIDC, Proxy (JWT) — mix and match
 - **SSO ready**: Google, Microsoft, Okta, Keycloak, any OIDC provider
 - **Group permissions**: Hierarchical group inheritance with granular access control
@@ -263,6 +280,7 @@ Best for: offline usage, desktop integration, kiosk deployments.
 - **CORS support**: Embed iHub in other web applications
 
 ### 🎨 Interface & UX
+
 - **React SPA**: Built with Vite + Tailwind CSS for blazing-fast UI
 - **Dark/light mode**: Automatic theme detection and manual switching
 - **Mobile-friendly**: Responsive design for all screen sizes
@@ -271,6 +289,7 @@ Best for: offline usage, desktop integration, kiosk deployments.
 - **Admin panel**: Full configuration management without code changes
 
 ### 📊 Operations & Scaling
+
 - **Zero-config startup**: Auto-generates configuration on first run
 - **Hot reload**: Config changes apply without server restart
 - **Multi-worker**: Process clustering for production throughput
@@ -305,4 +324,4 @@ Contributions, issues, and feature requests are welcome! See [CODE_OF_CONDUCT.md
 
 ---
 
-*Built with ❤️ by [IntraFind Software AG](https://intrafind.com/) — Berlin · Bonn · Munich · Remote*
+_Built with ❤️ by [IntraFind Software AG](https://intrafind.com/) — Berlin · Bonn · Munich · Remote_
