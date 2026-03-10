@@ -180,16 +180,16 @@ curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh
 
 **CLI Options:**
 
-| Option | Description |
-| --------------- | ------------------------------------------------- |
-| `--start` | Start iHub Apps immediately after installation |
+| Option          | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `--start`       | Start iHub Apps immediately after installation       |
 | `--version=TAG` | Install a specific version (e.g. `--version=v4.2.0`) |
-| `-h, --help` | Show help |
+| `-h, --help`    | Show help                                            |
 
 **Environment Variables:**
 
-| Variable | Description |
-| ------------------ | ----------------------------------- |
+| Variable           | Description                    |
+| ------------------ | ------------------------------ |
 | `IHUB_INSTALL_DIR` | Override the install directory |
 
 **Post-install steps:**
