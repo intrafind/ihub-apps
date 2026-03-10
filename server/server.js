@@ -411,7 +411,11 @@ if (cluster.isPrimary && workerCount > 1) {
     if (process.env.IHUB_OPEN_BROWSER === '1' || process.env.IHUB_OPEN_BROWSER === 'true') {
       import('child_process').then(({ exec }) => {
         const openCmd =
-          process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+          process.platform === 'darwin'
+            ? 'open'
+            : process.platform === 'win32'
+              ? 'start'
+              : 'xdg-open';
         exec(`${openCmd} ${url}`, err => {
           if (err) {
             logger.warn({
