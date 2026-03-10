@@ -1,6 +1,7 @@
 import { createCompletionRequest } from '../adapters/index.js';
 import dotenv from 'dotenv';
 import logger from '../utils/logger.js';
+import { httpFetch } from '../utils/httpConfig.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });
@@ -133,7 +134,7 @@ async function testProviderToolCall(provider, model, prompt, tools) {
       headers['api-key'] = apiKeys[provider];
     }
 
-    const response = await fetch(request.url, {
+    const response = await httpFetch(request.url, {
       method: request.method,
       headers,
       body: JSON.stringify(request.body)

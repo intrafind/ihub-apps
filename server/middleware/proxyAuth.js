@@ -1,5 +1,5 @@
-import fetch from 'node-fetch';
 import jwt from 'jsonwebtoken';
+import { httpFetch } from '../utils/httpConfig.js';
 import * as jose from 'jose';
 import config from '../config.js';
 import configCache from '../configCache.js';
@@ -12,7 +12,7 @@ const jwksCache = new Map();
 async function getJwks(jwkUrl) {
   if (jwksCache.has(jwkUrl)) return jwksCache.get(jwkUrl);
   try {
-    const res = await fetch(jwkUrl);
+    const res = await httpFetch(jwkUrl);
     if (!res.ok) throw new Error(`Failed to load JWKs: ${res.status}`);
     const jwks = await res.json();
     jwksCache.set(jwkUrl, jwks);

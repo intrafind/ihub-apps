@@ -1,7 +1,6 @@
-import axios from 'axios';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
-import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
+import { httpFetch } from '../../utils/httpConfig.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
@@ -86,20 +85,19 @@ class JiraService {
         tokenData.append('code_verifier', codeVerifier);
       }
 
-      const response = await axios.post(
-        this.tokenUrl,
-        tokenData,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          },
-          this.tokenUrl
-        )
-      );
+      const response = await httpFetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenData
+      });
 
-      const tokens = response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ Error exchanging authorization code:', errorData);
+        throw new Error('Failed to exchange authorization code for tokens');
+      }
+
+      const tokens = await response.json();
 
       if (!tokens.refresh_token) {
         logger.warn('⚠️ WARNING: No refresh token received from Atlassian OAuth');
@@ -112,10 +110,8 @@ class JiraService {
         scope: tokens.scope
       };
     } catch (error) {
-      logger.error(
-        '❌ Error exchanging authorization code:',
-        error.response?.data || error.message
-      );
+      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
+      logger.error('❌ Error exchanging authorization code:', error.message);
       throw new Error('Failed to exchange authorization code for tokens');
     }
   }
@@ -125,25 +121,23 @@ class JiraService {
    */
   async getAccessibleResources(accessToken) {
     try {
-      const response = await axios.get(
-        this.resourcesUrl,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${accessToken}`,
-              Accept: 'application/json'
-            }
-          },
-          this.resourcesUrl
-        )
-      );
+      const response = await httpFetch(this.resourcesUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json'
+        }
+      });
 
-      return response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ Error fetching accessible resources:', errorData);
+        throw new Error('Failed to fetch accessible resources');
+      }
+
+      return await response.json();
     } catch (error) {
-      logger.error(
-        '❌ Error fetching accessible resources:',
-        error.response?.data || error.message
-      );
+      if (error.message === 'Failed to fetch accessible resources') throw error;
+      logger.error('❌ Error fetching accessible resources:', error.message);
       throw new Error('Failed to fetch accessible resources');
     }
   }
@@ -191,20 +185,29 @@ class JiraService {
         refresh_token: refreshToken
       });
 
-      const response = await axios.post(
-        this.tokenUrl,
-        tokenData,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          },
-          this.tokenUrl
-        )
-      );
+      const response = await httpFetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenData
+      });
 
-      const tokens = response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ Error refreshing JIRA access token:', errorData);
+
+        if (response.status === 400) {
+          if (errorData.error === 'invalid_grant') {
+            throw new Error('Refresh token expired or invalid - user needs to reconnect');
+          }
+          throw new Error(
+            `Token refresh failed: ${errorData.error_description || errorData.error}`
+          );
+        }
+
+        throw new Error(`Failed to refresh access token: ${response.statusText}`);
+      }
+
+      const tokens = await response.json();
       logger.info('✅ JIRA token refresh successful');
 
       return {
@@ -214,18 +217,14 @@ class JiraService {
         scope: tokens.scope
       };
     } catch (error) {
-      const errorDetails = error.response?.data || error.message;
-      logger.error('❌ Error refreshing JIRA access token:', errorDetails);
-
-      // Check if it's a specific type of error
-      if (error.response?.status === 400) {
-        const errorData = error.response.data;
-        if (errorData.error === 'invalid_grant') {
-          throw new Error('Refresh token expired or invalid - user needs to reconnect');
-        }
-        throw new Error(`Token refresh failed: ${errorData.error_description || errorData.error}`);
+      if (
+        error.message.includes('Refresh token expired') ||
+        error.message.includes('Token refresh failed') ||
+        error.message.includes('Failed to refresh access token')
+      ) {
+        throw error;
       }
-
+      logger.error('❌ Error refreshing JIRA access token:', error.message);
       throw new Error(`Failed to refresh access token: ${error.message}`);
     }
   }
@@ -327,9 +326,8 @@ class JiraService {
       // Build the full API URL using cloud gateway
       const apiUrl = await this.buildApiUrl(tokens.accessToken, endpoint);
 
-      const config = {
+      const fetchOptions = {
         method,
-        url: apiUrl,
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`,
           Accept: 'application/json',
@@ -338,49 +336,60 @@ class JiraService {
       };
 
       if (data && (method === 'POST' || method === 'PUT')) {
-        config.data = data;
+        fetchOptions.body = JSON.stringify(data);
       }
 
-      const enhancedConfig = enhanceAxiosConfig(config, apiUrl);
-      const response = await axios(enhancedConfig);
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 401 && retryCount < maxRetries) {
-        logger.info(
-          `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`
-        );
+      const response = await httpFetch(apiUrl, fetchOptions);
 
-        try {
-          // Force refresh tokens by getting them directly and refreshing them
-          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+      if (!response.ok) {
+        if (response.status === 401 && retryCount < maxRetries) {
+          logger.info(
+            `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`
+          );
 
-          if (!expiredTokens.refreshToken) {
-            throw new Error('No refresh token available');
+          try {
+            // Force refresh tokens by getting them directly and refreshing them
+            const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+
+            if (!expiredTokens.refreshToken) {
+              throw new Error('No refresh token available');
+            }
+
+            const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
+
+            await this.storeUserTokens(userId, refreshedTokens);
+
+            logger.info(`✅ Forced token refresh successful for user ${userId}`);
+
+            // Retry the request with fresh tokens
+            return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
+          } catch (refreshError) {
+            logger.error(`❌ Forced token refresh failed:`, refreshError.message);
+
+            // Clean up invalid tokens
+            await this.deleteUserTokens(userId);
+            throw new Error('JIRA authentication expired. Please reconnect your account.');
           }
-
-          const refreshedTokens = await this.refreshAccessToken(expiredTokens.refreshToken);
-
-          await this.storeUserTokens(userId, refreshedTokens);
-
-          logger.info(`✅ Forced token refresh successful for user ${userId}`);
-
-          // Retry the request with fresh tokens
-          return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
-        } catch (refreshError) {
-          logger.error(`❌ Forced token refresh failed:`, refreshError.message);
-
-          // Clean up invalid tokens
-          await this.deleteUserTokens(userId);
-          throw new Error('JIRA authentication expired. Please reconnect your account.');
+        } else if (response.status === 401) {
+          throw new Error('JIRA authentication required. Please reconnect your account.');
         }
-      } else if (error.response?.status === 401) {
-        throw new Error('JIRA authentication required. Please reconnect your account.');
+
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ JIRA API request failed:', errorData);
+        throw new Error(`JIRA API error: ${errorData.errorMessages?.[0] || response.statusText}`);
       }
 
-      logger.error('❌ JIRA API request failed:', error.response?.data || error.message);
-      throw new Error(
-        `JIRA API error: ${error.response?.data?.errorMessages?.[0] || error.message}`
-      );
+      return await response.json();
+    } catch (error) {
+      // Re-throw known errors
+      if (
+        error.message.includes('JIRA authentication') ||
+        error.message.includes('JIRA API error')
+      ) {
+        throw error;
+      }
+      logger.error('❌ JIRA API request failed:', error.message);
+      throw new Error(`JIRA API error: ${error.message}`);
     }
   }
 
@@ -608,42 +617,40 @@ class JiraService {
 
       // Get attachment metadata using the cloud API
       const apiUrl = await this.buildApiUrl(tokens.accessToken, `/attachment/${attachmentId}`);
-      const response = await axios.get(
-        apiUrl,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`,
-              Accept: 'application/json'
-            }
-          },
-          apiUrl
-        )
-      );
+      const metaResponse = await httpFetch(apiUrl, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: 'application/json'
+        }
+      });
 
-      const attachmentInfo = response.data;
+      if (!metaResponse.ok) {
+        throw new Error(`Failed to get attachment metadata: ${metaResponse.statusText}`);
+      }
+
+      const attachmentInfo = await metaResponse.json();
 
       // Get attachment content as stream
-      const contentResponse = await axios.get(
-        attachmentInfo.content,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`,
-              Accept: '*/*'
-            },
-            responseType: 'stream',
-            timeout: 60000 // 60 second timeout for large files
-          },
-          attachmentInfo.content
-        )
-      );
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000);
+      const contentResponse = await httpFetch(attachmentInfo.content, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: '*/*'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!contentResponse.ok) {
+        throw new Error(`Failed to download attachment: ${contentResponse.statusText}`);
+      }
 
       return {
         filename: attachmentInfo.filename,
         mimeType: attachmentInfo.mimeType,
         size: attachmentInfo.size,
-        stream: contentResponse.data
+        stream: contentResponse.body
       };
     } catch (error) {
       logger.error('❌ Error getting JIRA attachment for proxy:', error.message);
@@ -660,20 +667,18 @@ class JiraService {
 
       // Get attachment metadata using the cloud API
       const apiUrl = await this.buildApiUrl(tokens.accessToken, `/attachment/${attachmentId}`);
-      const response = await axios.get(
-        apiUrl,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`,
-              Accept: 'application/json'
-            }
-          },
-          apiUrl
-        )
-      );
+      const metaResponse = await httpFetch(apiUrl, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: 'application/json'
+        }
+      });
 
-      const attachmentInfo = response.data;
+      if (!metaResponse.ok) {
+        throw new Error(`Failed to get attachment metadata: ${metaResponse.statusText}`);
+      }
+
+      const attachmentInfo = await metaResponse.json();
 
       logger.info(`📎 Attachment metadata for ${attachmentId}:`, {
         filename: attachmentInfo.filename,
@@ -693,23 +698,25 @@ class JiraService {
       logger.info(`📎 Downloading attachment: ${attachmentInfo.filename} from ${contentUrl}`);
 
       // Get attachment content with proper authorization
-      const contentResponse = await axios.get(
-        contentUrl,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`,
-              Accept: '*/*'
-            },
-            responseType: returnBase64 ? 'arraybuffer' : 'stream',
-            timeout: 30000 // 30 second timeout for large files
-          },
-          contentUrl
-        )
-      );
+      const timeout = returnBase64 ? 30000 : 30000;
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      const contentResponse = await httpFetch(contentUrl, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`,
+          Accept: '*/*'
+        },
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+
+      if (!contentResponse.ok) {
+        throw new Error(`Failed to download attachment: ${contentResponse.statusText}`);
+      }
 
       if (returnBase64) {
-        const base64Content = Buffer.from(contentResponse.data).toString('base64');
+        const buffer = Buffer.from(await contentResponse.arrayBuffer());
+        const base64Content = buffer.toString('base64');
         return {
           filename: attachmentInfo.filename,
           mimeType: attachmentInfo.mimeType,
@@ -726,13 +733,6 @@ class JiraService {
       }
     } catch (error) {
       logger.error('❌ Error getting JIRA attachment:', error.message);
-
-      // Provide more detailed error information
-      if (error.response) {
-        logger.error('❌ Response status:', error.response.status);
-        logger.error('❌ Response data:', error.response.data);
-      }
-
       throw error;
     }
   }

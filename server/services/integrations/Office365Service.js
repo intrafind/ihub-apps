@@ -1,8 +1,7 @@
 import 'dotenv/config';
-import axios from 'axios';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
-import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
+import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 
@@ -180,20 +179,22 @@ class Office365Service {
         code_verifier: codeVerifier
       });
 
-      const response = await axios.post(
-        tokenUrl,
-        tokenData,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          },
-          tokenUrl
-        )
-      );
+      const response = await httpFetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenData
+      });
 
-      const tokens = response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ Error exchanging authorization code:', {
+          component: 'Office 365',
+          error: errorData
+        });
+        throw new Error('Failed to exchange authorization code for tokens');
+      }
+
+      const tokens = await response.json();
 
       if (!tokens.refresh_token) {
         logger.warn('⚠️ WARNING: No refresh token received from Microsoft OAuth', {
@@ -209,9 +210,10 @@ class Office365Service {
         providerId: providerId // Store which provider these tokens are for
       };
     } catch (error) {
+      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
       logger.error('❌ Error exchanging authorization code:', {
         component: 'Office 365',
-        error: error.response?.data || error.message
+        error: error.message
       });
       throw new Error('Failed to exchange authorization code for tokens');
     }
@@ -241,20 +243,32 @@ class Office365Service {
           'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All offline_access'
       });
 
-      const response = await axios.post(
-        tokenUrl,
-        tokenData,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              'Content-Type': 'application/x-www-form-urlencoded'
-            }
-          },
-          tokenUrl
-        )
-      );
+      const response = await httpFetch(tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenData
+      });
 
-      const tokens = response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ Error refreshing Office 365 access token:', {
+          component: 'Office 365',
+          error: errorData
+        });
+
+        if (response.status === 400) {
+          if (errorData.error === 'invalid_grant') {
+            throw new Error('Refresh token expired or invalid - user needs to reconnect');
+          }
+          throw new Error(
+            `Token refresh failed: ${errorData.error_description || errorData.error}`
+          );
+        }
+
+        throw new Error(`Failed to refresh access token: ${response.statusText}`);
+      }
+
+      const tokens = await response.json();
       logger.info('✅ Office 365 token refresh successful', { component: 'Office 365' });
 
       return {
@@ -265,20 +279,17 @@ class Office365Service {
         providerId: providerId
       };
     } catch (error) {
-      const errorDetails = error.response?.data || error.message;
+      if (
+        error.message.includes('Refresh token expired') ||
+        error.message.includes('Token refresh failed') ||
+        error.message.includes('Failed to refresh access token')
+      ) {
+        throw error;
+      }
       logger.error('❌ Error refreshing Office 365 access token:', {
         component: 'Office 365',
-        error: errorDetails
+        error: error.message
       });
-
-      if (error.response?.status === 400) {
-        const errorData = error.response.data;
-        if (errorData.error === 'invalid_grant') {
-          throw new Error('Refresh token expired or invalid - user needs to reconnect');
-        }
-        throw new Error(`Token refresh failed: ${errorData.error_description || errorData.error}`);
-      }
-
       throw new Error(`Failed to refresh access token: ${error.message}`);
     }
   }
@@ -439,9 +450,8 @@ class Office365Service {
 
       const url = endpoint.startsWith('http') ? endpoint : `${this.graphApiUrl}${endpoint}`;
 
-      const config = {
+      const fetchOptions = {
         method,
-        url,
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`,
           Accept: 'application/json',
@@ -450,82 +460,95 @@ class Office365Service {
       };
 
       if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        config.data = data;
+        fetchOptions.body = JSON.stringify(data);
       }
 
-      const enhancedConfig = enhanceAxiosConfig(config, url);
-      const response = await axios(enhancedConfig);
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 401 && retryCount < maxRetries) {
-        logger.info(
-          `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
-          { component: 'Office 365' }
-        );
+      const response = await httpFetch(url, fetchOptions);
 
-        try {
-          // Force refresh tokens
-          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-
-          if (!expiredTokens.refreshToken) {
-            throw new Error('No refresh token available');
-          }
-
-          const refreshedTokens = await this.refreshAccessToken(
-            expiredTokens.providerId,
-            expiredTokens.refreshToken
+      if (!response.ok) {
+        if (response.status === 401 && retryCount < maxRetries) {
+          logger.info(
+            `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
+            { component: 'Office 365' }
           );
 
-          await this.storeUserTokens(userId, refreshedTokens);
+          try {
+            // Force refresh tokens
+            const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
 
-          logger.info(`✅ Forced token refresh successful for user ${userId}`, {
-            component: 'Office 365'
-          });
+            if (!expiredTokens.refreshToken) {
+              throw new Error('No refresh token available');
+            }
 
-          // Retry the request with fresh tokens
-          return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
-        } catch (refreshError) {
-          logger.error(`❌ Forced token refresh failed:`, {
+            const refreshedTokens = await this.refreshAccessToken(
+              expiredTokens.providerId,
+              expiredTokens.refreshToken
+            );
+
+            await this.storeUserTokens(userId, refreshedTokens);
+
+            logger.info(`✅ Forced token refresh successful for user ${userId}`, {
+              component: 'Office 365'
+            });
+
+            // Retry the request with fresh tokens
+            return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
+          } catch (refreshError) {
+            logger.error(`❌ Forced token refresh failed:`, {
+              component: 'Office 365',
+              error: refreshError.message
+            });
+
+            // Clean up invalid tokens
+            await this.deleteUserTokens(userId);
+            throw new Error('Office 365 authentication expired. Please reconnect your account.');
+          }
+        } else if (response.status === 401) {
+          throw new Error('Office 365 authentication required. Please reconnect your account.');
+        } else if (response.status === 429) {
+          // Rate limit exceeded - log and throw
+          const retryAfter = response.headers.get('retry-after') || 'unknown';
+          logger.warn(`⏱️ Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
             component: 'Office 365',
-            error: refreshError.message
+            endpoint
           });
-
-          // Clean up invalid tokens
-          await this.deleteUserTokens(userId);
-          throw new Error('Office 365 authentication expired. Please reconnect your account.');
+          throw new Error('Office 365 API rate limit exceeded. Please try again in a moment.');
         }
-      } else if (error.response?.status === 401) {
-        throw new Error('Office 365 authentication required. Please reconnect your account.');
-      } else if (error.response?.status === 429) {
-        // Rate limit exceeded - log and throw
-        const retryAfter = error.response?.headers?.['retry-after'] || 'unknown';
-        logger.warn(`⏱️ Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
-          component: 'Office 365',
-          endpoint
-        });
-        throw new Error('Office 365 API rate limit exceeded. Please try again in a moment.');
-      }
 
-      // Log 404 errors as debug (expected for Teams without SharePoint sites, etc.)
-      if (error.response?.status === 404) {
-        logger.debug('Office 365 API returned 404 (not found):', {
+        // Log 404 errors as debug (expected for Teams without SharePoint sites, etc.)
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 404) {
+          logger.debug('Office 365 API returned 404 (not found):', {
+            component: 'Office 365',
+            endpoint,
+            error: errorData?.error?.message || 'Resource not found'
+          });
+          throw new Error(
+            `Office 365 API error: ${errorData?.error?.message || 'Resource not found'}`
+          );
+        }
+
+        // Log other errors as error
+        logger.error('❌ Office 365 API request failed:', {
           component: 'Office 365',
-          endpoint,
-          error: error.response?.data?.error?.message || 'Resource not found'
+          error: errorData
         });
         throw new Error(
-          `Office 365 API error: ${error.response?.data?.error?.message || error.message}`
+          `Office 365 API error: ${errorData?.error?.message || response.statusText}`
         );
       }
 
-      // Log other errors as error
+      return await response.json();
+    } catch (error) {
+      // Re-throw known errors
+      if (error.message.includes('Office 365') || error.message.includes('authentication')) {
+        throw error;
+      }
       logger.error('❌ Office 365 API request failed:', {
         component: 'Office 365',
-        error: error.response?.data || error.message
+        error: error.message
       });
-      throw new Error(
-        `Office 365 API error: ${error.response?.data?.error?.message || error.message}`
-      );
+      throw new Error(`Office 365 API error: ${error.message}`);
     }
   }
 
@@ -968,25 +991,22 @@ class Office365Service {
 
       // Download file content
       const tokens = await this.getUserTokens(userId);
-      const response = await axios.get(
-        downloadUrl,
-        enhanceAxiosConfig(
-          {
-            headers: {
-              Authorization: `Bearer ${tokens.accessToken}`
-            },
-            responseType: 'arraybuffer'
-          },
-          downloadUrl
-        )
-      );
+      const response = await httpFetch(downloadUrl, {
+        headers: {
+          Authorization: `Bearer ${tokens.accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.statusText}`);
+      }
 
       return {
         id: fileInfo.id,
         name: fileInfo.name,
         mimeType: fileInfo.file.mimeType,
         size: fileInfo.size,
-        content: Buffer.from(response.data)
+        content: Buffer.from(await response.arrayBuffer())
       };
     } catch (error) {
       logger.error('❌ Error downloading file:', {

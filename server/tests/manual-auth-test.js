@@ -7,7 +7,7 @@
  */
 
 import jwt from 'jsonwebtoken';
-import axios from 'axios';
+import { httpFetch } from '../utils/httpConfig.js';
 import logger from '../utils/logger.js';
 
 const API_BASE = 'http://localhost:3000/api';
@@ -48,16 +48,22 @@ async function testLogin(user) {
   logger.info(`\n🧪 Testing login for: ${user.name}`);
 
   try {
-    const response = await axios.post(`${API_BASE}/auth/login`, {
-      username: user.username,
-      password: user.password
+    const response = await httpFetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: user.username,
+        password: user.password
+      })
     });
 
-    if (response.data.success && response.data.token) {
+    const data = await response.json();
+
+    if (data.success && data.token) {
       logger.info('✅ Login successful');
 
       // Decode token to see what's in it
-      const decoded = jwt.decode(response.data.token);
+      const decoded = jwt.decode(data.token);
       logger.info('📝 Token contents:', {
         id: decoded.id,
         groups: decoded.groups,
@@ -65,13 +71,13 @@ async function testLogin(user) {
       });
 
       // Test the token with apps endpoint
-      return await testAppsAccess(response.data.token, user);
+      return await testAppsAccess(data.token, user);
     } else {
-      logger.info('❌ Login failed:', response.data.error);
+      logger.info('❌ Login failed:', data.error);
       return false;
     }
   } catch (error) {
-    logger.info('❌ Login error:', error.response?.data?.error || error.message);
+    logger.info('❌ Login error:', error.message);
     return false;
   }
 }
@@ -80,18 +86,20 @@ async function testAppsAccess(token, user) {
   logger.info('🔍 Testing apps access with token...');
 
   try {
-    const response = await axios.get(`${API_BASE}/apps`, {
+    const response = await httpFetch(`${API_BASE}/apps`, {
       headers: {
         Authorization: `Bearer ${token}`
       }
     });
 
-    logger.info(`📱 Apps returned: ${response.data.length}`);
-    const appIds = response.data.map(app => app.id);
+    const data = await response.json();
+
+    logger.info(`📱 Apps returned: ${data.length}`);
+    const appIds = data.map(app => app.id);
     logger.info('🎯 App IDs:', appIds.slice(0, 10).join(', ') + (appIds.length > 10 ? '...' : ''));
 
     // Check ETag to ensure it's user-specific
-    const etag = response.headers.etag;
+    const etag = response.headers.get('etag');
     logger.info('🏷️  ETag:', etag);
 
     // Check if user is getting expected access
@@ -113,8 +121,7 @@ async function testAppsAccess(token, user) {
 
     return true;
   } catch (error) {
-    logger.info('❌ Apps access error:', error.response?.data?.error || error.message);
-    logger.info('📊 Status:', error.response?.status);
+    logger.info('❌ Apps access error:', error.message);
     return false;
   }
 }
@@ -123,19 +130,16 @@ async function testAnonymousAccess() {
   logger.info('\n🔓 Testing anonymous access (no token)...');
 
   try {
-    const response = await axios.get(`${API_BASE}/apps`);
-    logger.info(`📱 Anonymous apps returned: ${response.data.length}`);
-    if (response.data.length > 0) {
+    const response = await httpFetch(`${API_BASE}/apps`);
+    const data = await response.json();
+    logger.info(`📱 Anonymous apps returned: ${data.length}`);
+    if (data.length > 0) {
       logger.info('⚠️  Anonymous users can see apps! Check allowAnonymous setting.');
     } else {
       logger.info('✅ Anonymous access properly blocked');
     }
   } catch (error) {
-    if (error.response?.status === 401) {
-      logger.info('✅ Anonymous access properly blocked with 401');
-    } else {
-      logger.info('❌ Unexpected error:', error.response?.data?.error || error.message);
-    }
+    logger.info('❌ Unexpected error:', error.message);
   }
 }
 
@@ -143,18 +147,18 @@ async function testInvalidToken() {
   logger.info('\n🔒 Testing invalid token...');
 
   try {
-    await axios.get(`${API_BASE}/apps`, {
+    const response = await httpFetch(`${API_BASE}/apps`, {
       headers: {
         Authorization: 'Bearer invalid-token-here'
       }
     });
-    logger.info('⚠️  Invalid token was accepted!');
-  } catch (error) {
-    if (error.response?.status === 401) {
+    if (response.status === 401) {
       logger.info('✅ Invalid token properly rejected with 401');
     } else {
-      logger.info('❌ Unexpected error:', error.response?.data?.error || error.message);
+      logger.info('⚠️  Invalid token was accepted!');
     }
+  } catch (error) {
+    logger.info('❌ Unexpected error:', error.message);
   }
 }
 
@@ -162,12 +166,13 @@ async function testPlatformConfig() {
   logger.info('\n⚙️  Testing platform config access...');
 
   try {
-    const response = await axios.get(`${API_BASE}/configs/platform`);
+    const response = await httpFetch(`${API_BASE}/configs/platform`);
+    const data = await response.json();
     logger.info('✅ Platform config accessible');
-    logger.info('🔍 Auth mode:', response.data.auth?.mode);
-    logger.info('🔍 Allow anonymous:', response.data.auth?.allowAnonymous);
+    logger.info('🔍 Auth mode:', data.auth?.mode);
+    logger.info('🔍 Allow anonymous:', data.auth?.allowAnonymous);
   } catch (error) {
-    logger.info('❌ Platform config error:', error.response?.data?.error || error.message);
+    logger.info('❌ Platform config error:', error.message);
   }
 }
 

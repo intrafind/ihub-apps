@@ -1,8 +1,10 @@
 /**
  * HTTP Configuration Utilities
- * Provides centralized configuration for HTTP clients including SSL and proxy settings
+ * Provides centralized configuration for HTTP clients including SSL and proxy settings.
+ * All outbound HTTP calls should use httpFetch() to ensure proxy/SSL configuration is applied.
  */
 import https from 'https';
+import nodeFetch from 'node-fetch';
 import { HttpProxyAgent } from 'http-proxy-agent';
 import { HttpsProxyAgent } from 'https-proxy-agent';
 import configCache from '../configCache.js';
@@ -305,23 +307,6 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
 }
 
 /**
- * Create HTTPS agent with global SSL configuration (legacy function, kept for compatibility)
- * @deprecated Use createAgent() instead for proxy support
- * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
- * @returns {https.Agent|undefined} HTTPS agent if SSL ignore is enabled, undefined otherwise
- */
-export function createHTTPSAgent(forceIgnoreSSL = null) {
-  const shouldIgnoreSSL =
-    forceIgnoreSSL !== null ? forceIgnoreSSL : getSSLConfig().ignoreInvalidCertificates;
-
-  if (shouldIgnoreSSL) {
-    return new https.Agent({ rejectUnauthorized: false });
-  }
-
-  return undefined;
-}
-
-/**
  * Enhance fetch options with SSL and proxy configuration
  * @param {Object} options - Existing fetch options
  * @param {string} url - Request URL
@@ -343,34 +328,18 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
 }
 
 /**
- * Enhance axios config with SSL and proxy configuration
- * @param {Object} config - Existing axios config
- * @param {string} url - Request URL (optional, used for selective proxy)
+ * Fetch wrapper that automatically applies proxy and SSL configuration.
+ * Uses node-fetch (not native fetch) to support the agent option required
+ * by http-proxy-agent/https-proxy-agent.
+ *
+ * All outbound HTTP calls in the server should use this function.
+ *
+ * @param {string} url - The URL to fetch
+ * @param {Object} [options] - Standard fetch options (method, headers, body, signal, etc.)
  * @param {boolean} [forceIgnoreSSL] - Force ignore SSL (overrides global setting)
- * @returns {Object} Enhanced axios config
+ * @returns {Promise<Response>} node-fetch Response
  */
-export function enhanceAxiosConfig(config = {}, url = '', forceIgnoreSSL = null) {
-  const enhancedConfig = { ...config };
-
-  // Determine URL from config if not provided
-  const targetUrl = url || config.url || '';
-
-  // Only add agents if not already specified
-  if (!enhancedConfig.httpAgent && !enhancedConfig.httpsAgent) {
-    const agent = createAgent(targetUrl, forceIgnoreSSL);
-    if (agent) {
-      // Axios uses both httpAgent and httpsAgent
-      if (targetUrl.startsWith('https://')) {
-        enhancedConfig.httpsAgent = agent;
-      } else if (targetUrl.startsWith('http://')) {
-        enhancedConfig.httpAgent = agent;
-      } else {
-        // If URL protocol is unknown, set both
-        enhancedConfig.httpAgent = agent;
-        enhancedConfig.httpsAgent = agent;
-      }
-    }
-  }
-
-  return enhancedConfig;
+export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
+  const enhanced = enhanceFetchOptions(options, url, forceIgnoreSSL);
+  return nodeFetch(url, enhanced);
 }

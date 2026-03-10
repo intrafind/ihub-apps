@@ -1,6 +1,7 @@
 import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
 import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
+import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import iFinderService from '../../services/integrations/iFinderService.js';
 
@@ -41,7 +42,7 @@ router.get('/document', authRequired, async (req, res) => {
     logger.debug(`iFinder document proxy: fetching document ${documentId}`);
 
     const authHeader = getIFinderAuthorizationHeader(req.user);
-    const response = await fetch(fullUrl, {
+    const response = await httpFetch(fullUrl, {
       headers: { Authorization: authHeader }
     });
 

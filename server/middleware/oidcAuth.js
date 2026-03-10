@@ -1,6 +1,6 @@
 import passport from 'passport';
 import { Strategy as OAuth2Strategy } from 'passport-oauth2';
-import fetch from 'node-fetch';
+import { httpFetch } from '../utils/httpConfig.js';
 import configCache from '../configCache.js';
 import { enhanceUserGroups } from '../utils/authorization.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
@@ -200,7 +200,7 @@ async function fetchUserInfo(userInfoURL, accessToken, providerName, sessionId) 
       sessionId
     );
 
-    const response = await fetch(userInfoURL, {
+    const response = await httpFetch(userInfoURL, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json'

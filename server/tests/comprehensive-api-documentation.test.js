@@ -3,6 +3,7 @@ import dotenv from 'dotenv';
 import fs from 'fs';
 import path from 'path';
 import logger from '../utils/logger.js';
+import { httpFetch } from '../utils/httpConfig.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });
@@ -288,7 +289,7 @@ async function makeAPICall(provider, model, messages, tools, documentation, step
   };
 
   // Make the API call
-  const response = await fetch(requestUrl, fetchOptions);
+  const response = await httpFetch(requestUrl, fetchOptions);
   const responseData = await response.json();
 
   // Log the response
