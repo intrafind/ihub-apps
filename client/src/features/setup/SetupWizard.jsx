@@ -277,9 +277,7 @@ export default function SetupWizard() {
                       : `✗ ${testResult.error || t('setup.step2.testFailed')}`}
                   </p>
                 )}
-                {error && (
-                  <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>
-                )}
+                {error && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
               </div>
 
               {/* Local provider info notice */}
