@@ -1,8 +1,7 @@
 import 'dotenv/config';
-import axios from 'axios';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
-import { createAgent } from '../../utils/httpConfig.js';
+import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 
@@ -188,14 +187,22 @@ class GoogleDriveService {
         code_verifier: codeVerifier
       });
 
-      const response = await axios.post(this.tokenUrl, tokenData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        httpsAgent: createAgent(this.tokenUrl)
+      const response = await httpFetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenData
       });
 
-      const tokens = response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('Error exchanging authorization code:', {
+          component: 'Google Drive',
+          error: errorData
+        });
+        throw new Error('Failed to exchange authorization code for tokens');
+      }
+
+      const tokens = await response.json();
 
       if (!tokens.refresh_token) {
         logger.warn('No refresh token received from Google OAuth', {
@@ -211,9 +218,10 @@ class GoogleDriveService {
         providerId: providerId
       };
     } catch (error) {
+      if (error.message === 'Failed to exchange authorization code for tokens') throw error;
       logger.error('Error exchanging authorization code:', {
         component: 'Google Drive',
-        error: error.response?.data || error.message
+        error: error.message
       });
       throw new Error('Failed to exchange authorization code for tokens');
     }
@@ -240,14 +248,32 @@ class GoogleDriveService {
         grant_type: 'refresh_token'
       });
 
-      const response = await axios.post(this.tokenUrl, tokenData, {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        },
-        httpsAgent: createAgent(this.tokenUrl)
+      const response = await httpFetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: tokenData
       });
 
-      const tokens = response.data;
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('Error refreshing Google Drive access token:', {
+          component: 'Google Drive',
+          error: errorData
+        });
+
+        if (response.status === 400) {
+          if (errorData.error === 'invalid_grant') {
+            throw new Error('Refresh token expired or invalid - user needs to reconnect');
+          }
+          throw new Error(
+            `Token refresh failed: ${errorData.error_description || errorData.error}`
+          );
+        }
+
+        throw new Error(`Failed to refresh access token: ${response.statusText}`);
+      }
+
+      const tokens = await response.json();
       logger.info('Google Drive token refresh successful', { component: 'Google Drive' });
 
       return {
@@ -258,20 +284,17 @@ class GoogleDriveService {
         providerId: providerId
       };
     } catch (error) {
-      const errorDetails = error.response?.data || error.message;
+      if (
+        error.message.includes('Refresh token expired') ||
+        error.message.includes('Token refresh failed') ||
+        error.message.includes('Failed to refresh access token')
+      ) {
+        throw error;
+      }
       logger.error('Error refreshing Google Drive access token:', {
         component: 'Google Drive',
-        error: errorDetails
+        error: error.message
       });
-
-      if (error.response?.status === 400) {
-        const errorData = error.response.data;
-        if (errorData.error === 'invalid_grant') {
-          throw new Error('Refresh token expired or invalid - user needs to reconnect');
-        }
-        throw new Error(`Token refresh failed: ${errorData.error_description || errorData.error}`);
-      }
-
       throw new Error(`Failed to refresh access token: ${error.message}`);
     }
   }
@@ -408,9 +431,8 @@ class GoogleDriveService {
 
       const url = endpoint.startsWith('http') ? endpoint : `${this.driveApiUrl}${endpoint}`;
 
-      const config = {
+      const fetchOptions = {
         method,
-        url,
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`,
           Accept: 'application/json'
@@ -418,73 +440,84 @@ class GoogleDriveService {
       };
 
       if (data && (method === 'POST' || method === 'PUT' || method === 'PATCH')) {
-        config.headers['Content-Type'] = 'application/json';
-        config.data = data;
+        fetchOptions.headers['Content-Type'] = 'application/json';
+        fetchOptions.body = JSON.stringify(data);
       }
 
-      const enhancedConfig = { ...config, httpsAgent: createAgent(url) };
-      const response = await axios(enhancedConfig);
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 401 && retryCount < maxRetries) {
-        logger.info(
-          `Received 401, attempting token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
-          { component: 'Google Drive' }
-        );
+      const response = await httpFetch(url, fetchOptions);
 
-        try {
-          const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-
-          if (!expiredTokens.refreshToken) {
-            throw new Error('No refresh token available');
-          }
-
-          const refreshedTokens = await this.refreshAccessToken(
-            expiredTokens.providerId,
-            expiredTokens.refreshToken
+      if (!response.ok) {
+        if (response.status === 401 && retryCount < maxRetries) {
+          logger.info(
+            `Received 401, attempting token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
+            { component: 'Google Drive' }
           );
 
-          await this.storeUserTokens(userId, refreshedTokens);
+          try {
+            const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
 
-          return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
-        } catch (refreshError) {
-          logger.error('Forced token refresh failed:', {
+            if (!expiredTokens.refreshToken) {
+              throw new Error('No refresh token available');
+            }
+
+            const refreshedTokens = await this.refreshAccessToken(
+              expiredTokens.providerId,
+              expiredTokens.refreshToken
+            );
+
+            await this.storeUserTokens(userId, refreshedTokens);
+
+            return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
+          } catch (refreshError) {
+            logger.error('Forced token refresh failed:', {
+              component: 'Google Drive',
+              error: refreshError.message
+            });
+
+            await this.deleteUserTokens(userId);
+            throw new Error('Google Drive authentication expired. Please reconnect your account.');
+          }
+        } else if (response.status === 401) {
+          throw new Error('Google Drive authentication required. Please reconnect your account.');
+        } else if (response.status === 429) {
+          const retryAfter = response.headers.get('retry-after') || 'unknown';
+          logger.warn(`Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
             component: 'Google Drive',
-            error: refreshError.message
+            endpoint
           });
-
-          await this.deleteUserTokens(userId);
-          throw new Error('Google Drive authentication expired. Please reconnect your account.');
+          throw new Error('Google Drive API rate limit exceeded. Please try again in a moment.');
         }
-      } else if (error.response?.status === 401) {
-        throw new Error('Google Drive authentication required. Please reconnect your account.');
-      } else if (error.response?.status === 429) {
-        const retryAfter = error.response?.headers?.['retry-after'] || 'unknown';
-        logger.warn(`Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
-          component: 'Google Drive',
-          endpoint
-        });
-        throw new Error('Google Drive API rate limit exceeded. Please try again in a moment.');
-      }
 
-      if (error.response?.status === 404) {
-        logger.debug('Google Drive API returned 404 (not found):', {
+        const errorData = await response.json().catch(() => ({}));
+        if (response.status === 404) {
+          logger.debug('Google Drive API returned 404 (not found):', {
+            component: 'Google Drive',
+            endpoint,
+            error: errorData?.error?.message || 'Resource not found'
+          });
+          throw new Error(`Google Drive API error: ${errorData?.error?.message || 'Resource not found'}`);
+        }
+
+        logger.error('Google Drive API request failed:', {
           component: 'Google Drive',
-          endpoint,
-          error: error.response?.data?.error?.message || 'Resource not found'
+          error: errorData
         });
         throw new Error(
-          `Google Drive API error: ${error.response?.data?.error?.message || error.message}`
+          `Google Drive API error: ${errorData?.error?.message || response.statusText}`
         );
       }
 
+      if (response.status === 204) return null;
+      return await response.json();
+    } catch (error) {
+      if (error.message.includes('Google Drive')) {
+        throw error;
+      }
       logger.error('Google Drive API request failed:', {
         component: 'Google Drive',
-        error: error.response?.data || error.message
+        error: error.message
       });
-      throw new Error(
-        `Google Drive API error: ${error.response?.data?.error?.message || error.message}`
-      );
+      throw new Error(`Google Drive API error: ${error.message}`);
     }
   }
 
@@ -783,11 +816,15 @@ class GoogleDriveService {
 
       // Get file metadata first
       const metadataUrl = `${this.driveApiUrl}/files/${fileId}?fields=id,name,mimeType,size,webViewLink`;
-      const metadataResponse = await axios.get(metadataUrl, {
-        headers: { Authorization: `Bearer ${tokens.accessToken}` },
-        httpsAgent: createAgent(metadataUrl)
+      const metadataResponse = await httpFetch(metadataUrl, {
+        headers: { Authorization: `Bearer ${tokens.accessToken}` }
       });
-      const fileInfo = metadataResponse.data;
+
+      if (!metadataResponse.ok) {
+        throw new Error(`Failed to get file metadata: ${metadataResponse.statusText}`);
+      }
+
+      const fileInfo = await metadataResponse.json();
 
       const isGoogleDoc = GOOGLE_EXPORT_MIME_TYPES[fileInfo.mimeType];
 
@@ -809,20 +846,24 @@ class GoogleDriveService {
         resultMimeType = fileInfo.mimeType;
       }
 
-      const response = await axios.get(downloadUrl, {
+      const response = await httpFetch(downloadUrl, {
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`
-        },
-        responseType: 'arraybuffer',
-        httpsAgent: createAgent(downloadUrl)
+        }
       });
+
+      if (!response.ok) {
+        throw new Error(`Failed to download file: ${response.statusText}`);
+      }
+
+      const content = Buffer.from(await response.arrayBuffer());
 
       return {
         id: fileInfo.id,
         name: resultName,
         mimeType: resultMimeType,
-        size: response.data.byteLength,
-        content: Buffer.from(response.data)
+        size: content.byteLength,
+        content
       };
     } catch (error) {
       logger.error('Error downloading file:', {
