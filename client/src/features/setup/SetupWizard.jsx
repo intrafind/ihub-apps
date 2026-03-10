@@ -254,7 +254,11 @@ export default function SetupWizard() {
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
-                s === step ? 'w-5 bg-blue-500' : s < step ? 'w-2.5 bg-blue-300' : 'w-2.5 bg-gray-200 dark:bg-gray-700'
+                s === step
+                  ? 'w-5 bg-blue-500'
+                  : s < step
+                    ? 'w-2.5 bg-blue-300'
+                    : 'w-2.5 bg-gray-200 dark:bg-gray-700'
               }`}
             />
           ))}

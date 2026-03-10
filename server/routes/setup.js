@@ -17,9 +17,7 @@ async function isConfigured() {
   // Check providers config for stored API keys
   try {
     const { data: providers } = configCache.getProviders(true);
-    const hasStoredKey = providers
-      .filter(p => LLM_PROVIDER_IDS.includes(p.id))
-      .some(p => p.apiKey);
+    const hasStoredKey = providers.filter(p => LLM_PROVIDER_IDS.includes(p.id)).some(p => p.apiKey);
     if (hasStoredKey) {
       return true;
     }
