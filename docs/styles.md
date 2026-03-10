@@ -4,7 +4,7 @@ The `styles.json` file (located at `contents/config/styles.json`) defines the op
 
 ## Built-in Styles
 
-The following 15 styles ship with iHub Apps out of the box:
+The following 15 styles (plus the special `keep` sentinel) ship with iHub Apps out of the box:
 
 | Key | Description |
 | --- | ----------- |

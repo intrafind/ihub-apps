@@ -45,13 +45,14 @@ Response body:
 
 The endpoint requires authentication (`authRequired` middleware). Unauthenticated requests receive a `401` response.
 
-## 3-Level Model Fallback Chain
+## 4-Level Model Fallback Chain
 
-When determining which model to call, the server follows a three-level fallback chain:
+When determining which model to call, the server follows a four-level fallback chain:
 
 1. **`modelId` from the request body** — highest priority, used if provided and the model exists.
 2. **`MAGIC_PROMPT_MODEL` environment variable** — used if the requested model is not found or not provided.
-3. **First available model** — if both of the above are unavailable, the server selects the first model returned by `configCache.getModels()`.
+3. **Globally configured default model** — if no explicit model is selected from the request or environment, the model marked as `default` in `configCache.getModels()` is used.
+4. **First available model** — as a last resort, if no default is configured or available, the server selects the first model returned by `configCache.getModels()`.
 
 This ensures the feature always has a working model even in environments with restricted model availability.
 

@@ -26,12 +26,12 @@ The system supports six different types of rate limiters, each configurable thro
   - `/api/short-links`
 
 ### 2. Admin API Rate Limiter
-- **Default Limit**: 500 requests per 1 minute per IP address (more restrictive)
+- **Default Limit**: 100 requests per 1 minute per IP address (more restrictive)
 - **Applied to**: Administrative endpoints:
   - `/api/admin/*` (all admin routes)
 
 ### 3. Auth API Rate Limiter
-- **Default Limit**: 50 requests per 15 minutes per IP address (most restrictive)
+- **Default Limit**: 30 requests per 15 minutes per IP address (most restrictive)
 - **Applied to**: Authentication endpoints:
   - `/auth/*` (all authentication routes)
 
@@ -41,7 +41,7 @@ The system supports six different types of rate limiters, each configurable thro
   - `/inference/*` (all inference routes)
 
 ### 5. Default Rate Limiter
-- **Default Limit**: 500 requests per 1 minute per IP address
+- **Default Limit**: 100 requests per 1 minute per IP address
 - **Purpose**: Base configuration that other limiters inherit from
 
 ### 6. OAuth API Rate Limiter
@@ -58,27 +58,35 @@ Rate limiting is now fully configurable through the `platform.json` configuratio
   "rateLimit": {
     "default": {
       "windowMs": 60000,
-      "limit": 500,
+      "limit": 100,
       "standardHeaders": true,
       "legacyHeaders": false,
       "skipSuccessfulRequests": false,
       "skipFailedRequests": true
     },
     "adminApi": {
-      "limit": 50,
-      "skipFailedRequests": false
+      "windowMs": 60000,
+      "limit": 100,
+      "skipFailedRequests": true
     },
-    "publicApi": {},
+    "publicApi": {
+      "windowMs": 60000,
+      "limit": 500,
+      "skipFailedRequests": true
+    },
     "authApi": {
-      "limit": 50,
+      "windowMs": 900000,
+      "limit": 30,
       "skipFailedRequests": false
     },
     "inferenceApi": {
-      "limit": 60
+      "windowMs": 60000,
+      "limit": 500
     },
     "oauthApi": {
+      "windowMs": 900000,
       "limit": 50,
-      "windowMs": 900000
+      "skipFailedRequests": false
     }
   }
 }
