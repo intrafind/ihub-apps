@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { buildApiUrl, buildPath } from '../../utils/runtimeBasePath';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../shared/contexts/PlatformConfigContext';
@@ -9,7 +10,7 @@ const PROVIDERS = [
     id: 'google',
     name: 'Google Gemini',
     description: 'Powerful AI models with a generous free tier — great for getting started.',
-    badge: 'Free Tier',
+    badgeKey: 'setup.step2.freeTierBadge',
     placeholder: 'AIzaSy...',
     keyUrl: 'https://aistudio.google.com/app/apikey'
   },
@@ -38,20 +39,23 @@ const PROVIDERS = [
     id: 'local',
     name: 'Local Provider',
     description: 'LM Studio, Jan.ai, Ollama, vLLM — run models privately on your own hardware.',
-    badge: 'No API Key',
-    placeholder: null,
+    badgeKey: 'setup.step2.noApiKeyBadge',
+    placeholder: 'API key (optional)...',
     keyUrl: null
   }
 ];
 
 export default function SetupWizard() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { platformConfig, refreshConfig } = usePlatformConfig();
-  const [step, setStep] = useState(1); // 1=welcome, 2=provider, 3=done
+  const [step, setStep] = useState(1); // 1=welcome, 2=provider, 3=finish
   const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0]);
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState(null); // null | { valid, error }
   const [error, setError] = useState(null);
 
   // Setup requires real authentication — redirect to login if not authenticated
@@ -69,18 +73,41 @@ export default function SetupWizard() {
     }
   }, [platformConfig, navigate]);
 
+  const isLocal = selectedProvider.id === 'local';
+
+  const handleTestKey = async () => {
+    if (!apiKey.trim()) return;
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const response = await fetch(buildApiUrl('setup/test'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ providerId: selectedProvider.id, apiKey: apiKey.trim() })
+      });
+      const data = await response.json();
+      setTestResult(data);
+    } catch {
+      setTestResult({ valid: false, error: t('setup.step2.testError') });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleSave = async () => {
-    const isLocal = selectedProvider.id === 'local';
+    // Local provider: key is optional; cloud providers require a key
     if (!isLocal && !apiKey.trim()) {
-      setError('Please enter an API key.');
+      setError(t('setup.step2.testFailed'));
       return;
     }
     setSaving(true);
     setError(null);
     try {
-      const body = isLocal
-        ? { providerId: 'local' }
-        : { providerId: selectedProvider.id, apiKey: apiKey.trim() };
+      const body =
+        isLocal && !apiKey.trim()
+          ? { providerId: 'local' }
+          : { providerId: selectedProvider.id, apiKey: apiKey.trim() };
 
       const response = await fetch(buildApiUrl('setup/configure'), {
         method: 'POST',
@@ -90,7 +117,7 @@ export default function SetupWizard() {
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || 'Failed to save configuration. Please try again.');
+        setError(data.error || t('setup.step2.testError'));
         return;
       }
       // Refresh platform config so setup.configured becomes true in memory,
@@ -100,7 +127,7 @@ export default function SetupWizard() {
       sessionStorage.setItem('setup_configured', '1');
       setStep(3);
     } catch {
-      setError('Network error. Please check your connection and try again.');
+      setError(t('setup.step2.testError'));
     } finally {
       setSaving(false);
     }
@@ -117,7 +144,9 @@ export default function SetupWizard() {
     navigate('/', { replace: true });
   };
 
-  const isLocal = selectedProvider.id === 'local';
+  const handleGoToAdmin = () => {
+    navigate('/admin', { replace: true });
+  };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
@@ -136,23 +165,22 @@ export default function SetupWizard() {
             <div className="text-center">
               <div className="text-5xl mb-4">🚀</div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                Welcome to iHub Apps
+                {t('setup.step1.title')}
               </h1>
               <p className="text-gray-500 dark:text-gray-400 mb-8">
-                Your all-in-one platform for AI-powered applications. To get started, connect your
-                first AI provider — it only takes a minute.
+                {t('setup.step1.description')}
               </p>
               <button
                 onClick={() => setStep(2)}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
               >
-                Get Started
+                {t('setup.step1.getStarted')}
               </button>
               <button
                 onClick={handleSkip}
                 className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
               >
-                Skip, I&rsquo;ll configure later
+                {t('setup.step1.skipLater')}
               </button>
             </div>
           )}
@@ -161,10 +189,10 @@ export default function SetupWizard() {
           {step === 2 && (
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
-                Connect your first AI provider
+                {t('setup.step2.title')}
               </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
-                Select a provider and paste your API key below.
+                {t('setup.step2.description')}
               </p>
 
               {/* Provider cards */}
@@ -176,6 +204,7 @@ export default function SetupWizard() {
                       setSelectedProvider(provider);
                       setApiKey('');
                       setError(null);
+                      setTestResult(null);
                     }}
                     className={`relative text-left p-3 rounded-xl border-2 transition-all ${
                       selectedProvider.id === provider.id
@@ -183,9 +212,9 @@ export default function SetupWizard() {
                         : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                     }`}
                   >
-                    {provider.badge && (
+                    {provider.badgeKey && (
                       <span className="absolute top-2 right-2 text-xs bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300 px-1.5 py-0.5 rounded-full font-medium">
-                        {provider.badge}
+                        {t(provider.badgeKey)}
                       </span>
                     )}
                     <div className="font-semibold text-sm text-gray-900 dark:text-white mb-0.5 pr-12">
@@ -198,63 +227,102 @@ export default function SetupWizard() {
                 ))}
               </div>
 
-              {/* API key input (hidden for local provider) */}
-              {isLocal ? (
-                <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
-                  <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-1">
-                    Local provider selected
-                  </p>
-                  <p className="text-xs text-amber-700 dark:text-amber-300">
-                    No API key is required. Make sure your local model server (LM Studio, Jan.ai,
-                    Ollama, vLLM, etc.) is running, then configure its endpoint under{' '}
-                    <strong>Admin &rsaquo; Providers</strong> after setup.
-                  </p>
-                </div>
-              ) : (
-                <div className="mb-4">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {selectedProvider.name} API Key
-                    </label>
+              {/* API key input */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    {t('setup.step2.apiKeyLabel', { provider: selectedProvider.name })}
+                    {isLocal && (
+                      <span className="ml-1.5 text-xs font-normal text-gray-400">
+                        {t('setup.step2.apiKeyOptional')}
+                      </span>
+                    )}
+                  </label>
+                  {selectedProvider.keyUrl && (
                     <a
                       href={selectedProvider.keyUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-xs text-blue-500 hover:text-blue-600 dark:hover:text-blue-400"
                     >
-                      Get API key →
+                      {t('setup.step2.getApiKey')}
                     </a>
-                  </div>
-                  <input
-                    type="password"
-                    value={apiKey}
-                    onChange={e => {
-                      setApiKey(e.target.value);
-                      setError(null);
-                    }}
-                    placeholder={selectedProvider.placeholder}
-                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    autoComplete="off"
-                  />
-                  {error && (
-                    <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>
                   )}
                 </div>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={e => {
+                    setApiKey(e.target.value);
+                    setError(null);
+                    setTestResult(null);
+                  }}
+                  placeholder={selectedProvider.placeholder}
+                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  autoComplete="off"
+                />
+                {isLocal && (
+                  <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
+                    {t('setup.step2.localApiKeyHint')}
+                  </p>
+                )}
+
+                {/* Test result feedback */}
+                {testResult && (
+                  <p
+                    className={`mt-1.5 text-xs ${testResult.valid ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}
+                  >
+                    {testResult.valid
+                      ? `✓ ${t('setup.step2.testSuccess')}`
+                      : `✗ ${testResult.error || t('setup.step2.testFailed')}`}
+                  </p>
+                )}
+                {error && (
+                  <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>
+                )}
+              </div>
+
+              {/* Local provider info notice */}
+              {isLocal && (
+                <div className="mb-4 p-3 rounded-xl bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    {t('setup.step2.localNotice')}{' '}
+                    <strong>{t('setup.step2.localNoticeLink')}</strong>{' '}
+                    {t('setup.step2.localNoticeAfterSetup')}
+                  </p>
+                </div>
               )}
+
+              {/* Test + action buttons */}
+              <div className="flex gap-2 mb-3">
+                {!isLocal && (
+                  <button
+                    onClick={handleTestKey}
+                    disabled={testing || !apiKey.trim()}
+                    className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2.5 px-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-sm"
+                  >
+                    {testing ? t('setup.step2.testingButton') : t('setup.step2.testButton')}
+                  </button>
+                )}
+              </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
                   className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2.5 px-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
                 >
-                  Back
+                  {t('setup.step2.back')}
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving || (!isLocal && !apiKey.trim())}
                   className="flex-[2] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
                 >
-                  {saving ? 'Saving…' : isLocal ? 'Continue' : 'Save & Continue'}
+                  {saving
+                    ? t('setup.step2.savingButton')
+                    : isLocal
+                      ? t('setup.step2.saveButtonLocal')
+                      : t('setup.step2.saveButton')}
                 </button>
               </div>
 
@@ -262,29 +330,67 @@ export default function SetupWizard() {
                 onClick={handleSkip}
                 className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
               >
-                Skip, I&rsquo;ll configure later
+                {t('setup.step2.skipLater')}
               </button>
             </div>
           )}
 
-          {/* Step 3: Done */}
+          {/* Step 3: Finish */}
           {step === 3 && (
-            <div className="text-center">
-              <div className="text-5xl mb-4">✅</div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
-                You&rsquo;re all set!
-              </h2>
-              <p className="text-gray-500 dark:text-gray-400 mb-8">
-                {isLocal
-                  ? 'Local provider setup complete. Configure your model server endpoint under Admin › Providers.'
-                  : `Your ${selectedProvider.name} API key has been saved. You can now use AI-powered apps. More providers can be added under Admin › Providers.`}
-              </p>
-              <button
-                onClick={handleFinish}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
-              >
-                Go to Apps
-              </button>
+            <div>
+              <div className="text-center mb-6">
+                <div className="text-5xl mb-4">🎉</div>
+                <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+                  {t('setup.step3.title')}
+                </h2>
+                <p className="text-gray-500 dark:text-gray-400">
+                  {isLocal
+                    ? t('setup.step3.subtitleLocal')
+                    : t('setup.step3.subtitleCloud', { provider: selectedProvider.name })}
+                </p>
+              </div>
+
+              {/* Next steps */}
+              <div className="mb-6 rounded-xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+                <div className="px-4 py-2.5 bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+                  <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                    {t('setup.step3.nextStepsTitle')}
+                  </span>
+                </div>
+                <ul className="divide-y divide-gray-100 dark:divide-gray-800">
+                  {[
+                    t('setup.step3.nextStep1'),
+                    t('setup.step3.nextStep2'),
+                    t('setup.step3.nextStep3'),
+                    t('setup.step3.nextStep4')
+                  ].map((item, i) => (
+                    <li
+                      key={i}
+                      className="flex items-start gap-3 px-4 py-3 text-sm text-gray-700 dark:text-gray-300"
+                    >
+                      <span className="mt-0.5 flex-shrink-0 w-5 h-5 rounded-full bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 text-xs font-bold flex items-center justify-center">
+                        {i + 1}
+                      </span>
+                      {item}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={handleGoToAdmin}
+                  className="flex-1 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-medium py-2.5 px-4 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  {t('setup.step3.goToAdmin')}
+                </button>
+                <button
+                  onClick={handleFinish}
+                  className="flex-[2] bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
+                >
+                  {t('setup.step3.goToApps')}
+                </button>
+              </div>
             </div>
           )}
         </div>

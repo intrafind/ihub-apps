@@ -1,5 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
+import fetch from 'node-fetch';
 import { getRootDir } from '../pathUtils.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
@@ -10,6 +11,45 @@ import { adminAuth } from '../middleware/adminAuth.js';
 
 // Cloud LLM providers that require API keys
 const LLM_PROVIDER_IDS = ['openai', 'anthropic', 'google', 'mistral'];
+
+/**
+ * Test an API key by making a lightweight call to the provider's API.
+ * Returns { valid: boolean, error?: string }.
+ */
+async function testApiKey(providerId, apiKey) {
+  try {
+    let response;
+    if (providerId === 'openai') {
+      response = await fetch('https://api.openai.com/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+    } else if (providerId === 'anthropic') {
+      response = await fetch('https://api.anthropic.com/v1/models', {
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
+      });
+    } else if (providerId === 'google') {
+      response = await fetch(
+        `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`
+      );
+    } else if (providerId === 'mistral') {
+      response = await fetch('https://api.mistral.ai/v1/models', {
+        headers: { Authorization: `Bearer ${apiKey}` }
+      });
+    } else {
+      return { valid: false, error: 'Unknown provider' };
+    }
+
+    if (response.ok) {
+      return { valid: true };
+    }
+    if (response.status === 401 || response.status === 403) {
+      return { valid: false, error: 'Invalid API key' };
+    }
+    return { valid: false, error: `Provider returned status ${response.status}` };
+  } catch (err) {
+    return { valid: false, error: 'Could not reach provider API' };
+  }
+}
 
 /**
  * Mark setup as completed by setting setup.configured = true in platform.json.
@@ -37,6 +77,29 @@ export default function registerSetupRoutes(app) {
     // Default true so that existing installs without the flag are never blocked
     const configured = platform.setup?.configured ?? true;
     res.json({ configured });
+  });
+
+  /**
+   * POST /api/setup/test
+   * Tests whether the provided API key is valid for the given provider.
+   * Returns { valid: boolean, error?: string }.
+   * Always requires admin authentication.
+   */
+  app.post(buildServerPath('/api/setup/test'), adminAuth, async (req, res) => {
+    const { providerId, apiKey } = req.body;
+
+    if (!providerId || !LLM_PROVIDER_IDS.includes(providerId)) {
+      return res.status(400).json({ valid: false, error: 'Invalid provider ID' });
+    }
+    if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
+      return res.status(400).json({ valid: false, error: 'API key is required' });
+    }
+
+    const result = await testApiKey(providerId, apiKey.trim());
+    logger.info(`Setup test for provider "${providerId}": ${result.valid ? 'valid' : 'invalid'}`, {
+      component: 'Setup'
+    });
+    res.json(result);
   });
 
   /**
