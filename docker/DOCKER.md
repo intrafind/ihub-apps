@@ -18,10 +18,10 @@ This uses the pre-built image from the registry and mounts a local `./contents/`
 
 Images are published to two registries:
 
-| Registry | Image |
-|---|---|
+| Registry                  | Image                                |
+| ------------------------- | ------------------------------------ |
 | GitHub Container Registry | `ghcr.io/intrafind/ihub-apps:latest` |
-| Docker Hub | `intrafind/ihub-apps:latest` |
+| Docker Hub                | `intrafind/ihub-apps:latest`         |
 
 ```bash
 # Pull from GHCR
@@ -234,6 +234,7 @@ This will automatically start the CI/CD pipeline and publish new images to the r
 Images are published to both GitHub Container Registry (GHCR) and Docker Hub:
 
 **GitHub Container Registry:**
+
 ```
 ghcr.io/intrafind/ihub-apps:latest
 ghcr.io/intrafind/ihub-apps:v1.0.0
@@ -241,6 +242,7 @@ ghcr.io/intrafind/ihub-apps:main
 ```
 
 **Docker Hub:**
+
 ```
 intrafind/ihub-apps:latest
 intrafind/ihub-apps:v1.0.0
