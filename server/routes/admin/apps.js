@@ -51,7 +51,10 @@ async function findAppFile(appId, appsDir) {
 
     return null;
   } catch (err) {
-    console.warn(`Failed to read apps directory: ${appsDir}`, err.message);
+    logger.warn(`Failed to read apps directory: ${appsDir}`, {
+      component: 'AdminApps',
+      error: err.message
+    });
     return null;
   }
 }
@@ -913,7 +916,7 @@ export default function registerAdminAppsRoutes(app) {
           // Find the actual file for this app ID (may not match ${id}.json)
           const filename = await findAppFile(id, appsDir);
           if (!filename) {
-            console.warn(`App file not found for ID: ${id}`);
+            logger.warn(`App file not found for ID: ${id}`, { component: 'AdminApps' });
             continue;
           }
           const appFilePath = join(appsDir, filename);

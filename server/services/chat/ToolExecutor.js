@@ -932,21 +932,17 @@ class ToolExecutor {
       });
 
       // Debug: Log collected tool calls to verify metadata preservation
-      console.log(
-        `[ToolExecutor] Collected ${validToolCalls.length} tool call(s):`,
-        JSON.stringify(
-          validToolCalls.map(c => ({
-            name: c.function?.name,
-            hasMetadata: !!c.metadata,
-            hasThoughtSignature: !!c.metadata?.thoughtSignature,
-            thoughtSignaturePreview: c.metadata?.thoughtSignature
-              ? `${c.metadata.thoughtSignature.substring(0, 20)}...`
-              : undefined
-          })),
-          null,
-          2
-        )
-      );
+      logger.info(`Collected ${validToolCalls.length} tool call(s)`, {
+        component: 'ToolExecutor',
+        toolCalls: validToolCalls.map(c => ({
+          name: c.function?.name,
+          hasMetadata: !!c.metadata,
+          hasThoughtSignature: !!c.metadata?.thoughtSignature,
+          thoughtSignaturePreview: c.metadata?.thoughtSignature
+            ? `${c.metadata.thoughtSignature.substring(0, 20)}...`
+            : undefined
+        }))
+      });
 
       const assistantMessage = { role: 'assistant', tool_calls: validToolCalls };
       assistantMessage.content = assistantContent || null;
@@ -1235,8 +1231,11 @@ class ToolExecutor {
             // Collect thoughtSignatures for Google Gemini thinking models
             if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
               collectedThoughtSignatures.push(...result.thoughtSignatures);
-              console.log(
-                `[ToolExecutor] Collected ${result.thoughtSignatures.length} thoughtSignature(s) from response`
+              logger.info(
+                `Collected ${result.thoughtSignatures.length} thoughtSignature(s) from response`,
+                {
+                  component: 'ToolExecutor'
+                }
               );
             }
 

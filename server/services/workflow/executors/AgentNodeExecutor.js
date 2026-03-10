@@ -26,6 +26,7 @@ import { createSourceManager } from '../../../sources/index.js';
 import config from '../../../config.js';
 import { getRootDir } from '../../../pathUtils.js';
 import path from 'path';
+import logger from '../../../utils/logger.js';
 
 /**
  * Agent node configuration
@@ -274,9 +275,17 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       for (const varName of config.inputFiles) {
         const raw = state.data?.[varName] || state.data?._fileData;
-        console.log(
-          `[AgentNodeExecutor] inputFiles lookup: varName="${varName}", raw type="${typeof raw}", isObject=${raw && typeof raw === 'object'}, hasContent=${!!(raw && raw.content)}, hasPageImages=${!!(raw && Array.isArray(raw.pageImages) && raw.pageImages.length > 0)}, pageImagesCount=${raw?.pageImages?.length || 0}, hasFileName=${!!(raw && raw.fileName)}, stateDataKeys=${Object.keys(state.data || {}).join(', ')}`
-        );
+        logger.info('inputFiles lookup', {
+          component: 'AgentNodeExecutor',
+          varName,
+          rawType: typeof raw,
+          isObject: raw && typeof raw === 'object',
+          hasContent: !!(raw && raw.content),
+          hasPageImages: !!(raw && Array.isArray(raw.pageImages) && raw.pageImages.length > 0),
+          pageImagesCount: raw?.pageImages?.length || 0,
+          hasFileName: !!(raw && raw.fileName),
+          stateDataKeys: Object.keys(state.data || {}).join(', ')
+        });
         if (!raw || typeof raw !== 'object') continue;
 
         // Ensure we have a file data object (not a plain string from text mapping)

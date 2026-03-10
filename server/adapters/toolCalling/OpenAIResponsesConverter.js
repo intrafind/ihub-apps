@@ -123,8 +123,11 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
     }
     // If webSearch is present, filter out other web search tools (but not webSearch itself)
     if (hasWebSearch && webSearchToolIds.includes(tool.id)) {
-      console.log(
-        `[OpenAI Responses Converter] Filtering out web search tool ${tool.id} because webSearch (native) is available`
+      logger.info(
+        `Filtering out web search tool ${tool.id} because webSearch (native) is available`,
+        {
+          component: 'OpenAIResponsesConverter'
+        }
       );
       continue;
     }

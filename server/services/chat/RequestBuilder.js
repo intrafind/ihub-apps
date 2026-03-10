@@ -160,8 +160,9 @@ class RequestBuilder {
 
       // Filter models based on app requirements (allowedModels, tools, settings.model.filter)
       const filteredModels = filterModelsForApp(models, app);
-      console.log(
-        `App ${app.id}: Filtered ${filteredModels.length} compatible models from ${models.length} total models`
+      logger.info(
+        `App ${app.id}: Filtered ${filteredModels.length} compatible models from ${models.length} total models`,
+        { component: 'RequestBuilder' }
       );
 
       // Check if no models are available at all
@@ -203,13 +204,16 @@ class RequestBuilder {
 
       // Check if we still don't have a model ID (all sources were null/undefined)
       if (!resolvedModelId) {
-        console.log(
-          `No model ID could be determined for app ${app.id}. No modelId provided, no preferred model, and no default model available.`
+        logger.info(
+          `No model ID could be determined for app ${app.id}. No modelId provided, no preferred model, and no default model available.`,
+          { component: 'RequestBuilder' }
         );
         // Use the first available model from filtered list as last resort
         if (filteredModels.length > 0) {
           resolvedModelId = filteredModels[0].id;
-          console.log(`Using first available model as fallback: ${resolvedModelId}`);
+          logger.info(`Using first available model as fallback: ${resolvedModelId}`, {
+            component: 'RequestBuilder'
+          });
         } else {
           // This shouldn't happen since we checked filteredModels.length above, but handle it anyway
           const error = new Error('No model ID provided and no default model available.');
@@ -222,8 +226,9 @@ class RequestBuilder {
       const isModelInFilteredList = filteredModels.some(m => m.id === resolvedModelId);
 
       if (!isModelInFilteredList) {
-        console.log(
-          `Model ${resolvedModelId} is not compatible with app ${app.id} requirements. Searching for fallback...`
+        logger.info(
+          `Model ${resolvedModelId} is not compatible with app ${app.id} requirements. Searching for fallback...`,
+          { component: 'RequestBuilder' }
         );
 
         // Try to find a compatible fallback model
@@ -232,17 +237,23 @@ class RequestBuilder {
         // 1. Try app's preferred model if it's in the filtered list
         if (app.preferredModel && filteredModels.some(m => m.id === app.preferredModel)) {
           fallbackModel = app.preferredModel;
-          console.log(`Using app's preferred model as fallback: ${fallbackModel}`);
+          logger.info(`Using app's preferred model as fallback: ${fallbackModel}`, {
+            component: 'RequestBuilder'
+          });
         }
         // 2. Try default model from filtered list
         else if (defaultModelFromFiltered) {
           fallbackModel = defaultModelFromFiltered;
-          console.log(`Using default model from filtered list as fallback: ${fallbackModel}`);
+          logger.info(`Using default model from filtered list as fallback: ${fallbackModel}`, {
+            component: 'RequestBuilder'
+          });
         }
         // 3. Try first available model from filtered list
         else if (filteredModels.length > 0) {
           fallbackModel = filteredModels[0].id;
-          console.log(`Using first available compatible model as fallback: ${fallbackModel}`);
+          logger.info(`Using first available compatible model as fallback: ${fallbackModel}`, {
+            component: 'RequestBuilder'
+          });
         }
 
         if (fallbackModel) {

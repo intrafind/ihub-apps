@@ -14,6 +14,7 @@
 import crypto from 'crypto';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
+import logger from '../utils/logger.js';
 
 /**
  * Generate CSS from theme configuration
@@ -232,7 +233,7 @@ export default function registerThemeRoutes(app) {
 
       res.send(fullCSS);
     } catch (error) {
-      console.error('Error generating theme CSS:', error);
+      logger.error('Error generating theme CSS', { component: 'Theme', error });
 
       // Return default CSS on error
       res.set({

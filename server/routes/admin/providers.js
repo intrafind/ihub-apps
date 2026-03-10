@@ -229,7 +229,7 @@ export default function registerAdminProvidersRoutes(app) {
           providers = providersFromDisk.providers || [];
         }
       } catch (error) {
-        console.error('Error reading providers file:', error);
+        logger.error('Error reading providers file', { component: 'AdminProviders', error });
         // Continue with empty array
       }
 
@@ -245,7 +245,7 @@ export default function registerAdminProvidersRoutes(app) {
         try {
           newProvider.apiKey = tokenStorageService.encryptString(newProvider.apiKey);
         } catch (error) {
-          console.error('Error encrypting API key:', error);
+          logger.error('Error encrypting API key', { component: 'AdminProviders', error });
           return res.status(500).json({ error: 'Failed to encrypt API key' });
         }
       } else {
@@ -276,7 +276,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       res.status(201).json({ message: 'Provider created successfully', provider: newProvider });
     } catch (error) {
-      console.error('Error creating provider:', error);
+      logger.error('Error creating provider', { component: 'AdminProviders', error });
       res.status(500).json({ error: 'Failed to create provider' });
     }
   });
@@ -338,7 +338,7 @@ export default function registerAdminProvidersRoutes(app) {
           providers = providersFromDisk.providers || [];
         }
       } catch (error) {
-        console.error('Error reading providers file:', error);
+        logger.error('Error reading providers file', { component: 'AdminProviders', error });
         return res.status(500).json({ error: 'Failed to read providers configuration' });
       }
 
@@ -357,7 +357,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       res.json({ message: 'Provider deleted successfully' });
     } catch (error) {
-      console.error('Error deleting provider:', error);
+      logger.error('Error deleting provider', { component: 'AdminProviders', error });
       res.status(500).json({ error: 'Failed to delete provider' });
     }
   });

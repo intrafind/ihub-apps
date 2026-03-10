@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { getRootDir } from '../pathUtils.js';
+import logger from './logger.js';
 
 /**
  * Ensures that providers.json has all the default providers
@@ -19,7 +20,9 @@ export async function ensureDefaultProviders() {
 
     // Check if runtime providers.json exists
     if (!existsSync(providersPath)) {
-      console.log('📋 providers.json does not exist, will be created by copyDefaultConfiguration');
+      logger.info('providers.json does not exist, will be created by copyDefaultConfiguration', {
+        component: 'ProviderMigration'
+      });
       return;
     }
 
@@ -32,15 +35,15 @@ export async function ensureDefaultProviders() {
     const missingProviders = defaultProviders.filter(p => !existingIds.has(p.id));
 
     if (missingProviders.length === 0) {
-      console.log('✅ All default providers already present in providers.json');
+      logger.info('All default providers already present in providers.json', {
+        component: 'ProviderMigration'
+      });
       return;
     }
 
-    console.log(
-      `📦 Adding ${missingProviders.length} missing default provider(s) to providers.json:`
-    );
-    missingProviders.forEach(p => {
-      console.log(`   - ${p.id} (${p.category || 'llm'})`);
+    logger.info(`Adding ${missingProviders.length} missing default provider(s) to providers.json`, {
+      component: 'ProviderMigration',
+      providers: missingProviders.map(p => `${p.id} (${p.category || 'llm'})`)
     });
 
     // Add missing providers
@@ -48,9 +51,14 @@ export async function ensureDefaultProviders() {
 
     // Save updated providers
     await fs.writeFile(providersPath, JSON.stringify({ providers: updatedProviders }, null, 2));
-    console.log('✅ Providers.json updated with missing default providers');
+    logger.info('providers.json updated with missing default providers', {
+      component: 'ProviderMigration'
+    });
   } catch (error) {
-    console.error('⚠️  Error ensuring default providers:', error.message);
+    logger.error('Error ensuring default providers', {
+      component: 'ProviderMigration',
+      error: error.message
+    });
     // Don't throw - this is a non-critical operation
   }
 }

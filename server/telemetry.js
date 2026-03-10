@@ -1,3 +1,4 @@
+import appLogger from './utils/logger.js';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
@@ -38,7 +39,7 @@ export async function initTelemetry(config = {}) {
   if (!config.enabled) {
     return;
   }
-  console.log('Initializing telemetry... with config:', config);
+  appLogger.info('Initializing telemetry', { component: 'Telemetry', config });
 
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
@@ -87,5 +88,5 @@ export function recordTokenUsage(tokens) {
 
 export async function shutdownTelemetry() {
   await sdk?.shutdown();
-  console.log('Telemetry shutdown completed successfully.');
+  appLogger.info('Telemetry shutdown completed successfully', { component: 'Telemetry' });
 }

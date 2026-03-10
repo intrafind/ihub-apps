@@ -179,8 +179,13 @@ if (cluster.isPrimary && workerCount > 1) {
     await tokenStorageService.initializeJwtSecret();
     await tokenStorageService.initializeRSAKeyPair();
   } catch (err) {
-    console.error('Failed to initialize encryption key or JWT secret:', err);
-    console.warn('Encrypted API keys, tokens, or JWT authentication may not work properly');
+    logger.error('Failed to initialize encryption key or JWT secret', {
+      component: 'Server',
+      error: err
+    });
+    logger.warn('Encrypted API keys, tokens, or JWT authentication may not work properly', {
+      component: 'Server'
+    });
   }
 
   // Initialize configuration cache for optimal performance
