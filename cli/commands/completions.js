@@ -107,7 +107,6 @@ complete -F _ihub_completions ihub
 
 function zshCompletions() {
   const commandList = COMMANDS.map(cmd => {
-    const subs = SUBCOMMANDS[cmd];
     const desc =
       {
         start: 'Start the server',

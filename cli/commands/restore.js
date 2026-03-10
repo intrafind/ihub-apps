@@ -122,6 +122,7 @@ export default async function restore(args) {
           if (streamErr) return reject(streamErr);
 
           const writeStream = createWriteStream(fullPath);
+          readStream.on('error', reject);
           readStream.pipe(writeStream);
 
           writeStream.on('close', () => {

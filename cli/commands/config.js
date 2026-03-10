@@ -3,7 +3,7 @@
  * Usage: ihub config <subcommand> [options]
  * Subcommands: show, edit, reset
  */
-import { existsSync, readFileSync, writeFileSync, copyFileSync, readdirSync } from 'fs';
+import { existsSync, readFileSync, copyFileSync, readdirSync } from 'fs';
 import path from 'path';
 import { c, symbols } from '../utils/colors.js';
 import { getContentsDir, getDefaultsDir } from '../utils/paths.js';

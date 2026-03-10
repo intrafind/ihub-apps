@@ -177,7 +177,7 @@ async function addApp(args) {
     process.exit(1);
   }
 
-  const { intro, outro, text, select, confirm, isCancel, cancel } = clack;
+  const { intro, outro, text, confirm, isCancel, cancel } = clack;
 
   intro(c.bold(' Create a new App '));
 

@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, copyFileSync, readdirSync, writeFileSync, readFileSync } from 'fs';
 import path from 'path';
 import { c, symbols } from '../utils/colors.js';
-import { getRootDir, getContentsDir, getDefaultsDir, getEnvFile } from '../utils/paths.js';
+import { getContentsDir, getDefaultsDir, getEnvFile } from '../utils/paths.js';
 
 const HELP = `
   ${c.bold('ihub setup')} — Interactive first-run setup wizard
@@ -56,9 +56,8 @@ export default async function setup(args) {
     process.exit(1);
   }
 
-  const { intro, outro, text, confirm, select, spinner, isCancel, cancel } = clack;
+  const { intro, outro, text, confirm, spinner, isCancel, cancel } = clack;
   const force = args.includes('--force');
-  const rootDir = getRootDir();
   const contentsDir = getContentsDir();
   const defaultsDir = getDefaultsDir();
   const envFile = getEnvFile();
