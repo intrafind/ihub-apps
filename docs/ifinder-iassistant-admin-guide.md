@@ -12,16 +12,14 @@ This comprehensive guide provides step-by-step instructions for administrators t
 4. [Post-Installation Setup](#post-installation-setup)
 5. [iFinder Configuration](#ifinder-configuration)
 6. [iAssistant Configuration](#iassistant-configuration)
-7. [Model Configuration](#model-configuration)
-8. [Tool Configuration](#tool-configuration)
-9. [Application Setup](#application-setup)
-10. [Streaming vs Non-Streaming Configuration](#streaming-vs-non-streaming-configuration)
-11. [Complete Configuration Examples](#complete-configuration-examples)
-12. [Testing and Validation](#testing-and-validation)
-13. [Troubleshooting](#troubleshooting)
-14. [Security Considerations](#security-considerations)
-15. [Performance Optimization](#performance-optimization)
-16. [Monitoring and Maintenance](#monitoring-and-maintenance)
+7. [Tool Configuration](#tool-configuration)
+8. [Application Setup](#application-setup)
+9. [Complete Configuration Examples](#complete-configuration-examples)
+10. [Testing and Validation](#testing-and-validation)
+11. [Troubleshooting](#troubleshooting)
+12. [Security Considerations](#security-considerations)
+13. [Performance Optimization](#performance-optimization)
+14. [Monitoring and Maintenance](#monitoring-and-maintenance)
 
 ## Overview
 
@@ -32,7 +30,7 @@ This guide assumes you have already completed the basic installation of iHub App
 - **Enterprise Knowledge Access**: Direct access to corporate document repositories through natural language queries
 - **RAG-Powered Responses**: Intelligent answers backed by your organization's specific documents and data
 - **User Authentication**: Secure, user-context-aware document access respecting organizational permissions
-- **Dual Usage Models**: Both direct chat with iAssistant and tool-based integration with other LLMs
+- **Workspace (Conversation) API**: Conversational multi-turn chat with iAssistant via the Workspace API
 - **Seamless UX**: Consistent interface experience across different interaction patterns
 
 ## What Are iFinder and iAssistant?
@@ -64,7 +62,7 @@ This guide assumes you have already completed the basic installation of iHub App
 - **Telemetry**: Detailed metrics about document retrieval and response generation
 
 **Key Characteristics:**
-- Non-conversational: Each query is independent (no chat history)
+- Conversational: Supports multi-turn chat via the Workspace (Conversation) API
 - Document-grounded: All responses backed by retrieved documents
 - User-aware: All queries execute in authenticated user context
 - Streaming-capable: Real-time response delivery
@@ -76,22 +74,20 @@ graph TB
     A[iHub Apps User] --> B[iHub Apps Frontend]
     B --> C[iHub Apps Server]
     C --> D{Integration Type}
-    
+
     D --> E[iFinder Tools]
-    D --> F[iAssistant LLM Model]
-    D --> G[iAssistant Tool]
-    
+    D --> F[iAssistant Workspace]
+
     E --> H[iFinder API]
-    F --> I[iAssistant RAG API]
-    G --> I
-    
+    F --> I[iAssistant Conversation API]
+
     H --> J[iFinder Search Engine]
     I --> J
     J --> K[Enterprise Documents]
-    
+
     L[JWT Authentication] --> H
     L --> I
-    
+
     M[User Context] --> L
     C --> M
 ```
@@ -327,94 +323,6 @@ echo -n "searchprofile-standard" | base64
 # Output: c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==
 ```
 
-## Model Configuration
-
-### 1. Enable iAssistant Model
-
-Edit `contents/models/iassistant.json` to enable the iAssistant model:
-
-```json
-{
-  "id": "iassistant",
-  "enabled": true,
-  "modelId": "iassistant",
-  "name": {
-    "en": "iAssistant Enterprise RAG",
-    "de": "iAssistant Unternehmens-RAG"
-  },
-  "description": {
-    "en": "Enterprise knowledge assistant with access to corporate documents via RAG",
-    "de": "Unternehmens-Wissensassistent mit Zugang zu Unternehmensdokumenten über RAG"
-  },
-  "url": "http://localhost:8080",
-  "provider": "iassistant",
-  "tokenLimit": null,
-  "supportsTools": false,
-  "supportsImages": false,
-  "default": false,
-  "config": {
-    "baseUrl": "https://your-iassistant-instance.com",
-    "searchFields": {},
-    "searchMode": "multiword",
-    "searchDistance": "",
-    "profileId": "c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==",
-    "filter": [
-      {
-        "key": "application.keyword",
-        "values": ["PDF", "DOCX", "TXT"],
-        "isNegated": false
-      }
-    ]
-  }
-}
-```
-
-### 2. Model Configuration Options
-
-**Advanced Model Configuration:**
-
-```json
-{
-  "config": {
-    "baseUrl": "https://your-iassistant-instance.com",
-    "profileId": "c2VhcmNocHJvZmlsZS1zdGFuZGFyZA==",
-    "searchMode": "multiword",
-    "searchDistance": "0.7",
-    "searchFields": {
-      "title": 2.0,
-      "content": 1.0,
-      "tags": 1.5
-    },
-    "filter": [
-      {
-        "key": "application.keyword",
-        "values": ["PDF", "DOCX"],
-        "isNegated": false
-      },
-      {
-        "key": "department",
-        "values": ["IT", "HR"],
-        "isNegated": false
-      }
-    ],
-    "maxResults": 10,
-    "scope": "fa_index_read"
-  }
-}
-```
-
-**Configuration Parameters:**
-
-| Parameter | Description | Type | Default |
-|-----------|-------------|------|---------|
-| `profileId` | Base64-encoded search profile | string | Required |
-| `searchMode` | Search algorithm | string | multiword |
-| `searchDistance` | Semantic similarity threshold | string | "" |
-| `searchFields` | Field weighting for relevance | object | {} |
-| `filter` | Document filters | array | [] |
-| `maxResults` | Maximum retrieved documents | number | 10 |
-| `scope` | JWT scope for permissions | string | fa_index_read |
-
 ## Tool Configuration
 
 ### 1. Enable iFinder Tools
@@ -463,49 +371,7 @@ The iFinder tools should already be configured in `contents/config/tools.json`. 
 }
 ```
 
-### 2. Enable iAssistant Tool
-
-Configure the iAssistant tool for use by other LLMs:
-
-```json
-{
-  "id": "iAssistant",
-  "name": "iAssistant",
-  "title": {
-    "en": "iAssistant RAG Question Answering",
-    "de": "iAssistant RAG-Fragenbeantwortung"
-  },
-  "description": {
-    "en": "AI-powered question answering using RAG with document search and response synthesis",
-    "de": "KI-gestützte Fragenbeantwortung mit RAG mit Dokumentensuche und Antwortsynthese"
-  },
-  "script": "iAssistant.js",
-  "functions": {
-    "ask": {
-      "passthrough": true,
-      "description": {
-        "en": "Ask a question using RAG-based intelligent document search and answer synthesis",
-        "de": "Eine Frage mit RAG-basierter intelligenter Dokumentensuche und Antwortsynthese stellen"
-      },
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "question": {
-            "type": "string",
-            "description": {
-              "en": "The question to ask. The system will search relevant documents and synthesize an intelligent answer.",
-              "de": "Die zu stellende Frage. Das System wird relevante Dokumente durchsuchen und eine intelligente Antwort synthetisieren."
-            }
-          }
-        },
-        "required": ["question"]
-      }
-    }
-  }
-}
-```
-
-### 3. Tool Method Configuration
+### 2. Tool Method Reference
 
 **iFinder Tool Methods:**
 
@@ -514,59 +380,12 @@ Configure the iAssistant tool for use by other LLMs:
 | `search` | Find documents | query, maxResults, searchProfile | Search results with metadata |
 | `getContent` | Retrieve document text | documentId, maxLength | Full document content |
 | `getMetadata` | Get document info | documentId | Document metadata only |
-| `download` | Download documents | documentId, action | Download info or saved file |
-
-**iAssistant Tool Methods:**
-
-| Method | Purpose | Parameters | Response |
-|--------|---------|------------|----------|
-| `ask` | RAG question answering | question | AI-generated answer with sources |
 
 ## Application Setup
 
-### 1. Enable Default iAssistant Apps
+### 1. Create Custom Enterprise Apps
 
-Enable the pre-configured iAssistant demo app in `contents/apps/iassistant-demo.json`:
-
-```json
-{
-  "id": "iassistant-demo",
-  "name": {
-    "en": "iAssistant RAG Demo",
-    "de": "iAssistant RAG Demo"  
-  },
-  "description": {
-    "en": "Demonstration of iAssistant RAG capabilities with intelligent document search and answer synthesis",
-    "de": "Demonstration der iAssistant RAG-Funktionen mit intelligenter Dokumentensuche und Antwortsynthese"
-  },
-  "color": "#2563eb",
-  "icon": "search-brain",
-  "system": {
-    "en": "You are an intelligent assistant that can search through documents and provide comprehensive answers based on the information found...",
-    "de": "Sie sind ein intelligenter Assistent, der Dokumente durchsuchen und umfassende Antworten basierend auf gefundenen Informationen bereitstellen kann..."
-  },
-  "tokenLimit": 50000,
-  "preferredModel": "gpt-4o",
-  "tools": ["iAssistant_ask"],
-  "iassistant": {
-    "baseUrl": "https://your-iassistant-instance.com",
-    "profileId": "searchprofile-standard",
-    "filter": [
-      {
-        "key": "application.keyword", 
-        "values": ["PDF"],
-        "isNegated": false
-      }
-    ]
-  },
-  "enabled": true,
-  "order": 100
-}
-```
-
-### 2. Create Custom Enterprise Apps
-
-**Example: Enterprise Knowledge Chat**
+**Example: Enterprise Knowledge Chat (using iFinder tools)**
 
 Create `contents/apps/enterprise-knowledge-chat.json`:
 
@@ -579,20 +398,21 @@ Create `contents/apps/enterprise-knowledge-chat.json`:
     "de": "Unternehmenswissen Chat"
   },
   "description": {
-    "en": "Direct chat with enterprise knowledge using iAssistant RAG",
-    "de": "Direkter Chat mit Unternehmenswissen über iAssistant RAG"
+    "en": "Chat with enterprise knowledge using iFinder document search",
+    "de": "Chat mit Unternehmenswissen über iFinder-Dokumentensuche"
   },
   "color": "#2563eb",
   "icon": "building-columns",
   "system": {
-    "en": "You are an enterprise knowledge assistant with access to company documents, policies, and procedures through iAssistant RAG. Provide accurate, helpful responses based on retrieved information. Always cite sources and indicate confidence levels.",
-    "de": "Sie sind ein Unternehmenswissensassistent mit Zugang zu Firmendokumenten, Richtlinien und Verfahren über iAssistant RAG. Geben Sie genaue, hilfreiche Antworten basierend auf abgerufenen Informationen. Zitieren Sie immer Quellen und geben Sie Vertrauensniveaus an."
+    "en": "You are an enterprise knowledge assistant with access to company documents, policies, and procedures through iFinder. Provide accurate, helpful responses based on retrieved information. Always cite sources.",
+    "de": "Sie sind ein Unternehmenswissensassistent mit Zugang zu Firmendokumenten, Richtlinien und Verfahren über iFinder. Geben Sie genaue, hilfreiche Antworten basierend auf abgerufenen Informationen. Zitieren Sie immer Quellen."
   },
-  "tokenLimit": 8192,
-  "preferredModel": "iassistant",
-  "allowedModels": ["iassistant"],
-  "disallowModelSelection": true,
-  "sendChatHistory": false,
+  "tokenLimit": 32000,
+  "preferredModel": "gpt-4o",
+  "tools": [
+    "iFinder.search",
+    "iFinder.getContent"
+  ],
   "messagePlaceholder": {
     "en": "Ask about company policies, procedures, or any enterprise information...",
     "de": "Fragen Sie nach Unternehmensrichtlinien, Verfahren oder anderen Unternehmensinformationen..."
@@ -600,12 +420,12 @@ Create `contents/apps/enterprise-knowledge-chat.json`:
   "greeting": {
     "en": {
       "title": "Enterprise Knowledge Assistant",
-      "subtitle": "Powered by iAssistant RAG",
+      "subtitle": "Powered by iFinder",
       "text": "Hello! I can help you find information from company documents, policies, procedures, and more. What would you like to know?"
     },
     "de": {
-      "title": "Unternehmenswissensassistent", 
-      "subtitle": "Powered by iAssistant RAG",
+      "title": "Unternehmenswissensassistent",
+      "subtitle": "Powered by iFinder",
       "text": "Hallo! Ich kann Ihnen helfen, Informationen aus Firmendokumenten, Richtlinien, Verfahren und mehr zu finden. Was möchten Sie wissen?"
     }
   },
@@ -617,10 +437,6 @@ Create `contents/apps/enterprise-knowledge-chat.json`:
     {
       "title": {"en": "HR Procedures", "de": "HR-Verfahren"},
       "prompt": {"en": "How do I submit time off requests?", "de": "Wie reiche ich Urlaubsanträge ein?"}
-    },
-    {
-      "title": {"en": "IT Support", "de": "IT-Support"},
-      "prompt": {"en": "What are the IT support procedures?", "de": "Was sind die IT-Support-Verfahren?"}
     }
   ],
   "category": "Enterprise",
@@ -634,7 +450,7 @@ Create `contents/apps/research-assistant.json`:
 
 ```json
 {
-  "id": "research-assistant", 
+  "id": "research-assistant",
   "order": 5,
   "name": {
     "en": "Research Assistant",
@@ -647,124 +463,19 @@ Create `contents/apps/research-assistant.json`:
   "color": "#7c3aed",
   "icon": "magnifying-glass-chart",
   "system": {
-    "en": "You are a comprehensive research assistant with access to both web search and enterprise knowledge. Use iAssistant for company-specific questions and web search for general information. Always distinguish between internal and external sources.",
-    "de": "Sie sind ein umfassender Recherche-Assistent mit Zugang zu Websuche und Unternehmenswissen. Verwenden Sie iAssistant für firmenspezifische Fragen und Websuche für allgemeine Informationen."
+    "en": "You are a comprehensive research assistant with access to both web search and enterprise knowledge via iFinder. Always distinguish between internal and external sources.",
+    "de": "Sie sind ein umfassender Recherche-Assistent mit Zugang zu Websuche und Unternehmenswissen über iFinder. Unterscheiden Sie immer zwischen internen und externen Quellen."
   },
-  "tokenLimit": 12000,
+  "tokenLimit": 32000,
   "preferredModel": "gpt-4o",
   "tools": [
-    "iAssistant_ask",
-    "iFinder.search", 
+    "iFinder.search",
     "iFinder.getContent",
     "braveSearch",
     "enhancedWebSearch"
   ],
   "sendChatHistory": true,
   "enabled": true
-}
-```
-
-### 3. App-Specific Configuration
-
-Apps can override global iAssistant settings using the `iassistant` configuration block:
-
-```json
-{
-  "iassistant": {
-    "baseUrl": "https://specialized-iassistant.company.com",
-    "profileId": "hr-documents-profile",
-    "searchMode": "phrase",
-    "filter": [
-      {
-        "key": "department",
-        "values": ["HR"],
-        "isNegated": false
-      },
-      {
-        "key": "document_type",
-        "values": ["policy", "procedure"],
-        "isNegated": false
-      }
-    ],
-    "maxResults": 15,
-    "scope": "hr_documents_read"
-  }
-}
-```
-
-## Streaming vs Non-Streaming Configuration
-
-### 1. Streaming Configuration (Recommended)
-
-**Benefits of Streaming:**
-- Real-time response generation
-- Better user experience with immediate feedback
-- Progressive content delivery
-- Lower perceived latency
-
-**Enable Streaming:**
-
-```json
-{
-  "iAssistant": {
-    "streaming": true,
-    "streamingTimeout": 60000
-  }
-}
-```
-
-**Application Configuration for Streaming:**
-```json
-{
-  "preferredOutputFormat": "markdown",
-  "features": {
-    "streaming": true
-  }
-}
-```
-
-### 2. Non-Streaming Configuration
-
-**When to Use Non-Streaming:**
-- Network reliability concerns
-- Simpler integration requirements  
-- Batch processing scenarios
-- Legacy system compatibility
-
-**Configure Non-Streaming:**
-
-```json
-{
-  "iAssistant": {
-    "streaming": false,
-    "timeout": 45000
-  }
-}
-```
-
-### 3. Hybrid Configuration
-
-Configure different behaviors per application:
-
-```json
-{
-  "id": "batch-reports-app",
-  "tools": ["iAssistant_ask"],
-  "iassistant": {
-    "streaming": false,
-    "timeout": 120000
-  }
-}
-```
-
-```json
-{
-  "id": "interactive-chat-app", 
-  "preferredModel": "iassistant",
-  "config": {
-    "streaming": true,
-    "streamingTimeout": 30000
-  }
 }
 ```
 
@@ -840,20 +551,10 @@ IASSISTANT_BASE_URL=https://iassistant.company.com
 {
   "id": "hr-assistant",
   "name": {"en": "HR Assistant"},
-  "preferredModel": "iassistant",
-  "iassistant": {
-    "profileId": "aHItZG9jcw==",
-    "filter": [
-      {
-        "key": "department",
-        "values": ["HR"],
-        "isNegated": false
-      }
-    ]
-  },
+  "preferredModel": "gpt-4o",
   "tools": [
     "iFinder.search",
-    "iAssistant_ask"
+    "iFinder.getContent"
   ]
 }
 ```
@@ -992,13 +693,13 @@ Use a JWT decoder tool to verify token structure:
    - Get document metadata
    - Test download functionality
 
-**Test iAssistant Integration:**
-1. Enable iAssistant model
-2. Create test app with iAssistant model selected
-3. Test question answering:
+**Test iAssistant (Workspace) Integration:**
+1. Configure iAssistant Workspace (Conversation API) in platform settings
+2. Create a test app with `iassistant-conversation` provider model
+3. Test conversational question answering:
    - Ask questions about known documents
    - Verify response quality and source attribution
-   - Test streaming vs non-streaming modes
+   - Test multi-turn conversation continuity
 
 **Test Authentication Flow:**
 1. Test with anonymous user (should fail)
@@ -1008,22 +709,9 @@ Use a JWT decoder tool to verify token structure:
 
 ### 4. Performance Testing
 
-**Load Testing Configuration:**
-```bash
-# Test concurrent iAssistant requests
-for i in {1..10}; do
-  curl -X POST \
-    -H "Content-Type: application/json" \
-    -H "Authorization: Bearer YOUR_JWT" \
-    -d '{"question": "What are the company policies?"}' \
-    https://your-iassistant-instance.com/api/v2/rag &
-done
-wait
-```
-
 **Monitor Response Times:**
 - Check iHub Apps server logs for request duration
-- Monitor iFinder/iAssistant API response times
+- Monitor iFinder API response times
 - Set up alerts for slow responses (>10 seconds)
 
 ### 5. End-to-End Testing

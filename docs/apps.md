@@ -490,7 +490,7 @@ The following fields are specific to chat apps and are not used for redirect or 
 - `settings`, `inputMode`, `upload`, `features`
 - `greeting`, `starterPrompts`, `messagePlaceholder`
 - `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
-- `sources`, `thinking`, `iassistant`
+- `sources`, `thinking`
 
 ## Basic App Structure
 
@@ -541,8 +541,6 @@ Each app is defined with the following essential properties:
 | `preferredTemperature`  | Number  | Optional. Temperature setting (0.0-2.0) controlling randomness                                                           |
 | `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests (default: true)                                                |
 | `outputSchema`          | Object  | Optional. JSON schema describing the structured response format                                                          |
-| `iassistant`            | Object  | Optional. Tool-specific configuration for iAssistant RAG integration (see [Tool-Specific Configuration](#tool-specific-configuration)) |
-
 ### Advanced Configuration Options
 
 Apps can include additional configuration for user inputs and prompt formatting:
@@ -791,56 +789,6 @@ When `true`, users can submit the form without entering content in the main inpu
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model
 - `outputSchema`: JSON schema defining the required structure of the AI response
-
-### Tool-Specific Configuration
-
-Some tools support app-level configuration to override platform defaults. This allows individual apps to customize tool behavior for their specific use case.
-
-#### iAssistant Configuration
-
-The `iassistant` configuration object allows apps to customize iAssistant RAG (Retrieval-Augmented Generation) behavior:
-
-```json
-{
-  "id": "my-rag-app",
-  "name": { "en": "Knowledge Base Assistant" },
-  "description": { "en": "Search and answer from knowledge base" },
-  "color": "#2563eb",
-  "icon": "search-brain",
-  "system": { 
-    "en": "You are an assistant that searches documents and provides accurate answers."
-  },
-  "tools": ["iAssistant_ask"],
-  "iassistant": {
-    "baseUrl": "https://my-iassistant-instance.example.com",
-    "profileId": "my-search-profile-id",
-    "filter": [
-      {
-        "key": "category",
-        "values": ["documentation", "help"],
-        "isNegated": false
-      }
-    ],
-    "searchMode": "multiword",
-    "searchDistance": "",
-    "searchFields": {}
-  }
-}
-```
-
-**iAssistant Configuration Properties:**
-
-- `baseUrl` (optional): URL of the iAssistant API endpoint. Overrides the platform-level setting.
-- `profileId` (optional): Search profile ID to use. Can be plain text or base64-encoded.
-- `filter` (optional): Array of filter objects to apply to searches:
-  - `key`: Field name to filter on
-  - `values`: Array of values to match
-  - `isNegated`: Boolean, if true excludes matches instead of including them
-- `searchMode` (optional): Search algorithm mode (e.g., "multiword")
-- `searchDistance` (optional): Search distance parameter
-- `searchFields` (optional): Object specifying which fields to search
-
-This configuration allows each app to query different knowledge bases, apply different filters, or use different search profiles without affecting other apps using iAssistant.
 
 ### Available Icons
 

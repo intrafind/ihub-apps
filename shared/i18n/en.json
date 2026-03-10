@@ -1587,5 +1587,48 @@
       "started": "Finalizing answer...",
       "completed": "Answer ready"
     }
+  },
+  "setup": {
+    "step1": {
+      "title": "Welcome to iHub Apps",
+      "description": "Your all-in-one platform for AI-powered applications. To get started, connect your first AI provider — it only takes a minute.",
+      "getStarted": "Get Started",
+      "skipLater": "Skip, I'll configure later"
+    },
+    "step2": {
+      "title": "Connect your first AI provider",
+      "description": "Select a provider and enter your API key below.",
+      "apiKeyLabel": "{{provider}} API Key",
+      "apiKeyOptional": "(Optional)",
+      "getApiKey": "Get API key →",
+      "localNotice": "No API key is required. Make sure your local model server (LM Studio, Jan.ai, Ollama, vLLM, etc.) is running, then configure its endpoint under",
+      "localNoticeLink": "Admin › Providers",
+      "localNoticeAfterSetup": "after setup.",
+      "localApiKeyHint": "Leave empty if your local server does not require authentication.",
+      "testButton": "Test Connection",
+      "testingButton": "Testing…",
+      "testSuccess": "API key is valid",
+      "testFailed": "Invalid API key. Please check and try again.",
+      "testError": "Could not reach provider API. Please check your network connection.",
+      "back": "Back",
+      "saveButton": "Save & Continue",
+      "saveButtonLocal": "Continue",
+      "savingButton": "Saving…",
+      "skipLater": "Skip, I'll configure later",
+      "freeTierBadge": "Free Tier",
+      "noApiKeyBadge": "Optional Key"
+    },
+    "step3": {
+      "title": "You're all set!",
+      "subtitleCloud": "Your {{provider}} API key has been saved. You're ready to start using AI-powered apps.",
+      "subtitleLocal": "Local provider setup complete. Configure your model server endpoint under Admin › Providers.",
+      "nextStepsTitle": "Next steps",
+      "nextStep1": "Browse the apps gallery and try your first AI app",
+      "nextStep2": "Add more providers or models under Admin › Providers",
+      "nextStep3": "Invite team members and configure groups under Admin › Teams",
+      "nextStep4": "Explore settings to customize your workspace",
+      "goToApps": "Go to Apps",
+      "goToAdmin": "Open Admin"
+    }
   }
 }

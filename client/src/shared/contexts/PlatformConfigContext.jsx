@@ -64,7 +64,10 @@ export const PlatformConfigProvider = ({ children }) => {
         // Additional auth status fields
         authenticated: authStatus.authenticated,
         user: authStatus.user,
-        autoRedirect: authStatus.autoRedirect
+        autoRedirect: authStatus.autoRedirect,
+
+        // Setup wizard state
+        setup: authStatus.setup
       };
 
       setPlatformConfig(combinedConfig);

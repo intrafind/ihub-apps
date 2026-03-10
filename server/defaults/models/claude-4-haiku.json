@@ -1,9 +1,9 @@
 {
-  "id": "claude-4-opus",
-  "modelId": "claude-opus-4-6",
+  "id": "claude-haiku-4-5",
+  "modelId": "claude-haiku-4-5",
   "name": {
-    "en": "Claude 4 Opus",
-    "de": "Claude 4 Opus"
+    "en": "Claude 4 Haiku",
+    "de": "Claude 4 Haiku"
   },
   "description": {
     "en": "Anthropic's most capable model with exceptional reasoning abilities",

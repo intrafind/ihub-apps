@@ -277,13 +277,12 @@ class StreamingHandler {
       let fullResponse = '';
       let accumulatedUsage = null;
 
-      // Check if the adapter needs custom SSE processing (only iAssistant for now)
+      // Check if the adapter needs custom SSE processing (iassistant-conversation uses custom format)
       const adapter = getAdapter(model.provider);
-      const hasCustomBufferProcessor =
-        model.provider === 'iassistant' || model.provider === 'iassistant-conversation';
+      const hasCustomBufferProcessor = model.provider === 'iassistant-conversation';
 
       if (hasCustomBufferProcessor) {
-        // For providers like iAssistant with custom SSE format
+        // For providers like iAssistant Conversation with custom SSE format
         let buffer = '';
 
         while (true) {
@@ -555,13 +554,15 @@ class StreamingHandler {
       );
       logger.error('StreamingHandler: Full error:', error);
 
-      // Handle connection termination by remote server specifically for iAssistant
+      // Handle connection termination by remote server specifically for iAssistant Conversation
       if (
         error.message === 'terminated' &&
         error.cause?.code === 'UND_ERR_SOCKET' &&
-        (model.provider === 'iassistant' || model.provider === 'iassistant-conversation')
+        model.provider === 'iassistant-conversation'
       ) {
-        logger.error('iAssistant: Connection terminated by remote server. This may indicate:');
+        logger.error(
+          'iAssistant Conversation: Connection terminated by remote server. This may indicate:'
+        );
         logger.error('- Authentication/authorization failure');
         logger.error('- Invalid request format');
         logger.error('- Server-side error');
