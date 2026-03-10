@@ -5,7 +5,14 @@
  * creates backups, swaps application files, and supports rollback.
  */
 import { promises as fs } from 'fs';
-import { createWriteStream, existsSync, createReadStream, readdirSync, readFileSync, statSync } from 'fs';
+import {
+  createWriteStream,
+  existsSync,
+  createReadStream,
+  readdirSync,
+  readFileSync,
+  statSync
+} from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { pipeline } from 'stream/promises';
@@ -292,7 +299,9 @@ export async function downloadUpdate(updateInfo) {
 
     // Validate archive contents before extraction to prevent path traversal
     setState({ status: 'extracting', progress: 93, message: 'Validating archive...' });
-    const { stdout: tarList } = await execAsync('tar', ['-tzf', archivePath], { maxBuffer: 50 * 1024 * 1024 });
+    const { stdout: tarList } = await execAsync('tar', ['-tzf', archivePath], {
+      maxBuffer: 50 * 1024 * 1024
+    });
     const archiveEntries = tarList.split('\n').filter(Boolean);
     for (const entry of archiveEntries) {
       if (entry.startsWith('/') || entry.includes('../')) {
