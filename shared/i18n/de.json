@@ -956,6 +956,8 @@
       "rollbackAvailable": "Rollback verfügbar",
       "rollbackDesc": "Eine Sicherung von Version {{version}} ist verfügbar. Sie können ein Rollback durchführen, wenn die aktuelle Version Probleme aufweist.",
       "rollbackButton": "Zurück zu {{version}}",
+      "updateTimeout": "Das Update dauert länger als erwartet. Bitte überprüfen Sie den Serverstatus und versuchen Sie es erneut.",
+      "rollbackTimeout": "Das Rollback dauert länger als erwartet. Bitte überprüfen Sie den Serverstatus und die Logs.",
       "logging": {
         "title": "Logging-Konfiguration",
         "description": "Konfigurieren Sie Anwendungs-Logging-Stufen und -Ausgabe",

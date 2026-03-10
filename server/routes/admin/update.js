@@ -63,13 +63,10 @@ export default function registerAdminUpdateRoutes(app) {
     }
 
     try {
-      // Check for update info from the request body or fetch it
-      let updateInfo = req.body?.updateInfo;
-      if (!updateInfo) {
-        updateInfo = await checkForUpdate();
-        if (!updateInfo.updateAvailable) {
-          return res.json({ success: false, message: 'No update available' });
-        }
+      // Always fetch update info server-side to prevent SSRF via client-supplied URLs
+      const updateInfo = await checkForUpdate();
+      if (!updateInfo.updateAvailable) {
+        return res.json({ success: false, message: 'No update available' });
       }
 
       const result = await downloadUpdate(updateInfo);

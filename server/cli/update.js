@@ -169,8 +169,10 @@ export async function runUpdateCLI(subcommand, force = false) {
       }
 
       case 'apply': {
-        const applyResult = await handleApply();
-        process.exit(applyResult.restartCode);
+        await handleApply();
+        // Exit 0 for CLI-invoked apply; the shell launcher wrapper handles restart
+        // (exit code 75 is for the server process itself, not the one-shot CLI)
+        process.exit(0);
         break;
       }
 
@@ -184,8 +186,9 @@ export async function runUpdateCLI(subcommand, force = false) {
             process.exit(0);
           }
         }
-        const rollbackResult = await handleRollback();
-        process.exit(rollbackResult.restartCode);
+        await handleRollback();
+        // Exit 0 for CLI-invoked rollback; same reasoning as apply above
+        process.exit(0);
         break;
       }
 
@@ -207,8 +210,9 @@ export async function runUpdateCLI(subcommand, force = false) {
         }
 
         await handleDownload(updateInfo);
-        const result = await handleApply();
-        process.exit(result.restartCode);
+        await handleApply();
+        // Exit 0 for CLI full-update; user can re-run the launcher manually
+        process.exit(0);
       }
     }
   } catch (err) {

@@ -25,8 +25,15 @@ const UPDATE_BACKUP_DIR = '.update-backup';
 const UPDATE_LOCK_FILE = '.update-lock';
 const UPDATE_RESTART_CODE = 75;
 
-// Files/directories that should be replaced during updates
-const REPLACE_PATHS = ['server', 'shared', 'public', 'docs', 'launcher.cjs', 'node', 'version.txt'];
+/**
+ * Returns the list of files/directories that should be replaced during updates.
+ * The Node binary name is platform-specific (node.exe on Windows, node elsewhere).
+ */
+function getReplacePaths() {
+  const platform = detectPlatform();
+  const nodeBinary = platform === 'windows' ? 'node.exe' : 'node';
+  return ['server', 'shared', 'public', 'docs', 'launcher.cjs', nodeBinary, 'version.txt'];
+}
 
 /**
  * Detect the current platform from the launcher script filename
@@ -363,8 +370,9 @@ export async function applyUpdate() {
     await fs.writeFile(join(backupDir, 'version.txt'), currentVersion);
 
     // Backup and replace each path
+    const replacePaths = getReplacePaths();
     let replacedCount = 0;
-    for (const relPath of REPLACE_PATHS) {
+    for (const relPath of replacePaths) {
       const currentPath = join(rootDir, relPath);
       const stagedPath = join(stagingDir, relPath);
       const backupPath = join(backupDir, relPath);
@@ -382,18 +390,21 @@ export async function applyUpdate() {
       // Move staged file/directory into place
       await fs.rename(stagedPath, currentPath);
       replacedCount++;
-      setState({ progress: Math.round((replacedCount / REPLACE_PATHS.length) * 70) });
+      setState({ progress: Math.round((replacedCount / replacePaths.length) * 70) });
     }
 
     // Handle launcher script (versioned filename)
     setState({ progress: 75, message: 'Updating launcher...' });
     await updateLauncherScript(rootDir, stagingDir, backupDir);
 
-    // Ensure permissions on node binary and launcher
+    // Ensure permissions on node binary and launcher (Unix only; Windows doesn't use chmod)
     setState({ progress: 85, message: 'Setting permissions...' });
-    const nodePath = join(rootDir, 'node');
-    if (existsSync(nodePath)) {
-      await fs.chmod(nodePath, 0o755);
+    const platform = detectPlatform();
+    if (platform !== 'windows') {
+      const nodePath = join(rootDir, 'node');
+      if (existsSync(nodePath)) {
+        await fs.chmod(nodePath, 0o755);
+      }
     }
 
     // Make any launcher scripts executable
@@ -492,7 +503,7 @@ export async function rollback() {
  * Internal rollback implementation
  */
 async function performRollback(rootDir, backupDir) {
-  for (const relPath of REPLACE_PATHS) {
+  for (const relPath of getReplacePaths()) {
     const currentPath = join(rootDir, relPath);
     const backupPath = join(backupDir, relPath);
 

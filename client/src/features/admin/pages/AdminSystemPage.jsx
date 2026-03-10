@@ -140,11 +140,19 @@ const AdminSystemPage = () => {
         }
       }, 3000);
 
-      // Stop polling after 2 minutes
+      // Stop polling after 2 minutes and show timeout error
       setTimeout(() => {
         if (updatePollIntervalRef.current) {
           clearInterval(updatePollIntervalRef.current);
           updatePollIntervalRef.current = null;
+          setUpdateActionMessage(
+            t(
+              'admin.system.updateTimeout',
+              'Update is taking longer than expected. Please check the server status and try again.'
+            )
+          );
+          setUpdateActionMessageType('error');
+          setUpdateActionLoading(false);
         }
       }, 120000);
     } catch (error) {
@@ -216,6 +224,14 @@ const AdminSystemPage = () => {
         if (rollbackPollIntervalRef.current) {
           clearInterval(rollbackPollIntervalRef.current);
           rollbackPollIntervalRef.current = null;
+          setUpdateActionMessage(
+            t(
+              'admin.system.rollbackTimeout',
+              'Rollback is taking longer than expected. Please check the server status and logs.'
+            )
+          );
+          setUpdateActionMessageType('error');
+          setUpdateActionLoading(false);
         }
       }, 120000);
     } catch (error) {

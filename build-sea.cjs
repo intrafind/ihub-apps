@@ -505,15 +505,22 @@ if not exist "%DIR%node.exe" (
   exit /b 1
 )
 
-REM Use the bundled Node.js to run the server
+REM Run the server in a loop to support update-triggered restarts.
+REM Exit code 75 signals that the server needs to restart after an update.
+:loop
 "%DIR%node.exe" "%DIR%launcher.cjs" %*
-
-REM If we get here, check if there was an error
-if %ERRORLEVEL% neq 0 (
-  echo Application exited with error code %ERRORLEVEL%
-  pause
-  exit /b %ERRORLEVEL%
+set EXIT_CODE=%ERRORLEVEL%
+if %EXIT_CODE% equ 75 (
+  echo.
+  echo Restarting after update...
+  echo.
+  goto loop
 )
+if %EXIT_CODE% neq 0 (
+  echo Application exited with error code %EXIT_CODE%
+  pause
+)
+exit /b %EXIT_CODE%
 `;
 
     fs.writeFileSync(path.join(outputDir, outputName), batchLauncher);
