@@ -1,0 +1,20 @@
+{
+  "id": "mistral-large",
+  "modelId": "mistral-large-latest",
+  "name": {
+    "en": "Mistral Large",
+    "de": "Mistral Large"
+  },
+  "description": {
+    "en": "Mistral's fast model for general tasks",
+    "de": "Schnelles Mistral-Modell für allgemeine Aufgaben"
+  },
+  "url": "https://api.mistral.ai/v1/chat/completions",
+  "provider": "mistral",
+  "tokenLimit": 32000,
+  "supportsTools": true,
+  "concurrency": 1,
+  "requestDelayMs": 1000,
+  "enabled": true,
+  "default": false
+}

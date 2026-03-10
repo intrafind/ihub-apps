@@ -29,6 +29,7 @@ import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
+import registerSetupRoutes from './routes/setup.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
 import jiraRoutes from './routes/integrations/jira.js';
@@ -312,6 +313,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerShortLinkRoutes(app);
   await registerSwaggerRoutes(app);
   registerWorkflowRoutes(app, { getLocalizedError });
+  registerSetupRoutes(app);
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up

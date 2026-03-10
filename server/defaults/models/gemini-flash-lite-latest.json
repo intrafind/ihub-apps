@@ -1,15 +1,15 @@
 {
-  "id": "gemini-3-pro",
-  "modelId": "gemini-3-pro-preview",
+  "id": "gemini-flash-lite-latest",
+  "modelId": "gemini-flash-lite-latest",
   "name": {
-    "en": "Gemini 3 Pro",
-    "de": "Gemini 3 Pro"
+    "en": "Gemini Flash Lite Latest",
+    "de": "Gemini Flash Lite Latest"
   },
   "description": {
     "en": "Google's versatile model optimized for text and code tasks",
     "de": "Googles vielseitiges Modell, optimiert für Text- und Code-Aufgaben"
   },
-  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-preview:streamGenerateContent",
+  "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-lite-latest:streamGenerateContent",
   "provider": "google",
   "tokenLimit": 32768,
   "supportsTools": true,

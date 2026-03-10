@@ -1550,5 +1550,48 @@
       "started": "Antwort wird fertiggestellt...",
       "completed": "Antwort fertig"
     }
+  },
+  "setup": {
+    "step1": {
+      "title": "Willkommen bei iHub Apps",
+      "description": "Ihre zentrale Plattform für KI-gestützte Anwendungen. Verbinden Sie Ihren ersten KI-Anbieter, um loszulegen — das dauert nur eine Minute.",
+      "getStarted": "Loslegen",
+      "skipLater": "Überspringen, später konfigurieren"
+    },
+    "step2": {
+      "title": "Ersten KI-Anbieter verbinden",
+      "description": "Wählen Sie einen Anbieter und geben Sie Ihren API-Schlüssel ein.",
+      "apiKeyLabel": "{{provider}} API-Schlüssel",
+      "apiKeyOptional": "(Optional)",
+      "getApiKey": "API-Schlüssel erhalten →",
+      "localNotice": "Es wird kein API-Schlüssel benötigt. Stellen Sie sicher, dass Ihr lokaler Modellserver (LM Studio, Jan.ai, Ollama, vLLM usw.) läuft, und konfigurieren Sie den Endpunkt anschließend unter",
+      "localNoticeLink": "Admin › Anbieter",
+      "localNoticeAfterSetup": "nach der Einrichtung.",
+      "localApiKeyHint": "Leer lassen, wenn Ihr lokaler Server keine Authentifizierung erfordert.",
+      "testButton": "Verbindung testen",
+      "testingButton": "Wird getestet…",
+      "testSuccess": "API-Schlüssel ist gültig",
+      "testFailed": "Ungültiger API-Schlüssel. Bitte prüfen und erneut versuchen.",
+      "testError": "Anbieter-API nicht erreichbar. Bitte Netzwerkverbindung prüfen.",
+      "back": "Zurück",
+      "saveButton": "Speichern & Weiter",
+      "saveButtonLocal": "Weiter",
+      "savingButton": "Wird gespeichert…",
+      "skipLater": "Überspringen, später konfigurieren",
+      "freeTierBadge": "Kostenlos",
+      "noApiKeyBadge": "Optionaler Schlüssel"
+    },
+    "step3": {
+      "title": "Alles bereit!",
+      "subtitleCloud": "Ihr {{provider}} API-Schlüssel wurde gespeichert. Sie können jetzt KI-Apps verwenden.",
+      "subtitleLocal": "Lokaler Anbieter eingerichtet. Konfigurieren Sie den Modellserver-Endpunkt unter Admin › Anbieter.",
+      "nextStepsTitle": "Nächste Schritte",
+      "nextStep1": "Apps-Galerie erkunden und erste KI-App ausprobieren",
+      "nextStep2": "Weitere Anbieter oder Modelle unter Admin › Anbieter hinzufügen",
+      "nextStep3": "Teammitglieder einladen und Gruppen unter Admin › Teams konfigurieren",
+      "nextStep4": "Einstellungen erkunden, um den Arbeitsbereich anzupassen",
+      "goToApps": "Zu den Apps",
+      "goToAdmin": "Admin öffnen"
+    }
   }
 }

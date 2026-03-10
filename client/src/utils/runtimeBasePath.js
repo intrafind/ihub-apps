@@ -43,7 +43,8 @@ export const detectBasePath = () => {
     'settings', // Settings pages (integrations, etc.)
     'teams', // Microsoft Teams routes
     'workflows', // Workflow management and execution
-    's' // Short links
+    's', // Short links
+    'setup' // First-run setup wizard
   ];
 
   // Split path into segments and find the first known route
@@ -108,7 +109,8 @@ export const getBasePath = () => {
       'settings',
       'teams',
       'workflows',
-      's'
+      's',
+      'setup'
     ];
     const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
 
