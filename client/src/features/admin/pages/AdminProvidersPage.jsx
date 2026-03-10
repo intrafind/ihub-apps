@@ -423,9 +423,13 @@ const AdminProvidersPage = () => {
                                     <td className="px-6 py-4 whitespace-nowrap">
                                       <span className="text-sm text-gray-700 dark:text-gray-300">
                                         {enabledModels.length > 0 ? (
-                                          <span className="font-medium">{enabledModels.length}</span>
+                                          <span className="font-medium">
+                                            {enabledModels.length}
+                                          </span>
                                         ) : (
-                                          <span className="text-gray-400 dark:text-gray-500">—</span>
+                                          <span className="text-gray-400 dark:text-gray-500">
+                                            —
+                                          </span>
                                         )}
                                       </span>
                                     </td>
@@ -445,9 +449,7 @@ const AdminProvidersPage = () => {
                                           >
                                             <Icon
                                               name={
-                                                isExpanded
-                                                  ? 'ChevronUpIcon'
-                                                  : 'ChevronDownIcon'
+                                                isExpanded ? 'ChevronUpIcon' : 'ChevronDownIcon'
                                               }
                                               className="w-4 h-4"
                                             />
@@ -464,7 +466,9 @@ const AdminProvidersPage = () => {
                                             e.stopPropagation();
                                             testProvider(provider.id);
                                           }}
-                                          disabled={providerHealth.status === 'testing' || testingAll}
+                                          disabled={
+                                            providerHealth.status === 'testing' || testingAll
+                                          }
                                           className="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                           {t('admin.providers.test', 'Test')}
@@ -518,9 +522,7 @@ const AdminProvidersPage = () => {
                                           >
                                             <Icon
                                               name={
-                                                result.success
-                                                  ? 'CheckCircleIcon'
-                                                  : 'XCircleIcon'
+                                                result.success ? 'CheckCircleIcon' : 'XCircleIcon'
                                               }
                                               className={`w-4 h-4 mt-0.5 flex-shrink-0 ${
                                                 result.success
@@ -559,7 +561,10 @@ const AdminProvidersPage = () => {
                                         {providerHealth.status === 'testing' && (
                                           <div className="flex items-center gap-2 p-2 text-sm text-gray-500 dark:text-gray-400">
                                             <span className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500 inline-block" />
-                                            {t('admin.providers.testingMore', 'Testing remaining models...')}
+                                            {t(
+                                              'admin.providers.testingMore',
+                                              'Testing remaining models...'
+                                            )}
                                           </div>
                                         )}
                                       </div>
