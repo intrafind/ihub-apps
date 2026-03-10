@@ -126,6 +126,20 @@ if (fs.existsSync(configPath)) {
   }
 }
 
+// Check for --update CLI argument before starting the server
+const updateArg = process.argv.find(a => a.startsWith('--update'));
+if (updateArg) {
+  const subcommand = updateArg.includes('=') ? updateArg.split('=')[1] : '';
+  const force = process.argv.includes('--force');
+  // Dynamic import of the ESM CLI module
+  import('./server/cli/update.js').then(mod => {
+    mod.runUpdateCLI(subcommand, force);
+  }).catch(err => {
+    console.error('Failed to load update module:', err.message);
+    process.exit(1);
+  });
+} else {
+
 // Set default values
 process.env.HOST = process.env.HOST || '0.0.0.0';
 process.env.PORT = process.env.PORT || '3001'; // Changed default to 3001 to avoid common port conflicts
@@ -370,7 +384,10 @@ async function startServer() {
 }
 
 // Start the server
-startServer();`;
+startServer();
+
+} // end of else block (not --update)
+`;
 
 // Build our application manually instead of using Node.js SEA
 console.log(`Building standalone executable for ${currentPlatform.platform}...`);
@@ -453,8 +470,21 @@ try {
 # Get the directory where this script is located
 DIR="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
 
-# Use the bundled Node.js to run the server
-"\${DIR}/node" "\${DIR}/launcher.cjs" "\$@"
+# Run the server in a loop to support update-triggered restarts.
+# Exit code 75 signals that the server needs to restart after an update.
+while true; do
+  "\${DIR}/node" "\${DIR}/launcher.cjs" "\$@"
+  EXIT_CODE=\$?
+  if [ "\$EXIT_CODE" -eq 75 ]; then
+    echo ""
+    echo "Restarting after update..."
+    echo ""
+    # Re-exec this script so that any launcher changes take effect
+    exec "\$0" "\$@"
+  else
+    exit \$EXIT_CODE
+  fi
+done
 `;
 
     fs.writeFileSync(path.join(outputDir, outputName), shellLauncher);
