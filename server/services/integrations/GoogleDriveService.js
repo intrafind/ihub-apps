@@ -495,7 +495,9 @@ class GoogleDriveService {
             endpoint,
             error: errorData?.error?.message || 'Resource not found'
           });
-          throw new Error(`Google Drive API error: ${errorData?.error?.message || 'Resource not found'}`);
+          throw new Error(
+            `Google Drive API error: ${errorData?.error?.message || 'Resource not found'}`
+          );
         }
 
         logger.error('Google Drive API request failed:', {
