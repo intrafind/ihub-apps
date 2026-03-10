@@ -215,11 +215,6 @@ function sanitizeRegistrySourceUrl(source) {
     throw new Error('Registry source URL must use HTTPS');
   }
 
-  const allowedHosts = new Set(['github.com', 'raw.githubusercontent.com']);
-  if (!allowedHosts.has(urlObj.hostname)) {
-    throw new Error(`Registry source host "${urlObj.hostname}" is not allowed`);
-  }
-
   return urlObj.toString();
 }
 
