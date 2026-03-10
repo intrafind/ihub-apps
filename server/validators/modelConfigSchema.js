@@ -67,13 +67,12 @@ export const modelConfigSchema = z
         'google',
         'mistral',
         'local',
-        'iassistant',
         'iassistant-conversation'
       ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant, iassistant-conversation'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation'
         })
       }
     ),

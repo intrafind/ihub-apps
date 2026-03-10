@@ -9,9 +9,6 @@ import configCache from './configCache.js';
 import tokenStorageService from './services/TokenStorageService.js';
 import logger from './utils/logger.js';
 
-// Constants
-const JWT_AUTH_REQUIRED = 'JWT_AUTH_REQUIRED';
-
 /**
  * Sanitize user-provided input for logging to prevent log injection
  * @param {string} input - User input to sanitize
@@ -155,10 +152,6 @@ export async function getApiKeyForModel(modelId) {
         // For local models, check if there's a specific LOCAL_API_KEY or return a default empty string
         // This allows local models to work without authentication in many cases
         return config.LOCAL_API_KEY || '';
-      case 'iassistant':
-        // iAssistant uses JWT tokens generated per-user, not static API keys
-        // Return a placeholder that indicates JWT auth should be used
-        return JWT_AUTH_REQUIRED;
       default:
         // Try to find a generic API key based on provider name (e.g., COHERE_API_KEY for provider 'cohere')
         const genericKey = config[`${provider.toUpperCase()}_API_KEY`];
