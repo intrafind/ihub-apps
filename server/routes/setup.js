@@ -5,6 +5,7 @@ import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
+import { strictAuthRequired } from '../middleware/authRequired.js';
 
 // LLM providers that require API keys
 const LLM_PROVIDER_IDS = ['openai', 'anthropic', 'google', 'mistral'];
@@ -56,8 +57,9 @@ export default function registerSetupRoutes(app) {
    * POST /api/setup/configure
    * Saves the first API key for a provider.
    * Only accessible when the system is unconfigured.
+   * Always requires real authentication — never allowed anonymously.
    */
-  app.post(buildServerPath('/api/setup/configure'), async (req, res) => {
+  app.post(buildServerPath('/api/setup/configure'), strictAuthRequired, async (req, res) => {
     try {
       // Only allow when not yet configured — prevents unauthorized key overwrite
       const configured = await isConfigured();

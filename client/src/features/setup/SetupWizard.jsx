@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { buildApiUrl } from '../../utils/runtimeBasePath';
+import { buildApiUrl, buildPath } from '../../utils/runtimeBasePath';
+import { useAuth } from '../../shared/contexts/AuthContext';
 
 const PROVIDERS = [
   {
@@ -36,15 +37,24 @@ const PROVIDERS = [
 
 export default function SetupWizard() {
   const navigate = useNavigate();
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [step, setStep] = useState(1); // 1=welcome, 2=provider, 3=done
   const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0]);
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
 
+  // Setup requires real authentication — redirect to login if not authenticated
+  useEffect(() => {
+    if (!authLoading && !isAuthenticated) {
+      const setupPath = buildPath('setup');
+      navigate(`/login?returnUrl=${encodeURIComponent(setupPath)}`, { replace: true });
+    }
+  }, [authLoading, isAuthenticated, navigate]);
+
   // If already configured, skip the wizard
   useEffect(() => {
-    fetch(buildApiUrl('/api/setup/status'), { credentials: 'include' })
+    fetch(buildApiUrl('setup/status'), { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
         if (data.configured) {
@@ -64,7 +74,7 @@ export default function SetupWizard() {
     setSaving(true);
     setError(null);
     try {
-      const response = await fetch(buildApiUrl('/api/setup/configure'), {
+      const response = await fetch(buildApiUrl('setup/configure'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -212,7 +222,7 @@ export default function SetupWizard() {
                 <button
                   onClick={handleSave}
                   disabled={saving || !apiKey.trim()}
-                  className="flex-2 flex-grow bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
+                  className="flex-[2] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
                 >
                   {saving ? 'Saving…' : 'Save & Continue'}
                 </button>
