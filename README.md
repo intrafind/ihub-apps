@@ -33,6 +33,23 @@ npm run dev
 
 **📖 Need help?** See [Developer Setup Guide](#method-1-npm-installation-development) | [Complete Documentation](docs/README.md)
 
+### ⚡ One-Line Installer (Recommended for Linux/macOS)
+
+Install the binary with a single command:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh
+# Open http://localhost:3000 → Configure API keys in admin UI (Settings → Models)
+```
+
+Install and start immediately:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh -s -- --start
+```
+
+**📦 More installer options:** [One-Line Installer Guide](#method-3-one-line-installer-linuxmacos)
+
 ### 🏭 For Production
 
 Deploy with Docker (recommended for production):
@@ -257,15 +274,19 @@ iHub Apps provides multiple installation methods to suit different use cases and
 
 ### Installation Methods Comparison
 
-| Method     | Best For                               | Setup Time | System Requirements                      | Auto-Updates      |
-| ---------- | -------------------------------------- | ---------- | ---------------------------------------- | ----------------- |
-| **npm**    | Development, customization             | ~5 min     | Node.js 22+, npm 8+                      | Manual            |
-| **Docker** | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+ | Container restart |
-| **Binary** | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)      | Manual download   |
+| Method            | Best For                               | Setup Time | System Requirements                      | Auto-Updates      |
+| ----------------- | -------------------------------------- | ---------- | ---------------------------------------- | ----------------- |
+| **npm**           | Development, customization             | ~5 min     | Node.js 22+, npm 8+                      | Manual            |
+| **Docker**        | Production, containerized environments | ~2 min     | Docker Engine 24.0+, Docker Compose 2.0+ | Container restart |
+| **Installer**     | Quick setup, Linux/macOS               | ~30 sec    | curl or wget, Linux/macOS                | Re-run installer  |
+| **Binary**        | Quick deployment, no dependencies      | ~1 min     | OS-specific (Windows, macOS, Linux)      | Manual download   |
 
 ### Quick Start Commands
 
 ```bash
+# One-Line Installer (Linux/macOS - Recommended)
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh
+
 # npm Installation (Development)
 git clone <repository-url> && cd ihub-apps
 npm run setup:dev
@@ -285,6 +306,7 @@ npm run install:all && npm run electron:dev
 
 ### Choosing Your Installation Method
 
+- **Choose One-Line Installer** for the fastest path to a running binary on Linux or macOS
 - **Choose npm** if you need to customize code, develop features, or contribute to the project
 - **Choose Docker** for production deployments, containerized environments, or easy scaling
 - **Choose Binary** for quick setup, no dependencies, or when Node.js is not available
@@ -415,7 +437,70 @@ npm run install:all && npm run electron:dev
 
 For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md).
 
-### Method 3: Binary Installation (Standalone)
+### Method 3: One-Line Installer (Linux/macOS)
+
+**Best for:** Fastest path to a running binary on Linux or macOS, no Node.js required
+
+The installer script automatically detects your OS and architecture, downloads the latest release binary, verifies the checksum (when available), generates a secure JWT secret, and installs the binary to your PATH.
+
+#### Installation
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh
+```
+
+The binary is installed to `/usr/local/bin/ihub-apps` (if writable) or `~/.local/bin/ihub-apps`. A config file with a generated JWT secret is created at `~/.config/ihub-apps/.env`.
+
+#### Options
+
+```bash
+# Install and start immediately
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh -s -- --start
+
+# Install a specific version
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh -s -- --version=v4.2.0
+
+# Install a specific version and start
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh -s -- --version=v4.2.0 --start
+
+# Show help
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh -s -- --help
+```
+
+#### Environment Variables
+
+| Variable           | Description                                         |
+| ------------------ | --------------------------------------------------- |
+| `IHUB_INSTALL_DIR` | Override the install directory (default: system or `~/.local/bin`) |
+
+```bash
+# Install to a custom directory
+IHUB_INSTALL_DIR=/opt/ihub curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh
+```
+
+#### After Installation
+
+```bash
+# Run iHub Apps
+ihub-apps
+
+# The config file is at ~/.config/ihub-apps/.env
+# Edit it to add your API keys:
+# OPENAI_API_KEY=your-key
+# ANTHROPIC_API_KEY=your-key
+```
+
+> **Note:** Windows is not supported by the installer script. Windows users should download the `.zip` release from [GitHub Releases](https://github.com/intrafind/ihub-apps/releases).
+
+**Installer Features:**
+
+- ✅ **Auto-detects OS and architecture** - Linux and macOS supported
+- ✅ **Docker offer** - Prompts to use Docker if available (interactive terminals only)
+- ✅ **Checksum verification** - Verifies download integrity when checksums are published
+- ✅ **Secure JWT secret** - Generates and stores a random JWT secret on first install
+- ✅ **Upgrade-safe** - Re-running the installer upgrades to the latest version
+
+### Method 4: Binary Installation (Standalone)
 
 **Best for:** Quick deployment, no dependencies, environments without Node.js
 
@@ -475,7 +560,7 @@ For comprehensive Docker documentation, see [docker/DOCKER.md](docker/DOCKER.md)
 - ✅ **Cross-platform** - Windows, macOS, and Linux binaries
 - ✅ **Production-ready** - Optimized single executable
 
-### Method 4: Electron Desktop Application
+### Method 5: Electron Desktop Application
 
 **Best for:** Desktop app experience, offline usage, system integration
 
