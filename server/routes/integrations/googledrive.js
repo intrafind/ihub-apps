@@ -26,6 +26,17 @@ function isValidReturnUrl(returnUrl, req) {
   }
 }
 
+/**
+ * Validate Google Drive fileId to ensure it is a safe opaque identifier.
+ * Google Drive IDs are typically URL-safe base64-like strings.
+ * This restricts to alphanumerics, underscore and hyphen, 1-200 chars.
+ */
+function isValidFileId(fileId) {
+  if (typeof fileId !== 'string') return false;
+  const FILE_ID_REGEX = /^[A-Za-z0-9_-]{1,200}$/;
+  return FILE_ID_REGEX.test(fileId);
+}
+
 // Gate all Google Drive routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
 
@@ -509,6 +520,13 @@ router.get('/download', authRequired, async (req, res) => {
       return res.status(400).json({
         error: 'Missing fileId',
         message: 'fileId query parameter is required'
+      });
+    }
+
+    if (!isValidFileId(fileId)) {
+      return res.status(400).json({
+        error: 'Invalid fileId',
+        message: 'fileId must be a valid Google Drive file identifier'
       });
     }
 
