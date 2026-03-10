@@ -58,7 +58,7 @@ Open **http://localhost:3000** → Go to **Settings → Models** → Add your AP
 
 🎉 **Done!** iHub auto-configures everything on first run. No `.env` file, no database, no manual setup.
 
-**Other install methods:** [Docker](#-docker-production) · [npm (for developers)](#-npm-development) · [Electron desktop](#-electron-desktop-app)
+**Other install methods:** [One-Line Installer](#-one-line-installer-linuxmacos) · [Docker](#-docker-production) · [npm (for developers)](#-npm-development) · [Electron desktop](#-electron-desktop-app)
 
 ---
 
@@ -164,6 +164,49 @@ Add new apps, models, and knowledge sources through the admin UI. JSON-based con
 ---
 
 ## 🚢 Deploy Anywhere
+
+### ⚡ One-Line Installer (Linux/macOS)
+
+The simplest way to install — a single command handles everything:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh
+```
+
+```bash
+# Install and start immediately:
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh -s -- --start
+```
+
+**CLI Options:**
+
+| Option          | Description                                          |
+| --------------- | ---------------------------------------------------- |
+| `--start`       | Start iHub Apps immediately after installation       |
+| `--version=TAG` | Install a specific version (e.g. `--version=v4.2.0`) |
+| `-h, --help`    | Show help                                            |
+
+**Environment Variables:**
+
+| Variable           | Description                    |
+| ------------------ | ------------------------------ |
+| `IHUB_INSTALL_DIR` | Override the install directory |
+
+**Post-install steps:**
+
+1. Edit `~/.config/ihub-apps/.env` to add your API keys
+2. Run `ihub-apps` to start the server
+3. Open **http://localhost:3000**
+
+> **Windows users**: Download the `.zip` from [GitHub Releases](https://github.com/intrafind/ihub-apps/releases) — the shell installer does not support Windows.
+
+- ✅ Detects OS and architecture automatically
+- ✅ Offers Docker if available on your system
+- ✅ Verifies download integrity with checksums
+- ✅ Generates a secure JWT secret automatically
+- ✅ Upgrade-safe — re-run at any time to update
+
+---
 
 ### 📦 Binary (Recommended for most users)
 
