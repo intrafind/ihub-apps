@@ -372,7 +372,7 @@ Core authentication configuration.
 }
 ```
 
-- **mode** (string) – Authentication mode. Options: `"proxy"`, `"local"`, `"oidc"`, `"ldap"`, `"ntlm"`, `"anonymous"`. Default: `"proxy"`
+- **mode** (string) – Authentication mode. Options: `"proxy"`, `"local"`, `"oidc"`, `"ldap"`, `"ntlm"`, `"anonymous"`. Default: `"local"`
 - **authenticatedGroup** (string) – Group name assigned to authenticated users. Default: `"authenticated"`
 - **sessionTimeoutMinutes** (number) – Session timeout in minutes for local auth. Default: `480`
 - **jwtSecret** (string) – JWT signing secret. Supports environment variables like `"${JWT_SECRET}"`
