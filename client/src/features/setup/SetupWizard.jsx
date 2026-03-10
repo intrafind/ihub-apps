@@ -39,7 +39,6 @@ const PROVIDERS = [
     id: 'local',
     name: 'Local Provider',
     description: 'LM Studio, Jan.ai, Ollama, vLLM — run models privately on your own hardware.',
-    badgeKey: 'setup.step2.noApiKeyBadge',
     placeholder: 'API key (optional)...',
     keyUrl: null
   }
@@ -66,12 +65,13 @@ export default function SetupWizard() {
     }
   }, [authLoading, isAuthenticated, navigate]);
 
-  // If already configured, skip the wizard
+  // If already configured, skip the wizard (but not when we just finished — step 3 is the finish screen)
   useEffect(() => {
+    if (step === 3) return;
     if (platformConfig && (platformConfig.setup?.configured ?? true)) {
       navigate('/', { replace: true });
     }
-  }, [platformConfig, navigate]);
+  }, [platformConfig, navigate, step]);
 
   const isLocal = selectedProvider.id === 'local';
 
