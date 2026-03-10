@@ -75,8 +75,6 @@ export default function SetupWizard() {
         setError(data.error || 'Failed to save API key. Please try again.');
         return;
       }
-      // Mark setup as done in session so the guard doesn't re-check
-      sessionStorage.setItem('setup_configured', '1');
       setStep(3);
     } catch {
       setError('Network error. Please check your connection and try again.');
@@ -86,7 +84,9 @@ export default function SetupWizard() {
   };
 
   const handleSkip = () => {
-    sessionStorage.setItem('setup_configured', '1');
+    // Remember the skip for this session only so the wizard doesn't interrupt
+    // again. Next session/tab will re-check with the server.
+    sessionStorage.setItem('setup_skipped', '1');
     navigate('/', { replace: true });
   };
 

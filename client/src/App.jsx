@@ -121,24 +121,23 @@ const LazyAdminRoute = ({ component: Component }) => (
 );
 
 /**
- * Checks setup status once per session and redirects to /setup when unconfigured.
- * Renders children immediately if the session was already checked.
+ * Checks setup status on every mount and redirects to /setup when unconfigured.
+ * Always verifies with the server so that a server reset (e.g. deleted contents
+ * folder) is detected even when the browser tab is still open.
+ * If the user explicitly skipped setup this session, the redirect is suppressed
+ * until the next session/tab.
  */
 const SetupCheck = ({ children }) => {
   const navigate = useNavigate();
-  // If already checked (or configured) this session, skip the API call
-  const alreadyChecked = !!sessionStorage.getItem('setup_configured');
-  const [done, setDone] = useState(alreadyChecked);
+  // User deliberately chose "Skip" this session — don't redirect again until next session
+  const sessionSkipped = !!sessionStorage.getItem('setup_skipped');
+  const [done, setDone] = useState(false);
 
   useEffect(() => {
-    if (alreadyChecked) return;
-
     fetch(buildApiUrl('/api/setup/status'), { credentials: 'include' })
       .then(r => r.json())
       .then(data => {
-        if (data.configured) {
-          sessionStorage.setItem('setup_configured', '1');
-        } else {
+        if (!data.configured && !sessionSkipped) {
           navigate('/setup', { replace: true });
         }
       })
