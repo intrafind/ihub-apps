@@ -26,6 +26,16 @@ The Software is free-of-use and "AS-IS" without warranty of any kind. — [Licen
 
 **No Node.js, no Docker, no dependencies.** Download the standalone binary and you're running:
 
+### ⚡ One-Line Installer (Linux/macOS)
+
+The simplest way to install — a single command handles everything:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/intrafind/ihub-apps/main/install.sh | sh
+```
+
+OR
+
 ### Step 1 — Download for your platform
 
 👉 **[Download the latest release](https://github.com/intrafind/ihub-apps/releases)**
@@ -58,7 +68,7 @@ Open **http://localhost:3000** → Go to **Settings → Models** → Add your AP
 
 🎉 **Done!** iHub auto-configures everything on first run. No `.env` file, no database, no manual setup.
 
-**Other install methods:** [One-Line Installer](#-one-line-installer-linuxmacos) · [Docker](#-docker-production) · [npm (for developers)](#-npm-development) · [Electron desktop](#-electron-desktop-app)
+**Other install methods:** [One-Line Installer](#-one-line-installer-linuxmacos) · [Docker](#-docker-production) · [npm (for developers)](#-npm-development) 
 
 ---
 
@@ -257,17 +267,6 @@ npm run dev
 Best for: customization, contributing, building new apps.
 
 📖 **[Developer Setup Guide](docs/README.md)**
-
----
-
-### 🖥️ Electron Desktop App
-
-```bash
-npm run install:all
-npm run electron:dev
-```
-
-Best for: offline usage, desktop integration, kiosk deployments.
 
 ---
 
