@@ -1,0 +1,25 @@
+# docker-compose.quickstart.yml - Zero-config Quickstart
+#
+# Get iHub Apps running in seconds — no .env file needed.
+# Configure API keys and settings via the admin UI after startup.
+#
+# Usage:
+#   docker compose -f docker-compose.quickstart.yml up
+#
+# Then open http://localhost:3000 and go to Admin → Configuration to add your API keys.
+
+services:
+  ihub-apps:
+    image: ghcr.io/intrafind/ihub-apps:latest
+    container_name: ihub-apps
+    ports:
+      - '3000:3000'
+    volumes:
+      - ./contents:/app/contents
+    restart: unless-stopped
+    healthcheck:
+      test: ['CMD', 'node', '/app/healthcheck.js']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
