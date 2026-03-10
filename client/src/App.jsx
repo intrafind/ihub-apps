@@ -1,7 +1,7 @@
 import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
-import { initializeBasePath, getBasePath, buildPath } from './utils/runtimeBasePath';
+import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
@@ -90,7 +90,7 @@ import { useUIConfig } from './shared/contexts/UIConfigContext';
 import { usePlatformConfig } from './shared/contexts/PlatformConfigContext';
 import DocumentTitle from './shared/components/DocumentTitle';
 import { AdminAuthProvider } from './features/admin/hooks/useAdminAuth';
-import { AuthProvider, useAuth } from './shared/contexts/AuthContext';
+import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
@@ -125,10 +125,8 @@ const LazyAdminRoute = ({ component: Component }) => (
  * Reads the setup.configured flag from the platform config (included in /api/auth/status)
  * which is already fetched on every page load — no extra API call needed.
  *
- * Security: setup requires real authentication even when anonymous access is enabled.
- * When unconfigured:
- *   - Not authenticated → redirect to /login?returnUrl=/setup
- *   - Authenticated     → redirect to /setup
+ * When unconfigured, always redirects to /setup — the setup wizard handles
+ * authentication internally as one of its steps.
  *
  * If the user explicitly skipped setup this session, the redirect is suppressed
  * until the next session/tab. The setup_configured flag is set after wizard completion
@@ -137,7 +135,6 @@ const LazyAdminRoute = ({ component: Component }) => (
  */
 const SetupCheck = ({ children }) => {
   const navigate = useNavigate();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { platformConfig, isLoading: platformLoading } = usePlatformConfig();
   // User deliberately chose "Skip" this session — don't redirect again until next session
   const sessionSkipped = !!sessionStorage.getItem('setup_skipped');
@@ -153,19 +150,13 @@ const SetupCheck = ({ children }) => {
         : (platformConfig.setup?.configured ?? true);
 
   useEffect(() => {
-    if (setupConfigured === null || authLoading) return;
+    if (setupConfigured === null) return;
     if (!setupConfigured) {
-      if (isAuthenticated) {
-        navigate('/setup', { replace: true });
-      } else {
-        // Setup requires auth — send to login first, then redirect back to setup
-        const setupPath = buildPath('setup');
-        navigate(`/login?returnUrl=${encodeURIComponent(setupPath)}`, { replace: true });
-      }
+      navigate('/setup', { replace: true });
     }
-  }, [setupConfigured, authLoading, isAuthenticated, navigate]);
+  }, [setupConfigured, navigate]);
 
-  if (setupConfigured === null || authLoading) {
+  if (setupConfigured === null) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
