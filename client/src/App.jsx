@@ -145,7 +145,7 @@ const SetupCheck = ({ children }) => {
       .then(r => r.json())
       .then(data => setSetupConfigured(data.configured))
       .catch(() => setSetupConfigured(true)); // On error, don't block the app
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (setupConfigured === null || authLoading) return;
