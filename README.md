@@ -231,6 +231,7 @@ tar -xzf ihub-apps-v*-linux.tar.gz && cd ihub-apps-v* && ./ihub-apps-v*-linux
 - ✅ Auto-setup — creates default configuration on first run
 - ✅ Cross-platform — Windows, macOS, Linux binaries
 - ✅ Production-ready — optimized single executable
+- ✅ Built-in updates — update via Admin UI or `--update` CLI flag
 
 📥 **[Download from GitHub Releases](https://github.com/intrafind/ihub-apps/releases)**
 

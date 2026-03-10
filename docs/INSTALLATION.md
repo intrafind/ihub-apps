@@ -659,50 +659,46 @@ For detailed configuration documentation, see the main README.md Configuration s
 
 ### Binary Installation Updates
 
-**Safe update procedure with configuration preservation:**
+**In-place updates** (recommended): Binary installations support automatic in-place updates via the Admin UI or CLI. Updates are downloaded from GitHub Releases, verified with checksums, and applied without manual file management. A backup of the previous version is kept for rollback.
 
-1. **Backup current installation:**
+**Via Admin UI:**
+1. Navigate to **Admin > System**
+2. Click **Check for Updates**
+3. If an update is available, click **Download** then **Apply**
+4. The server restarts automatically with the new version
+
+**Via CLI:**
 ```bash
-# Create backup of entire directory
-cp -r ihub-apps-current ihub-apps-backup-$(date +%Y%m%d)
+# Full update (check, download, apply)
+./ihub-apps-v*-<platform> --update
 
-# Or backup just configuration
-cp -r contents contents-backup-$(date +%Y%m%d)
+# Step-by-step
+./ihub-apps-v*-<platform> --update=check      # Check for available updates
+./ihub-apps-v*-<platform> --update=download   # Download and stage
+./ihub-apps-v*-<platform> --update=apply      # Apply staged update
+
+# Rollback to previous version
+./ihub-apps-v*-<platform> --update=rollback
+
+# Skip confirmation prompts
+./ihub-apps-v*-<platform> --update --force
 ```
 
-2. **Stop current application:**
-```bash
-# Stop the application (Ctrl+C or close terminal)
-# Or kill process if running in background
-pkill -f ihub-apps
-```
+**What happens during an update:**
+1. New version is downloaded from GitHub Releases and checksum-verified
+2. Current `server/`, `shared/`, `public/`, `node`, and launcher script are backed up to `.update-backup/<version>/`
+3. Staged files replace the current installation
+4. Server restarts automatically (exit code 75 triggers the launcher to re-exec)
 
-3. **Download new version:**
-   - Visit [GitHub Releases](https://github.com/intrafind/ihub-apps/releases/latest)
-   - Download the appropriate package for your platform
-   - Extract to a new directory
+**Rollback:**
+- Backups are organized by version under `.update-backup/` and preserved across updates
+- Rollback always restores the most recent backup
+- Available via Admin UI (**Admin > System > Rollback**) or CLI (`--update=rollback`)
 
-4. **Migrate configuration:**
-```bash
-# Copy your configuration to new installation
-cp -r contents-backup-*/* new-version/contents/
-
-# Or copy specific files if needed
-cp contents-backup-*/config/platform.json new-version/contents/config/
-cp -r contents-backup-*/data/* new-version/contents/data/
-```
-
-5. **Start updated application:**
-```bash
-cd new-version
-chmod +x ihub-apps-v*-platform  # Linux/macOS only
-./ihub-apps-v*-platform
-```
-
-6. **Verify update:**
-   - Check version in web interface or API
-   - Verify all applications still work
-   - Test configuration settings
+**Requirements:**
+- Write permissions on the installation directory
+- At least 500 MB free disk space
+- Only available for binary installations (not Docker or npm)
 
 ### Docker Installation Updates
 
@@ -772,7 +768,7 @@ curl http://localhost:3000/api/health | jq '.version'
 ```
 
 **Rollback procedures:**
-- **Binary**: Replace executable with backup version
+- **Binary**: Use the Admin UI or `--update=rollback` CLI command
 - **Docker**: Use specific version tag: `ghcr.io/intrafind/ihub-apps:v3.2.0`
 - **npm**: `git checkout v3.2.0` (or specific commit)
 
@@ -787,18 +783,10 @@ docker run -d \
   ihub-apps
 ```
 
-**Binary update script example:**
+**Binary automated updates via cron:**
 ```bash
-#!/bin/bash
-# update-ihub-apps.sh
-
-CURRENT_VERSION=$(./ihub-apps --version | cut -d' ' -f2)
-LATEST_VERSION=$(curl -s https://api.github.com/repos/intrafind/ihub-apps/releases/latest | jq -r '.tag_name')
-
-if [ "$CURRENT_VERSION" != "$LATEST_VERSION" ]; then
-  echo "Updating from $CURRENT_VERSION to $LATEST_VERSION"
-  # Download and update logic here
-fi
+# Run unattended update daily at 2am (skips prompt, restarts if update available)
+0 2 * * * /path/to/ihub-apps-v*-linux --update --force
 ```
 
 ## Troubleshooting

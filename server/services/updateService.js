@@ -5,7 +5,7 @@
  * creates backups, swaps application files, and supports rollback.
  */
 import { promises as fs } from 'fs';
-import { createWriteStream, existsSync, createReadStream, readdirSync, readFileSync } from 'fs';
+import { createWriteStream, existsSync, createReadStream, readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
 import { createHash } from 'crypto';
 import { pipeline } from 'stream/promises';
@@ -84,14 +84,25 @@ let updateState = {
  */
 export function getUpdateStatus() {
   const rootDir = getRootDir();
-  const hasBackup = existsSync(join(rootDir, UPDATE_BACKUP_DIR));
+  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
+  const hasBackup = existsSync(backupBaseDir);
   let backupVersion = null;
 
   if (hasBackup) {
     try {
-      const bvPath = join(rootDir, UPDATE_BACKUP_DIR, 'version.txt');
-      if (existsSync(bvPath)) {
-        backupVersion = readFileSync(bvPath, 'utf8').trim();
+      const versions = readdirSync(backupBaseDir).filter(d => {
+        try {
+          return statSync(join(backupBaseDir, d)).isDirectory();
+        } catch {
+          return false;
+        }
+      });
+      if (versions.length > 0) {
+        versions.sort().reverse();
+        const bvPath = join(backupBaseDir, versions[0], 'version.txt');
+        if (existsSync(bvPath)) {
+          backupVersion = readFileSync(bvPath, 'utf8').trim();
+        }
       }
     } catch {
       // ignore
@@ -351,7 +362,6 @@ export async function downloadUpdate(updateInfo) {
 export async function applyUpdate() {
   const rootDir = getRootDir();
   const stagingDir = join(rootDir, UPDATE_STAGING_DIR);
-  const backupDir = join(rootDir, UPDATE_BACKUP_DIR);
 
   if (!existsSync(stagingDir)) {
     throw new Error('No staged update found. Download an update first.');
@@ -360,13 +370,16 @@ export async function applyUpdate() {
   await acquireLock();
   setState({ status: 'applying', progress: 0, message: 'Applying update...', error: null });
 
+  const currentVersion = getAppVersion();
+  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
+  const backupDir = join(backupBaseDir, currentVersion);
+
   try {
-    // Remove any previous backup
+    // Remove any stale backup for THIS version only (e.g. from a failed attempt)
     await fs.rm(backupDir, { recursive: true, force: true });
     await fs.mkdir(backupDir, { recursive: true });
 
     // Save current version to backup
-    const currentVersion = getAppVersion();
     await fs.writeFile(join(backupDir, 'version.txt'), currentVersion);
 
     // Backup and replace each path
@@ -468,11 +481,26 @@ export async function applyUpdate() {
  */
 export async function rollback() {
   const rootDir = getRootDir();
-  const backupDir = join(rootDir, UPDATE_BACKUP_DIR);
+  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
 
-  if (!existsSync(backupDir)) {
+  if (!existsSync(backupBaseDir)) {
     throw new Error('No backup available for rollback');
   }
+
+  const versions = (await fs.readdir(backupBaseDir)).filter(d => {
+    try {
+      return statSync(join(backupBaseDir, d)).isDirectory();
+    } catch {
+      return false;
+    }
+  });
+
+  if (versions.length === 0) {
+    throw new Error('No backup available for rollback');
+  }
+
+  versions.sort().reverse();
+  const backupDir = join(backupBaseDir, versions[0]);
 
   await acquireLock();
   setState({ status: 'applying', progress: 0, message: 'Rolling back...', error: null });
@@ -518,8 +546,19 @@ async function performRollback(rootDir, backupDir) {
   // Restore launcher script
   await restoreLauncherScript(rootDir, backupDir);
 
-  // Clean up backup dir
+  // Clean up the restored backup subdirectory (not the whole .update-backup/)
   await fs.rm(backupDir, { recursive: true, force: true });
+
+  // If no more backups remain, clean up the parent directory too
+  const backupBaseDir = join(rootDir, UPDATE_BACKUP_DIR);
+  try {
+    const remaining = await fs.readdir(backupBaseDir);
+    if (remaining.length === 0) {
+      await fs.rm(backupBaseDir, { recursive: true, force: true });
+    }
+  } catch {
+    // ignore
+  }
 }
 
 /**
