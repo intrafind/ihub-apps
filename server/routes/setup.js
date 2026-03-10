@@ -1,6 +1,6 @@
 import { promises as fs } from 'fs';
 import { join } from 'path';
-import fetch from 'node-fetch';
+import { httpFetch } from '../utils/httpConfig.js';
 import { getRootDir } from '../pathUtils.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
@@ -20,19 +20,19 @@ async function testApiKey(providerId, apiKey) {
   try {
     let response;
     if (providerId === 'openai') {
-      response = await fetch('https://api.openai.com/v1/models', {
+      response = await httpFetch('https://api.openai.com/v1/models', {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
     } else if (providerId === 'anthropic') {
-      response = await fetch('https://api.anthropic.com/v1/models', {
+      response = await httpFetch('https://api.anthropic.com/v1/models', {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
       });
     } else if (providerId === 'google') {
-      response = await fetch(
+      response = await httpFetch(
         `https://generativelanguage.googleapis.com/v1/models?key=${encodeURIComponent(apiKey)}`
       );
     } else if (providerId === 'mistral') {
-      response = await fetch('https://api.mistral.ai/v1/models', {
+      response = await httpFetch('https://api.mistral.ai/v1/models', {
         headers: { Authorization: `Bearer ${apiKey}` }
       });
     } else {

@@ -13,6 +13,7 @@
 import jwt from 'jsonwebtoken';
 import { loadUsers, saveUsers } from '../utils/userManager.js';
 import configCache from '../configCache.js';
+import { httpFetch } from '../utils/httpConfig.js';
 
 const SERVER_URL = 'http://localhost:3000';
 const JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
@@ -26,7 +27,7 @@ async function testEndpoint(description, token, expectedStatus, expectedErrorTyp
   console.log(`\n📋 ${description}`);
 
   try {
-    const response = await fetch(`${SERVER_URL}/api/auth/user`, {
+    const response = await httpFetch(`${SERVER_URL}/api/auth/user`, {
       headers: {
         Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json'
@@ -60,7 +61,7 @@ async function runTests() {
   // Check if server is running
   console.log('\n📋 Checking server availability...');
   try {
-    const healthCheck = await fetch(`${SERVER_URL}/api/health`);
+    const healthCheck = await httpFetch(`${SERVER_URL}/api/health`);
     if (healthCheck.ok) {
       console.log('  ✓ Server is running');
     } else {

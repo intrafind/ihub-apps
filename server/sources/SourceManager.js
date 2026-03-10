@@ -3,6 +3,7 @@ import URLHandler from './URLHandler.js';
 import IFinderHandler from './IFinderHandler.js';
 import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
+import { httpFetch } from '../utils/httpConfig.js';
 import { resolveAndValidatePath } from '../utils/pathSecurity.js';
 
 // Global registry for source tool functions (persists across SourceManager instances)
@@ -616,7 +617,7 @@ class SourceManager {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-      const response = await fetch(url, {
+      const response = await httpFetch(url, {
         method,
         headers,
         signal: controller.signal

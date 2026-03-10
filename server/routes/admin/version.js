@@ -1,6 +1,7 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
+import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 
 export default function registerAdminVersionRoutes(app) {
@@ -48,7 +49,7 @@ export default function registerAdminVersionRoutes(app) {
       const currentVersion = getAppVersion();
 
       // Fetch latest release from GitHub
-      const response = await fetch(
+      const response = await httpFetch(
         'https://api.github.com/repos/intrafind/ihub-apps/releases/latest',
         {
           headers: {

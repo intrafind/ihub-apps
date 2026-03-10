@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { createCompletionRequest } from '../adapters/index.js';
 import logger from '../utils/logger.js';
+import { httpFetch } from '../utils/httpConfig.js';
 
 // Load environment variables
 dotenv.config({ path: '../.env' });
@@ -55,7 +56,7 @@ const testAzureOpenAI = async () => {
       headers['api-key'] = apiKey;
     }
 
-    const response = await fetch(request.url, {
+    const response = await httpFetch(request.url, {
       method: request.method,
       headers,
       body: JSON.stringify(request.body)

@@ -1,6 +1,5 @@
 import 'dotenv/config';
-import axios from 'axios';
-import { enhanceAxiosConfig } from '../../utils/httpConfig.js';
+import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -36,20 +35,26 @@ class EntraService {
     params.append('grant_type', 'client_credentials');
 
     try {
-      const axiosConfig = enhanceAxiosConfig(
-        {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        },
-        this.tokenUrl
-      );
-      const response = await axios.post(this.tokenUrl, params, axiosConfig);
-      const tokenData = response.data;
+      const response = await httpFetch(this.tokenUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        logger.error('❌ Error fetching access token:', errorData);
+        throw new Error('Failed to acquire access token.');
+      }
+
+      const tokenData = await response.json();
       this.accessToken = tokenData.access_token;
       this.tokenExpiry = Date.now() + tokenData.expires_in * 1000;
       logger.info('EntraService: ✅ Token acquired');
       return this.accessToken;
     } catch (error) {
-      logger.error('❌ Error fetching access token:', error.response?.data || error.message);
+      if (error.message === 'Failed to acquire access token.') throw error;
+      logger.error('❌ Error fetching access token:', error.message);
       throw new Error('Failed to acquire access token.');
     }
   }
@@ -58,24 +63,26 @@ class EntraService {
     const token = await this._getAccessToken();
     const url = `${this.graphUrl}${endpoint}`;
     try {
-      const axiosConfig = enhanceAxiosConfig(
-        {
-          headers: { Authorization: `Bearer ${token}` },
-          ...options
-        },
-        url
-      );
-      const response = await axios.get(url, axiosConfig);
-      return response.data;
-    } catch (error) {
-      if (error.response?.status === 404) {
-        logger.info(`EntraService: Resource not found at endpoint: ${endpoint}`);
+      const response = await httpFetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          logger.info(`EntraService: Resource not found at endpoint: ${endpoint}`);
+          return null;
+        }
+        const errorData = await response.json().catch(() => ({}));
+        logger.error(`❌ Error calling Graph API endpoint ${endpoint}:`, errorData);
         return null;
       }
-      logger.error(
-        `❌ Error calling Graph API endpoint ${endpoint}:`,
-        error.response?.data || error.message
-      );
+
+      if (options.responseType === 'arraybuffer') {
+        return await response.arrayBuffer();
+      }
+      return await response.json();
+    } catch (error) {
+      logger.error(`❌ Error calling Graph API endpoint ${endpoint}:`, error.message);
       return null;
     }
   }

@@ -1,6 +1,6 @@
 import SourceHandler from './SourceHandler.js';
 import configCache from '../configCache.js';
-import { enhanceFetchOptions } from '../utils/httpConfig.js';
+import { httpFetch } from '../utils/httpConfig.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -116,18 +116,10 @@ class URLHandler extends SourceHandler {
         try {
           logger.info(`Fallback extractor: Fetching ${url}`);
 
-          // Use native fetch if available, otherwise import node-fetch
-          let fetch;
-          if (typeof globalThis.fetch === 'function') {
-            fetch = globalThis.fetch;
-          } else {
-            fetch = (await import('node-fetch')).default;
-          }
-
           const controller = new AbortController();
           const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-          const baseOptions = {
+          const response = await httpFetch(url, {
             method: 'GET',
             headers: {
               'User-Agent': 'ihub-Apps/1.0 (+https://github.com/intrafind/ihub-apps)',
@@ -138,12 +130,7 @@ class URLHandler extends SourceHandler {
             },
             signal: controller.signal,
             redirect: followRedirects ? 'follow' : 'manual'
-          };
-
-          // Apply global SSL configuration
-          const fetchOptions = enhanceFetchOptions(baseOptions, url);
-
-          const response = await fetch(url, fetchOptions);
+          });
 
           clearTimeout(timeoutId);
 
