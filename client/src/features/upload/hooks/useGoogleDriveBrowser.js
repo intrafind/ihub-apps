@@ -2,6 +2,9 @@ import { useState, useCallback } from 'react';
 import { apiClient } from '../../../api/client';
 import { processCloudFile } from '../utils/cloudFileProcessing';
 
+// Sources that have exactly one virtual drive and should skip the drives list view
+export const SINGLE_DRIVE_SOURCES = ['myDrive', 'sharedWithMe'];
+
 /**
  * Custom hook for Google Drive file browsing and selection
  */
@@ -159,6 +162,20 @@ export const useGoogleDriveBrowser = () => {
       await loadItems(drive.id, null);
     },
     [loadItems]
+  );
+
+  /**
+   * Select a source category, automatically skipping the drives list for single-drive sources
+   * (myDrive and sharedWithMe always have exactly one virtual drive)
+   */
+  const selectSource = useCallback(
+    async sourceId => {
+      const drivesResult = await loadDrivesForSource(sourceId);
+      if (SINGLE_DRIVE_SOURCES.includes(sourceId) && drivesResult.length > 0) {
+        await selectDrive(drivesResult[0]);
+      }
+    },
+    [loadDrivesForSource, selectDrive]
   );
 
   /**
@@ -345,6 +362,7 @@ export const useGoogleDriveBrowser = () => {
     checkAuthStatus,
     loadSources,
     loadDrivesForSource,
+    selectSource,
     goBackToSources,
     loadItems,
     selectDrive,

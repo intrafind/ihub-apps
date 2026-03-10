@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import { useGoogleDriveBrowser } from '../hooks/useGoogleDriveBrowser';
+import { useGoogleDriveBrowser, SINGLE_DRIVE_SOURCES } from '../hooks/useGoogleDriveBrowser';
 import { formatFileSize, isCloudFileSupported } from '../utils/cloudFileProcessing';
 
 /**
@@ -27,7 +27,7 @@ const GoogleDriveFileBrowser = ({ provider, onFilesProcessed, onClose, uploadCon
     sortDirection,
     checkAuthStatus,
     loadSources,
-    loadDrivesForSource,
+    selectSource,
     goBackToSources,
     selectDrive,
     navigateToFolder,
@@ -206,7 +206,7 @@ const GoogleDriveFileBrowser = ({ provider, onFilesProcessed, onClose, uploadCon
           {sources.map(source => (
             <button
               key={source.id}
-              onClick={() => loadDrivesForSource(source.id)}
+              onClick={() => selectSource(source.id)}
               className="w-full flex items-center p-4 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-600 transition-colors"
             >
               <div className="flex-shrink-0 w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/30 flex items-center justify-center mr-4">
@@ -305,11 +305,15 @@ const GoogleDriveFileBrowser = ({ provider, onFilesProcessed, onClose, uploadCon
         {/* Header with back button and breadcrumbs */}
         <div className="mb-4 pb-3 border-b border-gray-200 dark:border-gray-700">
           <button
-            onClick={() => selectDrive(null)}
+            onClick={() =>
+              SINGLE_DRIVE_SOURCES.includes(currentSource) ? goBackToSources() : selectDrive(null)
+            }
             className="text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 mb-2 flex items-center"
           >
             <Icon name="arrowLeft" size="sm" className="mr-1" />
-            {t('cloudStorage.backToDrives', 'Back to Drives')}
+            {SINGLE_DRIVE_SOURCES.includes(currentSource)
+              ? t('cloudStorage.backToStorageLocations', 'Back to Storage Locations')
+              : t('cloudStorage.backToDrives', 'Back to Drives')}
           </button>
 
           {/* Breadcrumbs */}
