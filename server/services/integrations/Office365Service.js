@@ -538,6 +538,7 @@ class Office365Service {
         );
       }
 
+      if (response.status === 204) return null;
       return await response.json();
     } catch (error) {
       // Re-throw known errors

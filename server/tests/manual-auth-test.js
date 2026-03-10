@@ -92,6 +92,11 @@ async function testAppsAccess(token, user) {
       }
     });
 
+    if (!response.ok) {
+      logger.info(`❌ Apps access failed with status ${response.status}`);
+      return false;
+    }
+
     const data = await response.json();
 
     logger.info(`📱 Apps returned: ${data.length}`);
@@ -131,6 +136,10 @@ async function testAnonymousAccess() {
 
   try {
     const response = await httpFetch(`${API_BASE}/apps`);
+    if (response.status === 401) {
+      logger.info('✅ Anonymous access properly blocked with 401');
+      return;
+    }
     const data = await response.json();
     logger.info(`📱 Anonymous apps returned: ${data.length}`);
     if (data.length > 0) {
@@ -167,6 +176,10 @@ async function testPlatformConfig() {
 
   try {
     const response = await httpFetch(`${API_BASE}/configs/platform`);
+    if (!response.ok) {
+      logger.info(`❌ Platform config request failed with status ${response.status}`);
+      return;
+    }
     const data = await response.json();
     logger.info('✅ Platform config accessible');
     logger.info('🔍 Auth mode:', data.auth?.mode);

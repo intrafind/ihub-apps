@@ -61,9 +61,8 @@ router.get('/document', authRequired, async (req, res) => {
       if (v) res.set(h, v);
     }
 
-    // Stream response body to client
-    const { Readable } = await import('stream');
-    Readable.fromWeb(response.body).pipe(res);
+    // Stream response body to client (node-fetch returns a Node.js Readable, not a WHATWG ReadableStream)
+    response.body.pipe(res);
   } catch (error) {
     logger.error('iFinder document proxy error:', error.message);
     const status = error.message.includes('not found') ? 404 : 500;

@@ -379,6 +379,7 @@ class JiraService {
         throw new Error(`JIRA API error: ${errorData.errorMessages?.[0] || response.statusText}`);
       }
 
+      if (response.status === 204) return null;
       return await response.json();
     } catch (error) {
       // Re-throw known errors
@@ -698,38 +699,42 @@ class JiraService {
       logger.info(`📎 Downloading attachment: ${attachmentInfo.filename} from ${contentUrl}`);
 
       // Get attachment content with proper authorization
-      const timeout = returnBase64 ? 30000 : 30000;
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      const contentResponse = await httpFetch(contentUrl, {
-        headers: {
-          Authorization: `Bearer ${tokens.accessToken}`,
-          Accept: '*/*'
-        },
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      let contentResponse;
+      try {
+        contentResponse = await httpFetch(contentUrl, {
+          headers: {
+            Authorization: `Bearer ${tokens.accessToken}`,
+            Accept: '*/*'
+          },
+          signal: controller.signal
+        });
 
-      if (!contentResponse.ok) {
-        throw new Error(`Failed to download attachment: ${contentResponse.statusText}`);
-      }
+        if (!contentResponse.ok) {
+          throw new Error(`Failed to download attachment: ${contentResponse.statusText}`);
+        }
 
-      if (returnBase64) {
-        const buffer = Buffer.from(await contentResponse.arrayBuffer());
-        const base64Content = buffer.toString('base64');
-        return {
-          filename: attachmentInfo.filename,
-          mimeType: attachmentInfo.mimeType,
-          size: attachmentInfo.size,
-          content: base64Content
-        };
-      } else {
-        return {
-          filename: attachmentInfo.filename,
-          mimeType: attachmentInfo.mimeType,
-          size: attachmentInfo.size,
-          downloadUrl: contentUrl
-        };
+        if (returnBase64) {
+          // Keep timeout active until body is fully consumed
+          const buffer = Buffer.from(await contentResponse.arrayBuffer());
+          const base64Content = buffer.toString('base64');
+          return {
+            filename: attachmentInfo.filename,
+            mimeType: attachmentInfo.mimeType,
+            size: attachmentInfo.size,
+            content: base64Content
+          };
+        } else {
+          return {
+            filename: attachmentInfo.filename,
+            mimeType: attachmentInfo.mimeType,
+            size: attachmentInfo.size,
+            downloadUrl: contentUrl
+          };
+        }
+      } finally {
+        clearTimeout(timeoutId);
       }
     } catch (error) {
       logger.error('❌ Error getting JIRA attachment:', error.message);
