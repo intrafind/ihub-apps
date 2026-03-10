@@ -236,7 +236,9 @@ export default function SetupWizard() {
                     className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     autoComplete="off"
                   />
-                  {error && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
+                  {error && (
+                    <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>
+                  )}
                 </div>
               )}
 
