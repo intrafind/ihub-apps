@@ -12,10 +12,12 @@ import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 const HealthBadge = ({ status }) => {
+  const { t } = useTranslation();
+
   if (!status || status === 'idle') {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
-        Not tested
+        {t('admin.providers.health.notTested', 'Not tested')}
       </span>
     );
   }
@@ -24,23 +26,23 @@ const HealthBadge = ({ status }) => {
     testing: {
       bg: 'bg-blue-100 dark:bg-blue-900',
       text: 'text-blue-800 dark:text-blue-200',
-      label: 'Testing...',
+      label: t('admin.providers.health.testing', 'Testing...'),
       spinning: true
     },
     ok: {
       bg: 'bg-green-100 dark:bg-green-900',
       text: 'text-green-800 dark:text-green-200',
-      label: 'All OK'
+      label: t('admin.providers.health.allOk', 'All OK')
     },
     partial: {
       bg: 'bg-yellow-100 dark:bg-yellow-900',
       text: 'text-yellow-800 dark:text-yellow-200',
-      label: 'Partial'
+      label: t('admin.providers.health.partial', 'Partial')
     },
     error: {
       bg: 'bg-red-100 dark:bg-red-900',
       text: 'text-red-800 dark:text-red-200',
-      label: 'Failed'
+      label: t('admin.providers.health.failed', 'Failed')
     }
   };
 
@@ -78,7 +80,7 @@ const AdminProvidersPage = () => {
       setError(null);
       const [providersResponse, modelsResponse] = await Promise.all([
         makeAdminApiCall('/admin/providers'),
-        makeAdminApiCall('/admin/models')
+        makeAdminApiCall('/admin/models').catch(() => ({ data: [] }))
       ]);
 
       const providersArray = Array.isArray(providersResponse.data) ? providersResponse.data : [];
@@ -121,25 +123,45 @@ const AdminProvidersPage = () => {
       [providerId]: { status: 'testing', results: [], expanded: true }
     }));
 
+    // Use fetch directly to bypass the axios auth interceptor.
+    // The model test endpoint returns 401 when a model has no API key configured —
+    // a normal testable condition, not an auth failure. Using makeAdminApiCall here
+    // would cause the axios interceptor to clear tokens and redirect the admin.
+    const API_URL = import.meta.env.VITE_API_URL || '/api';
+    const authToken = localStorage.getItem('authToken') || localStorage.getItem('adminToken');
+    const fetchHeaders = { 'Content-Type': 'application/json' };
+    if (authToken) fetchHeaders['Authorization'] = `Bearer ${authToken}`;
+
     const results = [];
     for (const model of providerModels) {
       try {
-        const response = await makeAdminApiCall(`/admin/models/${model.id}/test`, {
-          method: 'POST'
+        const fetchResponse = await fetch(`${API_URL}/admin/models/${model.id}/test`, {
+          method: 'POST',
+          headers: fetchHeaders,
+          credentials: 'include'
         });
-        results.push({
-          model,
-          success: true,
-          message: response.data?.message || 'Test successful',
-          response: response.data?.response
-        });
+        const data = await fetchResponse.json().catch(() => ({}));
+        if (fetchResponse.ok) {
+          results.push({
+            model,
+            success: true,
+            message: data?.message || t('admin.providers.health.testSuccessful', 'Test successful'),
+            response: data?.response
+          });
+        } else {
+          results.push({
+            model,
+            success: false,
+            message: data?.message || t('admin.providers.health.testFailed', 'Test failed'),
+            error: data?.error || `HTTP ${fetchResponse.status}`
+          });
+        }
       } catch (err) {
-        const errData = err.response?.data || {};
         results.push({
           model,
           success: false,
-          message: errData.message || 'Test failed',
-          error: errData.error || err.message
+          message: t('admin.providers.health.testFailed', 'Test failed'),
+          error: err.message
         });
       }
       // Update incrementally so user sees progress
@@ -445,7 +467,7 @@ const AdminProvidersPage = () => {
                                               toggleExpanded(provider.id);
                                             }}
                                             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
-                                            title={isExpanded ? 'Hide results' : 'Show results'}
+                                            title={isExpanded ? t('admin.providers.health.hideResults', 'Hide results') : t('admin.providers.health.showResults', 'Show results')}
                                           >
                                             <Icon
                                               name={
