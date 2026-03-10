@@ -90,13 +90,19 @@ async function listModels(args) {
   }
 
   if (asJson) {
-    console.log(JSON.stringify(models.map(m => ({
-      id: m.id,
-      name: getModelName(m),
-      provider: m.provider,
-      enabled: m.enabled !== false,
-      hasApiKey: hasApiKey(m)
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        models.map(m => ({
+          id: m.id,
+          name: getModelName(m),
+          provider: m.provider,
+          enabled: m.enabled !== false,
+          hasApiKey: hasApiKey(m)
+        })),
+        null,
+        2
+      )
+    );
     return;
   }
 
@@ -235,35 +241,54 @@ async function addModel(args) {
       { value: 'openai', label: 'Local (LM Studio, vLLM, etc.) — uses OpenAI-compatible API' }
     ]
   });
-  if (isCancel(provider)) { cancel('Cancelled.'); return; }
+  if (isCancel(provider)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const id = await text({
     message: 'Model config ID (unique):',
     placeholder: 'gpt-4o',
-    validate: val => { if (!val) return 'ID is required'; }
+    validate: val => {
+      if (!val) return 'ID is required';
+    }
   });
-  if (isCancel(id)) { cancel('Cancelled.'); return; }
+  if (isCancel(id)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const modelId = await text({
     message: 'API model identifier:',
     placeholder: 'gpt-4o',
     initialValue: id
   });
-  if (isCancel(modelId)) { cancel('Cancelled.'); return; }
+  if (isCancel(modelId)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const nameEn = await text({
     message: 'Display name:',
     placeholder: 'GPT-4o',
     initialValue: id
   });
-  if (isCancel(nameEn)) { cancel('Cancelled.'); return; }
+  if (isCancel(nameEn)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const tokenLimit = await text({
     message: 'Token limit:',
     initialValue: '128000',
-    validate: val => { if (isNaN(parseInt(val))) return 'Enter a number'; }
+    validate: val => {
+      if (isNaN(parseInt(val))) return 'Enter a number';
+    }
   });
-  if (isCancel(tokenLimit)) { cancel('Cancelled.'); return; }
+  if (isCancel(tokenLimit)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const modelConfig = {
     id: id.trim(),
@@ -279,7 +304,9 @@ async function addModel(args) {
   const modelsDir = path.join(contentsDir, 'models');
 
   if (!existsSync(modelsDir)) {
-    console.error(`${symbols.error} Models directory not found. Run ${c.cyan('ihub start')} first.`);
+    console.error(
+      `${symbols.error} Models directory not found. Run ${c.cyan('ihub start')} first.`
+    );
     cancel('');
     return;
   }
@@ -288,7 +315,10 @@ async function addModel(args) {
   if (existsSync(outFile)) {
     const { confirm } = clack;
     const overwrite = await confirm({ message: `Model '${id}' already exists. Overwrite?` });
-    if (isCancel(overwrite) || !overwrite) { cancel('Cancelled.'); return; }
+    if (isCancel(overwrite) || !overwrite) {
+      cancel('Cancelled.');
+      return;
+    }
   }
 
   writeFileSync(outFile, JSON.stringify(modelConfig, null, 2) + '\n', 'utf-8');

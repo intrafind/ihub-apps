@@ -89,7 +89,9 @@ export default async function status(args) {
   console.log('');
   console.log(`  ${c.bold('iHub Apps')} v${version}`);
   console.log(`  ${c.gray('─'.repeat(40))}`);
-  console.log(`  Status:    ${running ? `${symbols.success} ${c.green('Running')}` : `${symbols.error} ${c.red('Stopped')}`}`);
+  console.log(
+    `  Status:    ${running ? `${symbols.success} ${c.green('Running')}` : `${symbols.error} ${c.red('Stopped')}`}`
+  );
   console.log(`  URL:       ${running ? c.cyan(url) : c.gray('—')}`);
 
   if (pid) {

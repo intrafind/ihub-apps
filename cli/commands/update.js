@@ -61,7 +61,9 @@ export default async function update(args) {
     if (latest === version) {
       console.log(`${symbols.success} You are on the latest version (${c.green(`v${version}`)})`);
     } else {
-      console.log(`${symbols.warning} Update available: ${c.yellow(`v${version}`)} → ${c.green(`v${latest}`)}`);
+      console.log(
+        `${symbols.warning} Update available: ${c.yellow(`v${version}`)} → ${c.green(`v${latest}`)}`
+      );
       console.log('');
 
       if (!checkOnly) {

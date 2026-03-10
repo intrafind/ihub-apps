@@ -66,8 +66,7 @@ export default async function setup(args) {
   intro(c.bold(' iHub Apps Setup Wizard '));
 
   // Check if already set up
-  const alreadySetUp =
-    existsSync(path.join(contentsDir, 'config', 'platform.json')) && !force;
+  const alreadySetUp = existsSync(path.join(contentsDir, 'config', 'platform.json')) && !force;
 
   if (alreadySetUp) {
     const proceed = await confirm({

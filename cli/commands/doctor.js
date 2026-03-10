@@ -53,7 +53,7 @@ function warn(label, detail = '') {
 }
 
 function formatBytes(bytes) {
-  const gb = bytes / (1024 ** 3);
+  const gb = bytes / 1024 ** 3;
   return `${gb.toFixed(1)} GB`;
 }
 
@@ -94,7 +94,7 @@ export default async function doctor(args) {
   try {
     const stats = statfsSync(rootDir);
     const freeBytes = stats.bfree * stats.bsize;
-    const freeGB = freeBytes / (1024 ** 3);
+    const freeGB = freeBytes / 1024 ** 3;
     if (freeGB < 0.5) {
       fail(`Disk space`, `only ${formatBytes(freeBytes)} free — critically low`);
       issues++;
@@ -159,11 +159,7 @@ export default async function doctor(args) {
   if (existsSync(contentsDir)) {
     pass('Contents directory found', contentsDir);
 
-    const configFiles = [
-      'config/platform.json',
-      'config/groups.json',
-      'config/ui.json'
-    ];
+    const configFiles = ['config/platform.json', 'config/groups.json', 'config/ui.json'];
     for (const f of configFiles) {
       const fp = path.join(contentsDir, f);
       if (existsSync(fp)) {
@@ -207,7 +203,10 @@ export default async function doctor(args) {
         const hasProvider = modelFiles.some(f => {
           try {
             const m = JSON.parse(readFileSync(path.join(modelsDir, f), 'utf-8'));
-            return m.provider === check.provider || (m.provider === 'openai' && check.provider === 'openai');
+            return (
+              m.provider === check.provider ||
+              (m.provider === 'openai' && check.provider === 'openai')
+            );
           } catch {
             return false;
           }
@@ -236,7 +235,9 @@ export default async function doctor(args) {
       console.log(`  ${symbols.error} ${c.red(`${issues} issue${issues > 1 ? 's' : ''} found`)}`);
     }
     if (warnings > 0) {
-      console.log(`  ${symbols.warning} ${c.yellow(`${warnings} warning${warnings > 1 ? 's' : ''}`)}`);
+      console.log(
+        `  ${symbols.warning} ${c.yellow(`${warnings} warning${warnings > 1 ? 's' : ''}`)}`
+      );
     }
     if (issues > 0) {
       console.log('');

@@ -38,16 +38,16 @@ export default async function backup(args) {
   }
 
   const dirIdx = args.indexOf('--dir');
-  const sourceDir =
-    dirIdx !== -1 ? args[dirIdx + 1] : getContentsDir();
+  const sourceDir = dirIdx !== -1 ? args[dirIdx + 1] : getContentsDir();
 
   const outputArg = args.filter(a => !a.startsWith('--') && a !== args[dirIdx + 1])[0];
-  const outputFile =
-    outputArg || path.join(getRootDir(), `ihub-backup-${formatTimestamp()}.zip`);
+  const outputFile = outputArg || path.join(getRootDir(), `ihub-backup-${formatTimestamp()}.zip`);
 
   if (!existsSync(sourceDir)) {
     console.error(`${symbols.error} Source directory not found: ${sourceDir}`);
-    console.error(`  Make sure iHub has been started at least once to create the contents directory.`);
+    console.error(
+      `  Make sure iHub has been started at least once to create the contents directory.`
+    );
     process.exit(1);
   }
 

@@ -72,13 +72,19 @@ async function listApps(args) {
   }
 
   if (asJson) {
-    console.log(JSON.stringify(apps.map(a => ({
-      id: a.id,
-      name: getAppName(a),
-      model: a.preferredModel,
-      enabled: a.enabled !== false,
-      category: a.category
-    })), null, 2));
+    console.log(
+      JSON.stringify(
+        apps.map(a => ({
+          id: a.id,
+          name: getAppName(a),
+          model: a.preferredModel,
+          enabled: a.enabled !== false,
+          category: a.category
+        })),
+        null,
+        2
+      )
+    );
     return;
   }
 
@@ -112,7 +118,9 @@ async function listApps(args) {
   }
 
   console.log('');
-  console.log(`  ${c.gray('Tip:')} Use ${c.cyan('ihub apps enable <id>')} or ${c.cyan('disable <id>')} to change status.`);
+  console.log(
+    `  ${c.gray('Tip:')} Use ${c.cyan('ihub apps enable <id>')} or ${c.cyan('disable <id>')} to change status.`
+  );
   console.log('');
 }
 
@@ -182,33 +190,52 @@ async function addApp(args) {
       if (val.length > 50) return 'ID must be 50 characters or less';
     }
   });
-  if (isCancel(id)) { cancel('Cancelled.'); return; }
+  if (isCancel(id)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const name = await text({
     message: 'App name:',
     placeholder: 'My Assistant',
-    validate: val => { if (!val) return 'Name is required'; }
+    validate: val => {
+      if (!val) return 'Name is required';
+    }
   });
-  if (isCancel(name)) { cancel('Cancelled.'); return; }
+  if (isCancel(name)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const description = await text({
     message: 'Short description:',
     placeholder: 'A helpful AI assistant'
   });
-  if (isCancel(description)) { cancel('Cancelled.'); return; }
+  if (isCancel(description)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const model = await text({
     message: 'Preferred model (optional):',
     placeholder: 'gpt-4o'
   });
-  if (isCancel(model)) { cancel('Cancelled.'); return; }
+  if (isCancel(model)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const systemPrompt = await text({
     message: 'System prompt:',
     placeholder: 'You are a helpful assistant.',
-    validate: val => { if (!val) return 'System prompt is required'; }
+    validate: val => {
+      if (!val) return 'System prompt is required';
+    }
   });
-  if (isCancel(systemPrompt)) { cancel('Cancelled.'); return; }
+  if (isCancel(systemPrompt)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const color = await text({
     message: 'Accent color (hex):',
@@ -217,7 +244,10 @@ async function addApp(args) {
       if (!/^#[0-9A-Fa-f]{6}$/.test(val)) return 'Enter a valid hex color like #4F46E5';
     }
   });
-  if (isCancel(color)) { cancel('Cancelled.'); return; }
+  if (isCancel(color)) {
+    cancel('Cancelled.');
+    return;
+  }
 
   const appConfig = {
     id: id.trim(),
@@ -243,7 +273,10 @@ async function addApp(args) {
   const outFile = path.join(appsDir, `${id}.json`);
   if (existsSync(outFile)) {
     const overwrite = await confirm({ message: `App '${id}' already exists. Overwrite?` });
-    if (isCancel(overwrite) || !overwrite) { cancel('Cancelled.'); return; }
+    if (isCancel(overwrite) || !overwrite) {
+      cancel('Cancelled.');
+      return;
+    }
   }
 
   writeFileSync(outFile, JSON.stringify(appConfig, null, 2) + '\n', 'utf-8');

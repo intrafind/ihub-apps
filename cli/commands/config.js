@@ -69,7 +69,9 @@ async function showConfig(args) {
 
     if (!existsSync(filePath)) {
       console.error(`${symbols.error} Config file not found: ${fileName}`);
-      console.error(`  Available: ${CONFIG_FILES.map(f => f.replace('config/', '').replace('.json', '')).join(', ')}`);
+      console.error(
+        `  Available: ${CONFIG_FILES.map(f => f.replace('config/', '').replace('.json', '')).join(', ')}`
+      );
       process.exit(1);
     }
 
@@ -114,7 +116,9 @@ async function showConfig(args) {
       try {
         const data = JSON.parse(readFileSync(filePath, 'utf-8'));
         const size = Object.keys(data).length;
-        console.log(`  ${symbols.success} ${c.white(label)} ${c.gray(`(${size} keys — ${filePath})`)}`);
+        console.log(
+          `  ${symbols.success} ${c.white(label)} ${c.gray(`(${size} keys — ${filePath})`)}`
+        );
       } catch {
         console.log(`  ${symbols.error} ${c.red(label)} ${c.gray('(invalid JSON)')}`);
       }
@@ -133,8 +137,12 @@ async function showConfig(args) {
     ? path.join(contentsDir, 'models')
     : path.join(defaultsDir, 'models');
 
-  const appCount = existsSync(appsDir) ? readdirSync(appsDir).filter(f => f.endsWith('.json')).length : 0;
-  const modelCount = existsSync(modelsDir) ? readdirSync(modelsDir).filter(f => f.endsWith('.json')).length : 0;
+  const appCount = existsSync(appsDir)
+    ? readdirSync(appsDir).filter(f => f.endsWith('.json')).length
+    : 0;
+  const modelCount = existsSync(modelsDir)
+    ? readdirSync(modelsDir).filter(f => f.endsWith('.json')).length
+    : 0;
 
   console.log('');
   console.log(`  ${c.gray('Apps:')}   ${appCount} configured`);
@@ -159,9 +167,10 @@ function printJson(obj, indent = '') {
     } else if (typeof value === 'string' && value.includes('***')) {
       console.log(`${indent}${c.cyan(key)}: ${c.gray('[redacted]')}`);
     } else {
-      const displayValue = typeof value === 'string'
-        ? c.green(`"${value.length > 60 ? value.slice(0, 60) + '...' : value}"`)
-        : c.yellow(String(value));
+      const displayValue =
+        typeof value === 'string'
+          ? c.green(`"${value.length > 60 ? value.slice(0, 60) + '...' : value}"`)
+          : c.yellow(String(value));
       console.log(`${indent}${c.cyan(key)}: ${displayValue}`);
     }
   }
@@ -227,7 +236,9 @@ async function resetConfig(args) {
 
     if (!noConfirm) {
       let clack;
-      try { clack = await import('@clack/prompts'); } catch {}
+      try {
+        clack = await import('@clack/prompts');
+      } catch {}
       if (clack) {
         const { confirm, isCancel, cancel } = clack;
         const proceed = await confirm({
@@ -248,7 +259,9 @@ async function resetConfig(args) {
     // Reset all config
     if (!noConfirm) {
       let clack;
-      try { clack = await import('@clack/prompts'); } catch {}
+      try {
+        clack = await import('@clack/prompts');
+      } catch {}
       if (clack) {
         const { confirm, isCancel, cancel } = clack;
         const proceed = await confirm({
@@ -260,7 +273,9 @@ async function resetConfig(args) {
           return;
         }
       } else {
-        console.error(`${symbols.warning} Use --no-confirm to skip confirmation without @clack/prompts`);
+        console.error(
+          `${symbols.warning} Use --no-confirm to skip confirmation without @clack/prompts`
+        );
         process.exit(1);
       }
     }

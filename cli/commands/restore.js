@@ -39,9 +39,7 @@ export default async function restore(args) {
   const noConfirm = args.includes('--no-confirm');
   const destIdx = args.indexOf('--dest');
   const destDir = destIdx !== -1 ? args[destIdx + 1] : getContentsDir();
-  const backupFile = args.filter(
-    a => !a.startsWith('--') && a !== args[destIdx + 1]
-  )[0];
+  const backupFile = args.filter(a => !a.startsWith('--') && a !== args[destIdx + 1])[0];
 
   if (!backupFile) {
     console.error(`${symbols.error} No backup file specified.`);
@@ -63,7 +61,9 @@ export default async function restore(args) {
 
   if (!noConfirm) {
     let clack;
-    try { clack = await import('@clack/prompts'); } catch {}
+    try {
+      clack = await import('@clack/prompts');
+    } catch {}
     if (clack) {
       const { confirm, isCancel, cancel } = clack;
       const proceed = await confirm({

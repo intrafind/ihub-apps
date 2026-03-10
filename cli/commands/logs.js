@@ -59,7 +59,8 @@ function colorizeLog(line, levelFilter) {
       if (!lower.includes(`[${levelFilter}]`) && !lower.includes(` ${levelFilter}:`)) {
         // Heuristic level detection
         if (levelFilter === 'error' && !lower.includes('error')) return null;
-        if (levelFilter === 'warn' && !lower.includes('warn') && !lower.includes('error')) return null;
+        if (levelFilter === 'warn' && !lower.includes('warn') && !lower.includes('error'))
+          return null;
       }
     }
     return line;
@@ -127,9 +128,7 @@ export default async function logs(args) {
 
   if (!logFile) {
     console.error(`${symbols.error} No log file found.`);
-    console.error(
-      `  Looked in:\n${candidateLogFiles.map(f => `    ${f}`).join('\n')}`
-    );
+    console.error(`  Looked in:\n${candidateLogFiles.map(f => `    ${f}`).join('\n')}`);
     console.error(`\n  Make sure the server is running with logging enabled.`);
     process.exit(1);
   }

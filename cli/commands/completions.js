@@ -24,8 +24,20 @@ const HELP = `
 `;
 
 const COMMANDS = [
-  'start', 'stop', 'status', 'doctor', 'open', 'setup', 'update',
-  'apps', 'models', 'config', 'logs', 'backup', 'restore', 'completions'
+  'start',
+  'stop',
+  'status',
+  'doctor',
+  'open',
+  'setup',
+  'update',
+  'apps',
+  'models',
+  'config',
+  'logs',
+  'backup',
+  'restore',
+  'completions'
 ];
 
 const SUBCOMMANDS = {
@@ -96,22 +108,23 @@ complete -F _ihub_completions ihub
 function zshCompletions() {
   const commandList = COMMANDS.map(cmd => {
     const subs = SUBCOMMANDS[cmd];
-    const desc = {
-      start: 'Start the server',
-      stop: 'Stop the server',
-      status: 'Show server status',
-      doctor: 'Diagnose configuration',
-      open: 'Open in browser',
-      setup: 'Interactive setup wizard',
-      update: 'Self-update',
-      apps: 'Manage apps',
-      models: 'Manage models',
-      config: 'Manage configuration',
-      logs: 'Stream server logs',
-      backup: 'Backup contents directory',
-      restore: 'Restore from backup',
-      completions: 'Generate shell completions'
-    }[cmd] || cmd;
+    const desc =
+      {
+        start: 'Start the server',
+        stop: 'Stop the server',
+        status: 'Show server status',
+        doctor: 'Diagnose configuration',
+        open: 'Open in browser',
+        setup: 'Interactive setup wizard',
+        update: 'Self-update',
+        apps: 'Manage apps',
+        models: 'Manage models',
+        config: 'Manage configuration',
+        logs: 'Stream server logs',
+        backup: 'Backup contents directory',
+        restore: 'Restore from backup',
+        completions: 'Generate shell completions'
+      }[cmd] || cmd;
     return `    '${cmd}:${desc}'`;
   }).join('\n');
 
@@ -173,30 +186,35 @@ _ihub "$@"
 
 function fishCompletions() {
   const cmdCompletions = COMMANDS.map(cmd => {
-    const desc = {
-      start: 'Start the server',
-      stop: 'Stop the server',
-      status: 'Show server status',
-      doctor: 'Diagnose configuration',
-      open: 'Open in browser',
-      setup: 'Interactive setup wizard',
-      update: 'Self-update',
-      apps: 'Manage apps',
-      models: 'Manage models',
-      config: 'Manage configuration',
-      logs: 'Stream server logs',
-      backup: 'Backup contents directory',
-      restore: 'Restore from backup',
-      completions: 'Generate shell completions'
-    }[cmd] || cmd;
+    const desc =
+      {
+        start: 'Start the server',
+        stop: 'Stop the server',
+        status: 'Show server status',
+        doctor: 'Diagnose configuration',
+        open: 'Open in browser',
+        setup: 'Interactive setup wizard',
+        update: 'Self-update',
+        apps: 'Manage apps',
+        models: 'Manage models',
+        config: 'Manage configuration',
+        logs: 'Stream server logs',
+        backup: 'Backup contents directory',
+        restore: 'Restore from backup',
+        completions: 'Generate shell completions'
+      }[cmd] || cmd;
     return `complete -c ihub -f -n '__fish_use_subcommand' -a ${cmd} -d '${desc}'`;
   }).join('\n');
 
-  const subCompletions = Object.entries(SUBCOMMANDS).map(([cmd, subs]) => {
-    return subs.map(sub => {
-      return `complete -c ihub -f -n '__fish_seen_subcommand_from ${cmd}' -a ${sub}`;
-    }).join('\n');
-  }).join('\n');
+  const subCompletions = Object.entries(SUBCOMMANDS)
+    .map(([cmd, subs]) => {
+      return subs
+        .map(sub => {
+          return `complete -c ihub -f -n '__fish_seen_subcommand_from ${cmd}' -a ${sub}`;
+        })
+        .join('\n');
+    })
+    .join('\n');
 
   return `# ihub fish completions
 # Install: ihub completions fish > ~/.config/fish/completions/ihub.fish
