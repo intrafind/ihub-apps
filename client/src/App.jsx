@@ -1,7 +1,7 @@
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
-import { initializeBasePath, getBasePath, buildApiUrl, buildPath } from './utils/runtimeBasePath';
+import { initializeBasePath, getBasePath, buildPath } from './utils/runtimeBasePath';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
@@ -121,9 +121,9 @@ const LazyAdminRoute = ({ component: Component }) => (
 );
 
 /**
- * Checks setup status on every mount and redirects when unconfigured.
- * Always verifies with the server so that a server reset (e.g. deleted contents
- * folder) is detected even when the browser tab is still open.
+ * Checks setup status and redirects when unconfigured.
+ * Reads the setup.configured flag from the platform config (included in /api/auth/status)
+ * which is already fetched on every page load — no extra API call needed.
  *
  * Security: setup requires real authentication even when anonymous access is enabled.
  * When unconfigured:
@@ -131,25 +131,30 @@ const LazyAdminRoute = ({ component: Component }) => (
  *   - Authenticated     → redirect to /setup
  *
  * If the user explicitly skipped setup this session, the redirect is suppressed
- * until the next session/tab.
+ * until the next session/tab. The setup_configured flag is set after wizard completion
+ * as a fast-path so navigation back to '/' doesn't re-trigger the redirect before the
+ * refreshed platform config arrives.
  */
 const SetupCheck = ({ children }) => {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { platformConfig, isLoading: platformLoading } = usePlatformConfig();
   // User deliberately chose "Skip" this session — don't redirect again until next session
   const sessionSkipped = !!sessionStorage.getItem('setup_skipped');
-  const [setupConfigured, setSetupConfigured] = useState(null); // null = loading
+  // Fast-path: wizard just completed in this session
+  const sessionConfigured = !!sessionStorage.getItem('setup_configured');
 
-  useEffect(() => {
-    fetch(buildApiUrl('setup/status'), { credentials: 'include' })
-      .then(r => r.json())
-      .then(data => setSetupConfigured(data.configured))
-      .catch(() => setSetupConfigured(true)); // On error, don't block the app
-  }, []);
+  // Derive setup state: null = still loading, true/false = known
+  const setupConfigured =
+    sessionConfigured || sessionSkipped
+      ? true
+      : platformLoading || !platformConfig
+        ? null
+        : (platformConfig.setup?.configured ?? true);
 
   useEffect(() => {
     if (setupConfigured === null || authLoading) return;
-    if (!setupConfigured && !sessionSkipped) {
+    if (!setupConfigured) {
       if (isAuthenticated) {
         navigate('/setup', { replace: true });
       } else {
@@ -158,7 +163,7 @@ const SetupCheck = ({ children }) => {
         navigate(`/login?returnUrl=${encodeURIComponent(setupPath)}`, { replace: true });
       }
     }
-  }, [setupConfigured, authLoading, isAuthenticated, sessionSkipped, navigate]);
+  }, [setupConfigured, authLoading, isAuthenticated, navigate]);
 
   if (setupConfigured === null || authLoading) {
     return (

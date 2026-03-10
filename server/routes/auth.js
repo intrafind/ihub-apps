@@ -636,7 +636,11 @@ export default function registerAuthRoutes(app) {
         const logoUrl = uiConfig.header?.logo?.url || null;
         const headerColor = uiConfig.header?.defaultColor || null;
         return { appName, logoUrl, primaryColor: headerColor };
-      })()
+      })(),
+      // Setup wizard state — default true so existing installs are never blocked
+      setup: {
+        configured: platform.setup?.configured ?? true
+      }
     };
 
     res.json(status);

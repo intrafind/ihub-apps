@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { buildApiUrl, buildPath } from '../../utils/runtimeBasePath';
 import { useAuth } from '../../shared/contexts/AuthContext';
+import { usePlatformConfig } from '../../shared/contexts/PlatformConfigContext';
 
 const PROVIDERS = [
   {
@@ -32,12 +33,21 @@ const PROVIDERS = [
     description: 'Efficient, open-weight models with strong multilingual support.',
     placeholder: 'API key...',
     keyUrl: 'https://console.mistral.ai/api-keys/'
+  },
+  {
+    id: 'local',
+    name: 'Local Provider',
+    description: 'LM Studio, Jan.ai, Ollama, vLLM — run models privately on your own hardware.',
+    badge: 'No API Key',
+    placeholder: null,
+    keyUrl: null
   }
 ];
 
 export default function SetupWizard() {
   const navigate = useNavigate();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { platformConfig, refreshConfig } = usePlatformConfig();
   const [step, setStep] = useState(1); // 1=welcome, 2=provider, 3=done
   const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0]);
   const [apiKey, setApiKey] = useState('');
@@ -54,37 +64,40 @@ export default function SetupWizard() {
 
   // If already configured, skip the wizard
   useEffect(() => {
-    fetch(buildApiUrl('setup/status'), { credentials: 'include' })
-      .then(r => r.json())
-      .then(data => {
-        if (data.configured) {
-          navigate('/', { replace: true });
-        }
-      })
-      .catch(() => {
-        // If the check fails, show the wizard anyway
-      });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (platformConfig && (platformConfig.setup?.configured ?? true)) {
+      navigate('/', { replace: true });
+    }
+  }, [platformConfig, navigate]);
 
   const handleSave = async () => {
-    if (!apiKey.trim()) {
+    const isLocal = selectedProvider.id === 'local';
+    if (!isLocal && !apiKey.trim()) {
       setError('Please enter an API key.');
       return;
     }
     setSaving(true);
     setError(null);
     try {
+      const body = isLocal
+        ? { providerId: 'local' }
+        : { providerId: selectedProvider.id, apiKey: apiKey.trim() };
+
       const response = await fetch(buildApiUrl('setup/configure'), {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ providerId: selectedProvider.id, apiKey: apiKey.trim() })
+        body: JSON.stringify(body)
       });
       const data = await response.json();
       if (!response.ok) {
-        setError(data.error || 'Failed to save API key. Please try again.');
+        setError(data.error || 'Failed to save configuration. Please try again.');
         return;
       }
+      // Refresh platform config so setup.configured becomes true in memory,
+      // then store a session fast-path flag in case the refresh hasn't settled
+      // before the user clicks "Go to Apps".
+      refreshConfig();
+      sessionStorage.setItem('setup_configured', '1');
       setStep(3);
     } catch {
       setError('Network error. Please check your connection and try again.');
@@ -103,6 +116,8 @@ export default function SetupWizard() {
   const handleFinish = () => {
     navigate('/', { replace: true });
   };
+
+  const isLocal = selectedProvider.id === 'local';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
@@ -183,34 +198,47 @@ export default function SetupWizard() {
                 ))}
               </div>
 
-              {/* API key input */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    {selectedProvider.name} API Key
-                  </label>
-                  <a
-                    href={selectedProvider.keyUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-blue-500 hover:text-blue-600 dark:hover:text-blue-400"
-                  >
-                    Get API key →
-                  </a>
+              {/* API key input (hidden for local provider) */}
+              {isLocal ? (
+                <div className="mb-4 p-4 rounded-xl bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800">
+                  <p className="text-sm text-amber-800 dark:text-amber-200 font-medium mb-1">
+                    Local provider selected
+                  </p>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    No API key is required. Make sure your local model server (LM Studio, Jan.ai,
+                    Ollama, vLLM, etc.) is running, then configure its endpoint under{' '}
+                    <strong>Admin &rsaquo; Providers</strong> after setup.
+                  </p>
                 </div>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={e => {
-                    setApiKey(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder={selectedProvider.placeholder}
-                  className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  autoComplete="off"
-                />
-                {error && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
-              </div>
+              ) : (
+                <div className="mb-4">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {selectedProvider.name} API Key
+                    </label>
+                    <a
+                      href={selectedProvider.keyUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-xs text-blue-500 hover:text-blue-600 dark:hover:text-blue-400"
+                    >
+                      Get API key →
+                    </a>
+                  </div>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={e => {
+                      setApiKey(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder={selectedProvider.placeholder}
+                    className="w-full border border-gray-300 dark:border-gray-600 rounded-xl px-4 py-2.5 text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    autoComplete="off"
+                  />
+                  {error && <p className="mt-1.5 text-xs text-red-600 dark:text-red-400">{error}</p>}
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button
@@ -221,10 +249,10 @@ export default function SetupWizard() {
                 </button>
                 <button
                   onClick={handleSave}
-                  disabled={saving || !apiKey.trim()}
+                  disabled={saving || (!isLocal && !apiKey.trim())}
                   className="flex-[2] bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 disabled:cursor-not-allowed text-white font-semibold py-2.5 px-6 rounded-xl transition-colors"
                 >
-                  {saving ? 'Saving…' : 'Save & Continue'}
+                  {saving ? 'Saving…' : isLocal ? 'Continue' : 'Save & Continue'}
                 </button>
               </div>
 
@@ -245,8 +273,9 @@ export default function SetupWizard() {
                 You&rsquo;re all set!
               </h2>
               <p className="text-gray-500 dark:text-gray-400 mb-8">
-                Your {selectedProvider.name} API key has been saved. You can now use AI-powered
-                apps. More providers can be added under Admin &rsaquo; Providers.
+                {isLocal
+                  ? 'Local provider setup complete. Configure your model server endpoint under Admin › Providers.'
+                  : `Your ${selectedProvider.name} API key has been saved. You can now use AI-powered apps. More providers can be added under Admin › Providers.`}
               </p>
               <button
                 onClick={handleFinish}

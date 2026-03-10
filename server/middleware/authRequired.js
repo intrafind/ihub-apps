@@ -128,25 +128,6 @@ export const appAccessRequired = resourceAccessRequired('app');
 export const modelAccessRequired = resourceAccessRequired('model');
 
 /**
- * Middleware that ALWAYS requires real authentication, regardless of the platform's
- * anonymousAuth setting. Use this for sensitive endpoints like initial setup where you
- * must never allow anonymous access even if the platform permits it globally.
- * @param {Object} req - Express request object
- * @param {Object} res - Express response object
- * @param {Function} next - Express next function
- */
-export function strictAuthRequired(req, res, next) {
-  if (!req.user || req.user.id === 'anonymous') {
-    return res.status(401).json({
-      error: 'Authentication required',
-      code: 'AUTH_REQUIRED',
-      message: 'You must be logged in to access this resource'
-    });
-  }
-  next();
-}
-
-/**
  * Combined middleware for chat endpoints that enforces authentication and app access
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
