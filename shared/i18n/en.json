@@ -1595,6 +1595,12 @@
       "getStarted": "Get Started",
       "skipLater": "Skip, I'll configure later"
     },
+    "step2Login": {
+      "title": "Sign in to continue",
+      "description": "An admin account is required to complete the initial setup.",
+      "notAdmin": "This account does not have admin privileges. Please sign in with an admin account.",
+      "signOutAndRetry": "Sign in with a different account"
+    },
     "step2": {
       "title": "Connect your first AI provider",
       "description": "Select a provider and enter your API key below.",

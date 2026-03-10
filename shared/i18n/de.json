@@ -1558,6 +1558,12 @@
       "getStarted": "Loslegen",
       "skipLater": "Überspringen, später konfigurieren"
     },
+    "step2Login": {
+      "title": "Anmelden, um fortzufahren",
+      "description": "Zur Ersteinrichtung ist ein Admin-Konto erforderlich.",
+      "notAdmin": "Dieses Konto hat keine Admin-Berechtigungen. Bitte melden Sie sich mit einem Admin-Konto an.",
+      "signOutAndRetry": "Mit einem anderen Konto anmelden"
+    },
     "step2": {
       "title": "Ersten KI-Anbieter verbinden",
       "description": "Wählen Sie einen Anbieter und geben Sie Ihren API-Schlüssel ein.",

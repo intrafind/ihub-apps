@@ -4,7 +4,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
 
-const LoginForm = ({ onSuccess, onCancel }) => {
+const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
   const { t } = useTranslation();
   const { loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
@@ -118,11 +118,19 @@ const LoginForm = ({ onSuccess, onCancel }) => {
 
   const isFormLoading = isLoading || isSubmitting;
 
+  const Wrapper = embedded
+    ? 'div'
+    : ({ children }) => (
+        <div className="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6">{children}</div>
+      );
+
   return (
-    <div className="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6">
-      <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
-        {t('errors.signIn', 'Sign In')}
-      </h2>
+    <Wrapper>
+      {!embedded && (
+        <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">
+          {t('errors.signIn', 'Sign In')}
+        </h2>
+      )}
 
       {error && (
         <div className="mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded">
@@ -352,7 +360,7 @@ const LoginForm = ({ onSuccess, onCancel }) => {
           <p className="text-sm mt-2">Please contact your administrator.</p>
         </div>
       )}
-    </div>
+    </Wrapper>
   );
 };
 

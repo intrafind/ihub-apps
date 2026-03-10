@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { buildApiUrl, buildPath } from '../../utils/runtimeBasePath';
+import { buildApiUrl } from '../../utils/runtimeBasePath';
 import { useAuth } from '../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../shared/contexts/PlatformConfigContext';
+import LoginForm from '../auth/components/LoginForm';
 
 const PROVIDERS = [
   {
@@ -44,36 +45,85 @@ const PROVIDERS = [
   }
 ];
 
+const TOTAL_STEPS = 4;
+
 export default function SetupWizard() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { user, isAuthenticated, isLoading: authLoading, logout } = useAuth();
   const { platformConfig, refreshConfig } = usePlatformConfig();
-  const [step, setStep] = useState(1); // 1=welcome, 2=provider, 3=finish
+  const [step, setStep] = useState(1); // 1=welcome, 2=sign-in, 3=provider, 4=finish
   const [selectedProvider, setSelectedProvider] = useState(PROVIDERS[0]);
   const [apiKey, setApiKey] = useState('');
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState(null); // null | { valid, error }
   const [error, setError] = useState(null);
+  const [loginError, setLoginError] = useState(null);
+  const [loginJustCompleted, setLoginJustCompleted] = useState(false);
 
-  // Setup requires real authentication — redirect to login if not authenticated
+  const userIsAdmin = user?.isAdmin === true;
+
+  // On mount, check if returning from an OIDC/NTLM redirect
   useEffect(() => {
-    if (!authLoading && !isAuthenticated) {
-      const setupPath = buildPath('setup');
-      navigate(`/login?returnUrl=${encodeURIComponent(setupPath)}`, { replace: true });
+    const savedStep = sessionStorage.getItem('setup_wizard_step');
+    if (savedStep) {
+      sessionStorage.removeItem('setup_wizard_step');
+      const targetStep = parseInt(savedStep, 10);
+      if (!authLoading && isAuthenticated && targetStep > 1) {
+        setStep(targetStep);
+      }
     }
-  }, [authLoading, isAuthenticated, navigate]);
+  }, [authLoading, isAuthenticated]);
 
-  // If already configured, skip the wizard (but not when we just finished — step 3 is the finish screen)
+  // When entering the login step, save the next step for OIDC/NTLM redirects
   useEffect(() => {
-    if (step === 3) return;
+    if (step === 2) {
+      sessionStorage.setItem('setup_wizard_step', '3');
+    } else {
+      sessionStorage.removeItem('setup_wizard_step');
+    }
+  }, [step]);
+
+  // After login completes, check admin access and advance
+  useEffect(() => {
+    if (loginJustCompleted && !authLoading && isAuthenticated) {
+      setLoginJustCompleted(false);
+      if (user?.isAdmin) {
+        setLoginError(null);
+        setStep(3);
+      } else {
+        setLoginError(t('setup.step2Login.notAdmin'));
+      }
+    }
+  }, [loginJustCompleted, authLoading, isAuthenticated, user, t]);
+
+  // If already configured, skip the wizard (but not on the finish screen)
+  useEffect(() => {
+    if (step === 4) return;
     if (platformConfig && (platformConfig.setup?.configured ?? true)) {
       navigate('/', { replace: true });
     }
   }, [platformConfig, navigate, step]);
 
   const isLocal = selectedProvider.id === 'local';
+
+  const handleGetStarted = () => {
+    if (!authLoading && isAuthenticated && userIsAdmin) {
+      setStep(3); // skip login — already authenticated as admin
+    } else {
+      setStep(2); // show login step
+    }
+  };
+
+  const handleLoginSuccess = () => {
+    setLoginJustCompleted(true);
+  };
+
+  const handleSignOutAndRetry = async () => {
+    setLoginError(null);
+    await logout();
+  };
 
   const handleTestKey = async () => {
     if (!apiKey.trim()) return;
@@ -125,7 +175,7 @@ export default function SetupWizard() {
       // before the user clicks "Go to Apps".
       refreshConfig();
       sessionStorage.setItem('setup_configured', '1');
-      setStep(3);
+      setStep(4);
     } catch {
       setError(t('setup.step2.testError'));
     } finally {
@@ -148,6 +198,8 @@ export default function SetupWizard() {
     navigate('/admin', { replace: true });
   };
 
+  const progressWidth = `${(step / TOTAL_STEPS) * 100}%`;
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-xl w-full max-w-lg">
@@ -155,7 +207,7 @@ export default function SetupWizard() {
         <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-t-2xl overflow-hidden">
           <div
             className="h-full bg-blue-500 transition-all duration-500"
-            style={{ width: step === 1 ? '33%' : step === 2 ? '66%' : '100%' }}
+            style={{ width: progressWidth }}
           />
         </div>
 
@@ -171,7 +223,7 @@ export default function SetupWizard() {
                 {t('setup.step1.description')}
               </p>
               <button
-                onClick={() => setStep(2)}
+                onClick={handleGetStarted}
                 className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-xl transition-colors"
               >
                 {t('setup.step1.getStarted')}
@@ -185,8 +237,41 @@ export default function SetupWizard() {
             </div>
           )}
 
-          {/* Step 2: Provider setup */}
+          {/* Step 2: Sign In */}
           {step === 2 && (
+            <div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
+                {t('setup.step2Login.title')}
+              </h2>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+                {t('setup.step2Login.description')}
+              </p>
+
+              {loginError && (
+                <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800">
+                  <p className="text-sm text-red-700 dark:text-red-300">{loginError}</p>
+                  <button
+                    onClick={handleSignOutAndRetry}
+                    className="mt-2 text-sm font-medium text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline"
+                  >
+                    {t('setup.step2Login.signOutAndRetry')}
+                  </button>
+                </div>
+              )}
+
+              <LoginForm embedded onSuccess={handleLoginSuccess} />
+
+              <button
+                onClick={handleSkip}
+                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+              >
+                {t('setup.step1.skipLater')}
+              </button>
+            </div>
+          )}
+
+          {/* Step 3: Provider setup */}
+          {step === 3 && (
             <div>
               <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-1">
                 {t('setup.step2.title')}
@@ -333,8 +418,8 @@ export default function SetupWizard() {
             </div>
           )}
 
-          {/* Step 3: Finish */}
-          {step === 3 && (
+          {/* Step 4: Finish */}
+          {step === 4 && (
             <div>
               <div className="text-center mb-6">
                 <div className="text-5xl mb-4">🎉</div>
@@ -395,7 +480,7 @@ export default function SetupWizard() {
 
         {/* Footer step indicator */}
         <div className="flex justify-center gap-1.5 pb-5">
-          {[1, 2, 3].map(s => (
+          {Array.from({ length: TOTAL_STEPS }, (_, i) => i + 1).map(s => (
             <div
               key={s}
               className={`h-1.5 rounded-full transition-all duration-300 ${
