@@ -19,6 +19,12 @@ npm run dev
 
 **That's it!** The server automatically creates default configuration files on first startup.
 
+## Prerequisites
+
+- **Node.js 24+**: Download from [nodejs.org](https://nodejs.org) (required for npm installation)
+- **npm 8+**: Included with Node.js
+- **Docker**: Alternative to Node.js — see [Docker Installation](INSTALLATION.md#method-2-docker-installation-recommended-for-production)
+
 ### What Happens During First Startup
 
 When you start the server for the first time:

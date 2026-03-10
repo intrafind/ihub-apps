@@ -32,11 +32,11 @@ This comprehensive troubleshooting guide helps you diagnose and resolve common i
 # Check Node.js version
 node --version
 
-# Required: Node.js 18.x or higher
+# Required: Node.js 24.x or higher
 # Install using Node Version Manager (recommended)
 curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
-nvm install 18
-nvm use 18
+nvm install 24
+nvm use 24
 ```
 
 **Prevention:**

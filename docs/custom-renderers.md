@@ -48,25 +48,27 @@ The filename (without extension) becomes the renderer ID.
 
 ### Step 2: Write the Component
 
-Your renderer must export a component named `UserComponent` that receives props:
+The component function **must be named `UserComponent`** — this is the convention the renderer system expects. The `export default` statement is required and must export `UserComponent`.
 
 ```jsx
 import { useState } from 'react';
 
 /**
- * MyCustomRenderer - Example custom renderer
- * Displays structured data in a custom format
+ * UserComponent - Example custom renderer
+ * Displays structured data in a custom format.
+ *
+ * The function name UserComponent is required by the renderer system.
  */
-const MyCustomRenderer = ({ data, t }) => {
+const UserComponent = ({ data, t }) => {
   // Access data from the AI response
   const items = data.items || [];
-  
+
   return (
     <div className="space-y-4 p-4">
       <h2 className="text-2xl font-bold text-gray-800">
         {t ? t('myRenderer.title', 'Results') : 'Results'}
       </h2>
-      
+
       <div className="grid grid-cols-2 gap-4">
         {items.map((item, idx) => (
           <div key={idx} className="border rounded-lg p-4 bg-white shadow">
@@ -79,7 +81,7 @@ const MyCustomRenderer = ({ data, t }) => {
   );
 };
 
-export default MyCustomRenderer;
+export default UserComponent;
 ```
 
 ### Step 3: Reference in App Config
@@ -127,10 +129,10 @@ Your renderer component receives the following props:
 ## Example: Using React Hooks
 
 ```jsx
-const InteractiveRenderer = ({ data, t, useState, useEffect }) => {
+const UserComponent = ({ data, t, useState, useEffect }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [processedData, setProcessedData] = useState([]);
-  
+
   useEffect(() => {
     // Process data when component mounts
     const processed = data.items.map(item => ({
@@ -139,16 +141,16 @@ const InteractiveRenderer = ({ data, t, useState, useEffect }) => {
     }));
     setProcessedData(processed);
   }, [data]);
-  
+
   return (
     <div>
-      <button 
+      <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
       >
         {isExpanded ? 'Collapse' : 'Expand'}
       </button>
-      
+
       {isExpanded && (
         <div className="mt-4 space-y-2">
           {processedData.map((item, idx) => (
@@ -163,7 +165,7 @@ const InteractiveRenderer = ({ data, t, useState, useEffect }) => {
   );
 };
 
-export default InteractiveRenderer;
+export default UserComponent;
 ```
 
 ## Styling with Tailwind CSS
@@ -171,7 +173,7 @@ export default InteractiveRenderer;
 All renderers have access to Tailwind CSS utility classes:
 
 ```jsx
-const StyledRenderer = ({ data }) => {
+const UserComponent = ({ data }) => {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Color-coded status */}
@@ -182,7 +184,7 @@ const StyledRenderer = ({ data }) => {
       } border-2`}>
         <h3 className="text-lg font-semibold">{data.message}</h3>
       </div>
-      
+
       {/* Responsive grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
         {data.cards.map((card, idx) => (
@@ -195,7 +197,7 @@ const StyledRenderer = ({ data }) => {
   );
 };
 
-export default StyledRenderer;
+export default UserComponent;
 ```
 
 ## Internationalization (i18n)
@@ -203,12 +205,12 @@ export default StyledRenderer;
 Use the `t` function for translating text:
 
 ```jsx
-const I18nRenderer = ({ data, t }) => {
+const UserComponent = ({ data, t }) => {
   return (
     <div>
       <h2>{t ? t('renderer.title', 'Default Title') : 'Default Title'}</h2>
       <p>{t ? t('renderer.description', 'Default description') : 'Default description'}</p>
-      
+
       {/* Always provide fallback for when t is undefined */}
       <button>
         {t('common.submit', 'Submit')}
@@ -216,6 +218,8 @@ const I18nRenderer = ({ data, t }) => {
     </div>
   );
 };
+
+export default UserComponent;
 ```
 
 Add translations to your locale files:
@@ -228,7 +232,7 @@ Add translations to your locale files:
 The renderer system includes automatic error handling:
 
 ```jsx
-const SafeRenderer = ({ data, t }) => {
+const UserComponent = ({ data, t }) => {
   // Validate data structure
   if (!data || !data.results) {
     return (
@@ -237,7 +241,7 @@ const SafeRenderer = ({ data, t }) => {
       </div>
     );
   }
-  
+
   // Handle empty arrays
   if (data.results.length === 0) {
     return (
@@ -246,7 +250,7 @@ const SafeRenderer = ({ data, t }) => {
       </div>
     );
   }
-  
+
   // Render data
   return (
     <div className="space-y-4">
@@ -257,7 +261,7 @@ const SafeRenderer = ({ data, t }) => {
   );
 };
 
-export default SafeRenderer;
+export default UserComponent;
 ```
 
 ## Complete Example: NDA Risk Analyzer
@@ -287,47 +291,23 @@ const getRiskColorClasses = level => {
   }
 };
 
-const NDAResultsRenderer = ({ data, t }) => {
-  if (!data || !data.clauses) {
-    return <div className="p-4 text-center text-gray-500">No data</div>;
-  }
-  
-  const overallColors = getRiskColorClasses(data.overall_risk);
-  
-  return (
-    <div className="space-y-6 p-4">
-      {/* Overall Risk Summary */}
-      <div className={`rounded-lg border-2 ${overallColors.container} p-6`}>
-        <h2 className={`text-2xl font-bold ${overallColors.text}`}>
-          {t('nda.overallRisk', 'Overall Risk Assessment')}
-        </h2>
-      </div>
-      
-      {/* Clause Cards */}
-      {data.clauses.map((clause, idx) => (
-        <ClauseCard key={idx} clause={clause} t={t} />
-      ))}
-    </div>
-  );
-};
-
-// Nested component with its own state
+// Nested component with its own state (can use any name)
 const ClauseCard = ({ clause, t }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const colors = getRiskColorClasses(clause.risk_level);
-  
+
   return (
     <div className={`rounded-lg border ${colors.container}`}>
       <div className="p-4">
         <h4 className={colors.text}>{clause.clause_name}</h4>
         <p>{clause.reason}</p>
-        
+
         {clause.citation && clause.citation.length > 0 && (
           <button onClick={() => setIsExpanded(!isExpanded)}>
             {isExpanded ? 'Hide Citations' : `Show Citations (${clause.citation.length})`}
           </button>
         )}
-        
+
         {isExpanded && (
           <div className="mt-3 space-y-2">
             {clause.citation.map((cite, idx) => (
@@ -342,7 +322,32 @@ const ClauseCard = ({ clause, t }) => {
   );
 };
 
-export default NDAResultsRenderer;
+// The top-level component MUST be named UserComponent
+const UserComponent = ({ data, t }) => {
+  if (!data || !data.clauses) {
+    return <div className="p-4 text-center text-gray-500">No data</div>;
+  }
+
+  const overallColors = getRiskColorClasses(data.overall_risk);
+
+  return (
+    <div className="space-y-6 p-4">
+      {/* Overall Risk Summary */}
+      <div className={`rounded-lg border-2 ${overallColors.container} p-6`}>
+        <h2 className={`text-2xl font-bold ${overallColors.text}`}>
+          {t('nda.overallRisk', 'Overall Risk Assessment')}
+        </h2>
+      </div>
+
+      {/* Clause Cards */}
+      {data.clauses.map((clause, idx) => (
+        <ClauseCard key={idx} clause={clause} t={t} />
+      ))}
+    </div>
+  );
+};
+
+export default UserComponent;
 ```
 
 ## Best Practices
@@ -484,7 +489,7 @@ console.log('Sample data:', JSON.stringify(sampleData, null, 2));
 
 **Solutions**:
 - Verify JSX syntax is correct
-- Check that component is named `UserComponent` or exported as default
+- Check that the component function is named `UserComponent` and exported as `export default UserComponent`
 - Ensure all JSX tags are properly closed
 - Check for balanced braces and parentheses
 

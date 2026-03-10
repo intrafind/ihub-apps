@@ -408,24 +408,28 @@ export const getBasePath = () => {
 
 #### Runtime Base Path Detection (client/src/utils/runtimeBasePath.js)
 
+The client detects the deployment base path at runtime by looking for well-known React route segments in the current URL. This list is kept in sync with the routes registered in `App.jsx`.
+
 ```javascript
-export const detectBasePath = () => {
-  const pathname = window.location.pathname;
-  
-  // Remove any React route parts to find the base
-  const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat'];
-  for (const route of knownRoutes) {
-    const routeIndex = pathname.indexOf(route);
-    if (routeIndex > 0) {
-      // Everything before the route is the base path
-      return pathname.substring(0, routeIndex);
-    }
-  }
-  
-  // If at root or unknown route, detect from current location
-  return pathname.replace(/\/[^/]*$/, '');
-};
+const knownRoutes = [
+  'apps',       // App listing and individual app routes
+  'admin',      // Admin panel routes
+  'auth',       // Authentication routes
+  'login',      // Login page
+  'chat',       // Direct chat routes
+  'pages',      // Dynamic pages
+  'prompts',    // Prompts listing
+  'settings',   // Settings pages (integrations, etc.)
+  'teams',      // Microsoft Teams routes
+  'workflows',  // Workflow management and execution
+  's',          // Short links
+  'setup'       // First-run setup wizard
+];
 ```
+
+When a user visits `https://www.myserver.com/ihub/admin/sources`, the function finds `admin` at segment index 1 and determines that the base path is `/ihub`.
+
+> **Important:** When adding new top-level routes to `App.jsx`, you must also add them to this array in `client/src/utils/runtimeBasePath.js`. Failure to do so causes subpath deployments to misdetect the base path for those routes.
 
 ## Docker Deployment
 

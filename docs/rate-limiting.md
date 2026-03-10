@@ -8,10 +8,10 @@ Rate limiting has been implemented using the `express-rate-limit` package to pro
 
 ## Rate Limiting Types
 
-The system supports five different types of rate limiters, each configurable through the platform configuration:
+The system supports six different types of rate limiters, each configurable through the platform configuration:
 
 ### 1. Public API Rate Limiter
-- **Default Limit**: 100 requests per 15 minutes per IP address
+- **Default Limit**: 500 requests per 1 minute per IP address
 - **Applied to**: Regular API endpoints including:
   - `/api/apps`
   - `/api/tools` (including `/api/tools/:toolId`)
@@ -26,23 +26,28 @@ The system supports five different types of rate limiters, each configurable thr
   - `/api/short-links`
 
 ### 2. Admin API Rate Limiter
-- **Default Limit**: 50 requests per 15 minutes per IP address (more restrictive)
+- **Default Limit**: 500 requests per 1 minute per IP address (more restrictive)
 - **Applied to**: Administrative endpoints:
   - `/api/admin/*` (all admin routes)
 
 ### 3. Auth API Rate Limiter
-- **Default Limit**: 30 requests per 15 minutes per IP address (most restrictive)
+- **Default Limit**: 50 requests per 15 minutes per IP address (most restrictive)
 - **Applied to**: Authentication endpoints:
   - `/auth/*` (all authentication routes)
 
 ### 4. Inference API Rate Limiter
-- **Default Limit**: 60 requests per 15 minutes per IP address (moderate)
+- **Default Limit**: 500 requests per 1 minute per IP address (moderate)
 - **Applied to**: AI inference endpoints:
   - `/inference/*` (all inference routes)
 
 ### 5. Default Rate Limiter
-- **Default Limit**: 100 requests per 15 minutes per IP address
+- **Default Limit**: 500 requests per 1 minute per IP address
 - **Purpose**: Base configuration that other limiters inherit from
+
+### 6. OAuth API Rate Limiter
+- **Default Limit**: 50 requests per 15 minutes per IP address (strict)
+- **Applied to**: OAuth token and authorization endpoints:
+  - `/api/oauth/*` (all OAuth routes)
 
 ## Configuration
 
@@ -52,8 +57,8 @@ Rate limiting is now fully configurable through the `platform.json` configuratio
 {
   "rateLimit": {
     "default": {
-      "windowMs": 900000,
-      "limit": 100,
+      "windowMs": 60000,
+      "limit": 500,
       "standardHeaders": true,
       "legacyHeaders": false,
       "skipSuccessfulRequests": false,
@@ -65,11 +70,15 @@ Rate limiting is now fully configurable through the `platform.json` configuratio
     },
     "publicApi": {},
     "authApi": {
-      "limit": 30,
+      "limit": 50,
       "skipFailedRequests": false
     },
     "inferenceApi": {
       "limit": 60
+    },
+    "oauthApi": {
+      "limit": 50,
+      "windowMs": 900000
     }
   }
 }
@@ -79,7 +88,7 @@ Rate limiting is now fully configurable through the `platform.json` configuratio
 
 Each rate limiter supports the following configuration options:
 
-- `windowMs`: Time window in milliseconds (default: 900000 = 15 minutes)
+- `windowMs`: Time window in milliseconds (default: 60000 = 1 minute)
 - `limit`: Maximum number of requests per window (varies by type)
 - `standardHeaders`: Return rate limit info in `RateLimit-*` headers (default: true)
 - `legacyHeaders`: Enable legacy `X-RateLimit-*` headers (default: false)
@@ -130,7 +139,7 @@ Rate limiting can be tested by making multiple requests to any protected endpoin
 # Test public API rate limiting
 curl -I http://localhost:3000/api/apps
 
-# Test admin API rate limiting  
+# Test admin API rate limiting
 curl -I http://localhost:3000/api/admin/apps
 
 # Test auth API rate limiting

@@ -14,9 +14,31 @@ JWT (JSON Web Token) authentication allows external systems to:
 ## How It Works
 
 1. **External System**: Issues JWT tokens to users/systems
-2. **Client**: Makes API calls with `Authorization: Bearer <jwt-token>` header
+2. **Client**: Makes API calls with a JWT token (see Token Delivery below)
 3. **iHub**: Validates JWT against external provider's public keys
 4. **Access**: Grants access based on token claims and group mappings
+
+## Token Delivery
+
+iHub Apps extracts JWT tokens from two sources, in this order:
+
+1. **HTTP-only cookie** (`authToken`) — checked first. This is the preferred mechanism for browser clients and Server-Sent Events (SSE), because cookies are sent automatically with every request and are not accessible to JavaScript.
+2. **`Authorization: Bearer` header** — used as a fallback for API clients that cannot send cookies.
+
+If neither source contains a token, the request continues as anonymous.
+
+### Browser / SSE clients
+
+iHub issues the `authToken` cookie automatically after a successful login (local, OIDC, LDAP, etc.). No extra configuration is required.
+
+### API clients
+
+Pass the JWT in the standard Authorization header:
+
+```bash
+curl -H "Authorization: Bearer eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9..." \
+     https://your-ihub.com/api/apps
+```
 
 ## Configuration
 
@@ -294,10 +316,14 @@ Configure group mappings to translate JWT groups to application roles in `conten
 
 ### Debug Mode
 
-Enable debug logging by setting environment variable:
+Enable debug logging by setting the log level in `contents/config/platform.json`:
 
-```bash
-DEBUG=jwt:* npm start
+```json
+{
+  "logging": {
+    "level": "debug"
+  }
+}
 ```
 
 ### Token Inspection
