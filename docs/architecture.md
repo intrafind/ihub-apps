@@ -8,12 +8,14 @@ iHub Apps is an enterprise-grade platform for creating, managing, and deploying 
 2. [Server Architecture](#server-architecture)
 3. [Client Architecture](#client-architecture)
 4. [Source Handlers System](#source-handlers-system)
-5. [Authentication & Authorization](#authentication--authorization)
-6. [Configuration Management](#configuration-management)
-7. [Request/Response Flow](#requestresponse-flow)
-8. [Component Interactions](#component-interactions)
-9. [Security Architecture](#security-architecture)
-10. [Performance & Scalability](#performance--scalability)
+5. [Workflow System](#workflow-system)
+6. [Skills System](#skills-system)
+7. [Authentication & Authorization](#authentication--authorization)
+8. [Configuration Management](#configuration-management)
+9. [Request/Response Flow](#requestresponse-flow)
+10. [Component Interactions](#component-interactions)
+11. [Security Architecture](#security-architecture)
+12. [Performance & Scalability](#performance--scalability)
 
 ## High-Level Architecture Overview
 
@@ -72,8 +74,13 @@ client/src/
 │   ├── chat/          # Chat interface and messaging
 │   ├── admin/         # Administrative interfaces
 │   ├── canvas/        # Rich text editing canvas
+│   ├── prompts/       # Prompt management UI
+│   ├── settings/      # User and app settings
+│   ├── setup/         # First-run setup wizard
+│   ├── teams/         # Microsoft Teams integration
 │   ├── upload/        # File upload functionality
-│   └── voice/         # Voice input components
+│   ├── voice/         # Voice input components
+│   └── workflows/     # Workflow builder and execution UI
 ├── shared/            # Shared components and utilities
 │   ├── components/    # Reusable UI components
 │   ├── contexts/      # React Context providers
@@ -207,12 +214,19 @@ server/
 │   └── auth.js        # Authentication endpoints
 ├── services/          # Business logic services
 │   ├── chat/          # Chat service components
-│   └── integrations/  # External service integrations
+│   ├── workflow/      # Workflow orchestration engine
+│   ├── integrations/  # External service integrations
+│   └── skillLoader.js # Agent Skills loader
 ├── adapters/          # LLM provider adapters
 │   └── toolCalling/   # Tool calling converters
 ├── sources/           # Source handler system
 ├── middleware/        # Express middleware
+│   ├── ldapAuth.js    # LDAP authentication middleware
+│   └── ntlmAuth.js    # NTLM/Windows authentication middleware
+├── migrations/        # Versioned configuration migration scripts
 ├── utils/             # Utility modules
+│   ├── ErrorHandler.js  # Centralized error handling
+│   └── ApiKeyVerifier.js # API key validation
 ├── validators/        # Zod schema validators
 └── tools/            # LLM tool implementations
 ```
@@ -300,8 +314,8 @@ graph TB
 - **`NonStreamingHandler.js`**: Processes complete LLM responses in single requests
 - **`StreamingHandler.js`**: Handles real-time streaming responses using Server-Sent Events
 - **`ToolExecutor.js`**: Manages LLM tool calling and execution workflows
-- **`ErrorHandler.js`**: Centralized error handling with custom error classes
-- **`ApiKeyVerifier.js`**: Validates API keys for different LLM providers
+- **`ErrorHandler.js`** (`server/utils/`): Centralized error handling with custom error classes
+- **`ApiKeyVerifier.js`** (`server/utils/`): Validates API keys for different LLM providers
 
 #### Chat Request Flow
 
@@ -445,6 +459,142 @@ const urlTool = {
     }
   }
 };
+```
+
+## Workflow System
+
+The Workflow System provides a DAG-based (Directed Acyclic Graph) agentic orchestration engine that allows chaining AI agents, tools, and human checkpoints into multi-step automated processes.
+
+### Architecture
+
+```mermaid
+graph TB
+    subgraph "Workflow Engine"
+        WE[WorkflowEngine]
+        DAG[DAGScheduler]
+        SM[StateManager]
+        ER[ExecutionRegistry]
+    end
+
+    subgraph "Node Executors"
+        Agent[AgentNodeExecutor]
+        Tool[ToolNodeExecutor]
+        Decision[DecisionNodeExecutor]
+        Human[HumanNodeExecutor]
+        Transform[TransformNodeExecutor]
+        Start[StartNodeExecutor]
+        End[EndNodeExecutor]
+    end
+
+    subgraph "Client UI"
+        Builder[Workflow Builder]
+        Monitor[Execution Monitor]
+    end
+
+    WE --> DAG
+    WE --> SM
+    WE --> ER
+    DAG --> Agent
+    DAG --> Tool
+    DAG --> Decision
+    DAG --> Human
+    DAG --> Transform
+    DAG --> Start
+    DAG --> End
+    Builder --> WE
+    WE --> Monitor
+```
+
+### Key Components
+
+- **`WorkflowEngine.js`**: Main orchestrator that drives workflow execution through the DAG
+- **`DAGScheduler.js`**: Determines which nodes are ready to execute based on edge conditions and dependency resolution
+- **`StateManager.js`**: Tracks and persists workflow execution state across nodes
+- **`ExecutionRegistry.js`**: Tracks active executions by user for monitoring and cancellation
+- **`WorkflowLLMHelper.js`**: Provides LLM-based decision making for conditional routing
+
+### Node Types
+
+| Type | Purpose |
+|------|---------|
+| `start` | Entry point; exactly one per workflow |
+| `end` | Exit point; at least one per workflow |
+| `agent` | LLM-powered step that processes input and produces output |
+| `tool` | Calls an external tool or API |
+| `decision` | Conditional branching based on data or LLM evaluation |
+| `parallel` | Forks execution into multiple concurrent branches |
+| `join` | Synchronizes parallel branches back to a single path |
+| `human` | Pauses execution for human input or approval |
+| `transform` | Maps and reshapes data between nodes |
+| `memory` | Reads or writes persistent context across executions |
+
+### Human-in-the-Loop Flow
+
+When a `human` node is reached, the workflow pauses and emits a `workflow.human.required` Server-Sent Event to the client. The user responds via `POST /api/workflows/executions/:id/respond`, and the workflow resumes automatically.
+
+### Client UI
+
+The workflow feature module lives at `client/src/features/workflows/` and provides:
+- Visual workflow builder with drag-and-drop node placement
+- Real-time execution monitoring via SSE
+- Human checkpoint response UI
+
+### Workflow Configuration
+
+Workflows are defined as JSON files validated by `workflowConfigSchema.js` and stored in `contents/workflows/`. See [Configuration Validation](configuration-validation.md) for the full schema reference.
+
+## Skills System
+
+The Skills System allows administrators to load structured markdown-based skill definitions that provide LLM agents with reusable instructions, reference materials, and tool constraints.
+
+### Architecture
+
+Skills are stored as directories under `contents/skills/`. Each skill directory contains a `SKILL.md` file with YAML frontmatter describing the skill's metadata and a markdown body with the instructions.
+
+```
+contents/skills/
+└── my-skill/
+    ├── SKILL.md          # Required: frontmatter + instructions
+    ├── references/       # Optional: supporting documents
+    ├── scripts/          # Optional: helper scripts
+    └── assets/           # Optional: supporting assets
+```
+
+### Key Components
+
+- **`server/services/skillLoader.js`**: Loads, validates, and serves skill content. Enforces the Agent Skills specification (name pattern, description length, path traversal prevention).
+- **Authorization integration**: Skills are permission-controlled via group configuration using the `skills` permission key.
+
+### Skill Metadata (SKILL.md frontmatter)
+
+```yaml
+---
+name: my-skill           # Lowercase alphanumeric with hyphens, max 64 chars
+description: "Brief description"  # Max 1024 chars
+license: MIT
+compatibility: ">=1.0.0"
+allowed-tools: [webSearch, iFinder]
+---
+
+# Skill Instructions
+
+The markdown body contains the actual instructions injected into the LLM system prompt.
+```
+
+### Authorization
+
+Skills are integrated with the group permission system. The `skills` permission key in `groups.json` controls which groups can install or use specific skills:
+
+```json
+{
+  "groups": {
+    "admin": {
+      "permissions": {
+        "skills": ["*"]
+      }
+    }
+  }
+}
 ```
 
 ## Authentication & Authorization

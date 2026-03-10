@@ -170,6 +170,177 @@ Validates standalone prompt definitions.
 - **Actions**: Available prompt actions
 - **Output Schema**: Structured response configuration
 
+### 8. Workflow Configuration (`workflowConfigSchema.js`)
+
+Validates agentic workflow definitions that power the DAG-based workflow orchestration engine.
+
+**Key Components:**
+- **Nodes**: Array of typed execution nodes (start, end, agent, tool, decision, parallel, join, human, transform, memory)
+- **Edges**: Directed connections between nodes with optional conditions (always, expression, equals, contains, exists, llm)
+- **Global Config**: Observability level, persistence strategy, error handling, human-in-loop mode, execution limits
+- **Chat Integration**: Controls whether the workflow appears as a selectable tool in chat
+
+**Validation Refinements:**
+- Exactly one `start` node must exist
+- At least one `end` node must exist
+- All edge `source` and `target` references must point to valid node IDs
+- All non-start nodes must have at least one incoming edge (no orphan nodes)
+
+**Example Valid Configuration:**
+```json
+{
+  "id": "document-processor",
+  "name": { "en": "Document Processor" },
+  "description": { "en": "Extracts and summarizes document content" },
+  "version": "1.0.0",
+  "enabled": true,
+  "config": {
+    "observability": "standard",
+    "persistence": "session",
+    "errorHandling": "fail",
+    "maxExecutionTime": 120000
+  },
+  "nodes": [
+    { "id": "start", "type": "start", "name": { "en": "Start" }, "position": { "x": 0, "y": 0 } },
+    { "id": "extract", "type": "agent", "name": { "en": "Extract Content" }, "position": { "x": 200, "y": 0 }, "config": { "appId": "extractor" } },
+    { "id": "end", "type": "end", "name": { "en": "End" }, "position": { "x": 400, "y": 0 } }
+  ],
+  "edges": [
+    { "id": "e1", "source": "start", "target": "extract" },
+    { "id": "e2", "source": "extract", "target": "end" }
+  ]
+}
+```
+
+### 9. Catalog Schema (`catalogSchema.js`)
+
+Validates marketplace catalog documents fetched from a registry's `catalog.json` endpoint. A catalog describes the installable content items available from a registry.
+
+**Key Components:**
+- **Items**: Array of installable content (type: app, model, prompt, skill, workflow)
+- **Source**: How to fetch each item's content file — three types supported:
+  - `relative`: Path relative to the catalog's base URL
+  - `github`: GitHub repository file via the Contents API
+  - `url`: Absolute URL with optional companion files
+- **Metadata**: Version, author, category, tags, license, minimum iHub version
+
+**Example Valid Configuration:**
+```json
+{
+  "name": "Official iHub Registry",
+  "description": "Curated apps and workflows",
+  "version": "1.0.0",
+  "categories": ["productivity", "analytics"],
+  "items": [
+    {
+      "type": "app",
+      "name": "data-analyzer",
+      "displayName": { "en": "Data Analyzer" },
+      "version": "2.1.0",
+      "category": "analytics",
+      "source": {
+        "type": "github",
+        "owner": "intrafind",
+        "repo": "ihub-catalog",
+        "path": "apps/data-analyzer.json"
+      }
+    }
+  ]
+}
+```
+
+### 10. Registry Configuration (`registryConfigSchema.js`)
+
+Validates registry entries stored in `config/registries.json`. Each registry points to a remote `catalog.json` and may require authentication.
+
+**Key Components:**
+- **ID**: Lowercase alphanumeric with hyphens (URL-safe slug, max 100 chars)
+- **Source**: URL pointing to the registry's `catalog.json`
+- **Auth**: Authentication strategy — `none`, `bearer` (token), `basic` (username/password), or `header` (custom header)
+- **Auto-Refresh**: Whether the registry catalog is periodically re-fetched (1–168 hour interval)
+
+**Example Valid Configuration:**
+```json
+{
+  "id": "ihub-official",
+  "name": "iHub Official Registry",
+  "description": "Official curated content from IntraFind",
+  "source": "https://registry.ihub.example.com/catalog.json",
+  "auth": { "type": "none" },
+  "enabled": true,
+  "autoRefresh": true,
+  "refreshIntervalHours": 24
+}
+```
+
+### 11. MIME Type Configuration (`mimetypeConfigSchema.js`)
+
+Validates the MIME type configuration used to classify and display uploadable file types.
+
+**Key Components:**
+- **Categories**: Named groups of related MIME types (e.g., images, audio, documents, text), each with a localized name and list of associated MIME type keys
+- **MIME Types**: Detailed entries for each MIME type including file extensions, a display name, and the category it belongs to
+
+**Cross-Validation:**
+- MIME types referenced in category lists are checked against the detailed entries (warning if missing)
+- MIME type entries are checked to ensure their `category` field matches a defined category key
+
+**Example Valid Configuration:**
+```json
+{
+  "categories": {
+    "images": {
+      "name": { "en": "Images" },
+      "mimeTypes": ["image/png", "image/jpeg"]
+    }
+  },
+  "mimeTypes": {
+    "image/png": {
+      "extensions": [".png"],
+      "displayName": "PNG Image",
+      "category": "images"
+    },
+    "image/jpeg": {
+      "extensions": [".jpg", ".jpeg"],
+      "displayName": "JPEG Image",
+      "category": "images"
+    }
+  }
+}
+```
+
+### 12. Cloud Storage Configuration (`cloudStorageSchema.js`)
+
+Validates cloud storage provider definitions used for file browser integration.
+
+**Supported Provider Types:**
+- **`office365`**: Microsoft SharePoint / OneDrive integration — requires `tenantId`, `clientId`, `clientSecret`; supports filtering by personal drive, followed sites, and Teams
+- **`googledrive`**: Google Drive integration — requires `clientId`, `clientSecret`; supports filtering by My Drive, shared drives, and shared-with-me
+
+**Example Valid Configuration:**
+```json
+{
+  "enabled": true,
+  "providers": [
+    {
+      "id": "company-sharepoint",
+      "name": "company-sharepoint",
+      "displayName": "Company SharePoint",
+      "type": "office365",
+      "enabled": true,
+      "tenantId": "${AZURE_TENANT_ID}",
+      "clientId": "${AZURE_CLIENT_ID}",
+      "clientSecret": "${AZURE_CLIENT_SECRET}",
+      "sources": {
+        "personalDrive": true,
+        "followedSites": true,
+        "teams": true
+      }
+    }
+  ]
+}
+```
+
 ## Error Handling
 
 ### Validation Error Types

@@ -38,6 +38,8 @@ curl https://your-ihub-domain.com/.well-known/openid-configuration
   "authorization_endpoint": "https://your-ihub-domain.com/api/oauth/authorize",
   "token_endpoint": "https://your-ihub-domain.com/api/oauth/token",
   "userinfo_endpoint": "https://your-ihub-domain.com/api/oauth/userinfo",
+  "revocation_endpoint": "https://your-ihub-domain.com/api/oauth/revoke",
+  "end_session_endpoint": "https://your-ihub-domain.com/api/oauth/logout",
   "response_types_supported": ["code"],
   "subject_types_supported": ["public"],
   "id_token_signing_alg_values_supported": ["RS256"],
@@ -46,11 +48,12 @@ curl https://your-ihub-domain.com/.well-known/openid-configuration
     "client_secret_basic"
   ],
   "grant_types_supported": [
+    "client_credentials",
     "authorization_code",
-    "refresh_token",
-    "client_credentials"
+    "refresh_token"
   ],
   "scopes_supported": ["openid", "profile", "email", "offline_access"],
+  "claims_supported": ["sub", "name", "email", "groups", "iss", "aud", "exp", "iat", "nonce"],
   "code_challenge_methods_supported": ["S256"]
 }
 ```

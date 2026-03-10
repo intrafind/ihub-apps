@@ -532,15 +532,34 @@ Each app is defined with the following essential properties:
 | `description`           | Object  | **Required.** Localized descriptions of app functionality                                                                |
 | `color`                 | String  | **Required.** Hex color code for app theming                                                                             |
 | `icon`                  | String  | **Required.** Icon identifier for the app (see [Available Icons](#available-icons))                                      |
-| `system`                | Object  | **Required.** Localized system prompts/instructions for the AI model                                                     |
-| `tokenLimit`            | Number  | Optional. Maximum token limit for context window (1-1,000,000)                                                           |
+| `system`                | Object  | **Required for chat type.** Localized system prompts/instructions for the AI model                                       |
+| `tokenLimit`            | Number  | **Required for chat type.** Maximum token limit for context window (1-1,000,000)                                        |
+| `type`                  | String  | Optional. App type: `"chat"` (default), `"redirect"`, or `"iframe"`                                                     |
 | `order`                 | Number  | Optional. Display order in the app list                                                                                  |
+| `enabled`               | Boolean | Optional. Whether the app is enabled. Default: `true`                                                                    |
+| `category`              | String  | Optional. Category label for grouping apps in the UI                                                                     |
 | `preferredModel`        | String  | Optional. Default AI model to use with this app. If omitted, uses the model marked as default in `models.json`          |
-| `preferredOutputFormat` | String  | Optional. Format for AI responses (markdown, text, json, html)                                                           |
+| `preferredOutputFormat` | String  | Optional. Format for AI responses (`markdown`, `text`, `json`, `html`)                                                   |
 | `preferredStyle`        | String  | Optional. Style guidance for AI responses (normal, professional, creative, academic)                                     |
 | `preferredTemperature`  | Number  | Optional. Temperature setting (0.0-2.0) controlling randomness                                                           |
-| `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests (default: true)                                                |
+| `sendChatHistory`       | Boolean | Optional. Whether to include chat history in API requests. Default: `true`                                               |
+| `autoStart`             | Boolean | Optional. Automatically start the chat as soon as the app opens (sends the configured `prompt` without user input). Default: `false` |
+| `allowEmptyContent`     | Boolean | Optional. Allow users to submit the form without entering content in the main input field. Default: `false`              |
+| `allowedModels`         | Array   | Optional. Array of model IDs to restrict which models can be selected for this app                                       |
+| `disallowModelSelection`| Boolean | Optional. Hide the model selector so users cannot change the model. Default: `false`                                     |
 | `outputSchema`          | Object  | Optional. JSON schema describing the structured response format                                                          |
+| `customResponseRenderer`| String  | Optional. Name of a custom renderer component used to display the AI response instead of the default markdown renderer  |
+| `skills`                | Array   | Optional. Array of skill identifiers (strings) that are available for this app. Skills extend app capabilities with reusable AI behaviors |
+| `skillSettings`         | Object  | Optional. Controls how skills behave. See [Skill Settings](#skill-settings) below                                        |
+| `iassistant`            | Object  | Optional. App-specific iAssistant search configuration overriding platform defaults. See [iAssistant Configuration](#iassistant-configuration) below |
+| `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
+| `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
+| `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
+| `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
+| `parentId`              | String  | Optional. ID of the parent app to inherit configuration from                                                             |
+| `inheritanceLevel`      | Number  | Optional. Depth of the inheritance chain                                                                                 |
+| `overriddenFields`      | Array   | Optional. Fields that have been explicitly overridden from the parent app                                                |
 ### Advanced Configuration Options
 
 Apps can include additional configuration for user inputs and prompt formatting:
@@ -608,7 +627,10 @@ Administrators can override the automatically generated placeholder for each var
 | ---------- | -------------------------------- |
 | `string`   | Single-line text input           |
 | `text`     | Multi-line text input            |
-| `dropdown` | Selection from predefined values |
+| `select`   | Selection from predefined values |
+| `number`   | Numeric input field              |
+| `boolean`  | Boolean true/false toggle        |
+| `date`     | Date picker input                |
 
 
 #### Settings Configuration
@@ -618,11 +640,19 @@ The `settings` property controls which configuration options users can adjust fo
 ```json
 "settings": {
   "enabled": true,
-  "model": { "enabled": true },
+  "model": {
+    "enabled": true,
+    "filter": { "supportsTools": true }
+  },
   "style": { "enabled": true },
   "temperature": { "enabled": true },
   "outputFormat": { "enabled": true },
-  "chatHistory": { "enabled": true }
+  "chatHistory": { "enabled": true },
+  "imageGeneration": { "enabled": true },
+  "speechRecognition": {
+    "service": "default",
+    "host": "https://speech.example.com"
+  }
 },
 "inputMode": {
   "type": "multiline",
@@ -638,10 +668,14 @@ The `settings` property controls which configuration options users can adjust fo
 | ------------------------------------- | ------------------------------------------------------------------------ |
 | `settings.enabled`                    | Master switch for all settings - when `false`, all settings UI is hidden |
 | `settings.model.enabled`              | Enable/disable model selection option                                    |
+| `settings.model.filter`               | Record of model properties to filter the available models list. Example: `{"supportsTools": true}` shows only models that support tool calling |
 | `settings.style.enabled`              | Enable/disable response style selection                                  |
 | `settings.temperature.enabled`        | Enable/disable temperature adjustment                                    |
 | `settings.outputFormat.enabled`       | Enable/disable output format selection                                   |
 | `settings.chatHistory.enabled`        | Enable/disable chat history toggle                                       |
+| `settings.imageGeneration.enabled`    | Show/hide the image generation settings panel                            |
+| `settings.speechRecognition.service`  | Speech recognition backend: `"default"` (browser Web Speech API) or `"azure"` |
+| `settings.speechRecognition.host`     | Host URL for the speech recognition service (required when `service` is `"azure"`) |
 | `inputMode.microphone.mode`           | Mode for recording (`manual` or `automatic`)                             |
 | `inputMode.microphone.showTranscript` | Show the live transcript while recording                                 |
 | `inputMode.microphone.enabled`        | Enable/disable microphone input for voice commands                       |
@@ -673,10 +707,10 @@ Apps can configure the chat input with the `inputMode` object. The `type` contro
 
 Available types:
 
-- `single` – single line text field (default)
-- `multiline` – expandable text area
+- `singleline` – single line text field
+- `multiline` – expandable text area (default)
 
-The optional `rows` property sets the initial number of textarea rows (defaults to 2). If the `microphone` block is provided, it configures voice input for that app.
+The optional `rows` property sets the initial number of textarea rows (defaults to 5). If the `microphone` block is provided, it configures voice input for that app.
 
 #### Message Placeholders
 
@@ -730,15 +764,32 @@ Each prompt can optionally set initial values for input variables:
 "starterPrompts": [
   {
     "title": { "en": "Brainstorm a topic" },
+    "description": { "en": "Get creative ideas for any subject" },
     "message": { "en": "Help me brainstorm about a specific topic." }
   },
   {
     "title": { "en": "Translate to German" },
     "message": { "en": "Translate the following text." },
-    "variables": { "language": "German" }
+    "variables": { "language": "German" },
+    "autoSend": false
+  },
+  {
+    "title": { "en": "Quick Summary" },
+    "message": { "en": "Summarize the main points." },
+    "autoSend": true
   }
 ]
 ```
+
+Each starter prompt supports the following fields:
+
+| Field         | Type    | Required | Default | Description                                                           |
+| ------------- | ------- | -------- | ------- | --------------------------------------------------------------------- |
+| `title`       | Object  | Yes      | -       | Localized button label shown to the user                              |
+| `message`     | Object  | Yes      | -       | Localized message sent to the AI when the prompt is clicked           |
+| `description` | Object  | No       | -       | Localized subtitle displayed beneath the title for additional context |
+| `variables`   | Object  | No       | -       | Key-value pairs that pre-fill app variable fields                     |
+| `autoSend`    | Boolean | No       | `false` | When `true`, clicking the prompt immediately sends the message without requiring a second confirmation. When `false`, the message is inserted into the input field and the user can edit it before sending |
 
 Starter prompts take the highest priority and will hide both welcome messages and example prompts when configured.
 
@@ -783,11 +834,147 @@ Structured output works with all supported adapters. When an `outputSchema` is p
 
 When `true`, users can submit the form without entering content in the main input field.
 
+#### Upload Configuration
+
+The `upload` property controls file and media upload capabilities:
+
+```json
+"upload": {
+  "enabled": true,
+  "allowMultiple": true,
+  "imageUpload": {
+    "enabled": true,
+    "resizeImages": true,
+    "maxFileSizeMB": 10,
+    "supportedFormats": ["image/jpeg", "image/png", "image/webp"]
+  },
+  "audioUpload": {
+    "enabled": true,
+    "maxFileSizeMB": 20,
+    "supportedFormats": ["audio/mpeg", "audio/wav", "audio/mp3"]
+  },
+  "fileUpload": {
+    "enabled": true,
+    "maxFileSizeMB": 5,
+    "supportedFormats": ["application/pdf", "text/plain", "text/csv"]
+  },
+  "cloudStorageUpload": {
+    "enabled": true
+  }
+}
+```
+
+| Property                            | Type    | Default  | Description                                                                              |
+| ----------------------------------- | ------- | -------- | ---------------------------------------------------------------------------------------- |
+| `upload.enabled`                    | Boolean | `false`  | Master switch that enables or disables all upload functionality                          |
+| `upload.allowMultiple`              | Boolean | `false`  | Allow users to attach more than one file at a time                                       |
+| `upload.imageUpload.enabled`        | Boolean | `false`  | Enable image attachment support                                                          |
+| `upload.imageUpload.resizeImages`   | Boolean | `true`   | Automatically resize images before sending to reduce token consumption                  |
+| `upload.imageUpload.maxFileSizeMB`  | Number  | `10`     | Maximum image file size in megabytes (1-100)                                             |
+| `upload.imageUpload.supportedFormats` | Array | `["image/jpeg","image/jpg","image/png","image/gif","image/webp"]` | Allowed MIME types for image uploads |
+| `upload.audioUpload.enabled`        | Boolean | `false`  | Enable audio file upload support (for transcription or audio-capable models)            |
+| `upload.audioUpload.maxFileSizeMB`  | Number  | `20`     | Maximum audio file size in megabytes (1-100)                                             |
+| `upload.audioUpload.supportedFormats` | Array | `["audio/mpeg","audio/wav","audio/mp3","audio/flac","audio/ogg"]` | Allowed MIME types for audio uploads |
+| `upload.fileUpload.enabled`         | Boolean | `false`  | Enable document/text file upload support                                                 |
+| `upload.fileUpload.maxFileSizeMB`   | Number  | `5`      | Maximum document file size in megabytes (1-100)                                          |
+| `upload.fileUpload.supportedFormats`| Array   | See schema | Allowed MIME types for document uploads (plain text, CSV, PDF, Office formats, etc.)   |
+| `upload.cloudStorageUpload.enabled` | Boolean | `false`  | Enable the cloud storage file picker (requires cloud storage configured in platform.json)|
+
+#### Skill Settings
+
+The `skills` array specifies which skill identifiers are available for an app. Skills are reusable AI behaviors stored in the `contents/skills/` directory.
+
+```json
+"skills": ["summarizer", "translator", "code-reviewer"],
+"skillSettings": {
+  "autoActivate": true,
+  "maxActiveSkills": 3
+}
+```
+
+| Property                       | Type    | Default | Description                                                                         |
+| ------------------------------ | ------- | ------- | ----------------------------------------------------------------------------------- |
+| `skills`                       | Array   | -       | Array of skill identifier strings. Each string must match a skill defined in the skills directory |
+| `skillSettings.autoActivate`   | Boolean | -       | When `true`, all listed skills are activated automatically when the app opens        |
+| `skillSettings.maxActiveSkills`| Number  | -       | Maximum number of skills that can be active at the same time (1-10)                 |
+
+#### iAssistant Configuration
+
+The `iassistant` property configures app-specific overrides for the iAssistant search integration. When set, these values take precedence over the global `iAssistant` settings in `platform.json`.
+
+```json
+"iassistant": {
+  "baseUrl": "https://iassistant.example.com",
+  "profileId": "my-search-profile",
+  "filter": [
+    {
+      "key": "department",
+      "values": ["engineering", "product"],
+      "isNegated": false
+    }
+  ],
+  "searchMode": "semantic",
+  "searchDistance": "0.7",
+  "searchFields": {
+    "title": 2.0,
+    "body": 1.0
+  }
+}
+```
+
+| Property                    | Type   | Description                                                                                      |
+| --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
+| `iassistant.profileId`      | String | iAssistant profile ID that determines the search index and configuration                         |
+| `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
+| `iassistant.filter[].key`   | String | The metadata field name to filter on                                                             |
+| `iassistant.filter[].values`| Array  | Array of allowed values for the filter field                                                     |
+| `iassistant.filter[].isNegated` | Boolean | When `true`, excludes results matching the filter instead of including them. Default: `false` |
+| `iassistant.searchMode`     | String | Search algorithm mode (e.g., `"semantic"`, `"fulltext"`, `"hybrid"`)                            |
+| `iassistant.searchDistance` | String | Similarity threshold for semantic search results (e.g., `"0.7"`)                                |
+| `iassistant.searchFields`   | Object | Map of field names to boost weights for relevance tuning                                         |
+
+#### Image Generation Configuration
+
+The `imageGeneration` property sets default parameters for image generation apps. These defaults are used when the user has not changed the settings manually.
+
+```json
+"imageGeneration": {
+  "aspectRatio": "16:9",
+  "quality": "High"
+}
+```
+
+| Property                      | Type   | Default | Description                                                                                               |
+| ----------------------------- | ------ | ------- | --------------------------------------------------------------------------------------------------------- |
+| `imageGeneration.aspectRatio` | String | -       | Default aspect ratio for generated images. Options: `"1:1"`, `"16:9"`, `"9:16"`, `"5:4"`, `"4:5"`, `"3:2"`, `"2:3"`, `"3:4"`, `"4:3"`, `"21:9"` |
+| `imageGeneration.quality`     | String | -       | Default image quality level. Options: `"Low"`, `"Medium"`, `"High"`                                      |
+
+#### Thinking Configuration
+
+The `thinking` property enables extended thinking for models that support it (e.g., Claude claude-3-7-sonnet). When enabled, the model performs additional internal reasoning steps before producing its answer.
+
+```json
+"thinking": {
+  "enabled": true,
+  "budget": 5000,
+  "thoughts": true
+}
+```
+
+| Property           | Type    | Default | Description                                                                                             |
+| ------------------ | ------- | ------- | ------------------------------------------------------------------------------------------------------- |
+| `thinking.enabled` | Boolean | `false` | Enable extended thinking mode                                                                           |
+| `thinking.budget`  | Number  | -       | Token budget allocated for internal thinking steps. A positive integer sets a specific budget           |
+| `thinking.thoughts`| Boolean | `false` | When `true`, the model's internal thinking steps are included and displayed in the response             |
+
 #### Other Options
 
+- `autoStart`: Automatically begin the chat on app open, sending the configured `prompt` immediately
 - `allowEmptyContent`: Allow submission without content input
 - `allowedModels`: Restrict which models can be used with this app
 - `disallowModelSelection`: Prevent user from changing the model
+- `customResponseRenderer`: Specify a custom component for rendering AI responses
 - `outputSchema`: JSON schema defining the required structure of the AI response
 
 ### Available Icons
@@ -912,7 +1099,7 @@ Here are some practical examples of how to configure the settings for different 
 
 **Variables not working:**
 - Confirm variable names in prompt template match variable definitions
-- Check that variable types are valid (`string`, `text`, `dropdown`)
+- Check that variable types are valid (`string`, `text`, `select`, `number`, `boolean`, `date`)
 - Verify required fields are marked correctly
 
 **Tools not executing:**

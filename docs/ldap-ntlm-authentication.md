@@ -157,8 +157,10 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | ----------------------- | -------------------------------------------------------------- | -------- | ------- |
 | `enabled`               | Enable NTLM authentication                                     | Yes      | `false` |
 | `domain`                | Windows domain name                                            | No       | -       |
-| `domainController`      | Domain controller URL (e.g., `ldap://dc.example.com:389`)      | No       | -       |
-| `type`                  | Authentication type (`ntlm` or `negotiate`)                    | No       | `ntlm`  |
+| `domainController`          | Domain controller URL (e.g., `ldap://dc.example.com:389`)      | No       | -       |
+| `domainControllerUser`      | LDAP service account username for group lookup (optional)       | No       | -       |
+| `domainControllerPassword`  | LDAP service account password for group lookup (optional)       | No       | -       |
+| `type`                      | Authentication type (`ntlm` or `negotiate`)                     | No       | `ntlm`  |
 | `debug`                 | Enable debug logging                                           | No       | `false` |
 | `getUserInfo`           | Retrieve user information                                      | No       | `true`  |
 | `getGroups`             | Retrieve user groups                                           | No       | `true`  |
@@ -498,8 +500,7 @@ This feature requires the following npm packages:
 ```json
 {
   "ldap-authentication": "^3.3.4",
-  "express-ntlm": "^2.6.0",
-  "passport-ntlm": "^1.0.1"
+  "express-ntlm": "^2.7.0"
 }
 ```
 

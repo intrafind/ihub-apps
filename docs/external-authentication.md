@@ -14,13 +14,15 @@ iHub Apps supports multiple authentication modes and is **fully functional witho
 
 ### **Optional Authentication Modes**
 
-The platform supports five authentication methods:
+The platform supports seven authentication methods:
 
 1. **[JWT Authentication](jwt-authentication.md)** - External JWT tokens (no handshake required)
 2. **[OIDC Authentication](oidc-authentication.md)** - Full OpenID Connect flow
 3. **Local Authentication** - Built-in user database
 4. **Proxy Authentication** - Reverse proxy headers
-5. **Anonymous** - No authentication (default)
+5. **LDAP Authentication** - Directory server authentication (Active Directory, OpenLDAP)
+6. **NTLM Authentication** - Windows integrated/Kerberos authentication
+7. **Anonymous** - No authentication (default)
 
 - **Proxy Mode**: Authentication handled by reverse proxy or external service
 - **Local Mode**: Built-in username/password authentication
@@ -208,6 +210,8 @@ Group configuration is now stored in `contents/config/groups.json`:
         "apps": ["*"],
         "prompts": ["*"],
         "models": ["*"],
+        "workflows": ["*"],
+        "skills": ["*"],
         "adminAccess": true
       },
       "mappings": ["Admins", "IT-Admin", "Platform-Admin"]
@@ -220,6 +224,8 @@ Group configuration is now stored in `contents/config/groups.json`:
         "apps": ["chat", "translator", "summarizer"],
         "prompts": ["general"],
         "models": ["gpt-3.5-turbo", "gemini-pro"],
+        "workflows": ["document-processor"],
+        "skills": [],
         "adminAccess": false
       },
       "mappings": ["Users", "Employees", "Staff"]
@@ -227,6 +233,17 @@ Group configuration is now stored in `contents/config/groups.json`:
   }
 }
 ```
+
+#### Supported Permission Types
+
+| Permission Key | Description |
+|----------------|-------------|
+| `apps` | AI application IDs the group can access (`["*"]` for all) |
+| `prompts` | Prompt IDs the group can use |
+| `models` | Model IDs the group can select |
+| `workflows` | Workflow IDs the group can execute |
+| `skills` | Skill names the group can install or use |
+| `adminAccess` | Boolean: grants access to the admin panel |
 
 #### Legacy Support
 
@@ -463,6 +480,134 @@ OpenID Connect authentication with external providers like Google, Microsoft, Au
 ```
 
 **See [OIDC Authentication Guide](./oidc-authentication.md) for complete configuration instructions.**
+
+### 4. LDAP Authentication
+
+LDAP (Lightweight Directory Access Protocol) authentication integrates with corporate directory servers such as Microsoft Active Directory or OpenLDAP. Users log in with their directory credentials; groups are extracted from the LDAP response and mapped to iHub internal groups.
+
+#### How It Works
+
+1. User submits credentials to `POST /api/auth/ldap/login`
+2. `server/middleware/ldapAuth.js` calls the LDAP server via `ldap-authentication`
+3. Groups are extracted from the LDAP user object (supports `cn`, `name`, `displayName`, and `dn`-based extraction)
+4. External LDAP groups are mapped to internal iHub groups via `groups.json` `mappings`
+5. A JWT token is generated and returned to the client
+
+#### Configuration
+
+```json
+{
+  "auth": { "mode": "local" },
+  "ldapAuth": {
+    "enabled": true,
+    "providers": [
+      {
+        "name": "corporate-ldap",
+        "displayName": "Corporate Directory",
+        "url": "ldap://dc.company.com",
+        "userSearchBase": "ou=people,dc=company,dc=com",
+        "usernameAttribute": "uid",
+        "userDn": "uid={{username}},ou=people,dc=company,dc=com",
+        "adminDn": "cn=service-account,dc=company,dc=com",
+        "adminPassword": "${LDAP_ADMIN_PASSWORD}",
+        "groupSearchBase": "ou=groups,dc=company,dc=com",
+        "groupClass": "groupOfNames",
+        "groupMemberAttribute": "member",
+        "defaultGroups": ["authenticated"],
+        "sessionTimeoutMinutes": 480
+      }
+    ]
+  }
+}
+```
+
+#### Multi-Provider Support
+
+Multiple LDAP providers can be configured simultaneously. The provider is selected by passing `?provider=corporate-ldap` to the login endpoint, allowing fallback across multiple directories.
+
+#### Group Mapping
+
+LDAP groups are mapped to iHub groups using the `mappings` array in `groups.json`:
+
+```json
+{
+  "groups": {
+    "admin": {
+      "permissions": {
+        "apps": ["*"],
+        "models": ["*"],
+        "prompts": ["*"],
+        "workflows": ["*"],
+        "skills": ["*"],
+        "adminAccess": true
+      },
+      "mappings": ["Admins", "IT-Admin", "CN=Administrators,OU=Groups"]
+    }
+  }
+}
+```
+
+#### Security Notes
+
+- The `adminPassword` field is encrypted at rest using AES-256-GCM (see [Security Guide](security.md))
+- TLS options can be configured via the `tlsOptions` field for LDAPS
+- Group extraction falls back through multiple LDAP attribute names for compatibility
+
+### 5. NTLM Authentication
+
+NTLM (Windows Integrated Authentication) allows users on domain-joined Windows machines to authenticate transparently using their Windows credentials via the NTLM/Negotiate protocol. This is implemented using the `express-ntlm` package.
+
+#### How It Works
+
+1. The browser sends an NTLM negotiate request automatically (no login form required for SSO)
+2. `server/middleware/ntlmAuth.js` handles the multi-round NTLM handshake
+3. Active Directory groups are queried via LDAP using the configured bind credentials
+4. Groups are mapped to iHub internal groups and a JWT token is optionally generated
+
+#### Configuration
+
+```json
+{
+  "ntlmAuth": {
+    "enabled": true,
+    "domain": "COMPANY",
+    "domainController": "ldap://dc.company.com",
+    "domainControllerUser": "CN=Service Account,OU=Users,DC=company,DC=com",
+    "domainControllerPassword": "${NTLM_LDAP_PASSWORD}",
+    "getGroups": true,
+    "getUserInfo": true,
+    "generateJwtToken": true,
+    "defaultGroups": ["authenticated"],
+    "sessionTimeoutMinutes": 480
+  }
+}
+```
+
+LDAP credentials can also be supplied via environment variables instead of the configuration file:
+
+```bash
+export NTLM_LDAP_USER="CN=Service Account,OU=Users,DC=company,DC=com"
+export NTLM_LDAP_PASSWORD="secure-password"
+```
+
+#### Multiple Provider Co-existence
+
+When NTLM is enabled alongside other providers (local, LDAP, OIDC), automatic NTLM SSO is suppressed for non-NTLM flows. NTLM authentication is only activated when:
+
+- The user explicitly requests it via `?ntlm=true`, or
+- The request targets the `POST /api/auth/ntlm/login` endpoint
+
+This prevents the NTLM multi-round handshake from blocking access to standard login forms.
+
+#### Development Notes
+
+NTLM authentication is automatically skipped for requests proxied through Vite's dev server (port 5173) to prevent authentication loops. Set `SKIP_NTLM_VITE_PROXY=false` to override this behaviour during local testing.
+
+#### Security Notes
+
+- The `domainControllerPassword` field is encrypted at rest using AES-256-GCM (see [Security Guide](security.md))
+- NTLM requires a domain controller with LDAP access for group retrieval
+- For production deployments, use LDAPS (`ldaps://`) for the domain controller URL
 
 ## API Endpoints
 

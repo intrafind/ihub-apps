@@ -99,7 +99,7 @@ iHub Apps offers four installation methods designed for different use cases:
 - **Storage**: 4GB for images and volumes
 
 #### npm Installation
-- **Node.js**: 20.0 or higher (LTS recommended)
+- **Node.js**: 24.0 or higher (LTS recommended)
 - **npm**: 8.0 or higher (included with Node.js)
 - **Python**: 3.8+ (for some native dependencies)
 - **Build tools**: Platform-specific C++ compiler
@@ -608,9 +608,9 @@ Edit `contents/config/platform.json`:
 
 ```
 contents/
-├── config/           # Core configuration files
-│   ├── apps.json    # Application definitions
-│   ├── models.json  # LLM model configurations
+├── apps/            # AI application definitions (individual .json files)
+├── models/          # LLM model configurations (individual .json files)
+├── config/          # Core configuration files
 │   ├── platform.json # Server and auth configuration
 │   ├── groups.json  # User groups and permissions
 │   └── ui.json      # UI customization
@@ -624,11 +624,11 @@ contents/
 
 ### Key Configuration Files
 
-#### apps.json - Application Definitions
-Defines available AI applications with prompts, variables, and settings.
+#### apps/ - Application Definitions
+Defines available AI applications as individual JSON files (one per app) with prompts, variables, and settings.
 
-#### models.json - LLM Provider Configuration  
-Configures OpenAI, Anthropic, Google, and other LLM providers.
+#### models/ - LLM Provider Configuration
+Configures OpenAI, Anthropic, Google, and other LLM providers as individual JSON files (one per model).
 
 #### platform.json - Server Configuration
 Core server settings including authentication, CORS, and performance.

@@ -9,6 +9,12 @@ This document is the primary developer reference for implementing OAuth 2.0 Auth
 3. [PKCE Requirement](#pkce-requirement)
 4. [Step-by-Step Flow](#step-by-step-flow)
 5. [API Endpoint Reference](#api-endpoint-reference)
+   - [Authorization Endpoint](#authorization-endpoint)
+   - [Token Endpoint](#token-endpoint)
+   - [UserInfo Endpoint](#userinfo-endpoint)
+   - [Revocation Endpoint](#revocation-endpoint)
+   - [Introspection Endpoint](#introspection-endpoint-rfc-7662)
+   - [Discovery Endpoint](#discovery-endpoint)
 6. [Client Configuration Reference](#client-configuration-reference)
 7. [Complete Code Example](#complete-code-example)
 8. [Token Format and Claims](#token-format-and-claims)
@@ -399,6 +405,79 @@ Revokes an access or refresh token. After revocation, the token is no longer val
 ```
 
 **Response:** HTTP 200 (no body) on success.
+
+---
+
+### Introspection Endpoint (RFC 7662)
+
+```
+POST /api/oauth/introspect
+Content-Type: application/json
+```
+
+Validates an OAuth access token and returns its metadata. This endpoint implements [RFC 7662](https://datatracker.ietf.org/doc/html/rfc7662) token introspection.
+
+**Authentication required.** The caller must authenticate using one of:
+
+- `client_id` + `client_secret` of a registered OAuth client, OR
+- A valid admin user JWT (for admin users only)
+
+**Request body:**
+
+| Field | Required | Description |
+|---|---|---|
+| `token` | Yes | The access token to introspect |
+| `client_id` | Required (non-admin) | OAuth client ID of the introspecting party |
+| `client_secret` | Required (non-admin) | OAuth client secret of the introspecting party |
+
+**Example request:**
+
+```bash
+curl -X POST https://your-ihub-instance.com/api/oauth/introspect \
+  -H "Content-Type: application/json" \
+  -d '{
+    "token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...",
+    "client_id": "YOUR_CLIENT_ID",
+    "client_secret": "YOUR_CLIENT_SECRET"
+  }'
+```
+
+**Response for an active token:**
+
+```json
+{
+  "active": true,
+  "scopes": ["openid", "profile", "email"],
+  "exp": 1709990400,
+  "iat": 1709986800,
+  "iss": "https://your-ihub-instance.com",
+  "aud": "your_client_id",
+  "token_type": "oauth_authorization_code",
+  "sub": "user@example.com",
+  "name": "Jane Doe",
+  "email": "user@example.com",
+  "groups": ["users", "authenticated"],
+  "client_id": "your_client_id"
+}
+```
+
+For client credentials tokens, the response includes `client_id`, `client_name`, `allowedApps`, and `allowedModels` instead of the user identity fields.
+
+**Response for an inactive or invalid token:**
+
+```json
+{
+  "active": false
+}
+```
+
+**Error responses:**
+
+| Status | Error | Cause |
+|---|---|---|
+| `400` | `invalid_request` | `token` field is missing or OAuth is not enabled |
+| `401` | `invalid_client` | Missing or invalid `client_id`/`client_secret` |
+| `500` | `server_error` | Unexpected server error |
 
 ---
 

@@ -11,6 +11,8 @@ This comprehensive guide covers how to implement and use tool calling in iHub Ap
 - [Advanced Features](#advanced-features)
 - [Practical Examples](#practical-examples)
 - [Troubleshooting & Best Practices](#troubleshooting--best-practices)
+- [Tool Configuration Reference](#tool-configuration-reference)
+- [Built-in Tools Reference](#built-in-tools-reference)
 
 ## Quick Start
 
@@ -919,6 +921,98 @@ Test complete workflow from chat interface through tool execution.
 - [ ] Integration tests passed
 - [ ] Documentation updated
 - [ ] Security review completed
+
+## Tool Configuration Reference
+
+### `tools.json` Field Reference
+
+Each entry in `contents/config/tools.json` uses the following fields:
+
+| Field | Description |
+|-------|-------------|
+| `id` | Unique identifier referenced by apps in their `tools` array |
+| `name` | Localized display name object (e.g., `{"en": "..."}`) |
+| `description` | Localized short description object |
+| `script` | The script file in `server/tools/` implementing the tool |
+| `parameters` | JSON schema describing the tool input |
+| `provider` | Provider restriction (e.g., `"google"`, `"openai-responses"`) |
+| `isSpecialTool` | If `true`, handled by the provider API rather than executed server-side |
+| `concurrency` | Maximum number of concurrent executions (optional) |
+
+### Provider-Handled Tools (`isSpecialTool`)
+
+Some tools are not executed server-side but are instead passed directly to the LLM provider's API as a capability hint. When `isSpecialTool: true`, iHub Apps includes the tool in the API request but delegates all execution to the model provider.
+
+This is used for native capabilities such as:
+- Google Search grounding in Gemini models
+- Web search in OpenAI Responses API models
+
+These tools do not have a `script` file because no server-side code runs.
+
+## Built-in Tools Reference
+
+iHub Apps ships with a set of pre-configured built-in tools that cover the most common integration scenarios.
+
+### `webSearch`
+
+- **Provider**: OpenAI GPT-5 and compatible models via the Responses API
+- **Description**: Enables the model to search the web for up-to-date information, providing answers with citations and sources
+- **Type**: Provider-handled (`isSpecialTool: true`)
+- **Parameters**: None — automatically enabled when listed in an app's `tools` array
+- **Authentication**: Uses the configured OpenAI API key; no additional setup required
+- **Response**: Returns responses with inline citations, annotations, and web search metadata (queries, domains, sources)
+- **Use Cases**: Current events, latest news, real-time data, fact-checking
+
+### `googleSearch`
+
+- **Provider**: Google Gemini models only
+- **Description**: Grounds Gemini responses with real-time information from Google Search, providing verifiable and up-to-date answers with citations
+- **Type**: Provider-handled (`isSpecialTool: true`)
+- **Parameters**: None — automatically enabled when listed in an app's `tools` array
+- **Authentication**: Uses the configured Gemini API key; no additional setup required
+- **Response**: Returns grounding metadata with search queries, sources, and citations
+
+### `braveSearch`
+
+- **Provider**: Any model supporting function calling
+- **Description**: Web search powered by the Brave Search API
+- **Type**: Server-side execution
+- **Authentication**: Requires `BRAVE_API_KEY` environment variable
+- **Use Cases**: Privacy-focused web search alternative
+
+### `tavilySearch`
+
+- **Provider**: Any model supporting function calling
+- **Description**: Web search powered by the Tavily Search API, optimized for AI agents
+- **Type**: Server-side execution
+- **Authentication**: Requires `TAVILY_API_KEY` environment variable
+- **Use Cases**: Research-oriented search with rich result summaries
+
+### `enhancedWebSearch`
+
+- **Provider**: Any model supporting function calling
+- **Description**: Web content extraction combining multiple sources for comprehensive results
+- **Type**: Server-side execution
+- **Use Cases**: Deep-dive research, multi-source fact gathering
+
+### `iFinder`
+
+- **Provider**: Any model supporting function calling
+- **Description**: Comprehensive document search, content retrieval, and management for iFinder document management systems
+- **Type**: Server-side execution (method-based)
+- **Methods**: `search`, `getContent`, `getMetadata`, `download`
+- **Authentication**: Requires authenticated users and JWT configuration
+- **App Usage**: Reference specific methods with dot notation: `"tools": ["iFinder.search", "iFinder.getContent"]`
+- **Documentation**: See [iFinder Integration](iFinder-Integration.md) for detailed setup and usage
+
+### `entraPeopleSearch`
+
+- **Provider**: Any model supporting function calling
+- **Description**: Corporate directory integration for Microsoft Entra ID (formerly Azure AD)
+- **Type**: Server-side execution (method-based)
+- **Methods**: `findUser`, `getAllUserDetails`, `getUserManager`, `getUserGroups`, `getTeamMembers`, `getUserPhotoBase64`
+- **Authentication**: Requires Azure credentials and Microsoft Graph API permissions
+- **Use Cases**: Org chart lookups, employee directory, team composition queries
 
 ## Related Documentation
 

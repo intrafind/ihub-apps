@@ -53,8 +53,10 @@ The server reads settings from the environment or a `.env` file such as `config.
 | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
 | `PORT`                     | Port the HTTP server listens on                                   | `3000`                                           |
 | `HOST`                     | Host interface to bind to                                         | `0.0.0.0`                                        |
-| `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `60000`                                          |
-| `WORKERS`                  | Number of Node.js cluster workers                                 | CPU count                                        |
+| `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`). Affects cookie security flags, debug logging, and cache TTLs. | – |
+| `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `300000`                                         |
+| `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`)          | `1`                                              |
+| `NUM_WORKERS`              | Number of Node.js cluster workers (alias of `WORKERS`)            | `1`                                              |
 | `OPENAI_API_KEY`           | API key for OpenAI models                                         | –                                                |
 | `ANTHROPIC_API_KEY`        | API key for Anthropic models                                      | –                                                |
 | `MISTRAL_API_KEY`          | API key for Mistral models                                        | –                                                |
@@ -62,7 +64,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `DEFAULT_API_KEY`          | Fallback API key used when a model specific key is missing        | –                                                |
 | `LOCAL_API_KEY`            | Generic API key for local models                                  | –                                                |
 | `CONTENTS_DIR`             | Directory containing the `contents` folder                        | `contents`                                       |
-| `DATA_DIR`                 | Directory for storing application data                             | `data`                                           |
+| `DATA_DIR`                 | Directory for storing application data                            | `data`                                           |
 | `APP_ROOT_DIR`             | Override the application root path when running packaged binaries | –                                                |
 | `MCP_SERVER_URL`           | URL of a Model Context Protocol server for tool discovery         | –                                                |
 | `BRAVE_SEARCH_API_KEY`     | API key for the Brave Search tool                                 | –                                                |
@@ -80,6 +82,17 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `PROXY_AUTH_GROUPS_HEADER` | Optional header with comma separated group names                  | –                                                |
 | `PROXY_AUTH_JWKS`          | JSON Web Key Set URL for verifying forwarded JWTs                 | –                                                |
 | `PROXY_AUTH_JWT_HEADER`    | Header containing the JWT if not using `Authorization`            | `Authorization`                                  |
+| `JWT_SECRET`               | HMAC secret for signing JWTs. **Only required when `jwt.algorithm` is `HS256`.** RS256 (the default) uses auto-generated RSA key files instead. | – |
+| `JWT_PRIVATE_KEY`          | PEM-encoded RSA private key for RS256 JWT signing. Overrides the auto-generated key stored at `contents/.jwt-private-key.pem`. | – |
+| `JWT_PUBLIC_KEY`           | PEM-encoded RSA public key for RS256 JWT verification. Overrides the auto-generated key stored at `contents/.jwt-public-key.pem`. | – |
+| `BASE_PATH`                | Deployment subpath prefix (e.g., `/ihub`). Use this when iHub is accessed directly at a subpath without a reverse proxy stripping the prefix. | – |
+| `AUTO_DETECT_BASE_PATH`    | Set to `true` to detect the base path automatically from the `X-Forwarded-Prefix` header (or the header named by `BASE_PATH_HEADER`). Use this with reverse proxies that set forwarding headers. | `false` |
+| `BASE_PATH_HEADER`         | Header name used for auto base path detection when `AUTO_DETECT_BASE_PATH=true`. | `x-forwarded-prefix` |
+| `AZURE_CLIENT_ID`          | Azure app registration client ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
+| `AZURE_CLIENT_SECRET`      | Azure app registration client secret for the Office 365 / Microsoft Teams cloud storage integration. | – |
+| `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
+| `NTLM_LDAP_USER`           | LDAP bind user for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerUser` in `platform.json`. | – |
+| `NTLM_LDAP_PASSWORD`       | LDAP bind password for NTLM authentication domain controller queries. Overrides `ntlmAuth.domainControllerPassword` in `platform.json`. | – |
 
 The concurrency of outbound requests is configured via `requestConcurrency` in `contents/config/platform.json` and can be overridden per model or tool. If this value is omitted or below `1`, requests are not throttled.
 The delay between requests can be adjusted with `requestDelayMs` in the same configuration files. A value of `0` disables the delay.

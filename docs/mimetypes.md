@@ -241,8 +241,9 @@ To create a new category (advanced use case):
 | Word (DOCX) | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` | `.docx` | DOCX |
 | Excel (XLSX) | `application/vnd.openxmlformats-officedocument.spreadsheetml.sheet` | `.xlsx` | XLSX |
 | PowerPoint (PPTX) | `application/vnd.openxmlformats-officedocument.presentationml.presentation` | `.pptx` | PPTX |
-| Word (DOC) | `application/vnd.ms-excel` | `.xls` | XLS |
-| Excel (XLS) | `application/vnd.ms-powerpoint` | `.ppt` | PPT |
+| Word (DOC) | `application/msword` | `.doc` | DOC |
+| Excel (XLS) | `application/vnd.ms-excel` | `.xls` | XLS |
+| PowerPoint (PPT) | `application/vnd.ms-powerpoint` | `.ppt` | PPT |
 | Plain Text | `text/plain` | `.txt` | TXT |
 | Markdown | `text/markdown` | `.md` | MD |
 | CSV | `text/csv` | `.csv` | CSV |

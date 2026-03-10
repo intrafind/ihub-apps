@@ -108,7 +108,7 @@ Alternatively, configure in your `contents/config/platform.json`:
     "algorithm": "RS256",
     "issuer": "ihub-apps",
     "audience": "ifinder-api",
-    "defaultScope": "fa_index_read",
+    "defaultScope": "fi_index_read",
     "tokenExpirationSeconds": 3600
   }
 }
@@ -208,7 +208,7 @@ The generated JWT tokens will have this structure:
     "exp": 1643727000,
     "iss": "ihub-apps",
     "aud": "ifinder-api",
-    "scope": "fa_index_read"
+    "scope": "fi_index_read"
   }
 }
 ```
