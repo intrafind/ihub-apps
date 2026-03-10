@@ -479,8 +479,15 @@ while true; do
     echo ""
     echo "Restarting after update..."
     echo ""
-    # Re-exec this script so that any launcher changes take effect
-    exec "\$0" "\$@"
+    # Find the launcher script — version in the filename may have changed after update
+    for f in "\${DIR}"/ihub-apps-v*; do
+      case "\$f" in *.bat) continue ;; esac
+      if [ -x "\$f" ]; then
+        exec "\$f" "\$@"
+      fi
+    done
+    # Fallback: continue the loop (runs node + launcher.cjs directly)
+    continue
   else
     exit \$EXIT_CODE
   fi
