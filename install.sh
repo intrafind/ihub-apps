@@ -25,7 +25,7 @@ fi
 info()    { printf "${BLUE}==>${NC} ${BOLD}%s${NC}\n" "$1" >&2; }
 success() { printf "${GREEN}✓${NC} %s\n" "$1" >&2; }
 warn()    { printf "${YELLOW}warning:${NC} %s\n" "$1" >&2; }
-error()   { printf "${RED}error:${NC} %s\n" "$1" >&2; exit 1; }
+error()   { printf "${RED}error:${NC} %b\n" "$1" >&2; exit 1; }
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -111,7 +111,7 @@ verify_checksum() {
   fi
 
   local expected
-  expected="$(grep "$filename" "$checksums_file" 2>/dev/null | awk '{print $1}')"
+  expected="$(grep -F "$filename" "$checksums_file" 2>/dev/null | awk '{print $1}')"
 
   if [ -z "$expected" ]; then
     warn "No checksum entry found for $filename — skipping verification."
@@ -165,16 +165,21 @@ check_docker() {
 }
 
 offer_docker() {
+  local version="${1:-latest}"
+  # Skip Docker offer if no TTY is available for user interaction (e.g. CI/CD pipelines)
+  if ! [ -c /dev/tty ]; then
+    return 0
+  fi
   printf "\n${YELLOW}Docker is available on this system.${NC}\n"
   printf "Would you like to run iHub Apps via Docker instead of the binary? [y/N] "
-  read -r reply </dev/tty
+  read -r reply </dev/tty 2>/dev/null || reply=""
   case "$reply" in
     [Yy]*)
-      info "Pulling latest iHub Apps Docker image..."
-      docker pull intrafind/ihub-apps:latest
+      info "Pulling iHub Apps Docker image (${version})..."
+      docker pull "intrafind/ihub-apps:${version}"
       success "Docker image pulled successfully."
       printf "\nRun iHub Apps with:\n"
-      printf "  ${BOLD}docker run -d --name ihub-apps -p 3000:3000 intrafind/ihub-apps:latest${NC}\n\n"
+      printf "  ${BOLD}docker run -d --name ihub-apps -p 3000:3000 intrafind/ihub-apps:${version}${NC}\n\n"
       exit 0
       ;;
   esac
@@ -214,7 +219,7 @@ install_binary() {
   binary_path="$(find "$tmp_dir" -maxdepth 2 -type f -name "${BINARY_NAME}-*-${os}" | head -n 1)"
   if [ -z "$binary_path" ]; then
     # Fallback: look for any executable matching the name
-    binary_path="$(find "$tmp_dir" -maxdepth 2 -type f -name "${BINARY_NAME}*" ! -name "*.txt" ! -name "*.sh" ! -name "*.bat" | head -n 1)"
+    binary_path="$(find "$tmp_dir" -maxdepth 2 -type f -name "${BINARY_NAME}*" ! -name "*.txt" ! -name "*.sh" ! -name "*.bat" ! -name "*.tar.gz" ! -name "*.zip" | head -n 1)"
   fi
   if [ -z "$binary_path" ]; then
     error "Could not find the ${BINARY_NAME} binary in the extracted archive."
@@ -230,6 +235,9 @@ install_binary() {
   fi
 
   local install_path="${install_dir}/${BINARY_NAME}"
+  # Remove existing binary before copy to avoid ETXTBSY ("Text file busy") on Linux
+  # when upgrading while the process is still running.
+  rm -f "$install_path" 2>/dev/null || true
   cp "$binary_path" "$install_path"
   chmod +x "$install_path"
 
@@ -319,13 +327,16 @@ main() {
   local arch
   arch="$(detect_arch)"
   info "Detected platform: ${os} (${arch})"
+  if [ "$arch" != "x64" ]; then
+    warn "No native ${arch} binary is available — falling back to x64. This may require Rosetta 2 (macOS) or CPU emulation (Linux)."
+  fi
 
   need_cmd uname
   need_cmd tar
 
   # Docker offer
   if check_docker; then
-    offer_docker
+    offer_docker "$OPT_VERSION"
   fi
 
   # Resolve version
@@ -349,13 +360,13 @@ main() {
   setup_env_file
 
   # Summary
-  printf "\n${GREEN}${BOLD}iHub Apps ${version} installed successfully!${NC}\n\n"
-  printf "Binary:  ${BOLD}${install_path}${NC}\n"
-  printf "Config:  ${BOLD}${HOME}/.config/ihub-apps/.env${NC}\n\n"
+  printf "\n%s%siHub Apps %s installed successfully!%s\n\n" "${GREEN}" "${BOLD}" "${version}" "${NC}"
+  printf "Binary:  %s%s%s\n" "${BOLD}" "${install_path}" "${NC}"
+  printf "Config:  %s%s/.config/ihub-apps/.env%s\n\n" "${BOLD}" "${HOME}" "${NC}"
   printf "Run iHub Apps:\n"
-  printf "  ${BOLD}${BINARY_NAME}${NC}\n\n"
+  printf "  %s%s%s\n\n" "${BOLD}" "${BINARY_NAME}" "${NC}"
   printf "Docs & support:\n"
-  printf "  https://github.com/${REPO}\n\n"
+  printf "  https://github.com/%s\n\n" "${REPO}"
 
   # Start if requested
   if [ "$OPT_START" = "1" ]; then
