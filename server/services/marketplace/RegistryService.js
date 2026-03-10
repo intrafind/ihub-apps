@@ -191,6 +191,39 @@ function toRawGitHubUrl(url) {
 }
 
 /**
+ * Validate and normalize a registry source URL before it is used for outbound HTTP calls.
+ * Currently restricts hosts to GitHub raw/content domains to mitigate SSRF risks.
+ *
+ * @param {string} source
+ * @returns {string} sanitized URL string
+ * @throws {Error} if the URL is invalid or uses a disallowed host
+ */
+function sanitizeRegistrySourceUrl(source) {
+  if (typeof source !== 'string' || !source.trim()) {
+    throw new Error('Registry source URL must be a non-empty string');
+  }
+
+  let urlObj;
+  try {
+    urlObj = new URL(source);
+  } catch {
+    throw new Error('Registry source URL is not a valid URL');
+  }
+
+  // Only allow HTTPS to avoid downgrades; extend if HTTP is required in your environment.
+  if (urlObj.protocol !== 'https:') {
+    throw new Error('Registry source URL must use HTTPS');
+  }
+
+  const allowedHosts = new Set(['github.com', 'raw.githubusercontent.com']);
+  if (!allowedHosts.has(urlObj.hostname)) {
+    throw new Error(`Registry source host "${urlObj.hostname}" is not allowed`);
+  }
+
+  return urlObj.toString();
+}
+
+/**
  * Derive the full URL of a catalog.json from a registry source URL.
  * Normalises github.com/blob/ URLs to raw.githubusercontent.com first.
  * If the source URL already ends with "catalog.json" or "marketplace.json"
@@ -744,7 +777,13 @@ class RegistryService {
    */
   async testRegistry(registryConfig) {
     try {
-      const catalog = await this.fetchCatalog(registryConfig);
+      const safeConfig = { ...registryConfig };
+      if (safeConfig && safeConfig.source) {
+        // Validate and normalize the source URL before using it for outbound HTTP.
+        safeConfig.source = sanitizeRegistrySourceUrl(String(safeConfig.source));
+      }
+
+      const catalog = await this.fetchCatalog(safeConfig);
       const itemCount = (catalog?.items || []).length;
       return {
         success: true,

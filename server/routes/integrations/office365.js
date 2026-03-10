@@ -26,6 +26,20 @@ function isValidReturnUrl(returnUrl, req) {
   }
 }
 
+/**
+ * Validate an identifier used in Office 365 / Microsoft Graph URLs.
+ * Restricts characters and length to reduce risk when interpolated into URLs.
+ *
+ * NOTE: Adjust the regex if your environment uses a wider ID character set.
+ */
+function isValidGraphId(id) {
+  if (typeof id !== 'string') return false;
+  const trimmed = id.trim();
+  if (!trimmed || trimmed.length > 512) return false;
+  // Allow common safe characters; disallow whitespace and URL control chars.
+  return /^[A-Za-z0-9._\-]+$/.test(trimmed);
+}
+
 // Gate all Office 365 routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
 
@@ -572,6 +586,20 @@ router.get('/items', authRequired, async (req, res) => {
 
     const { driveId, folderId, search } = req.query;
 
+    if (driveId && !isValidGraphId(driveId)) {
+      return res.status(400).json({
+        error: 'Invalid driveId',
+        message: 'driveId contains invalid characters or is too long'
+      });
+    }
+
+    if (folderId && !isValidGraphId(folderId)) {
+      return res.status(400).json({
+        error: 'Invalid folderId',
+        message: 'folderId contains invalid characters or is too long'
+      });
+    }
+
     let items;
     // If search query is provided, use search endpoint
     if (search && search.trim().length > 0) {
@@ -626,6 +654,20 @@ router.get('/download', authRequired, async (req, res) => {
       return res.status(400).json({
         error: 'Missing fileId',
         message: 'fileId query parameter is required'
+      });
+    }
+
+    if (!isValidGraphId(fileId)) {
+      return res.status(400).json({
+        error: 'Invalid fileId',
+        message: 'fileId contains invalid characters or is too long'
+      });
+    }
+
+    if (driveId && !isValidGraphId(driveId)) {
+      return res.status(400).json({
+        error: 'Invalid driveId',
+        message: 'driveId contains invalid characters or is too long'
       });
     }
 
