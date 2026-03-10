@@ -133,6 +133,90 @@ function decryptPlatformSecrets(config) {
   return config;
 }
 
+/**
+ * Convert an UPPER_SNAKE_CASE segment to camelCase
+ * Example: SESSION_TIMEOUT_MINUTES → sessionTimeoutMinutes
+ */
+function toCamelCase(segment) {
+  return segment.toLowerCase().replace(/_([a-z0-9])/g, (_, c) => c.toUpperCase());
+}
+
+/**
+ * Parse an environment variable string value to the most appropriate type.
+ * Numbers and booleans are coerced; JSON arrays/objects are parsed; otherwise string.
+ */
+function parseEnvValue(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+/**
+ * Set a value at a nested path inside an object.
+ * Intermediate objects are created as needed.
+ */
+function setNestedValue(obj, pathParts, value) {
+  if (!obj || typeof obj !== 'object' || pathParts.length === 0) return;
+
+  let current = obj;
+  for (let i = 0; i < pathParts.length - 1; i++) {
+    const key = pathParts[i];
+    if (current[key] === undefined || typeof current[key] !== 'object') {
+      current[key] = {};
+    }
+    current = current[key];
+  }
+  current[pathParts[pathParts.length - 1]] = value;
+}
+
+/**
+ * Mapping from config cache keys to IHUB_* environment variable prefixes.
+ * Double underscores (__) separate nested path segments.
+ * Each segment is UPPER_SNAKE_CASE and is converted to camelCase before use.
+ *
+ * Examples:
+ *   IHUB_PLATFORM__AUTH__MODE=anonymous         → platform.json  auth.mode
+ *   IHUB_PLATFORM__DEFAULT_LANGUAGE=de          → platform.json  defaultLanguage
+ *   IHUB_PLATFORM__RATE_LIMIT__DEFAULT__LIMIT=200 → platform.json rateLimit.default.limit
+ *   IHUB_UI__THEME__PRIMARY_COLOR=#ff0000       → ui.json        theme.primaryColor
+ */
+const IHUB_ENV_PREFIXES = {
+  'config/platform.json': 'IHUB_PLATFORM__',
+  'config/ui.json': 'IHUB_UI__'
+};
+
+/**
+ * Scan process.env for IHUB_* overrides and apply them to the given config object.
+ * Only configs listed in IHUB_ENV_PREFIXES are processed.
+ * Returns the (potentially mutated) data object.
+ */
+function applyIhubEnvOverrides(configPath, data) {
+  const prefix = IHUB_ENV_PREFIXES[configPath];
+  if (!prefix || !data || typeof data !== 'object' || Array.isArray(data)) return data;
+
+  for (const [envKey, envValue] of Object.entries(process.env)) {
+    if (!envKey.startsWith(prefix)) continue;
+
+    const pathStr = envKey.slice(prefix.length);
+    if (!pathStr) continue;
+
+    const pathParts = pathStr.split('__').map(toCamelCase);
+    if (pathParts.some(p => !p)) continue; // skip malformed keys
+
+    const parsedValue = parseEnvValue(envValue);
+    setNestedValue(data, pathParts, parsedValue);
+
+    logger.info(
+      `Applied IHUB env override: ${envKey} → ${pathParts.join('.')} = ${JSON.stringify(parsedValue)}`,
+      { component: 'ConfigCache' }
+    );
+  }
+
+  return data;
+}
+
 function expandToolFunctions(tools = []) {
   const expanded = [];
   for (const tool of tools) {
@@ -399,6 +483,9 @@ class ConfigCache {
 
     // Resolve environment variables in the data
     const resolvedData = resolveEnvVarsInObject(data);
+
+    // Apply IHUB_* environment variable overrides
+    applyIhubEnvOverrides(key, resolvedData);
 
     // Generate ETag for the data
     const etag = this.generateETag(resolvedData);
