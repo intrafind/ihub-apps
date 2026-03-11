@@ -5,7 +5,7 @@ import Icon from '../../../shared/components/Icon';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 
-const ChatActionsMenu = ({
+function ChatActionsMenu({
   onClearChat,
   onToggleConfig,
   onShare,
@@ -21,7 +21,7 @@ const ChatActionsMenu = ({
   showCanvasButton = false,
   appId,
   chatId
-}) => {
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -148,6 +148,6 @@ const ChatActionsMenu = ({
       />
     </div>
   );
-};
+}
 
 export default ChatActionsMenu;

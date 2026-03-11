@@ -12,14 +12,7 @@ import SearchModal from '../../../shared/components/SearchModal';
 
 const fuseRef = { current: null };
 
-const PromptSearch = ({
-  isOpen,
-  onClose,
-  onSelect,
-  appId,
-  appSkills = [],
-  promptsEnabled = true
-}) => {
+function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], promptsEnabled = true }) {
   const { t, i18n } = useTranslation();
   const [prompts, setPrompts] = useState([]);
   const [skills, setSkills] = useState([]);
@@ -185,6 +178,6 @@ const PromptSearch = ({
       }
     />
   );
-};
+}
 
 export default PromptSearch;

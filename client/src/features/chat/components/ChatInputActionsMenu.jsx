@@ -15,7 +15,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * Consolidates tools, file upload, magic prompt, and voice input into one menu
  * Supports single action optimization and tool usage tracking
  */
-const ChatInputActionsMenu = ({
+function ChatInputActionsMenu({
   app,
   enabledTools,
   onEnabledToolsChange,
@@ -42,7 +42,7 @@ const ChatInputActionsMenu = ({
   onImageQualityChange,
   // Cloud storage props
   onCloudProviderSelect
-}) => {
+}) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
@@ -525,6 +525,6 @@ const ChatInputActionsMenu = ({
       )}
     </div>
   );
-};
+}
 
 export default ChatInputActionsMenu;

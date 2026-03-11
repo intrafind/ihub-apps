@@ -9,7 +9,7 @@ import IntegrationAuthPrompts from '../../../shared/components/integrations/Inte
  * Auto-scrolls to new messages and during streaming unless user manually scrolls up
  * Only renders when there are actual messages to display
  */
-const ChatMessageList = ({
+function ChatMessageList({
   messages,
   outputFormat = 'markdown',
   onDelete,
@@ -33,7 +33,7 @@ const ChatMessageList = ({
   onClarificationSkip = null, // Callback when a clarification is skipped
   // Citation document action handlers
   onDocumentAction = null
-}) => {
+}) {
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -174,6 +174,6 @@ const ChatMessageList = ({
       ))}
     </div>
   );
-};
+}
 
 export default ChatMessageList;

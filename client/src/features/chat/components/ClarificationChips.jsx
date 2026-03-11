@@ -21,14 +21,14 @@ import Icon from '../../../shared/components/Icon';
  * @param {boolean} props.disabled - Whether the chips are disabled
  * @returns {JSX.Element} The ClarificationChips component
  */
-const ClarificationChips = ({
+function ClarificationChips({
   options = [],
   multiSelect = false,
   allowOther = false,
   value,
   onChange,
   disabled = false
-}) => {
+}) {
   const { t } = useTranslation();
   const [focusedIndex, setFocusedIndex] = useState(-1);
   const [showOtherInput, setShowOtherInput] = useState(false);
@@ -270,6 +270,6 @@ const ClarificationChips = ({
       )}
     </div>
   );
-};
+}
 
 export default ClarificationChips;

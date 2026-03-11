@@ -22,7 +22,7 @@ import Icon from '../../../shared/components/Icon';
  * @param {boolean} props.disabled - Whether the dropdown is disabled
  * @returns {JSX.Element} The ClarificationDropdown component
  */
-const ClarificationDropdown = ({
+function ClarificationDropdown({
   options = [],
   multiSelect = false,
   allowOther = false,
@@ -30,7 +30,7 @@ const ClarificationDropdown = ({
   onChange,
   placeholder,
   disabled = false
-}) => {
+}) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -457,6 +457,6 @@ const ClarificationDropdown = ({
       )}
     </div>
   );
-};
+}
 
 export default ClarificationDropdown;

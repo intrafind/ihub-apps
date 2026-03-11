@@ -7,14 +7,14 @@ import Icon from '../../../shared/components/Icon';
  * Inline model selector component for next-gen chat input
  * Displays selected model with dropdown for quick model switching
  */
-const ModelSelector = ({
+function ModelSelector({
   app,
   models,
   selectedModel,
   onModelChange,
   currentLanguage,
   disabled = false
-}) => {
+}) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -153,6 +153,6 @@ const ModelSelector = ({
       )}
     </div>
   );
-};
+}
 
 export default ModelSelector;

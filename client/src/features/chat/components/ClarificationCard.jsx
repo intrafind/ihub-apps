@@ -49,7 +49,7 @@ const CHIP_THRESHOLD = 4;
  * @param {Object} props.validation - Validation constraints (min, max, minDate, maxDate)
  * @returns {JSX.Element} The ClarificationCard component
  */
-const ClarificationCard = ({
+function ClarificationCard({
   // Support both clarification object and explicit props
   clarification,
   question: questionProp,
@@ -63,7 +63,7 @@ const ClarificationCard = ({
   onSkip,
   disabled = false,
   validation = {}
-}) => {
+}) {
   // Extract values from clarification object if provided, otherwise use direct props
   const questionId = clarification?.questionId;
   const question = clarification?.question || questionProp;
@@ -426,6 +426,6 @@ const ClarificationCard = ({
       </p>
     </div>
   );
-};
+}
 
 export default ClarificationCard;

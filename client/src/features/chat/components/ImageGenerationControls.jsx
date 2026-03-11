@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
  * Image generation controls component
  * Displays aspect ratio and quality dropdowns for image generation models
  */
-const ImageGenerationControls = ({
+function ImageGenerationControls({
   app,
   model: _model,
   imageAspectRatio,
@@ -13,7 +13,7 @@ const ImageGenerationControls = ({
   onImageQualityChange,
   className = '',
   inline = false // New prop for inline display without labels
-}) => {
+}) {
   const { t } = useTranslation();
 
   // Check if image generation settings are disabled
@@ -118,6 +118,6 @@ const ImageGenerationControls = ({
       </div>
     </div>
   );
-};
+}
 
 export default ImageGenerationControls;

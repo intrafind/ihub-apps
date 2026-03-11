@@ -17,7 +17,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
  * - Top line: User input (auto-expanding textarea)
  * - Bottom line: Actions menu (+), model selector, send/stop button
  */
-const ChatInput = ({
+function ChatInput({
   app,
   value,
   onChange,
@@ -62,7 +62,7 @@ const ChatInput = ({
   clarificationPending = false, // When true, input is disabled waiting for clarification answer
   // Document token size warning
   fileTokenWarning = null
-}) => {
+}) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const localInputRef = useRef(null);
@@ -582,6 +582,6 @@ const ChatInput = ({
       )}
     </div>
   );
-};
+}
 
 export default ChatInput;

@@ -9,7 +9,7 @@ import { useTranslation } from 'react-i18next';
  * Shared app header component for both chat and canvas modes
  * Handles header display and configuration panel
  */
-const SharedAppHeader = ({
+function SharedAppHeader({
   app,
   appId,
   chatId,
@@ -57,7 +57,7 @@ const SharedAppHeader = ({
   onShare,
   showShareButton = false,
   conversationTitle = null
-}) => {
+}) {
   const navigate = useNavigate();
   const { t } = useTranslation();
 
@@ -181,6 +181,6 @@ const SharedAppHeader = ({
       )}
     </>
   );
-};
+}
 
 export default SharedAppHeader;
