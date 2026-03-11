@@ -4,6 +4,7 @@ import { throttledFetch } from '../requestThrottler.js';
 import configCache from '../configCache.js';
 import { authRequired } from '../middleware/authRequired.js';
 import { filterResourcesByPermissions } from '../utils/authorization.js';
+import { getLocalizedError } from '../serverHelpers.js';
 import {
   convertResponseToGeneric,
   convertResponseFromGeneric,
@@ -175,9 +176,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         req.headers['accept-language']?.split(',')[0] ||
         configCache.getPlatform()?.defaultLanguage ||
         'en';
-      const msg = getLocalizedError
-        ? await getLocalizedError('missingRequiredFields', {}, lang)
-        : 'Missing required fields';
+      const msg = await getLocalizedError('missingRequiredFields', {}, lang);
       return res.status(400).json({ error: msg });
     }
 
@@ -193,9 +192,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         req.headers['accept-language']?.split(',')[0] ||
         configCache.getPlatform()?.defaultLanguage ||
         'en';
-      const msg = getLocalizedError
-        ? await getLocalizedError('modelNotFound', {}, lang)
-        : 'Model not found';
+      const msg = await getLocalizedError('modelNotFound', {}, lang);
       return res.status(404).json({ error: msg });
     }
     if (req.user && req.user.permissions) {
@@ -205,9 +202,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
           req.headers['accept-language']?.split(',')[0] ||
           configCache.getPlatform()?.defaultLanguage ||
           'en';
-        const msg = getLocalizedError
-          ? await getLocalizedError('modelAccessDenied', {}, lang)
-          : 'Model access denied';
+        const msg = await getLocalizedError('modelAccessDenied', {}, lang);
         return res.status(403).json({ error: msg });
       }
     }
@@ -218,9 +213,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         req.headers['accept-language']?.split(',')[0] ||
         configCache.getPlatform()?.defaultLanguage ||
         'en';
-      const msg = getLocalizedError
-        ? await getLocalizedError('apiKeyNotFound', { provider: model.provider }, lang)
-        : 'API key not configured';
+      const msg = await getLocalizedError('apiKeyNotFound', { provider: model.provider }, lang);
       return res.status(500).json({ error: msg });
     }
 
@@ -270,9 +263,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
           req.headers['accept-language']?.split(',')[0] ||
           configCache.getPlatform()?.defaultLanguage ||
           'en';
-        const msg = getLocalizedError
-          ? await getLocalizedError('providerError', { provider: model.provider }, lang)
-          : 'Provider error';
+        const msg = await getLocalizedError('providerError', { provider: model.provider }, lang);
         return res.status(llmResponse.status).json({ error: msg, details: errorText });
       }
       if (stream) {
@@ -515,9 +506,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         req.headers['accept-language']?.split(',')[0] ||
         configCache.getPlatform()?.defaultLanguage ||
         'en';
-      const msg = getLocalizedError
-        ? await getLocalizedError('internalError', {}, lang)
-        : 'Internal server error';
+      const msg = await getLocalizedError('internalError', {}, lang);
       res.status(500).json({ error: msg });
     }
   });
