@@ -20,6 +20,7 @@ import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
 import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
+import { ContextSummarizer } from '../ContextSummarizer.js';
 import { estimateTokens } from '../../../usageTracker.js';
 import SourceResolutionService from '../../SourceResolutionService.js';
 import { createSourceManager } from '../../../sources/index.js';
@@ -80,6 +81,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     this.chatService = options.chatService || new ChatService();
     this.llmHelper = options.llmHelper || new WorkflowLLMHelper();
     this.maxIterations = options.maxIterations || 10;
+    this.contextSummarizer = new ContextSummarizer();
   }
 
   /**
@@ -113,6 +115,11 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       );
       if (sourceContent) {
         context = { ...context, sourceContent };
+      }
+
+      // Auto-summarize context if configured and needed
+      if (config.autoSummarize === true && this.contextSummarizer.needsSummarization(state)) {
+        state = await this.contextSummarizer.summarizeContext(state, context);
       }
 
       // Build messages from config and state

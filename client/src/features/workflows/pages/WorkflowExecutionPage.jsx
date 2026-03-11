@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { resetChatId } from '../../../utils/chatId';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
@@ -111,6 +112,9 @@ function WorkflowExecutionPage() {
   const [copiedFields, setCopiedFields] = useState(new Set());
   /** @type {[boolean, Function]} Tracks whether the additional data section is expanded */
   const [additionalDataExpanded, setAdditionalDataExpanded] = useState(false);
+
+  const { user } = useAuth();
+  const isAdmin = user?.permissions?.adminAccess === true;
 
   const { state, loading, connected, error, respondToCheckpoint, cancelExecution, refetch } =
     useWorkflowExecution(executionId);
@@ -353,6 +357,15 @@ function WorkflowExecutionPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {isAdmin && state.workflowId && (
+              <Link
+                to={`/admin/workflows/${state.workflowId}/edit`}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+              >
+                <Icon name="pencil" className="w-4 h-4" />
+                {t('workflows.editWorkflow', 'Edit Workflow')}
+              </Link>
+            )}
             {isActive && (
               <button
                 onClick={handleCancel}

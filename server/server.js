@@ -29,6 +29,9 @@ import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
+import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
+import { authRequired } from './middleware/authRequired.js';
+import { adminAuth } from './middleware/adminAuth.js';
 import registerSetupRoutes from './routes/setup.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
@@ -314,6 +317,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerShortLinkRoutes(app);
   await registerSwaggerRoutes(app);
   registerWorkflowRoutes(app, { getLocalizedError });
+  registerTriggerRoutes(app, { authRequired, adminAuth });
   registerSetupRoutes(app);
 
   // --- Integration Routes ---
@@ -409,7 +413,38 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   });
 
+  // Initialize workflow triggers (schedules and webhooks)
+  try {
+    const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');
+    const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
+    const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
+
+    const triggerManager = getTriggerManager();
+    triggerManager.setEngine(new WorkflowEngine());
+    triggerManager.setWorkflowLoader(loadWorkflows);
+
+    const workflows = await loadWorkflows(false);
+    workflows.forEach(w => triggerManager.registerWorkflowTriggers(w));
+    logger.info({
+      component: 'Server',
+      message: `Initialized ${triggerManager.getActiveTriggers().length} workflow triggers`
+    });
+  } catch (error) {
+    logger.warn({
+      component: 'Server',
+      message: `Workflow trigger initialization skipped: ${error.message}`
+    });
+  }
+
   const handleShutdownSignal = async () => {
+    // Stop all workflow triggers before shutdown
+    try {
+      const { resetTriggerManager } =
+        await import('./services/workflow/triggers/TriggerManager.js');
+      resetTriggerManager();
+    } catch {
+      // Triggers may not have been initialized
+    }
     await shutdownTelemetry();
     process.exit(0);
   };

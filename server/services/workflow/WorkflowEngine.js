@@ -28,7 +28,7 @@ const MAX_NODE_TIMEOUT = 30 * 60 * 1000;
  * Maximum number of execution iterations to prevent infinite loops
  * @constant {number}
  */
-const MAX_EXECUTION_ITERATIONS = 100;
+const MAX_EXECUTION_ITERATIONS = 200;
 
 /**
  * WorkflowEngine is the main orchestrator for executing workflow definitions.
@@ -144,6 +144,63 @@ export class WorkflowEngine {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Execute a child sub-workflow spawned by a planner node.
+   *
+   * Creates a new execution with a parent-child relationship tracked in state,
+   * emits an SSE event for UI visibility, and starts the child workflow
+   * non-blocking via this.start().
+   *
+   * @param {string} parentExecutionId - The execution ID of the parent workflow
+   * @param {Object} workflowDef - The materialized sub-workflow definition
+   * @param {Object} initialData - Initial data for the child workflow (merged from parent state)
+   * @param {Object} [options={}] - Execution options
+   * @param {number} [options.depth=0] - Current sub-workflow nesting depth
+   * @param {number} [options.maxDepth=3] - Maximum allowed nesting depth
+   * @param {Object} [options.user] - User context
+   * @param {string} [options.chatId] - Chat ID for SSE events
+   * @param {Object} [options.appConfig] - App configuration
+   * @param {string} [options.language] - Language code
+   * @returns {Promise<string>} The child execution ID
+   * @throws {Error} If depth limit is exceeded
+   */
+  async executeSubWorkflow(parentExecutionId, workflowDef, initialData, options = {}) {
+    const depth = options.depth || 0;
+    const maxDepth = options.maxDepth || 3;
+    if (depth > maxDepth) throw new Error(`Sub-workflow depth limit (${maxDepth}) exceeded`);
+
+    const childExecutionId = `wf-child-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+
+    // Store parent-child relationship in parent state
+    const parentState = await this.stateManager.get(parentExecutionId);
+    if (parentState) {
+      const childIds = parentState.data?._childExecutionIds || [];
+      await this.stateManager.update(parentExecutionId, {
+        data: { _childExecutionIds: [...childIds, childExecutionId] }
+      });
+    }
+
+    // Emit SSE event for UI tracking
+    actionTracker.emit('fire-sse', {
+      event: 'workflow.subworkflow.start',
+      chatId: parentExecutionId,
+      data: { executionId: childExecutionId, depth, taskCount: workflowDef.nodes?.length }
+    });
+
+    // Start child execution (non-blocking)
+    await this.start(
+      workflowDef,
+      { ...initialData, _parentExecutionId: parentExecutionId },
+      {
+        executionId: childExecutionId,
+        depth,
+        ...options
+      }
+    );
+
+    return childExecutionId;
   }
 
   /**
@@ -732,7 +789,9 @@ export class WorkflowEngine {
       iteration: currentIteration, // Current iteration count for this node
       user: options.user,
       language: options.language || 'en',
-      abortSignal: this.abortControllers.get(executionId)?.signal
+      abortSignal: this.abortControllers.get(executionId)?.signal,
+      engine: this, // Reference to engine for sub-workflow spawning (planner nodes)
+      depth: options?.depth || 0 // Current sub-workflow nesting depth
     };
 
     // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)

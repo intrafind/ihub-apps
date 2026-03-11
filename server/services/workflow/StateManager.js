@@ -610,6 +610,25 @@ export class StateManager {
   }
 
   /**
+   * Returns all child execution states for a given parent execution.
+   * This is used by the planner node to track sub-workflow executions
+   * spawned from a parent workflow.
+   *
+   * @param {string} parentExecutionId - The parent execution identifier
+   * @returns {Object[]} Array of child execution state copies
+   *
+   * @example
+   * const children = stateManager.getChildExecutions('wf-exec-parent-123');
+   * children.forEach(child => console.log(child.executionId, child.status));
+   */
+  getChildExecutions(parentExecutionId) {
+    const allStates = [...this.activeStates.values()];
+    return allStates
+      .filter(s => s.data?._parentExecutionId === parentExecutionId)
+      .map(s => ({ ...s })); // Return copies, not mutable references
+  }
+
+  /**
    * Validates that state size is within limits
    * @param {Object} state - The state object to validate
    * @throws {Error} If state exceeds size limit

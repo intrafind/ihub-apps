@@ -113,7 +113,12 @@ const nodeTypeEnum = z.enum([
   'join',
   'human',
   'transform',
-  'memory'
+  'memory',
+  'planner',
+  'verifier',
+  'loop',
+  'http',
+  'code'
 ]);
 
 /**
@@ -435,7 +440,39 @@ const baseWorkflowConfigSchema = z.object({
     .optional(),
 
   /** Visual editor canvas state */
-  canvas: canvasSchema
+  canvas: canvasSchema,
+
+  /**
+   * Workflow lifecycle status
+   * - draft: Work in progress, not yet available for execution
+   * - published: Ready for execution by users
+   */
+  status: z.enum(['draft', 'published']).optional().default('draft'),
+
+  /**
+   * Trigger definitions for automated workflow execution.
+   * Supports scheduled (cron) and webhook-based triggers.
+   */
+  triggers: z
+    .array(
+      z.object({
+        /** Unique trigger identifier */
+        id: z.string(),
+        /** Trigger type: schedule (cron-based) or webhook (HTTP-based) */
+        type: z.enum(['schedule', 'webhook']),
+        /** Cron expression for schedule triggers (e.g., "0 9 * * 1" for Monday 9am) */
+        cron: z.string().optional(),
+        /** IANA timezone for schedule evaluation (e.g., "Europe/Berlin") */
+        timezone: z.string().optional(),
+        /** Shared secret for webhook authentication */
+        secret: z.string().optional(),
+        /** URL path suffix for webhook triggers */
+        path: z.string().optional(),
+        /** Default initial data passed to the workflow on trigger */
+        initialData: z.record(z.any()).optional()
+      })
+    )
+    .optional()
 });
 
 // Export known workflow keys from base schema before adding refinements

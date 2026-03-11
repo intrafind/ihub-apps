@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import { useMyExecutions } from '../hooks';
 import WorkflowListTab from './WorkflowListTab';
 import MyExecutionsTab from './MyExecutionsTab';
@@ -10,6 +12,8 @@ import Icon from '../../../shared/components/Icon';
  */
 function WorkflowsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
+  const isAdmin = user?.permissions?.adminAccess === true;
   const [activeTab, setActiveTab] = useState('available');
 
   // Get running count for badge
@@ -40,6 +44,15 @@ function WorkflowsPage() {
         <p className="text-gray-600 dark:text-gray-400">
           {t('workflows.subtitle', 'Manage and run automated workflows')}
         </p>
+        {isAdmin && (
+          <Link
+            to="/admin/workflows/new"
+            className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
+          >
+            <Icon name="plus" className="w-5 h-5" />
+            {t('workflows.newWorkflow', 'New Workflow')}
+          </Link>
+        )}
       </div>
 
       {/* Tabs */}
