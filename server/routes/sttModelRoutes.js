@@ -61,8 +61,7 @@ export default function registerSttModelRoutes(app) {
 
         if (rangeHeader) {
           const match = rangeHeader.match(/^bytes=(\d+)-(\d*)$/);
-          if (!match)
-            return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
+          if (!match) return res.status(416).set('Content-Range', `bytes */${fileSize}`).end();
           const start = parseInt(match[1], 10);
           const end = match[2] ? parseInt(match[2], 10) : fileSize - 1;
           if (start >= fileSize || end >= fileSize || start > end)

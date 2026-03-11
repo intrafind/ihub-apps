@@ -61,7 +61,12 @@ function downloadFile(url, dest) {
           const file = fs.open(dest, 'w').then(fh => {
             res.on('data', chunk => fh.write(chunk));
             res.on('end', () => fh.close().then(resolve).catch(reject));
-            res.on('error', err => fh.close().then(() => reject(err)).catch(reject));
+            res.on('error', err =>
+              fh
+                .close()
+                .then(() => reject(err))
+                .catch(reject)
+            );
           });
           file.catch(reject);
         })
