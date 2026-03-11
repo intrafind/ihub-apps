@@ -71,7 +71,7 @@ async function saveStore(store) {
     await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
     await atomicWriteJSON(STORE_PATH, store);
   } catch (error) {
-    logger.error('[RefreshTokenStore] Failed to save:', error.message);
+    logger.error('Failed to save refresh token store', { component: 'RefreshTokenStore', error });
     throw error;
   }
 }
@@ -149,9 +149,11 @@ export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
   }
 
   await saveStore(store);
-  logger.info(
-    `[RefreshTokenStore] Stored refresh token | client=${data.clientId} | user=${data.userId}`
-  );
+  logger.info('Refresh token stored', {
+    component: 'RefreshTokenStore',
+    clientId: data.clientId,
+    userId: data.userId
+  });
 }
 
 /**
@@ -176,13 +178,13 @@ export async function consumeRefreshToken(token) {
   const entry = store.tokens[tokenHash];
 
   if (!entry) {
-    logger.warn('[RefreshTokenStore] Token not found');
+    logger.warn('Token not found', { component: 'RefreshTokenStore' });
     return null;
   }
 
   // Check expiry before bcrypt to short-circuit the (expensive) hash comparison.
   if (new Date(entry.expiresAt).getTime() < Date.now()) {
-    logger.warn('[RefreshTokenStore] Token expired');
+    logger.warn('Token expired', { component: 'RefreshTokenStore' });
     delete store.tokens[tokenHash];
     await saveStore(store);
     return null;
@@ -191,7 +193,7 @@ export async function consumeRefreshToken(token) {
   // Verify the bcrypt hash – this is the authoritative check.
   const valid = await bcrypt.compare(token, entry.bcryptHash);
   if (!valid) {
-    logger.warn('[RefreshTokenStore] Token hash mismatch');
+    logger.warn('Token hash mismatch', { component: 'RefreshTokenStore' });
     return null;
   }
 
@@ -224,6 +226,6 @@ export async function revokeRefreshToken(token) {
 
   delete store.tokens[tokenHash];
   await saveStore(store);
-  logger.info('[RefreshTokenStore] Token revoked');
+  logger.info('Token revoked', { component: 'RefreshTokenStore' });
   return true;
 }

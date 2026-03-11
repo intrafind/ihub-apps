@@ -105,7 +105,7 @@ export function verifyOAuthToken(token) {
     }
 
     if (!decoded) {
-      logger.warn('[OAuth] Token verification failed');
+      logger.warn('Token verification failed', { component: 'OAuthTokenService' });
       return null;
     }
 
@@ -116,13 +116,16 @@ export function verifyOAuthToken(token) {
       'oauth_static_api_key'
     ];
     if (!validAuthModes.includes(decoded.authMode)) {
-      logger.warn(`[OAuth] Token is not an OAuth token (authMode: ${decoded.authMode})`);
+      logger.warn('Token is not an OAuth token', {
+        component: 'OAuthTokenService',
+        authMode: decoded.authMode
+      });
       return null;
     }
 
     return decoded;
   } catch (error) {
-    logger.warn('[OAuth] Token verification failed:', error.message);
+    logger.warn('OAuth token verification failed', { component: 'OAuthTokenService', error });
     return null;
   }
 }
@@ -188,7 +191,7 @@ export function introspectOAuthToken(token) {
 
     return result;
   } catch (error) {
-    logger.error('[OAuth] Token introspection error:', error.message);
+    logger.error('Token introspection error', { component: 'OAuthTokenService', error });
     return {
       active: false,
       error: 'invalid_token'
@@ -241,9 +244,11 @@ export function generateStaticApiKey(client, expirationDays = 365) {
     algorithm: algorithm
   });
 
-  logger.info(
-    `[OAuth] Static API key generated | client_id=${client.clientId} | expires_in_days=${expirationDays}`
-  );
+  logger.info('Static API key generated', {
+    component: 'OAuthTokenService',
+    clientId: client.clientId,
+    expirationDays
+  });
 
   return {
     api_key: token,

@@ -60,7 +60,7 @@ export function validateMimetypeConfig(config) {
     }
 
     if (missingMimeTypes.length > 0) {
-      logger.warn('Some MIME types in categories lack detailed definitions:', {
+      logger.warn('Some MIME types in categories lack detailed definitions', {
         component: 'MimetypeConfig',
         missingMimeTypes
       });
@@ -80,7 +80,7 @@ export function validateMimetypeConfig(config) {
     }
 
     if (invalidCategories.length > 0) {
-      logger.warn('Some MIME types reference non-existent categories:', {
+      logger.warn('Some MIME types reference non-existent categories', {
         component: 'MimetypeConfig',
         invalidCategories
       });
@@ -88,7 +88,7 @@ export function validateMimetypeConfig(config) {
 
     return { success: true, data: validated };
   } catch (error) {
-    logger.error('Mimetype validation error:', { component: 'ConfigLoader', error });
+    logger.error('Mimetype validation error', { component: 'ConfigLoader', error });
     return {
       success: false,
       errors: error.errors || [{ message: error.message }]

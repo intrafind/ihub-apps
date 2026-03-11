@@ -41,8 +41,9 @@ export async function ensureDefaultProviders() {
       return;
     }
 
-    logger.info(`Adding ${missingProviders.length} missing default provider(s) to providers.json`, {
+    logger.info('Adding missing default providers to providers.json', {
       component: 'ProviderMigration',
+      count: missingProviders.length,
       providers: missingProviders.map(p => `${p.id} (${p.category || 'llm'})`)
     });
 

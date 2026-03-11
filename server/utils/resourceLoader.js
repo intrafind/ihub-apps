@@ -50,10 +50,10 @@ export function createResourceLoader({
 
     if (!existsSync(resourceDir)) {
       if (verbose) {
-        logger.info(
-          `📁 ${resourceName} directory not found, skipping individual ${resourceName.toLowerCase()} files`,
-          { component: 'ResourceLoader' }
-        );
+        logger.info('Resource directory not found, skipping individual files', {
+          component: 'ResourceLoader',
+          resourceName
+        });
       }
       return [];
     }
@@ -63,9 +63,10 @@ export function createResourceLoader({
     const files = dirContents.filter(file => file.endsWith('.json'));
 
     if (verbose && files.length > 0) {
-      logger.info(`\n━━━ Loading ${resourceName} ━━━`, { component: 'ResourceLoader' });
-      logger.info(`📱 Found ${files.length} ${resourceName.toLowerCase()} files`, {
-        component: 'ResourceLoader'
+      logger.info('Loading resource', {
+        component: 'ResourceLoader',
+        resourceName,
+        count: files.length
       });
     }
 
@@ -106,7 +107,7 @@ export function createResourceLoader({
     // Log each item individually for better filtering
     if (verbose && loadedItems.length > 0) {
       for (const item of loadedItems) {
-        logger.info(`${item.icon} ${item.id}`, {
+        logger.info('Resource loaded', {
           component: 'ResourceLoader',
           resourceId: item.id,
           enabled: item.enabled
@@ -115,7 +116,7 @@ export function createResourceLoader({
     }
     if (errorItems.length > 0) {
       for (const item of errorItems) {
-        logger.error(`❌ ${item.file}: ${item.error}`, {
+        logger.error('Failed to load resource file', {
           component: 'ResourceLoader',
           file: item.file,
           error: item.error
@@ -137,7 +138,10 @@ export function createResourceLoader({
 
     if (!existsSync(legacyFilePath)) {
       if (verbose) {
-        logger.info(`📄 Legacy ${legacyPath} not found, skipping`, { component: 'ResourceLoader' });
+        logger.info('Legacy file not found, skipping', {
+          component: 'ResourceLoader',
+          legacyPath
+        });
       }
       return [];
     }
@@ -147,15 +151,17 @@ export function createResourceLoader({
       let resources = JSON.parse(fileContent);
 
       if (!Array.isArray(resources)) {
-        logger.warn(`⚠️  Legacy ${legacyPath} is not an array`, { component: 'ResourceLoader' });
+        logger.warn('Legacy file is not an array', { component: 'ResourceLoader', legacyPath });
         return [];
       }
 
       if (verbose) {
-        logger.info(
-          `📄 Loading ${resources.length} ${resourceName.toLowerCase()}s from legacy ${legacyPath}...`,
-          { component: 'ResourceLoader' }
-        );
+        logger.info('Loading resources from legacy file', {
+          component: 'ResourceLoader',
+          legacyPath,
+          count: resources.length,
+          resourceName
+        });
       }
 
       // Process each resource
@@ -181,9 +187,10 @@ export function createResourceLoader({
 
       return resources;
     } catch (error) {
-      logger.error(`❌ Error loading legacy ${legacyPath}:`, {
+      logger.error('Error loading legacy file', {
         component: 'ResourceLoader',
-        error: error.message
+        legacyPath,
+        error
       });
       return [];
     }
@@ -258,11 +265,13 @@ export function createResourceLoader({
     if (verbose) {
       const enabledCount = allResources.filter(r => r.enabled !== false).length;
       const disabledCount = allResources.length - enabledCount;
-      logger.info(
-        `📊 Summary: ${allResources.length} ${resourceName.toLowerCase()}s ` +
-          `(${enabledCount} enabled, ${disabledCount} disabled)`,
-        { component: 'ResourceLoader' }
-      );
+      logger.info('Resource loading summary', {
+        component: 'ResourceLoader',
+        resourceName,
+        total: allResources.length,
+        enabled: enabledCount,
+        disabled: disabledCount
+      });
     }
 
     return filteredResources;
@@ -306,8 +315,10 @@ export function createValidator(requiredFields = []) {
   return function (item, source) {
     const missing = requiredFields.filter(field => !(field in item) || item[field] == null);
     if (missing.length > 0) {
-      logger.warn(`⚠️  Missing required fields in ${source}: ${missing.join(', ')}`, {
-        component: 'ResourceLoader'
+      logger.warn('Missing required fields in resource', {
+        component: 'ResourceLoader',
+        source,
+        missing
       });
     }
     return item;
@@ -350,8 +361,11 @@ export function createSchemaValidator(schema, knownKeys = []) {
         const messages = result.error.errors
           .map(e => `${e.path.join('.')}: ${e.message}`)
           .join('; ');
-        logger.warn(`⚠️  ${resourceType}: ${resourceId} - validation issues: ${messages}`, {
-          component: 'ResourceLoader'
+        logger.warn('Resource validation issues', {
+          component: 'ResourceLoader',
+          resourceType,
+          resourceId,
+          messages
         });
       } else {
         // Apply the parsed data which includes Zod defaults
@@ -363,8 +377,11 @@ export function createSchemaValidator(schema, knownKeys = []) {
     if (knownKeys.length > 0) {
       const unknown = Object.keys(validatedItem).filter(key => !knownKeys.includes(key));
       if (unknown.length > 0) {
-        logger.warn(`⚠️  ${resourceType}: ${resourceId} - unknown keys: ${unknown.join(', ')}`, {
-          component: 'ResourceLoader'
+        logger.warn('Resource has unknown keys', {
+          component: 'ResourceLoader',
+          resourceType,
+          resourceId,
+          unknown
         });
       }
     }
