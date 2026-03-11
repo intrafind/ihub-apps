@@ -253,9 +253,8 @@ class GoogleAdapterClass extends BaseAdapter {
                 parts: [{ text: safeTextContent }]
               });
             } else {
-              logger.warn({
+              logger.warn('Skipping message with empty content', {
                 component: 'GoogleAdapter',
-                message: 'Skipping message with empty content',
                 role: message.role
               });
             }
@@ -267,9 +266,8 @@ class GoogleAdapterClass extends BaseAdapter {
 
     // Debug logs to trace message transformation
     this.debugLogMessages(messages, geminiContents, 'Google');
-    logger.info({
+    logger.info('System instruction set', {
       component: 'GoogleAdapter',
-      message: 'System instruction set',
       hasSystemInstruction: !!systemInstruction
     });
 
@@ -361,15 +359,13 @@ class GoogleAdapterClass extends BaseAdapter {
           thinkingBudget: options.thinkingBudget ?? model.thinking.budget,
           includeThoughts: options.thinkingThoughts ?? model.thinking.thoughts
         };
-        logger.info({
+        logger.info('Thinking enabled with thinkingConfig', {
           component: 'GoogleAdapter',
-          message: 'Thinking enabled with thinkingConfig',
           thinkingBudget: requestBody.generationConfig.thinkingConfig.thinkingBudget
         });
       } else {
-        logger.info({
-          component: 'GoogleAdapter',
-          message: 'Thinking disabled'
+        logger.info('Thinking disabled', {
+          component: 'GoogleAdapter'
         });
       }
     }
@@ -388,9 +384,8 @@ class GoogleAdapterClass extends BaseAdapter {
 
       // Validate aspect ratio
       if (!GOOGLE_IMAGE_RESOLUTION_TABLE[aspectRatio]) {
-        logger.warn({
+        logger.warn('Invalid aspect ratio, using default', {
           component: 'GoogleAdapter',
-          message: 'Invalid aspect ratio, using default',
           providedRatio: aspectRatio,
           defaultRatio: '1:1'
         });
@@ -399,9 +394,8 @@ class GoogleAdapterClass extends BaseAdapter {
 
       // Validate quality
       if (!['Low', 'Medium', 'High'].includes(quality)) {
-        logger.warn({
+        logger.warn('Invalid quality level, using default', {
           component: 'GoogleAdapter',
-          message: 'Invalid quality level, using default',
           providedQuality: quality,
           defaultQuality: 'Medium'
         });
@@ -417,9 +411,8 @@ class GoogleAdapterClass extends BaseAdapter {
         imageSize
       };
 
-      logger.info({
+      logger.info('Image generation enabled', {
         component: 'GoogleAdapter',
-        message: 'Image generation enabled',
         responseModalities: requestBody.generationConfig.responseModalities,
         imageConfig: requestBody.generationConfig.imageConfig,
         translatedFrom: { aspectRatio: imageConfig.aspectRatio, quality: imageConfig.quality }
@@ -464,7 +457,10 @@ class GoogleAdapterClass extends BaseAdapter {
         const parsed = JSON.parse(data);
 
         // Debug: Log the full parsed response to see what metadata we receive
-        logger.info('Full Gemini response structure:', JSON.stringify(parsed, null, 2));
+        logger.info('Full Gemini response structure', {
+          component: 'GoogleAdapter',
+          parsed: JSON.stringify(parsed, null, 2)
+        });
 
         // Extract usage metadata from Google Gemini responses
         if (parsed.usageMetadata) {
@@ -609,18 +605,16 @@ class GoogleAdapterClass extends BaseAdapter {
           }
         }
       } catch (jsonError) {
-        logger.error({
+        logger.error('Failed to parse Google response as JSON', {
           component: 'GoogleAdapter',
-          message: 'Failed to parse Google response as JSON',
-          error: jsonError.message,
+          error: jsonError,
           dataPreview: data.substring(0, 200)
         });
 
         // Check if this is an error response from Google API
         if (data.includes('callbacks') && data.includes('function')) {
-          logger.error({
+          logger.error('Google API returned callbacks-related error', {
             component: 'GoogleAdapter',
-            message: 'Google API returned callbacks-related error',
             errorData: data.substring(0, 500)
           });
           result.error = true;
@@ -656,11 +650,9 @@ class GoogleAdapterClass extends BaseAdapter {
 
       return result;
     } catch (error) {
-      logger.error({
+      logger.error('Error processing Gemini response', {
         component: 'GoogleAdapter',
-        message: 'Error processing Gemini response',
-        error: error.message,
-        stack: error.stack,
+        error,
         dataPreview: data.substring(0, 200)
       });
       return {

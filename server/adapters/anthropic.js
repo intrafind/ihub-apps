@@ -22,9 +22,8 @@ class AnthropicAdapterClass extends BaseAdapter {
 
         // If tool message contains imageData, prioritize the image for vision analysis
         if (this.hasImageData(msg)) {
-          logger.info({
-            component: 'AnthropicAdapter',
-            message: 'Processing image from tool message'
+          logger.info('Processing image from tool message', {
+            component: 'AnthropicAdapter'
           });
 
           // Add simple tool result acknowledgment
@@ -318,11 +317,9 @@ class AnthropicAdapterClass extends BaseAdapter {
         // that was already processed by the ToolExecutor.
       }
     } catch (parseError) {
-      logger.error({
+      logger.error('Error parsing Claude response chunk', {
         component: 'AnthropicAdapter',
-        message: 'Error parsing Claude response chunk',
-        error: parseError.message,
-        stack: parseError.stack
+        error: parseError
       });
       result.error = true;
       result.errorMessage = `Error parsing Claude response: ${parseError.message}`;

@@ -29,7 +29,10 @@ export function configureOidcProviders() {
   for (const provider of oidcConfig.providers) {
     // Skip disabled providers
     if (provider.enabled === false) {
-      logger.info(`OIDC provider ${provider.name} is disabled, skipping configuration`);
+      logger.info('OIDC provider is disabled, skipping configuration', {
+        component: 'OidcAuth',
+        providerName: provider.name
+      });
       continue;
     }
 
@@ -41,7 +44,10 @@ export function configureOidcProviders() {
       !provider.tokenURL ||
       !provider.userInfoURL
     ) {
-      logger.warn(`OIDC provider ${provider.name || 'unnamed'} missing required configuration`);
+      logger.warn('OIDC provider missing required configuration', {
+        component: 'OidcAuth',
+        providerName: provider.name || 'unnamed'
+      });
       continue;
     }
 
@@ -161,7 +167,11 @@ export function configureOidcProviders() {
               sessionId
             );
 
-            logger.error(`OIDC user validation error for provider ${provider.name}:`, error);
+            logger.error('OIDC user validation error for provider', {
+              component: 'OidcAuth',
+              providerName: provider.name,
+              error
+            });
             return done(error, null);
           }
         }
@@ -176,9 +186,16 @@ export function configureOidcProviders() {
         strategyName
       });
 
-      logger.info(`OIDC provider configured: ${provider.name}`);
+      logger.info('OIDC provider configured', {
+        component: 'OidcAuth',
+        providerName: provider.name
+      });
     } catch (error) {
-      logger.error(`Failed to configure OIDC provider ${provider.name}:`, error);
+      logger.error('Failed to configure OIDC provider', {
+        component: 'OidcAuth',
+        providerName: provider.name,
+        error
+      });
     }
   }
 }
@@ -502,13 +519,16 @@ export function createOidcCallbackHandler(providerName) {
           );
 
           logger.error(
-            '[OIDC Callback] OAuth state verification failed. This might be due to session issues.'
+            'OIDC callback: OAuth state verification failed, may be due to session issues',
+            {
+              component: 'OidcAuth',
+              error: err,
+              query: req.query,
+              sessionId: req.sessionID,
+              session: req.session,
+              cookies: req.headers.cookie
+            }
           );
-          logger.error('[OIDC Callback] Error details:', err);
-          logger.error('[OIDC Callback] Request query:', req.query);
-          logger.error('[OIDC Callback] Session ID:', req.sessionID);
-          logger.error('[OIDC Callback] Session data:', req.session);
-          logger.error('[OIDC Callback] Cookies:', req.headers.cookie);
         }
 
         // Redirect back to the app with error message instead of returning JSON
@@ -531,7 +551,11 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
-        logger.warn(`OIDC authentication failed for provider ${providerName}:`, info);
+        logger.warn('OIDC authentication failed for provider', {
+          component: 'OidcAuth',
+          providerName,
+          info
+        });
 
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent(info?.message || 'Authentication failed');
@@ -674,7 +698,11 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
-        logger.error(`JWT token generation error for provider ${providerName}:`, tokenError);
+        logger.error('JWT token generation error for OIDC provider', {
+          component: 'OidcAuth',
+          providerName,
+          error: tokenError
+        });
 
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent('Token generation failed: ' + tokenError.message);
@@ -688,7 +716,7 @@ export function createOidcCallbackHandler(providerName) {
  * Reconfigure providers when platform config changes
  */
 export function reconfigureOidcProviders() {
-  logger.info('Reconfiguring OIDC providers...');
+  logger.info('Reconfiguring OIDC providers', { component: 'OidcAuth' });
   configureOidcProviders();
 }
 

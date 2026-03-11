@@ -48,28 +48,39 @@ async function authenticateLdapUser(username, password, ldapConfig) {
       })
     };
 
-    logger.info(`[LDAP Auth] Attempting authentication for user: ${username}`);
-    logger.info(`[LDAP Auth] LDAP server: ${ldapConfig.url}`);
+    logger.info('LDAP Auth: attempting authentication for user', {
+      component: 'LdapAuth',
+      username
+    });
+    logger.info('LDAP Auth: LDAP server', { component: 'LdapAuth', url: ldapConfig.url });
     if (ldapConfig.groupSearchBase) {
-      logger.info(
-        `[LDAP Auth] Group search enabled - groupSearchBase: ${ldapConfig.groupSearchBase}, groupClass: ${ldapConfig.groupClass || 'groupOfNames'}`
-      );
+      logger.info('LDAP Auth: group search enabled', {
+        component: 'LdapAuth',
+        groupSearchBase: ldapConfig.groupSearchBase,
+        groupClass: ldapConfig.groupClass || 'groupOfNames'
+      });
     } else {
-      logger.warn(`[LDAP Auth] Group search not configured - groupSearchBase is missing`);
+      logger.warn('LDAP Auth: group search not configured, groupSearchBase is missing', {
+        component: 'LdapAuth'
+      });
     }
 
     // Perform LDAP authentication
     const user = await authenticate(options);
 
     if (!user) {
-      logger.warn(`[LDAP Auth] Authentication failed for user: ${username}`);
+      logger.warn('LDAP Auth: authentication failed for user', { component: 'LdapAuth', username });
       return null;
     }
 
-    logger.info(`[LDAP Auth] Authentication successful for user: ${username}`);
+    logger.info('LDAP Auth: authentication successful for user', {
+      component: 'LdapAuth',
+      username
+    });
 
     // Log raw user object for debugging (before group extraction)
-    logger.debug(`[LDAP Auth] Raw LDAP user object:`, {
+    logger.debug('LDAP Auth: raw LDAP user object', {
+      component: 'LdapAuth',
       hasGroups: !!user.groups,
       groupsType: user.groups ? typeof user.groups : 'undefined',
       groupsIsArray: Array.isArray(user.groups),
@@ -116,10 +127,11 @@ async function authenticateLdapUser(username, password, ldapConfig) {
           }
 
           // If we can't extract a meaningful name, skip this entry
-          logger.warn(
-            `[LDAP Auth] Could not extract group name from group object for user ${username}:`,
+          logger.warn('LDAP Auth: could not extract group name from group object', {
+            component: 'LdapAuth',
+            username,
             group
-          );
+          });
           return null;
         })
         .filter(g => g !== null); // Remove null entries
@@ -127,18 +139,28 @@ async function authenticateLdapUser(username, password, ldapConfig) {
 
     // Log extracted LDAP groups for troubleshooting
     if (groups.length > 0) {
-      logger.info(
-        `[LDAP Auth] Extracted ${groups.length} LDAP groups for user ${username}: ${groups.join(', ')}`
-      );
+      logger.info('LDAP Auth: extracted LDAP groups for user', {
+        component: 'LdapAuth',
+        username,
+        groupCount: groups.length,
+        groups: groups.join(', ')
+      });
     } else {
-      logger.warn(`[LDAP Auth] No groups found in LDAP response for user ${username}`);
+      logger.warn('LDAP Auth: no groups found in LDAP response for user', {
+        component: 'LdapAuth',
+        username
+      });
     }
 
     // Apply group mapping using centralized function
     const mappedGroups = mapExternalGroups(groups);
-    logger.info(
-      `[LDAP Auth] Mapped ${groups.length} LDAP groups to ${mappedGroups.length} internal groups for user ${username}: ${mappedGroups.join(', ')}`
-    );
+    logger.info('LDAP Auth: mapped LDAP groups to internal groups', {
+      component: 'LdapAuth',
+      username,
+      ldapGroupCount: groups.length,
+      internalGroupCount: mappedGroups.length,
+      internalGroups: mappedGroups.join(', ')
+    });
 
     // Add default groups if configured
     if (ldapConfig.defaultGroups && Array.isArray(ldapConfig.defaultGroups)) {
@@ -165,7 +187,11 @@ async function authenticateLdapUser(username, password, ldapConfig) {
 
     return normalizedUser;
   } catch (error) {
-    logger.error(`[LDAP Auth] Authentication error for user ${username}:`, error.message);
+    logger.error('LDAP Auth: authentication error for user', {
+      component: 'LdapAuth',
+      username,
+      error
+    });
     return null;
   }
 }
@@ -223,7 +249,10 @@ export async function loginLdapUser(username, password, ldapConfig) {
   // Validate and persist user in users.json
   const persistedUser = await validateAndPersistExternalUser(externalUser, platform);
 
-  logger.info(`[LDAP Auth] User persisted in users.json: ${persistedUser.id}`);
+  logger.info('LDAP Auth: user persisted in users.json', {
+    component: 'LdapAuth',
+    userId: persistedUser.id
+  });
 
   // Generate JWT token using centralized token service
   const sessionTimeout =

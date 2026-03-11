@@ -23,7 +23,7 @@ export function adminAuth(req, res, next) {
       message: 'Admin access requires authentication with admin privileges.'
     });
   } catch (error) {
-    logger.error('Admin authentication error:', error);
+    logger.error('Admin authentication error', { component: 'AdminAuth', error });
     return res.status(500).json({
       error: 'Authentication system error',
       message: 'Internal server error during authentication'
@@ -52,7 +52,10 @@ export function isAdminAuthRequired(req = null) {
         return false; // Allow access for authenticated admin users
       }
     } catch (error) {
-      logger.warn('Failed to load groups configuration for admin check:', error);
+      logger.warn('Failed to load groups configuration for admin check', {
+        component: 'AdminAuth',
+        error
+      });
       // Fallback to default admin groups if groups config fails
       const defaultAdminGroups = ['admin', 'admins'];
       const isAdmin = userGroups.some(group => defaultAdminGroups.includes(group));

@@ -23,14 +23,14 @@ function loadUsers(usersFilePath) {
       : path.join(__dirname, '../../', usersFilePath);
 
     if (!fs.existsSync(fullPath)) {
-      logger.warn(`Users file not found: ${fullPath}`);
+      logger.warn('Users file not found', { component: 'LocalAuth', fullPath });
       return { users: {} };
     }
 
     const config = JSON.parse(fs.readFileSync(fullPath, 'utf8'));
     return config;
   } catch (error) {
-    logger.warn('Could not load users configuration:', error.message);
+    logger.warn('Could not load users configuration', { component: 'LocalAuth', error });
     return { users: {} };
   }
 }

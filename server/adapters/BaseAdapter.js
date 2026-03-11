@@ -10,14 +10,13 @@ export class BaseAdapter {
    * @param {string} provider - Provider name
    */
   debugLogMessages(messages, formattedMessages, provider) {
-    logger.debug({
+    logger.debug('Original messages', {
       component: `${provider}Adapter`,
-      message: 'Original messages',
       messages: messages.map(m => ({ role: m.role, hasImage: !!m.imageData }))
     });
-    logger.debug({
+    logger.debug('Processed messages', {
       component: `${provider}Adapter`,
-      message: `Processed ${provider} messages`,
+      provider,
       formattedMessages: formattedMessages.map(m => ({
         role: m.role,
         contentType: Array.isArray(m.content) ? 'array' : typeof m.content,

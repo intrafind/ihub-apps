@@ -29,14 +29,19 @@ export function convertGenericToolsToAnthropic(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      logger.info(
-        `[Anthropic Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
-      );
+      logger.info('Filtering out provider-specific tool', {
+        component: 'AnthropicConverter',
+        toolId: tool.id || tool.name,
+        provider: tool.provider
+      });
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      logger.info(`[Anthropic Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info('Filtering out special tool', {
+        component: 'AnthropicConverter',
+        toolId: tool.id || tool.name
+      });
       return false;
     }
     // Universal tool - include it
@@ -253,7 +258,10 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
       try {
         parsedArgs = JSON.parse(toolCall.arguments);
       } catch (e) {
-        logger.warn('Failed to parse tool arguments:', e);
+        logger.warn('Failed to parse tool arguments', {
+          component: 'AnthropicConverter',
+          error: e
+        });
         parsedArgs = { __raw_arguments: toolCall.arguments };
       }
 
@@ -283,7 +291,10 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (parseError) {
-    logger.error('Error parsing Anthropic response chunk:', parseError);
+    logger.error('Error parsing Anthropic response chunk', {
+      component: 'AnthropicConverter',
+      error: parseError
+    });
     result.error = true;
     result.errorMessage = `Error parsing Anthropic response: ${parseError.message}`;
   }
@@ -381,7 +392,10 @@ export function processMessageForAnthropic(message) {
             ? JSON.parse(toolCall.function.arguments)
             : toolCall.function.arguments;
       } catch (error) {
-        logger.warn('Failed to parse tool call arguments:', error);
+        logger.warn('Failed to parse tool call arguments', {
+          component: 'AnthropicConverter',
+          error
+        });
         args = {};
       }
 

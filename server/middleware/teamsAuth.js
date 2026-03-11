@@ -74,7 +74,7 @@ async function verifyTeamsToken(token, teamsConfig) {
     const verified = jwt.verify(token, signingKey, verifyOptions);
     return verified;
   } catch (error) {
-    logger.error('Teams token verification failed:', error);
+    logger.error('Teams token verification failed', { component: 'TeamsAuth', error });
     throw error;
   }
 }
@@ -183,7 +183,7 @@ export async function teamsAuthMiddleware(req, res, next) {
 
     next();
   } catch (error) {
-    logger.error('Teams authentication failed:', error);
+    logger.error('Teams authentication failed', { component: 'TeamsAuth', error });
 
     // Don't fail the request, just continue without Teams auth
     // This allows fallback to other auth methods
@@ -270,7 +270,7 @@ export async function teamsTokenExchange(req, res) {
       expiresIn
     });
   } catch (error) {
-    logger.error('Teams token exchange error:', error);
+    logger.error('Teams token exchange error', { component: 'TeamsAuth', error });
     const errorMessage = await errorHandler.getLocalizedError(
       'TEAMS_INVALID_OR_EXPIRED_TOKEN',
       {},

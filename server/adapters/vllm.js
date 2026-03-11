@@ -75,9 +75,8 @@ class VLLMAdapterClass extends BaseAdapter {
       if (toolChoice) {
         body.tool_choice = toolChoice;
       }
-      logger.info({
+      logger.info('Converted tools with schema sanitization', {
         component: 'VLLMAdapter',
-        message: 'Converted tools with schema sanitization',
         toolCount: tools.length
       });
     } else if (toolChoice) {
@@ -182,11 +181,9 @@ class VLLMAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      logger.error({
+      logger.error('Error parsing vLLM response chunk', {
         component: 'VLLMAdapter',
-        message: 'Error parsing vLLM response chunk',
-        error: error.message,
-        stack: error.stack
+        error
       });
       result.error = true;
       result.errorMessage = `Error parsing vLLM response: ${error.message}`;
