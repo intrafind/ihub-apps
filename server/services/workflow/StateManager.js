@@ -599,7 +599,9 @@ export class StateManager {
    */
   async getChildExecutions(parentExecutionId) {
     const allStates = Array.from(this.activeStates.values());
-    return allStates.filter(s => s.data?._parentExecutionId === parentExecutionId);
+    return allStates
+      .filter(s => s.data?._parentExecutionId === parentExecutionId)
+      .map(s => ({ ...s }));
   }
 
   /**

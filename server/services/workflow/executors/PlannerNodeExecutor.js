@@ -230,7 +230,11 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
 
       // Step 8: Poll until child completes
       const stateManager = getStateManager();
-      const childFinalState = await this.waitForChildCompletion(childExecutionId, stateManager);
+      const childFinalState = await this.waitForChildCompletion(
+        childExecutionId,
+        stateManager,
+        context
+      );
 
       if (!childFinalState) {
         return this.createErrorResult(
@@ -457,6 +461,30 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       }
     }
 
+    // Check for circular dependencies using DFS
+    const tasks = plan.tasks;
+    const visited = new Set();
+    const inStack = new Set();
+
+    const hasCycle = taskId => {
+      if (inStack.has(taskId)) return true;
+      if (visited.has(taskId)) return false;
+      visited.add(taskId);
+      inStack.add(taskId);
+      const task = tasks.find(t => t.id === taskId);
+      for (const depId of task.dependsOn || []) {
+        if (hasCycle(depId)) return true;
+      }
+      inStack.delete(taskId);
+      return false;
+    };
+
+    for (const taskId of uniqueIds) {
+      if (hasCycle(taskId)) {
+        return `Circular dependency detected in task plan involving task '${taskId}'`;
+      }
+    }
+
     return null;
   }
 
@@ -465,13 +493,25 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
    *
    * @param {string} childExecutionId - The child execution ID to poll
    * @param {Object} stateManager - The StateManager instance
+   * @param {Object} [context={}] - Execution context (used for abort signal and deadline)
    * @returns {Promise<Object|null>} Final child state or null on timeout
    * @private
    */
-  async waitForChildCompletion(childExecutionId, stateManager) {
+  async waitForChildCompletion(childExecutionId, stateManager, context = {}) {
     const start = Date.now();
+    const parentDeadline = context.state?.data?._executionDeadline || Infinity;
 
     while (Date.now() - start < CHILD_COMPLETION_TIMEOUT) {
+      // Check parent abort signal
+      if (context.abortSignal?.aborted) {
+        throw new Error('Parent workflow was cancelled, aborting child wait');
+      }
+
+      // Check parent execution deadline
+      if (Date.now() >= parentDeadline) {
+        throw new Error('Parent workflow deadline exceeded, aborting child wait');
+      }
+
       const childState = await stateManager.get(childExecutionId);
 
       if (!childState) {

@@ -60,6 +60,7 @@ export class SubWorkflowMaterializer {
     });
 
     // Create agent nodes for each task
+    const { tools: templateTools, ...restTemplate } = taskTemplate;
     tasks.forEach((task, index) => {
       const nodeId = `task-${task.id}`;
       const xPos = 300 + index * 250;
@@ -70,10 +71,10 @@ export class SubWorkflowMaterializer {
         name: { en: task.title },
         position: { x: xPos, y: 300 },
         config: {
+          ...restTemplate,
           system: task.description,
           outputVariable: `task_${task.id}_output`,
-          tools: task.tools || taskTemplate.tools || [],
-          ...taskTemplate
+          tools: task.tools?.length ? task.tools : templateTools || []
         }
       });
     });
