@@ -93,7 +93,7 @@ function extractBasicCredentials(req) {
     const clientSecret = decodeURIComponent(decoded.substring(colonIndex + 1));
     return { clientId, clientSecret };
   } catch (error) {
-    logger.warn('[OAuth] Failed to parse Basic credentials:', error.message);
+    logger.warn('Failed to parse Basic credentials', { component: 'OAuth', error });
     return null;
   }
 }

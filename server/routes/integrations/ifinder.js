@@ -66,7 +66,7 @@ router.get('/document', authRequired, async (req, res) => {
     // Stream response body to client (node-fetch returns a Node.js Readable, not a WHATWG ReadableStream)
     response.body.pipe(res);
   } catch (error) {
-    logger.error('iFinder document proxy error:', error.message);
+    logger.error('iFinder document proxy error', { component: 'IFinder', error });
     const status = error.message.includes('not found') ? 404 : 500;
     res.status(status).json({ error: error.message });
   }
@@ -100,7 +100,7 @@ router.get('/document/content', authRequired, async (req, res) => {
     res.set('Content-Disposition', `attachment; filename="${safeTitle}.txt"`);
     res.send(result.content || '');
   } catch (error) {
-    logger.error('iFinder document content error:', error.message);
+    logger.error('iFinder document content error', { component: 'IFinder', error });
     const status = error.message.includes('not found')
       ? 404
       : error.message.includes('Access denied')
@@ -170,7 +170,7 @@ router.get('/document/metadata', authRequired, async (req, res) => {
     logger.info('iFinder Metadata response', { component: 'iFinder', documentId, response });
     res.json(response);
   } catch (error) {
-    logger.error('iFinder document metadata error:', error.message);
+    logger.error('iFinder document metadata error', { component: 'IFinder', error });
     const status = error.message.includes('not found')
       ? 404
       : error.message.includes('Access denied')

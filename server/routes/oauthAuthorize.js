@@ -519,7 +519,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       // Fire-and-forget: a storage failure must not block the authorization response.
       const consentMemoryDays = oauthConfig.consentMemoryDays || 90;
       grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays).catch(err => {
-        logger.warn('[OAuth Authorize] Failed to store consent:', err.message);
+        logger.warn('Failed to store consent', { component: 'OAuthAuthorize', error: err });
       });
 
       const callbackUrl = new URL(redirect_uri);

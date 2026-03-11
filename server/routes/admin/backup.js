@@ -303,7 +303,7 @@ export async function importConfig(req, res) {
       await fs.cp(contentsPath, currentBackupPath, { recursive: true });
       logger.info('Current configuration backed up', { component: 'AdminBackup' });
     } catch (error) {
-      logger.error('⚠️  Warning: Could not backup current configuration:', error.message);
+      logger.error('Could not backup current configuration', { component: 'AdminBackup', error });
       // Continue with import but warn user
     }
 
@@ -357,7 +357,7 @@ export async function importConfig(req, res) {
         await fs.rm(tempExtractPath, { recursive: true, force: true });
       }
     } catch (error) {
-      logger.warn('Warning: Could not clean up temporary files:', error.message);
+      logger.warn('Could not clean up temporary files', { component: 'AdminBackup', error });
     }
   }
 }

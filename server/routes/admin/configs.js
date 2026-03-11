@@ -604,7 +604,7 @@ export default function registerAdminConfigRoutes(app) {
             component: 'AdminConfigs'
           });
         } catch (err) {
-          logger.warn('Could not reset iFinder/iAssistant service caches:', err.message);
+          logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error: err });
         }
       }
 
