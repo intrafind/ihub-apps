@@ -42,6 +42,8 @@ export { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
 export { LoopNodeExecutor } from './LoopNodeExecutor.js';
 export { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
 export { JoinNodeExecutor } from './JoinNodeExecutor.js';
+export { HttpNodeExecutor } from './HttpNodeExecutor.js';
+export { CodeNodeExecutor } from './CodeNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
@@ -56,6 +58,8 @@ import { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
 import { LoopNodeExecutor } from './LoopNodeExecutor.js';
 import { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
 import { JoinNodeExecutor } from './JoinNodeExecutor.js';
+import { HttpNodeExecutor } from './HttpNodeExecutor.js';
+import { CodeNodeExecutor } from './CodeNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -73,7 +77,9 @@ const executorRegistry = {
   verifier: VerifierNodeExecutor,
   loop: LoopNodeExecutor,
   parallel: ParallelNodeExecutor,
-  join: JoinNodeExecutor
+  join: JoinNodeExecutor,
+  http: HttpNodeExecutor,
+  code: CodeNodeExecutor
 };
 
 /**
