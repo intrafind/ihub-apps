@@ -11,7 +11,8 @@ import { authRequired } from '../middleware/authRequired.js';
 import {
   sendBadRequest,
   sendNotFound,
-  sendFailedOperationError
+  sendFailedOperationError,
+  sendErrorResponse
 } from '../utils/responseHelpers.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { requireFeature } from '../featureRegistry.js';
@@ -41,7 +42,7 @@ export default function registerShortLinkRoutes(app) {
         res.json(link);
       } catch (e) {
         if (e.message === 'Code already exists') {
-          return res.status(409).json({ error: 'Code already exists' });
+          return sendErrorResponse(res, 409, 'Code already exists');
         }
         sendFailedOperationError(res, 'create short link', e);
       }
