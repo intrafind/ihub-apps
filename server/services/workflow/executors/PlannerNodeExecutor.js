@@ -499,7 +499,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
    */
   async waitForChildCompletion(childExecutionId, stateManager, context = {}) {
     const start = Date.now();
-    const parentDeadline = context.state?.data?._executionDeadline || Infinity;
+    const parentDeadline = context.initialData?._executionDeadline || Infinity;
 
     while (Date.now() - start < CHILD_COMPLETION_TIMEOUT) {
       // Check parent abort signal
