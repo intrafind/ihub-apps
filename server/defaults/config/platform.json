@@ -144,6 +144,7 @@
   "speechRecognition": {
     "defaultService": "default",
     "defaultModel": "whisper-tiny",
-    "modelsBasePath": "/api/stt-models"
+    "modelsBasePath": "/api/assets/models/stt",
+    "allowAnonymousModelDownload": false
   }
 }

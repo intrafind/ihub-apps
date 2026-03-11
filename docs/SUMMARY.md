@@ -7,6 +7,7 @@
     - [App Configuration](apps.md)
     - [Custom Response Renderers](custom-renderers.md)
     - [Models](models.md)
+    - [STT Models](stt-models.md)
     - [UI Configuration](ui.md)
     - [Platform Configuration](platform.md)
     - [Styles](styles.md)

@@ -13,6 +13,7 @@ import logger from './utils/logger.js';
 import registerChatRoutes from './routes/chat/index.js';
 import registerAdminRoutes from './routes/adminRoutes.js';
 import registerStaticRoutes from './routes/staticRoutes.js';
+import registerSttModelRoutes from './routes/sttModelRoutes.js';
 import registerGeneralRoutes from './routes/generalRoutes.js';
 import registerModelRoutes from './routes/modelRoutes.js';
 import registerToolRoutes from './routes/toolRoutes.js';
@@ -329,6 +330,9 @@ if (cluster.isPrimary && workerCount > 1) {
   // so the extension guard in staticRoutes does not 404 them
   registerPwaRoutes(app);
   registerThemeRoutes(app);
+
+  // Authenticated streaming route for STT model files
+  registerSttModelRoutes(app);
 
   // Register static file and SPA routes after API routes
   registerStaticRoutes(app, { isPackaged, rootDir, basePath });

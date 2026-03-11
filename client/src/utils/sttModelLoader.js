@@ -3,6 +3,50 @@
  * Models are loaded on first use and cached for subsequent calls.
  */
 
+export class STTModelNotAvailableError extends Error {
+  constructor(service, modelId) {
+    super(
+      `STT model "${modelId}" (${service}) is not downloaded on this server. Ask an administrator to download it.`
+    );
+    this.name = 'STTModelNotAvailableError';
+    this.service = service;
+    this.modelId = modelId;
+  }
+}
+
+/**
+ * Probes the server for a model's availability before attempting to load it.
+ * Throws STTModelNotAvailableError if the model files are not present.
+ * @param {string} service - 'whisper' | 'parakeet' | 'moonshine'
+ * @param {string} modelId - Model identifier
+ * @param {string} basePath - Base URL path to model files
+ */
+async function checkModelAvailability(service, modelId, basePath) {
+  let probeUrl;
+  switch (service) {
+    case 'parakeet':
+      probeUrl = `${basePath}/parakeet-tdt-0.6b/vocab.txt`;
+      break;
+    default:
+      probeUrl = `${basePath}/${modelId}/config.json`;
+  }
+
+  let response;
+  try {
+    response = await fetch(probeUrl, { method: 'HEAD' });
+  } catch {
+    // Network error — let the actual load attempt surface a more specific error
+    return;
+  }
+
+  if (response.status === 404) {
+    throw new STTModelNotAvailableError(service, modelId);
+  }
+  if (response.status === 401 || response.status === 403) {
+    throw new Error('Authentication required to download STT model files.');
+  }
+}
+
 const modelCache = new Map();
 
 /**
@@ -18,6 +62,8 @@ export async function loadSTTModel(service, modelId, basePath, onProgress) {
   if (modelCache.has(cacheKey)) {
     return modelCache.get(cacheKey);
   }
+
+  await checkModelAvailability(service, modelId, basePath);
 
   let model;
 

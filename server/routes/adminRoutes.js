@@ -22,6 +22,7 @@ import registerAdminSSLRoutes from './admin/ssl.js';
 import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
 import registerAdminUpdateRoutes from './admin/update.js';
+import registerAdminSttModelsRoutes from './admin/sttModels.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
@@ -48,4 +49,5 @@ export default async function registerAdminRoutes(app) {
   registerAdminFeaturesRoutes(app);
   registerAdminUsageRoutes(app);
   registerAdminUpdateRoutes(app);
+  registerAdminSttModelsRoutes(app);
 }

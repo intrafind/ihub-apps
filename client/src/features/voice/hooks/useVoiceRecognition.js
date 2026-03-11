@@ -4,7 +4,7 @@ import AzureSpeechRecognition from '../../../utils/azureRecognitionService';
 import WhisperRecognition from '../../../utils/whisperRecognitionService.js';
 import ParakeetRecognition from '../../../utils/parakeetRecognitionService.js';
 import MoonshineRecognition from '../../../utils/moonshineRecognitionService.js';
-import { isModelCached } from '../../../utils/sttModelLoader.js';
+import { isModelCached, STTModelNotAvailableError } from '../../../utils/sttModelLoader.js';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
 
 const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disabled = false }) => {
@@ -345,10 +345,21 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       recognitionRef.current = recognition;
       recognition.start();
     } catch (error) {
-      console.error('Error starting speech recognition:', error);
-      showError(t('voiceInput.error.startError', 'Error starting voice input. Please try again.'));
-      setIsListening(false);
       setIsModelLoading(false);
+      if (error instanceof STTModelNotAvailableError) {
+        showError(
+          t(
+            'voiceInput.error.modelNotAvailable',
+            'Speech model not available. Contact your administrator to download it.'
+          )
+        );
+      } else {
+        console.error('Error starting speech recognition:', error);
+        showError(
+          t('voiceInput.error.startError', 'Error starting voice input. Please try again.')
+        );
+      }
+      setIsListening(false);
     }
   };
 

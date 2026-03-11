@@ -177,7 +177,8 @@ export const platformConfigSchema = z
           .optional()
           .default('default'),
         defaultModel: z.string().optional().default('whisper-tiny'),
-        modelsBasePath: z.string().optional().default('/api/stt-models')
+        modelsBasePath: z.string().optional().default('/api/assets/models/stt'),
+        allowAnonymousModelDownload: z.boolean().optional().default(false)
       })
       .optional()
   })
