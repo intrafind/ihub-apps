@@ -4,6 +4,13 @@ import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
 
+// Defined outside LoginForm to ensure a stable reference across renders.
+// Defining component types inside a render function causes React to unmount
+// and remount the subtree on every render, which loses input focus.
+const StandaloneWrapper = ({ children }) => (
+  <div className="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6">{children}</div>
+);
+
 const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
   const { t } = useTranslation();
   const { loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
@@ -118,11 +125,7 @@ const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
 
   const isFormLoading = isLoading || isSubmitting;
 
-  const Wrapper = embedded
-    ? 'div'
-    : ({ children }) => (
-        <div className="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6">{children}</div>
-      );
+  const Wrapper = embedded ? 'div' : StandaloneWrapper;
 
   return (
     <Wrapper>
