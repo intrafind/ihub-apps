@@ -475,20 +475,11 @@ export default function registerAdminModelsRoutes(app) {
         } else {
           errorMessage = testError.message;
         }
-        res.status(500).json({
-          success: false,
-          message: userMessage,
-          error: errorMessage,
-          model: model
-        });
+        sendInternalError(res, new Error(errorMessage), `test model: ${userMessage}`);
       }
     } catch (error) {
       logger.error('Error testing model', { component: 'ModelsRoutes', error });
-      res.status(500).json({
-        success: false,
-        message: 'System error',
-        error: 'Failed to test model due to a system error. Please try again.'
-      });
+      sendInternalError(res, error, 'test model');
     }
   });
 }

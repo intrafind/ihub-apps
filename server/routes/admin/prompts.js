@@ -1201,7 +1201,7 @@ export default function registerAdminPromptsRoutes(app) {
           error: localizationError
         });
       }
-      res.status(500).json({ error: errorMessage, details: error.message });
+      sendErrorResponse(res, 500, errorMessage, { details: error.message });
     }
   });
 

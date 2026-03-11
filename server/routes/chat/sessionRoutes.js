@@ -15,7 +15,13 @@ import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
-import { sendNotFound, sendFailedOperationError } from '../../utils/responseHelpers.js';
+import {
+  sendNotFound,
+  sendFailedOperationError,
+  sendInternalError,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 export default function registerSessionRoutes(
   app,
@@ -223,10 +229,11 @@ export default function registerSessionRoutes(
           req.headers['accept-language']?.split(',')[0] || defaultLang
         );
         if (!apiKey) {
-          return res.status(500).json({
-            error: `API key not found for model: ${model.id} (${model.provider})`,
-            provider: model.provider
-          });
+          return sendInternalError(
+            res,
+            new Error(`API key not found for model: ${model.id} (${model.provider})`),
+            'test chat completion'
+          );
         }
         const request = createCompletionRequest(model, messages, apiKey, {
           stream: false,
@@ -264,24 +271,20 @@ export default function registerSessionRoutes(
         } catch (fetchError) {
           clearTimeout(timeoutId);
           if (fetchError.message.includes('timed out')) {
-            return res.status(504).json({
-              error: 'Request timed out',
-              message: `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
-            });
+            return sendErrorResponse(
+              res,
+              504,
+              `Request to ${model.provider} API timed out after ${DEFAULT_TIMEOUT / 1000} seconds`
+            );
           }
           const errorDetails = getErrorDetails(fetchError, model);
-          return res.status(500).json({
-            error: errorDetails.message,
-            code: errorDetails.code,
-            modelId: model.id,
-            provider: model.provider,
-            recommendation: errorDetails.recommendation,
+          return sendErrorResponse(res, 500, errorDetails.message, {
             details: fetchError.message
           });
         }
       } catch (error) {
         logger.error('Error in test chat completion', { component: 'sessionRoutes', error });
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+        sendInternalError(res, error, 'test chat completion');
       }
     }
   );
@@ -369,7 +372,7 @@ export default function registerSessionRoutes(
       } catch (error) {
         logger.error('Error establishing SSE connection', { component: 'sessionRoutes', error });
         if (!res.headersSent) {
-          return res.status(500).json({ error: 'Internal server error' });
+          return sendInternalError(res, error, 'establish SSE connection');
         }
         actionTracker.trackError(chatId, { message: 'Internal server error' });
         res.end();
@@ -600,7 +603,7 @@ export default function registerSessionRoutes(
         logger.info('Processing chat', { component: 'sessionRoutes', language: clientLanguage });
         if (!messages || !Array.isArray(messages)) {
           const errorMessage = await getLocalizedError('messagesRequired', {}, clientLanguage);
-          return res.status(400).json({ error: errorMessage });
+          return sendBadRequest(res, errorMessage);
         }
         trackSession(chatId, { appId, userSessionId, userAgent: req.headers['user-agent'] });
         actionTracker.trackSessionStart(chatId, {
@@ -807,7 +810,7 @@ export default function registerSessionRoutes(
         }
       } catch (error) {
         logger.error('Error in app chat', { component: 'sessionRoutes', error });
-        return res.status(500).json({ error: 'Internal server error', message: error.message });
+        return sendInternalError(res, error, 'app chat');
       }
     }
   );
@@ -916,7 +919,7 @@ export default function registerSessionRoutes(
         logger.info('Chat stream stopped', { component: 'sessionRoutes', chatId });
         return res.status(200).json({ success: true, message: 'Chat stream stopped' });
       }
-      return res.status(404).json({ success: false, message: 'Chat session not found' });
+      return sendNotFound(res, 'Chat session');
     }
   );
 

@@ -645,10 +645,11 @@ export default function registerDataRoutes(app) {
           }
         }
 
-        return res.status(500).json({
-          error: `Failed to load translations for language: ${lang}`,
-          requestId: requestId
-        });
+        return sendFailedOperationError(
+          res,
+          `load translations for language: ${lang}`,
+          new Error(`requestId: ${requestId}`)
+        );
       }
 
       logger.info('Successfully returning translations', {
@@ -702,10 +703,7 @@ export default function registerDataRoutes(app) {
         });
       }
 
-      res.status(500).json({
-        error: 'Internal server error',
-        requestId: requestId
-      });
+      sendInternalError(res, error, 'fetch translations');
     }
   });
 

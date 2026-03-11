@@ -175,7 +175,7 @@ export async function exportConfig(req, res) {
     archive.on('error', err => {
       logger.error('Archive error', { component: 'AdminBackup', error: err });
       if (!res.headersSent) {
-        res.status(500).json({ error: 'Failed to create backup archive' });
+        sendInternalError(res, err, 'create backup archive');
       }
     });
 
