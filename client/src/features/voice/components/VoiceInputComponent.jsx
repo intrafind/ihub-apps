@@ -10,7 +10,7 @@ const VoiceInputComponent = ({
   disabled = false,
   onCommand = null
 }) => {
-  const { isListening, transcript, toggleListening, stopListening, microphoneMode } =
+  const { isListening, transcript, toggleListening, stopListening, microphoneMode, isModelLoading, loadingProgress } =
     useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
 
   useEffect(() => {
@@ -41,6 +41,8 @@ const VoiceInputComponent = ({
             : ''
         }
         mode={microphoneMode}
+        isModelLoading={isModelLoading}
+        loadingProgress={loadingProgress}
       />
       <VoiceInputButton
         isListening={isListening}

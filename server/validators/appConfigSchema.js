@@ -89,8 +89,9 @@ const settingsSchema = z
       .optional(),
     speechRecognition: z
       .object({
-        service: z.enum(['default', 'azure']).optional().default('default'),
-        host: z.string().url().optional()
+        service: z.enum(['default', 'azure', 'whisper', 'parakeet', 'moonshine']).optional().default('default'),
+        host: z.string().url().optional(),
+        model: z.string().optional()
       })
       .optional()
   })

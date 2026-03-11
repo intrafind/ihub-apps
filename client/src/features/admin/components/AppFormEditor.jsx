@@ -1771,16 +1771,25 @@ const AppFormEditor = ({
                       <option value="default">
                         {t('admin.apps.edit.defaultService', 'Default (Browser)')}
                       </option>
-                      <option value="custom">
-                        {t('admin.apps.edit.customService', 'Custom Service')}
+                      <option value="azure">
+                        {t('admin.apps.edit.azureService', 'Azure Speech Services')}
+                      </option>
+                      <option value="whisper">
+                        {t('admin.apps.edit.whisperService', 'Whisper (Local, Multilingual)')}
+                      </option>
+                      <option value="parakeet">
+                        {t('admin.apps.edit.parakeetService', 'Parakeet (Local, English)')}
+                      </option>
+                      <option value="moonshine">
+                        {t('admin.apps.edit.moonshineService', 'Moonshine (Local, Lightweight)')}
                       </option>
                     </select>
                   </div>
 
-                  {app.settings?.speechRecognition?.service === 'custom' && (
+                  {app.settings?.speechRecognition?.service === 'azure' && (
                     <div className="pl-6">
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        {t('admin.apps.edit.customServiceHost', 'Custom Service Host')}
+                        {t('admin.apps.edit.azureServiceHost', 'Azure Service Host')}
                       </label>
                       <input
                         type="url"
@@ -1797,6 +1806,30 @@ const AppFormEditor = ({
                         placeholder="https://your-speech-service.com"
                         className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                       />
+                    </div>
+                  )}
+
+                  {app.settings?.speechRecognition?.service === 'whisper' && (
+                    <div className="pl-6 mt-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.apps.edit.whisperModel', 'Whisper Model')}
+                      </label>
+                      <select
+                        value={app.settings?.speechRecognition?.model || 'whisper-tiny'}
+                        onChange={e =>
+                          handleInputChange('settings', {
+                            ...app.settings,
+                            speechRecognition: {
+                              ...app.settings?.speechRecognition,
+                              model: e.target.value
+                            }
+                          })
+                        }
+                        className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                      >
+                        <option value="whisper-tiny">Whisper Tiny (~75MB, multilingual)</option>
+                        <option value="whisper-base">Whisper Base (~150MB, multilingual)</option>
+                      </select>
                     </div>
                   )}
                 </div>

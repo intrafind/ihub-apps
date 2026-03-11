@@ -1,12 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import AzureSpeechRecognition from '../../../utils/azureRecognitionService';
+import WhisperRecognition from '../../../utils/whisperRecognitionService.js';
+import ParakeetRecognition from '../../../utils/parakeetRecognitionService.js';
+import MoonshineRecognition from '../../../utils/moonshineRecognitionService.js';
+import { isModelCached } from '../../../utils/sttModelLoader.js';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
 
 const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disabled = false }) => {
   const { t, i18n } = useTranslation();
+  const { platformConfig } = usePlatformConfig();
   const [isListening, setIsListening] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [transcript, setTranscript] = useState('');
+  const [isModelLoading, setIsModelLoading] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const recognitionRef = useRef(null);
   const originalInputValue = useRef('');
   const originalPlaceholder = useRef('');
@@ -110,7 +118,26 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
     if (disabled) return;
 
     try {
-      if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      // Resolve which STT service to use, falling back through app config →
+      // platform config → built-in browser speech recognition.
+      const service =
+        app?.settings?.speechRecognition?.service ||
+        platformConfig?.speechRecognition?.defaultService ||
+        'default';
+      const modelId =
+        app?.settings?.speechRecognition?.model ||
+        platformConfig?.speechRecognition?.defaultModel ||
+        'whisper-tiny';
+      const modelsBasePath =
+        platformConfig?.speechRecognition?.modelsBasePath || '/api/stt-models';
+
+      // Browser-native services require the Web Speech API to be available.
+      // The in-browser ML services (whisper/parakeet/moonshine) bypass this check
+      // because they implement their own audio pipeline.
+      const isBrowserMLService =
+        service === 'whisper' || service === 'parakeet' || service === 'moonshine';
+
+      if (!isBrowserMLService && !('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
         showError(
           t('voiceInput.error.notSupported', 'Speech recognition not supported in this browser')
         );
@@ -135,16 +162,42 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       let recognition;
 
-      switch (app?.settings?.speechRecognition?.service) {
+      switch (service) {
         case 'azure':
           recognition = new AzureSpeechRecognition();
           recognition.host = app?.settings?.speechRecognition?.host;
           break;
+        case 'whisper': {
+          recognition = new WhisperRecognition();
+          recognition.modelId = modelId;
+          if (!isModelCached('whisper', modelId)) setIsModelLoading(true);
+          await recognition.init(modelsBasePath, p => setLoadingProgress(p));
+          setIsModelLoading(false);
+          break;
+        }
+        case 'parakeet': {
+          recognition = new ParakeetRecognition();
+          if (!isModelCached('parakeet', 'parakeet-tdt-0.6b')) setIsModelLoading(true);
+          await recognition.init(modelsBasePath, p => setLoadingProgress(p));
+          setIsModelLoading(false);
+          break;
+        }
+        case 'moonshine': {
+          recognition = new MoonshineRecognition();
+          recognition.modelId = modelId;
+          if (!isModelCached('moonshine', modelId)) setIsModelLoading(true);
+          await recognition.init(modelsBasePath, p => setLoadingProgress(p));
+          setIsModelLoading(false);
+          break;
+        }
         case 'default':
         default:
           recognition = new SpeechRecognition();
       }
 
+      // The browser-native and Azure services support these Web Speech API
+      // properties. The in-browser ML services ignore them (they manage their
+      // own audio loop), so it is safe to assign unconditionally here.
       recognition.continuous = microphoneMode === 'manual';
       recognition.interimResults = true;
 
@@ -292,6 +345,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       console.error('Error starting speech recognition:', error);
       showError(t('voiceInput.error.startError', 'Error starting voice input. Please try again.'));
       setIsListening(false);
+      setIsModelLoading(false);
     }
   };
 
@@ -308,7 +362,9 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
     transcript,
     toggleListening,
     stopListening,
-    microphoneMode
+    microphoneMode,
+    isModelLoading,
+    loadingProgress
   };
 };
 

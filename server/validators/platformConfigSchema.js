@@ -169,7 +169,17 @@ export const platformConfigSchema = z
           )
       })
       .default({}),
-    cloudStorage: cloudStorageConfigSchema.default({})
+    cloudStorage: cloudStorageConfigSchema.default({}),
+    speechRecognition: z
+      .object({
+        defaultService: z
+          .enum(['default', 'azure', 'whisper', 'parakeet', 'moonshine'])
+          .optional()
+          .default('default'),
+        defaultModel: z.string().optional().default('whisper-tiny'),
+        modelsBasePath: z.string().optional().default('/api/stt-models')
+      })
+      .optional()
   })
   .passthrough();
 

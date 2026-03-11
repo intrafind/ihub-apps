@@ -22,7 +22,10 @@ export default defineConfig({
           monaco: ['@monaco-editor/react'],
           teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
           pdf: ['pdfjs-dist'],
-          babel: ['@babel/standalone']
+          babel: ['@babel/standalone'],
+          'stt-whisper': ['@huggingface/transformers'],
+          'stt-parakeet': ['parakeet.js'],
+          'stt-moonshine': ['@moonshine-ai/moonshine-js']
         }
       }
     },

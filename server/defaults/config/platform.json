@@ -140,5 +140,10 @@
     "baseUrl": "",
     "defaultProfileId": "",
     "timeout": 60000
+  },
+  "speechRecognition": {
+    "defaultService": "default",
+    "defaultModel": "whisper-tiny",
+    "modelsBasePath": "/api/stt-models"
   }
 }
