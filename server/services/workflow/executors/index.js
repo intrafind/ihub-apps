@@ -9,6 +9,9 @@
  * - AgentNodeExecutor: LLM agent with optional tool access
  * - ToolNodeExecutor: Direct tool invocation without LLM
  * - DecisionNodeExecutor: Conditional branching logic
+ * - LoopNodeExecutor: Iterative execution (for/forEach/while modes)
+ * - ParallelNodeExecutor: Concurrent branch execution
+ * - JoinNodeExecutor: Merge parallel branch outputs
  *
  * The getExecutor() factory function provides a convenient way to get
  * the appropriate executor for a given node type.
@@ -36,6 +39,9 @@ export { HumanNodeExecutor } from './HumanNodeExecutor.js';
 export { TransformNodeExecutor } from './TransformNodeExecutor.js';
 export { PlannerNodeExecutor } from './PlannerNodeExecutor.js';
 export { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
+export { LoopNodeExecutor } from './LoopNodeExecutor.js';
+export { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
+export { JoinNodeExecutor } from './JoinNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
@@ -47,6 +53,9 @@ import { HumanNodeExecutor } from './HumanNodeExecutor.js';
 import { TransformNodeExecutor } from './TransformNodeExecutor.js';
 import { PlannerNodeExecutor } from './PlannerNodeExecutor.js';
 import { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
+import { LoopNodeExecutor } from './LoopNodeExecutor.js';
+import { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
+import { JoinNodeExecutor } from './JoinNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -61,7 +70,10 @@ const executorRegistry = {
   human: HumanNodeExecutor,
   transform: TransformNodeExecutor,
   planner: PlannerNodeExecutor,
-  verifier: VerifierNodeExecutor
+  verifier: VerifierNodeExecutor,
+  loop: LoopNodeExecutor,
+  parallel: ParallelNodeExecutor,
+  join: JoinNodeExecutor
 };
 
 /**
