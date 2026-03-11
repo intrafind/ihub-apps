@@ -42,7 +42,7 @@ class GoogleDriveService {
     this.driveApiUrl = 'https://www.googleapis.com/drive/v3';
     this.userInfoUrl = 'https://www.googleapis.com/oauth2/v2/userinfo';
 
-    logger.info('🟢 GoogleDriveService initialized', { component: 'Google Drive' });
+    logger.info('GoogleDriveService initialized', { component: 'Google Drive' });
   }
 
   /**
@@ -195,7 +195,7 @@ class GoogleDriveService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('Error exchanging authorization code:', {
+        logger.error('Error exchanging authorization code', {
           component: 'Google Drive',
           error: errorData
         });
@@ -219,9 +219,9 @@ class GoogleDriveService {
       };
     } catch (error) {
       if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('Error exchanging authorization code:', {
+      logger.error('Error exchanging authorization code', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw new Error('Failed to exchange authorization code for tokens');
     }
@@ -235,7 +235,7 @@ class GoogleDriveService {
    */
   async refreshAccessToken(providerId, refreshToken) {
     try {
-      logger.info('Attempting to refresh Google Drive access token...', {
+      logger.info('Attempting to refresh Google Drive access token', {
         component: 'Google Drive'
       });
 
@@ -256,7 +256,7 @@ class GoogleDriveService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('Error refreshing Google Drive access token:', {
+        logger.error('Error refreshing Google Drive access token', {
           component: 'Google Drive',
           error: errorData
         });
@@ -291,9 +291,9 @@ class GoogleDriveService {
       ) {
         throw error;
       }
-      logger.error('Error refreshing Google Drive access token:', {
+      logger.error('Error refreshing Google Drive access token', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw new Error(`Failed to refresh access token: ${error.message}`);
     }
@@ -313,15 +313,16 @@ class GoogleDriveService {
       }
 
       await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
-      logger.info(`Google Drive tokens stored for user ${userId}`, {
+      logger.info('Google Drive tokens stored for user', {
         component: 'Google Drive',
+        userId,
         providerId: tokens.providerId
       });
       return true;
     } catch (error) {
-      logger.error('Error storing user tokens:', {
+      logger.error('Error storing user tokens', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw new Error('Failed to store user tokens');
     }
@@ -339,13 +340,14 @@ class GoogleDriveService {
       const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
 
       if (expired) {
-        logger.info(`Tokens expired for user ${userId}, attempting refresh...`, {
-          component: 'Google Drive'
+        logger.info('Tokens expired for user, attempting refresh', {
+          component: 'Google Drive',
+          userId
         });
 
         try {
           if (!tokens.refreshToken) {
-            logger.error('No refresh token available for user:', {
+            logger.error('No refresh token available for user', {
               component: 'Google Drive',
               userId
             });
@@ -360,14 +362,16 @@ class GoogleDriveService {
           );
 
           await this.storeUserTokens(userId, refreshedTokens);
-          logger.info(`Successfully refreshed Google Drive tokens for user ${userId}`, {
-            component: 'Google Drive'
+          logger.info('Successfully refreshed Google Drive tokens for user', {
+            component: 'Google Drive',
+            userId
           });
           return refreshedTokens;
         } catch (refreshError) {
-          logger.error(`Failed to refresh tokens for user ${userId}:`, {
+          logger.error('Failed to refresh tokens for user', {
             component: 'Google Drive',
-            error: refreshError.message
+            userId,
+            error: refreshError
           });
 
           await this.deleteUserTokens(userId);
@@ -383,9 +387,9 @@ class GoogleDriveService {
       ) {
         throw error;
       }
-      logger.error('Error retrieving user tokens:', {
+      logger.error('Error retrieving user tokens', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw new Error('Failed to retrieve user tokens');
     }
@@ -400,15 +404,16 @@ class GoogleDriveService {
     try {
       const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
       if (result) {
-        logger.info(`Google Drive tokens deleted for user ${userId}`, {
-          component: 'Google Drive'
+        logger.info('Google Drive tokens deleted for user', {
+          component: 'Google Drive',
+          userId
         });
       }
       return result;
     } catch (error) {
-      logger.error('Error deleting user tokens:', {
+      logger.error('Error deleting user tokens', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       return false;
     }
@@ -448,10 +453,11 @@ class GoogleDriveService {
 
       if (!response.ok) {
         if (response.status === 401 && retryCount < maxRetries) {
-          logger.info(
-            `Received 401, attempting token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
-            { component: 'Google Drive' }
-          );
+          logger.info('Received 401, attempting token refresh and retry', {
+            component: 'Google Drive',
+            attempt: retryCount + 1,
+            maxAttempts: maxRetries + 1
+          });
 
           try {
             const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
@@ -469,9 +475,9 @@ class GoogleDriveService {
 
             return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
           } catch (refreshError) {
-            logger.error('Forced token refresh failed:', {
+            logger.error('Forced token refresh failed', {
               component: 'Google Drive',
-              error: refreshError.message
+              error: refreshError
             });
 
             await this.deleteUserTokens(userId);
@@ -481,8 +487,9 @@ class GoogleDriveService {
           throw new Error('Google Drive authentication required. Please reconnect your account.');
         } else if (response.status === 429) {
           const retryAfter = response.headers.get('retry-after') || 'unknown';
-          logger.warn(`Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
+          logger.warn('Rate limit exceeded', {
             component: 'Google Drive',
+            retryAfter,
             endpoint
           });
           throw new Error('Google Drive API rate limit exceeded. Please try again in a moment.');
@@ -490,17 +497,17 @@ class GoogleDriveService {
 
         const errorData = await response.json().catch(() => ({}));
         if (response.status === 404) {
-          logger.debug('Google Drive API returned 404 (not found):', {
+          logger.debug('Google Drive API returned 404 (not found)', {
             component: 'Google Drive',
             endpoint,
-            error: errorData?.error?.message || 'Resource not found'
+            errorMessage: errorData?.error?.message || 'Resource not found'
           });
           throw new Error(
             `Google Drive API error: ${errorData?.error?.message || 'Resource not found'}`
           );
         }
 
-        logger.error('Google Drive API request failed:', {
+        logger.error('Google Drive API request failed', {
           component: 'Google Drive',
           error: errorData
         });
@@ -515,9 +522,9 @@ class GoogleDriveService {
       if (error.message.includes('Google Drive')) {
         throw error;
       }
-      logger.error('Google Drive API request failed:', {
+      logger.error('Google Drive API request failed', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw new Error(`Google Drive API error: ${error.message}`);
     }
@@ -534,9 +541,10 @@ class GoogleDriveService {
       await this.makeApiRequest(this.userInfoUrl, 'GET', null, userId);
       return true;
     } catch (error) {
-      logger.info(`User ${userId} Google Drive authentication failed:`, {
+      logger.info('User Google Drive authentication failed', {
         component: 'Google Drive',
-        error: error.message
+        userId,
+        error
       });
       return false;
     }
@@ -558,9 +566,9 @@ class GoogleDriveService {
         picture: data.picture
       };
     } catch (error) {
-      logger.error('Error getting Google Drive user info:', {
+      logger.error('Error getting Google Drive user info', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw error;
     }
@@ -609,8 +617,9 @@ class GoogleDriveService {
 
     do {
       if (pageCount >= maxPages) {
-        logger.warn(`_fetchAllPages: reached maximum page limit (${maxPages} pages)`, {
+        logger.warn('Reached maximum page limit in _fetchAllPages', {
           component: 'Google Drive',
+          maxPages,
           endpoint
         });
         break;
@@ -660,9 +669,9 @@ class GoogleDriveService {
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
-      logger.error('Error listing My Drive files:', {
+      logger.error('Error listing My Drive files', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw error;
     }
@@ -675,7 +684,7 @@ class GoogleDriveService {
    */
   async listSharedDrives(userId) {
     try {
-      logger.info('Loading shared drives...', { component: 'Google Drive' });
+      logger.info('Loading shared drives', { component: 'Google Drive' });
 
       const params = {
         pageSize: '100',
@@ -692,12 +701,12 @@ class GoogleDriveService {
         source: 'sharedDrives'
       }));
 
-      logger.info(`Loaded ${result.length} shared drives`, { component: 'Google Drive' });
+      logger.info('Loaded shared drives', { component: 'Google Drive', count: result.length });
       return result;
     } catch (error) {
-      logger.error('Error listing shared drives:', {
+      logger.error('Error listing shared drives', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       return [];
     }
@@ -730,9 +739,9 @@ class GoogleDriveService {
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
-      logger.error('Error listing shared drive files:', {
+      logger.error('Error listing shared drive files', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw error;
     }
@@ -757,9 +766,9 @@ class GoogleDriveService {
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
-      logger.error('Error listing shared with me files:', {
+      logger.error('Error listing shared with me files', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw error;
     }
@@ -797,9 +806,9 @@ class GoogleDriveService {
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
-      logger.error('Error searching files:', {
+      logger.error('Error searching files', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw error;
     }
@@ -868,9 +877,9 @@ class GoogleDriveService {
         content
       };
     } catch (error) {
-      logger.error('Error downloading file:', {
+      logger.error('Error downloading file', {
         component: 'Google Drive',
-        error: error.message
+        error
       });
       throw error;
     }

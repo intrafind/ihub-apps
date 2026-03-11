@@ -939,8 +939,9 @@ class ToolExecutor {
       });
 
       // Debug: Log collected tool calls to verify metadata preservation
-      logger.info(`Collected ${validToolCalls.length} tool call(s)`, {
+      logger.info('Collected tool calls', {
         component: 'ToolExecutor',
+        toolCallCount: validToolCalls.length,
         toolCalls: validToolCalls.map(c => ({
           name: c.function?.name,
           hasMetadata: !!c.metadata,

@@ -689,7 +689,7 @@ class RegistryService {
     const catalogUrl = getCatalogUrl(registry.source);
     const authHeaders = buildAuthHeaders(registry.auth);
 
-    logger.info(`Fetching catalog from ${catalogUrl}`, { component: COMPONENT });
+    logger.info('Fetching catalog', { component: COMPONENT, catalogUrl });
 
     const rawData = await fetchContent(catalogUrl, authHeaders);
 
@@ -714,8 +714,9 @@ class RegistryService {
     const validation = validateCatalog(mapped);
 
     if (!validation.success) {
-      logger.warn(`Catalog validation warnings: ${validation.errors.join(', ')}`, {
-        component: COMPONENT
+      logger.warn('Catalog validation warnings', {
+        component: COMPONENT,
+        errors: validation.errors
       });
       // Return the mapped data even if validation finds issues — be lenient with remote content
       return mapped;
@@ -757,8 +758,10 @@ class RegistryService {
       await this._saveRegistries(data);
     }
 
-    logger.info(`Registry '${registryId}' refreshed: ${(catalog.items || []).length} items`, {
-      component: COMPONENT
+    logger.info('Registry refreshed', {
+      component: COMPONENT,
+      registryId,
+      itemCount: (catalog.items || []).length
     });
     return catalog;
   }
@@ -938,8 +941,9 @@ class RegistryService {
           contentPreview = await fetchContent(itemUrl, authHeaders);
         }
       } catch (error) {
-        logger.warn(`Could not fetch content preview: ${error.message}`, {
-          component: COMPONENT
+        logger.warn('Could not fetch content preview', {
+          component: COMPONENT,
+          error
         });
       }
     }
