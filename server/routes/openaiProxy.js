@@ -226,7 +226,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       } catch (error) {
         logger.error('[OpenAI Proxy] Error converting tools to generic format', {
           component: 'OpenAIProxy',
-          error: error.message
+          error
         });
         genericTools = tools; // Fallback to original tools
       }
@@ -402,7 +402,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
                 logger.error('[OpenAI Proxy] Error processing chunk', {
                   component: 'OpenAIProxy',
                   provider: model.provider,
-                  error: error.message
+                  error
                 });
                 // Continue processing other chunks
               }
@@ -444,7 +444,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
                   logger.error('[OpenAI Proxy] Error processing provider buffer', {
                     component: 'OpenAIProxy',
                     provider: model.provider,
-                    error: error.message
+                    error
                   });
                 }
               }

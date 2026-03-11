@@ -172,7 +172,7 @@ export async function exportConfig(req, res) {
     });
 
     archive.on('error', err => {
-      logger.error('❌ Archive error', { component: 'AdminBackup', error: err });
+      logger.error('Archive error', { component: 'AdminBackup', error: err });
       if (!res.headersSent) {
         res.status(500).json({ error: 'Failed to create backup archive' });
       }
@@ -222,7 +222,7 @@ export async function exportConfig(req, res) {
     await archive.finalize();
     logger.info('Configuration export completed', { component: 'AdminBackup' });
   } catch (error) {
-    logger.error('❌ Export error', { component: 'AdminBackup', error });
+    logger.error('Export error', { component: 'AdminBackup', error });
     if (!res.headersSent) {
       res.status(500).json({
         error: 'Failed to export configuration',
@@ -341,7 +341,7 @@ export async function importConfig(req, res) {
       importedCount: importedFiles.length
     });
   } catch (error) {
-    logger.error('❌ Import error', { component: 'AdminBackup', error });
+    logger.error('Import error', { component: 'AdminBackup', error });
 
     res.status(500).json({
       error: 'Failed to import configuration',

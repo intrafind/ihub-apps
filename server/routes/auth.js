@@ -120,7 +120,7 @@ export default function registerAuthRoutes(app) {
         result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
         logger.info('[Auth] Local authentication succeeded', { component: 'Auth' });
       } catch (error) {
-        logger.warn('[Auth] Local authentication failed:', { error: error.message });
+        logger.warn('Local authentication failed', { component: 'Auth', error });
         return res.status(401).json({
           success: false,
           error: 'Invalid credentials'

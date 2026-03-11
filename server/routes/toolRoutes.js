@@ -80,7 +80,7 @@ export default function registerToolRoutes(app) {
         logger.error('Tool execution error', {
           component: 'ToolRoutes',
           toolId,
-          error: error.message
+          error
         });
         res.status(500).json({ error: 'Tool execution failed' });
       }

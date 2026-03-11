@@ -90,7 +90,7 @@ router.get('/callback', authOptional, async (req, res) => {
 
     // Check for OAuth errors
     if (error) {
-      logger.error('❌ JIRA OAuth error', { component: 'Jira', oauthError: error });
+      logger.error('JIRA OAuth error', { component: 'Jira', oauthError: error });
       return res.redirect(`${returnUrl}${separator}jira_error=${encodeURIComponent(error)}`);
     }
 
