@@ -14,7 +14,7 @@ const turndownService = new TurndownService();
  * @returns {boolean} returns.isLoading - Whether a copy operation is in progress
  * @returns {string|null} returns.lastCopied - Type of last successful copy ('text'|'markdown'|'html'|'json')
  */
-export const useClipboard = () => {
+export function useClipboard() {
   const [isLoading, setIsLoading] = useState(false);
   const [lastCopied, setLastCopied] = useState(null);
 
@@ -107,6 +107,6 @@ export const useClipboard = () => {
     isLoading,
     lastCopied
   };
-};
+}
 
 export default useClipboard;

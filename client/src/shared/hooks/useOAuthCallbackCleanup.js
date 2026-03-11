@@ -7,7 +7,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
  * This is needed because OAuth callbacks redirect back to the original page
  * and we want to clean up the URL without the user seeing the query parameters
  */
-export const useOAuthCallbackCleanup = () => {
+export function useOAuthCallbackCleanup() {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -44,4 +44,4 @@ export const useOAuthCallbackCleanup = () => {
       navigate(newUrl, { replace: true });
     }
   }, [location, navigate]);
-};
+}

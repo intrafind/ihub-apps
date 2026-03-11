@@ -13,7 +13,7 @@ import { FeatureFlags } from '../../../../shared/featureFlags.js';
  * @returns {Function} returns.resetMagicPrompt - Reset magic prompt state () => void
  * @returns {boolean} returns.showUndoMagicPrompt - Whether undo option should be shown
  */
-export const useMagicPrompt = () => {
+export function useMagicPrompt() {
   const [originalInput, setOriginalInput] = useState(null);
   const [magicLoading, setMagicLoading] = useState(false);
 
@@ -67,6 +67,6 @@ export const useMagicPrompt = () => {
     resetMagicPrompt,
     showUndoMagicPrompt: originalInput !== null
   };
-};
+}
 
 export default useMagicPrompt;

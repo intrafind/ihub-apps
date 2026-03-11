@@ -77,7 +77,7 @@ const AVAILABLE_ICONS = [
  * @param {string} props.className - Additional CSS classes
  * @param {string} props.error - Error message to display
  */
-const IconPicker = ({ value, onChange, className = '', error }) => {
+function IconPicker({ value, onChange, className = '', error }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -212,6 +212,6 @@ const IconPicker = ({ value, onChange, className = '', error }) => {
       )}
     </div>
   );
-};
+}
 
 export default IconPicker;

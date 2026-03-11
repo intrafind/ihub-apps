@@ -4,7 +4,7 @@ import { useState } from 'react';
  * NDAResultsRenderer - Custom renderer for NDA Risk Analysis JSON output
  * Displays risk assessment results in a user-friendly, color-coded format
  */
-const NDAResultsRenderer = ({ data, t }) => {
+function NDAResultsRenderer({ data, t }) {
   // Helper function to get risk color classes
   const getRiskColorClasses = level => {
     switch (level?.toLowerCase()) {
@@ -169,10 +169,10 @@ const NDAResultsRenderer = ({ data, t }) => {
       </div>
     </div>
   );
-};
+}
 
 // Separate component for each clause card (to manage its own state)
-const ClauseCard = ({ clause, t }) => {
+function ClauseCard({ clause, t }) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   const getRiskColorClasses = level => {
@@ -337,6 +337,6 @@ const ClauseCard = ({ clause, t }) => {
       </div>
     </div>
   );
-};
+}
 
 export default NDAResultsRenderer;

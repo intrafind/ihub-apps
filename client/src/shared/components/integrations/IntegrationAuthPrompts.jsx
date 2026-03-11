@@ -3,7 +3,7 @@ import IntegrationConnectionCard from './IntegrationConnectionCard';
 /**
  * Component that displays authentication prompts for required integrations
  */
-const IntegrationAuthPrompts = ({ requiredIntegrations = [], onConnect, className = '' }) => {
+function IntegrationAuthPrompts({ requiredIntegrations = [], onConnect, className = '' }) {
   if (!requiredIntegrations.length) return null;
 
   return (
@@ -19,6 +19,6 @@ const IntegrationAuthPrompts = ({ requiredIntegrations = [], onConnect, classNam
       ))}
     </div>
   );
-};
+}
 
 export default IntegrationAuthPrompts;

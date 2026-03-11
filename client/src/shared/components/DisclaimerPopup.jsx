@@ -4,7 +4,7 @@ import { getLocalizedContent } from '../../utils/localizeContent';
 
 const DISCLAIMER_STORAGE_KEY = 'ihub-disclaimer-acknowledged';
 
-const DisclaimerPopup = ({ disclaimer, currentLanguage }) => {
+function DisclaimerPopup({ disclaimer, currentLanguage }) {
   const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(false);
 
@@ -57,6 +57,6 @@ const DisclaimerPopup = ({ disclaimer, currentLanguage }) => {
       </div>
     </div>
   );
-};
+}
 
 export default DisclaimerPopup;

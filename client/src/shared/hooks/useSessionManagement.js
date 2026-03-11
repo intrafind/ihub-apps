@@ -6,7 +6,7 @@ import { sendSessionStart } from '../../api/api';
  * Custom hook to handle session initialization and renewal
  * Separates session management logic from component rendering
  */
-const useSessionManagement = () => {
+function useSessionManagement() {
   useEffect(() => {
     // Get or create a session ID
     const sessionId = getSessionId();
@@ -43,6 +43,6 @@ const useSessionManagement = () => {
       clearInterval(renewalTimer);
     };
   }, []);
-};
+}
 
 export default useSessionManagement;

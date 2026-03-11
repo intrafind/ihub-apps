@@ -7,7 +7,7 @@ import { configureMarked } from '../../config/marked.config';
 // Re-export configureMarked for backward compatibility
 export { configureMarked };
 
-const MarkdownRenderer = () => {
+function MarkdownRenderer() {
   const { t } = useTranslation();
 
   // Custom hook for copy/download buttons on standard code blocks
@@ -24,6 +24,6 @@ const MarkdownRenderer = () => {
   // This component's purpose is to set up global listeners and configurations.
   // It doesn't render any visible elements itself.
   return null;
-};
+}
 
 export default MarkdownRenderer;

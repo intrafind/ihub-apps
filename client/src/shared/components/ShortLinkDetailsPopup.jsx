@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 
-const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
+function ShortLinkDetailsPopup({ link, isOpen, onClose }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -131,6 +131,6 @@ const ShortLinkDetailsPopup = ({ link, isOpen, onClose }) => {
       </div>
     </div>
   );
-};
+}
 
 export default ShortLinkDetailsPopup;

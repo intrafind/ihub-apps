@@ -14,7 +14,7 @@ import { fetchSkills } from '../../api/endpoints/skills';
  * @param {string[]} props.selectedSkills - Array of selected skill name strings
  * @param {Function} props.onSkillsChange - Callback receiving updated array of skill name strings
  */
-const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
+function SkillsSelector({ selectedSkills = [], onSkillsChange }) {
   const { t } = useTranslation();
   const [searchTerm, setSearchTerm] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
@@ -194,6 +194,6 @@ const SkillsSelector = ({ selectedSkills = [], onSkillsChange }) => {
       </p>
     </div>
   );
-};
+}
 
 export default SkillsSelector;

@@ -2,49 +2,53 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component
-const ErrorFallback = ({ error, resetErrorBoundary, t }) => (
-  <div className="border-2 border-red-200 rounded-lg p-6 bg-red-50">
-    <div className="flex items-center mb-4">
-      <svg
-        className="w-6 h-6 text-red-600 mr-2"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
+function ErrorFallback({ error, resetErrorBoundary, t }) {
+  return (
+    <div className="border-2 border-red-200 rounded-lg p-6 bg-red-50">
+      <div className="flex items-center mb-4">
+        <svg
+          className="w-6 h-6 text-red-600 mr-2"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+          ></path>
+        </svg>
+        <h3 className="text-red-800 font-semibold">
+          {t ? t('errors.componentError', 'Component Error') : 'Component Error'}
+        </h3>
+      </div>
+      <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
+        {error.message}
+      </pre>
+      <button
+        onClick={resetErrorBoundary}
+        className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
       >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-        ></path>
-      </svg>
-      <h3 className="text-red-800 font-semibold">
-        {t ? t('errors.componentError', 'Component Error') : 'Component Error'}
-      </h3>
+        Try Again
+      </button>
     </div>
-    <pre className="text-sm text-red-700 bg-red-100 p-3 rounded mb-4 overflow-auto">
-      {error.message}
-    </pre>
-    <button
-      onClick={resetErrorBoundary}
-      className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
-    >
-      Try Again
-    </button>
-  </div>
-);
+  );
+}
 
 // Loading component
-const LoadingComponent = ({ t }) => (
-  <div className="flex items-center justify-center p-8">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    <span className="ml-3 text-gray-600">
-      {t ? t('common.compiling', 'Compiling component...') : 'Compiling component...'}
-    </span>
-  </div>
-);
+function LoadingComponent({ t }) {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span className="ml-3 text-gray-600">
+        {t ? t('common.compiling', 'Compiling component...') : 'Compiling component...'}
+      </span>
+    </div>
+  );
+}
 
-const ReactComponentRenderer = ({ jsxCode, componentProps = {}, className = '' }) => {
+function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }) {
   const [CompiledComponent, setCompiledComponent] = useState(null);
   const [compileError, setCompileError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -332,6 +336,6 @@ UserComponent;
       </ErrorBoundary>
     </div>
   );
-};
+}
 
 export default ReactComponentRenderer;
