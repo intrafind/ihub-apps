@@ -8,7 +8,7 @@ import configCache from '../../configCache.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
 import { getDailyRollups, getMonthlyRollups, runRollups } from '../../services/UsageAggregator.js';
 import { readEvents } from '../../services/UsageEventLog.js';
-import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 function parseRange(range) {
   if (!range) return { startDate: null, endDate: null, granularity: 'daily' };
@@ -63,8 +63,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ granularity, range, data });
     } catch (e) {
-      logger.error('Error loading usage timeline', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to load usage timeline' });
+      return sendInternalError(res, e, 'load usage timeline');
     }
   });
 
@@ -89,8 +88,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ range, users });
     } catch (e) {
-      logger.error('Error loading usage users', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to load usage user data' });
+      return sendInternalError(res, e, 'load usage user data');
     }
   });
 
@@ -113,8 +111,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ range, apps });
     } catch (e) {
-      logger.error('Error loading usage apps', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to load usage app data' });
+      return sendInternalError(res, e, 'load usage app data');
     }
   });
 
@@ -138,8 +135,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ range, models });
     } catch (e) {
-      logger.error('Error loading usage models', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to load usage model data' });
+      return sendInternalError(res, e, 'load usage model data');
     }
   });
 
@@ -149,8 +145,7 @@ export default function registerAdminUsageRoutes(app) {
       const mode = await getTrackingMode();
       res.json({ trackingMode: mode });
     } catch (e) {
-      logger.error('Error loading usage meta', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to load usage metadata' });
+      return sendInternalError(res, e, 'load usage metadata');
     }
   });
 
@@ -160,9 +155,10 @@ export default function registerAdminUsageRoutes(app) {
       const { trackingMode } = req.body;
       const validModes = ['anonymous', 'pseudonymous', 'identified'];
       if (!validModes.includes(trackingMode)) {
-        return res
-          .status(400)
-          .json({ error: `Invalid tracking mode. Must be one of: ${validModes.join(', ')}` });
+        return sendBadRequest(
+          res,
+          `Invalid tracking mode. Must be one of: ${validModes.join(', ')}`
+        );
       }
 
       const rootDir = getRootDir();
@@ -183,8 +179,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ trackingMode, message: 'Tracking mode updated successfully' });
     } catch (e) {
-      logger.error('Error updating tracking mode', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to update tracking mode' });
+      return sendInternalError(res, e, 'update tracking mode');
     }
   });
 
@@ -196,8 +191,7 @@ export default function registerAdminUsageRoutes(app) {
       const stats = await runRollups(retentionConfig);
       res.json({ message: 'Rollup generation completed successfully', ...stats });
     } catch (e) {
-      logger.error('Error generating rollups', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to generate rollups' });
+      return sendInternalError(res, e, 'generate rollups');
     }
   });
 
@@ -241,8 +235,7 @@ export default function registerAdminUsageRoutes(app) {
         res.json({ range, events });
       }
     } catch (e) {
-      logger.error('Error exporting usage data', { component: 'AdminUsage', error: e });
-      res.status(500).json({ error: 'Failed to export usage data' });
+      return sendInternalError(res, e, 'export usage data');
     }
   });
 }

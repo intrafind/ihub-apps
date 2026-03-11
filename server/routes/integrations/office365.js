@@ -8,6 +8,12 @@ import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -60,10 +66,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     const { providerId, returnUrl } = req.query;
 
     if (!providerId) {
-      return res.status(400).json({
-        error: 'Missing providerId',
-        message: 'providerId query parameter is required'
-      });
+      return sendBadRequest(res, 'providerId query parameter is required');
     }
 
     logger.debug('🔍 Office 365 Auth Debug:', {
@@ -77,10 +80,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
 
     // Check if session is available
     if (!req.session) {
-      return res.status(500).json({
-        error: 'Session not available',
-        message: 'Session middleware is required for Office 365 OAuth integrations.'
-      });
+      return sendErrorResponse(res, 500, 'Session not available');
     }
 
     // Generate state for CSRF protection
@@ -118,14 +118,7 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     // Redirect to Microsoft OAuth consent screen
     res.redirect(authUrl);
   } catch (error) {
-    logger.error('❌ Error initiating Office 365 OAuth:', {
-      component: 'Office 365',
-      error: error.message
-    });
-    res.status(500).json({
-      error: 'OAuth initiation failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'initiate Office 365 OAuth');
   }
 });
 
@@ -378,7 +371,7 @@ router.get('/callback', authOptional, async (req, res) => {
 router.get('/status', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const isAuthenticated = await Office365Service.isUserAuthenticated(req.user.id);
@@ -427,10 +420,7 @@ router.get('/status', authRequired, async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      error: 'Status check failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'get Office 365 status');
   }
 });
 
@@ -441,7 +431,7 @@ router.get('/status', authRequired, async (req, res) => {
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const success = await Office365Service.deleteUserTokens(req.user.id);
@@ -462,14 +452,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
       });
     }
   } catch (error) {
-    logger.error('❌ Error disconnecting Office 365:', {
-      component: 'Office 365',
-      error: error.message
-    });
-    res.status(500).json({
-      error: 'Disconnect failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'disconnect Office 365');
   }
 });
 
@@ -480,7 +463,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
 router.get('/sources', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     // Return static source categories (no Graph API calls)
@@ -515,10 +498,7 @@ router.get('/sources', authRequired, async (req, res) => {
       error: error.message
     });
 
-    res.status(500).json({
-      error: 'Failed to get sources',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'get Office 365 sources');
   }
 });
 
@@ -529,7 +509,7 @@ router.get('/sources', authRequired, async (req, res) => {
 router.get('/drives/:source', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { source } = req.params;
@@ -546,10 +526,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
         drives = await Office365Service.listTeamsDrives(req.user.id);
         break;
       default:
-        return res.status(400).json({
-          error: 'Invalid source',
-          message: `Source must be one of: personal, sharepoint, teams`
-        });
+        return sendBadRequest(res, 'Source must be one of: personal, sharepoint, teams');
     }
 
     res.json({
@@ -564,16 +541,10 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your Office 365 account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Failed to list drives',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'list Office 365 drives');
   }
 });
 
@@ -584,33 +555,24 @@ router.get('/drives/:source', authRequired, async (req, res) => {
 router.get('/items', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { driveId, folderId, search } = req.query;
 
     if (driveId && !isValidGraphId(driveId)) {
-      return res.status(400).json({
-        error: 'Invalid driveId',
-        message: 'driveId contains invalid characters or is too long'
-      });
+      return sendBadRequest(res, 'driveId contains invalid characters or is too long');
     }
 
     if (folderId && !isValidGraphId(folderId)) {
-      return res.status(400).json({
-        error: 'Invalid folderId',
-        message: 'folderId contains invalid characters or is too long'
-      });
+      return sendBadRequest(res, 'folderId contains invalid characters or is too long');
     }
 
     let items;
     // If search query is provided, use search endpoint
     if (search && search.trim().length > 0) {
       if (!driveId) {
-        return res.status(400).json({
-          error: 'Missing driveId',
-          message: 'driveId is required for search'
-        });
+        return sendBadRequest(res, 'driveId is required for search');
       }
       items = await Office365Service.searchItems(req.user.id, driveId, search);
     } else {
@@ -628,16 +590,10 @@ router.get('/items', authRequired, async (req, res) => {
     });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your Office 365 account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Failed to list items',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'list Office 365 items');
   }
 });
 
@@ -648,30 +604,21 @@ router.get('/items', authRequired, async (req, res) => {
 router.get('/download', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { fileId, driveId } = req.query;
 
     if (!fileId) {
-      return res.status(400).json({
-        error: 'Missing fileId',
-        message: 'fileId query parameter is required'
-      });
+      return sendBadRequest(res, 'fileId query parameter is required');
     }
 
     if (!isValidGraphId(fileId)) {
-      return res.status(400).json({
-        error: 'Invalid fileId',
-        message: 'fileId contains invalid characters or is too long'
-      });
+      return sendBadRequest(res, 'fileId contains invalid characters or is too long');
     }
 
     if (driveId && !isValidGraphId(driveId)) {
-      return res.status(400).json({
-        error: 'Invalid driveId',
-        message: 'driveId contains invalid characters or is too long'
-      });
+      return sendBadRequest(res, 'driveId contains invalid characters or is too long');
     }
 
     const file = await Office365Service.downloadFile(req.user.id, fileId, driveId);
@@ -690,16 +637,10 @@ router.get('/download', authRequired, async (req, res) => {
     });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your Office 365 account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Failed to download file',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'download Office 365 file');
   }
 });
 

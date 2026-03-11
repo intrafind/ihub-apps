@@ -7,6 +7,12 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -228,8 +234,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json(groupsData);
     } catch (error) {
-      logger.error('Error getting groups', { component: 'AdminGroups', error });
-      res.status(500).json({ error: 'Failed to get groups' });
+      return sendInternalError(res, error, 'get groups');
     }
   });
 
@@ -409,8 +414,7 @@ export default function registerAdminGroupRoutes(app) {
         skills: skills.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
-      logger.error('Error getting resources', { component: 'AdminGroups', error });
-      res.status(500).json({ error: 'Failed to get resources' });
+      return sendInternalError(res, error, 'get resources');
     }
   });
 
@@ -518,7 +522,7 @@ export default function registerAdminGroupRoutes(app) {
       const { id, name, description, permissions, mappings = [] } = req.body;
 
       if (!id || !name) {
-        return res.status(400).json({ error: 'Group ID and name are required' });
+        return sendBadRequest(res, 'Group ID and name are required');
       }
 
       // Validate group ID for security
@@ -528,7 +532,7 @@ export default function registerAdminGroupRoutes(app) {
 
       // Validate permissions structure
       if (!permissions || typeof permissions !== 'object') {
-        return res.status(400).json({ error: 'Valid permissions object is required' });
+        return sendBadRequest(res, 'Valid permissions object is required');
       }
 
       const rootDir = getRootDir();
@@ -553,7 +557,7 @@ export default function registerAdminGroupRoutes(app) {
 
       // Check if group ID already exists
       if (groupsData.groups[id]) {
-        return res.status(409).json({ error: 'Group ID already exists' });
+        return sendErrorResponse(res, 409, 'Group ID already exists');
       }
 
       // Create new group
@@ -584,8 +588,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json({ group: newGroup });
     } catch (error) {
-      logger.error('Error creating group', { component: 'AdminGroups', error });
-      res.status(500).json({ error: 'Failed to create group' });
+      return sendInternalError(res, error, 'create group');
     }
   });
 
@@ -673,12 +676,12 @@ export default function registerAdminGroupRoutes(app) {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        return res.status(404).json({ error: 'Groups file not found' });
+        return sendNotFound(res, 'Groups file');
       }
 
       // Check if group exists
       if (!groupsData.groups[groupId]) {
-        return res.status(404).json({ error: 'Group not found' });
+        return sendNotFound(res, 'Group');
       }
 
       const group = groupsData.groups[groupId];
@@ -720,8 +723,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json({ group });
     } catch (error) {
-      logger.error('Error updating group', { component: 'AdminGroups', error });
-      res.status(500).json({ error: 'Failed to update group' });
+      return sendInternalError(res, error, 'update group');
     }
   });
 
@@ -803,7 +805,7 @@ export default function registerAdminGroupRoutes(app) {
       // Prevent deletion of core system groups
       const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
       if (protectedGroups.includes(groupId)) {
-        return res.status(400).json({ error: `Cannot delete protected system group: ${groupId}` });
+        return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 
       const rootDir = getRootDir();
@@ -815,12 +817,12 @@ export default function registerAdminGroupRoutes(app) {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        return res.status(404).json({ error: 'Groups file not found' });
+        return sendNotFound(res, 'Groups file');
       }
 
       // Check if group exists
       if (!groupsData.groups[groupId]) {
-        return res.status(404).json({ error: 'Group not found' });
+        return sendNotFound(res, 'Group');
       }
 
       const groupName = groupsData.groups[groupId].name;
@@ -839,8 +841,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting group', { component: 'AdminGroups', error });
-      res.status(500).json({ error: 'Failed to delete group' });
+      return sendInternalError(res, error, 'delete group');
     }
   });
 }

@@ -20,6 +20,12 @@ import {
   validateSkillName
 } from '../../services/skillLoader.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 const MAX_SKILL_ZIP_SIZE = 10 * 1024 * 1024; // 10 MB
 
@@ -75,8 +81,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.json({ skills, settings });
       } catch (error) {
-        logger.error('Error fetching admin skills', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch admin skills');
       }
     }
   );
@@ -96,7 +101,7 @@ export default function registerAdminSkillsRoutes(app) {
         const skill = skills.find(s => s.name === req.params.name);
 
         if (!skill) {
-          return res.status(404).json({ error: 'Skill not found' });
+          return sendNotFound(res, 'Skill');
         }
 
         const content = await getSkillContent(req.params.name);
@@ -120,8 +125,7 @@ export default function registerAdminSkillsRoutes(app) {
           files
         });
       } catch (error) {
-        logger.error('Error fetching admin skill detail', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch admin skill detail');
       }
     }
   );
@@ -144,11 +148,11 @@ export default function registerAdminSkillsRoutes(app) {
             component: 'AdminSkills',
             name: req.params.name
           });
-          return res.status(400).json({ error: 'Invalid skill path' });
+          return sendBadRequest(res, 'Invalid skill path');
         }
 
         if (!existsSync(skillPathResolved)) {
-          return res.status(404).json({ error: 'Skill directory not found' });
+          return sendNotFound(res, 'Skill directory');
         }
 
         await fs.rm(skillPathResolved, { recursive: true, force: true });
@@ -158,8 +162,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.json({ success: true });
       } catch (error) {
-        logger.error('Error deleting skill', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'delete skill');
       }
     }
   );
@@ -175,7 +178,7 @@ export default function registerAdminSkillsRoutes(app) {
       try {
         const { skillName } = req.body;
         if (!skillName) {
-          return res.status(400).json({ error: 'skillName is required' });
+          return sendBadRequest(res, 'skillName is required');
         }
 
         const nameValidation = validateSkillName(skillName);
@@ -190,14 +193,13 @@ export default function registerAdminSkillsRoutes(app) {
             component: 'AdminSkills',
             skillName
           });
-          return res.status(400).json({ error: 'Invalid skill path' });
+          return sendBadRequest(res, 'Invalid skill path');
         }
 
         const validation = await validateSkillDirectory(resolvedSkillPath);
         res.json(validation);
       } catch (error) {
-        logger.error('Error validating skill', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'validate skill');
       }
     }
   );
@@ -221,11 +223,11 @@ export default function registerAdminSkillsRoutes(app) {
             component: 'AdminSkills',
             skillName
           });
-          return res.status(400).json({ error: 'Invalid skill path' });
+          return sendBadRequest(res, 'Invalid skill path');
         }
 
         if (!existsSync(resolvedSkillPath)) {
-          return res.status(404).json({ error: 'Skill not found' });
+          return sendNotFound(res, 'Skill');
         }
 
         const archive = archiver('zip', { zlib: { level: 9 } });
@@ -238,8 +240,7 @@ export default function registerAdminSkillsRoutes(app) {
         archive.directory(resolvedSkillPath, skillName);
         await archive.finalize();
       } catch (error) {
-        logger.error('Error exporting skill', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'export skill');
       }
     }
   );
@@ -258,16 +259,18 @@ export default function registerAdminSkillsRoutes(app) {
     requireFeature('skills'),
     async (req, res) => {
       if (!req.files || !req.files.skill) {
-        return res.status(400).json({ error: 'No skill file uploaded' });
+        return sendBadRequest(res, 'No skill file uploaded');
       }
 
       const file = req.files.skill;
 
       // Enforce upload size limit before any extraction
       if (file.size > MAX_SKILL_ZIP_SIZE) {
-        return res
-          .status(413)
-          .json({ error: `Skill zip must not exceed ${MAX_SKILL_ZIP_SIZE / 1024 / 1024} MB` });
+        return sendErrorResponse(
+          res,
+          413,
+          `Skill zip must not exceed ${MAX_SKILL_ZIP_SIZE / 1024 / 1024} MB`
+        );
       }
 
       const skillsDir = getSkillsDirectory();
@@ -284,30 +287,30 @@ export default function registerAdminSkillsRoutes(app) {
         const dirs = entries.filter(e => e.isDirectory() && !e.isSymbolicLink());
 
         if (dirs.length !== 1) {
-          return res
-            .status(400)
-            .json({ error: 'Zip must contain exactly one top-level skill directory' });
+          return sendBadRequest(res, 'Zip must contain exactly one top-level skill directory');
         }
 
         const skillDir = path.join(tempDir, dirs[0].name);
         const validation = await validateSkillDirectory(skillDir);
 
         if (!validation.valid) {
-          return res.status(400).json({ error: 'Invalid skill', errors: validation.errors });
+          return sendBadRequest(res, 'Invalid skill', validation.errors);
         }
 
         const skillName = dirs[0].name;
         const nameValidation = validateSkillName(skillName);
         if (!nameValidation.valid) {
-          return res.status(400).json({ error: nameValidation.error });
+          return sendBadRequest(res, nameValidation.error);
         }
 
         const targetPath = getSkillPath(skillName);
 
         if (existsSync(targetPath) && !req.body.overwrite) {
-          return res.status(409).json({
-            error: `Skill '${skillName}' already exists. Set overwrite=true to replace.`
-          });
+          return sendErrorResponse(
+            res,
+            409,
+            `Skill '${skillName}' already exists. Set overwrite=true to replace.`
+          );
         }
 
         if (existsSync(targetPath)) {
@@ -319,8 +322,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.json({ success: true, skillName, metadata: validation.metadata });
       } catch (error) {
-        logger.error('Error importing skill', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        sendInternalError(res, error, 'import skill');
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
       }
@@ -340,18 +342,17 @@ export default function registerAdminSkillsRoutes(app) {
 
         const filePath = req.params[0];
         if (!filePath) {
-          return res.status(400).json({ error: 'File path is required' });
+          return sendBadRequest(res, 'File path is required');
         }
 
         const content = await getSkillResource(req.params.name, filePath);
         if (content === null) {
-          return res.status(404).json({ error: 'Resource not found' });
+          return sendNotFound(res, 'Resource');
         }
 
         res.type('text/plain').send(content);
       } catch (error) {
-        logger.error('Error fetching skill resource', { component: 'AdminSkills', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch skill resource');
       }
     }
   );

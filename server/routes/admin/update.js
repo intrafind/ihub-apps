@@ -2,6 +2,11 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import {
+  sendInternalError,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
+import {
   checkForUpdate,
   downloadUpdate,
   applyUpdate,
@@ -31,8 +36,7 @@ export default function registerAdminUpdateRoutes(app) {
       const result = await checkForUpdate();
       res.json(result);
     } catch (error) {
-      logger.error('Update check failed', { component: 'AdminUpdate', error });
-      res.status(500).json({ error: error.message });
+      return sendInternalError(res, error, 'check for update');
     }
   });
 
@@ -42,24 +46,26 @@ export default function registerAdminUpdateRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/update/download'), adminAuth, async (req, res) => {
     if (!isBinaryInstallation()) {
-      return res.status(400).json({
-        error: 'In-place updates are only available for binary installations'
-      });
+      return sendBadRequest(res, 'In-place updates are only available for binary installations');
     }
 
     // Pre-flight checks
     const hasPermissions = await checkWritePermissions();
     if (!hasPermissions) {
-      return res.status(403).json({
-        error: 'Insufficient write permissions on the installation directory'
-      });
+      return sendErrorResponse(
+        res,
+        403,
+        'Insufficient write permissions on the installation directory'
+      );
     }
 
     const diskSpace = await checkDiskSpace();
     if (!diskSpace.sufficient) {
-      return res.status(507).json({
-        error: 'Insufficient disk space for update. At least 500MB required.'
-      });
+      return sendErrorResponse(
+        res,
+        507,
+        'Insufficient disk space for update. At least 500MB required.'
+      );
     }
 
     try {
@@ -72,8 +78,7 @@ export default function registerAdminUpdateRoutes(app) {
       const result = await downloadUpdate(updateInfo);
       res.json(result);
     } catch (error) {
-      logger.error('Update download failed', { component: 'AdminUpdate', error });
-      res.status(500).json({ error: error.message });
+      return sendInternalError(res, error, 'download update');
     }
   });
 
@@ -83,9 +88,7 @@ export default function registerAdminUpdateRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/update/apply'), adminAuth, async (req, res) => {
     if (!isBinaryInstallation()) {
-      return res.status(400).json({
-        error: 'In-place updates are only available for binary installations'
-      });
+      return sendBadRequest(res, 'In-place updates are only available for binary installations');
     }
 
     try {
@@ -98,8 +101,7 @@ export default function registerAdminUpdateRoutes(app) {
         process.exit(UPDATE_RESTART_CODE);
       }, 1000);
     } catch (error) {
-      logger.error('Update apply failed', { component: 'AdminUpdate', error });
-      res.status(500).json({ error: error.message });
+      return sendInternalError(res, error, 'apply update');
     }
   });
 
@@ -109,9 +111,7 @@ export default function registerAdminUpdateRoutes(app) {
    */
   app.post(buildServerPath('/api/admin/update/rollback'), adminAuth, async (req, res) => {
     if (!isBinaryInstallation()) {
-      return res.status(400).json({
-        error: 'In-place updates are only available for binary installations'
-      });
+      return sendBadRequest(res, 'In-place updates are only available for binary installations');
     }
 
     try {
@@ -124,8 +124,7 @@ export default function registerAdminUpdateRoutes(app) {
         process.exit(UPDATE_RESTART_CODE);
       }, 1000);
     } catch (error) {
-      logger.error('Rollback failed', { component: 'AdminUpdate', error });
-      res.status(500).json({ error: error.message });
+      return sendInternalError(res, error, 'rollback update');
     }
   });
 }

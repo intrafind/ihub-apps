@@ -10,6 +10,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -224,10 +225,7 @@ export async function exportConfig(req, res) {
   } catch (error) {
     logger.error('Export error', { component: 'AdminBackup', error });
     if (!res.headersSent) {
-      res.status(500).json({
-        error: 'Failed to export configuration',
-        message: error.message
-      });
+      return sendInternalError(res, error, 'export configuration');
     }
   }
 }
@@ -244,7 +242,7 @@ export async function importConfig(req, res) {
 
     // Check if file was uploaded
     if (!req.file) {
-      return res.status(400).json({ error: 'No ZIP file uploaded' });
+      return sendBadRequest(res, 'No ZIP file uploaded');
     }
 
     tempZipPath = req.file.path;
@@ -269,9 +267,7 @@ export async function importConfig(req, res) {
     try {
       await fs.access(extractedContentsPath);
     } catch {
-      return res.status(400).json({
-        error: 'Invalid backup file: No contents directory found'
-      });
+      return sendBadRequest(res, 'Invalid backup file: No contents directory found');
     }
 
     // Get backup metadata if available
@@ -342,11 +338,7 @@ export async function importConfig(req, res) {
     });
   } catch (error) {
     logger.error('Import error', { component: 'AdminBackup', error });
-
-    res.status(500).json({
-      error: 'Failed to import configuration',
-      message: error.message
-    });
+    sendInternalError(res, error, 'import configuration');
   } finally {
     // Clean up temporary files
     try {

@@ -7,6 +7,11 @@ import JiraService from '../../services/integrations/JiraService.js';
 import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -33,10 +38,7 @@ router.get('/auth', authRequired, async (req, res) => {
 
     // Check if session is available
     if (!req.session) {
-      return res.status(500).json({
-        error: 'Session not available',
-        message: 'Session middleware is required for JIRA OAuth integrations.'
-      });
+      return sendErrorResponse(res, 500, 'Session not available');
     }
 
     // Generate state for CSRF protection
@@ -64,11 +66,7 @@ router.get('/auth', authRequired, async (req, res) => {
     // Redirect to Atlassian OAuth consent screen
     res.redirect(authUrl);
   } catch (error) {
-    logger.error('Error initiating JIRA OAuth', { component: 'Jira', error });
-    res.status(500).json({
-      error: 'OAuth initiation failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'initiate JIRA OAuth');
   }
 });
 
@@ -174,7 +172,7 @@ router.get('/callback', authOptional, async (req, res) => {
 router.get('/status', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
@@ -220,10 +218,7 @@ router.get('/status', authRequired, async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      error: 'Status check failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'get JIRA status');
   }
 });
 
@@ -234,7 +229,7 @@ router.get('/status', authRequired, async (req, res) => {
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const success = await JiraService.deleteUserTokens(req.user.id);
@@ -252,11 +247,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
       });
     }
   } catch (error) {
-    logger.error('Error disconnecting JIRA', { component: 'Jira', error });
-    res.status(500).json({
-      error: 'Disconnect failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'disconnect JIRA');
   }
 });
 
@@ -267,7 +258,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
 router.post('/refresh', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     logger.info('Manual JIRA refresh requested', { component: 'Jira', userId: req.user.id });
@@ -276,10 +267,7 @@ router.post('/refresh', authRequired, async (req, res) => {
     const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);
 
     if (!isAuthenticated) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your JIRA account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
     // Get user info to confirm everything is working
@@ -308,16 +296,10 @@ router.post('/refresh', authRequired, async (req, res) => {
     logger.error('Error refreshing JIRA connection', { component: 'Jira', error });
 
     if (error.message.includes('authentication required') || error.message.includes('expired')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your JIRA account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Refresh failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'refresh JIRA connection');
   }
 });
 
@@ -331,7 +313,7 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
     const { download } = req.query;
 
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     // Get attachment metadata and content
@@ -358,16 +340,10 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
     logger.error('Error proxying JIRA attachment', { component: 'Jira', error });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication expired',
-        message: 'Please reconnect your JIRA account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication expired');
     }
 
-    res.status(500).json({
-      error: 'Failed to retrieve attachment',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'proxy JIRA attachment');
   }
 });
 
@@ -378,7 +354,7 @@ router.get('/attachment/:attachmentId', authRequired, async (req, res) => {
 router.get('/test', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     // Test connection by getting user info
@@ -405,13 +381,7 @@ router.get('/test', authRequired, async (req, res) => {
       message: 'JIRA connection test successful'
     });
   } catch (error) {
-    logger.error('Error testing JIRA connection', { component: 'Jira', error });
-
-    res.status(500).json({
-      success: false,
-      error: 'Connection test failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'test JIRA connection');
   }
 });
 

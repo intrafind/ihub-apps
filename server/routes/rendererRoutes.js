@@ -2,7 +2,7 @@ import express from 'express';
 import { loadAllRenderers, getRendererById } from '../renderersLoader.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
-import logger from '../utils/logger.js';
+import { sendInternalError, sendNotFound, sendErrorResponse } from '../utils/responseHelpers.js';
 
 /**
  * Register renderer routes
@@ -31,11 +31,7 @@ export default function registerRendererRoutes(app) {
 
       res.json(rendererList);
     } catch (error) {
-      logger.error('Error loading renderers', { component: 'RendererRoutes', error });
-      res.status(500).json({
-        error: 'Failed to load renderers',
-        message: error.message
-      });
+      return sendInternalError(res, error, 'load renderers');
     }
   });
 
@@ -53,27 +49,17 @@ export default function registerRendererRoutes(app) {
       const renderer = await getRendererById(id, false);
 
       if (!renderer) {
-        return res.status(404).json({
-          error: 'Renderer not found',
-          id
-        });
+        return sendNotFound(res, 'Renderer');
       }
 
       if (!renderer.enabled) {
-        return res.status(403).json({
-          error: 'Renderer is disabled',
-          id
-        });
+        return sendErrorResponse(res, 403, 'Renderer is disabled');
       }
 
       // Return full renderer including code
       res.json(renderer);
     } catch (error) {
-      logger.error('Error loading renderer', { component: 'RendererRoutes', error });
-      res.status(500).json({
-        error: 'Failed to load renderer',
-        message: error.message
-      });
+      return sendInternalError(res, error, 'load renderer');
     }
   });
 

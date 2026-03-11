@@ -7,7 +7,7 @@ import configCache from '../../configCache.js';
 import conversationApiService from '../../services/integrations/ConversationApiService.js';
 import iAssistantService from '../../services/integrations/iAssistantService.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import logger from '../../utils/logger.js';
+import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
 
 /**
  * Resolve the iAssistant base URL for an app's conversation API calls.
@@ -104,12 +104,12 @@ export default function registerConversationRoutes(app) {
         const { data: apps = [] } = configCache.getApps() || {};
         const appConfig = apps.find(a => a.id === appId);
         if (!appConfig) {
-          return res.status(404).json({ error: 'App not found' });
+          return sendNotFound(res, 'App');
         }
 
         const baseUrl = resolveBaseUrl(appConfig);
         if (!baseUrl) {
-          return res.status(400).json({ error: 'No base URL configured for conversation API' });
+          return sendBadRequest(res, 'No base URL configured for conversation API');
         }
 
         const result = await conversationApiService.getMessages(conversationId, {
@@ -121,11 +121,7 @@ export default function registerConversationRoutes(app) {
 
         res.json(result);
       } catch (error) {
-        logger.error('Conversation messages route error', {
-          component: 'ConversationRoutes',
-          error
-        });
-        res.status(500).json({ error: error.message });
+        return sendInternalError(res, error, 'fetch conversation messages');
       }
     }
   );
@@ -183,12 +179,12 @@ export default function registerConversationRoutes(app) {
         const { data: apps = [] } = configCache.getApps() || {};
         const appConfig = apps.find(a => a.id === appId);
         if (!appConfig) {
-          return res.status(404).json({ error: 'App not found' });
+          return sendNotFound(res, 'App');
         }
 
         const baseUrl = resolveBaseUrl(appConfig);
         if (!baseUrl) {
-          return res.status(400).json({ error: 'No base URL configured for conversation API' });
+          return sendBadRequest(res, 'No base URL configured for conversation API');
         }
 
         await conversationApiService.deleteMessage(conversationId, messageId, {
@@ -198,11 +194,7 @@ export default function registerConversationRoutes(app) {
 
         res.status(204).send();
       } catch (error) {
-        logger.error('Conversation delete message route error', {
-          component: 'ConversationRoutes',
-          error
-        });
-        res.status(500).json({ error: error.message });
+        return sendInternalError(res, error, 'delete conversation message');
       }
     }
   );
@@ -254,12 +246,12 @@ export default function registerConversationRoutes(app) {
         const { data: apps = [] } = configCache.getApps() || {};
         const appConfig = apps.find(a => a.id === appId);
         if (!appConfig) {
-          return res.status(404).json({ error: 'App not found' });
+          return sendNotFound(res, 'App');
         }
 
         const baseUrl = resolveBaseUrl(appConfig);
         if (!baseUrl) {
-          return res.status(400).json({ error: 'No base URL configured for conversation API' });
+          return sendBadRequest(res, 'No base URL configured for conversation API');
         }
 
         await conversationApiService.deleteConversation(conversationId, {
@@ -269,8 +261,7 @@ export default function registerConversationRoutes(app) {
 
         res.status(204).send();
       } catch (error) {
-        logger.error('Conversation delete route error', { component: 'ConversationRoutes', error });
-        res.status(500).json({ error: error.message });
+        return sendInternalError(res, error, 'delete conversation');
       }
     }
   );

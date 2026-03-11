@@ -8,6 +8,12 @@ import { authOptional, authRequired } from '../../middleware/authRequired.js';
 import { requireFeature } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import rateLimit from 'express-rate-limit';
+import {
+  sendInternalError,
+  sendAuthRequired,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -65,10 +71,7 @@ router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
     const { providerId, returnUrl } = req.query;
 
     if (!providerId) {
-      return res.status(400).json({
-        error: 'Missing providerId',
-        message: 'providerId query parameter is required'
-      });
+      return sendBadRequest(res, 'providerId query parameter is required');
     }
 
     logger.debug('Google Drive Auth Debug:', {
@@ -81,10 +84,7 @@ router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
     });
 
     if (!req.session) {
-      return res.status(500).json({
-        error: 'Session not available',
-        message: 'Session middleware is required for Google Drive OAuth integrations.'
-      });
+      return sendErrorResponse(res, 500, 'Session not available');
     }
 
     // Generate state for CSRF protection
@@ -120,14 +120,7 @@ router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
 
     res.redirect(authUrl);
   } catch (error) {
-    logger.error('Error initiating Google Drive OAuth:', {
-      component: 'Google Drive',
-      error: error.message
-    });
-    res.status(500).json({
-      error: 'OAuth initiation failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'initiate Google Drive OAuth');
   }
 });
 
@@ -250,7 +243,7 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
 router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const isAuthenticated = await GoogleDriveService.isUserAuthenticated(req.user.id);
@@ -295,10 +288,7 @@ router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
       });
     }
 
-    res.status(500).json({
-      error: 'Status check failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'get Google Drive status');
   }
 });
 
@@ -309,7 +299,7 @@ router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
 router.post('/disconnect', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const success = await GoogleDriveService.deleteUserTokens(req.user.id);
@@ -330,14 +320,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
       });
     }
   } catch (error) {
-    logger.error('Error disconnecting Google Drive:', {
-      component: 'Google Drive',
-      error: error.message
-    });
-    res.status(500).json({
-      error: 'Disconnect failed',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'disconnect Google Drive');
   }
 });
 
@@ -348,7 +331,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
 router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { providerId } = req.query;
@@ -397,10 +380,7 @@ router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => 
       error: error.message
     });
 
-    res.status(500).json({
-      error: 'Failed to get sources',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'get Google Drive sources');
   }
 });
 
@@ -411,7 +391,7 @@ router.get('/sources', authRequired, googleDriveApiLimiter, async (req, res) => 
 router.get('/drives/:source', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { source } = req.params;
@@ -446,10 +426,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
         ];
         break;
       default:
-        return res.status(400).json({
-          error: 'Invalid source',
-          message: 'Source must be one of: myDrive, sharedDrives, sharedWithMe'
-        });
+        return sendBadRequest(res, 'Source must be one of: myDrive, sharedDrives, sharedWithMe');
     }
 
     res.json({
@@ -464,16 +441,10 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your Google Drive account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Failed to list drives',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'list Google Drive drives');
   }
 });
 
@@ -484,7 +455,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
 router.get('/items', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { driveId, folderId, search, source } = req.query;
@@ -518,16 +489,10 @@ router.get('/items', authRequired, async (req, res) => {
     });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your Google Drive account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Failed to list items',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'list Google Drive items');
   }
 });
 
@@ -538,23 +503,17 @@ router.get('/items', authRequired, async (req, res) => {
 router.get('/download', authRequired, async (req, res) => {
   try {
     if (!req.user?.id) {
-      return res.status(401).json({ error: 'Authentication required' });
+      return sendAuthRequired(res);
     }
 
     const { fileId } = req.query;
 
     if (!fileId) {
-      return res.status(400).json({
-        error: 'Missing fileId',
-        message: 'fileId query parameter is required'
-      });
+      return sendBadRequest(res, 'fileId query parameter is required');
     }
 
     if (!isValidFileId(fileId)) {
-      return res.status(400).json({
-        error: 'Invalid fileId',
-        message: 'fileId must be a valid Google Drive file identifier'
-      });
+      return sendBadRequest(res, 'fileId must be a valid Google Drive file identifier');
     }
 
     const file = await GoogleDriveService.downloadFile(req.user.id, fileId);
@@ -571,16 +530,10 @@ router.get('/download', authRequired, async (req, res) => {
     });
 
     if (error.message.includes('authentication required')) {
-      return res.status(401).json({
-        error: 'Authentication required',
-        message: 'Please reconnect your Google Drive account'
-      });
+      return sendErrorResponse(res, 401, 'Authentication required');
     }
 
-    res.status(500).json({
-      error: 'Failed to download file',
-      message: error.message
-    });
+    return sendInternalError(res, error, 'download Google Drive file');
   }
 });
 

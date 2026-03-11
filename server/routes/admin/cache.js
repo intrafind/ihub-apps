@@ -8,6 +8,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 export default function registerAdminCacheRoutes(app) {
   app.get(buildServerPath('/api/admin/usage'), adminAuth, async (req, res) => {
@@ -15,8 +16,7 @@ export default function registerAdminCacheRoutes(app) {
       const data = await getUsage();
       res.json(data);
     } catch (e) {
-      logger.error('Error loading usage data', { component: 'AdminCache', error: e });
-      res.status(500).json({ error: 'Failed to load usage data' });
+      return sendInternalError(res, e, 'load usage data');
     }
   });
 
@@ -25,8 +25,7 @@ export default function registerAdminCacheRoutes(app) {
       const stats = configCache.getStats();
       res.json(stats);
     } catch (e) {
-      logger.error('Error getting cache stats', { component: 'AdminCache', error: e });
-      res.status(500).json({ error: 'Failed to get cache statistics' });
+      return sendInternalError(res, e, 'get cache statistics');
     }
   });
 
@@ -35,8 +34,7 @@ export default function registerAdminCacheRoutes(app) {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
     } catch (e) {
-      logger.error('Error refreshing cache', { component: 'AdminCache', error: e });
-      res.status(500).json({ error: 'Failed to refresh cache' });
+      return sendInternalError(res, e, 'refresh cache');
     }
   });
 
@@ -51,8 +49,7 @@ export default function registerAdminCacheRoutes(app) {
       await configCache.initialize();
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (e) {
-      logger.error('Error clearing cache', { component: 'AdminCache', error: e });
-      res.status(500).json({ error: 'Failed to clear cache' });
+      return sendInternalError(res, e, 'clear cache');
     }
   });
 
@@ -85,8 +82,7 @@ export default function registerAdminCacheRoutes(app) {
         timestamp: platformConfig.refreshSalt.lastUpdated
       });
     } catch (error) {
-      logger.error('Error triggering force refresh', { component: 'AdminCache', error });
-      res.status(500).json({ error: 'Failed to trigger force refresh' });
+      return sendInternalError(res, error, 'trigger force refresh');
     }
   });
 
@@ -115,16 +111,12 @@ export default function registerAdminCacheRoutes(app) {
 
       // Validate input
       if (!value || typeof value !== 'string' || value.trim() === '') {
-        return res.status(400).json({
-          error: 'Invalid value: must be a non-empty string'
-        });
+        return sendBadRequest(res, 'Invalid value: must be a non-empty string');
       }
 
       // Check if value is already encrypted
       if (tokenStorageService.isEncrypted(value)) {
-        return res.status(400).json({
-          error: 'Value is already encrypted'
-        });
+        return sendBadRequest(res, 'Value is already encrypted');
       }
 
       // Encrypt the value
@@ -137,14 +129,7 @@ export default function registerAdminCacheRoutes(app) {
         message: 'Value encrypted successfully'
       });
     } catch (error) {
-      logger.error('Error encrypting value:', {
-        component: 'AdminEncryption',
-        error: error.message
-      });
-      res.status(500).json({
-        error: 'Failed to encrypt value',
-        details: error.message
-      });
+      return sendInternalError(res, error, 'encrypt value');
     }
   });
 }

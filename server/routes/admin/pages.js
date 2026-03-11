@@ -12,6 +12,12 @@ import {
   resolveAndValidatePath
 } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 export default function registerAdminPagesRoutes(app) {
   app.get(buildServerPath('/api/admin/pages'), adminAuth, async (req, res) => {
@@ -26,8 +32,7 @@ export default function registerAdminPagesRoutes(app) {
       }));
       res.json(pages);
     } catch (error) {
-      logger.error('Error fetching pages', { component: 'AdminPages', error });
-      res.status(500).json({ error: 'Failed to fetch pages' });
+      return sendInternalError(res, error, 'fetch pages');
     }
   });
 
@@ -43,7 +48,7 @@ export default function registerAdminPagesRoutes(app) {
       const { data: uiConfig } = configCache.getUI();
       const page = uiConfig.pages?.[pageId];
       if (!page) {
-        return res.status(404).json({ error: 'Page not found' });
+        return sendNotFound(res, 'Page');
       }
       const content = {};
       const rootDir = getRootDir();
@@ -74,8 +79,7 @@ export default function registerAdminPagesRoutes(app) {
         contentType: page.contentType || 'markdown'
       });
     } catch (error) {
-      logger.error('Error fetching page', { component: 'AdminPages', error });
-      res.status(500).json({ error: 'Failed to fetch page' });
+      return sendInternalError(res, error, 'fetch page');
     }
   });
 
@@ -90,7 +94,7 @@ export default function registerAdminPagesRoutes(app) {
         contentType = 'markdown'
       } = req.body;
       if (!id) {
-        return res.status(400).json({ error: 'Missing page ID' });
+        return sendBadRequest(res, 'Missing page ID');
       }
 
       // Validate id for security
@@ -103,14 +107,14 @@ export default function registerAdminPagesRoutes(app) {
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       uiConfig.pages = uiConfig.pages || {};
       if (uiConfig.pages[id]) {
-        return res.status(409).json({ error: 'Page with this ID already exists' });
+        return sendErrorResponse(res, 409, 'Page with this ID already exists');
       }
       // Validate language keys in content and title to prevent path traversal
       if (Object.keys(content).length > 0 && !validateLanguageKeys(content)) {
-        return res.status(400).json({ error: 'Invalid language code in content keys' });
+        return sendBadRequest(res, 'Invalid language code in content keys');
       }
       if (Object.keys(title).length > 0 && !validateLanguageKeys(title)) {
-        return res.status(400).json({ error: 'Invalid language code in title keys' });
+        return sendBadRequest(res, 'Invalid language code in title keys');
       }
 
       uiConfig.pages[id] = { title, filePath: {}, authRequired, allowedGroups, contentType };
@@ -126,8 +130,7 @@ export default function registerAdminPagesRoutes(app) {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page created successfully', page: { id, title } });
     } catch (error) {
-      logger.error('Error creating page', { component: 'AdminPages', error });
-      res.status(500).json({ error: 'Failed to create page' });
+      return sendInternalError(res, error, 'create page');
     }
   });
 
@@ -149,14 +152,14 @@ export default function registerAdminPagesRoutes(app) {
         contentType = 'markdown'
       } = req.body;
       if (!id || id !== pageId) {
-        return res.status(400).json({ error: 'Invalid page ID' });
+        return sendBadRequest(res, 'Invalid page ID');
       }
       const rootDir = getRootDir();
       const uiPath = join(rootDir, 'contents', 'config', 'ui.json');
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       const pageEntry = uiConfig.pages?.[pageId];
       if (!pageEntry) {
-        return res.status(404).json({ error: 'Page not found' });
+        return sendNotFound(res, 'Page');
       }
       pageEntry.title = title;
       pageEntry.authRequired = authRequired;
@@ -164,10 +167,10 @@ export default function registerAdminPagesRoutes(app) {
       pageEntry.contentType = contentType;
       // Validate language keys in content and title to prevent path traversal
       if (Object.keys(content).length > 0 && !validateLanguageKeys(content)) {
-        return res.status(400).json({ error: 'Invalid language code in content keys' });
+        return sendBadRequest(res, 'Invalid language code in content keys');
       }
       if (Object.keys(title).length > 0 && !validateLanguageKeys(title)) {
-        return res.status(400).json({ error: 'Invalid language code in title keys' });
+        return sendBadRequest(res, 'Invalid language code in title keys');
       }
 
       pageEntry.filePath = pageEntry.filePath || {};
@@ -183,8 +186,7 @@ export default function registerAdminPagesRoutes(app) {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page updated successfully', page: { id, title } });
     } catch (error) {
-      logger.error('Error updating page', { component: 'AdminPages', error });
-      res.status(500).json({ error: 'Failed to update page' });
+      return sendInternalError(res, error, 'update page');
     }
   });
 
@@ -202,7 +204,7 @@ export default function registerAdminPagesRoutes(app) {
       const uiConfig = JSON.parse(readFileSync(uiPath, 'utf8'));
       const pageEntry = uiConfig.pages?.[pageId];
       if (!pageEntry) {
-        return res.status(404).json({ error: 'Page not found' });
+        return sendNotFound(res, 'Page');
       }
       const contentsBase = join(rootDir, 'contents');
       for (const rel of Object.values(pageEntry.filePath || {})) {
@@ -224,8 +226,7 @@ export default function registerAdminPagesRoutes(app) {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting page', { component: 'AdminPages', error });
-      res.status(500).json({ error: 'Failed to delete page' });
+      return sendInternalError(res, error, 'delete page');
     }
   });
 }

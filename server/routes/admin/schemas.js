@@ -1,6 +1,10 @@
 import { getJsonSchemaByType, getAllJsonSchemas } from '../../utils/schemaExport.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { sendFailedOperationError } from '../../utils/responseHelpers.js';
+import {
+  sendFailedOperationError,
+  sendBadRequest,
+  sendNotFound
+} from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 
 /**
@@ -97,18 +101,16 @@ export default function registerAdminSchemasRoutes(app) {
 
       const allowedTypes = ['app', 'model', 'prompt', 'group', 'platform', 'user'];
       if (!allowedTypes.includes(type)) {
-        return res.status(400).json({
-          error: 'Invalid schema type',
-          message: `Schema type must be one of: ${allowedTypes.join(', ')}`
-        });
+        return sendBadRequest(
+          res,
+          'Invalid schema type',
+          `Schema type must be one of: ${allowedTypes.join(', ')}`
+        );
       }
 
       const schema = getJsonSchemaByType(type);
       if (!schema) {
-        return res.status(404).json({
-          error: 'Schema not found',
-          message: `No schema found for type: ${type}`
-        });
+        return sendNotFound(res, `Schema for type: ${type}`);
       }
 
       res.json(schema);

@@ -8,6 +8,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
 
 export default function registerAdminProvidersRoutes(app) {
   /**
@@ -51,8 +52,7 @@ export default function registerAdminProvidersRoutes(app) {
       res.setHeader('ETag', providersEtag);
       res.json(maskedProviders);
     } catch (error) {
-      logger.error('Error fetching all providers:', { component: 'AdminProviders', error });
-      res.status(500).json({ error: 'Failed to fetch providers' });
+      return sendInternalError(res, error, 'fetch providers');
     }
   });
 
@@ -68,7 +68,7 @@ export default function registerAdminProvidersRoutes(app) {
       const { data: providers, etag: providersEtag } = configCache.getProviders(true);
       const provider = providers.find(p => p.id === providerId);
       if (!provider) {
-        return res.status(404).json({ error: 'Provider not found' });
+        return sendNotFound(res, 'Provider');
       }
 
       // Mask API key in the response for security
@@ -86,8 +86,7 @@ export default function registerAdminProvidersRoutes(app) {
       res.setHeader('ETag', providersEtag);
       res.json(maskedProvider);
     } catch (error) {
-      logger.error('Error fetching provider:', { component: 'AdminProviders', error });
-      res.status(500).json({ error: 'Failed to fetch provider' });
+      return sendInternalError(res, error, 'fetch provider');
     }
   });
 
@@ -102,7 +101,7 @@ export default function registerAdminProvidersRoutes(app) {
       }
 
       if (updatedProvider.id !== providerId) {
-        return res.status(400).json({ error: 'Provider ID cannot be changed' });
+        return sendBadRequest(res, 'Provider ID cannot be changed');
       }
 
       // Define paths once at the top
@@ -118,8 +117,7 @@ export default function registerAdminProvidersRoutes(app) {
           try {
             updatedProvider.apiKey = tokenStorageService.encryptString(updatedProvider.apiKey);
           } catch (error) {
-            logger.error('Error encrypting API key:', { component: 'AdminProviders', error });
-            return res.status(500).json({ error: 'Failed to encrypt API key' });
+            return sendInternalError(res, error, 'encrypt API key');
           }
         } else {
           // Masked value - need to preserve existing key
@@ -141,7 +139,10 @@ export default function registerAdminProvidersRoutes(app) {
               delete updatedProvider.apiKey;
             }
           } catch (error) {
-            logger.error('Error reading existing providers from disk:', { component: 'AdminProviders', error });
+            logger.error('Error reading existing providers from disk:', {
+              component: 'AdminProviders',
+              error
+            });
             // Fallback to removing the masked placeholder
             delete updatedProvider.apiKey;
           }
@@ -161,7 +162,7 @@ export default function registerAdminProvidersRoutes(app) {
       // Find and update the provider
       const index = providers.findIndex(p => p.id === providerId);
       if (index === -1) {
-        return res.status(404).json({ error: 'Provider not found' });
+        return sendNotFound(res, 'Provider');
       }
 
       providers[index] = updatedProvider;
@@ -175,8 +176,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       res.json({ message: 'Provider updated successfully', provider: updatedProvider });
     } catch (error) {
-      logger.error('Error updating provider:', { component: 'AdminProviders', error });
-      res.status(500).json({ error: 'Failed to update provider' });
+      return sendInternalError(res, error, 'update provider');
     }
   });
 
@@ -207,9 +207,10 @@ export default function registerAdminProvidersRoutes(app) {
 
       // Validate required fields
       if (!newProvider.id || !newProvider.name || !newProvider.description) {
-        return res.status(400).json({
-          error: 'Missing required fields: id, name, and description are required'
-        });
+        return sendBadRequest(
+          res,
+          'Missing required fields: id, name, and description are required'
+        );
       }
 
       // Validate providerId for security
@@ -235,9 +236,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       // Check if provider with this ID already exists
       if (providers.find(p => p.id === newProvider.id)) {
-        return res
-          .status(400)
-          .json({ error: `Provider with id '${newProvider.id}' already exists` });
+        return sendBadRequest(res, `Provider with id '${newProvider.id}' already exists`);
       }
 
       // Handle API key encryption
@@ -245,8 +244,7 @@ export default function registerAdminProvidersRoutes(app) {
         try {
           newProvider.apiKey = tokenStorageService.encryptString(newProvider.apiKey);
         } catch (error) {
-          logger.error('Error encrypting API key', { component: 'AdminProviders', error });
-          return res.status(500).json({ error: 'Failed to encrypt API key' });
+          return sendInternalError(res, error, 'encrypt API key');
         }
       } else {
         delete newProvider.apiKey;
@@ -276,8 +274,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       res.status(201).json({ message: 'Provider created successfully', provider: newProvider });
     } catch (error) {
-      logger.error('Error creating provider', { component: 'AdminProviders', error });
-      res.status(500).json({ error: 'Failed to create provider' });
+      return sendInternalError(res, error, 'create provider');
     }
   });
 
@@ -322,9 +319,10 @@ export default function registerAdminProvidersRoutes(app) {
       // Prevent deletion of built-in LLM providers
       const builtInProviders = ['openai', 'anthropic', 'google', 'mistral', 'local'];
       if (builtInProviders.includes(providerId)) {
-        return res.status(400).json({
-          error: `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
-        });
+        return sendBadRequest(
+          res,
+          `Cannot delete built-in provider '${providerId}'. Only custom providers can be deleted.`
+        );
       }
 
       const rootDir = getRootDir();
@@ -338,14 +336,13 @@ export default function registerAdminProvidersRoutes(app) {
           providers = providersFromDisk.providers || [];
         }
       } catch (error) {
-        logger.error('Error reading providers file', { component: 'AdminProviders', error });
-        return res.status(500).json({ error: 'Failed to read providers configuration' });
+        return sendInternalError(res, error, 'read providers configuration');
       }
 
       // Find provider index
       const index = providers.findIndex(p => p.id === providerId);
       if (index === -1) {
-        return res.status(404).json({ error: 'Provider not found' });
+        return sendNotFound(res, 'Provider');
       }
 
       // Remove provider
@@ -357,8 +354,7 @@ export default function registerAdminProvidersRoutes(app) {
 
       res.json({ message: 'Provider deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting provider', { component: 'AdminProviders', error });
-      res.status(500).json({ error: 'Failed to delete provider' });
+      return sendInternalError(res, error, 'delete provider');
     }
   });
 }

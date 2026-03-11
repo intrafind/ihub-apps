@@ -8,6 +8,12 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendFailedOperationError
+} from '../../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -205,7 +211,11 @@ export default function registerAdminToolsRoutes(app) {
       const { tools, needsCleanup, filePath } = loadRawTools();
 
       if (!tools) {
-        return res.status(500).json({ error: 'Failed to load tools configuration' });
+        return sendFailedOperationError(
+          res,
+          'load tools configuration',
+          new Error('tools is null')
+        );
       }
 
       // If we detected expanded tools, clean up the file
@@ -256,8 +266,7 @@ export default function registerAdminToolsRoutes(app) {
       }
       res.json(allTools);
     } catch (error) {
-      logger.error('Error fetching all tools', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to fetch tools' });
+      return sendInternalError(res, error, 'fetch tools');
     }
   });
 
@@ -314,12 +323,11 @@ export default function registerAdminToolsRoutes(app) {
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
-        return res.status(404).json({ error: 'Tool not found' });
+        return sendNotFound(res, 'Tool');
       }
       res.json(tool);
     } catch (error) {
-      logger.error('Error fetching tool', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to fetch tool' });
+      return sendInternalError(res, error, 'fetch tool');
     }
   });
 
@@ -387,11 +395,11 @@ export default function registerAdminToolsRoutes(app) {
 
       // Validate required fields
       if (!updatedTool.id || !updatedTool.name || !updatedTool.description) {
-        return res.status(400).json({ error: 'Missing required fields: id, name, description' });
+        return sendBadRequest(res, 'Missing required fields: id, name, description');
       }
 
       if (updatedTool.id !== toolId) {
-        return res.status(400).json({ error: 'Tool ID cannot be changed' });
+        return sendBadRequest(res, 'Tool ID cannot be changed');
       }
 
       const rootDir = getRootDir();
@@ -403,7 +411,7 @@ export default function registerAdminToolsRoutes(app) {
       const toolIndex = tools.findIndex(t => t.id === toolId);
 
       if (toolIndex === -1) {
-        return res.status(404).json({ error: 'Tool not found' });
+        return sendNotFound(res, 'Tool');
       }
 
       // Update the tool
@@ -420,8 +428,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.json({ message: 'Tool updated successfully', tool: updatedTool });
     } catch (error) {
-      logger.error('Error updating tool', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to update tool' });
+      return sendInternalError(res, error, 'update tool');
     }
   });
 
@@ -472,7 +479,7 @@ export default function registerAdminToolsRoutes(app) {
 
       // Validate required fields
       if (!newTool.id || !newTool.name || !newTool.description) {
-        return res.status(400).json({ error: 'Missing required fields: id, name, description' });
+        return sendBadRequest(res, 'Missing required fields: id, name, description');
       }
 
       // Validate toolId for security
@@ -489,7 +496,7 @@ export default function registerAdminToolsRoutes(app) {
 
       // Check if tool already exists
       if (tools.find(t => t.id === newTool.id)) {
-        return res.status(400).json({ error: 'Tool with this ID already exists' });
+        return sendBadRequest(res, 'Tool with this ID already exists');
       }
 
       // Set default enabled state if not provided
@@ -511,8 +518,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.status(201).json({ message: 'Tool created successfully', tool: newTool });
     } catch (error) {
-      logger.error('Error creating tool', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to create tool' });
+      return sendInternalError(res, error, 'create tool');
     }
   });
 
@@ -580,7 +586,7 @@ export default function registerAdminToolsRoutes(app) {
       const toolIndex = tools.findIndex(t => t.id === toolId);
 
       if (toolIndex === -1) {
-        return res.status(404).json({ error: 'Tool not found' });
+        return sendNotFound(res, 'Tool');
       }
 
       const tool = tools[toolIndex];
@@ -620,8 +626,7 @@ export default function registerAdminToolsRoutes(app) {
         scriptDeleted: tool.script ? true : false
       });
     } catch (error) {
-      logger.error('Error deleting tool', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to delete tool' });
+      return sendInternalError(res, error, 'delete tool');
     }
   });
 
@@ -692,7 +697,7 @@ export default function registerAdminToolsRoutes(app) {
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
-        return res.status(404).json({ error: 'Tool not found' });
+        return sendNotFound(res, 'Tool');
       }
 
       // Toggle enabled state
@@ -709,8 +714,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
     } catch (error) {
-      logger.error('Error toggling tool', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to toggle tool' });
+      return sendInternalError(res, error, 'toggle tool');
     }
   });
 
@@ -768,20 +772,18 @@ export default function registerAdminToolsRoutes(app) {
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
-        return res.status(404).json({ error: 'Tool not found' });
+        return sendNotFound(res, 'Tool');
       }
 
       if (!tool.script) {
-        return res
-          .status(400)
-          .json({ error: 'Tool has no script property (may be a special tool)' });
+        return sendBadRequest(res, 'Tool has no script property (may be a special tool)');
       }
 
       const rootDir = getRootDir();
       const scriptPath = join(rootDir, 'server', 'tools', tool.script);
 
       if (!existsSync(scriptPath)) {
-        return res.status(404).json({ error: 'Script file not found' });
+        return sendNotFound(res, 'Script file');
       }
 
       const content = readFileSync(scriptPath, 'utf-8');
@@ -792,8 +794,7 @@ export default function registerAdminToolsRoutes(app) {
         content
       });
     } catch (error) {
-      logger.error('Error reading tool script', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to read tool script' });
+      return sendInternalError(res, error, 'read tool script');
     }
   });
 
@@ -864,7 +865,7 @@ export default function registerAdminToolsRoutes(app) {
       const { content } = req.body;
 
       if (!content) {
-        return res.status(400).json({ error: 'Missing script content' });
+        return sendBadRequest(res, 'Missing script content');
       }
 
       // Validate toolId for security
@@ -876,20 +877,18 @@ export default function registerAdminToolsRoutes(app) {
       const tool = tools.find(t => t.id === toolId);
 
       if (!tool) {
-        return res.status(404).json({ error: 'Tool not found' });
+        return sendNotFound(res, 'Tool');
       }
 
       if (!tool.script) {
-        return res
-          .status(400)
-          .json({ error: 'Tool has no script property (may be a special tool)' });
+        return sendBadRequest(res, 'Tool has no script property (may be a special tool)');
       }
 
       const rootDir = getRootDir();
       const scriptPath = join(rootDir, 'server', 'tools', tool.script);
 
       if (!existsSync(scriptPath)) {
-        return res.status(404).json({ error: 'Script file not found' });
+        return sendNotFound(res, 'Script file');
       }
 
       // Write the new content
@@ -897,8 +896,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.json({ message: 'Script updated successfully' });
     } catch (error) {
-      logger.error('Error updating tool script', { component: 'AdminTools', error });
-      res.status(500).json({ error: 'Failed to update tool script' });
+      return sendInternalError(res, error, 'update tool script');
     }
   });
 }

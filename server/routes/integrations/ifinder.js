@@ -4,6 +4,7 @@ import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import iFinderService from '../../services/integrations/iFinderService.js';
+import { sendBadRequest, sendErrorResponse } from '../../utils/responseHelpers.js';
 
 const router = express.Router();
 
@@ -18,7 +19,7 @@ router.get('/document', authRequired, async (req, res) => {
   const { documentId, searchProfile, convertToPdf } = req.query;
 
   if (!documentId) {
-    return res.status(400).json({ error: 'documentId parameter is required' });
+    return sendBadRequest(res, 'documentId parameter is required');
   }
 
   try {
@@ -68,7 +69,7 @@ router.get('/document', authRequired, async (req, res) => {
   } catch (error) {
     logger.error('iFinder document proxy error', { component: 'IFinder', error });
     const status = error.message.includes('not found') ? 404 : 500;
-    res.status(status).json({ error: error.message });
+    return sendErrorResponse(res, status, error.message);
   }
 });
 
@@ -82,7 +83,7 @@ router.get('/document/content', authRequired, async (req, res) => {
   const { documentId, searchProfile } = req.query;
 
   if (!documentId) {
-    return res.status(400).json({ error: 'documentId parameter is required' });
+    return sendBadRequest(res, 'documentId parameter is required');
   }
 
   try {
@@ -106,7 +107,7 @@ router.get('/document/content', authRequired, async (req, res) => {
       : error.message.includes('Access denied')
         ? 403
         : 500;
-    res.status(status).json({ error: error.message });
+    return sendErrorResponse(res, status, error.message);
   }
 });
 
@@ -122,7 +123,7 @@ router.get('/document/metadata', authRequired, async (req, res) => {
   const { documentId, searchProfile } = req.query;
 
   if (!documentId) {
-    return res.status(400).json({ error: 'documentId parameter is required' });
+    return sendBadRequest(res, 'documentId parameter is required');
   }
 
   try {
@@ -176,7 +177,7 @@ router.get('/document/metadata', authRequired, async (req, res) => {
       : error.message.includes('Access denied')
         ? 403
         : 500;
-    res.status(status).json({ error: error.message });
+    return sendErrorResponse(res, status, error.message);
   }
 });
 

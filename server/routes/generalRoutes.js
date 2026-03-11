@@ -2,7 +2,7 @@ import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
-import logger from '../utils/logger.js';
+import { sendInternalError, sendFailedOperationError } from '../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -183,14 +183,13 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       );
 
       if (!apps) {
-        return res.status(500).json({ error: 'Failed to load apps configuration' });
+        return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
       }
 
       res.setHeader('ETag', userSpecificEtag);
       res.json(apps);
     } catch (error) {
-      logger.error('Error fetching apps', { component: 'GeneralRoutes', error });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch apps');
     }
   });
 
@@ -319,12 +318,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         environment: process.env.NODE_ENV || 'development'
       });
     } catch (error) {
-      logger.error('Health check error', { component: 'GeneralRoutes', error });
-      res.status(500).json({
-        status: 'ERROR',
-        error: 'Health check failed',
-        timestamp: new Date().toISOString()
-      });
+      return sendInternalError(res, error, 'health check');
     }
   });
 
@@ -343,7 +337,11 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         const { data: apps } = configCache.getApps();
 
         if (!apps) {
-          return res.status(500).json({ error: 'Failed to load apps configuration' });
+          return sendFailedOperationError(
+            res,
+            'load apps configuration',
+            new Error('apps is null')
+          );
         }
         const appData = apps.find(a => a.id === appId);
         if (!appData) {
@@ -362,8 +360,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
 
         res.json(appData);
       } catch (error) {
-        logger.error('Error fetching app details', { component: 'GeneralRoutes', error });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch app details');
       }
     }
   );

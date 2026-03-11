@@ -13,6 +13,13 @@ import {
 } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse,
+  sendFailedOperationError
+} from '../../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -294,7 +301,11 @@ export default function registerAdminPromptsRoutes(app) {
     try {
       const { data: prompts, etag } = configCache.getPrompts(true);
       if (!prompts) {
-        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+        return sendFailedOperationError(
+          res,
+          'load prompts configuration',
+          new Error('prompts is null')
+        );
       }
       if (etag) {
         res.setHeader('ETag', etag);
@@ -305,8 +316,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       res.json(prompts);
     } catch (error) {
-      logger.error('Error fetching all prompts', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Failed to fetch prompts' });
+      return sendInternalError(res, error, 'fetch all prompts');
     }
   });
 
@@ -399,12 +409,11 @@ export default function registerAdminPromptsRoutes(app) {
       const { data: prompts } = configCache.getPrompts(true);
       const prompt = prompts.find(p => p.id === promptId);
       if (!prompt) {
-        return res.status(404).json({ error: 'Prompt not found' });
+        return sendNotFound(res, 'Prompt');
       }
       res.json(prompt);
     } catch (error) {
-      logger.error('Error fetching prompt', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Failed to fetch prompt' });
+      return sendInternalError(res, error, 'fetch prompt');
     }
   });
 
@@ -523,10 +532,10 @@ export default function registerAdminPromptsRoutes(app) {
       }
 
       if (!updatedPrompt.id || !updatedPrompt.name || !updatedPrompt.prompt) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return sendBadRequest(res, 'Missing required fields');
       }
       if (updatedPrompt.id !== promptId) {
-        return res.status(400).json({ error: 'Prompt ID cannot be changed' });
+        return sendBadRequest(res, 'Prompt ID cannot be changed');
       }
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
@@ -534,8 +543,7 @@ export default function registerAdminPromptsRoutes(app) {
       await configCache.refreshPromptsCache();
       res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
     } catch (error) {
-      logger.error('Error updating prompt', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Failed to update prompt' });
+      return sendInternalError(res, error, 'update prompt');
     }
   });
 
@@ -640,7 +648,7 @@ export default function registerAdminPromptsRoutes(app) {
     try {
       const newPrompt = req.body;
       if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return sendBadRequest(res, 'Missing required fields');
       }
 
       // Validate newPrompt.id for security
@@ -652,7 +660,7 @@ export default function registerAdminPromptsRoutes(app) {
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${newPrompt.id}.json`);
       try {
         readFileSync(promptFilePath, 'utf8');
-        return res.status(409).json({ error: 'Prompt with this ID already exists' });
+        return sendErrorResponse(res, 409, 'Prompt with this ID already exists');
       } catch {
         // file not found
       }
@@ -660,8 +668,7 @@ export default function registerAdminPromptsRoutes(app) {
       await configCache.refreshPromptsCache();
       res.json({ message: 'Prompt created successfully', prompt: newPrompt });
     } catch (error) {
-      logger.error('Error creating prompt', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Failed to create prompt' });
+      return sendInternalError(res, error, 'create prompt');
     }
   });
 
@@ -753,7 +760,7 @@ export default function registerAdminPromptsRoutes(app) {
       const { data: prompts } = configCache.getPrompts(true);
       const prompt = prompts.find(p => p.id === promptId);
       if (!prompt) {
-        return res.status(404).json({ error: 'Prompt not found' });
+        return sendNotFound(res, 'Prompt');
       }
       const newEnabledState = !prompt.enabled;
       prompt.enabled = newEnabledState;
@@ -767,8 +774,7 @@ export default function registerAdminPromptsRoutes(app) {
         enabled: newEnabledState
       });
     } catch (error) {
-      logger.error('Error toggling prompt', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Failed to toggle prompt' });
+      return sendInternalError(res, error, 'toggle prompt');
     }
   });
 
@@ -885,7 +891,7 @@ export default function registerAdminPromptsRoutes(app) {
         const { promptIds } = req.params;
         const { enabled } = req.body;
         if (typeof enabled !== 'boolean') {
-          return res.status(400).json({ error: 'Missing enabled flag' });
+          return sendBadRequest(res, 'Missing enabled flag');
         }
 
         // Validate promptIds for security
@@ -915,8 +921,7 @@ export default function registerAdminPromptsRoutes(app) {
           ids: resolvedIds
         });
       } catch (error) {
-        logger.error('Error toggling prompts', { component: 'AdminPrompts', error });
-        res.status(500).json({ error: 'Failed to toggle prompts' });
+        return sendInternalError(res, error, 'toggle prompts');
       }
     }
   );
@@ -1008,19 +1013,18 @@ export default function registerAdminPromptsRoutes(app) {
       const promptsDir = join(rootDir, 'contents', 'prompts');
       const normalizedPromptFilePath = resolveAndValidatePath(`${promptId}.json`, promptsDir);
       if (!normalizedPromptFilePath) {
-        return res.status(400).json({ error: 'Invalid prompt path' });
+        return sendBadRequest(res, 'Invalid prompt path');
       }
 
       if (!existsSync(normalizedPromptFilePath)) {
-        return res.status(404).json({ error: 'Prompt file not found' });
+        return sendNotFound(res, 'Prompt file');
       }
       await fs.unlink(normalizedPromptFilePath);
       await configCache.refreshPromptsCache();
       await removeMarketplaceInstallation('prompt', promptId);
       res.json({ message: 'Prompt deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting prompt', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Failed to delete prompt' });
+      return sendInternalError(res, error, 'delete prompt');
     }
   });
 
@@ -1136,22 +1140,24 @@ export default function registerAdminPromptsRoutes(app) {
         responseSchema = null
       } = req.body;
       if (!messages || !Array.isArray(messages) || messages.length === 0) {
-        return res.status(400).json({ error: 'Missing required field: messages' });
+        return sendBadRequest(res, 'Missing required field: messages');
       }
       let { data: models = [] } = configCache.getModels();
       if (!models) {
-        return res.status(500).json({ error: 'Failed to load models configuration' });
+        return sendFailedOperationError(
+          res,
+          'load models configuration',
+          new Error('models is null')
+        );
       }
       const defaultModel = models.find(m => m.default)?.id;
       const modelId = model || defaultModel;
       if (!modelId) {
-        return res
-          .status(400)
-          .json({ error: 'No model specified and no default model configured' });
+        return sendBadRequest(res, 'No model specified and no default model configured');
       }
       const modelConfig = models.find(m => m.id === modelId);
       if (!modelConfig) {
-        return res.status(400).json({ error: `Model not found: ${modelId}` });
+        return sendBadRequest(res, `Model not found: ${modelId}`);
       }
       const { verifyApiKey } = await import('../../serverHelpers.js');
       const apiKey = await verifyApiKey(modelConfig, res);
@@ -1286,18 +1292,21 @@ export default function registerAdminPromptsRoutes(app) {
       const { lang = defaultLanguage } = req.query;
       const { data: prompts } = configCache.getPrompts(true);
       if (!prompts) {
-        return res.status(500).json({ error: 'Failed to load prompts configuration' });
+        return sendFailedOperationError(
+          res,
+          'load prompts configuration',
+          new Error('prompts is null')
+        );
       }
       const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
       if (!appGeneratorPrompt) {
-        return res.status(404).json({ error: 'App-generator prompt not found' });
+        return sendNotFound(res, 'App-generator prompt');
       }
       const promptText =
         appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
       res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
     } catch (error) {
-      logger.error('Error fetching app-generator prompt', { component: 'AdminPrompts', error });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch app-generator prompt');
     }
   });
 }

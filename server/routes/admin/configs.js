@@ -8,6 +8,7 @@ import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 /**
  * Check if a value is an environment variable placeholder
@@ -430,8 +431,7 @@ export default function registerAdminConfigRoutes(app) {
 
       res.json(sanitizedConfig);
     } catch (error) {
-      logger.error('Error getting platform configuration', { component: 'AdminConfigs', error });
-      res.status(500).json({ error: 'Failed to get platform configuration' });
+      return sendInternalError(res, error, 'get platform configuration');
     }
   });
 
@@ -443,7 +443,7 @@ export default function registerAdminConfigRoutes(app) {
       const newConfig = req.body;
 
       if (!newConfig || typeof newConfig !== 'object') {
-        return res.status(400).json({ error: 'Invalid configuration data' });
+        return sendBadRequest(res, 'Invalid configuration data');
       }
 
       const rootDir = getRootDir();
@@ -682,8 +682,7 @@ export default function registerAdminConfigRoutes(app) {
         }
       });
     } catch (error) {
-      logger.error('Error updating platform configuration', { component: 'AdminConfigs', error });
-      res.status(500).json({ error: 'Failed to update platform configuration' });
+      return sendInternalError(res, error, 'update platform configuration');
     }
   });
 }

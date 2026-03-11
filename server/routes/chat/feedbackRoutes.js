@@ -136,7 +136,12 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           rating,
           user: req.user
         });
-        logger.info(`Feedback received for message ${messageId} in chat ${chatId}: ${rating}`);
+        logger.info('Feedback received', {
+          component: 'feedbackRoutes',
+          messageId,
+          chatId,
+          rating
+        });
         return res.status(200).json({ success: true });
       } catch (error) {
         return sendInternalError(res, error, 'processing feedback');

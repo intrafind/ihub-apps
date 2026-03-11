@@ -15,6 +15,7 @@ import validate from '../../validators/validate.js';
 import { chatTestSchema, chatPostSchema, chatConnectSchema } from '../../validators/index.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import { sendNotFound, sendFailedOperationError } from '../../utils/responseHelpers.js';
 
 export default function registerSessionRoutes(
   app,
@@ -204,11 +205,15 @@ export default function registerSessionRoutes(
         let { data: models = [] } = configCache.getModels();
 
         if (!models) {
-          return res.status(500).json({ error: 'Failed to load models configuration' });
+          return sendFailedOperationError(
+            res,
+            'load models configuration',
+            new Error('models is null')
+          );
         }
         const model = models.find(m => m.id === modelId);
         if (!model) {
-          return res.status(404).json({ error: 'Model not found' });
+          return sendNotFound(res, 'Model');
         }
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const apiKey = await verifyApiKey(
