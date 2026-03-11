@@ -587,6 +587,22 @@ export class StateManager {
   }
 
   /**
+   * Gets all child executions for a given parent execution ID.
+   * Child executions store their parent's ID in state.data._parentExecutionId.
+   *
+   * @param {string} parentExecutionId - The parent execution identifier
+   * @returns {Promise<Object[]>} Array of child execution states
+   *
+   * @example
+   * const children = await stateManager.getChildExecutions('wf-exec-123');
+   * console.log('Child count:', children.length);
+   */
+  async getChildExecutions(parentExecutionId) {
+    const allStates = Array.from(this.activeStates.values());
+    return allStates.filter(s => s.data?._parentExecutionId === parentExecutionId);
+  }
+
+  /**
    * Gets summary information for all active executions
    * @returns {Promise<Object[]>} Array of execution summaries
    */

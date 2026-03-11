@@ -34,6 +34,8 @@ export { ToolNodeExecutor } from './ToolNodeExecutor.js';
 export { DecisionNodeExecutor } from './DecisionNodeExecutor.js';
 export { HumanNodeExecutor } from './HumanNodeExecutor.js';
 export { TransformNodeExecutor } from './TransformNodeExecutor.js';
+export { PlannerNodeExecutor } from './PlannerNodeExecutor.js';
+export { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
@@ -43,6 +45,8 @@ import { ToolNodeExecutor } from './ToolNodeExecutor.js';
 import { DecisionNodeExecutor } from './DecisionNodeExecutor.js';
 import { HumanNodeExecutor } from './HumanNodeExecutor.js';
 import { TransformNodeExecutor } from './TransformNodeExecutor.js';
+import { PlannerNodeExecutor } from './PlannerNodeExecutor.js';
+import { VerifierNodeExecutor } from './VerifierNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -55,7 +59,9 @@ const executorRegistry = {
   tool: ToolNodeExecutor,
   decision: DecisionNodeExecutor,
   human: HumanNodeExecutor,
-  transform: TransformNodeExecutor
+  transform: TransformNodeExecutor,
+  planner: PlannerNodeExecutor,
+  verifier: VerifierNodeExecutor
 };
 
 /**

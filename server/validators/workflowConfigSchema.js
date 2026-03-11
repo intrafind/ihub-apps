@@ -113,7 +113,12 @@ const nodeTypeEnum = z.enum([
   'join',
   'human',
   'transform',
-  'memory'
+  'memory',
+  'planner',
+  'verifier',
+  'loop',
+  'http',
+  'code'
 ]);
 
 /**
@@ -389,6 +394,9 @@ const baseWorkflowConfigSchema = z.object({
 
   /** Whether this workflow is active and can be executed */
   enabled: z.boolean().optional().default(true),
+
+  /** Workflow lifecycle status */
+  status: z.enum(['draft', 'published']).optional().default('draft'),
 
   /** Global workflow configuration options */
   config: workflowGlobalConfigSchema,

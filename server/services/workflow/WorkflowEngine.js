@@ -28,7 +28,7 @@ const MAX_NODE_TIMEOUT = 30 * 60 * 1000;
  * Maximum number of execution iterations to prevent infinite loops
  * @constant {number}
  */
-const MAX_EXECUTION_ITERATIONS = 100;
+const MAX_EXECUTION_ITERATIONS = 200;
 
 /**
  * WorkflowEngine is the main orchestrator for executing workflow definitions.
@@ -263,6 +263,55 @@ export class WorkflowEngine {
 
     // 8. Return initial state (execution continues in background)
     return state;
+  }
+
+  /**
+   * Spawns a child workflow as a sub-workflow of the current execution.
+   *
+   * Used by PlannerNodeExecutor to create dynamically planned workflows.
+   * Depth is checked to prevent infinite recursion.
+   *
+   * @param {string} parentExecutionId - The parent execution's ID
+   * @param {Object} workflowDef - The child workflow definition to execute
+   * @param {Object} initialData - Initial data for the child workflow
+   * @param {Object} [options={}] - Execution options
+   * @param {number} [options.depth=0] - Current nesting depth
+   * @param {number} [options.maxDepth=3] - Maximum allowed nesting depth
+   * @param {Object} [options.user] - User context
+   * @param {string} [options.language='en'] - Language for the execution
+   * @returns {Promise<string>} The child execution ID
+   * @throws {Error} If maximum depth is exceeded
+   */
+  async executeSubWorkflow(parentExecutionId, workflowDef, initialData = {}, options = {}) {
+    const depth = options.depth || 0;
+    const maxDepth = options.maxDepth || 3;
+
+    if (depth > maxDepth) {
+      throw new Error(
+        `Sub-workflow depth limit exceeded (depth: ${depth}, max: ${maxDepth}). ` +
+          'Increase maxDepth in the planner config if deeper nesting is needed.'
+      );
+    }
+
+    logger.info({
+      component: 'WorkflowEngine',
+      message: 'Spawning sub-workflow',
+      parentExecutionId,
+      workflowId: workflowDef.id,
+      depth
+    });
+
+    const childInitialData = {
+      ...initialData,
+      _parentExecutionId: parentExecutionId
+    };
+
+    const childState = await this.start(workflowDef, childInitialData, {
+      ...options,
+      depth
+    });
+
+    return childState.executionId;
   }
 
   /**
@@ -732,7 +781,9 @@ export class WorkflowEngine {
       iteration: currentIteration, // Current iteration count for this node
       user: options.user,
       language: options.language || 'en',
-      abortSignal: this.abortControllers.get(executionId)?.signal
+      abortSignal: this.abortControllers.get(executionId)?.signal,
+      depth: options.depth || 0,
+      engine: this
     };
 
     // 7. Execute with timeout and timing (prefer node.execution.timeout over legacy node.timeout)
