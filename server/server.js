@@ -25,7 +25,10 @@ import registerOpenAIProxyRoutes from './routes/openaiProxy.js';
 import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerSwaggerRoutes from './routes/swagger.js';
-import registerWorkflowRoutes from './routes/workflow/index.js';
+import registerWorkflowRoutes, {
+  registerTriggerRoutes,
+  loadWorkflows
+} from './routes/workflow/index.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
@@ -257,6 +260,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerShortLinkRoutes(app, basePath);
   await registerSwaggerRoutes(app, basePath);
   registerWorkflowRoutes(app, { basePath, getLocalizedError });
+  registerTriggerRoutes(app, { basePath });
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
@@ -272,6 +276,33 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // Cleanup inactive clients every minute
   cleanupInactiveClients();
+
+  // Initialize trigger system for scheduled and webhook-triggered workflows
+  try {
+    const { getTriggerManager } = await import('./services/workflow/triggers/TriggerManager.js');
+    const { WorkflowEngine } = await import('./services/workflow/WorkflowEngine.js');
+    const triggerManager = getTriggerManager();
+    const workflowEngine = new WorkflowEngine();
+    triggerManager.setEngine(workflowEngine);
+    const workflows = await loadWorkflows();
+    for (const workflow of workflows) {
+      if (workflow.triggers?.length) {
+        await triggerManager.registerWorkflowTriggers(workflow);
+      }
+    }
+    logger.info({
+      component: 'Server',
+      message: 'Trigger system initialized',
+      registeredTriggers: triggerManager.getTriggersInfo().length
+    });
+  } catch (err) {
+    logger.error({
+      component: 'Server',
+      message: 'Failed to initialize trigger system',
+      error: err.message,
+      stack: err.stack
+    });
+  }
 
   // Validate API keys at startup
   validateApiKeys();

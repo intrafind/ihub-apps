@@ -7,9 +7,10 @@
  */
 
 import registerWorkflowRoutes from './workflowRoutes.js';
+import { registerTriggerRoutes } from './triggerRoutes.js';
 
 // Named exports
-export { registerWorkflowRoutes };
+export { registerWorkflowRoutes, registerTriggerRoutes };
 export {
   filterByPermissions,
   isAdmin,

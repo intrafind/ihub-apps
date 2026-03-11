@@ -359,6 +359,33 @@ const canvasSchema = z
   .optional();
 
 // ============================================================================
+// Trigger Schema
+// ============================================================================
+
+/**
+ * Trigger configuration schema
+ * Defines how a workflow can be automatically triggered (schedule or webhook)
+ */
+const triggerSchema = z
+  .object({
+    /** Unique identifier for the trigger within the workflow */
+    id: z.string().min(1),
+    /** Type of trigger: schedule (cron) or webhook (HTTP) */
+    type: z.enum(['schedule', 'webhook']),
+    /** Cron expression for schedule triggers (e.g., '0 * * * *' for hourly) */
+    cron: z.string().optional(),
+    /** Timezone for schedule triggers (e.g., 'Europe/Berlin') */
+    timezone: z.string().optional(),
+    /** Shared secret for webhook signature verification (HMAC-SHA256) */
+    secret: z.string().optional(),
+    /** Initial data to pass into the workflow when the trigger fires */
+    initialData: z.record(z.unknown()).optional(),
+    /** Whether this trigger is active */
+    enabled: z.boolean().optional().default(true)
+  })
+  .passthrough();
+
+// ============================================================================
 // Main Workflow Configuration Schema
 // ============================================================================
 
@@ -441,6 +468,12 @@ const baseWorkflowConfigSchema = z.object({
       outputFormat: z.enum(['markdown', 'text', 'json']).optional()
     })
     .optional(),
+
+  /**
+   * Trigger definitions for this workflow
+   * Workflows can be triggered by schedules (cron) or webhooks (HTTP)
+   */
+  triggers: z.array(triggerSchema).optional(),
 
   /** Visual editor canvas state */
   canvas: canvasSchema
