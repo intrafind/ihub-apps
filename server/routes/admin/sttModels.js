@@ -104,6 +104,10 @@ export default function registerAdminSttModelsRoutes(app) {
     async (req, res) => {
       const { modelId } = req.params;
       if (!validateIdForPath(modelId, 'model', res)) return;
+      // Ensure modelId is a single safe path segment (no separators or traversal)
+      if (modelId.includes('/') || modelId.includes('\\') || modelId.includes('..')) {
+        return res.status(400).json({ error: 'Invalid model identifier.' });
+      }
 
       const repoPath = KNOWN_STT_MODELS[modelId];
       if (!repoPath) {
