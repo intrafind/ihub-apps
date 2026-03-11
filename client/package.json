@@ -10,11 +10,13 @@
   },
   "dependencies": {
     "@babel/standalone": "^7.28.1",
+    "@dagrejs/dagre": "^2.0.4",
     "@heroicons/react": "2.2.0",
     "@kenjiuno/msgreader": "^1.27.0-alpha.3",
     "@microsoft/teams-js": "^2.19.0",
     "@monaco-editor/react": "^4.7.0",
     "@tailwindcss/typography": "^0.5.16",
+    "@xyflow/react": "^12.10.1",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
     "axios": "^1.13.5",
