@@ -79,7 +79,26 @@ export class CodeNodeExecutor extends BaseNodeExecutor {
     sandbox.Math = Math;
     sandbox.Date = Date;
     sandbox.Array = Array;
-    sandbox.Object = Object;
+    // Shadow Object with a safe proxy that doesn't expose the constructor chain
+    const safeObject = Object.create(null);
+    const safeObjectMethods = [
+      'keys',
+      'values',
+      'entries',
+      'assign',
+      'freeze',
+      'isFrozen',
+      'is',
+      'create',
+      'fromEntries'
+    ];
+    for (const method of safeObjectMethods) {
+      if (typeof Object[method] === 'function') {
+        safeObject[method] = Object[method].bind(Object);
+      }
+    }
+    sandbox.Object = safeObject;
+    sandbox.Function = undefined; // Block Function constructor to prevent sandbox escape
     sandbox.String = String;
     sandbox.Number = Number;
     sandbox.RegExp = RegExp;
@@ -108,8 +127,9 @@ export class CodeNodeExecutor extends BaseNodeExecutor {
     // Create hardened context
     const context = vm.createContext(sandbox);
 
-    // Wrap user code in an IIFE to capture return value
-    const wrappedCode = `(function() { ${config.code} })()`;
+    // Wrap user code in a strict-mode IIFE to capture return value.
+    // 'use strict' prevents `this` from leaking to the global object.
+    const wrappedCode = `'use strict'; (function() { ${config.code} })()`;
 
     try {
       const result = vm.runInContext(wrappedCode, context, { timeout });

@@ -23,6 +23,9 @@ function isPrivateOrLocalhost(urlStr) {
   try {
     const { hostname } = new URL(urlStr);
     if (hostname === 'localhost' || hostname === '::1') return true;
+    // IPv6 private ranges
+    if (hostname.startsWith('fc') || hostname.startsWith('fd')) return true; // fc00::/7 (ULA)
+    if (hostname.startsWith('fe80')) return true; // fe80::/10 link-local
     // IPv4 private ranges
     const ipv4 = hostname.match(/^(\d+)\.(\d+)\.(\d+)\.(\d+)$/);
     if (ipv4) {
@@ -32,6 +35,7 @@ function isPrivateOrLocalhost(urlStr) {
       if (a === 192 && b === 168) return true;
       if (a === 127) return true;
       if (a === 0) return true;
+      if (a === 169 && b === 254) return true; // link-local / AWS IMDS
     }
     return false;
   } catch {
@@ -152,22 +156,26 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
     const timeout = Math.min(config.timeout || DEFAULT_TIMEOUT, MAX_TIMEOUT);
     const responseType = config.responseType || 'json';
     const outputVariable = config.outputVariable || 'httpResponse';
+    const failOnError = config.failOnError !== false;
 
-    this.logger.info({
-      component: 'HttpNodeExecutor',
-      message: `Executing HTTP node '${node.id}'`,
-      nodeId: node.id,
-      method,
-      url
-    });
-
-    // SSRF protection
+    // SSRF protection — check before logging to avoid leaking interpolated secrets
     if (isPrivateOrLocalhost(url)) {
       return this.createErrorResult(
         `HTTP node '${node.id}' blocked: URL targets a private or localhost address`,
-        { nodeId: node.id, url }
+        { nodeId: node.id }
       );
     }
+
+    // Log only hostname/path, not full URL to avoid leaking interpolated secrets
+    const { hostname: logHost, pathname: logPath } = new URL(url);
+    this.logger.info({
+      component: 'HttpNodeExecutor',
+      message: `Executing HTTP ${method} request`,
+      nodeId: node.id,
+      host: logHost,
+      path: logPath,
+      method
+    });
 
     // Build headers
     const headers = {
@@ -222,6 +230,20 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
         headers: responseHeaders,
         body: responseBody
       };
+
+      if (!response.ok && failOnError) {
+        this.logger.warn({
+          component: 'HttpNodeExecutor',
+          message: `HTTP node '${node.id}' received error status`,
+          nodeId: node.id,
+          statusCode: response.status
+        });
+        return this.createErrorResult(`HTTP request failed with status ${response.status}`, {
+          nodeId: node.id,
+          status: response.status,
+          body: responseBody
+        });
+      }
 
       this.logger.info({
         component: 'HttpNodeExecutor',
