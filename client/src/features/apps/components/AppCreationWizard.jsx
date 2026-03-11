@@ -11,7 +11,7 @@ import {
   APP_ID_PATTERN
 } from '../../../../../shared/validationPatterns.js';
 
-const AppCreationWizard = ({ onClose, templateApp = null }) => {
+function AppCreationWizard({ onClose, templateApp = null }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(0);
@@ -474,16 +474,10 @@ const AppCreationWizard = ({ onClose, templateApp = null }) => {
       </div>
     </div>
   );
-};
+}
 
 // Step 1: Creation Method
-const CreationMethodStep = ({
-  appData,
-  updateAppData,
-  templateApp,
-  validateCurrentStep,
-  error
-}) => {
+function CreationMethodStep({ appData, updateAppData, templateApp, validateCurrentStep, error }) {
   const { t } = useTranslation();
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -620,10 +614,10 @@ const CreationMethodStep = ({
       </div>
     </div>
   );
-};
+}
 
 // Step 2: AI Generation
-const AIGenerationStep = ({ appData, updateAppData }) => {
+function AIGenerationStep({ appData, updateAppData }) {
   const { t, i18n } = useTranslation();
   const [generating, setGenerating] = useState(false);
   const [prompt, setPrompt] = useState('');
@@ -857,17 +851,17 @@ const AIGenerationStep = ({ appData, updateAppData }) => {
       )}
     </div>
   );
-};
+}
 
 // Step 3: Basic Information
-const BasicInfoStep = ({
+function BasicInfoStep({
   appData,
   updateAppData,
   templateApp,
   revertToParent,
   validateCurrentStep,
   error
-}) => {
+}) {
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
   const [fieldErrors, setFieldErrors] = useState({});
@@ -1137,17 +1131,17 @@ const BasicInfoStep = ({
       </div>
     </div>
   );
-};
+}
 
 // Step 4: System Prompt
-const SystemPromptStep = ({
+function SystemPromptStep({
   appData,
   updateAppData,
   templateApp,
   revertToParent,
   validateCurrentStep,
   error
-}) => {
+}) {
   const { t, i18n } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(i18n.language || 'en');
   const [fieldErrors, setFieldErrors] = useState({});
@@ -1371,10 +1365,10 @@ const SystemPromptStep = ({
       </div>
     </div>
   );
-};
+}
 
 // Step 5: Variables
-const VariablesStep = ({ appData, updateAppData }) => {
+function VariablesStep({ appData, updateAppData }) {
   const { t } = useTranslation();
 
   const addVariable = () => {
@@ -1502,10 +1496,10 @@ const VariablesStep = ({ appData, updateAppData }) => {
       </button>
     </div>
   );
-};
+}
 
 // Step 6: Tools
-const ToolsStep = ({ appData, updateAppData }) => {
+function ToolsStep({ appData, updateAppData }) {
   const { t } = useTranslation();
   const [availableTools, setAvailableTools] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1608,10 +1602,10 @@ const ToolsStep = ({ appData, updateAppData }) => {
       )}
     </div>
   );
-};
+}
 
 // Step 7: Advanced Settings
-const AdvancedSettingsStep = ({ appData, updateAppData }) => {
+function AdvancedSettingsStep({ appData, updateAppData }) {
   const { t } = useTranslation();
 
   return (
@@ -1693,10 +1687,10 @@ const AdvancedSettingsStep = ({ appData, updateAppData }) => {
       </div>
     </div>
   );
-};
+}
 
 // Step 8: Review
-const ReviewStep = ({ appData, templateApp }) => {
+function ReviewStep({ appData, templateApp }) {
   const { t } = useTranslation();
 
   return (
@@ -1775,6 +1769,6 @@ const ReviewStep = ({ appData, templateApp }) => {
       </div>
     </div>
   );
-};
+}
 
 export default AppCreationWizard;

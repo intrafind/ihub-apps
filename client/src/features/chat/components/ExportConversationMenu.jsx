@@ -6,7 +6,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, chatId }) => {
+function ExportConversationMenu({ messages = [], settings = {}, onClose, appId, chatId }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
@@ -229,6 +229,6 @@ const ExportConversationMenu = ({ messages = [], settings = {}, onClose, appId, 
       </button>
     </div>
   );
-};
+}
 
 export default ExportConversationMenu;

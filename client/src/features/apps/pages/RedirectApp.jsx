@@ -8,7 +8,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
  * RedirectApp component
  * Handles redirect-type apps that navigate to external URLs
  */
-const RedirectApp = ({ app }) => {
+function RedirectApp({ app }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor } = useUIConfig();
@@ -151,6 +151,6 @@ const RedirectApp = ({ app }) => {
       )}
     </div>
   );
-};
+}
 
 export default RedirectApp;

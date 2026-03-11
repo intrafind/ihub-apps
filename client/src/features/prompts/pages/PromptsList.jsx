@@ -13,7 +13,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
 const ITEMS_PER_PAGE = 9;
 
-const PromptsList = () => {
+function PromptsList() {
   const { t, i18n } = useTranslation();
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -479,6 +479,6 @@ const PromptsList = () => {
       )}
     </div>
   );
-};
+}
 
 export default PromptsList;

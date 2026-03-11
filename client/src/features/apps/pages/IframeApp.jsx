@@ -8,7 +8,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
  * IframeApp component
  * Handles iframe-type apps that embed external applications
  */
-const IframeApp = ({ app }) => {
+function IframeApp({ app }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor } = useUIConfig();
@@ -175,6 +175,6 @@ const IframeApp = ({ app }) => {
       </div>
     </div>
   );
-};
+}
 
 export default IframeApp;

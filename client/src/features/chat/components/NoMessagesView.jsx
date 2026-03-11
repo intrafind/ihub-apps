@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
 /** Displayed when a chat has no messages and no greeting */
-const NoMessagesView = () => {
+function NoMessagesView() {
   const { t } = useTranslation();
   return (
     <div className="text-center text-gray-500 space-y-6 w-full">
@@ -17,6 +17,6 @@ const NoMessagesView = () => {
       </div>
     </div>
   );
-};
+}
 
 export default NoMessagesView;

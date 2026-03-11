@@ -17,7 +17,7 @@ import './StreamingMarkdown.css';
  * @param {string} props.content - Markdown content to render
  * @param {boolean} [props.hasCitations] - Whether content may contain cite tags
  */
-const StreamingMarkdown = ({ content, hasCitations }) => {
+function StreamingMarkdown({ content, hasCitations }) {
   const containerRef = useRef(null);
   const [htmlContent, setHtmlContent] = useState('');
   const [renderKey, setRenderKey] = useState(0);
@@ -79,6 +79,6 @@ const StreamingMarkdown = ({ content, hasCitations }) => {
       dangerouslySetInnerHTML={{ __html: htmlContent }}
     />
   );
-};
+}
 
 export default StreamingMarkdown;

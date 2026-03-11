@@ -11,7 +11,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 
 // Instead of fixed values, we'll calculate based on viewport
-const AppsList = () => {
+function AppsList() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { resetHeaderColor, uiConfig } = useUIConfig();
@@ -707,6 +707,6 @@ const AppsList = () => {
       )}
     </div>
   );
-};
+}
 
 export default AppsList;

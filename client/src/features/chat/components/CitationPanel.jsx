@@ -43,7 +43,7 @@ const hasProxyAccess = item => !!getDocumentAccess(item);
 /**
  * Returns a document type icon based on the `application` metadata field.
  */
-const DocIcon = ({ item }) => {
+function DocIcon({ item }) {
   const app = getApplication(item);
   const base = 'w-5 h-5 flex-shrink-0';
 
@@ -61,12 +61,12 @@ const DocIcon = ({ item }) => {
       <path fillRule="evenodd" d={iconPath} clipRule="evenodd" />
     </svg>
   );
-};
+}
 
 /**
  * A single passage with truncate/expand behavior.
  */
-const PassageText = ({ content, index, t }) => {
+function PassageText({ content, index, t }) {
   const [expanded, setExpanded] = useState(false);
   const needsTruncation = content && content.length > PASSAGE_TRUNCATE_LENGTH;
 
@@ -94,12 +94,12 @@ const PassageText = ({ content, index, t }) => {
       </p>
     </div>
   );
-};
+}
 
 /**
  * Overflow menu with click-outside dismiss.
  */
-const OverflowMenu = ({ item, onAction, onOpenInApp, t }) => {
+function OverflowMenu({ item, onAction, onOpenInApp, t }) {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
@@ -219,12 +219,12 @@ const OverflowMenu = ({ item, onAction, onOpenInApp, t }) => {
       )}
     </div>
   );
-};
+}
 
 /**
  * Modal displaying document metadata fetched from iFinder.
  */
-const DocumentDetailsModal = ({ item, onClose, t }) => {
+function DocumentDetailsModal({ item, onClose, t }) {
   const [metadata, setMetadata] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -409,7 +409,7 @@ const DocumentDetailsModal = ({ item, onClose, t }) => {
       </div>
     </div>
   );
-};
+}
 
 /**
  * CitationPanel renders below the message content when citations are present.

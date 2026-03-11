@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 
-const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
+function PromptDetailsPopup({ prompt, isOpen, onClose }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -200,6 +200,6 @@ const PromptDetailsPopup = ({ prompt, isOpen, onClose }) => {
       </div>
     </div>
   );
-};
+}
 
 export default PromptDetailsPopup;

@@ -11,7 +11,7 @@ import IframeApp from '../pages/IframeApp';
  * AppRouterWrapper component
  * Routes to the appropriate component based on the app type
  */
-const AppRouterWrapper = () => {
+function AppRouterWrapper() {
   const { appId } = useParams();
   const { t } = useTranslation();
   const [app, setApp] = useState(null);
@@ -82,6 +82,6 @@ const AppRouterWrapper = () => {
       // Pass the app data as a prop to avoid re-fetching
       return <AppChat preloadedApp={app} />;
   }
-};
+}
 
 export default AppRouterWrapper;
