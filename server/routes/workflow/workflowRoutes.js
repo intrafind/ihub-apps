@@ -1883,6 +1883,129 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     }
   );
 
+  // ============================================================================
+  // Workflow Version Control Endpoints
+  // ============================================================================
+
+  // GET /api/workflows/:id/versions - list version history
+  app.get(
+    buildServerPath('/api/workflows/:id/versions'),
+    checkWorkflowsFeature,
+    adminAuth,
+    async (req, res) => {
+      const { id } = req.params;
+      if (!validateIdForPath(id, 'workflow', res)) {
+        return;
+      }
+
+      const historyDir = join(getRootDir(), 'contents', 'workflows', '.history', id);
+
+      try {
+        await fs.access(historyDir);
+        const files = await fs.readdir(historyDir);
+        const jsonFiles = files.filter(f => f.endsWith('.json'));
+
+        const versions = await Promise.all(
+          jsonFiles.map(async file => {
+            const filePath = join(historyDir, file);
+            const stat = await fs.stat(filePath);
+            const content = JSON.parse(await fs.readFile(filePath, 'utf-8'));
+            return {
+              version: content.version,
+              status: content.status,
+              publishedAt: content._publishedAt || stat.mtime.toISOString(),
+              snapshotFile: file,
+              size: stat.size
+            };
+          })
+        );
+
+        versions.sort((a, b) => new Date(b.publishedAt) - new Date(a.publishedAt));
+        res.json({ workflowId: id, versions });
+      } catch {
+        res.json({ workflowId: id, versions: [] });
+      }
+    }
+  );
+
+  // POST /api/workflows/:id/publish - create a published snapshot
+  app.post(
+    buildServerPath('/api/workflows/:id/publish'),
+    checkWorkflowsFeature,
+    adminAuth,
+    async (req, res) => {
+      const { id } = req.params;
+      if (!validateIdForPath(id, 'workflow', res)) {
+        return;
+      }
+
+      const workflowPath = join(getRootDir(), 'contents', 'workflows', `${id}.json`);
+
+      try {
+        const workflowData = JSON.parse(await fs.readFile(workflowPath, 'utf-8'));
+        const publishedAt = new Date().toISOString();
+        const snapshot = {
+          ...workflowData,
+          status: 'published',
+          _publishedAt: publishedAt,
+          _publishedBy: req.user?.id || 'system'
+        };
+
+        // Create history directory
+        const historyDir = join(getRootDir(), 'contents', 'workflows', '.history', id);
+        await fs.mkdir(historyDir, { recursive: true });
+
+        // Save snapshot with version + timestamp filename
+        const snapshotFile = `${workflowData.version}-${Date.now()}.json`;
+        await atomicWriteJSON(join(historyDir, snapshotFile), snapshot);
+
+        // Update current workflow status to 'published'
+        workflowData.status = 'published';
+        await atomicWriteJSON(workflowPath, workflowData);
+
+        res.json({ success: true, version: workflowData.version, publishedAt, snapshotFile });
+      } catch (error) {
+        return sendNotFound(res, `Workflow ${id} not found`);
+      }
+    }
+  );
+
+  // PUT /api/workflows/:id/activate/:version - activate a specific version
+  app.put(
+    buildServerPath('/api/workflows/:id/activate/:version'),
+    checkWorkflowsFeature,
+    adminAuth,
+    async (req, res) => {
+      const { id, version } = req.params;
+      if (!validateIdForPath(id, 'workflow', res)) {
+        return;
+      }
+
+      const historyDir = join(getRootDir(), 'contents', 'workflows', '.history', id);
+
+      try {
+        const files = await fs.readdir(historyDir);
+        const versionFile = files.find(f => f.startsWith(version + '-') && f.endsWith('.json'));
+
+        if (!versionFile) {
+          return sendNotFound(res, `Version ${version} not found for workflow ${id}`);
+        }
+
+        const snapshot = JSON.parse(await fs.readFile(join(historyDir, versionFile), 'utf-8'));
+
+        // Remove internal publishing metadata before restoring
+        const { _publishedAt, _publishedBy, ...workflowData } = snapshot;
+
+        const workflowPath = join(getRootDir(), 'contents', 'workflows', `${id}.json`);
+        await atomicWriteJSON(workflowPath, workflowData);
+
+        res.json({ success: true, activated: workflowData.version, workflow: workflowData });
+      } catch (error) {
+        return sendNotFound(res, `Version ${version} not found or history directory missing`);
+      }
+    }
+  );
+
   return {
     workflowEngine,
     workflowClients
