@@ -10,7 +10,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ModelFormEditor from '../components/ModelFormEditor';
 
-const AdminModelEditPage = () => {
+function AdminModelEditPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -485,6 +485,6 @@ const AdminModelEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminModelEditPage;

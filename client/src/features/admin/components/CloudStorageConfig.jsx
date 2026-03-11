@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const CloudStorageConfig = () => {
+function CloudStorageConfig() {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     enabled: false,
@@ -788,6 +788,6 @@ const CloudStorageConfig = () => {
       </div>
     </div>
   );
-};
+}
 
 export default CloudStorageConfig;

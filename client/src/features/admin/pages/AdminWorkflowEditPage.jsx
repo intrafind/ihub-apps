@@ -22,7 +22,7 @@ import {
  *
  * Follows the same patterns as AdminToolEditPage.jsx.
  */
-const AdminWorkflowEditPage = () => {
+function AdminWorkflowEditPage() {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
@@ -478,6 +478,6 @@ const AdminWorkflowEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminWorkflowEditPage;

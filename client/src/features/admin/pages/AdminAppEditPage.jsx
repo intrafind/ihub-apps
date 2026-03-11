@@ -10,7 +10,7 @@ import { fetchJsonSchema } from '../../../utils/schemaService';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
-const AdminAppEditPage = () => {
+function AdminAppEditPage() {
   const { t } = useTranslation();
   const { appId } = useParams();
   const navigate = useNavigate();
@@ -499,6 +499,6 @@ const AdminAppEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminAppEditPage;

@@ -20,7 +20,7 @@ import {
  * @param {Array} props.apps - Available apps for linking
  * @param {Array} props.categories - Available categories
  */
-const PromptFormEditor = ({
+function PromptFormEditor({
   value: data,
   onChange,
   onValidationChange,
@@ -29,7 +29,7 @@ const PromptFormEditor = ({
   apps = [],
   categories = [],
   jsonSchema
-}) => {
+}) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [validationErrors, setValidationErrors] = useState({});
@@ -500,6 +500,6 @@ const PromptFormEditor = ({
       </div>
     </div>
   );
-};
+}
 
 export default PromptFormEditor;

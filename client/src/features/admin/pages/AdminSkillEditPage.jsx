@@ -25,7 +25,7 @@ import {
  *
  * Follows the same layout conventions as AdminToolEditPage.
  */
-const AdminSkillEditPage = () => {
+function AdminSkillEditPage() {
   const { t } = useTranslation();
   const { skillName } = useParams();
   const navigate = useNavigate();
@@ -663,6 +663,6 @@ const AdminSkillEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminSkillEditPage;

@@ -7,7 +7,7 @@ import SourceConfigForm from '../components/SourceConfigForm';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
 
-const AdminSourceEditPage = () => {
+function AdminSourceEditPage() {
   const { t } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
@@ -419,6 +419,6 @@ const AdminSourceEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminSourceEditPage;

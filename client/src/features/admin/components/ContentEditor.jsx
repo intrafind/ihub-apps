@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
-const ContentEditor = ({ config, onUpdate }) => {
+function ContentEditor({ config, onUpdate }) {
   const { t } = useTranslation();
   const [activeSection, setActiveSection] = useState('title');
 
@@ -371,6 +371,6 @@ const ContentEditor = ({ config, onUpdate }) => {
       )}
     </div>
   );
-};
+}
 
 export default ContentEditor;

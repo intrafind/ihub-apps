@@ -12,7 +12,7 @@ const JWT_SUBJECT_OPTIONS = [
   { value: 'custom', label: 'Custom template' }
 ];
 
-const IFinderConfig = () => {
+function IFinderConfig() {
   const { t } = useTranslation();
   const [iFinderConfig, setIFinderConfig] = useState({
     enabled: false,
@@ -515,6 +515,6 @@ const IFinderConfig = () => {
       </div>
     </div>
   );
-};
+}
 
 export default IFinderConfig;

@@ -6,7 +6,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { fetchAdminPage, createPage, updatePage } from '../../../api/adminApi';
 
-const AdminPageEditPage = () => {
+function AdminPageEditPage() {
   const { t } = useTranslation();
   const { pageId } = useParams();
   const navigate = useNavigate();
@@ -206,6 +206,6 @@ const AdminPageEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminPageEditPage;

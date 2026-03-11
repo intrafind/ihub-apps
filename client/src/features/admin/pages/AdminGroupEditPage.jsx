@@ -10,7 +10,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 
-const AdminGroupEditPage = () => {
+function AdminGroupEditPage() {
   const { t } = useTranslation();
   const { groupId } = useParams();
   const navigate = useNavigate();
@@ -257,6 +257,6 @@ const AdminGroupEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminGroupEditPage;

@@ -15,7 +15,7 @@ import { fetchJsonSchema } from '../../../utils/schemaService';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PromptFormEditor from '../components/PromptFormEditor';
 
-const AdminPromptEditPage = () => {
+function AdminPromptEditPage() {
   const { t } = useTranslation();
   const { promptId } = useParams();
   const navigate = useNavigate();
@@ -284,6 +284,6 @@ const AdminPromptEditPage = () => {
       </div>
     </div>
   );
-};
+}
 
 export default AdminPromptEditPage;

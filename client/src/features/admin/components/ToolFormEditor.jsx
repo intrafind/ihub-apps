@@ -5,7 +5,7 @@ import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEdi
  * ToolFormEditor - Form interface for editing tool configurations
  * Used within DualModeEditor to provide form-based tool editing
  */
-const ToolFormEditor = ({ value, onChange, isNewTool }) => {
+function ToolFormEditor({ value, onChange, isNewTool }) {
   const { t } = useTranslation();
 
   const handleInputChange = (field, fieldValue) => {
@@ -271,6 +271,6 @@ const ToolFormEditor = ({ value, onChange, isNewTool }) => {
       </div>
     </div>
   );
-};
+}
 
 export default ToolFormEditor;

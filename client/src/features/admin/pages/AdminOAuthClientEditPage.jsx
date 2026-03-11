@@ -8,7 +8,7 @@ import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
-const AdminOAuthClientEditPage = () => {
+function AdminOAuthClientEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { clientId } = useParams();
@@ -734,6 +734,6 @@ const AdminOAuthClientEditPage = () => {
       )}
     </AdminAuth>
   );
-};
+}
 
 export default AdminOAuthClientEditPage;

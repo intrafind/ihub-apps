@@ -10,12 +10,7 @@ import { fetchMimetypesConfig } from '../../../api/endpoints/config';
  * @param {Function} props.onChange - Callback when selection changes
  * @param {string[]} props.defaultFormats - Default formats to use if none selected
  */
-const MimeTypeSelector = ({
-  categoryType,
-  selectedFormats = [],
-  onChange,
-  defaultFormats = []
-}) => {
+function MimeTypeSelector({ categoryType, selectedFormats = [], onChange, defaultFormats = [] }) {
   const { t } = useTranslation();
   const [mimetypesConfig, setMimetypesConfig] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -120,6 +115,6 @@ const MimeTypeSelector = ({
       )}
     </div>
   );
-};
+}
 
 export default MimeTypeSelector;

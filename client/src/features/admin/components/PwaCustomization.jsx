@@ -21,7 +21,7 @@ const ICON_FIELDS = [
   }
 ];
 
-const PwaCustomization = ({ config, onUpdate, t }) => {
+function PwaCustomization({ config, onUpdate, t }) {
   const pwa = config || {};
 
   const handleChange = (field, value) => {
@@ -303,6 +303,6 @@ const PwaCustomization = ({ config, onUpdate, t }) => {
       )}
     </div>
   );
-};
+}
 
 export default PwaCustomization;

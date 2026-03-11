@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const SSLConfig = () => {
+function SSLConfig() {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     ignoreInvalidCertificates: false,
@@ -338,6 +338,6 @@ const SSLConfig = () => {
       </div>
     </div>
   );
-};
+}
 
 export default SSLConfig;

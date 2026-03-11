@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const JiraConfig = () => {
+function JiraConfig() {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     enabled: false,
@@ -306,6 +306,6 @@ const JiraConfig = () => {
       </div>
     </div>
   );
-};
+}
 
 export default JiraConfig;

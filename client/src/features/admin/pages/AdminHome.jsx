@@ -6,7 +6,7 @@ import AdminSectionCard from '../components/AdminSectionCard';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-const AdminHome = () => {
+function AdminHome() {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
@@ -162,6 +162,6 @@ const AdminHome = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminHome;

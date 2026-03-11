@@ -7,7 +7,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
-const AdminOAuthClientsPage = () => {
+function AdminOAuthClientsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -653,6 +653,6 @@ const AdminOAuthClientsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminOAuthClientsPage;

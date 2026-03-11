@@ -11,13 +11,13 @@ import {
 /**
  * GroupFormEditor - Form-based editor for group configuration
  */
-const GroupFormEditor = ({
+function GroupFormEditor({
   value: group,
   onChange,
   onValidationChange,
   resources = { apps: [], models: [], prompts: [], workflows: [], skills: [] },
   jsonSchema
-}) => {
+}) {
   const { t } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -335,6 +335,6 @@ const GroupFormEditor = ({
       </div>
     </div>
   );
-};
+}
 
 export default GroupFormEditor;

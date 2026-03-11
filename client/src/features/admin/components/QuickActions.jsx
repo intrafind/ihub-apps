@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-const QuickActions = ({ isEnabled }) => {
+function QuickActions({ isEnabled }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const featureFlags = useFeatureFlags();
@@ -56,6 +56,6 @@ const QuickActions = ({ isEnabled }) => {
       </div>
     </div>
   );
-};
+}
 
 export default QuickActions;

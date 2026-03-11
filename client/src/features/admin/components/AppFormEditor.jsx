@@ -29,14 +29,14 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * @param {Object} props.uiConfig - UI configuration for categories etc.
  * @returns {React.Component} AppFormEditor component
  */
-const AppFormEditor = ({
+function AppFormEditor({
   value: app,
   onChange,
   onValidationChange,
   availableModels = [],
   uiConfig = null,
   jsonSchema
-}) => {
+}) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [validationErrors, setValidationErrors] = useState({});
@@ -1987,6 +1987,6 @@ const AppFormEditor = ({
       )}
     </div>
   );
-};
+}
 
 export default AppFormEditor;

@@ -11,13 +11,13 @@ import {
 /**
  * UserFormEditor - Form-based editor for user configuration
  */
-const UserFormEditor = ({
+function UserFormEditor({
   value: user,
   onChange,
   onValidationChange,
   isNewUser = false,
   jsonSchema
-}) => {
+}) {
   const { t } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -448,6 +448,6 @@ const UserFormEditor = ({
       </div>
     </div>
   );
-};
+}
 
 export default UserFormEditor;

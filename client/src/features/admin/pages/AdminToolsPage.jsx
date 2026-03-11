@@ -7,7 +7,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { fetchAdminTools, makeAdminApiCall, toggleTool, deleteTool } from '../../../api/adminApi';
 
-const AdminToolsPage = () => {
+function AdminToolsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -516,6 +516,6 @@ const AdminToolsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminToolsPage;

@@ -22,7 +22,7 @@ import {
  * @param {Function} props.onSave - Callback invoked after successful save
  * @param {Function} props.onCancel - Callback invoked when the dialog is dismissed
  */
-const RegistryFormDialog = ({ registry, onSave, onCancel }) => {
+function RegistryFormDialog({ registry, onSave, onCancel }) {
   const { t } = useTranslation();
   const isEdit = !!registry;
 
@@ -412,6 +412,6 @@ const RegistryFormDialog = ({ registry, onSave, onCancel }) => {
       </div>
     </div>
   );
-};
+}
 
 export default RegistryFormDialog;

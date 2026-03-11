@@ -1,6 +1,6 @@
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
-const HeaderCustomization = ({ config, onUpdate, t }) => {
+function HeaderCustomization({ config, onUpdate, t }) {
   // Map config links to component format
   const mappedLinks = (config.links || []).map(link => ({
     text: link.name || link.text || { en: '' },
@@ -324,6 +324,6 @@ const HeaderCustomization = ({ config, onUpdate, t }) => {
       </div>
     </div>
   );
-};
+}
 
 export default HeaderCustomization;

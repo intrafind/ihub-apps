@@ -107,7 +107,7 @@ function shortenId(id) {
  *
  * @returns {JSX.Element} The rendered admin workflow executions page
  */
-const AdminWorkflowExecutionsPage = () => {
+function AdminWorkflowExecutionsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -608,6 +608,6 @@ const AdminWorkflowExecutionsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminWorkflowExecutionsPage;

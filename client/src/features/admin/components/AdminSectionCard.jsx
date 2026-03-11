@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 
-const AdminSectionCard = ({ section }) => {
+function AdminSectionCard({ section }) {
   return (
     <Link
       to={section.href}
@@ -28,6 +28,6 @@ const AdminSectionCard = ({ section }) => {
       </div>
     </Link>
   );
-};
+}
 
 export default AdminSectionCard;

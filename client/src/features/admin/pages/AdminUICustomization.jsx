@@ -11,7 +11,7 @@ import PwaCustomization from '../components/PwaCustomization';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
-const AdminUICustomization = () => {
+function AdminUICustomization() {
   const { t } = useTranslation();
   const { uiConfig, refreshUIConfig } = useUIConfig();
   const [config, setConfig] = useState(null);
@@ -318,6 +318,6 @@ const AdminUICustomization = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminUICustomization;

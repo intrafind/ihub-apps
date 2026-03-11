@@ -6,7 +6,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
-const AdminFeaturesPage = () => {
+function AdminFeaturesPage() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
   const { refreshConfig } = usePlatformConfig();
@@ -184,6 +184,6 @@ const AdminFeaturesPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminFeaturesPage;

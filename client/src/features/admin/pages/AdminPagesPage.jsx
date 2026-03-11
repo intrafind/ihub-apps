@@ -7,7 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import { fetchAdminPages, deletePage } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
-const AdminPagesPage = () => {
+function AdminPagesPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -155,6 +155,6 @@ const AdminPagesPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminPagesPage;

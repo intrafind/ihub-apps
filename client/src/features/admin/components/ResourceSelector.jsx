@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import Icon from '../../../shared/components/Icon';
 
-const ResourceSelector = ({
+function ResourceSelector({
   label,
   resources,
   selectedResources,
@@ -9,7 +9,7 @@ const ResourceSelector = ({
   allowWildcard = true,
   placeholder = 'Search and select...',
   emptyMessage = 'No items selected'
-}) => {
+}) {
   const [searchTerm, setSearchTerm] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
 
@@ -180,6 +180,6 @@ const ResourceSelector = ({
       )}
     </div>
   );
-};
+}
 
 export default ResourceSelector;

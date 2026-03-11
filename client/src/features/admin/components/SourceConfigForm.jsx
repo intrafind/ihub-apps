@@ -4,7 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import FileUploader from './FileUploader';
 
-const SourceConfigForm = ({ source, onChange, onSave, saving, isEditing }) => {
+function SourceConfigForm({ source, onChange, onSave, saving, isEditing }) {
   const { t } = useTranslation();
   const [formData, setFormData] = useState(source || {});
   const [validationErrors, setValidationErrors] = useState({});
@@ -558,6 +558,6 @@ const SourceConfigForm = ({ source, onChange, onSave, saving, isEditing }) => {
       </div>
     </form>
   );
-};
+}
 
 export default SourceConfigForm;
