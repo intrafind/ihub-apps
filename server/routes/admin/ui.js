@@ -103,7 +103,7 @@ export default function registerAdminUIRoutes(app) {
           asset: assetInfo
         });
       } catch (error) {
-        logger.error('Error uploading asset:', error);
+        logger.error('Error uploading asset', { component: 'AdminUI', error });
         res.status(500).json({
           success: false,
           message: 'Failed to upload asset',
@@ -154,7 +154,11 @@ export default function registerAdminUIRoutes(app) {
               isImage: ['.svg', '.png', '.jpg', '.jpeg', '.ico'].includes(ext)
             };
           } catch (statError) {
-            logger.warn(`Error reading file stats for ${filename}:`, statError.message);
+            logger.warn('Error reading file stats', {
+              component: 'AdminUI',
+              filename,
+              error: statError.message
+            });
             return null;
           }
         })
@@ -163,7 +167,7 @@ export default function registerAdminUIRoutes(app) {
 
       res.json({ success: true, assets });
     } catch (error) {
-      logger.error('Error listing assets:', error);
+      logger.error('Error listing assets', { component: 'AdminUI', error });
       res.status(500).json({
         success: false,
         message: 'Failed to load assets',
@@ -203,7 +207,7 @@ export default function registerAdminUIRoutes(app) {
         message: 'Asset deleted successfully'
       });
     } catch (error) {
-      logger.error('Error deleting asset:', error);
+      logger.error('Error deleting asset', { component: 'AdminUI', error });
       res.status(500).json({
         success: false,
         message: 'Failed to delete asset',
@@ -224,7 +228,7 @@ export default function registerAdminUIRoutes(app) {
         config: uiConfig?.data || {}
       });
     } catch (error) {
-      logger.error('Error getting UI config:', error);
+      logger.error('Error getting UI config', { component: 'AdminUI', error });
       res.status(500).json({
         success: false,
         message: 'Failed to get UI configuration',
@@ -264,7 +268,7 @@ export default function registerAdminUIRoutes(app) {
         message: 'UI configuration updated successfully'
       });
     } catch (error) {
-      logger.error('Error updating UI config:', error);
+      logger.error('Error updating UI config', { component: 'AdminUI', error });
       res.status(500).json({
         success: false,
         message: 'Failed to update UI configuration',
@@ -297,7 +301,7 @@ export default function registerAdminUIRoutes(app) {
         backupPath: `backups/ui-config-backup-${timestamp}.json`
       });
     } catch (error) {
-      logger.error('Error backing up UI config:', error);
+      logger.error('Error backing up UI config', { component: 'AdminUI', error });
       res.status(500).json({
         success: false,
         message: 'Failed to backup UI configuration',

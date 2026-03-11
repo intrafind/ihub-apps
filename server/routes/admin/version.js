@@ -29,7 +29,7 @@ export default function registerAdminVersionRoutes(app) {
         node: process.version
       });
     } catch (error) {
-      logger.error('Error getting version information:', error);
+      logger.error('Error getting version information', { component: 'AdminVersion', error });
       res.status(500).json({ error: 'Failed to get version information' });
     }
   });
@@ -95,7 +95,7 @@ export default function registerAdminVersionRoutes(app) {
         publishedAt: releaseData.published_at
       });
     } catch (error) {
-      logger.error('Error checking for updates:', error);
+      logger.error('Error checking for updates', { component: 'AdminVersion', error });
 
       // Return graceful response with no update available on error
       const currentVersion = getAppVersion();

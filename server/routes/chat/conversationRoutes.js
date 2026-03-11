@@ -121,7 +121,10 @@ export default function registerConversationRoutes(app) {
 
         res.json(result);
       } catch (error) {
-        logger.error('Conversation messages route error:', error);
+        logger.error('Conversation messages route error', {
+          component: 'ConversationRoutes',
+          error
+        });
         res.status(500).json({ error: error.message });
       }
     }
@@ -195,7 +198,10 @@ export default function registerConversationRoutes(app) {
 
         res.status(204).send();
       } catch (error) {
-        logger.error('Conversation delete message route error:', error);
+        logger.error('Conversation delete message route error', {
+          component: 'ConversationRoutes',
+          error
+        });
         res.status(500).json({ error: error.message });
       }
     }
@@ -263,7 +269,7 @@ export default function registerConversationRoutes(app) {
 
         res.status(204).send();
       } catch (error) {
-        logger.error('Conversation delete route error:', error);
+        logger.error('Conversation delete route error', { component: 'ConversationRoutes', error });
         res.status(500).json({ error: error.message });
       }
     }

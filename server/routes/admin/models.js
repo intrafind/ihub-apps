@@ -68,9 +68,8 @@ export default function registerAdminModelsRoutes(app) {
       res.setHeader('ETag', modelsEtag);
       res.json(maskedModels);
     } catch (error) {
-      logger.error({
+      logger.error('Error fetching all models', {
         component: 'ModelsRoutes',
-        message: 'Error fetching all models',
         error: error.message,
         stack: error.stack
       });
@@ -108,9 +107,8 @@ export default function registerAdminModelsRoutes(app) {
       res.setHeader('ETag', modelsEtag);
       res.json(maskedModel);
     } catch (error) {
-      logger.error({
+      logger.error('Error fetching model', {
         component: 'ModelsRoutes',
-        message: 'Error fetching model',
         modelId: req.params.modelId,
         error: error.message,
         stack: error.stack
@@ -150,7 +148,7 @@ export default function registerAdminModelsRoutes(app) {
           try {
             updatedModel.apiKey = tokenStorageService.encryptString(updatedModel.apiKey);
           } catch (error) {
-            logger.error('Error encrypting API key:', error);
+            logger.error('Error encrypting API key', { component: 'ModelsRoutes', error });
             return res.status(500).json({ error: 'Failed to encrypt API key' });
           }
         } else {
@@ -175,7 +173,10 @@ export default function registerAdminModelsRoutes(app) {
               delete updatedModel.apiKey;
             }
           } catch (error) {
-            logger.error('Error reading existing model from disk:', error);
+            logger.error('Error reading existing model from disk', {
+              component: 'ModelsRoutes',
+              error
+            });
             // Fallback to removing the masked placeholder
             delete updatedModel.apiKey;
           }
@@ -203,9 +204,8 @@ export default function registerAdminModelsRoutes(app) {
       await configCache.refreshModelsCache();
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
-      logger.error({
+      logger.error('Error updating model', {
         component: 'ModelsRoutes',
-        message: 'Error updating model',
         modelId: req.params.modelId,
         error: error.message,
         stack: error.stack
@@ -238,7 +238,7 @@ export default function registerAdminModelsRoutes(app) {
         try {
           newModel.apiKey = tokenStorageService.encryptString(newModel.apiKey);
         } catch (error) {
-          logger.error('Error encrypting API key:', error);
+          logger.error('Error encrypting API key', { component: 'ModelsRoutes', error });
           return res.status(500).json({ error: 'Failed to encrypt API key' });
         }
       } else if (newModel.apiKey === '••••••••') {
@@ -273,9 +273,8 @@ export default function registerAdminModelsRoutes(app) {
       await configCache.refreshModelsCache();
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
-      logger.error({
+      logger.error('Error creating model', {
         component: 'ModelsRoutes',
-        message: 'Error creating model',
         error: error.message,
         stack: error.stack
       });
@@ -323,7 +322,7 @@ export default function registerAdminModelsRoutes(app) {
         enabled: newEnabledState
       });
     } catch (error) {
-      logger.error('Error toggling model:', error);
+      logger.error('Error toggling model', { component: 'ModelsRoutes', error });
       res.status(500).json({ error: 'Failed to toggle model' });
     }
   });
@@ -372,7 +371,7 @@ export default function registerAdminModelsRoutes(app) {
         ids: resolvedIds
       });
     } catch (error) {
-      logger.error('Error toggling models:', error);
+      logger.error('Error toggling models', { component: 'ModelsRoutes', error });
       res.status(500).json({ error: 'Failed to toggle models' });
     }
   });
@@ -414,7 +413,7 @@ export default function registerAdminModelsRoutes(app) {
       await removeMarketplaceInstallation('model', modelId);
       res.json({ message: 'Model deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting model:', error);
+      logger.error('Error deleting model', { component: 'ModelsRoutes', error });
       res.status(500).json({ error: 'Failed to delete model' });
     }
   });
@@ -452,7 +451,7 @@ export default function registerAdminModelsRoutes(app) {
           model: model
         });
       } catch (testError) {
-        logger.error('Model test failed:', testError);
+        logger.error('Model test failed', { component: 'ModelsRoutes', error: testError });
         let errorMessage = 'Unknown error occurred';
         let userMessage = 'Model test failed';
         if (testError.message.includes('fetch failed')) {
@@ -505,7 +504,7 @@ export default function registerAdminModelsRoutes(app) {
         });
       }
     } catch (error) {
-      logger.error('Error testing model:', error);
+      logger.error('Error testing model', { component: 'ModelsRoutes', error });
       res.status(500).json({
         success: false,
         message: 'System error',

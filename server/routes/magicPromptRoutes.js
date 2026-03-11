@@ -47,7 +47,10 @@ export default function registerMagicPromptRoutes(app) {
           // Double-check fallback model exists
           const fallbackExists = models.some(m => m.id === fallbackModel);
           if (!fallbackExists) {
-            logger.warn(`Fallback model '${fallbackModel}' not found, using first available model`);
+            logger.warn('Fallback model not found, using first available model', {
+              component: 'MagicPrompt',
+              fallbackModel
+            });
             selectedModelId = models[0]?.id;
           }
         }
@@ -82,7 +85,7 @@ export default function registerMagicPromptRoutes(app) {
 
         return res.json({ prompt: newPrompt });
       } catch (error) {
-        logger.error('Error generating magic prompt:', error);
+        logger.error('Error generating magic prompt', { component: 'MagicPrompt', error });
         return res.status(500).json({ error: 'Internal server error' });
       }
     }

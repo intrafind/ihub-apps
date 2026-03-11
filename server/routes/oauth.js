@@ -640,7 +640,7 @@ export default function registerOAuthRoutes(app) {
 
       res.json(introspection);
     } catch (error) {
-      logger.error('[OAuth] Introspection endpoint error:', error);
+      logger.error('[OAuth] Introspection endpoint error', { component: 'OAuth', error });
       sendOAuthError(res, 500, 'server_error', 'An internal error occurred');
     }
   });
@@ -703,7 +703,7 @@ export default function registerOAuthRoutes(app) {
       logger.info('[OAuth] Revocation request processed', { component: 'OAuth', ip: req.ip });
       res.status(200).json({ revoked: true });
     } catch (error) {
-      logger.error('[OAuth] Revocation endpoint error:', error);
+      logger.error('[OAuth] Revocation endpoint error', { component: 'OAuth', error });
       sendOAuthError(res, 500, 'server_error', 'An internal error occurred');
     }
   });
@@ -799,7 +799,7 @@ export default function registerOAuthRoutes(app) {
       });
       res.json(userInfo);
     } catch (error) {
-      logger.error('[OAuth] UserInfo endpoint error:', error);
+      logger.error('[OAuth] UserInfo endpoint error', { component: 'OAuth', error });
       res
         .status(500)
         .json({ error: 'server_error', error_description: 'An internal error occurred' });
@@ -872,7 +872,7 @@ export default function registerOAuthRoutes(app) {
       logger.info('[OAuth] Logout completed', { component: 'OAuth' });
       res.json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
-      logger.error('[OAuth] Logout endpoint error:', error);
+      logger.error('[OAuth] Logout endpoint error', { component: 'OAuth', error });
       res
         .status(500)
         .json({ error: 'server_error', error_description: 'An internal error occurred' });

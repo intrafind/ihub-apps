@@ -404,7 +404,10 @@ export default function registerOAuthAuthorizeRoutes(app) {
       res.setHeader('Cache-Control', 'no-store');
       res.send(html);
     } catch (error) {
-      logger.error('[OAuth Authorize] Error in GET /authorize:', error);
+      logger.error('[OAuth Authorize] Error in GET /authorize', {
+        component: 'OAuthAuthorize',
+        error
+      });
       res.status(500).send('server_error: An internal error occurred');
     }
   });
@@ -530,7 +533,10 @@ export default function registerOAuthAuthorizeRoutes(app) {
       });
       return res.redirect(callbackUrl.toString());
     } catch (error) {
-      logger.error('[OAuth Authorize] Error in POST /authorize/decision:', error);
+      logger.error('[OAuth Authorize] Error in POST /authorize/decision', {
+        component: 'OAuthAuthorize',
+        error
+      });
       res.status(500).send('server_error: An internal error occurred');
     }
   });

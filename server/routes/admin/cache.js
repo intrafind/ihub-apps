@@ -15,7 +15,7 @@ export default function registerAdminCacheRoutes(app) {
       const data = await getUsage();
       res.json(data);
     } catch (e) {
-      logger.error('Error loading usage data:', e);
+      logger.error('Error loading usage data', { component: 'AdminCache', error: e });
       res.status(500).json({ error: 'Failed to load usage data' });
     }
   });
@@ -25,7 +25,7 @@ export default function registerAdminCacheRoutes(app) {
       const stats = configCache.getStats();
       res.json(stats);
     } catch (e) {
-      logger.error('Error getting cache stats:', e);
+      logger.error('Error getting cache stats', { component: 'AdminCache', error: e });
       res.status(500).json({ error: 'Failed to get cache statistics' });
     }
   });
@@ -35,7 +35,7 @@ export default function registerAdminCacheRoutes(app) {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
     } catch (e) {
-      logger.error('Error refreshing cache:', e);
+      logger.error('Error refreshing cache', { component: 'AdminCache', error: e });
       res.status(500).json({ error: 'Failed to refresh cache' });
     }
   });
@@ -51,7 +51,7 @@ export default function registerAdminCacheRoutes(app) {
       await configCache.initialize();
       res.json({ message: 'Configuration cache cleared successfully' });
     } catch (e) {
-      logger.error('Error clearing cache:', e);
+      logger.error('Error clearing cache', { component: 'AdminCache', error: e });
       res.status(500).json({ error: 'Failed to clear cache' });
     }
   });
@@ -75,14 +75,17 @@ export default function registerAdminCacheRoutes(app) {
       await atomicWriteJSON(platformConfigPath, platformConfig);
       await new Promise(resolve => setTimeout(resolve, 100));
       await configCache.refreshCacheEntry('config/platform.json');
-      logger.info(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.salt}`);
+      logger.info('Force refresh triggered', {
+        component: 'AdminCache',
+        newAdminSalt: platformConfig.refreshSalt.salt
+      });
       res.json({
         message: 'Force refresh triggered successfully',
         newAdminSalt: platformConfig.refreshSalt.salt,
         timestamp: platformConfig.refreshSalt.lastUpdated
       });
     } catch (error) {
-      logger.error('Error triggering force refresh:', error);
+      logger.error('Error triggering force refresh', { component: 'AdminCache', error });
       res.status(500).json({ error: 'Failed to trigger force refresh' });
     }
   });

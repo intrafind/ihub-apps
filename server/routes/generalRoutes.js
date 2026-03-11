@@ -189,7 +189,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       res.setHeader('ETag', userSpecificEtag);
       res.json(apps);
     } catch (error) {
-      logger.error('Error fetching apps:', error);
+      logger.error('Error fetching apps', { component: 'GeneralRoutes', error });
       res.status(500).json({ error: 'Internal server error' });
     }
   });
@@ -319,7 +319,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         environment: process.env.NODE_ENV || 'development'
       });
     } catch (error) {
-      logger.error('Health check error:', error);
+      logger.error('Health check error', { component: 'GeneralRoutes', error });
       res.status(500).json({
         status: 'ERROR',
         error: 'Health check failed',
@@ -362,7 +362,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
 
         res.json(appData);
       } catch (error) {
-        logger.error('Error fetching app details:', error);
+        logger.error('Error fetching app details', { component: 'GeneralRoutes', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }

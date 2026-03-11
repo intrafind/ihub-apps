@@ -305,7 +305,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       res.json(prompts);
     } catch (error) {
-      logger.error('Error fetching all prompts:', error);
+      logger.error('Error fetching all prompts', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Failed to fetch prompts' });
     }
   });
@@ -403,7 +403,7 @@ export default function registerAdminPromptsRoutes(app) {
       }
       res.json(prompt);
     } catch (error) {
-      logger.error('Error fetching prompt:', error);
+      logger.error('Error fetching prompt', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Failed to fetch prompt' });
     }
   });
@@ -534,7 +534,7 @@ export default function registerAdminPromptsRoutes(app) {
       await configCache.refreshPromptsCache();
       res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
     } catch (error) {
-      logger.error('Error updating prompt:', error);
+      logger.error('Error updating prompt', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Failed to update prompt' });
     }
   });
@@ -660,7 +660,7 @@ export default function registerAdminPromptsRoutes(app) {
       await configCache.refreshPromptsCache();
       res.json({ message: 'Prompt created successfully', prompt: newPrompt });
     } catch (error) {
-      logger.error('Error creating prompt:', error);
+      logger.error('Error creating prompt', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Failed to create prompt' });
     }
   });
@@ -767,7 +767,7 @@ export default function registerAdminPromptsRoutes(app) {
         enabled: newEnabledState
       });
     } catch (error) {
-      logger.error('Error toggling prompt:', error);
+      logger.error('Error toggling prompt', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Failed to toggle prompt' });
     }
   });
@@ -915,7 +915,7 @@ export default function registerAdminPromptsRoutes(app) {
           ids: resolvedIds
         });
       } catch (error) {
-        logger.error('Error toggling prompts:', error);
+        logger.error('Error toggling prompts', { component: 'AdminPrompts', error });
         res.status(500).json({ error: 'Failed to toggle prompts' });
       }
     }
@@ -1019,7 +1019,7 @@ export default function registerAdminPromptsRoutes(app) {
       await removeMarketplaceInstallation('prompt', promptId);
       res.json({ message: 'Prompt deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting prompt:', error);
+      logger.error('Error deleting prompt', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Failed to delete prompt' });
     }
   });
@@ -1183,14 +1183,17 @@ export default function registerAdminPromptsRoutes(app) {
         usage: result.usage
       });
     } catch (error) {
-      logger.error('Error in completions endpoint:', error);
+      logger.error('Error in completions endpoint', { component: 'AdminPrompts', error });
       const { getLocalizedError } = await import('../../serverHelpers.js');
       const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
       let errorMessage = 'Failed to generate completion';
       try {
         errorMessage = await getLocalizedError('internalError', {}, defaultLang);
       } catch (localizationError) {
-        logger.warn('Failed to get localized error message:', localizationError);
+        logger.warn('Failed to get localized error message', {
+          component: 'AdminPrompts',
+          error: localizationError
+        });
       }
       res.status(500).json({ error: errorMessage, details: error.message });
     }
@@ -1293,7 +1296,7 @@ export default function registerAdminPromptsRoutes(app) {
         appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
       res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
     } catch (error) {
-      logger.error('Error fetching app-generator prompt:', error);
+      logger.error('Error fetching app-generator prompt', { component: 'AdminPrompts', error });
       res.status(500).json({ error: 'Internal server error' });
     }
   });

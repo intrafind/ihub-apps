@@ -38,7 +38,7 @@ export default function registerAdminLoggingRoutes(app) {
       const levelInfo = logger.getLogLevelInfo();
       res.json(levelInfo);
     } catch (error) {
-      logger.error('Error getting log level:', error);
+      logger.error('Error getting log level', { component: 'AdminLogging', error });
       res.status(500).json({ error: 'Failed to get log level' });
     }
   });
@@ -88,7 +88,7 @@ export default function registerAdminLoggingRoutes(app) {
 
       // Update logger immediately
       logger.setLogLevel(level);
-      logger.info(`Log level changed to: ${level}`);
+      logger.info('Log level changed', { component: 'AdminLogging', level });
 
       // Optionally persist to platform.json
       if (persist) {
@@ -115,7 +115,7 @@ export default function registerAdminLoggingRoutes(app) {
         // Reconfigure logger to pick up any other changes
         logger.reconfigureLogger();
 
-        logger.info(`Log level persisted to platform.json: ${level}`);
+        logger.info('Log level persisted to platform.json', { component: 'AdminLogging', level });
       }
 
       res.json({
@@ -125,7 +125,7 @@ export default function registerAdminLoggingRoutes(app) {
         message: `Log level updated to ${level}${persist ? ' and saved to configuration' : ' (runtime only)'}`
       });
     } catch (error) {
-      logger.error('Error updating log level:', error);
+      logger.error('Error updating log level', { component: 'AdminLogging', error });
       res.status(500).json({ error: 'Failed to update log level' });
     }
   });
@@ -158,7 +158,7 @@ export default function registerAdminLoggingRoutes(app) {
 
       res.json(loggingConfig);
     } catch (error) {
-      logger.error('Error getting logging config:', error);
+      logger.error('Error getting logging config', { component: 'AdminLogging', error });
       res.status(500).json({ error: 'Failed to get logging configuration' });
     }
   });
@@ -222,7 +222,7 @@ export default function registerAdminLoggingRoutes(app) {
       // Reconfigure logger to pick up changes
       logger.reconfigureLogger();
 
-      logger.info('Logging configuration updated:', newLoggingConfig);
+      logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
 
       res.json({
         success: true,
@@ -230,7 +230,7 @@ export default function registerAdminLoggingRoutes(app) {
         message: 'Logging configuration updated successfully'
       });
     } catch (error) {
-      logger.error('Error updating logging config:', error);
+      logger.error('Error updating logging config', { component: 'AdminLogging', error });
       res.status(500).json({ error: 'Failed to update logging configuration' });
     }
   });

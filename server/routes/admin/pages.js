@@ -26,7 +26,7 @@ export default function registerAdminPagesRoutes(app) {
       }));
       res.json(pages);
     } catch (error) {
-      logger.error('Error fetching pages:', error);
+      logger.error('Error fetching pages', { component: 'AdminPages', error });
       res.status(500).json({ error: 'Failed to fetch pages' });
     }
   });
@@ -53,7 +53,10 @@ export default function registerAdminPagesRoutes(app) {
           // Validate stored path stays within contents directory
           const abs = resolveAndValidatePath(relPath, contentsBase);
           if (!abs) {
-            logger.warn(`Skipping page file with invalid path: ${relPath}`);
+            logger.warn('Skipping page file with invalid path', {
+              component: 'AdminPages',
+              relPath
+            });
             content[lang] = '';
             continue;
           }
@@ -71,7 +74,7 @@ export default function registerAdminPagesRoutes(app) {
         contentType: page.contentType || 'markdown'
       });
     } catch (error) {
-      logger.error('Error fetching page:', error);
+      logger.error('Error fetching page', { component: 'AdminPages', error });
       res.status(500).json({ error: 'Failed to fetch page' });
     }
   });
@@ -123,7 +126,7 @@ export default function registerAdminPagesRoutes(app) {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page created successfully', page: { id, title } });
     } catch (error) {
-      logger.error('Error creating page:', error);
+      logger.error('Error creating page', { component: 'AdminPages', error });
       res.status(500).json({ error: 'Failed to create page' });
     }
   });
@@ -180,7 +183,7 @@ export default function registerAdminPagesRoutes(app) {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page updated successfully', page: { id, title } });
     } catch (error) {
-      logger.error('Error updating page:', error);
+      logger.error('Error updating page', { component: 'AdminPages', error });
       res.status(500).json({ error: 'Failed to update page' });
     }
   });
@@ -207,7 +210,10 @@ export default function registerAdminPagesRoutes(app) {
           // Validate stored path stays within contents directory
           const abs = resolveAndValidatePath(rel, contentsBase);
           if (!abs) {
-            logger.warn(`Skipping deletion of page file with invalid path: ${rel}`);
+            logger.warn('Skipping deletion of page file with invalid path', {
+              component: 'AdminPages',
+              rel
+            });
             continue;
           }
           await fs.unlink(abs);
@@ -218,7 +224,7 @@ export default function registerAdminPagesRoutes(app) {
       await configCache.refreshCacheEntry('config/ui.json');
       res.json({ message: 'Page deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting page:', error);
+      logger.error('Error deleting page', { component: 'AdminPages', error });
       res.status(500).json({ error: 'Failed to delete page' });
     }
   });

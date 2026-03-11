@@ -501,7 +501,10 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
 
           res.json(openAIResponse);
         } catch (error) {
-          logger.error('[OpenAI Proxy] Error processing non-streaming response:', error);
+          logger.error('[OpenAI Proxy] Error processing non-streaming response', {
+            component: 'OpenAIProxy',
+            error
+          });
           // Fallback: try to parse as JSON and send as-is
           try {
             const parsed = JSON.parse(data);
@@ -512,9 +515,9 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         }
       }
     } catch (err) {
-      logger.error('[OpenAI Proxy] Error occurred:', {
-        error: err.message,
-        stack: err.stack,
+      logger.error('[OpenAI Proxy] Error occurred', {
+        component: 'OpenAIProxy',
+        error: err,
         modelId,
         provider: model?.provider,
         stream

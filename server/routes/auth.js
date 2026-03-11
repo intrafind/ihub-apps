@@ -142,7 +142,7 @@ export default function registerAuthRoutes(app) {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('Local login error:', error);
+      logger.error('Local login error', { component: 'Auth', error });
       res.status(401).json({
         success: false,
         error: error.message || 'Authentication failed'
@@ -294,7 +294,7 @@ export default function registerAuthRoutes(app) {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('LDAP login error:', error);
+      logger.error('LDAP login error', { component: 'Auth', error });
       res.status(401).json({
         success: false,
         error: error.message || 'Authentication failed'
@@ -370,14 +370,14 @@ export default function registerAuthRoutes(app) {
           returnUrl = '/';
         }
       } catch (error) {
-        logger.error('[Security] Invalid return URL:', returnUrl, error);
+        logger.error('[Security] Invalid return URL', { component: 'Auth', returnUrl, error });
         returnUrl = '/';
       }
 
       // Redirect to the validated return URL with success indicator
       res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
     } catch (error) {
-      logger.error('NTLM login error:', error);
+      logger.error('NTLM login error', { component: 'Auth', error });
       res.status(401).json({
         success: false,
         error: error.message || 'NTLM authentication failed'
@@ -427,7 +427,7 @@ export default function registerAuthRoutes(app) {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('NTLM login error:', error);
+      logger.error('NTLM login error', { component: 'Auth', error });
       res.status(401).json({
         success: false,
         error: error.message || 'NTLM authentication failed'
@@ -475,7 +475,7 @@ export default function registerAuthRoutes(app) {
       // Regenerate session to ensure clean state
       req.session.regenerate(err => {
         if (err) {
-          logger.error('Session regeneration error:', err);
+          logger.error('Session regeneration error', { component: 'Auth', error: err });
         }
 
         // Set flag in the new session to prevent NTLM auto-login
@@ -519,7 +519,7 @@ export default function registerAuthRoutes(app) {
           user: newUser
         });
       } catch (error) {
-        logger.error('User creation error:', error);
+        logger.error('User creation error', { component: 'Auth', error });
         res.status(400).json({
           success: false,
           error: error.message || 'Failed to create user'

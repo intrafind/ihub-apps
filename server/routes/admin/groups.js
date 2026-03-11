@@ -228,7 +228,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json(groupsData);
     } catch (error) {
-      logger.error('Error getting groups:', error);
+      logger.error('Error getting groups', { component: 'AdminGroups', error });
       res.status(500).json({ error: 'Failed to get groups' });
     }
   });
@@ -409,7 +409,7 @@ export default function registerAdminGroupRoutes(app) {
         skills: skills.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
-      logger.error('Error getting resources:', error);
+      logger.error('Error getting resources', { component: 'AdminGroups', error });
       res.status(500).json({ error: 'Failed to get resources' });
     }
   });
@@ -584,7 +584,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json({ group: newGroup });
     } catch (error) {
-      logger.error('Error creating group:', error);
+      logger.error('Error creating group', { component: 'AdminGroups', error });
       res.status(500).json({ error: 'Failed to create group' });
     }
   });
@@ -720,7 +720,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json({ group });
     } catch (error) {
-      logger.error('Error updating group:', error);
+      logger.error('Error updating group', { component: 'AdminGroups', error });
       res.status(500).json({ error: 'Failed to update group' });
     }
   });
@@ -839,7 +839,7 @@ export default function registerAdminGroupRoutes(app) {
 
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting group:', error);
+      logger.error('Error deleting group', { component: 'AdminGroups', error });
       res.status(500).json({ error: 'Failed to delete group' });
     }
   });

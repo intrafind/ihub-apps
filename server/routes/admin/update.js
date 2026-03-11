@@ -31,7 +31,7 @@ export default function registerAdminUpdateRoutes(app) {
       const result = await checkForUpdate();
       res.json(result);
     } catch (error) {
-      logger.error('Update check failed:', error);
+      logger.error('Update check failed', { component: 'AdminUpdate', error });
       res.status(500).json({ error: error.message });
     }
   });
@@ -72,7 +72,7 @@ export default function registerAdminUpdateRoutes(app) {
       const result = await downloadUpdate(updateInfo);
       res.json(result);
     } catch (error) {
-      logger.error('Update download failed:', error);
+      logger.error('Update download failed', { component: 'AdminUpdate', error });
       res.status(500).json({ error: error.message });
     }
   });
@@ -98,7 +98,7 @@ export default function registerAdminUpdateRoutes(app) {
         process.exit(UPDATE_RESTART_CODE);
       }, 1000);
     } catch (error) {
-      logger.error('Update apply failed:', error);
+      logger.error('Update apply failed', { component: 'AdminUpdate', error });
       res.status(500).json({ error: error.message });
     }
   });
@@ -124,7 +124,7 @@ export default function registerAdminUpdateRoutes(app) {
         process.exit(UPDATE_RESTART_CODE);
       }, 1000);
     } catch (error) {
-      logger.error('Rollback failed:', error);
+      logger.error('Rollback failed', { component: 'AdminUpdate', error });
       res.status(500).json({ error: error.message });
     }
   });

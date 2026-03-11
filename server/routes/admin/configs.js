@@ -212,7 +212,7 @@ function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
       results.reconfigured.push('OIDC providers');
       results.notes.push('OIDC providers reconfigured successfully');
     } catch (error) {
-      logger.error('Failed to reconfigure OIDC providers:', error);
+      logger.error('Failed to reconfigure OIDC providers', { component: 'AdminConfigs', error });
       results.notes.push(`OIDC reconfiguration failed: ${error.message}`);
     }
   }
@@ -430,7 +430,7 @@ export default function registerAdminConfigRoutes(app) {
 
       res.json(sanitizedConfig);
     } catch (error) {
-      logger.error('Error getting platform configuration:', error);
+      logger.error('Error getting platform configuration', { component: 'AdminConfigs', error });
       res.status(500).json({ error: 'Failed to get platform configuration' });
     }
   });
@@ -682,7 +682,7 @@ export default function registerAdminConfigRoutes(app) {
         }
       });
     } catch (error) {
-      logger.error('Error updating platform configuration:', error);
+      logger.error('Error updating platform configuration', { component: 'AdminConfigs', error });
       res.status(500).json({ error: 'Failed to update platform configuration' });
     }
   });

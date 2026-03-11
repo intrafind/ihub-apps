@@ -69,7 +69,7 @@ export default function registerPageRoutes(app) {
         contentType
       });
     } catch (error) {
-      logger.error('Error fetching page content:', error);
+      logger.error('Error fetching page content', { component: 'PageRoutes', error });
       res.status(500).json({ error: 'Failed to fetch page content' });
     }
   });

@@ -43,7 +43,7 @@ export default function registerAdminTranslateRoute(app) {
       });
       res.json({ translation: result.content });
     } catch (error) {
-      logger.error('Translation error:', error);
+      logger.error('Translation error', { component: 'AdminTranslate', error });
       res.status(500).json({ error: 'Translation failed' });
     }
   });

@@ -117,7 +117,7 @@ export default function registerShortLinkRoutes(app) {
       }
       res.redirect(link.url);
     } catch (e) {
-      logger.error('Error redirecting short link:', e);
+      logger.error('Error redirecting short link', { component: 'ShortLinkRoutes', error: e });
       res.status(500).send('Error');
     }
   });

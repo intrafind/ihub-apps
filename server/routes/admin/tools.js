@@ -220,7 +220,10 @@ export default function registerAdminToolsRoutes(app) {
             filePath
           });
         } catch (cleanupError) {
-          logger.error('Failed to cleanup tools file:', cleanupError);
+          logger.error('Failed to cleanup tools file', {
+            component: 'AdminTools',
+            error: cleanupError
+          });
           // Don't fail the request, just log the error
         }
       }
@@ -253,7 +256,7 @@ export default function registerAdminToolsRoutes(app) {
       }
       res.json(allTools);
     } catch (error) {
-      logger.error('Error fetching all tools:', error);
+      logger.error('Error fetching all tools', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to fetch tools' });
     }
   });
@@ -315,7 +318,7 @@ export default function registerAdminToolsRoutes(app) {
       }
       res.json(tool);
     } catch (error) {
-      logger.error('Error fetching tool:', error);
+      logger.error('Error fetching tool', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to fetch tool' });
     }
   });
@@ -417,7 +420,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.json({ message: 'Tool updated successfully', tool: updatedTool });
     } catch (error) {
-      logger.error('Error updating tool:', error);
+      logger.error('Error updating tool', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to update tool' });
     }
   });
@@ -508,7 +511,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.status(201).json({ message: 'Tool created successfully', tool: newTool });
     } catch (error) {
-      logger.error('Error creating tool:', error);
+      logger.error('Error creating tool', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to create tool' });
     }
   });
@@ -617,7 +620,7 @@ export default function registerAdminToolsRoutes(app) {
         scriptDeleted: tool.script ? true : false
       });
     } catch (error) {
-      logger.error('Error deleting tool:', error);
+      logger.error('Error deleting tool', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to delete tool' });
     }
   });
@@ -706,7 +709,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.json({ message: 'Tool state updated successfully', enabled: tool.enabled });
     } catch (error) {
-      logger.error('Error toggling tool:', error);
+      logger.error('Error toggling tool', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to toggle tool' });
     }
   });
@@ -789,7 +792,7 @@ export default function registerAdminToolsRoutes(app) {
         content
       });
     } catch (error) {
-      logger.error('Error reading tool script:', error);
+      logger.error('Error reading tool script', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to read tool script' });
     }
   });
@@ -894,7 +897,7 @@ export default function registerAdminToolsRoutes(app) {
 
       res.json({ message: 'Script updated successfully' });
     } catch (error) {
-      logger.error('Error updating tool script:', error);
+      logger.error('Error updating tool script', { component: 'AdminTools', error });
       res.status(500).json({ error: 'Failed to update tool script' });
     }
   });

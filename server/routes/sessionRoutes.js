@@ -36,7 +36,7 @@ export default function registerSessionRoutes(app) {
         await logNewSession(sessionId, type || 'app_loaded', enrichedMetadata);
         res.status(200).json({ success: true });
       } catch (error) {
-        logger.error('Error logging session start:', error);
+        logger.error('Error logging session start', { component: 'SessionRoutes', error });
         res.status(500).json({ error: 'Failed to log session start' });
       }
     }

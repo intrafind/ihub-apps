@@ -1993,7 +1993,7 @@ async function findSourceDependencies(sourceId) {
 
     return dependencies;
   } catch (error) {
-    logger.error('Error finding source dependencies:', error);
+    logger.error('Error finding source dependencies', { component: 'AdminSources', error });
     return [];
   }
 }

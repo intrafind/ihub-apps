@@ -31,7 +31,7 @@ export default function registerRendererRoutes(app) {
 
       res.json(rendererList);
     } catch (error) {
-      logger.error('Error loading renderers:', error);
+      logger.error('Error loading renderers', { component: 'RendererRoutes', error });
       res.status(500).json({
         error: 'Failed to load renderers',
         message: error.message
@@ -69,7 +69,7 @@ export default function registerRendererRoutes(app) {
       // Return full renderer including code
       res.json(renderer);
     } catch (error) {
-      logger.error('Error loading renderer:', error);
+      logger.error('Error loading renderer', { component: 'RendererRoutes', error });
       res.status(500).json({
         error: 'Failed to load renderer',
         message: error.message

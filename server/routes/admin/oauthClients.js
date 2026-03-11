@@ -68,7 +68,7 @@ export default function registerAdminOAuthRoutes(app) {
         clients
       });
     } catch (error) {
-      logger.error('[OAuth Admin] List clients error:', error);
+      logger.error('[OAuth Admin] List clients error', { component: 'OAuthAdmin', error });
       res.status(500).json({
         success: false,
         error: 'Failed to list OAuth clients'
@@ -135,7 +135,7 @@ export default function registerAdminOAuthRoutes(app) {
         client: clientWithoutSecret
       });
     } catch (error) {
-      logger.error('[OAuth Admin] Get client error:', error);
+      logger.error('[OAuth Admin] Get client error', { component: 'OAuthAdmin', error });
       res.status(500).json({
         success: false,
         error: 'Failed to get OAuth client'
@@ -280,7 +280,7 @@ export default function registerAdminOAuthRoutes(app) {
         }
       });
     } catch (error) {
-      logger.error('[OAuth Admin] Create client error:', error);
+      logger.error('[OAuth Admin] Create client error', { component: 'OAuthAdmin', error });
       res.status(500).json({
         success: false,
         error: 'Failed to create OAuth client'
@@ -364,7 +364,7 @@ export default function registerAdminOAuthRoutes(app) {
           error: error.message
         });
       }
-      logger.error('[OAuth Admin] Update client error:', error);
+      logger.error('[OAuth Admin] Update client error', { component: 'OAuthAdmin', error });
       res.status(500).json({
         success: false,
         error: 'Failed to update OAuth client'
@@ -428,7 +428,7 @@ export default function registerAdminOAuthRoutes(app) {
           error: error.message
         });
       }
-      logger.error('[OAuth Admin] Delete client error:', error);
+      logger.error('[OAuth Admin] Delete client error', { component: 'OAuthAdmin', error });
       res.status(500).json({
         success: false,
         error: 'Failed to delete OAuth client'
@@ -499,7 +499,7 @@ export default function registerAdminOAuthRoutes(app) {
             error: error.message
           });
         }
-        logger.error('[OAuth Admin] Rotate secret error:', error);
+        logger.error('[OAuth Admin] Rotate secret error', { component: 'OAuthAdmin', error });
         res.status(500).json({
           success: false,
           error: 'Failed to rotate client secret'
@@ -596,7 +596,7 @@ export default function registerAdminOAuthRoutes(app) {
           ...apiKeyResult
         });
       } catch (error) {
-        logger.error('[OAuth Admin] Generate token error:', error);
+        logger.error('[OAuth Admin] Generate token error', { component: 'OAuthAdmin', error });
         res.status(500).json({
           success: false,
           error: 'Failed to generate static API key'
@@ -680,7 +680,7 @@ export default function registerAdminOAuthRoutes(app) {
           introspection
         });
       } catch (error) {
-        logger.error('[OAuth Admin] Introspect token error:', error);
+        logger.error('[OAuth Admin] Introspect token error', { component: 'OAuthAdmin', error });
         res.status(500).json({
           success: false,
           error: 'Failed to introspect token'

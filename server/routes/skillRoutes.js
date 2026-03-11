@@ -44,7 +44,7 @@ export default function registerSkillRoutes(app) {
 
         res.json(safeSkills);
       } catch (error) {
-        logger.error('Error fetching skills:', error);
+        logger.error('Error fetching skills', { component: 'SkillRoutes', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -78,7 +78,7 @@ export default function registerSkillRoutes(app) {
         const { name, displayName, description, license, compatibility, metadata } = skill;
         res.json({ name, displayName, description, license, compatibility, metadata });
       } catch (error) {
-        logger.error('Error fetching skill:', error);
+        logger.error('Error fetching skill', { component: 'SkillRoutes', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -124,7 +124,7 @@ export default function registerSkillRoutes(app) {
           assets: content.assets
         });
       } catch (error) {
-        logger.error('Error fetching skill content:', error);
+        logger.error('Error fetching skill content', { component: 'SkillRoutes', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -168,7 +168,7 @@ export default function registerSkillRoutes(app) {
 
         res.type('text/plain').send(content);
       } catch (error) {
-        logger.error('Error fetching skill resource:', error);
+        logger.error('Error fetching skill resource', { component: 'SkillRoutes', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }

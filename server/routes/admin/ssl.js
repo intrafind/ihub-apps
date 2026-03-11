@@ -43,7 +43,7 @@ export default function registerAdminSSLRoutes(app) {
 
       res.json(sslConfig);
     } catch (error) {
-      logger.error('Error getting SSL config:', error);
+      logger.error('Error getting SSL config', { component: 'AdminSSL', error });
       res.status(500).json({ error: 'Failed to get SSL configuration' });
     }
   });
@@ -137,7 +137,7 @@ export default function registerAdminSSLRoutes(app) {
         }
       });
     } catch (error) {
-      logger.error('Error updating SSL config:', error);
+      logger.error('Error updating SSL config', { component: 'AdminSSL', error });
       res.status(500).json({ error: 'Failed to update SSL configuration' });
     }
   });

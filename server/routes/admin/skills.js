@@ -75,7 +75,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.json({ skills, settings });
       } catch (error) {
-        logger.error('Error fetching admin skills:', error);
+        logger.error('Error fetching admin skills', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -120,7 +120,7 @@ export default function registerAdminSkillsRoutes(app) {
           files
         });
       } catch (error) {
-        logger.error('Error fetching admin skill detail:', error);
+        logger.error('Error fetching admin skill detail', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -158,7 +158,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.json({ success: true });
       } catch (error) {
-        logger.error('Error deleting skill:', error);
+        logger.error('Error deleting skill', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -196,7 +196,7 @@ export default function registerAdminSkillsRoutes(app) {
         const validation = await validateSkillDirectory(resolvedSkillPath);
         res.json(validation);
       } catch (error) {
-        logger.error('Error validating skill:', error);
+        logger.error('Error validating skill', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -238,7 +238,7 @@ export default function registerAdminSkillsRoutes(app) {
         archive.directory(resolvedSkillPath, skillName);
         await archive.finalize();
       } catch (error) {
-        logger.error('Error exporting skill:', error);
+        logger.error('Error exporting skill', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -319,7 +319,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.json({ success: true, skillName, metadata: validation.metadata });
       } catch (error) {
-        logger.error('Error importing skill:', error);
+        logger.error('Error importing skill', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       } finally {
         await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
@@ -350,7 +350,7 @@ export default function registerAdminSkillsRoutes(app) {
 
         res.type('text/plain').send(content);
       } catch (error) {
-        logger.error('Error fetching skill resource:', error);
+        logger.error('Error fetching skill resource', { component: 'AdminSkills', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }

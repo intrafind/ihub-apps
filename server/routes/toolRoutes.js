@@ -44,7 +44,7 @@ export default function registerToolRoutes(app) {
         res.setHeader('ETag', userSpecificEtag);
         res.json(tools);
       } catch (error) {
-        logger.error('Error fetching tools:', error);
+        logger.error('Error fetching tools', { component: 'ToolRoutes', error });
         res.status(500).json({ error: 'Internal server error' });
       }
     }
@@ -77,7 +77,11 @@ export default function registerToolRoutes(app) {
         });
         res.json(result);
       } catch (error) {
-        logger.error(`Tool ${toolId} error:`, error);
+        logger.error('Tool execution error', {
+          component: 'ToolRoutes',
+          toolId,
+          error: error.message
+        });
         res.status(500).json({ error: 'Tool execution failed' });
       }
     }

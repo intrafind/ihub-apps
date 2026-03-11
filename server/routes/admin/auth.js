@@ -169,7 +169,7 @@ export default function registerAdminAuthRoutes(app) {
         authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
       });
     } catch (error) {
-      logger.error('Error checking admin auth status:', error);
+      logger.error('Error checking admin auth status', { component: 'AdminAuth', error });
       res.status(500).json({ error: 'Failed to check authentication status' });
     }
   });
@@ -212,7 +212,7 @@ export default function registerAdminAuthRoutes(app) {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
-      logger.error('Error testing admin auth:', error);
+      logger.error('Error testing admin auth', { component: 'AdminAuth', error });
       res.status(500).json({ error: 'Failed to test authentication' });
     }
   });
@@ -261,7 +261,7 @@ export default function registerAdminAuthRoutes(app) {
 
       res.json(usersData);
     } catch (error) {
-      logger.error('Error getting users:', error);
+      logger.error('Error getting users', { component: 'AdminAuth', error });
       res.status(500).json({ error: 'Failed to get users' });
     }
   });
@@ -431,7 +431,7 @@ export default function registerAdminAuthRoutes(app) {
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
     } catch (error) {
-      logger.error('Error creating user:', error);
+      logger.error('Error creating user', { component: 'AdminAuth', error });
       res.status(500).json({ error: 'Failed to create user' });
     }
   });
@@ -564,7 +564,7 @@ export default function registerAdminAuthRoutes(app) {
       const { passwordHash, ...userResponse } = user;
       res.json({ user: userResponse });
     } catch (error) {
-      logger.error('Error updating user:', error);
+      logger.error('Error updating user', { component: 'AdminAuth', error });
       res.status(500).json({ error: 'Failed to update user' });
     }
   });
@@ -662,7 +662,7 @@ export default function registerAdminAuthRoutes(app) {
 
       res.json({ message: 'User deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting user:', error);
+      logger.error('Error deleting user', { component: 'AdminAuth', error });
       res.status(500).json({ error: 'Failed to delete user' });
     }
   });

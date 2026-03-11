@@ -63,7 +63,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ granularity, range, data });
     } catch (e) {
-      logger.error('Error loading usage timeline:', e);
+      logger.error('Error loading usage timeline', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to load usage timeline' });
     }
   });
@@ -89,7 +89,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ range, users });
     } catch (e) {
-      logger.error('Error loading usage users:', e);
+      logger.error('Error loading usage users', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to load usage user data' });
     }
   });
@@ -113,7 +113,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ range, apps });
     } catch (e) {
-      logger.error('Error loading usage apps:', e);
+      logger.error('Error loading usage apps', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to load usage app data' });
     }
   });
@@ -138,7 +138,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ range, models });
     } catch (e) {
-      logger.error('Error loading usage models:', e);
+      logger.error('Error loading usage models', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to load usage model data' });
     }
   });
@@ -149,7 +149,7 @@ export default function registerAdminUsageRoutes(app) {
       const mode = await getTrackingMode();
       res.json({ trackingMode: mode });
     } catch (e) {
-      logger.error('Error loading usage meta:', e);
+      logger.error('Error loading usage meta', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to load usage metadata' });
     }
   });
@@ -183,7 +183,7 @@ export default function registerAdminUsageRoutes(app) {
 
       res.json({ trackingMode, message: 'Tracking mode updated successfully' });
     } catch (e) {
-      logger.error('Error updating tracking mode:', e);
+      logger.error('Error updating tracking mode', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to update tracking mode' });
     }
   });
@@ -196,7 +196,7 @@ export default function registerAdminUsageRoutes(app) {
       const stats = await runRollups(retentionConfig);
       res.json({ message: 'Rollup generation completed successfully', ...stats });
     } catch (e) {
-      logger.error('Error generating rollups:', e);
+      logger.error('Error generating rollups', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to generate rollups' });
     }
   });
@@ -241,7 +241,7 @@ export default function registerAdminUsageRoutes(app) {
         res.json({ range, events });
       }
     } catch (e) {
-      logger.error('Error exporting usage data:', e);
+      logger.error('Error exporting usage data', { component: 'AdminUsage', error: e });
       res.status(500).json({ error: 'Failed to export usage data' });
     }
   });
