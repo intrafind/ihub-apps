@@ -118,11 +118,7 @@ export class WorkflowEngine {
 
     this.nodeExecutors.set(nodeType, executor);
 
-    logger.info({
-      component: 'WorkflowEngine',
-      message: 'Registered node executor',
-      nodeType
-    });
+    logger.info('Registered node executor', { component: 'WorkflowEngine', nodeType });
   }
 
   /**
@@ -173,9 +169,8 @@ export class WorkflowEngine {
     const executionId = options.executionId || `wf-exec-${uuidv4()}`;
     const workflowId = workflowDefinition.id || 'unknown';
 
-    logger.info({
+    logger.info('Starting workflow execution', {
       component: 'WorkflowEngine',
-      message: 'Starting workflow execution',
       executionId,
       workflowId,
       nodeCount: workflowDefinition.nodes?.length || 0
@@ -192,9 +187,8 @@ export class WorkflowEngine {
     if (cycleResult.hasCycle) {
       if (allowCycles) {
         // Cycles are allowed - log for informational purposes
-        logger.info({
+        logger.info('Workflow contains intentional cycles (loops enabled)', {
           component: 'WorkflowEngine',
-          message: 'Workflow contains intentional cycles (loops enabled)',
           executionId,
           cycleNodes: cycleResult.cycleNodes,
           maxIterations: workflowDefinition.config?.maxIterations || 10
@@ -251,12 +245,10 @@ export class WorkflowEngine {
     // 7. Begin execution loop (non-blocking)
     this._runExecutionLoop(workflowDefinition, executionId, options, abortController.signal).catch(
       error => {
-        logger.error({
+        logger.error('Workflow execution failed', {
           component: 'WorkflowEngine',
-          message: 'Workflow execution failed',
           executionId,
-          error: error.message,
-          stack: error.stack
+          error
         });
       }
     );
@@ -297,20 +289,15 @@ export class WorkflowEngine {
           maxIterations: MAX_EXECUTION_ITERATIONS
         });
 
-        logger.debug({
+        logger.debug('Workflow iteration', {
           component: 'WorkflowEngine',
-          message: `Workflow iteration ${iterationCount}`,
           executionId,
           iteration: iterationCount
         });
 
         // Check for cancellation
         if (signal.aborted) {
-          logger.info({
-            component: 'WorkflowEngine',
-            message: 'Workflow execution cancelled',
-            executionId
-          });
+          logger.info('Workflow execution cancelled', { component: 'WorkflowEngine', executionId });
           break;
         }
 
@@ -324,9 +311,8 @@ export class WorkflowEngine {
         // Check for execution deadline (maxExecutionTime)
         const executionDeadline = state.data?._executionDeadline;
         if (executionDeadline && Date.now() >= executionDeadline) {
-          logger.error({
+          logger.error('Workflow exceeded maximum execution time', {
             component: 'WorkflowEngine',
-            message: 'Workflow exceeded maximum execution time',
             executionId
           });
 
@@ -358,9 +344,8 @@ export class WorkflowEngine {
 
         // Check if workflow should continue
         if (state.status !== WorkflowStatus.RUNNING) {
-          logger.info({
+          logger.info('Workflow execution stopped', {
             component: 'WorkflowEngine',
-            message: 'Workflow execution stopped',
             executionId,
             status: state.status
           });
@@ -386,9 +371,8 @@ export class WorkflowEngine {
             await this._completeWorkflow(executionId, state, customStatus);
           } else {
             // Nodes are blocked (shouldn't happen in valid workflow)
-            logger.warn({
+            logger.warn('Workflow has blocked nodes', {
               component: 'WorkflowEngine',
-              message: 'Workflow has blocked nodes',
               executionId,
               blockedNodes: state.currentNodes
             });
@@ -403,9 +387,8 @@ export class WorkflowEngine {
           const node = workflow.nodes.find(n => n.id === nodeId);
 
           if (!node) {
-            logger.error({
+            logger.error('Node not found in workflow', {
               component: 'WorkflowEngine',
-              message: 'Node not found in workflow',
               executionId,
               nodeId
             });
@@ -431,14 +414,14 @@ export class WorkflowEngine {
                 attempt++;
                 if (attempt <= maxRetries) {
                   // Log retry attempt
-                  logger.warn({
+                  logger.warn('Node failed, retrying', {
                     component: 'WorkflowEngine',
-                    message: `Node '${nodeId}' failed (attempt ${attempt}/${maxRetries + 1}), retrying in ${retryDelay}ms`,
                     executionId,
                     nodeId,
                     attempt,
-                    maxRetries,
-                    error: executeError.message
+                    maxAttempts: maxRetries + 1,
+                    retryDelay,
+                    error: executeError
                   });
 
                   // Track retry count in state
@@ -474,9 +457,8 @@ export class WorkflowEngine {
 
             // Check if the node returned a paused status (e.g., human checkpoint)
             if (result && result.status === 'paused') {
-              logger.info({
+              logger.info('Workflow paused by node', {
                 component: 'WorkflowEngine',
-                message: 'Workflow paused by node',
                 executionId,
                 nodeId,
                 pauseReason: result.pauseReason || 'node_requested_pause'
@@ -554,9 +536,8 @@ export class WorkflowEngine {
 
       // Check for max iterations
       if (iterationCount >= MAX_EXECUTION_ITERATIONS) {
-        logger.error({
+        logger.error('Workflow exceeded maximum iterations', {
           component: 'WorkflowEngine',
-          message: 'Workflow exceeded maximum iterations',
           executionId,
           maxIterations: MAX_EXECUTION_ITERATIONS
         });
@@ -579,12 +560,10 @@ export class WorkflowEngine {
         });
       }
     } catch (error) {
-      logger.error({
+      logger.error('Fatal error in execution loop', {
         component: 'WorkflowEngine',
-        message: 'Fatal error in execution loop',
         executionId,
-        error: error.message,
-        stack: error.stack
+        error
       });
 
       await this.stateManager.update(executionId, {
@@ -633,13 +612,7 @@ export class WorkflowEngine {
   async executeNode(node, workflow, executionId, options = {}) {
     const { id: nodeId, type: nodeType, config } = node;
 
-    logger.info({
-      component: 'WorkflowEngine',
-      message: 'Executing node',
-      executionId,
-      nodeId,
-      nodeType
-    });
+    logger.info('Executing node', { component: 'WorkflowEngine', executionId, nodeId, nodeType });
 
     // 1. Get executor for node type
     const executor = this.getExecutor(nodeType);
@@ -712,9 +685,8 @@ export class WorkflowEngine {
     const updatedState = await this.stateManager.get(executionId);
 
     if (currentIteration > 1) {
-      logger.info({
+      logger.info('Node executing in loop iteration', {
         component: 'WorkflowEngine',
-        message: 'Node executing in loop iteration',
         executionId,
         nodeId,
         iteration: currentIteration,
@@ -797,12 +769,7 @@ export class WorkflowEngine {
       result: this._sanitizeForEvent(resultWithIteration)
     });
 
-    logger.info({
-      component: 'WorkflowEngine',
-      message: 'Node execution completed',
-      executionId,
-      nodeId
-    });
+    logger.info('Node execution completed', { component: 'WorkflowEngine', executionId, nodeId });
 
     return result;
   }
@@ -818,12 +785,11 @@ export class WorkflowEngine {
   async _handleNodeError(executionId, node, error, _options) {
     const { id: nodeId, type: _nodeType } = node;
 
-    logger.error({
+    logger.error('Node execution failed', {
       component: 'WorkflowEngine',
-      message: 'Node execution failed',
       executionId,
       nodeId,
-      error: error.message
+      error
     });
 
     // Mark node as failed
@@ -889,9 +855,8 @@ export class WorkflowEngine {
     // Use custom status if provided, otherwise default to COMPLETED
     const finalStatus = customStatus || WorkflowStatus.COMPLETED;
 
-    logger.info({
+    logger.info('Workflow execution completed', {
       component: 'WorkflowEngine',
-      message: 'Workflow execution completed',
       executionId,
       completedNodes: state.completedNodes.length,
       finalStatus
@@ -967,9 +932,8 @@ export class WorkflowEngine {
       throw error;
     }
 
-    logger.info({
+    logger.info('Resuming workflow execution', {
       component: 'WorkflowEngine',
-      message: 'Resuming workflow execution',
       executionId,
       currentNodes: state.currentNodes
     });
@@ -1000,11 +964,10 @@ export class WorkflowEngine {
 
     // Continue execution loop
     this._runExecutionLoop(workflow, executionId, options, abortController.signal).catch(error => {
-      logger.error({
+      logger.error('Resumed workflow execution failed', {
         component: 'WorkflowEngine',
-        message: 'Resumed workflow execution failed',
         executionId,
-        error: error.message
+        error
       });
     });
 
@@ -1035,9 +998,8 @@ export class WorkflowEngine {
       throw error;
     }
 
-    logger.info({
+    logger.info('Pausing workflow execution', {
       component: 'WorkflowEngine',
-      message: 'Pausing workflow execution',
       executionId,
       reason
     });
@@ -1080,18 +1042,16 @@ export class WorkflowEngine {
     }
 
     if (state.status === WorkflowStatus.COMPLETED || state.status === WorkflowStatus.CANCELLED) {
-      logger.warn({
+      logger.warn('Cannot cancel execution in terminal state', {
         component: 'WorkflowEngine',
-        message: 'Cannot cancel execution in terminal state',
         executionId,
         status: state.status
       });
       return state;
     }
 
-    logger.info({
+    logger.info('Cancelling workflow execution', {
       component: 'WorkflowEngine',
-      message: 'Cancelling workflow execution',
       executionId,
       reason
     });
@@ -1228,9 +1188,8 @@ export class WorkflowEngine {
       ...data
     });
 
-    logger.debug({
+    logger.debug('Emitted workflow event', {
       component: 'WorkflowEngine',
-      message: 'Emitted workflow event',
       eventType,
       executionId: data.executionId
     });

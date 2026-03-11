@@ -97,9 +97,8 @@ class ToolExecutor {
    * @returns {Promise<Object>} Tool result with clarification flag
    */
   async executeClarificationTool(toolCall, toolId, args, chatId, buildLogData, _user, _app) {
-    logger.info({
+    logger.info('Executing ask_user clarification tool', {
       component: 'ToolExecutor',
-      message: 'Executing ask_user clarification tool',
       chatId,
       args: { question: args.question?.substring(0, 100), input_type: args.input_type }
     });
@@ -107,9 +106,8 @@ class ToolExecutor {
     // Check rate limiting - max clarifications per conversation
     const currentCount = this.getClarificationCount(chatId);
     if (currentCount >= MAX_CLARIFICATIONS) {
-      logger.warn({
+      logger.warn('Clarification limit reached', {
         component: 'ToolExecutor',
-        message: 'Clarification limit reached',
         chatId,
         currentCount,
         maxAllowed: MAX_CLARIFICATIONS
@@ -152,9 +150,8 @@ class ToolExecutor {
     // Validate the clarification parameters
     const validation = validateAskUserParams(args);
     if (!validation.valid) {
-      logger.error({
+      logger.error('Invalid ask_user parameters', {
         component: 'ToolExecutor',
-        message: 'Invalid ask_user parameters',
         chatId,
         error: validation.error
       });
@@ -203,9 +200,8 @@ class ToolExecutor {
     const rawInputType = args.input_type || 'text';
     const mappedInputType = inputTypeMapping[rawInputType] || rawInputType;
 
-    logger.info({
+    logger.info('Processing ask_user tool call arguments', {
       component: 'ToolExecutor',
-      message: 'Processing ask_user tool call arguments',
       chatId,
       rawInputType,
       mappedInputType,
@@ -281,9 +277,8 @@ class ToolExecutor {
       toolOutput: { clarificationRequested: true, clarificationNumber: newCount }
     });
 
-    logger.info({
+    logger.info('Clarification event emitted', {
       component: 'ToolExecutor',
-      message: 'Clarification event emitted',
       chatId,
       clarificationNumber: newCount,
       question: args.question?.substring(0, 50)
@@ -324,29 +319,26 @@ class ToolExecutor {
         try {
           args = JSON.parse(finalArgs);
         } catch (e2) {
-          logger.error({
+          logger.error('Failed to parse tool arguments even after correction', {
             component: 'ToolExecutor',
-            message: 'Failed to parse tool arguments even after correction',
             toolId,
             arguments: toolCall.function.arguments,
-            error: e2.message
+            error: e2
           });
           args = {};
         }
       }
     } catch (e) {
-      logger.error({
+      logger.error('Failed to parse tool arguments', {
         component: 'ToolExecutor',
-        message: 'Failed to parse tool arguments',
         toolId,
         arguments: toolCall.function.arguments,
-        error: e.message
+        error: e
       });
     }
 
-    logger.info({
+    logger.info('executeToolCall invoked', {
       component: 'ToolExecutor',
-      message: 'executeToolCall invoked',
       chatId,
       toolId,
       isWorkflow: toolId.startsWith('workflow_'),
@@ -407,7 +399,10 @@ class ToolExecutor {
 
       // Check for imageData in the result and extract it to message level
       if (this.extractImageDataFromResult(result, message)) {
-        logger.info(`🖼️ Tool ${toolId} returned image data for vision analysis`);
+        logger.info('Tool returned image data for vision analysis', {
+          component: 'ToolExecutor',
+          toolId
+        });
         // For image analysis, replace verbose tool result with simple message
         message.content = `Retrieved image: ${message.imageData?.filename || 'attachment'}`;
       }
@@ -417,7 +412,11 @@ class ToolExecutor {
         message
       };
     } catch (toolError) {
-      logger.error(`Tool execution failed for ${toolId}:`, toolError);
+      logger.error('Tool execution failed', {
+        component: 'ToolExecutor',
+        toolId,
+        error: toolError
+      });
 
       const errorResult = {
         error: true,
@@ -480,7 +479,7 @@ class ToolExecutor {
 
       // Check if this object has imageData structure
       if (obj.imageData && obj.imageData.type === 'image' && obj.imageData.base64) {
-        logger.info(`🔍 Found imageData at path: ${path}`);
+        logger.info('Found imageData in tool result', { component: 'ToolExecutor', path });
 
         // Move imageData to message level for adapter processing
         message.imageData = {
@@ -637,7 +636,11 @@ class ToolExecutor {
         }
       };
     } catch (toolError) {
-      logger.error(`Passthrough tool execution failed for ${toolId}:`, toolError);
+      logger.error('Passthrough tool execution failed', {
+        component: 'ToolExecutor',
+        toolId,
+        error: toolError
+      });
 
       const errorResult = {
         error: true,
@@ -700,9 +703,8 @@ class ToolExecutor {
     } = prep;
 
     // Debug: Log available tools and file data for workflow debugging
-    logger.info({
+    logger.info('processChatWithTools called', {
       component: 'ToolExecutor',
-      message: 'processChatWithTools called',
       chatId,
       toolCount: tools?.length,
       toolNames: tools?.map(t => t.id).join(', '),
@@ -884,10 +886,12 @@ class ToolExecutor {
       }
 
       if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
-        logger.info(
-          `No tool calls to process for chat ID ${chatId}:`,
-          JSON.stringify({ finishReason, collectedToolCalls }, null, 2)
-        );
+        logger.info('No tool calls to process', {
+          component: 'ToolExecutor',
+          chatId,
+          finishReason,
+          collectedToolCalls
+        });
         clearTimeout(timeoutId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
@@ -909,7 +913,10 @@ class ToolExecutor {
       });
 
       if (validToolCalls.length === 0) {
-        logger.info(`No valid tool calls to process for chat ID ${chatId} after filtering`);
+        logger.info('No valid tool calls to process after filtering', {
+          component: 'ToolExecutor',
+          chatId
+        });
         clearTimeout(timeoutId);
         actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
         await logInteraction(
@@ -1231,12 +1238,10 @@ class ToolExecutor {
             // Collect thoughtSignatures for Google Gemini thinking models
             if (result.thoughtSignatures && result.thoughtSignatures.length > 0) {
               collectedThoughtSignatures.push(...result.thoughtSignatures);
-              logger.info(
-                `Collected ${result.thoughtSignatures.length} thoughtSignature(s) from response`,
-                {
-                  component: 'ToolExecutor'
-                }
-              );
+              logger.info('Collected thoughtSignatures from response', {
+                component: 'ToolExecutor',
+                count: result.thoughtSignatures.length
+              });
             }
 
             if (result.finishReason) {
@@ -1346,7 +1351,7 @@ class ToolExecutor {
 
         // Continue to next iteration for non-streaming tools
 
-        logger.info(`--- Tool execution iteration ${iteration} complete ---`);
+        logger.info('Tool execution iteration complete', { component: 'ToolExecutor', iteration });
         // Continue the loop for the next iteration
       } catch (error) {
         clearTimeout(timeoutId);
@@ -1379,7 +1384,11 @@ class ToolExecutor {
     }
 
     // If we hit the max iterations, log a warning but don't error
-    logger.warn(`Max tool execution iterations (${maxIterations}) reached for chat ${chatId}`);
+    logger.warn('Max tool execution iterations reached', {
+      component: 'ToolExecutor',
+      maxIterations,
+      chatId
+    });
     actionTracker.trackDone(chatId, { finishReason: 'max_iterations' });
   }
 }
