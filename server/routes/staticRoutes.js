@@ -40,15 +40,21 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
 
   // Serve STT model files (ONNX)
   const sttModelsPath = path.join(rootDir, 'contents/models/stt');
-  logger.info(`Serving STT models from: ${sttModelsPath} at ${buildServerPath('/api/stt-models/')}`, {
-    component: 'StaticRoutes'
-  });
-  app.use(buildServerPath('/api/stt-models'), express.static(sttModelsPath, {
-    maxAge: '30d',
-    setHeaders: (res) => {
-      res.set('Accept-Ranges', 'bytes');
+  logger.info(
+    `Serving STT models from: ${sttModelsPath} at ${buildServerPath('/api/stt-models/')}`,
+    {
+      component: 'StaticRoutes'
     }
-  }));
+  );
+  app.use(
+    buildServerPath('/api/stt-models'),
+    express.static(sttModelsPath, {
+      maxAge: '30d',
+      setHeaders: res => {
+        res.set('Accept-Ranges', 'bytes');
+      }
+    })
+  );
 
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');

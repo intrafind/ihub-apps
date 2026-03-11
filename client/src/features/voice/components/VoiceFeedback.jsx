@@ -3,7 +3,14 @@ import { useTranslation } from 'react-i18next';
 const wavesCount = 3;
 
 const VoiceFeedback = props => {
-  const { isActive, setIsActive, transcript = '', mode = 'automatic', isModelLoading = false, loadingProgress = 0 } = props;
+  const {
+    isActive,
+    setIsActive,
+    transcript = '',
+    mode = 'automatic',
+    isModelLoading = false,
+    loadingProgress = 0
+  } = props;
   const { t } = useTranslation();
 
   const onClose = () => {
@@ -36,7 +43,8 @@ const VoiceFeedback = props => {
               />
             </div>
             <span className="text-sm text-gray-500 dark:text-gray-400 mt-1 block">
-              {t('voiceInput.loadingModel', 'Loading speech model...')} {Math.round(loadingProgress || 0)}%
+              {t('voiceInput.loadingModel', 'Loading speech model...')}{' '}
+              {Math.round(loadingProgress || 0)}%
             </span>
           </div>
         )}

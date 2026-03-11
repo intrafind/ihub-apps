@@ -137,7 +137,7 @@ export default class ParakeetRecognition {
       const transcript = result?.utterance_text?.trim() || '';
 
       this.onresult?.({
-        results: [[{ transcript, confidence: 1 }]],
+        results: [[{ transcript, confidence: 1 }]]
       });
     } catch (err) {
       this.onerror?.({ error: err.message });

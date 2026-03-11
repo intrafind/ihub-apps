@@ -30,7 +30,7 @@ export async function loadSTTModel(service, modelId, basePath, onProgress) {
       env.allowLocalModels = true;
 
       const progressCallback = onProgress
-        ? (progressInfo) => {
+        ? progressInfo => {
             if (progressInfo.status === 'progress' && progressInfo.total > 0) {
               onProgress(Math.round((progressInfo.loaded / progressInfo.total) * 100));
             } else if (progressInfo.status === 'done') {
@@ -41,7 +41,7 @@ export async function loadSTTModel(service, modelId, basePath, onProgress) {
 
       model = await pipeline('automatic-speech-recognition', modelId, {
         progress_callback: progressCallback,
-        device: 'webgpu', // falls back to wasm automatically if WebGPU unavailable
+        device: 'webgpu' // falls back to wasm automatically if WebGPU unavailable
       });
       break;
     }
@@ -57,7 +57,7 @@ export async function loadSTTModel(service, modelId, basePath, onProgress) {
         decoderUrl: `${base}/decoder_joint-model.int8.onnx`,
         tokenizerUrl: `${base}/vocab.txt`,
         backend: 'webgpu-hybrid',
-        preprocessorBackend: 'js',
+        preprocessorBackend: 'js'
       });
       onProgress?.(100);
       break;

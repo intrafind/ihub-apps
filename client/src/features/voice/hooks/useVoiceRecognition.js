@@ -128,8 +128,7 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
         app?.settings?.speechRecognition?.model ||
         platformConfig?.speechRecognition?.defaultModel ||
         'whisper-tiny';
-      const modelsBasePath =
-        platformConfig?.speechRecognition?.modelsBasePath || '/api/stt-models';
+      const modelsBasePath = platformConfig?.speechRecognition?.modelsBasePath || '/api/stt-models';
 
       // Browser-native services require the Web Speech API to be available.
       // The in-browser ML services (whisper/parakeet/moonshine) bypass this check
@@ -137,7 +136,11 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
       const isBrowserMLService =
         service === 'whisper' || service === 'parakeet' || service === 'moonshine';
 
-      if (!isBrowserMLService && !('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      if (
+        !isBrowserMLService &&
+        !('webkitSpeechRecognition' in window) &&
+        !('SpeechRecognition' in window)
+      ) {
         showError(
           t('voiceInput.error.notSupported', 'Speech recognition not supported in this browser')
         );

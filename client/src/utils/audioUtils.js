@@ -15,7 +15,7 @@ export async function captureAudioStream(onChunk) {
   // ScriptProcessorNode is deprecated but universally supported
   const processor = audioContext.createScriptProcessor(4096, 1, 1);
 
-  processor.onaudioprocess = (event) => {
+  processor.onaudioprocess = event => {
     const channelData = event.inputBuffer.getChannelData(0);
     onChunk(new Float32Array(channelData));
   };
@@ -34,7 +34,7 @@ export function stopAudioCapture({ stream, audioContext, processor, source }) {
   try {
     processor.disconnect();
     source.disconnect();
-    stream.getTracks().forEach((track) => track.stop());
+    stream.getTracks().forEach(track => track.stop());
     if (audioContext.state !== 'closed') {
       audioContext.close();
     }
@@ -54,7 +54,11 @@ export async function resampleTo16kHz(float32Array, originalSampleRate) {
 
   const targetSampleRate = 16000;
   const duration = float32Array.length / originalSampleRate;
-  const offlineCtx = new OfflineAudioContext(1, Math.ceil(duration * targetSampleRate), targetSampleRate);
+  const offlineCtx = new OfflineAudioContext(
+    1,
+    Math.ceil(duration * targetSampleRate),
+    targetSampleRate
+  );
 
   const buffer = offlineCtx.createBuffer(1, float32Array.length, originalSampleRate);
   buffer.copyToChannel(float32Array, 0);
@@ -80,7 +84,7 @@ export function createRecorder() {
   return {
     async start() {
       chunks.length = 0;
-      captureHandle = await captureAudioStream((chunk) => chunks.push(chunk));
+      captureHandle = await captureAudioStream(chunk => chunks.push(chunk));
       capturedSampleRate = captureHandle.sampleRate;
     },
 
@@ -100,6 +104,6 @@ export function createRecorder() {
       }
 
       return resampleTo16kHz(combined, capturedSampleRate);
-    },
+    }
   };
 }

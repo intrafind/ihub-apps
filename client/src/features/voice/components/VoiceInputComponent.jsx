@@ -10,8 +10,15 @@ const VoiceInputComponent = ({
   disabled = false,
   onCommand = null
 }) => {
-  const { isListening, transcript, toggleListening, stopListening, microphoneMode, isModelLoading, loadingProgress } =
-    useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
+  const {
+    isListening,
+    transcript,
+    toggleListening,
+    stopListening,
+    microphoneMode,
+    isModelLoading,
+    loadingProgress
+  } = useVoiceRecognition({ app, inputRef, onSpeechResult, onCommand, disabled });
 
   useEffect(() => {
     const handleKeyDown = e => {

@@ -144,7 +144,7 @@ export default class WhisperRecognition {
       const transcript = result?.text?.trim() || '';
 
       this.onresult?.({
-        results: [[{ transcript, confidence: 1 }]],
+        results: [[{ transcript, confidence: 1 }]]
       });
     } catch (err) {
       this.onerror?.({ error: err.message });

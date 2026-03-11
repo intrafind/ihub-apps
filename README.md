@@ -68,7 +68,7 @@ Open **http://localhost:3000** → Go to **Settings → Models** → Add your AP
 
 🎉 **Done!** iHub auto-configures everything on first run. No `.env` file, no database, no manual setup.
 
-**Other install methods:** [One-Line Installer](#-one-line-installer-linuxmacos) · [Docker](#-docker-production) · [npm (for developers)](#-npm-development) 
+**Other install methods:** [One-Line Installer](#-one-line-installer-linuxmacos) · [Docker](#-docker-production) · [npm (for developers)](#-npm-development)
 
 ---
 

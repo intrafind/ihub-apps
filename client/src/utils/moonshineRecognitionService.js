@@ -131,10 +131,10 @@ export default class MoonshineRecognition {
       this.onstart?.();
 
       // Bridge MicrophoneTranscriber's callback into the shared onresult shape.
-      this._transcriber.onTranscript = (text) => {
+      this._transcriber.onTranscript = text => {
         if (text?.trim()) {
           this.onresult?.({
-            results: [[{ transcript: text.trim(), confidence: 1 }]],
+            results: [[{ transcript: text.trim(), confidence: 1 }]]
           });
         }
       };
