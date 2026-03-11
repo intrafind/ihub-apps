@@ -106,18 +106,31 @@ export class ParallelNodeExecutor extends BaseNodeExecutor {
 
       const branchResults = {};
 
-      settled.forEach((result, index) => {
+      settled.forEach((settlement, index) => {
         const branch = branches[index];
-        if (result.status === 'fulfilled') {
-          branchResults[branch.id] = result.value;
-        } else {
+        if (settlement.status === 'rejected') {
           this.logger.warn({
             component: 'ParallelNodeExecutor',
-            message: `Branch '${branch.id}' failed: ${result.reason?.message || result.reason}`,
+            message: `Branch '${branch.id}' rejected: ${settlement.reason?.message || settlement.reason}`,
             nodeId: node.id,
             branchId: branch.id
           });
-          branchResults[branch.id] = { error: result.reason?.message || String(result.reason) };
+          branchResults[branch.id] = {
+            error: settlement.reason?.message || String(settlement.reason)
+          };
+        } else {
+          const val = settlement.value;
+          if (val.failed) {
+            this.logger.warn({
+              component: 'ParallelNodeExecutor',
+              message: `Branch '${branch.id}' had a node failure: ${val.error}`,
+              nodeId: node.id,
+              branchId: branch.id
+            });
+            branchResults[branch.id] = { error: val.error };
+          } else {
+            branchResults[branch.id] = val.output;
+          }
         }
       });
 
@@ -150,17 +163,21 @@ export class ParallelNodeExecutor extends BaseNodeExecutor {
   /**
    * Execute a single branch by running its nodes sequentially.
    *
+   * Returns `{output, failed, error}`. If any node in the branch fails, execution
+   * stops for that branch and `failed: true` is returned so the caller can surface
+   * the failure to JoinNodeExecutor error detection.
+   *
    * @param {BranchConfig} branch - Branch configuration
    * @param {Object} state - Current workflow state
    * @param {Object} context - Execution context
-   * @returns {Promise<*>} Output of the last node in the branch
+   * @returns {Promise<{output: *, failed: boolean, error: string|undefined}>}
    * @private
    */
   async executeBranch(branch, state, context) {
     const nodes = branch.nodes || [];
 
     if (nodes.length === 0) {
-      return null;
+      return { output: null, failed: false };
     }
 
     // Lazy import to avoid circular dependency
@@ -172,8 +189,6 @@ export class ParallelNodeExecutor extends BaseNodeExecutor {
     for (const nodeConfig of nodes) {
       const executor = getExecutor(nodeConfig.type);
       const result = await executor.execute(nodeConfig, currentState, context);
-
-      lastOutput = result.output;
 
       // Propagate state updates within the branch
       if (result.stateUpdates) {
@@ -191,10 +206,13 @@ export class ParallelNodeExecutor extends BaseNodeExecutor {
           component: 'ParallelNodeExecutor',
           message: `Node '${nodeConfig.id}' in branch '${branch.id}' failed: ${result.error}`
         });
+        return { output: null, failed: true, error: result.error };
       }
+
+      lastOutput = result.output;
     }
 
-    return lastOutput;
+    return { output: lastOutput, failed: false };
   }
 }
 

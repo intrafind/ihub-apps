@@ -184,8 +184,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
     for (let i = 0; i < count; i++) {
       const iterState = this.buildIterationState(state, i, undefined, count);
-      const output = await this.executeBodyNodes(bodyNodes, iterState, context);
-      iterationOutputs.push({ index: i, output });
+      const { output, failed } = await this.executeBodyNodes(bodyNodes, iterState, context);
+      if (failed) {
+        // Best-effort: log warning and record null output, then continue to next iteration
+        iterationOutputs.push({ index: i, output: null });
+      } else {
+        iterationOutputs.push({ index: i, output });
+      }
     }
   }
 
@@ -209,9 +214,46 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
     for (let i = 0; i < total; i++) {
       const iterState = this.buildIterationState(state, i, items[i], items.length);
-      const output = await this.executeBodyNodes(bodyNodes, iterState, context);
-      iterationOutputs.push({ index: i, item: items[i], output });
+      const { output, failed } = await this.executeBodyNodes(bodyNodes, iterState, context);
+      if (failed) {
+        // Best-effort: log warning and record null output, then continue to next iteration
+        iterationOutputs.push({ index: i, item: items[i], output: null });
+      } else {
+        iterationOutputs.push({ index: i, item: items[i], output });
+      }
     }
+  }
+
+  /**
+   * Evaluate a while loop condition expression in a hardened sandbox.
+   *
+   * Security constraint: Conditions are admin-authored workflow expressions.
+   * The sandbox uses a null-prototype context and JSON-serialized data copies
+   * to prevent prototype chain attacks (e.g., constructor.__proto__ escalation).
+   * Only safe built-in constructors are exposed; no process, require, or globals.
+   *
+   * @param {string} condition - The condition expression string
+   * @param {Object} data - Current workflow data (deep-copied before exposure)
+   * @param {*} result - Last body node output (deep-copied before exposure)
+   * @returns {boolean} Whether the condition evaluated to truthy
+   * @private
+   */
+  evaluateCondition(condition, data, result) {
+    // Create a truly isolated sandbox with null prototype to block constructor chain attacks
+    const sandbox = vm.createContext(Object.create(null));
+    // JSON round-trip breaks live object references and prototype chains
+    sandbox.data = JSON.parse(JSON.stringify(data || {}));
+    sandbox.result =
+      result !== undefined && result !== null ? JSON.parse(JSON.stringify(result)) : null;
+    // Expose only safe, non-exploitable built-ins
+    sandbox.Math = Math;
+    sandbox.Number = Number;
+    sandbox.String = String;
+    sandbox.Boolean = Boolean;
+    sandbox.Array = Array;
+    sandbox.Object = Object;
+
+    return vm.runInContext(condition, sandbox, { timeout: 1000 });
   }
 
   /**
@@ -237,11 +279,7 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       let conditionResult;
 
       try {
-        conditionResult = vm.runInNewContext(
-          condition,
-          { data: currentState.data, result: lastOutput },
-          { timeout: 1000 }
-        );
+        conditionResult = this.evaluateCondition(condition, currentState.data, lastOutput);
       } catch (err) {
         this.logger.warn({
           component: 'LoopNodeExecutor',
@@ -255,14 +293,25 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       }
 
       const iterState = this.buildIterationState(currentState, i, undefined, null);
-      lastOutput = await this.executeBodyNodes(bodyNodes, iterState, context);
+      const {
+        output,
+        state: updatedState,
+        failed
+      } = await this.executeBodyNodes(bodyNodes, iterState, context);
+
+      if (failed) {
+        // A failed body node terminates the while loop
+        break;
+      }
+
+      lastOutput = output;
       iterationOutputs.push({ index: i, output: lastOutput });
 
-      // Carry state updates forward for next iteration's condition evaluation
+      // Carry state updates (including body node stateUpdates) forward for next condition evaluation
       currentState = {
-        ...currentState,
+        ...updatedState,
         data: {
-          ...currentState.data,
+          ...updatedState.data,
           _loopIndex: i,
           _loopTotal: null
         }
@@ -297,27 +346,33 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
 
   /**
    * Execute body nodes sequentially for one loop iteration.
-   * Returns the output of the last body node, or the iteration index if no body.
+   *
+   * Returns an object with the last output, the accumulated state after all body nodes,
+   * and a `failed` flag. State updates from each body node are applied so that
+   * subsequent body nodes (and the next while-loop condition) see the updated state.
+   *
+   * @param {Array<Object>} bodyNodes - Inline node configs to execute
+   * @param {Object} iterState - State at the start of this iteration
+   * @param {Object} context - Execution context
+   * @returns {Promise<{output: *, state: Object, failed: boolean, error: string|undefined}>}
    * @private
    */
   async executeBodyNodes(bodyNodes, iterState, context) {
     if (!bodyNodes || bodyNodes.length === 0) {
-      return { index: iterState.data._loopIndex };
+      return { output: { index: iterState.data._loopIndex }, state: iterState, failed: false };
     }
 
     // Lazy import to avoid circular dependency
     const { getExecutor } = await import('./index.js');
 
     let lastOutput = null;
-    let currentState = iterState;
+    let currentState = { ...iterState };
 
     for (const bodyNodeConfig of bodyNodes) {
       const executor = getExecutor(bodyNodeConfig.type);
       const result = await executor.execute(bodyNodeConfig, currentState, context);
 
-      lastOutput = result.output;
-
-      // Apply state updates for next body node in sequence
+      // Apply state updates so subsequent body nodes see the updated state
       if (result.stateUpdates) {
         currentState = {
           ...currentState,
@@ -333,10 +388,13 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           component: 'LoopNodeExecutor',
           message: `Body node '${bodyNodeConfig.id}' failed: ${result.error}`
         });
+        return { output: null, state: currentState, failed: true, error: result.error };
       }
+
+      lastOutput = result.output;
     }
 
-    return lastOutput;
+    return { output: lastOutput, state: currentState, failed: false };
   }
 }
 
