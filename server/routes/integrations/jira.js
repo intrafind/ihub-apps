@@ -59,7 +59,7 @@ router.get('/auth', authRequired, async (req, res) => {
     // Generate authorization URL for Atlassian Cloud
     const authUrl = JiraService.generateAuthUrl(state, codeVerifier);
 
-    logger.info(`🔗 Initiating JIRA OAuth for user ${req.user?.id} - URL: ${authUrl}`);
+    logger.info('Initiating JIRA OAuth', { component: 'Jira', userId: req.user?.id, authUrl });
 
     // Redirect to Atlassian OAuth consent screen
     res.redirect(authUrl);
@@ -96,19 +96,19 @@ router.get('/callback', authOptional, async (req, res) => {
 
     // Check if session is available
     if (!req.session) {
-      logger.error('❌ No session available for JIRA OAuth callback');
+      logger.error('No session available for JIRA OAuth callback', { component: 'Jira' });
       return res.redirect(`${returnUrl}${separator}jira_error=no_session`);
     }
 
     // Validate state parameter
     if (!storedAuth || storedAuth.state !== state) {
-      logger.error('❌ Invalid JIRA OAuth state parameter');
+      logger.error('Invalid JIRA OAuth state parameter', { component: 'Jira' });
       return res.redirect(`${returnUrl}${separator}jira_error=invalid_state`);
     }
 
     // Check session timeout (15 minutes)
     if (Date.now() - storedAuth.timestamp > 15 * 60 * 1000) {
-      logger.error('❌ JIRA OAuth session expired');
+      logger.error('JIRA OAuth session expired', { component: 'Jira' });
       return res.redirect(`${returnUrl}${separator}jira_error=session_expired`);
     }
 
@@ -117,18 +117,22 @@ router.get('/callback', authOptional, async (req, res) => {
 
     // Verify we received a refresh token (required for long-term access)
     if (!tokens.refreshToken) {
-      logger.error('❌ CRITICAL: No refresh token received from JIRA OAuth.');
       logger.error(
-        '   This means the user will need to re-authenticate when the access token expires (usually within 1 hour).'
+        'CRITICAL: No refresh token received from JIRA OAuth - user will need to re-authenticate when access token expires',
+        {
+          component: 'Jira',
+          causes: [
+            'JIRA app does not support offline access',
+            'User denied offline_access scope',
+            'Atlassian OAuth server configuration issue'
+          ]
+        }
       );
-      logger.error('   This can happen if:');
-      logger.error('   - The JIRA app configuration does not support offline access');
-      logger.error('   - The user denied the offline_access scope');
-      logger.error('   - Atlassian OAuth server configuration issue');
 
       // Still store the tokens but with a clear warning in logs
       logger.warn(
-        '⚠️ Storing tokens WITHOUT refresh capability - user will need to reconnect every hour'
+        'Storing tokens WITHOUT refresh capability - user will need to reconnect every hour',
+        { component: 'Jira' }
       );
     }
 
@@ -138,7 +142,9 @@ router.get('/callback', authOptional, async (req, res) => {
     // Clear session data using the consistent key
     delete req.session[sessionKey];
 
-    logger.info(`✅ JIRA OAuth completed for user ${storedAuth.userId}`, {
+    logger.info('JIRA OAuth completed', {
+      component: 'Jira',
+      userId: storedAuth.userId,
       returnUrl
     });
 
@@ -234,7 +240,7 @@ router.post('/disconnect', authRequired, async (req, res) => {
     const success = await JiraService.deleteUserTokens(req.user.id);
 
     if (success) {
-      logger.info(`🔓 JIRA disconnected for user ${req.user.id}`);
+      logger.info('JIRA disconnected', { component: 'Jira', userId: req.user.id });
       res.json({
         success: true,
         message: 'JIRA account disconnected successfully'
@@ -264,7 +270,7 @@ router.post('/refresh', authRequired, async (req, res) => {
       return res.status(401).json({ error: 'Authentication required' });
     }
 
-    logger.info(`🔄 Manual JIRA refresh requested for user ${req.user.id}`);
+    logger.info('Manual JIRA refresh requested', { component: 'Jira', userId: req.user.id });
 
     // Force a fresh check of authentication which will trigger refresh if needed
     const isAuthenticated = await JiraService.isUserAuthenticated(req.user.id);

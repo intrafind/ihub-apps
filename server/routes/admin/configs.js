@@ -295,7 +295,9 @@ export default function registerAdminConfigRoutes(app) {
         const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
         platformConfig = JSON.parse(platformConfigData);
       } catch {
-        logger.info('Platform config not found, returning default config');
+        logger.info('Platform config not found, returning default config', {
+          component: 'AdminConfigs'
+        });
         platformConfig = {
           auth: {
             mode: 'proxy',
@@ -454,7 +456,7 @@ export default function registerAdminConfigRoutes(app) {
         existingConfig = JSON.parse(existingConfigData);
       } catch {
         // File doesn't exist, start with empty config
-        logger.info('Creating new platform config file');
+        logger.info('Creating new platform config file', { component: 'AdminConfigs' });
       }
 
       // Decrypt existing secrets so restoreSecretIfRedacted compares against plaintext
@@ -598,7 +600,9 @@ export default function registerAdminConfigRoutes(app) {
             await import('../../services/integrations/iFinderService.js');
           iAssistantService.resetConfig();
           iFinderService.resetConfig();
-          logger.info('iFinder/iAssistant service caches reset after config change');
+          logger.info('iFinder/iAssistant service caches reset after config change', {
+            component: 'AdminConfigs'
+          });
         } catch (err) {
           logger.warn('Could not reset iFinder/iAssistant service caches:', err.message);
         }
@@ -609,14 +613,22 @@ export default function registerAdminConfigRoutes(app) {
 
       // Log results
       if (reconfigResults.reconfigured.length > 0) {
-        logger.info(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
+        logger.info('Reconfigured authentication methods', {
+          component: 'AdminConfigs',
+          reconfigured: reconfigResults.reconfigured.join(', ')
+        });
       }
       if (reconfigResults.requiresRestart.length > 0) {
-        logger.info(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
+        logger.info('Authentication methods require restart', {
+          component: 'AdminConfigs',
+          requiresRestart: reconfigResults.requiresRestart.join(', ')
+        });
       }
-      reconfigResults.notes.forEach(note => logger.info(`ℹ️  ${note}`));
+      reconfigResults.notes.forEach(note =>
+        logger.info('Authentication reconfiguration note', { component: 'AdminConfigs', note })
+      );
 
-      logger.info('🔧 Platform authentication configuration updated');
+      logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
 
       // Decrypt for sanitization before sending response (mergedConfig has encrypted values on disk)
       const responseConfig = JSON.parse(JSON.stringify(mergedConfig));

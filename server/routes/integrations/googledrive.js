@@ -112,10 +112,11 @@ router.get('/auth', authRequired, googleDriveAuthLimiter, async (req, res) => {
     // Generate authorization URL
     const authUrl = GoogleDriveService.generateAuthUrl(providerId, state, codeVerifier, req);
 
-    logger.info(
-      `Initiating Google Drive OAuth for user ${req.user?.id} - Provider: ${providerId}`,
-      { component: 'Google Drive' }
-    );
+    logger.info('Initiating Google Drive OAuth', {
+      component: 'Google Drive',
+      userId: req.user?.id,
+      providerId
+    });
 
     res.redirect(authUrl);
   } catch (error) {
@@ -214,8 +215,9 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     // Clear session data
     delete req.session[sessionKey];
 
-    logger.info(`Google Drive OAuth completed for user ${storedAuth.userId}`, {
+    logger.info('Google Drive OAuth completed', {
       component: 'Google Drive',
+      userId: storedAuth.userId,
       providerId: storedAuth.providerId
     });
 
@@ -313,8 +315,9 @@ router.post('/disconnect', authRequired, async (req, res) => {
     const success = await GoogleDriveService.deleteUserTokens(req.user.id);
 
     if (success) {
-      logger.info(`Google Drive disconnected for user ${req.user.id}`, {
-        component: 'Google Drive'
+      logger.info('Google Drive disconnected', {
+        component: 'Google Drive',
+        userId: req.user.id
       });
       res.json({
         success: true,
@@ -454,8 +457,9 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       drives
     });
   } catch (error) {
-    logger.error(`Error listing Google Drive drives for source ${req.params.source}:`, {
+    logger.error('Error listing Google Drive drives', {
       component: 'Google Drive',
+      source: req.params.source,
       error: error.message
     });
 

@@ -254,7 +254,9 @@ export default function registerAdminAuthRoutes(app) {
         usersData = JSON.parse(usersFileData);
       } catch {
         // File doesn't exist or is invalid, return empty users
-        logger.info('Users file not found or invalid, returning empty list');
+        logger.info('Users file not found or invalid, returning empty list', {
+          component: 'AdminAuth'
+        });
       }
 
       res.json(usersData);
@@ -418,9 +420,12 @@ export default function registerAdminAuthRoutes(app) {
       // Refresh cache to ensure new user is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(
-        `👤 Created new user: ${username} (${userId}) with auth methods: ${authMethods.join(', ')}`
-      );
+      logger.info('Created new user', {
+        component: 'AdminAuth',
+        username,
+        userId,
+        authMethods: authMethods.join(', ')
+      });
 
       // Return user without password hash
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
@@ -552,7 +557,7 @@ export default function registerAdminAuthRoutes(app) {
       // Refresh cache to ensure updated user data is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(`👤 Updated user: ${user.username} (${userId})`);
+      logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
 
       // Return user without password hash
       // eslint-disable-next-line no-unused-vars
@@ -653,7 +658,7 @@ export default function registerAdminAuthRoutes(app) {
       // Refresh cache to ensure deleted user is removed from cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(`👤 Deleted user: ${username} (${userId})`);
+      logger.info('Deleted user', { component: 'AdminAuth', username, userId });
 
       res.json({ message: 'User deleted successfully' });
     } catch (error) {

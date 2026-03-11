@@ -39,7 +39,7 @@ router.get('/document', authRequired, async (req, res) => {
     const baseUrl = iFinderConfig.baseUrl.replace(/\/+$/, '');
     const fullUrl = `${baseUrl}/${documentUrl.replace(/^\//, '')}`;
 
-    logger.debug(`iFinder document proxy: fetching document ${documentId}`);
+    logger.debug('iFinder document proxy: fetching document', { component: 'iFinder', documentId });
 
     const authHeader = getIFinderAuthorizationHeader(req.user);
     const response = await httpFetch(fullUrl, {
@@ -47,9 +47,11 @@ router.get('/document', authRequired, async (req, res) => {
     });
 
     if (!response.ok) {
-      logger.warn(
-        `iFinder document proxy returned ${response.status} for documentId=${documentId}`
-      );
+      logger.warn('iFinder document proxy returned non-OK status', {
+        component: 'iFinder',
+        status: response.status,
+        documentId
+      });
       return res.status(response.status).json({
         error: `iFinder returned ${response.status}`
       });
@@ -165,7 +167,7 @@ router.get('/document/metadata', authRequired, async (req, res) => {
       language: scalar(result.language),
       navigationTree: navigationTree?.length > 0 ? navigationTree : null
     };
-    logger.info(`iFinder Metadata response for ${documentId}: ${JSON.stringify(response)}`);
+    logger.info('iFinder Metadata response', { component: 'iFinder', documentId, response });
     res.json(response);
   } catch (error) {
     logger.error('iFinder document metadata error:', error.message);

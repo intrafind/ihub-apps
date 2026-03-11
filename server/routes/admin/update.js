@@ -93,7 +93,7 @@ export default function registerAdminUpdateRoutes(app) {
       res.json(result);
 
       // Schedule restart after response is sent
-      logger.info('Scheduling server restart for update...');
+      logger.info('Scheduling server restart for update', { component: 'AdminUpdate' });
       setTimeout(() => {
         process.exit(UPDATE_RESTART_CODE);
       }, 1000);
@@ -119,7 +119,7 @@ export default function registerAdminUpdateRoutes(app) {
       res.json(result);
 
       // Schedule restart after response is sent
-      logger.info('Scheduling server restart for rollback...');
+      logger.info('Scheduling server restart for rollback', { component: 'AdminUpdate' });
       setTimeout(() => {
         process.exit(UPDATE_RESTART_CODE);
       }, 1000);

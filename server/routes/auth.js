@@ -116,9 +116,9 @@ export default function registerAuthRoutes(app) {
       // Try local authentication
       let result = null;
       try {
-        logger.info('[Auth] Attempting local authentication (explicit)');
+        logger.info('[Auth] Attempting local authentication (explicit)', { component: 'Auth' });
         result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
-        logger.info('[Auth] Local authentication succeeded');
+        logger.info('[Auth] Local authentication succeeded', { component: 'Auth' });
       } catch (error) {
         logger.warn('[Auth] Local authentication failed:', { error: error.message });
         return res.status(401).json({
@@ -228,13 +228,16 @@ export default function registerAuthRoutes(app) {
         }
 
         try {
-          logger.info(
-            `[Auth] Attempting LDAP authentication (explicit) with provider: ${sanitizedProvider}`
-          );
+          logger.info('[Auth] Attempting LDAP authentication (explicit)', {
+            component: 'Auth',
+            provider: sanitizedProvider
+          });
           result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-          logger.info('[Auth] LDAP authentication succeeded');
+          logger.info('[Auth] LDAP authentication succeeded', { component: 'Auth' });
         } catch (error) {
-          logger.warn(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}':`, {
+          logger.warn('[Auth] LDAP authentication failed', {
+            component: 'Auth',
+            provider: sanitizedProvider,
             error: error.message
           });
           return res.status(401).json({
@@ -246,16 +249,22 @@ export default function registerAuthRoutes(app) {
         // Try each LDAP provider until one succeeds
         for (const ldapProvider of ldapAuthConfig.providers) {
           try {
-            logger.info(`[Auth] Trying LDAP provider (explicit): ${ldapProvider.name}`);
+            logger.info('[Auth] Trying LDAP provider (explicit)', {
+              component: 'Auth',
+              provider: ldapProvider.name
+            });
             result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
             if (result) {
-              logger.info(
-                `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
-              );
+              logger.info('[Auth] LDAP authentication succeeded', {
+                component: 'Auth',
+                provider: ldapProvider.name
+              });
               break;
             }
           } catch (error) {
-            logger.warn(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, {
+            logger.warn('[Auth] LDAP provider failed', {
+              component: 'Auth',
+              provider: ldapProvider.name,
               error: error.message
             });
             // Continue to next provider
@@ -345,7 +354,10 @@ export default function registerAuthRoutes(app) {
 
           // Only allow same-origin redirects
           if (returnUrlObj.host !== currentHost) {
-            logger.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
+            logger.warn('[Security] Blocked open redirect attempt', {
+              component: 'Auth',
+              returnUrl
+            });
             returnUrl = '/';
           }
         } else if (!returnUrl.startsWith('/')) {
@@ -473,7 +485,7 @@ export default function registerAuthRoutes(app) {
 
     // Log the event for analytics
     if (req.user && req.user.id !== 'anonymous') {
-      logger.info(`User ${req.user.id} logged out`);
+      logger.info('User logged out', { component: 'Auth', userId: req.user.id });
     }
 
     res.json({

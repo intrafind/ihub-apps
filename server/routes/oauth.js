@@ -63,7 +63,7 @@ function sanitizeOAuthInput(value, fieldName, maxLength = 255) {
  * @param {string} description - Human-readable description
  */
 function sendOAuthError(res, status, error, description) {
-  logger.info(`[OAuth] Error response | error=${error} | description=${description}`);
+  logger.info('[OAuth] Error response', { component: 'OAuth', error, description });
   res.status(status).json({
     error: error,
     error_description: description
@@ -368,9 +368,11 @@ export default function registerOAuthRoutes(app) {
           authCodeResponse.refresh_token = newRefreshToken;
         }
 
-        logger.info(
-          `[OAuth] Authorization code exchanged | client=${codeData.clientId} | user=${codeData.userId}`
-        );
+        logger.info('[OAuth] Authorization code exchanged', {
+          component: 'OAuth',
+          clientId: codeData.clientId,
+          userId: codeData.userId
+        });
         return res.json(authCodeResponse);
       }
 
@@ -445,9 +447,11 @@ export default function registerOAuthRoutes(app) {
           refreshPlatform.oauth?.refreshTokenExpirationDays || 30
         );
 
-        logger.info(
-          `[OAuth] Refresh token rotated | client=${tokenData.clientId} | user=${tokenData.userId}`
-        );
+        logger.info('[OAuth] Refresh token rotated', {
+          component: 'OAuth',
+          clientId: tokenData.clientId,
+          userId: tokenData.userId
+        });
         return res.json({
           access_token: newAccessToken,
           token_type: 'Bearer',
@@ -497,9 +501,13 @@ export default function registerOAuthRoutes(app) {
         });
 
         // Log token issuance
-        logger.info(
-          `[OAuth] Token issued | client_id=${sanitizedClientId} | scopes=${tokenResponse.scope} | expires_in=${tokenResponse.expires_in} | ip=${req.ip}`
-        );
+        logger.info('[OAuth] Token issued', {
+          component: 'OAuth',
+          clientId: sanitizedClientId,
+          scopes: tokenResponse.scope,
+          expiresIn: tokenResponse.expires_in,
+          ip: req.ip
+        });
 
         res.json(tokenResponse);
       } catch (error) {
@@ -623,9 +631,12 @@ export default function registerOAuthRoutes(app) {
       // Introspect token
       const introspection = introspectOAuthToken(sanitizedToken);
 
-      logger.info(
-        `[OAuth] Token introspected | active=${introspection.active} | client_id=${introspection.client_id || 'N/A'} | ip=${req.ip}`
-      );
+      logger.info('[OAuth] Token introspected', {
+        component: 'OAuth',
+        active: introspection.active,
+        clientId: introspection.client_id || 'N/A',
+        ip: req.ip
+      });
 
       res.json(introspection);
     } catch (error) {
@@ -689,7 +700,7 @@ export default function registerOAuthRoutes(app) {
       // always 200 so we do not surface whether the token existed.
       await revokeRefreshToken(sanitizedToken);
 
-      logger.info(`[OAuth] Revocation request processed | ip=${req.ip}`);
+      logger.info('[OAuth] Revocation request processed', { component: 'OAuth', ip: req.ip });
       res.status(200).json({ revoked: true });
     } catch (error) {
       logger.error('[OAuth] Revocation endpoint error:', error);
@@ -781,9 +792,11 @@ export default function registerOAuthRoutes(app) {
         groups: user.groups || []
       };
 
-      logger.info(
-        `[OAuth] UserInfo served | sub=${user.id} | client=${user.clientId || 'unknown'}`
-      );
+      logger.info('[OAuth] UserInfo served', {
+        component: 'OAuth',
+        sub: user.id,
+        clientId: user.clientId || 'unknown'
+      });
       res.json(userInfo);
     } catch (error) {
       logger.error('[OAuth] UserInfo endpoint error:', error);
@@ -840,19 +853,23 @@ export default function registerOAuthRoutes(app) {
             if (state) {
               redirectUrl.searchParams.set('state', state);
             }
-            logger.info(
-              `[OAuth] RP-initiated logout | client=${clientId} | redirect=${post_logout_redirect_uri}`
-            );
+            logger.info('[OAuth] RP-initiated logout', {
+              component: 'OAuth',
+              clientId,
+              redirect: post_logout_redirect_uri
+            });
             return res.redirect(redirectUrl.toString());
           }
         }
 
-        logger.warn(
-          `[OAuth] Logout redirect URI not validated | uri=${post_logout_redirect_uri} | client=${clientId}`
-        );
+        logger.warn('[OAuth] Logout redirect URI not validated', {
+          component: 'OAuth',
+          uri: post_logout_redirect_uri,
+          clientId
+        });
       }
 
-      logger.info('[OAuth] Logout completed');
+      logger.info('[OAuth] Logout completed', { component: 'OAuth' });
       res.json({ success: true, message: 'Logged out successfully' });
     } catch (error) {
       logger.error('[OAuth] Logout endpoint error:', error);

@@ -28,9 +28,11 @@ export default function registerSessionRoutes(app) {
             'en',
           referrer: req.headers['referer'] || metadata?.referrer || 'direct'
         };
-        logger.info(
-          `[APP LOADED] New session started: ${sessionId} | IP: ${enrichedMetadata.ipAddress.split(':').pop()}`
-        );
+        logger.info('[APP LOADED] New session started', {
+          component: 'SessionRoutes',
+          sessionId,
+          ip: enrichedMetadata.ipAddress.split(':').pop()
+        });
         await logNewSession(sessionId, type || 'app_loaded', enrichedMetadata);
         res.status(200).json({ success: true });
       } catch (error) {

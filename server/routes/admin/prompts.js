@@ -1167,7 +1167,10 @@ export default function registerAdminPromptsRoutes(app) {
         maxTokens: maxTokens,
         apiKey: apiKey
       });
-      logger.info('Completion result:', JSON.stringify(result, null, 2));
+      logger.info('Completion result', {
+        component: 'AdminPrompts',
+        result: JSON.stringify(result, null, 2)
+      });
       res.json({
         choices: [
           {

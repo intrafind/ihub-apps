@@ -123,9 +123,11 @@ export default function registerAdminSSLRoutes(app) {
       // Refresh config cache
       await configCache.refreshCacheEntry('config/platform.json');
 
-      logger.info(
-        `SSL configuration updated: ignoreInvalidCertificates=${ignoreInvalidCertificates}, domainWhitelist=[${domainWhitelist.join(', ')}]`
-      );
+      logger.info('SSL configuration updated', {
+        component: 'AdminSSL',
+        ignoreInvalidCertificates,
+        domainWhitelist
+      });
 
       res.json({
         message: 'SSL configuration updated successfully',

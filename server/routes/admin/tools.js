@@ -135,10 +135,15 @@ function loadRawTools() {
     // Check if we filtered any tools out
     if (tools.length !== allTools.length) {
       needsCleanup = true;
-      logger.info(
-        `⚠️  Detected ${allTools.length - tools.length} expanded tools in ${toolsFilePath}`
-      );
-      logger.info(`✓ Filtered to ${tools.length} raw tool definitions`);
+      logger.info('Detected expanded tools in config file', {
+        component: 'AdminTools',
+        expandedCount: allTools.length - tools.length,
+        toolsFilePath
+      });
+      logger.info('Filtered raw tool definitions', {
+        component: 'AdminTools',
+        count: tools.length
+      });
     }
   } else {
     // Fall back to defaults if no custom config exists
@@ -210,7 +215,10 @@ export default function registerAdminToolsRoutes(app) {
           const contentsDir = process.env.CONTENTS_DIR || 'contents';
           await fs.mkdir(join(rootDir, contentsDir, 'config'), { recursive: true });
           await fs.writeFile(filePath, JSON.stringify(tools, null, 2));
-          logger.info(`✓ Cleaned up ${filePath} - removed expanded tools`);
+          logger.info('Cleaned up tools file - removed expanded tools', {
+            component: 'AdminTools',
+            filePath
+          });
         } catch (cleanupError) {
           logger.error('Failed to cleanup tools file:', cleanupError);
           // Don't fail the request, just log the error
@@ -580,10 +588,14 @@ export default function registerAdminToolsRoutes(app) {
         try {
           if (existsSync(scriptPath)) {
             await fs.unlink(scriptPath);
-            logger.info(`Deleted script file: ${tool.script}`);
+            logger.info('Deleted script file', { component: 'AdminTools', script: tool.script });
           }
         } catch (scriptError) {
-          logger.warn(`Failed to delete script file ${tool.script}:`, scriptError);
+          logger.warn('Failed to delete script file', {
+            component: 'AdminTools',
+            script: tool.script,
+            error: scriptError.message
+          });
           // Continue with config deletion even if script deletion fails
         }
       }

@@ -33,7 +33,11 @@ async function getAllFiles(dirPath, arrayOfFiles = []) {
       }
     }
   } catch (error) {
-    logger.warn(`Warning: Could not read directory ${dirPath}:`, error.message);
+    logger.warn('Could not read directory', {
+      component: 'AdminBackup',
+      dirPath,
+      error: error.message
+    });
   }
 
   return arrayOfFiles;
@@ -64,11 +68,11 @@ function extractZip(zipPath, extractPath) {
       zipfile.readEntry();
 
       zipfile.on('entry', async entry => {
-        logger.info(`📂 ZIP entry: "${entry.fileName}"`);
+        logger.info('ZIP entry', { component: 'AdminBackup', fileName: entry.fileName });
 
         // Skip directories
         if (/\/$/.test(entry.fileName)) {
-          logger.info(`⏭️  Skipping directory: ${entry.fileName}`);
+          logger.info('Skipping directory', { component: 'AdminBackup', fileName: entry.fileName });
           zipfile.readEntry();
           return;
         }
@@ -79,7 +83,7 @@ function extractZip(zipPath, extractPath) {
           entry.fileName.includes('.DS_Store') ||
           entry.fileName.startsWith('._')
         ) {
-          logger.info(`⏭️  Skipping metadata: ${entry.fileName}`);
+          logger.info('Skipping metadata', { component: 'AdminBackup', fileName: entry.fileName });
           zipfile.readEntry();
           return;
         }
@@ -87,7 +91,10 @@ function extractZip(zipPath, extractPath) {
         // Check if this is a contents file (either direct contents/ or nested */contents/)
         const contentsMatch = entry.fileName.match(/(?:^|.*\/)contents\/(.+)$/);
         if (!contentsMatch) {
-          logger.info(`⏭️  Skipping non-contents file: ${entry.fileName}`);
+          logger.info('Skipping non-contents file', {
+            component: 'AdminBackup',
+            fileName: entry.fileName
+          });
           zipfile.readEntry();
           return;
         }
@@ -99,12 +106,19 @@ function extractZip(zipPath, extractPath) {
 
         // Prevent ZIP slip: skip entries that would escape the extract directory
         if (!entryPath) {
-          logger.warn(`⚠️  Skipping ZIP entry with path traversal: ${entry.fileName}`);
+          logger.warn('Skipping ZIP entry with path traversal', {
+            component: 'AdminBackup',
+            fileName: entry.fileName
+          });
           zipfile.readEntry();
           return;
         }
 
-        logger.info(`✅ Extracting: ${entry.fileName} -> contents/${relativePath}`);
+        logger.info('Extracting ZIP entry', {
+          component: 'AdminBackup',
+          fileName: entry.fileName,
+          relativePath
+        });
 
         // Ensure the directory exists
         await ensureDir(path.dirname(entryPath));
@@ -145,7 +159,7 @@ function extractZip(zipPath, extractPath) {
  */
 export async function exportConfig(req, res) {
   try {
-    logger.info('🔄 Starting configuration export...');
+    logger.info('Starting configuration export', { component: 'AdminBackup' });
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
     const filename = `ihub-config-backup-${timestamp}.zip`;
@@ -178,17 +192,21 @@ export async function exportConfig(req, res) {
         const relativePath = path.relative(path.join(contentsPath, '../'), filePath);
 
         // Debug logging
-        logger.info(`📁 Adding to archive: ${relativePath} (from ${filePath})`);
+        logger.info('Adding to archive', { component: 'AdminBackup', relativePath, filePath });
 
         // Add file to archive
         archive.file(filePath, { name: relativePath });
         fileCount++;
       } catch (error) {
-        logger.warn(`Warning: Could not add ${filePath} to archive:`, error.message);
+        logger.warn('Could not add file to archive', {
+          component: 'AdminBackup',
+          filePath,
+          error: error.message
+        });
       }
     }
 
-    logger.info(`✅ Added ${fileCount} files to backup archive`);
+    logger.info('Added files to backup archive', { component: 'AdminBackup', fileCount });
 
     // Add metadata file with backup information
     const metadata = {
@@ -202,7 +220,7 @@ export async function exportConfig(req, res) {
     archive.append(JSON.stringify(metadata, null, 2), { name: 'backup-metadata.json' });
 
     await archive.finalize();
-    logger.info('✅ Configuration export completed');
+    logger.info('Configuration export completed', { component: 'AdminBackup' });
   } catch (error) {
     logger.error('❌ Export error:', error);
     if (!res.headersSent) {
@@ -222,7 +240,7 @@ export async function importConfig(req, res) {
   let tempExtractPath = null;
 
   try {
-    logger.info('🔄 Starting configuration import...');
+    logger.info('Starting configuration import', { component: 'AdminBackup' });
 
     // Check if file was uploaded
     if (!req.file) {
@@ -232,7 +250,7 @@ export async function importConfig(req, res) {
     tempZipPath = req.file.path;
     tempExtractPath = path.join(path.dirname(tempZipPath), `extract_${Date.now()}`);
 
-    logger.info(`📁 Extracting ZIP file to: ${tempExtractPath}`);
+    logger.info('Extracting ZIP file', { component: 'AdminBackup', tempExtractPath });
 
     // Extract ZIP file
     await fs.mkdir(tempExtractPath, { recursive: true });
@@ -240,10 +258,10 @@ export async function importConfig(req, res) {
 
     // Debug: List what was actually extracted
     const extractedItems = await fs.readdir(tempExtractPath, { withFileTypes: true });
-    logger.info(
-      '📋 Extracted items:',
-      extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`)
-    );
+    logger.info('Extracted items from ZIP', {
+      component: 'AdminBackup',
+      items: extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`)
+    });
 
     // Verify the extracted content has a contents directory
     const extractedContentsPath = path.join(tempExtractPath, 'contents');
@@ -262,9 +280,11 @@ export async function importConfig(req, res) {
       const metadataPath = path.join(tempExtractPath, 'backup-metadata.json');
       const metadataContent = await fs.readFile(metadataPath, 'utf-8');
       metadata = JSON.parse(metadataContent);
-      logger.info('📋 Backup metadata:', metadata);
+      logger.info('Backup metadata loaded', { component: 'AdminBackup', metadata });
     } catch {
-      logger.info('ℹ️  No metadata found in backup (this is normal for manual backups)');
+      logger.info('No metadata found in backup (this is normal for manual backups)', {
+        component: 'AdminBackup'
+      });
     }
 
     // Create backup of current configuration
@@ -274,18 +294,21 @@ export async function importConfig(req, res) {
       `contents-backup-${backupTimestamp}`
     );
 
-    logger.info(`💾 Creating backup of current configuration at: ${currentBackupPath}`);
+    logger.info('Creating backup of current configuration', {
+      component: 'AdminBackup',
+      currentBackupPath
+    });
 
     try {
       await fs.cp(contentsPath, currentBackupPath, { recursive: true });
-      logger.info('✅ Current configuration backed up');
+      logger.info('Current configuration backed up', { component: 'AdminBackup' });
     } catch (error) {
       logger.error('⚠️  Warning: Could not backup current configuration:', error.message);
       // Continue with import but warn user
     }
 
     // Replace contents directory with imported one
-    logger.info('🔄 Replacing configuration files...');
+    logger.info('Replacing configuration files', { component: 'AdminBackup' });
 
     // Remove current contents (but keep backup)
     await fs.rm(contentsPath, { recursive: true, force: true });
@@ -293,13 +316,13 @@ export async function importConfig(req, res) {
     // Copy extracted contents
     await fs.cp(extractedContentsPath, contentsPath, { recursive: true });
 
-    logger.info('✅ Configuration files replaced');
+    logger.info('Configuration files replaced', { component: 'AdminBackup' });
 
     // Reload configuration cache
-    logger.info('🔄 Reloading configuration cache...');
+    logger.info('Reloading configuration cache', { component: 'AdminBackup' });
     await configCache.clear();
     await configCache.initialize();
-    logger.info('✅ Configuration cache reloaded');
+    logger.info('Configuration cache reloaded', { component: 'AdminBackup' });
 
     // Count imported files
     const importedFiles = await getAllFiles(contentsPath);
@@ -313,7 +336,10 @@ export async function importConfig(req, res) {
       note: 'All configurations have been replaced and cache has been reloaded. Frontend customizations (CSS, HTML, etc.) are included if they were in the backup.'
     });
 
-    logger.info(`✅ Configuration import completed. Imported ${importedFiles.length} files`);
+    logger.info('Configuration import completed', {
+      component: 'AdminBackup',
+      importedCount: importedFiles.length
+    });
   } catch (error) {
     logger.error('❌ Import error:', error);
 

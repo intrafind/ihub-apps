@@ -140,7 +140,10 @@ export default function registerAdminSkillsRoutes(app) {
         const skillsDir = getSkillsDirectory();
         const skillPathResolved = resolveAndValidatePath(req.params.name, skillsDir);
         if (!skillPathResolved) {
-          logger.warn(`Path traversal attempt blocked when deleting skill '${req.params.name}'`);
+          logger.warn('Path traversal attempt blocked when deleting skill', {
+            component: 'AdminSkills',
+            name: req.params.name
+          });
           return res.status(400).json({ error: 'Invalid skill path' });
         }
 
@@ -183,9 +186,10 @@ export default function registerAdminSkillsRoutes(app) {
         const skillsRoot = getSkillsDirectory();
         const resolvedSkillPath = resolveAndValidatePath(skillName, skillsRoot);
         if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
-          logger.warn(
-            `Skill directory validation blocked for invalid path derived from name '${skillName}'`
-          );
+          logger.warn('Skill directory validation blocked for invalid path', {
+            component: 'AdminSkills',
+            skillName
+          });
           return res.status(400).json({ error: 'Invalid skill path' });
         }
 
@@ -213,7 +217,10 @@ export default function registerAdminSkillsRoutes(app) {
         const skillsRoot = getSkillsDirectory();
         const resolvedSkillPath = resolveAndValidatePath(skillName, skillsRoot);
         if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
-          logger.warn(`Skill export blocked for invalid path derived from name '${skillName}'`);
+          logger.warn('Skill export blocked for invalid path', {
+            component: 'AdminSkills',
+            skillName
+          });
           return res.status(400).json({ error: 'Invalid skill path' });
         }
 

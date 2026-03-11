@@ -160,7 +160,8 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       max_tokens: maxTokens
     } = req.body || {};
 
-    logger.info(`[OpenAI Proxy] Incoming request:`, {
+    logger.info('[OpenAI Proxy] Incoming request', {
+      component: 'OpenAIProxy',
       modelId,
       messageCount: messages?.length,
       stream,
@@ -183,11 +184,11 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
     const { data: models = [] } = configCache.getModels();
     const model = models.find(m => m.id === modelId);
     if (!model) {
-      logger.info(`[OpenAI Proxy] Model not found: ${modelId}`);
-      logger.info(
-        `[OpenAI Proxy] Available models:`,
-        models.map(m => m.id)
-      );
+      logger.info('[OpenAI Proxy] Model not found', { component: 'OpenAIProxy', modelId });
+      logger.info('[OpenAI Proxy] Available models', {
+        component: 'OpenAIProxy',
+        models: models.map(m => m.id)
+      });
       const lang =
         req.headers['accept-language']?.split(',')[0] ||
         configCache.getPlatform()?.defaultLanguage ||
@@ -223,7 +224,10 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       try {
         genericTools = convertToolsToGeneric(tools, 'openai');
       } catch (error) {
-        logger.error(`[OpenAI Proxy] Error converting tools to generic format:`, error);
+        logger.error('[OpenAI Proxy] Error converting tools to generic format', {
+          component: 'OpenAIProxy',
+          error: error.message
+        });
         genericTools = tools; // Fallback to original tools
       }
     }
@@ -254,10 +258,12 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       //TODO check response status and handle errors
       if (!llmResponse.ok) {
         const errorText = await llmResponse.text();
-        logger.error(`[OpenAI Proxy] Error response from ${model.provider}:`, {
+        logger.error('[OpenAI Proxy] Error response from provider', {
+          component: 'OpenAIProxy',
+          provider: model.provider,
           status: llmResponse.status,
           statusText: llmResponse.statusText,
-          errorText: errorText
+          errorText
         });
         const lang =
           req.headers['accept-language']?.split(',')[0] ||
@@ -393,7 +399,11 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
                   }
                 }
               } catch (error) {
-                logger.error(`[OpenAI Proxy] Error processing ${model.provider} chunk:`, error);
+                logger.error('[OpenAI Proxy] Error processing chunk', {
+                  component: 'OpenAIProxy',
+                  provider: model.provider,
+                  error: error.message
+                });
                 // Continue processing other chunks
               }
             }
@@ -431,7 +441,11 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
                     res.write(`data: ${JSON.stringify(openAIChunk)}\n\n`);
                   }
                 } catch (error) {
-                  logger.error(`[OpenAI Proxy] Error processing ${model.provider} buffer:`, error);
+                  logger.error('[OpenAI Proxy] Error processing provider buffer', {
+                    component: 'OpenAIProxy',
+                    provider: model.provider,
+                    error: error.message
+                  });
                 }
               }
             }
@@ -449,7 +463,10 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         try {
           // Convert provider response to generic format, then to OpenAI format
           const genericResult = convertResponseToGeneric(data, model.provider);
-          logger.info(`[OpenAI Proxy] Generic result:`, JSON.stringify(genericResult, null, 2));
+          logger.info('[OpenAI Proxy] Generic result', {
+            component: 'OpenAIProxy',
+            result: JSON.stringify(genericResult, null, 2)
+          });
 
           const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
 

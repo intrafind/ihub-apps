@@ -221,7 +221,9 @@ export default function registerAdminGroupRoutes(app) {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        logger.info('Groups file not found or invalid, returning empty list');
+        logger.info('Groups file not found or invalid, returning empty list', {
+          component: 'AdminGroups'
+        });
       }
 
       res.json(groupsData);
@@ -303,7 +305,11 @@ export default function registerAdminGroupRoutes(app) {
               name: app.name || { en: app.id, de: app.id }
             });
           } catch (error) {
-            logger.warn(`Error reading app file ${file}:`, error.message);
+            logger.warn('Error reading app file', {
+              component: 'AdminGroups',
+              file,
+              error: error.message
+            });
           }
         }
       }
@@ -323,7 +329,11 @@ export default function registerAdminGroupRoutes(app) {
               name: model.name || { en: model.id, de: model.id }
             });
           } catch (error) {
-            logger.warn(`Error reading model file ${file}:`, error.message);
+            logger.warn('Error reading model file', {
+              component: 'AdminGroups',
+              file,
+              error: error.message
+            });
           }
         }
       }
@@ -344,12 +354,16 @@ export default function registerAdminGroupRoutes(app) {
                 name: prompt.name || { en: prompt.id, de: prompt.id }
               });
             } catch (error) {
-              logger.warn(`Error reading prompt file ${file}:`, error.message);
+              logger.warn('Error reading prompt file', {
+                component: 'AdminGroups',
+                file,
+                error: error.message
+              });
             }
           }
         }
       } catch {
-        logger.info('Prompts directory not found or empty');
+        logger.info('Prompts directory not found or empty', { component: 'AdminGroups' });
       }
 
       // Get workflows
@@ -368,12 +382,16 @@ export default function registerAdminGroupRoutes(app) {
                 name: workflow.name || { en: workflow.id, de: workflow.id }
               });
             } catch (error) {
-              logger.warn(`Error reading workflow file ${file}:`, error.message);
+              logger.warn('Error reading workflow file', {
+                component: 'AdminGroups',
+                file,
+                error: error.message
+              });
             }
           }
         }
       } catch {
-        logger.info('Workflows directory not found or empty');
+        logger.info('Workflows directory not found or empty', { component: 'AdminGroups' });
       }
 
       // Get skills
@@ -562,7 +580,7 @@ export default function registerAdminGroupRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      logger.info(`👥 Created new group: ${name} (${id})`);
+      logger.info('Created new group', { component: 'AdminGroups', name, id });
 
       res.json({ group: newGroup });
     } catch (error) {
@@ -698,7 +716,7 @@ export default function registerAdminGroupRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      logger.info(`👥 Updated group: ${group.name} (${groupId})`);
+      logger.info('Updated group', { component: 'AdminGroups', groupName: group.name, groupId });
 
       res.json({ group });
     } catch (error) {
@@ -817,7 +835,7 @@ export default function registerAdminGroupRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      logger.info(`👥 Deleted group: ${groupName} (${groupId})`);
+      logger.info('Deleted group', { component: 'AdminGroups', groupName, groupId });
 
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {

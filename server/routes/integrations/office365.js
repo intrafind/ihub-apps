@@ -109,12 +109,11 @@ router.get('/auth', authRequired, office365AuthLimiter, async (req, res) => {
     // Generate authorization URL (pass request for auto-detection)
     const authUrl = Office365Service.generateAuthUrl(providerId, state, codeVerifier, req);
 
-    logger.info(
-      `🔗 Initiating Office 365 OAuth for user ${req.user?.id} - Provider: ${providerId}`,
-      {
-        component: 'Office 365'
-      }
-    );
+    logger.info('Initiating Office 365 OAuth', {
+      component: 'Office 365',
+      userId: req.user?.id,
+      providerId
+    });
 
     // Redirect to Microsoft OAuth consent screen
     res.redirect(authUrl);
@@ -220,8 +219,9 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
     // Clear session data
     delete req.session[sessionKey];
 
-    logger.info(`✅ Office 365 OAuth completed for user ${storedAuth.userId}`, {
+    logger.info('Office 365 OAuth completed', {
       component: 'Office 365',
+      userId: storedAuth.userId,
       providerId: storedAuth.providerId
     });
 
@@ -339,8 +339,9 @@ router.get('/callback', authOptional, async (req, res) => {
       delete req.session[sessionKey];
     }
 
-    logger.info(`✅ Office 365 OAuth completed for user ${storedAuth.userId}`, {
+    logger.info('Office 365 OAuth completed', {
       component: 'Office 365',
+      userId: storedAuth.userId,
       providerId: storedAuth.providerId,
       returnUrl
     });
@@ -446,8 +447,9 @@ router.post('/disconnect', authRequired, async (req, res) => {
     const success = await Office365Service.deleteUserTokens(req.user.id);
 
     if (success) {
-      logger.info(`🔓 Office 365 disconnected for user ${req.user.id}`, {
-        component: 'Office 365'
+      logger.info('Office 365 disconnected', {
+        component: 'Office 365',
+        userId: req.user.id
       });
       res.json({
         success: true,
@@ -555,8 +557,9 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       drives
     });
   } catch (error) {
-    logger.error(`❌ Error listing Office 365 drives for source ${req.params.source}:`, {
+    logger.error('Error listing Office 365 drives', {
       component: 'Office 365',
+      source: req.params.source,
       error: error.message
     });
 
