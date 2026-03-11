@@ -644,6 +644,53 @@ function ExecutionProgress({ state, nodes = [] }) {
           ))}
         </div>
       )}
+
+      {/* Planned Tasks section - shown when planner node has run */}
+      {state?.data?.planCreated && (
+        <div className="mt-4 border border-purple-200 dark:border-purple-800 rounded-lg overflow-hidden">
+          <div className="bg-purple-50 dark:bg-purple-900/20 px-4 py-2 flex items-center gap-2">
+            <span className="text-purple-600 dark:text-purple-400 text-sm font-semibold">
+              📋 Planned Tasks ({state.data.planCreated.tasks?.length || 0})
+            </span>
+          </div>
+          {state.data.planCreated.reasoning && (
+            <div className="px-4 py-2 text-xs text-gray-500 dark:text-gray-400 italic border-b border-purple-100 dark:border-purple-800">
+              {state.data.planCreated.reasoning}
+            </div>
+          )}
+          <div className="divide-y divide-gray-100 dark:divide-gray-800">
+            {(state.data.planCreated.tasks || []).map((task, index) => (
+              <div key={task.id || index} className="px-4 py-2 flex items-start gap-3">
+                <span className="flex-shrink-0 w-5 h-5 bg-purple-100 dark:bg-purple-800 text-purple-600 dark:text-purple-300 rounded-full text-xs flex items-center justify-center font-medium">
+                  {index + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                    {task.title}
+                  </div>
+                  {task.description && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {task.description}
+                    </div>
+                  )}
+                  {task.tools?.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {task.tools.map(tool => (
+                        <span
+                          key={tool}
+                          className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-1.5 py-0.5 rounded"
+                        >
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

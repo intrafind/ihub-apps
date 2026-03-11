@@ -9,6 +9,7 @@ import { useWorkflowExecution } from '../hooks';
 import { HumanCheckpoint, ExecutionProgress, AppSelectionModal } from '../components';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 /**
  * Helper to download content as a file
@@ -101,6 +102,7 @@ function WorkflowExecutionPage() {
   const { executionId } = useParams();
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
+  const { user } = useAuth();
   const currentLanguage = i18n.language;
   const [showAppSelection, setShowAppSelection] = useState(false);
   /** @type {[Set<string>, Function]} Tracks which output accordion panels are expanded */
@@ -353,6 +355,15 @@ function WorkflowExecutionPage() {
 
           {/* Actions */}
           <div className="flex items-center gap-2">
+            {/* Edit Workflow link - admin only */}
+            {user?.permissions?.adminAccess && state.workflowId && (
+              <Link
+                to={`/admin/workflows/${state.workflowId}/edit`}
+                className="text-xs text-gray-500 hover:text-blue-600 underline"
+              >
+                Edit Workflow
+              </Link>
+            )}
             {isActive && (
               <button
                 onClick={handleCancel}

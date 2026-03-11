@@ -1,15 +1,18 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useMyExecutions } from '../hooks';
 import WorkflowListTab from './WorkflowListTab';
 import MyExecutionsTab from './MyExecutionsTab';
 import Icon from '../../../shared/components/Icon';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 /**
  * Main workflows page with tabs for available workflows and user's executions.
  */
 function WorkflowsPage() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState('available');
 
   // Get running count for badge
@@ -40,6 +43,18 @@ function WorkflowsPage() {
         <p className="text-gray-600 dark:text-gray-400">
           {t('workflows.subtitle', 'Manage and run automated workflows')}
         </p>
+        {/* New Workflow button - admin only */}
+        {user?.permissions?.adminAccess && (
+          <div className="mt-4 flex justify-center">
+            <Link
+              to="/admin/workflows/new"
+              className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-3 py-1.5 rounded flex items-center gap-1"
+            >
+              <span>+</span>
+              <span>New Workflow</span>
+            </Link>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
