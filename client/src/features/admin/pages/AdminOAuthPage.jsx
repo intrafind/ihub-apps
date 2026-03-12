@@ -12,6 +12,7 @@ const AdminOAuthPage = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [oauthEnabled, setOAuthEnabled] = useState(false);
+  const [clientsEnabled, setClientsEnabled] = useState(false);
   const [clientCount, setClientCount] = useState(0);
 
   useEffect(() => {
@@ -23,9 +24,11 @@ const AdminOAuthPage = () => {
       const response = await makeAdminApiCall('/admin/configs/platform');
       const data = response.data;
       const enabled = data?.oauth?.enabled || false;
+      const cEnabled = data?.oauth?.clientsEnabled || false;
       setOAuthEnabled(enabled);
+      setClientsEnabled(cEnabled);
 
-      if (enabled) {
+      if (cEnabled) {
         try {
           const clientsResponse = await makeAdminApiCall('/admin/oauth/clients');
           const clients = clientsResponse.data?.clients || [];
@@ -143,11 +146,22 @@ const AdminOAuthPage = () => {
                   </div>
                 </div>
                 <div className="flex items-center space-x-3 ml-4 flex-shrink-0">
-                  {oauthEnabled && clientCount > 0 && (
+                  {clientsEnabled && clientCount > 0 && (
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300">
                       {clientCount}
                     </span>
                   )}
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                      clientsEnabled
+                        ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+                        : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                    }`}
+                  >
+                    {clientsEnabled
+                      ? t('common.enabled', 'Enabled')
+                      : t('common.disabled', 'Disabled')}
+                  </span>
                   <Icon
                     name="chevron-right"
                     size="md"

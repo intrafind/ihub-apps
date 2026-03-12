@@ -582,6 +582,14 @@
           "nameRequired": "Client name is required",
           "tokenExpirationInvalid": "Token expiration must be between 1 and {{max}} minutes",
           "expirationDaysInvalid": "Expiration must be between 1 and 3650 days"
+        },
+        "clients": {
+          "enable": "OAuth Clients",
+          "enabledDesc": "OAuth Clients are active. External applications can authenticate using client credentials.",
+          "disabledDesc": "Enable OAuth Clients to allow external applications to authenticate using client credentials.",
+          "enabledSuccess": "OAuth Clients enabled successfully",
+          "disabledSuccess": "OAuth Clients disabled successfully",
+          "disabledWarning": "OAuth Clients are not enabled. Use the toggle above to enable them."
         }
       }
     },
