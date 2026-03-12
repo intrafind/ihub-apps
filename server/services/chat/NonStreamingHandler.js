@@ -66,7 +66,8 @@ class NonStreamingHandler {
 
         // Log additional info for context window errors
         if (errorResult.isContextWindowError) {
-          logger.warn(`Context window exceeded for model ${model.id}:`, {
+          logger.warn('Context window exceeded', {
+            component: 'NonStreamingHandler',
             modelId: model.id,
             tokenLimit: model.tokenLimit,
             httpStatus: errorResult.httpStatus,

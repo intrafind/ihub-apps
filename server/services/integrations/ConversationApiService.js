@@ -59,9 +59,11 @@ class ConversationApiService {
     const body = { conversation };
     if (Object.keys(retrieval_scope).length > 0) body.retrieval_scope = retrieval_scope;
 
-    logger.info(
-      `ConversationApiService: Creating conversation at ${url} — body: ${JSON.stringify(body)}`
-    );
+    logger.info('Creating conversation', {
+      component: 'ConversationApiService',
+      url,
+      body
+    });
 
     const response = await throttledFetch('iAssistantConversation', url, {
       method: 'POST',
@@ -100,7 +102,8 @@ class ConversationApiService {
     const body = { message };
     if (parentId) body.parent_id = parentId;
 
-    logger.info('ConversationApiService: Sending message', {
+    logger.info('Sending message', {
+      component: 'ConversationApiService',
       conversationId,
       hasParentId: !!parentId,
       contentLength: content?.length

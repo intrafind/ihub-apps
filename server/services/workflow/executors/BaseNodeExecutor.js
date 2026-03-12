@@ -131,9 +131,10 @@ export class BaseNodeExecutor {
     let current = state;
     for (const part of parts) {
       if (current === null || current === undefined) {
-        this.logger.debug({
+        this.logger.debug('Variable path resolved to undefined', {
           component: 'BaseNodeExecutor',
-          message: `Variable path '${path}' resolved to undefined at part '${part}'`
+          path,
+          part
         });
         return undefined;
       }
@@ -147,9 +148,10 @@ export class BaseNodeExecutor {
         if (Array.isArray(current)) {
           current = current[index];
         } else {
-          this.logger.debug({
+          this.logger.debug('Expected array at path but found non-array', {
             component: 'BaseNodeExecutor',
-            message: `Expected array at '${arrayName}' but found ${typeof current}`
+            arrayName,
+            foundType: typeof current
           });
           return undefined;
         }
@@ -265,11 +267,7 @@ export class BaseNodeExecutor {
    * }
    */
   createErrorResult(message, details = {}) {
-    this.logger.error({
-      component: this.constructor.name,
-      message,
-      ...details
-    });
+    this.logger.error(message, { component: this.constructor.name, ...details });
 
     return {
       status: 'failed',

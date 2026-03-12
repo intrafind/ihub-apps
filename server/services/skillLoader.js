@@ -58,7 +58,7 @@ async function parseSkillFile(filePath) {
     const { data: frontmatter, content: body } = matter(content);
     return { frontmatter, body: body.trim() };
   } catch (error) {
-    logger.error(`Failed to parse SKILL.md at ${filePath}:`, error.message);
+    logger.error('Failed to parse SKILL.md', { component: 'SkillLoader', filePath, error });
     return null;
   }
 }
@@ -81,9 +81,11 @@ function validateSkillData(frontmatter, dirName) {
     }
     if (frontmatter.name !== dirName) {
       // Warn but don't fail — use directory name as the canonical ID
-      logger.warn(
-        `Skill name '${frontmatter.name}' does not match directory name '${dirName}'. Using directory name.`
-      );
+      logger.warn('Skill name does not match directory name, using directory name', {
+        component: 'SkillLoader',
+        skillName: frontmatter.name,
+        dirName
+      });
     }
   }
 
@@ -118,13 +120,16 @@ async function scanForSkillDirs(dirPath) {
       // Directory doesn't exist yet — create it
       try {
         await fs.mkdir(dirPath, { recursive: true });
-        logger.info(`Created skills directory: ${dirPath}`);
+        logger.info('Created skills directory', { component: 'SkillLoader', dirPath });
       } catch (mkdirError) {
-        logger.error(`Failed to create skills directory: ${mkdirError.message}`);
+        logger.error('Failed to create skills directory', {
+          component: 'SkillLoader',
+          error: mkdirError
+        });
       }
       return [];
     }
-    logger.error(`Failed to scan skills directory: ${error.message}`);
+    logger.error('Failed to scan skills directory', { component: 'SkillLoader', error });
     return [];
   }
 }
@@ -186,7 +191,11 @@ export async function loadSkillsMetadata(customDir) {
 
     const validation = validateSkillData(parsed.frontmatter, dirName);
     if (!validation.valid) {
-      logger.warn(`Skipping invalid skill '${dirName}': ${validation.errors.join(', ')}`);
+      logger.warn('Skipping invalid skill', {
+        component: 'SkillLoader',
+        dirName,
+        errors: validation.errors
+      });
       continue;
     }
 
@@ -218,14 +227,18 @@ export async function getSkillContent(skillName, customDir) {
   // Validate skill name to prevent path traversal and enforce spec
   const nameValidation = validateSkillName(skillName);
   if (!nameValidation.valid) {
-    logger.warn(`Rejected invalid skill name '${skillName}': ${nameValidation.error}`);
+    logger.warn('Rejected invalid skill name', {
+      component: 'SkillLoader',
+      skillName,
+      error: nameValidation.error
+    });
     return null;
   }
 
   const skillsDir = getSkillsDirectory(customDir);
   const resolvedSkillPath = resolveAndValidatePath(skillName, skillsDir);
   if (!resolvedSkillPath) {
-    logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
+    logger.warn('Rejected skill path traversal attempt', { component: 'SkillLoader', skillName });
     return null;
   }
 
@@ -273,34 +286,50 @@ export async function getSkillResource(skillName, filePath, customDir) {
   // Validate skill name to prevent path traversal and enforce spec
   const nameValidation = validateSkillName(skillName);
   if (!nameValidation.valid) {
-    logger.warn(`Rejected invalid skill name '${skillName}': ${nameValidation.error}`);
+    logger.warn('Rejected invalid skill name', {
+      component: 'SkillLoader',
+      skillName,
+      error: nameValidation.error
+    });
     return null;
   }
 
   // Ensure filePath is a simple string to avoid type confusion attacks
   if (typeof filePath !== 'string') {
-    logger.warn(`Rejected non-string file path for skill '${skillName}': ${String(filePath)}`);
+    logger.warn('Rejected non-string file path for skill', {
+      component: 'SkillLoader',
+      skillName,
+      filePath: String(filePath)
+    });
     return null;
   }
 
   const skillsDir = getSkillsDirectory(customDir);
   const resolvedSkillPath = resolveAndValidatePath(skillName, skillsDir);
   if (!resolvedSkillPath) {
-    logger.warn(`Rejected skill path traversal attempt for skill '${skillName}'`);
+    logger.warn('Rejected skill path traversal attempt', { component: 'SkillLoader', skillName });
     return null;
   }
 
   // Validate the file path stays within the skill directory (handles ".." and absolute paths)
   const resolvedFilePath = resolveAndValidatePath(filePath, resolvedSkillPath);
   if (!resolvedFilePath) {
-    logger.warn(`Path traversal attempt blocked for skill '${skillName}': ${filePath}`);
+    logger.warn('Path traversal attempt blocked', {
+      component: 'SkillLoader',
+      skillName,
+      filePath
+    });
     return null;
   }
 
   // Resolve real paths (follows symlinks) to detect symlink-based traversal
   const realResolvedPath = await resolveAndValidateRealPath(filePath, resolvedSkillPath);
   if (!realResolvedPath) {
-    logger.warn(`Symlink-based path traversal blocked for skill '${skillName}': ${filePath}`);
+    logger.warn('Symlink-based path traversal blocked', {
+      component: 'SkillLoader',
+      skillName,
+      filePath
+    });
     return null;
   }
 
@@ -308,7 +337,12 @@ export async function getSkillResource(skillName, filePath, customDir) {
     const content = await fs.readFile(realResolvedPath, 'utf-8');
     return content;
   } catch (error) {
-    logger.error(`Failed to read skill resource '${filePath}' from '${skillName}':`, error.message);
+    logger.error('Failed to read skill resource', {
+      component: 'SkillLoader',
+      filePath,
+      skillName,
+      error
+    });
     return null;
   }
 }

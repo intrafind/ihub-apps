@@ -143,29 +143,35 @@ export default async function registerSwaggerRoutes(app) {
 
   // Debug logging
   logger.info('📚 Generated API specs:', { component: 'Swagger' });
-  logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).length}`, {
-    component: 'Swagger'
+  logger.info('Normal API paths count', {
+    component: 'Swagger',
+    count: Object.keys(normalApiSpec.paths || {}).length
   });
-  logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).length}`, {
-    component: 'Swagger'
+  logger.info('Admin API paths count', {
+    component: 'Swagger',
+    count: Object.keys(adminApiSpec.paths || {}).length
   });
-  logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).length}`, {
-    component: 'Swagger'
+  logger.info('OpenAI API paths count', {
+    component: 'Swagger',
+    count: Object.keys(openaiApiSpec.paths || {}).length
   });
 
   if (Object.keys(normalApiSpec.paths || {}).length > 0) {
-    logger.info(`   💬 Normal API paths: ${Object.keys(normalApiSpec.paths || {}).join(', ')}`, {
-      component: 'Swagger'
+    logger.info('Normal API paths', {
+      component: 'Swagger',
+      paths: Object.keys(normalApiSpec.paths || {}).join(', ')
     });
   }
   if (Object.keys(adminApiSpec.paths || {}).length > 0) {
-    logger.info(`   🔧 Admin API paths: ${Object.keys(adminApiSpec.paths || {}).join(', ')}`, {
-      component: 'Swagger'
+    logger.info('Admin API paths', {
+      component: 'Swagger',
+      paths: Object.keys(adminApiSpec.paths || {}).join(', ')
     });
   }
   if (Object.keys(openaiApiSpec.paths || {}).length > 0) {
-    logger.info(`   🤖 OpenAI API paths: ${Object.keys(openaiApiSpec.paths || {}).join(', ')}`, {
-      component: 'Swagger'
+    logger.info('OpenAI API paths', {
+      component: 'Swagger',
+      paths: Object.keys(openaiApiSpec.paths || {}).join(', ')
     });
   }
 
@@ -242,15 +248,21 @@ export default async function registerSwaggerRoutes(app) {
   });
 
   logger.info('📚 Swagger documentation available at:', { component: 'Swagger' });
-  logger.info(`   📖 All APIs: ${buildServerPath('/api/docs')}`, { component: 'Swagger' });
-  logger.info(`   💬 Chat & General: ${buildServerPath('/api/docs/normal', basePath)}`, {
-    component: 'Swagger'
+  logger.info('Swagger docs - All APIs', {
+    component: 'Swagger',
+    url: buildServerPath('/api/docs')
   });
-  logger.info(`   🔧 Admin: ${buildServerPath('/api/docs/admin', basePath)}`, {
-    component: 'Swagger'
+  logger.info('Swagger docs - Chat & General', {
+    component: 'Swagger',
+    url: buildServerPath('/api/docs/normal', basePath)
   });
-  logger.info(`   🤖 OpenAI Compatible: ${buildServerPath('/api/docs/openai', basePath)}`, {
-    component: 'Swagger'
+  logger.info('Swagger docs - Admin', {
+    component: 'Swagger',
+    url: buildServerPath('/api/docs/admin', basePath)
+  });
+  logger.info('Swagger docs - OpenAI Compatible', {
+    component: 'Swagger',
+    url: buildServerPath('/api/docs/openai', basePath)
   });
 
   if (requireAuth) {

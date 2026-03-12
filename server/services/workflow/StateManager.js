@@ -150,9 +150,8 @@ export class StateManager {
 
     this.activeStates.set(executionId, state);
 
-    logger.info({
+    logger.info('Created workflow execution state', {
       component: 'StateManager',
-      message: 'Created workflow execution state',
       executionId,
       workflowId
     });
@@ -198,9 +197,8 @@ export class StateManager {
 
     this.activeStates.set(executionId, updatedState);
 
-    logger.debug({
+    logger.debug('Updated workflow execution state', {
       component: 'StateManager',
-      message: 'Updated workflow execution state',
       executionId,
       status: updatedState.status
     });
@@ -222,9 +220,8 @@ export class StateManager {
   async get(executionId) {
     // Validate executionId before using it in filesystem paths
     if (!validateIdForPath(executionId, 'executionId')) {
-      logger.warn({
+      logger.warn('Invalid executionId for state lookup', {
         component: 'StateManager',
-        message: 'Invalid executionId for state lookup',
         executionId
       });
       return null;
@@ -262,11 +259,7 @@ export class StateManager {
   async checkpoint(executionId, reason = 'auto') {
     // Validate executionId before using it in filesystem paths
     if (!validateIdForPath(executionId, 'executionId')) {
-      logger.warn({
-        component: 'StateManager',
-        message: 'Invalid executionId for checkpoint',
-        executionId
-      });
+      logger.warn('Invalid executionId for checkpoint', { component: 'StateManager', executionId });
       throw new Error('Invalid executionId for checkpoint');
     }
 
@@ -299,9 +292,8 @@ export class StateManager {
     const latestPath = path.join(checkpointDir, 'latest.json');
     await atomicWriteJSON(latestPath, state);
 
-    logger.info({
+    logger.info('Checkpoint saved', {
       component: 'StateManager',
-      message: 'Checkpoint saved',
       executionId,
       checkpointId,
       reason
@@ -334,11 +326,7 @@ export class StateManager {
       // Store in active states
       this.activeStates.set(executionId, restoredState);
 
-      logger.info({
-        component: 'StateManager',
-        message: 'State restored from checkpoint',
-        executionId
-      });
+      logger.info('State restored from checkpoint', { component: 'StateManager', executionId });
 
       return { ...restoredState };
     } catch (error) {
@@ -380,9 +368,8 @@ export class StateManager {
     // Check state size after adding history
     this._validateStateSize(state);
 
-    logger.debug({
+    logger.debug('Added step to execution history', {
       component: 'StateManager',
-      message: 'Added step to execution history',
       executionId,
       nodeId: step.nodeId,
       type: step.type
@@ -421,9 +408,8 @@ export class StateManager {
     state.errors.push(errorEntry);
     state.updatedAt = errorEntry.timestamp;
 
-    logger.warn({
+    logger.warn('Recorded execution error', {
       component: 'StateManager',
-      message: 'Recorded execution error',
       executionId,
       nodeId: error.nodeId,
       errorMessage: error.message
@@ -553,26 +539,23 @@ export class StateManager {
       const checkpointDir = path.join(this.stateDir, executionId);
       try {
         await fs.rm(checkpointDir, { recursive: true, force: true });
-        logger.info({
+        logger.info('Cleaned up execution state and checkpoints', {
           component: 'StateManager',
-          message: 'Cleaned up execution state and checkpoints',
           executionId
         });
       } catch (error) {
         // Directory might not exist, which is fine
         if (error.code !== 'ENOENT') {
-          logger.warn({
+          logger.warn('Failed to clean up checkpoint directory', {
             component: 'StateManager',
-            message: 'Failed to clean up checkpoint directory',
             executionId,
-            error: error.message
+            error
           });
         }
       }
     } else {
-      logger.info({
+      logger.info('Cleaned up execution state (checkpoints preserved)', {
         component: 'StateManager',
-        message: 'Cleaned up execution state (checkpoints preserved)',
         executionId
       });
     }

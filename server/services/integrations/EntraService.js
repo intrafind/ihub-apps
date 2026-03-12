@@ -27,7 +27,7 @@ class EntraService {
       return this.accessToken;
     }
 
-    logger.info('EntraService: No valid token found, fetching a new one...');
+    logger.info('No valid token found, fetching a new one', { component: 'EntraService' });
     const params = new URLSearchParams();
     params.append('client_id', this.clientId);
     params.append('scope', 'https://graph.microsoft.com/.default');
@@ -43,18 +43,21 @@ class EntraService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ Error fetching access token:', errorData);
+        logger.error('Error fetching access token', {
+          component: 'EntraService',
+          error: errorData
+        });
         throw new Error('Failed to acquire access token.');
       }
 
       const tokenData = await response.json();
       this.accessToken = tokenData.access_token;
       this.tokenExpiry = Date.now() + tokenData.expires_in * 1000;
-      logger.info('EntraService: ✅ Token acquired');
+      logger.info('Token acquired', { component: 'EntraService' });
       return this.accessToken;
     } catch (error) {
       if (error.message === 'Failed to acquire access token.') throw error;
-      logger.error('❌ Error fetching access token:', error.message);
+      logger.error('Error fetching access token', { component: 'EntraService', error });
       throw new Error('Failed to acquire access token.');
     }
   }
@@ -69,11 +72,15 @@ class EntraService {
 
       if (!response.ok) {
         if (response.status === 404) {
-          logger.info(`EntraService: Resource not found at endpoint: ${endpoint}`);
+          logger.info('Resource not found at endpoint', { component: 'EntraService', endpoint });
           return null;
         }
         const errorData = await response.json().catch(() => ({}));
-        logger.error(`❌ Error calling Graph API endpoint ${endpoint}:`, errorData);
+        logger.error('Error calling Graph API endpoint', {
+          component: 'EntraService',
+          endpoint,
+          error: errorData
+        });
         return null;
       }
 
@@ -82,13 +89,17 @@ class EntraService {
       }
       return await response.json();
     } catch (error) {
-      logger.error(`❌ Error calling Graph API endpoint ${endpoint}:`, error.message);
+      logger.error('Error calling Graph API endpoint', {
+        component: 'EntraService',
+        endpoint,
+        error
+      });
       return null;
     }
   }
 
   async findUser(name) {
-    logger.info(`EntraService: Searching for user: ${name}`);
+    logger.info('Searching for user', { component: 'EntraService', name });
     const encodedName = encodeURIComponent(name);
     const endpoint = `/users?$filter=startswith(displayName,'${encodedName}') or startswith(mail,'${encodedName}')&$select=id,displayName,mail,jobTitle,department,officeLocation`;
     const result = await this._makeGraphRequest(endpoint);
@@ -96,17 +107,17 @@ class EntraService {
   }
 
   async getAllUserDetails(userId) {
-    logger.info(`EntraService: Getting all details for user ID: ${userId}`);
+    logger.info('Getting all details for user', { component: 'EntraService', userId });
     return this._makeGraphRequest(`/users/${userId}`);
   }
 
   async getUserManager(userId) {
-    logger.info(`EntraService: Getting manager for user ID: ${userId}`);
+    logger.info('Getting manager for user', { component: 'EntraService', userId });
     return this._makeGraphRequest(`/users/${userId}/manager`);
   }
 
   async getUserPhotoBase64(userId) {
-    logger.info(`EntraService: Getting photo for user ID: ${userId}`);
+    logger.info('Getting photo for user', { component: 'EntraService', userId });
     const photoBuffer = await this._makeGraphRequest(`/users/${userId}/photo/$value`, {
       responseType: 'arraybuffer'
     });
@@ -114,7 +125,7 @@ class EntraService {
   }
 
   async getUserGroups(userId) {
-    logger.info(`EntraService: Getting groups for user ID: ${userId}`);
+    logger.info('Getting groups for user', { component: 'EntraService', userId });
     const endpoint = `/users/${userId}/memberOf?$select=id,displayName,description,resourceProvisioningOptions`;
     const result = await this._makeGraphRequest(endpoint);
     const teams = result?.value.filter(group =>
@@ -124,14 +135,14 @@ class EntraService {
   }
 
   async getTeamMembers(groupId) {
-    logger.info(`EntraService: Getting members for group ID: ${groupId}`);
+    logger.info('Getting members for group', { component: 'EntraService', groupId });
     const endpoint = `/groups/${groupId}/members?$select=id,displayName,jobTitle`;
     const result = await this._makeGraphRequest(endpoint);
     return result?.value || [];
   }
 
   async getTeamChannels(teamId) {
-    logger.info(`EntraService: Getting channels for team ID: ${teamId}`);
+    logger.info('Getting channels for team', { component: 'EntraService', teamId });
     const result = await this._makeGraphRequest(`/teams/${teamId}/channels`);
     return result?.value || [];
   }

@@ -30,7 +30,10 @@ class SourceResolutionService {
    */
   async resolveAppSources(app, context = {}) {
     if (!app.sources || !Array.isArray(app.sources) || app.sources.length === 0) {
-      logger.info('No sources configured for app:', app.id);
+      logger.info('No sources configured for app', {
+        component: 'SourceResolutionService',
+        appId: app.id
+      });
       return [];
     }
 
@@ -41,12 +44,19 @@ class SourceResolutionService {
     if (this.resolutionCache.has(cacheKey)) {
       const cached = this.resolutionCache.get(cacheKey);
       if (Date.now() - cached.timestamp < this.cacheTimeout) {
-        logger.info(`Using cached source resolution for app: ${app.id}`);
+        logger.info('Using cached source resolution for app', {
+          component: 'SourceResolutionService',
+          appId: app.id
+        });
         return cached.sources;
       }
     }
 
-    logger.info(`Resolving ${app.sources.length} source references for app: ${app.id}`);
+    logger.info('Resolving source references for app', {
+      component: 'SourceResolutionService',
+      appId: app.id,
+      sourceCount: app.sources.length
+    });
     const resolvedSources = [];
 
     for (const sourceRef of app.sources) {
@@ -56,18 +66,28 @@ class SourceResolutionService {
           const resolvedSource = await this.resolveSourceById(sourceRef, context);
           if (resolvedSource) {
             resolvedSources.push(resolvedSource);
-            logger.info(`✓ Resolved admin source reference: ${sourceRef}`);
+            logger.info('Resolved admin source reference', {
+              component: 'SourceResolutionService',
+              sourceRef
+            });
           } else {
-            logger.warn(`⚠ Source reference '${sourceRef}' not found in admin sources or disabled`);
+            logger.warn('Source reference not found in admin sources or disabled', {
+              component: 'SourceResolutionService',
+              sourceRef
+            });
           }
         } else {
-          logger.warn(
-            `⚠ Invalid source reference format - only string IDs are supported:`,
+          logger.warn('Invalid source reference format - only string IDs are supported', {
+            component: 'SourceResolutionService',
             sourceRef
-          );
+          });
         }
       } catch (error) {
-        logger.error(`Error resolving source reference:`, sourceRef, error);
+        logger.error('Error resolving source reference', {
+          component: 'SourceResolutionService',
+          sourceRef,
+          error
+        });
         // Continue processing other sources
       }
     }
@@ -78,9 +98,12 @@ class SourceResolutionService {
       timestamp: Date.now()
     });
 
-    logger.info(
-      `Resolved ${resolvedSources.length}/${app.sources.length} sources for app: ${app.id}`
-    );
+    logger.info('Resolved sources for app', {
+      component: 'SourceResolutionService',
+      appId: app.id,
+      resolved: resolvedSources.length,
+      total: app.sources.length
+    });
     return resolvedSources;
   }
 
@@ -95,12 +118,12 @@ class SourceResolutionService {
     const adminSource = this.getAdminSourceById(sourceId);
 
     if (!adminSource) {
-      logger.warn(`Admin source not found: ${sourceId}`);
+      logger.warn('Admin source not found', { component: 'SourceResolutionService', sourceId });
       return null;
     }
 
     if (!adminSource.enabled) {
-      logger.warn(`Admin source disabled: ${sourceId}`);
+      logger.warn('Admin source disabled', { component: 'SourceResolutionService', sourceId });
       return null;
     }
 
@@ -121,7 +144,7 @@ class SourceResolutionService {
       const { data: sources } = this.configCache.getSources() || { data: [] };
       return sources.find(source => source.id === sourceId) || null;
     } catch (error) {
-      logger.error(`Error loading admin sources:`, error);
+      logger.error('Error loading admin sources', { component: 'SourceResolutionService', error });
       return null;
     }
   }
@@ -198,7 +221,7 @@ class SourceResolutionService {
    */
   clearCache() {
     this.resolutionCache.clear();
-    logger.info('Source resolution cache cleared');
+    logger.info('Source resolution cache cleared', { component: 'SourceResolutionService' });
   }
 
   /**

@@ -86,9 +86,8 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
     const { user, chatId, appConfig } = context;
     const { toolId, parameters = {}, outputVariable, timeout, optional = false } = config;
 
-    this.logger.info({
+    this.logger.info('Executing tool node', {
       component: 'ToolNodeExecutor',
-      message: `Executing tool node '${node.id}'`,
       nodeId: node.id,
       toolId,
       hasParameters: Object.keys(parameters).length > 0
@@ -98,9 +97,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
       // Resolve parameters from state
       const resolvedParams = this.resolveParameters(parameters, state);
 
-      this.logger.debug({
+      this.logger.debug('Resolved parameters for tool', {
         component: 'ToolNodeExecutor',
-        message: `Resolved parameters for tool '${toolId}'`,
+        toolId,
         nodeId: node.id,
         parameterKeys: Object.keys(resolvedParams)
       });
@@ -117,9 +116,9 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
         timeout
       );
 
-      this.logger.info({
+      this.logger.info('Tool executed successfully', {
         component: 'ToolNodeExecutor',
-        message: `Tool '${toolId}' executed successfully`,
+        toolId,
         nodeId: node.id,
         hasResult: result !== undefined
       });
@@ -188,20 +187,18 @@ export class ToolNodeExecutor extends BaseNodeExecutor {
   handleToolError(error, node, config, optional) {
     const errorMessage = error.message || 'Unknown tool error';
 
-    this.logger.error({
+    this.logger.error('Tool execution failed for node', {
       component: 'ToolNodeExecutor',
-      message: `Tool execution failed for node '${node.id}'`,
       nodeId: node.id,
       toolId: config.toolId,
-      error: errorMessage,
-      stack: error.stack
+      error
     });
 
     // If tool is optional, return error as output but don't fail
     if (optional) {
-      this.logger.info({
+      this.logger.info('Optional tool failed, continuing workflow', {
         component: 'ToolNodeExecutor',
-        message: `Optional tool '${config.toolId}' failed, continuing workflow`,
+        toolId: config.toolId,
         nodeId: node.id
       });
 

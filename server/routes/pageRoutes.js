@@ -2,7 +2,13 @@ import { loadText } from '../configLoader.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath, sanitizeLanguageCode } from '../utils/pathSecurity.js';
-import logger from '../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendAuthRequired,
+  sendInsufficientPermissions,
+  sendErrorResponse
+} from '../utils/responseHelpers.js';
 
 export default function registerPageRoutes(app) {
   app.get(buildServerPath('/api/pages/:pageId'), async (req, res) => {
@@ -17,7 +23,7 @@ export default function registerPageRoutes(app) {
       let { data: uiConfig } = configCache.getUI();
 
       if (!uiConfig || !uiConfig.pages || !uiConfig.pages[pageId]) {
-        return res.status(404).json({ error: 'Page not found' });
+        return sendNotFound(res, 'Page');
       }
       const pageConfig = uiConfig.pages[pageId];
 
@@ -25,7 +31,7 @@ export default function registerPageRoutes(app) {
 
       // Require authentication if configured
       if (authRequired && (!req.user || req.user.id === 'anonymous')) {
-        return res.status(401).json({ error: 'Authentication required' });
+        return sendAuthRequired(res);
       }
 
       // Check allowed groups if specified
@@ -37,18 +43,16 @@ export default function registerPageRoutes(app) {
         const userGroups = req.user?.groups || [];
         const hasGroup = userGroups.some(g => allowedGroups.includes(g));
         if (!hasGroup) {
-          return res.status(403).json({ error: 'Insufficient permissions' });
+          return sendInsufficientPermissions(res);
         }
       }
       const langFilePath = pageConfig.filePath[lang] || pageConfig.filePath['en'];
       if (!langFilePath) {
-        return res
-          .status(404)
-          .json({ error: 'Page content not available for the requested language' });
+        return sendErrorResponse(res, 404, 'Page content not available for the requested language');
       }
       const content = await loadText(langFilePath);
       if (!content) {
-        return res.status(404).json({ error: 'Page content file not found' });
+        return sendNotFound(res, 'Page content file');
       }
 
       // Determine content type from configuration or file extension
@@ -69,8 +73,7 @@ export default function registerPageRoutes(app) {
         contentType
       });
     } catch (error) {
-      logger.error('Error fetching page content', { component: 'PageRoutes', error });
-      res.status(500).json({ error: 'Failed to fetch page content' });
+      return sendInternalError(res, error, 'fetch page content');
     }
   });
 }

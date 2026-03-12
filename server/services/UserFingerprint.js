@@ -18,7 +18,7 @@ async function loadOrCreatePepper() {
     pepper = crypto.randomBytes(32).toString('hex');
     await fs.mkdir(path.dirname(pepperFile), { recursive: true });
     await fs.writeFile(pepperFile, pepper, 'utf8');
-    logger.info('Created new usage tracking pepper');
+    logger.info('Created new usage tracking pepper', { component: 'UserFingerprint' });
   }
   return pepper;
 }

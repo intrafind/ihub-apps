@@ -160,10 +160,12 @@ class RequestBuilder {
 
       // Filter models based on app requirements (allowedModels, tools, settings.model.filter)
       const filteredModels = filterModelsForApp(models, app);
-      logger.info(
-        `App ${app.id}: Filtered ${filteredModels.length} compatible models from ${models.length} total models`,
-        { component: 'RequestBuilder' }
-      );
+      logger.info('Filtered compatible models for app', {
+        component: 'RequestBuilder',
+        appId: app.id,
+        filteredCount: filteredModels.length,
+        totalCount: models.length
+      });
 
       // Check if no models are available at all
       if (filteredModels.length === 0) {
@@ -204,15 +206,16 @@ class RequestBuilder {
 
       // Check if we still don't have a model ID (all sources were null/undefined)
       if (!resolvedModelId) {
-        logger.info(
-          `No model ID could be determined for app ${app.id}. No modelId provided, no preferred model, and no default model available.`,
-          { component: 'RequestBuilder' }
-        );
+        logger.info('No model ID could be determined for app', {
+          component: 'RequestBuilder',
+          appId: app.id
+        });
         // Use the first available model from filtered list as last resort
         if (filteredModels.length > 0) {
           resolvedModelId = filteredModels[0].id;
-          logger.info(`Using first available model as fallback: ${resolvedModelId}`, {
-            component: 'RequestBuilder'
+          logger.info('Using first available model as fallback', {
+            component: 'RequestBuilder',
+            resolvedModelId
           });
         } else {
           // This shouldn't happen since we checked filteredModels.length above, but handle it anyway
@@ -226,10 +229,11 @@ class RequestBuilder {
       const isModelInFilteredList = filteredModels.some(m => m.id === resolvedModelId);
 
       if (!isModelInFilteredList) {
-        logger.info(
-          `Model ${resolvedModelId} is not compatible with app ${app.id} requirements. Searching for fallback...`,
-          { component: 'RequestBuilder' }
-        );
+        logger.info('Model not compatible with app requirements, searching for fallback', {
+          component: 'RequestBuilder',
+          resolvedModelId,
+          appId: app.id
+        });
 
         // Try to find a compatible fallback model
         let fallbackModel = null;
@@ -237,22 +241,25 @@ class RequestBuilder {
         // 1. Try app's preferred model if it's in the filtered list
         if (app.preferredModel && filteredModels.some(m => m.id === app.preferredModel)) {
           fallbackModel = app.preferredModel;
-          logger.info(`Using app's preferred model as fallback: ${fallbackModel}`, {
-            component: 'RequestBuilder'
+          logger.info("Using app's preferred model as fallback", {
+            component: 'RequestBuilder',
+            fallbackModel
           });
         }
         // 2. Try default model from filtered list
         else if (defaultModelFromFiltered) {
           fallbackModel = defaultModelFromFiltered;
-          logger.info(`Using default model from filtered list as fallback: ${fallbackModel}`, {
-            component: 'RequestBuilder'
+          logger.info('Using default model from filtered list as fallback', {
+            component: 'RequestBuilder',
+            fallbackModel
           });
         }
         // 3. Try first available model from filtered list
         else if (filteredModels.length > 0) {
           fallbackModel = filteredModels[0].id;
-          logger.info(`Using first available compatible model as fallback: ${fallbackModel}`, {
-            component: 'RequestBuilder'
+          logger.info('Using first available compatible model as fallback', {
+            component: 'RequestBuilder',
+            fallbackModel
           });
         }
 
@@ -300,9 +307,8 @@ class RequestBuilder {
       const lastUserMsg = [...llmMessages].reverse().find(m => m.role === 'user');
       const userFileData = lastUserMsg?.fileData || lastUserMsg?.imageData || null;
 
-      logger.info({
+      logger.info('File data extraction from messages', {
         component: 'RequestBuilder',
-        message: 'File data extraction from messages',
         hasLastUserMsg: !!lastUserMsg,
         hasFileData: !!lastUserMsg?.fileData,
         hasImageData: !!lastUserMsg?.imageData,
@@ -312,9 +318,8 @@ class RequestBuilder {
 
       llmMessages = preprocessMessagesWithFileData(llmMessages);
 
-      logger.info({
+      logger.info('Preparing chat request', {
         component: 'RequestBuilder',
-        message: 'Preparing chat request',
         appId: app.id,
         modelId: model.id,
         useMaxTokens
@@ -322,27 +327,15 @@ class RequestBuilder {
 
       // Determine model token limit (default to 8192 if not specified)
       const modelTokenLimit = model.tokenLimit || 8192;
-      logger.info({
-        component: 'RequestBuilder',
-        message: 'Model token limit',
-        modelTokenLimit
-      });
+      logger.info('Model token limit', { component: 'RequestBuilder', modelTokenLimit });
 
       // If app specifies tokenLimit, use it; otherwise use model's tokenLimit
       const appTokenLimit = app.tokenLimit !== undefined ? app.tokenLimit : modelTokenLimit;
-      logger.info({
-        component: 'RequestBuilder',
-        message: 'App token limit',
-        appTokenLimit
-      });
+      logger.info('App token limit', { component: 'RequestBuilder', appTokenLimit });
 
       // Use max tokens if requested, otherwise use the minimum of app and model limits
       const finalTokens = useMaxTokens ? modelTokenLimit : Math.min(appTokenLimit, modelTokenLimit);
-      logger.info({
-        component: 'RequestBuilder',
-        message: 'Final token limit for request',
-        finalTokens
-      });
+      logger.info('Final token limit for request', { component: 'RequestBuilder', finalTokens });
 
       const apiKeyResult = await this.apiKeyVerifier.verifyApiKey(model, res, clientRes, language);
       if (!apiKeyResult.success) {
@@ -370,9 +363,8 @@ class RequestBuilder {
             aspectRatio,
             quality
           };
-          logger.info({
+          logger.info('Image generation config passed to adapter', {
             component: 'RequestBuilder',
-            message: 'Image generation config passed to adapter',
             aspectRatio,
             quality
           });
@@ -410,12 +402,7 @@ class RequestBuilder {
         }
       };
     } catch (error) {
-      logger.error({
-        component: 'RequestBuilder',
-        message: 'Error in prepareChatRequest',
-        error: error.message,
-        stack: error.stack
-      });
+      logger.error('Error in prepareChatRequest', { component: 'RequestBuilder', error });
       const chatError = new Error(error.message || 'Internal server error');
       // Detect auth failures from provider APIs (e.g., "Failed to create conversation (401): ")
       if (error.message?.includes('(401)') || error.message?.includes('authentication failed')) {

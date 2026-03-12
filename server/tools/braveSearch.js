@@ -35,24 +35,25 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
 
-  logger.info(`Searching for: "${searchQuery}"`);
+  logger.info('Searching', { component: 'BraveSearch', searchQuery });
 
   try {
     const result = await braveSearch({ query: searchQuery });
-    logger.info('\nSearch Results:');
-    logger.info('===============');
 
     if (result.results.length === 0) {
-      logger.info('No results found.');
+      logger.info('No results found', { component: 'BraveSearch' });
     } else {
       result.results.forEach((item, index) => {
-        logger.info(`${index + 1}. ${item.title}`);
-        logger.info(`   URL: ${item.url}\n`);
-        logger.info(`   Result: ${JSON.stringify(item, null, 2)}\n`);
+        logger.info('Search result', {
+          component: 'BraveSearch',
+          index: index + 1,
+          title: item.title,
+          url: item.url
+        });
       });
     }
   } catch (error) {
-    logger.error('Error performing search:', error.message);
+    logger.error('Error performing search', { component: 'BraveSearch', error });
     process.exit(1);
   }
 }

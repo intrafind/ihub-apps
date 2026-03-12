@@ -69,9 +69,10 @@ class ConversationStateManager {
       entry.lastParentId = messageId;
       entry.updatedAt = Date.now();
     } else {
-      logger.warn(
-        `ConversationStateManager: No state found for chatId ${chatId} when updating parentId`
-      );
+      logger.warn('No state found for chatId when updating parentId', {
+        component: 'ConversationStateManager',
+        chatId
+      });
     }
   }
 
@@ -104,7 +105,10 @@ class ConversationStateManager {
       }
     }
     if (cleaned > 0) {
-      logger.info(`ConversationStateManager: Cleaned up ${cleaned} expired entries`);
+      logger.info('Cleaned up expired entries', {
+        component: 'ConversationStateManager',
+        count: cleaned
+      });
     }
   }
 

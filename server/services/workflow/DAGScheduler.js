@@ -115,11 +115,7 @@ export class DAGScheduler {
       // Find nodes involved in cycles (those not processed)
       const cycleNodes = nodes.map(n => n.id).filter(id => !processedNodes.has(id));
 
-      logger.warn({
-        component: 'DAGScheduler',
-        message: 'Cycle detected in workflow graph',
-        cycleNodes
-      });
+      logger.warn('Cycle detected in workflow graph', { component: 'DAGScheduler', cycleNodes });
 
       return { hasCycle: true, cycleNodes };
     }
@@ -201,9 +197,8 @@ export class DAGScheduler {
       }
     }
 
-    logger.debug({
+    logger.debug('Topological sort completed', {
       component: 'DAGScheduler',
-      message: 'Topological sort completed',
       nodeCount: sorted.length,
       order: sorted
     });
@@ -264,9 +259,8 @@ export class DAGScheduler {
 
     if (anyDependencyMet) {
       const satisfiedEdges = incomingEdges.filter(e => completedSet.has(e.source));
-      logger.debug({
+      logger.debug('Node ready for execution', {
         component: 'DAGScheduler',
-        message: 'Node ready for execution',
         nodeId: firstNode,
         satisfiedDependencies: satisfiedEdges.map(e => e.source),
         totalIncomingEdges: incomingEdges.length
@@ -275,9 +269,8 @@ export class DAGScheduler {
     }
 
     // No incoming edges are satisfied - node is blocked
-    logger.warn({
+    logger.warn('Node has no satisfied dependencies', {
       component: 'DAGScheduler',
-      message: 'Node has no satisfied dependencies',
       nodeId: firstNode,
       requiredNodes: incomingEdges.map(e => e.source),
       completedNodes: Array.from(completedSet)
@@ -315,11 +308,7 @@ export class DAGScheduler {
     const outgoingEdges = edges.filter(edge => edge.source === nodeId);
 
     if (outgoingEdges.length === 0) {
-      logger.debug({
-        component: 'DAGScheduler',
-        message: 'No outgoing edges from node',
-        nodeId
-      });
+      logger.debug('No outgoing edges from node', { component: 'DAGScheduler', nodeId });
       return [];
     }
 
@@ -330,9 +319,8 @@ export class DAGScheduler {
 
       if (shouldFollow) {
         nextNodes.push(edge.target);
-        logger.debug({
+        logger.debug('Following edge to next node', {
           component: 'DAGScheduler',
-          message: 'Following edge to next node',
           sourceNode: nodeId,
           targetNode: edge.target,
           conditionType: edge.condition?.type || 'always'
@@ -404,17 +392,15 @@ export class DAGScheduler {
       case 'llm':
         // Future: LLM-based routing decision
         // For now, log warning and treat as 'always'
-        logger.warn({
+        logger.warn('LLM condition type not yet implemented, treating as always', {
           component: 'DAGScheduler',
-          message: 'LLM condition type not yet implemented, treating as always',
           edge: { source: edge.source, target: edge.target }
         });
         return true;
 
       default:
-        logger.warn({
+        logger.warn('Unknown condition type, treating as always', {
           component: 'DAGScheduler',
-          message: 'Unknown condition type, treating as always',
           conditionType,
           edge: { source: edge.source, target: edge.target }
         });
@@ -456,12 +442,7 @@ export class DAGScheduler {
       const value = this._getValueFromPath(expression, context);
       return Boolean(value);
     } catch (error) {
-      logger.warn({
-        component: 'DAGScheduler',
-        message: 'Expression evaluation failed',
-        expression,
-        error: error.message
-      });
+      logger.warn('Expression evaluation failed', { component: 'DAGScheduler', expression, error });
       return false;
     }
   }
@@ -658,19 +639,14 @@ export class DAGScheduler {
 
     if (startNodes.length === 0 && nodes.length > 0) {
       // If no clear start node, use the first node (for simple linear workflows)
-      logger.warn({
+      logger.warn('No clear start node found, using first node', {
         component: 'DAGScheduler',
-        message: 'No clear start node found, using first node',
         firstNode: nodes[0].id
       });
       return [nodes[0].id];
     }
 
-    logger.debug({
-      component: 'DAGScheduler',
-      message: 'Found start nodes',
-      startNodes
-    });
+    logger.debug('Found start nodes', { component: 'DAGScheduler', startNodes });
 
     return startNodes;
   }
@@ -696,19 +672,14 @@ export class DAGScheduler {
 
     if (endNodes.length === 0 && nodes.length > 0) {
       // If no clear end node, use the last node
-      logger.warn({
+      logger.warn('No clear end node found, using last node', {
         component: 'DAGScheduler',
-        message: 'No clear end node found, using last node',
         lastNode: nodes[nodes.length - 1].id
       });
       return [nodes[nodes.length - 1].id];
     }
 
-    logger.debug({
-      component: 'DAGScheduler',
-      message: 'Found end nodes',
-      endNodes
-    });
+    logger.debug('Found end nodes', { component: 'DAGScheduler', endNodes });
 
     return endNodes;
   }

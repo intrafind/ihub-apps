@@ -227,9 +227,8 @@ export default async function askUser({
   context,
   chatId
 }) {
-  logger.info({
+  logger.info('Processing ask_user tool call', {
     component: 'askUser',
-    message: 'Processing ask_user tool call',
     chatId,
     input_type,
     questionLength: question?.length
@@ -244,9 +243,8 @@ export default async function askUser({
   });
 
   if (!validationResult.valid) {
-    logger.error({
+    logger.error('Validation failed', {
       component: 'askUser',
-      message: 'Validation failed',
       chatId,
       error: validationResult.error
     });
@@ -297,9 +295,8 @@ export default async function askUser({
     clarificationRequest.context = String(context).substring(0, 500);
   }
 
-  logger.info({
+  logger.info('Clarification request prepared', {
     component: 'askUser',
-    message: 'Clarification request prepared',
     chatId,
     input_type: clarificationRequest.input_type
   });

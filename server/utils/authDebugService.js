@@ -61,23 +61,17 @@ class AuthDebugService {
     // Log via Winston based on level
     switch (level) {
       case 'error':
-        logger.error(`[AuthDebug:${provider}] ${event}`, {
-          component: 'AuthService',
-          ...logEntry
-        });
+        logger.error(event, { component: 'AuthService', ...logEntry });
         break;
       case 'warn':
-        logger.warn(`[AuthDebug:${provider}] ${event}`, { component: 'AuthService', ...logEntry });
+        logger.warn(event, { component: 'AuthService', ...logEntry });
         break;
       case 'info':
-        logger.info(`[AuthDebug:${provider}] ${event}`, { component: 'AuthService', ...logEntry });
+        logger.info(event, { component: 'AuthService', ...logEntry });
         break;
       case 'debug':
       default:
-        logger.debug(`[AuthDebug:${provider}] ${event}`, {
-          component: 'AuthService',
-          ...logEntry
-        });
+        logger.debug(event, { component: 'AuthService', ...logEntry });
         break;
     }
   }

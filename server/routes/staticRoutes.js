@@ -17,7 +17,7 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   // In development, Vite serves the frontend directly
   if (isPackaged || config.NODE_ENV === 'production') {
     const staticPath = path.join(rootDir, 'public');
-    logger.info(`Serving static files from: ${staticPath}`, { component: 'StaticRoutes' });
+    logger.info('Serving static files', { component: 'StaticRoutes', staticPath });
 
     // Serve static files at base path
     if (basePath) {
@@ -33,15 +33,19 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
 
   // Serve uploaded assets
   const uploadsPath = path.join(rootDir, 'contents/uploads');
-  logger.info(`Serving uploaded assets from: ${uploadsPath} at ${buildUploadsPath('/')}`, {
-    component: 'StaticRoutes'
+  logger.info('Serving uploaded assets', {
+    component: 'StaticRoutes',
+    uploadsPath,
+    mountPath: buildUploadsPath('/')
   });
   app.use(buildUploadsPath('/'), express.static(uploadsPath));
 
   // Serve documentation with authentication
   const docsPath = path.join(rootDir, 'docs/book');
-  logger.info(`Serving documentation from: ${docsPath} at ${buildDocsPath('/')}`, {
-    component: 'StaticRoutes'
+  logger.info('Serving documentation', {
+    component: 'StaticRoutes',
+    docsPath,
+    mountPath: buildDocsPath('/')
   });
   app.use(buildDocsPath('/'), authRequired, express.static(docsPath));
 
@@ -49,7 +53,7 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
   // In development, Vite handles all frontend routing
   if (isPackaged || config.NODE_ENV === 'production') {
     const indexPath = path.join(rootDir, 'public/index.html');
-    logger.info(`SPA will be served from: ${indexPath}`, { component: 'StaticRoutes' });
+    logger.info('SPA will be served', { component: 'StaticRoutes', indexPath });
 
     // SPA routing handler
     const spaHandler = (req, res, next) => {

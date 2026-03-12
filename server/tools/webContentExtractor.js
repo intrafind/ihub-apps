@@ -352,25 +352,27 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     process.exit(1);
   }
 
-  logger.info(`Extracting content from: ${url}`);
+  logger.info('Extracting content from URL', { component: 'WebContentExtractor', url });
   if (ignoreSSLFlag) {
-    logger.warn('Warning: ignoring SSL certificate errors');
+    logger.warn('Ignoring SSL certificate errors', { component: 'WebContentExtractor' });
   }
 
   try {
     const result = await webContentExtractor({ url, ignoreSSL: ignoreSSLFlag });
-    logger.info('\nExtracted Content:');
-    logger.info('==================');
-    logger.info(`Title: ${result.title}`);
-    logger.info(`Description: ${result.description}`);
-    logger.info(`Author: ${result.author}`);
-    logger.info(`Word Count: ${result.wordCount}`);
-    logger.info(`Extracted At: ${result.extractedAt}`);
-    logger.info('\nContent:');
-    logger.info('--------');
-    logger.info(result.content);
+    logger.info('Extracted content', {
+      component: 'WebContentExtractor',
+      title: result.title,
+      description: result.description,
+      author: result.author,
+      wordCount: result.wordCount,
+      extractedAt: result.extractedAt
+    });
   } catch (error) {
-    logger.error(`Error extracting content: ${error.message} (code: ${error.code || 'UNKNOWN'})`);
+    logger.error('Error extracting content', {
+      component: 'WebContentExtractor',
+      error,
+      code: error.code || 'UNKNOWN'
+    });
     process.exit(1);
   }
 }

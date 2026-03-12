@@ -40,9 +40,10 @@ export function loadOAuthClients(clientsFilePath) {
     }
 
     // Fallback to file system if cache miss
-    logger.warn(
-      `[WARN] OAuth clients configuration not found in cache for: ${cacheKey}, attempting file system fallback`
-    );
+    logger.warn('OAuth clients configuration not found in cache, attempting file system fallback', {
+      component: 'OAuthClientManager',
+      cacheKey
+    });
 
     const fullPath = path.isAbsolute(clientsFilePath)
       ? clientsFilePath
@@ -50,7 +51,10 @@ export function loadOAuthClients(clientsFilePath) {
 
     // Check if file exists
     if (!fs.existsSync(fullPath)) {
-      logger.warn(`[WARN] OAuth clients file not found: ${fullPath}, creating empty structure`);
+      logger.warn('OAuth clients file not found, creating empty structure', {
+        component: 'OAuthClientManager',
+        fullPath
+      });
       const emptyConfig = {
         clients: {},
         metadata: { version: '1.0.0', lastUpdated: new Date().toISOString() }
@@ -85,8 +89,10 @@ export function loadOAuthClients(clientsFilePath) {
 
     return clientsConfig;
   } catch (error) {
-    logger.error(`[ERROR] Could not load OAuth clients configuration:`, error.message);
-    logger.error(`[ERROR] Stack trace:`, error.stack);
+    logger.error('Could not load OAuth clients configuration', {
+      component: 'OAuthClientManager',
+      error
+    });
 
     // Return safe empty structure as last resort
     const safeConfig = {
@@ -94,7 +100,9 @@ export function loadOAuthClients(clientsFilePath) {
       metadata: { version: '1.0.0', lastUpdated: new Date().toISOString(), error: error.message }
     };
 
-    logger.warn(`[WARN] Returning safe empty OAuth clients structure due to error`);
+    logger.warn('Returning safe empty OAuth clients structure due to error', {
+      component: 'OAuthClientManager'
+    });
     return safeConfig;
   }
 }
@@ -132,7 +140,10 @@ export async function saveOAuthClients(clientsConfig, clientsFilePath) {
 
     configCache.setCacheEntry(cacheKey, clientsConfig);
   } catch (error) {
-    logger.error('Could not save OAuth clients configuration:', error.message);
+    logger.error('Could not save OAuth clients configuration', {
+      component: 'OAuthClientManager',
+      error
+    });
     throw error;
   }
 }
@@ -361,7 +372,11 @@ export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log secret rotation
-  logger.info(`[OAuth] Secret rotated | client_id=${clientId} | rotated_by=${rotatedBy}`);
+  logger.info('OAuth secret rotated', {
+    component: 'OAuthClientManager',
+    clientId,
+    rotatedBy
+  });
 
   return {
     clientId: clientId,
@@ -390,9 +405,12 @@ export async function deleteOAuthClient(clientId, clientsFilePath, deletedBy) {
   await saveOAuthClients(clientsConfig, clientsFilePath);
 
   // Log client deletion
-  logger.info(
-    `[OAuth] Client deleted | client_id=${clientId} | name=${clientName} | deleted_by=${deletedBy}`
-  );
+  logger.info('OAuth client deleted', {
+    component: 'OAuthClientManager',
+    clientId,
+    name: clientName,
+    deletedBy
+  });
 }
 
 /**
@@ -432,7 +450,11 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
       await saveOAuthClients(clientsConfig, clientsFilePath);
     }
   } catch (error) {
-    logger.error(`[OAuth] Failed to update last used for client ${clientId}:`, error.message);
+    logger.error('OAuth failed to update last used for client', {
+      component: 'OAuthClientManager',
+      clientId,
+      error
+    });
     // Don't throw - this is a non-critical operation
   }
 }
@@ -449,12 +471,12 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   const client = clientsConfig.clients[clientId];
 
   if (!client) {
-    logger.info(`[OAuth] Client not found | client_id=${clientId}`);
+    logger.info('OAuth client not found', { component: 'OAuthClientManager', clientId });
     return null;
   }
 
   if (!client.active) {
-    logger.info(`[OAuth] Client suspended | client_id=${clientId}`);
+    logger.info('OAuth client suspended', { component: 'OAuthClientManager', clientId });
     return null;
   }
 
@@ -462,15 +484,22 @@ export async function validateClientCredentials(clientId, clientSecret, clientsF
   const isValid = await verifyClientSecret(clientSecret, client.clientSecret);
 
   if (!isValid) {
-    logger.info(`[OAuth] Invalid credentials | client_id=${clientId}`);
+    logger.info('OAuth invalid credentials', { component: 'OAuthClientManager', clientId });
     return null;
   }
 
-  logger.info(`[OAuth] Client authenticated | client_id=${clientId} | name=${client.name}`);
+  logger.info('OAuth client authenticated', {
+    component: 'OAuthClientManager',
+    clientId,
+    name: client.name
+  });
 
   // Update last used timestamp (async, non-blocking)
   updateClientLastUsed(clientId, clientsFilePath).catch(err => {
-    logger.error(`[OAuth] Failed to update last used:`, err);
+    logger.error('OAuth failed to update last used', {
+      component: 'OAuthClientManager',
+      error: err
+    });
   });
 
   // Return client without secret

@@ -229,10 +229,15 @@ class StreamingHandler {
           clientLanguage
         );
 
-        logger.error(
-          `StreamingHandler: HTTP error from ${model.provider}: ${llmResponse.status} ${llmResponse.statusText}`,
-          { url: redactUrl(request.url), details: errorInfo.details, code: errorInfo.code }
-        );
+        logger.error('HTTP error from LLM provider', {
+          component: 'StreamingHandler',
+          provider: model.provider,
+          httpStatus: llmResponse.status,
+          statusText: llmResponse.statusText,
+          url: redactUrl(request.url),
+          details: errorInfo.details,
+          code: errorInfo.code
+        });
 
         await logInteraction(
           'chat_error',
@@ -250,7 +255,8 @@ class StreamingHandler {
 
         // Log additional info for context window errors
         if (errorInfo.isContextWindowError) {
-          logger.warn(`Context window exceeded for model ${model.id} in streaming:`, {
+          logger.warn('Context window exceeded in streaming', {
+            component: 'StreamingHandler',
             modelId: model.id,
             tokenLimit: model.tokenLimit,
             httpStatus: errorInfo.httpStatus,
@@ -312,10 +318,11 @@ class StreamingHandler {
               try {
                 result = adapter.processResponseBuffer(completeEvents + '\n\n');
               } catch (processingError) {
-                logger.error(
-                  `StreamingHandler: Error processing buffer with ${model.provider} adapter:`,
-                  processingError.message
-                );
+                logger.error('Error processing buffer with adapter', {
+                  component: 'StreamingHandler',
+                  provider: model.provider,
+                  error: processingError
+                });
                 result = {
                   content: [],
                   complete: false,
@@ -547,12 +554,10 @@ class StreamingHandler {
     } catch (error) {
       clearTimeout(timeoutId);
 
-      logger.error(
-        'StreamingHandler: Caught error in executeStreamingResponse:',
-        error.name,
-        error.message
-      );
-      logger.error('StreamingHandler: Full error:', error);
+      logger.error('Caught error in executeStreamingResponse', {
+        component: 'StreamingHandler',
+        error
+      });
 
       // Handle connection termination by remote server specifically for iAssistant Conversation
       if (
@@ -560,13 +565,10 @@ class StreamingHandler {
         error.cause?.code === 'UND_ERR_SOCKET' &&
         model.provider === 'iassistant-conversation'
       ) {
-        logger.error(
-          'iAssistant Conversation: Connection terminated by remote server. This may indicate:'
-        );
-        logger.error('- Authentication/authorization failure');
-        logger.error('- Invalid request format');
-        logger.error('- Server-side error');
-        logger.error('- Network connectivity issue');
+        logger.error('iAssistant Conversation connection terminated by remote server', {
+          component: 'StreamingHandler',
+          hint: 'Check authentication, request format, and server-side configuration'
+        });
 
         const errorMessage = await getLocalizedError(
           'responseStreamError',

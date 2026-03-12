@@ -94,7 +94,11 @@ class ErrorHandler {
       });
       return message;
     } catch (error) {
-      logger.error(`Error getting localized error message for ${errorKey}:`, error);
+      logger.error('Error getting localized error message', {
+        component: 'ErrorHandler',
+        errorKey,
+        error
+      });
       return `Error: ${errorKey}`;
     }
   }
