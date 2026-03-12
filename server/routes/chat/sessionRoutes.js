@@ -357,11 +357,11 @@ export default function registerSessionRoutes(
                 controller.abort();
                 activeRequests.delete(chatId);
                 logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-              } catch (e) {
+              } catch (error) {
                 logger.error('Error aborting request', {
                   component: 'sessionRoutes',
                   chatId,
-                  error: e.message
+                  error: error.message
                 });
               }
             }
@@ -882,11 +882,11 @@ export default function registerSessionRoutes(
             controller.abort();
             activeRequests.delete(chatId);
             logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-          } catch (e) {
+          } catch (error) {
             logger.error('Error aborting request', {
               component: 'sessionRoutes',
               chatId,
-              error: e.message
+              error: error.message
             });
           }
         }
@@ -903,11 +903,11 @@ export default function registerSessionRoutes(
               executionId: workflowExec.executionId,
               chatId
             });
-          } catch (e) {
+          } catch (error) {
             logger.error('Error cancelling workflow', {
               component: 'sessionRoutes',
               chatId,
-              error: e.message
+              error: error.message
             });
           }
         }

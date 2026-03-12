@@ -15,8 +15,8 @@ export default function registerAdminCacheRoutes(app) {
     try {
       const data = await getUsage();
       res.json(data);
-    } catch (e) {
-      return sendInternalError(res, e, 'load usage data');
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage data');
     }
   });
 
@@ -24,8 +24,8 @@ export default function registerAdminCacheRoutes(app) {
     try {
       const stats = configCache.getStats();
       res.json(stats);
-    } catch (e) {
-      return sendInternalError(res, e, 'get cache statistics');
+    } catch (error) {
+      return sendInternalError(res, error, 'get cache statistics');
     }
   });
 
@@ -33,8 +33,8 @@ export default function registerAdminCacheRoutes(app) {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
-    } catch (e) {
-      return sendInternalError(res, e, 'refresh cache');
+    } catch (error) {
+      return sendInternalError(res, error, 'refresh cache');
     }
   });
 
@@ -48,8 +48,8 @@ export default function registerAdminCacheRoutes(app) {
       configCache.clear();
       await configCache.initialize();
       res.json({ message: 'Configuration cache cleared successfully' });
-    } catch (e) {
-      return sendInternalError(res, e, 'clear cache');
+    } catch (error) {
+      return sendInternalError(res, error, 'clear cache');
     }
   });
 

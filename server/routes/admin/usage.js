@@ -62,8 +62,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ granularity, range, data });
-    } catch (e) {
-      return sendInternalError(res, e, 'load usage timeline');
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage timeline');
     }
   });
 
@@ -87,8 +87,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ range, users });
-    } catch (e) {
-      return sendInternalError(res, e, 'load usage user data');
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage user data');
     }
   });
 
@@ -110,8 +110,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ range, apps });
-    } catch (e) {
-      return sendInternalError(res, e, 'load usage app data');
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage app data');
     }
   });
 
@@ -134,8 +134,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ range, models });
-    } catch (e) {
-      return sendInternalError(res, e, 'load usage model data');
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage model data');
     }
   });
 
@@ -144,8 +144,8 @@ export default function registerAdminUsageRoutes(app) {
     try {
       const mode = await getTrackingMode();
       res.json({ trackingMode: mode });
-    } catch (e) {
-      return sendInternalError(res, e, 'load usage metadata');
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage metadata');
     }
   });
 
@@ -178,8 +178,8 @@ export default function registerAdminUsageRoutes(app) {
       reloadConfig();
 
       res.json({ trackingMode, message: 'Tracking mode updated successfully' });
-    } catch (e) {
-      return sendInternalError(res, e, 'update tracking mode');
+    } catch (error) {
+      return sendInternalError(res, error, 'update tracking mode');
     }
   });
 
@@ -190,8 +190,8 @@ export default function registerAdminUsageRoutes(app) {
       const retentionConfig = platform?.usageTracking || {};
       const stats = await runRollups(retentionConfig);
       res.json({ message: 'Rollup generation completed successfully', ...stats });
-    } catch (e) {
-      return sendInternalError(res, e, 'generate rollups');
+    } catch (error) {
+      return sendInternalError(res, error, 'generate rollups');
     }
   });
 
@@ -234,8 +234,8 @@ export default function registerAdminUsageRoutes(app) {
       } else {
         res.json({ range, events });
       }
-    } catch (e) {
-      return sendInternalError(res, e, 'export usage data');
+    } catch (error) {
+      return sendInternalError(res, error, 'export usage data');
     }
   });
 }

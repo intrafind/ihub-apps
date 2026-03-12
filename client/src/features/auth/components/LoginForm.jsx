@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 // Defined outside LoginForm to ensure a stable reference across renders.
 // Defining component types inside a render function causes React to unmount

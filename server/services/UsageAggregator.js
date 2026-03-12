@@ -169,7 +169,7 @@ export async function generateDailyRollups() {
     const daysGenerated = Object.keys(byDate).length;
     logger.info('Generated daily rollups', { component: 'UsageAggregator', daysGenerated });
     return { eventsProcessed: events.length, daysGenerated };
-  } catch (e) {
+  } catch (error) {
     logger.error('Failed to generate daily rollups', { component: 'UsageAggregator', error: e });
     return { eventsProcessed: 0, daysGenerated: 0 };
   }
@@ -210,7 +210,7 @@ export async function generateMonthlyRollups() {
     const monthsGenerated = Object.keys(byMonth).length;
     logger.info('Generated monthly rollups', { component: 'UsageAggregator', monthsGenerated });
     return { monthsGenerated };
-  } catch (e) {
+  } catch (error) {
     logger.error('Failed to generate monthly rollups', { component: 'UsageAggregator', error: e });
     return { monthsGenerated: 0 };
   }

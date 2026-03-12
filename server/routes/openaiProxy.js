@@ -514,10 +514,10 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
           }
         }
       }
-    } catch (err) {
+    } catch (error) {
       logger.error('[OpenAI Proxy] Error occurred', {
         component: 'OpenAIProxy',
-        error: err,
+        error: error,
         modelId,
         provider: model?.provider,
         stream

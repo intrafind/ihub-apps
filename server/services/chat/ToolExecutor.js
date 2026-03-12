@@ -318,22 +318,22 @@ class ToolExecutor {
         if (!finalArgs.endsWith('}')) finalArgs = finalArgs + '}';
         try {
           args = JSON.parse(finalArgs);
-        } catch (e2) {
+        } catch (error2) {
           logger.error('Failed to parse tool arguments even after correction', {
             component: 'ToolExecutor',
             toolId,
             arguments: toolCall.function.arguments,
-            error: e2
+            error: error2
           });
           args = {};
         }
       }
-    } catch (e) {
+    } catch (error) {
       logger.error('Failed to parse tool arguments', {
         component: 'ToolExecutor',
         toolId,
         arguments: toolCall.function.arguments,
-        error: e
+        error: error
       });
     }
 

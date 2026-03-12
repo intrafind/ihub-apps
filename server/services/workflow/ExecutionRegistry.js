@@ -144,9 +144,8 @@ export class ExecutionRegistry {
     }
     this.userExecutions.get(userId).add(executionId);
 
-    logger.info({
+    logger.info('Registered execution', {
       component: 'ExecutionRegistry',
-      message: 'Registered execution',
       executionId,
       userId,
       workflowId
@@ -175,9 +174,8 @@ export class ExecutionRegistry {
     const execution = this.executions.get(executionId);
 
     if (!execution) {
-      logger.warn({
+      logger.warn('Execution not found for status update', {
         component: 'ExecutionRegistry',
-        message: 'Execution not found for status update',
         executionId
       });
       return null;
@@ -201,9 +199,8 @@ export class ExecutionRegistry {
       execution.completedAt = new Date().toISOString();
     }
 
-    logger.debug({
+    logger.debug('Updated execution status', {
       component: 'ExecutionRegistry',
-      message: 'Updated execution status',
       executionId,
       status
     });
@@ -345,11 +342,7 @@ export class ExecutionRegistry {
     // Remove from main map
     this.executions.delete(executionId);
 
-    logger.info({
-      component: 'ExecutionRegistry',
-      message: 'Removed execution from registry',
-      executionId
-    });
+    logger.info('Removed execution from registry', { component: 'ExecutionRegistry', executionId });
 
     // Schedule save
     this._scheduleSave();
@@ -382,18 +375,16 @@ export class ExecutionRegistry {
             this.userExecutions.get(execution.userId).add(execution.executionId);
           }
 
-          logger.info({
+          logger.info('Loaded registry from file', {
             component: 'ExecutionRegistry',
-            message: 'Loaded registry from file',
             executionCount: this.executions.size
           });
         }
-      } catch (err) {
-        if (err.code !== 'ENOENT') {
-          logger.warn({
+      } catch (error) {
+        if (error.code !== 'ENOENT') {
+          logger.warn('Error loading registry file, will rebuild from checkpoints', {
             component: 'ExecutionRegistry',
-            message: 'Error loading registry file, will rebuild from checkpoints',
-            error: err.message
+            error: err
           });
         }
       }
@@ -403,18 +394,13 @@ export class ExecutionRegistry {
 
       this._loaded = true;
 
-      logger.info({
+      logger.info('Registry loaded', {
         component: 'ExecutionRegistry',
-        message: 'Registry loaded',
         totalExecutions: this.executions.size,
         activeExecutions: this.getActive().length
       });
     } catch (error) {
-      logger.error({
-        component: 'ExecutionRegistry',
-        message: 'Failed to load registry from disk',
-        error: error.message
-      });
+      logger.error('Failed to load registry from disk', { component: 'ExecutionRegistry', error });
       this._loaded = true; // Mark as loaded even on error to allow fresh start
     }
   }
@@ -468,29 +454,24 @@ export class ExecutionRegistry {
           }
           this.userExecutions.get(execution.userId).add(executionId);
 
-          logger.info({
+          logger.info('Recovered execution from checkpoint', {
             component: 'ExecutionRegistry',
-            message: 'Recovered execution from checkpoint',
             executionId,
             status: execution.status
           });
-        } catch (err) {
+        } catch (error) {
           // Skip directories without valid checkpoints
-          logger.debug({
+          logger.debug('Skipping directory without valid checkpoint', {
             component: 'ExecutionRegistry',
-            message: 'Skipping directory without valid checkpoint',
             executionId,
-            error: err.message
+            error: err
           });
         }
       }
-    } catch (err) {
-      if (err.code === 'ENOENT') {
+    } catch (error) {
+      if (error.code === 'ENOENT') {
         // State directory doesn't exist yet, that's fine
-        logger.debug({
-          component: 'ExecutionRegistry',
-          message: 'State directory does not exist yet'
-        });
+        logger.debug('State directory does not exist yet', { component: 'ExecutionRegistry' });
       } else {
         throw err;
       }
@@ -515,17 +496,12 @@ export class ExecutionRegistry {
 
       await fs.writeFile(registryPath, JSON.stringify(data, null, 2), 'utf8');
 
-      logger.debug({
+      logger.debug('Saved registry to disk', {
         component: 'ExecutionRegistry',
-        message: 'Saved registry to disk',
         executionCount: this.executions.size
       });
     } catch (error) {
-      logger.error({
-        component: 'ExecutionRegistry',
-        message: 'Failed to save registry to disk',
-        error: error.message
-      });
+      logger.error('Failed to save registry to disk', { component: 'ExecutionRegistry', error });
     }
   }
 

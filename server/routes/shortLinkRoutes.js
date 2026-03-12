@@ -40,11 +40,11 @@ export default function registerShortLinkRoutes(app) {
           expiresAt
         });
         res.json(link);
-      } catch (e) {
-        if (e.message === 'Code already exists') {
+      } catch (error) {
+        if (error.message === 'Code already exists') {
           return sendErrorResponse(res, 409, 'Code already exists');
         }
-        sendFailedOperationError(res, 'create short link', e);
+        sendFailedOperationError(res, 'create short link', error);
       }
     }
   );
@@ -58,8 +58,8 @@ export default function registerShortLinkRoutes(app) {
         const { appId, userId } = req.query;
         const links = await searchLinks({ appId, userId });
         res.json(links);
-      } catch (e) {
-        sendFailedOperationError(res, 'fetch short links', e);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch short links', error);
       }
     }
   );
@@ -73,8 +73,8 @@ export default function registerShortLinkRoutes(app) {
         const link = await getLink(req.params.code);
         if (!link) return sendNotFound(res, 'Short link');
         res.json(link);
-      } catch (e) {
-        sendFailedOperationError(res, 'fetch short link', e);
+      } catch (error) {
+        sendFailedOperationError(res, 'fetch short link', error);
       }
     }
   );
@@ -88,8 +88,8 @@ export default function registerShortLinkRoutes(app) {
         const link = await updateLink(req.params.code, req.body);
         if (!link) return sendNotFound(res, 'Short link');
         res.json(link);
-      } catch (e) {
-        sendFailedOperationError(res, 'update short link', e);
+      } catch (error) {
+        sendFailedOperationError(res, 'update short link', error);
       }
     }
   );
@@ -103,8 +103,8 @@ export default function registerShortLinkRoutes(app) {
         const ok = await deleteLink(req.params.code);
         if (!ok) return sendNotFound(res, 'Short link');
         res.json({ success: true });
-      } catch (e) {
-        sendFailedOperationError(res, 'delete short link', e);
+      } catch (error) {
+        sendFailedOperationError(res, 'delete short link', error);
       }
     }
   );
@@ -117,7 +117,7 @@ export default function registerShortLinkRoutes(app) {
         return res.status(410).send('This short link has expired');
       }
       res.redirect(link.url);
-    } catch (e) {
+    } catch (error) {
       logger.error('Error redirecting short link', { component: 'ShortLinkRoutes', error: e });
       res.status(500).send('Error');
     }

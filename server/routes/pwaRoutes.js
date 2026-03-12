@@ -38,8 +38,8 @@ export default function registerPwaRoutes(app) {
       });
 
       res.json(buildManifest(pwaConfig));
-    } catch (err) {
-      return sendInternalError(res, err, 'serve manifest.json');
+    } catch (error) {
+      return sendInternalError(res, error, 'serve manifest.json');
     }
   });
 
@@ -67,10 +67,10 @@ self.addEventListener('activate', () => self.clients.claim());
       });
 
       res.send(script);
-    } catch (err) {
+    } catch (error) {
       logger.error('Error serving sw.js', {
         component: 'PwaRoutes',
-        error: err.message
+        error: error.message
       });
       res.status(500).send('// Service worker error');
     }

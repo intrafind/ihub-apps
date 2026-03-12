@@ -257,7 +257,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
       let parsedArgs = {};
       try {
         parsedArgs = JSON.parse(toolCall.arguments);
-      } catch (e) {
+      } catch (error) {
         logger.warn('Failed to parse tool arguments', {
           component: 'AnthropicConverter',
           error: e

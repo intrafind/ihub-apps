@@ -166,8 +166,8 @@ function scheduleSave() {
     saveTimer = null;
     try {
       await saveUsage();
-    } catch (e) {
-      logger.error('Failed to save usage data', e);
+    } catch (error) {
+      logger.error('Failed to save usage data', { component: 'UsageTracker', error: e });
     }
   }, SAVE_INTERVAL_MS);
 }
@@ -428,5 +428,8 @@ export async function resetUsage() {
 
 // Start periodic save interval
 setInterval(() => {
-  if (dirty) saveUsage().catch(e => logger.error('Usage save error:', e));
+  if (dirty)
+    saveUsage().catch(e =>
+      logger.error('Usage save error', { component: 'UsageTracker', error: e })
+    );
 }, SAVE_INTERVAL_MS);

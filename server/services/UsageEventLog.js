@@ -28,8 +28,8 @@ function scheduleFlush() {
     flushTimer = null;
     try {
       await flushQueue();
-    } catch (e) {
-      logger.error('Failed to flush usage events', e);
+    } catch (error) {
+      logger.error('Failed to flush usage events', { component: 'UsageEventLog', error: e });
     }
   }, FLUSH_INTERVAL_MS);
 }
@@ -134,16 +134,21 @@ export async function cleanupEvents(retentionDays = 90) {
     if (retained.length < events.length) {
       const lines = retained.map(e => JSON.stringify(e)).join('\n') + (retained.length ? '\n' : '');
       await fs.writeFile(eventFile, lines, 'utf8');
-      logger.info(`Usage event cleanup: removed ${events.length - retained.length} old events`);
+      logger.info('Usage event cleanup completed', {
+        component: 'UsageEventLog',
+        removed: events.length - retained.length
+      });
     }
-  } catch (e) {
-    logger.error('Failed to cleanup usage events', e);
+  } catch (error) {
+    logger.error('Failed to cleanup usage events', { component: 'UsageEventLog', error: e });
   }
 }
 
 // Periodic flush
 setInterval(() => {
   if (queue.length > 0) {
-    flushQueue().catch(e => logger.error('Usage event flush error:', e));
+    flushQueue().catch(error =>
+      logger.error('Usage event flush error', { component: 'UsageEventLog', error: e })
+    );
   }
 }, FLUSH_INTERVAL_MS);

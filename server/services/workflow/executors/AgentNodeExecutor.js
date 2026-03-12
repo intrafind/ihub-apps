@@ -925,7 +925,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       if (toolCall.function.arguments) {
         args = JSON.parse(toolCall.function.arguments);
       }
-    } catch (e) {
+    } catch (error) {
       this.logger.warn('Failed to parse tool arguments', {
         component: 'AgentNodeExecutor',
         toolId,

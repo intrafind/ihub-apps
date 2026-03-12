@@ -244,10 +244,10 @@ export function buildIndexWithPwaTags(indexPath, resolvedConfig) {
     }
 
     return modified;
-  } catch (err) {
-    logger.error('PwaService: failed to build index with PWA tags', {
+  } catch (error) {
+    logger.error('Failed to build index with PWA tags', {
       component: 'PwaService',
-      error: err.message
+      error: err
     });
     return null; // caller falls back to res.sendFile
   }

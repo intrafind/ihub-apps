@@ -65,8 +65,8 @@ export function throttledFetch(id, url, options = {}) {
 
         const res = await httpFetch(url, options);
         resolve(res);
-      } catch (err) {
-        reject(err);
+      } catch (error) {
+        reject(error);
       } finally {
         actives.set(id, actives.get(id) - 1);
         lastCompleted.set(id, Date.now());

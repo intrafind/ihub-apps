@@ -536,10 +536,10 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     req.user = user;
     return next();
-  } catch (err) {
+  } catch (error) {
     // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
     // so the endpoint can respond with proper auth status and auto-redirect info
-    if (req.path === '/api/auth/status' && err.name === 'TokenExpiredError') {
+    if (req.path === '/api/auth/status' && error.name === 'TokenExpiredError') {
       logger.info('JWT Auth: expired token on status endpoint, continuing', {
         component: 'JwtAuth'
       });

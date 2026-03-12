@@ -17,7 +17,7 @@ async function getJwks(jwkUrl) {
     const jwks = await res.json();
     jwksCache.set(jwkUrl, jwks);
     return jwks;
-  } catch (err) {
+  } catch (error) {
     logger.error('Error fetching JWKs', { component: 'ProxyAuth', error: err });
     return null;
   }
@@ -40,7 +40,7 @@ async function verifyJwt(token, provider) {
     });
 
     return payload;
-  } catch (err) {
+  } catch (error) {
     logger.error('JWT verification failed', { component: 'ProxyAuth', error: err });
     return null;
   }

@@ -603,7 +603,7 @@ export default function registerAdminConfigRoutes(app) {
           logger.info('iFinder/iAssistant service caches reset after config change', {
             component: 'AdminConfigs'
           });
-        } catch (err) {
+        } catch (error) {
           logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error: err });
         }
       }

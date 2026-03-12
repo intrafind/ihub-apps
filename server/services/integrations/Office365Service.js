@@ -17,7 +17,7 @@ class Office365Service {
     this.authBaseUrl = 'https://login.microsoftonline.com';
     this.graphApiUrl = 'https://graph.microsoft.com/v1.0';
 
-    logger.info('🔵 Office365Service initialized', { component: 'Office 365' });
+    logger.info('Office365Service initialized', { component: 'Office365Service' });
   }
 
   /**
@@ -94,8 +94,8 @@ class Office365Service {
     if (!redirectUri && req) {
       // Auto-detect from request if not configured
       redirectUri = this._buildCallbackUrl(req, providerId);
-      logger.info('🔗 Auto-detected Office 365 callback URL from request', {
-        component: 'Office 365',
+      logger.info('Auto-detected Office 365 callback URL from request', {
+        component: 'Office365Service',
         redirectUri
       });
     }
@@ -103,8 +103,8 @@ class Office365Service {
     if (!redirectUri) {
       // Final fallback to localhost (development)
       redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-      logger.warn('⚠️ Using fallback localhost URL for Office 365 callback', {
-        component: 'Office 365',
+      logger.warn('Using fallback localhost URL for Office 365 callback', {
+        component: 'Office365Service',
         redirectUri
       });
     }
@@ -155,8 +155,8 @@ class Office365Service {
       if (!redirectUri && req) {
         // Auto-detect from request if not configured
         redirectUri = this._buildCallbackUrl(req, providerId);
-        logger.info('🔗 Auto-detected Office 365 callback URL from request for token exchange', {
-          component: 'Office 365',
+        logger.info('Auto-detected Office 365 callback URL from request for token exchange', {
+          component: 'Office365Service',
           redirectUri
         });
       }
@@ -164,8 +164,8 @@ class Office365Service {
       if (!redirectUri) {
         // Final fallback to localhost (development)
         redirectUri = `${process.env.SERVER_URL || 'http://localhost:3000'}/api/integrations/${this.serviceName}/${providerId}/callback`;
-        logger.warn('⚠️ Using fallback localhost URL for Office 365 token exchange', {
-          component: 'Office 365',
+        logger.warn('Using fallback localhost URL for Office 365 token exchange', {
+          component: 'Office365Service',
           redirectUri
         });
       }
@@ -187,8 +187,8 @@ class Office365Service {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ Error exchanging authorization code:', {
-          component: 'Office 365',
+        logger.error('Error exchanging authorization code', {
+          component: 'Office365Service',
           error: errorData
         });
         throw new Error('Failed to exchange authorization code for tokens');
@@ -197,8 +197,8 @@ class Office365Service {
       const tokens = await response.json();
 
       if (!tokens.refresh_token) {
-        logger.warn('⚠️ WARNING: No refresh token received from Microsoft OAuth', {
-          component: 'Office 365'
+        logger.warn('No refresh token received from Microsoft OAuth', {
+          component: 'Office365Service'
         });
       }
 
@@ -211,9 +211,9 @@ class Office365Service {
       };
     } catch (error) {
       if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('❌ Error exchanging authorization code:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error exchanging authorization code', {
+        component: 'Office365Service',
+        error
       });
       throw new Error('Failed to exchange authorization code for tokens');
     }
@@ -227,8 +227,8 @@ class Office365Service {
    */
   async refreshAccessToken(providerId, refreshToken) {
     try {
-      logger.info('🔄 Attempting to refresh Office 365 access token...', {
-        component: 'Office 365'
+      logger.info('Attempting to refresh Office 365 access token', {
+        component: 'Office365Service'
       });
 
       const provider = this._getProviderConfig(providerId);
@@ -251,8 +251,8 @@ class Office365Service {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ Error refreshing Office 365 access token:', {
-          component: 'Office 365',
+        logger.error('Error refreshing Office 365 access token', {
+          component: 'Office365Service',
           error: errorData
         });
 
@@ -269,7 +269,7 @@ class Office365Service {
       }
 
       const tokens = await response.json();
-      logger.info('✅ Office 365 token refresh successful', { component: 'Office 365' });
+      logger.info('Office 365 token refresh successful', { component: 'Office365Service' });
 
       return {
         accessToken: tokens.access_token,
@@ -286,9 +286,9 @@ class Office365Service {
       ) {
         throw error;
       }
-      logger.error('❌ Error refreshing Office 365 access token:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error refreshing Office 365 access token', {
+        component: 'Office365Service',
+        error
       });
       throw new Error(`Failed to refresh access token: ${error.message}`);
     }
@@ -302,22 +302,22 @@ class Office365Service {
   async storeUserTokens(userId, tokens) {
     try {
       if (!tokens.refreshToken) {
-        logger.warn(
-          '⚠️ WARNING: No refresh token - user will need to reconnect when access token expires',
-          { component: 'Office 365' }
-        );
+        logger.warn('No refresh token - user will need to reconnect when access token expires', {
+          component: 'Office365Service'
+        });
       }
 
       await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
-      logger.info(`✅ Office 365 tokens stored for user ${userId}`, {
-        component: 'Office 365',
+      logger.info('Office 365 tokens stored for user', {
+        component: 'Office365Service',
+        userId,
         providerId: tokens.providerId
       });
       return true;
     } catch (error) {
-      logger.error('❌ Error storing user tokens:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error storing user tokens', {
+        component: 'Office365Service',
+        error
       });
       throw new Error('Failed to store user tokens');
     }
@@ -341,9 +341,10 @@ class Office365Service {
           tokens.scope.includes('ChannelSettings.Read.All'))
       ) {
         logger.warn(
-          `⚠️ Detected old Office 365 token with admin-consent scope for user ${userId}. Invalidating tokens to force re-authentication with new scopes.`,
+          'Detected old Office 365 token with admin-consent scope, invalidating to force re-authentication',
           {
-            component: 'Office 365',
+            component: 'Office365Service',
+            userId,
             oldScope: tokens.scope
           }
         );
@@ -353,14 +354,15 @@ class Office365Service {
       const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
 
       if (expired) {
-        logger.info(`🔄 Tokens expired for user ${userId}, attempting refresh...`, {
-          component: 'Office 365'
+        logger.info('Tokens expired, attempting refresh', {
+          component: 'Office365Service',
+          userId
         });
 
         try {
           if (!tokens.refreshToken) {
-            logger.error('❌ No refresh token available for user:', {
-              component: 'Office 365',
+            logger.error('No refresh token available for user', {
+              component: 'Office365Service',
               userId
             });
             throw new Error(
@@ -375,14 +377,16 @@ class Office365Service {
 
           // Store the refreshed tokens
           await this.storeUserTokens(userId, refreshedTokens);
-          logger.info(`✅ Successfully refreshed and stored Office 365 tokens for user ${userId}`, {
-            component: 'Office 365'
+          logger.info('Successfully refreshed and stored Office 365 tokens for user', {
+            component: 'Office365Service',
+            userId
           });
           return refreshedTokens;
         } catch (refreshError) {
-          logger.error(`❌ Failed to refresh tokens for user ${userId}:`, {
-            component: 'Office 365',
-            error: refreshError.message
+          logger.error('Failed to refresh tokens for user', {
+            component: 'Office365Service',
+            userId,
+            error: refreshError
           });
 
           // If refresh fails, delete the invalid tokens so user can reconnect
@@ -402,9 +406,9 @@ class Office365Service {
       ) {
         throw error;
       }
-      logger.error('❌ Error retrieving user tokens:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error retrieving user tokens', {
+        component: 'Office365Service',
+        error
       });
       throw new Error('Failed to retrieve user tokens');
     }
@@ -419,15 +423,16 @@ class Office365Service {
     try {
       const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
       if (result) {
-        logger.info(`✅ Office 365 tokens deleted for user ${userId}`, {
-          component: 'Office 365'
+        logger.info('Office 365 tokens deleted for user', {
+          component: 'Office365Service',
+          userId
         });
       }
       return result;
     } catch (error) {
-      logger.error('❌ Error deleting user tokens:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error deleting user tokens', {
+        component: 'Office365Service',
+        error
       });
       return false;
     }
@@ -467,10 +472,11 @@ class Office365Service {
 
       if (!response.ok) {
         if (response.status === 401 && retryCount < maxRetries) {
-          logger.info(
-            `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`,
-            { component: 'Office 365' }
-          );
+          logger.info('Received 401 error, attempting to force token refresh and retry', {
+            component: 'Office365Service',
+            attempt: retryCount + 1,
+            maxAttempts: maxRetries + 1
+          });
 
           try {
             // Force refresh tokens
@@ -487,16 +493,17 @@ class Office365Service {
 
             await this.storeUserTokens(userId, refreshedTokens);
 
-            logger.info(`✅ Forced token refresh successful for user ${userId}`, {
-              component: 'Office 365'
+            logger.info('Forced token refresh successful for user', {
+              component: 'Office365Service',
+              userId
             });
 
             // Retry the request with fresh tokens
             return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
           } catch (refreshError) {
-            logger.error(`❌ Forced token refresh failed:`, {
-              component: 'Office 365',
-              error: refreshError.message
+            logger.error('Forced token refresh failed', {
+              component: 'Office365Service',
+              error: refreshError
             });
 
             // Clean up invalid tokens
@@ -508,8 +515,9 @@ class Office365Service {
         } else if (response.status === 429) {
           // Rate limit exceeded - log and throw
           const retryAfter = response.headers.get('retry-after') || 'unknown';
-          logger.warn(`⏱️ Rate limit exceeded. Retry after: ${retryAfter} seconds`, {
-            component: 'Office 365',
+          logger.warn('Rate limit exceeded', {
+            component: 'Office365Service',
+            retryAfter,
             endpoint
           });
           throw new Error('Office 365 API rate limit exceeded. Please try again in a moment.');
@@ -518,8 +526,8 @@ class Office365Service {
         // Log 404 errors as debug (expected for Teams without SharePoint sites, etc.)
         const errorData = await response.json().catch(() => ({}));
         if (response.status === 404) {
-          logger.debug('Office 365 API returned 404 (not found):', {
-            component: 'Office 365',
+          logger.debug('Office 365 API returned 404', {
+            component: 'Office365Service',
             endpoint,
             error: errorData?.error?.message || 'Resource not found'
           });
@@ -529,8 +537,8 @@ class Office365Service {
         }
 
         // Log other errors as error
-        logger.error('❌ Office 365 API request failed:', {
-          component: 'Office 365',
+        logger.error('Office 365 API request failed', {
+          component: 'Office365Service',
           error: errorData
         });
         throw new Error(
@@ -545,9 +553,9 @@ class Office365Service {
       if (error.message.includes('Office 365') || error.message.includes('authentication')) {
         throw error;
       }
-      logger.error('❌ Office 365 API request failed:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Office 365 API request failed', {
+        component: 'Office365Service',
+        error
       });
       throw new Error(`Office 365 API error: ${error.message}`);
     }
@@ -566,14 +574,16 @@ class Office365Service {
       // Double-check by trying to make a lightweight API call
       await this.makeApiRequest('/me', 'GET', null, userId);
 
-      logger.info(`✅ User ${userId} has valid Office 365 authentication`, {
-        component: 'Office 365'
+      logger.info('User has valid Office 365 authentication', {
+        component: 'Office365Service',
+        userId
       });
       return true;
     } catch (error) {
-      logger.info(`❌ User ${userId} authentication failed:`, {
-        component: 'Office 365',
-        error: error.message
+      logger.info('User Office 365 authentication failed', {
+        component: 'Office365Service',
+        userId,
+        error
       });
       return false;
     }
@@ -597,9 +607,9 @@ class Office365Service {
         officeLocation: data.officeLocation
       };
     } catch (error) {
-      logger.error('❌ Error getting Office 365 user info:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error getting Office 365 user info', {
+        component: 'Office365Service',
+        error
       });
       throw error;
     }
@@ -690,12 +700,11 @@ class Office365Service {
         url: `/groups/${team.id}/drive`
       }));
 
-      logger.info(
-        `📦 Batch request for ${requests.length} team drives (batch ${Math.floor(i / batchSize) + 1})`,
-        {
-          component: 'Office 365'
-        }
-      );
+      logger.info('Batch request for team drives', {
+        component: 'Office365Service',
+        count: requests.length,
+        batch: Math.floor(i / batchSize) + 1
+      });
 
       // Execute batch
       const responses = await this._makeBatchRequest(requests, userId);
@@ -716,21 +725,25 @@ class Office365Service {
           });
         } else if (response.status === 404) {
           // Team doesn't have a SharePoint site - this is normal, skip silently
-          logger.debug(`Team ${response.id} has no SharePoint site (404), skipping`, {
-            component: 'Office 365'
+          logger.debug('Team has no SharePoint site, skipping', {
+            component: 'Office365Service',
+            teamId: response.id
           });
         } else {
           // Log other errors
-          logger.warn(`Failed to get drive for team ${response.id}: ${response.status}`, {
-            component: 'Office 365',
+          logger.warn('Failed to get drive for team', {
+            component: 'Office365Service',
+            teamId: response.id,
+            status: response.status,
             error: response.body
           });
         }
       }
     }
 
-    logger.info(`✅ Batch processing complete - ${allDrives.length} team drives retrieved`, {
-      component: 'Office 365'
+    logger.info('Batch processing complete', {
+      component: 'Office365Service',
+      teamDriveCount: allDrives.length
     });
 
     return allDrives;
@@ -766,41 +779,40 @@ class Office365Service {
   async listTeamsDrives(userId) {
     try {
       // Get all joined teams
-      logger.info('🔍 Fetching joined teams from /me/joinedTeams...', {
-        component: 'Office 365'
+      logger.info('Fetching joined teams', {
+        component: 'Office365Service'
       });
 
       const teams = await this._fetchAllPages('/me/joinedTeams', userId);
 
-      logger.info(`👥 /me/joinedTeams returned ${teams.length} teams`, {
-        component: 'Office 365',
+      logger.info('Joined teams retrieved', {
+        component: 'Office365Service',
         teamsCount: teams.length
       });
 
       if (teams.length === 0) {
-        logger.warn(
-          '⚠️ No teams returned from /me/joinedTeams. This could mean: 1) User is not a member of any Teams, 2) API permissions issue, or 3) API bug. Verify user has Teams memberships and token has Team.ReadBasic.All scope.',
-          {
-            component: 'Office 365',
-            userId
-          }
-        );
+        logger.warn('No teams returned from joined teams endpoint', {
+          component: 'Office365Service',
+          userId,
+          hint: 'Verify user has Teams memberships and token has Team.ReadBasic.All scope'
+        });
         return [];
       }
 
       // Use batch API to get team drives (no per-team limit needed)
       const teamsDrives = await this._batchGetGroupDrives(teams, userId);
 
-      logger.info(`✅ Loaded ${teamsDrives.length} Teams drives from ${teams.length} teams`, {
-        component: 'Office 365'
+      logger.info('Loaded Teams drives', {
+        component: 'Office365Service',
+        teamsDriveCount: teamsDrives.length,
+        teamsCount: teams.length
       });
 
       return teamsDrives;
     } catch (error) {
-      logger.error('❌ Error listing Teams drives:', {
-        component: 'Office 365',
-        error: error.message,
-        stack: error.stack
+      logger.error('Error listing Teams drives', {
+        component: 'Office365Service',
+        error
       });
       return []; // Return empty array on error to not block other drives
     }
@@ -813,7 +825,7 @@ class Office365Service {
    */
   async listPersonalDrives(userId) {
     try {
-      logger.info('📁 Loading personal OneDrive drives...', { component: 'Office 365' });
+      logger.info('Loading personal OneDrive drives', { component: 'Office365Service' });
       const personalDrives = await this._fetchAllPages('/me/drives', userId);
 
       const drives = personalDrives.map(drive => ({
@@ -825,15 +837,16 @@ class Office365Service {
         source: 'personal'
       }));
 
-      logger.info(`✅ Loaded ${drives.length} personal drives`, {
-        component: 'Office 365'
+      logger.info('Loaded personal drives', {
+        component: 'Office365Service',
+        count: drives.length
       });
 
       return drives;
     } catch (error) {
-      logger.error('❌ Error listing personal drives:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error listing personal drives', {
+        component: 'Office365Service',
+        error
       });
       return []; // Return empty array on error
     }
@@ -846,11 +859,11 @@ class Office365Service {
    */
   async listSharePointDrives(userId) {
     try {
-      logger.info('🌐 Loading followed SharePoint sites...', { component: 'Office 365' });
+      logger.info('Loading followed SharePoint sites', { component: 'Office365Service' });
       const allDrives = [];
 
       const sites = await this._fetchAllPages('/me/followedSites', userId);
-      logger.info(`📋 Found ${sites.length} followed sites`, { component: 'Office 365' });
+      logger.info('Found followed sites', { component: 'Office365Service', count: sites.length });
 
       for (const site of sites) {
         try {
@@ -866,22 +879,25 @@ class Office365Service {
               siteName: site.displayName
             });
           }
-        } catch (e) {
-          logger.warn(`Could not load drives for site ${site.displayName}:`, {
-            error: e.message
+        } catch (error) {
+          logger.warn('Could not load drives for site', {
+            component: 'Office365Service',
+            siteName: site.displayName,
+            error: e
           });
         }
       }
 
-      logger.info(`✅ Loaded ${allDrives.length} SharePoint drives`, {
-        component: 'Office 365'
+      logger.info('Loaded SharePoint drives', {
+        component: 'Office365Service',
+        count: allDrives.length
       });
 
       return allDrives;
     } catch (error) {
-      logger.error('❌ Error listing SharePoint drives:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error listing SharePoint drives', {
+        component: 'Office365Service',
+        error
       });
       return []; // Return empty array on error
     }
@@ -922,9 +938,9 @@ class Office365Service {
         downloadUrl: item['@microsoft.graph.downloadUrl']
       }));
     } catch (error) {
-      logger.error('❌ Error listing items:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error listing items', {
+        component: 'Office365Service',
+        error
       });
       throw error;
     }
@@ -959,9 +975,9 @@ class Office365Service {
         downloadUrl: item['@microsoft.graph.downloadUrl']
       }));
     } catch (error) {
-      logger.error('❌ Error searching items:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error searching items', {
+        component: 'Office365Service',
+        error
       });
       throw error;
     }
@@ -1010,9 +1026,9 @@ class Office365Service {
         content: Buffer.from(await response.arrayBuffer())
       };
     } catch (error) {
-      logger.error('❌ Error downloading file:', {
-        component: 'Office 365',
-        error: error.message
+      logger.error('Error downloading file', {
+        component: 'Office365Service',
+        error
       });
       throw error;
     }

@@ -81,15 +81,14 @@ async function rehashUserPasswords() {
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  rehashUserPasswords()
-    .then(() => {
-      logger.info('Password rehashing completed successfully', { component: 'RehashPasswords' });
-      process.exit(0);
-    })
-    .catch(error => {
-      logger.error('Password rehashing failed', { component: 'RehashPasswords', error });
-      process.exit(1);
-    });
+  try {
+    await rehashUserPasswords();
+    logger.info('Password rehashing completed successfully', { component: 'RehashPasswords' });
+    process.exit(0);
+  } catch (error) {
+    logger.error('Password rehashing failed', { component: 'RehashPasswords', error });
+    process.exit(1);
+  }
 }
 
 export { hashPasswordWithUserId, rehashUserPasswords };

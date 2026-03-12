@@ -122,12 +122,12 @@ if (cluster.isPrimary && workerCount > 1) {
   // Perform initial setup if contents directory is empty
   try {
     await performInitialSetup();
-  } catch (err) {
+  } catch (error) {
     logger.error({
       component: 'Server',
       message: 'Failed to perform initial setup',
-      error: err.message,
-      stack: err.stack
+      error: error.message,
+      stack: error.stack
     });
     logger.warn({
       component: 'Server',
@@ -138,12 +138,12 @@ if (cluster.isPrimary && workerCount > 1) {
   // Run versioned configuration migrations
   try {
     await runConfigMigrations();
-  } catch (err) {
+  } catch (error) {
     logger.error({
       component: 'Server',
       message: 'Configuration migration failed',
-      error: err.message,
-      stack: err.stack
+      error: error.message,
+      stack: error.stack
     });
     logger.warn({
       component: 'Server',
@@ -159,12 +159,12 @@ if (cluster.isPrimary && workerCount > 1) {
       setDefaultLanguage(platformConfig.defaultLanguage);
     }
     await initTelemetry(platformConfig?.telemetry || {});
-  } catch (err) {
+  } catch (error) {
     logger.error({
       component: 'Server',
       message: 'Failed to initialize telemetry',
-      error: err.message,
-      stack: err.stack
+      error: error.message,
+      stack: error.stack
     });
   }
 
@@ -178,7 +178,7 @@ if (cluster.isPrimary && workerCount > 1) {
     await tokenStorageService.initializeEncryptionKey();
     await tokenStorageService.initializeJwtSecret();
     await tokenStorageService.initializeRSAKeyPair();
-  } catch (err) {
+  } catch (error) {
     logger.error('Failed to initialize encryption key or JWT secret', {
       component: 'Server',
       error: err
@@ -195,12 +195,12 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.setConfigCache(configCache);
     // Reconfigure logger to pick up logging settings from platform config
     logger.reconfigureLogger();
-  } catch (err) {
+  } catch (error) {
     logger.error({
       component: 'Server',
       message: 'Failed to initialize configuration cache',
-      error: err.message,
-      stack: err.stack
+      error: error.message,
+      stack: error.stack
     });
     logger.warn({
       component: 'Server',
@@ -227,11 +227,11 @@ if (cluster.isPrimary && workerCount > 1) {
         message: 'Proxy is explicitly disabled'
       });
     }
-  } catch (err) {
+  } catch (error) {
     logger.warn({
       component: 'Server',
       message: 'Failed to read proxy configuration',
-      error: err.message
+      error: error.message
     });
   }
 
@@ -241,8 +241,8 @@ if (cluster.isPrimary && workerCount > 1) {
     const platform = configCache.getPlatform ? configCache.getPlatform() : {};
     const retentionConfig = platform?.usageTracking || {};
     startRollupScheduler(retentionConfig);
-  } catch (err) {
-    logger.warn('Failed to start usage rollup scheduler:', err.message);
+  } catch (error) {
+    logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error: err });
   }
 
   // Create Express application

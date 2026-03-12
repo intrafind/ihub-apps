@@ -44,23 +44,23 @@ async function findAppFile(appId, appsDir) {
         if (app.id === appId) {
           return file;
         }
-      } catch (err) {
+      } catch (error) {
         // Skip files that can't be read or parsed
         logger.debug('Skipping malformed app file', {
           component: 'AdminApps',
           file,
-          error: err.message
+          error: error.message
         });
         continue;
       }
     }
 
     return null;
-  } catch (err) {
+  } catch (error) {
     logger.warn('Failed to read apps directory', {
       component: 'AdminApps',
       appsDir,
-      error: err.message
+      error: error.message
     });
     return null;
   }

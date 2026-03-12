@@ -16,7 +16,7 @@ actionTracker.on('fire-sse', step => {
     clientEntry.lastActivity = new Date(); // Keep connection marked as active
     try {
       sendSSE(clientEntry.response, event, step);
-    } catch (err) {
+    } catch (error) {
       logger.error('Error sending SSE action event', { component: 'SSE', error: err });
     }
   }

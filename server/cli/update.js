@@ -215,8 +215,8 @@ export async function runUpdateCLI(subcommand, force = false) {
         process.exit(0);
       }
     }
-  } catch (err) {
-    error(err.message);
+  } catch (error) {
+    error(error.message);
     process.exit(1);
   }
 }

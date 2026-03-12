@@ -186,7 +186,7 @@ export async function loadConfiguredTools(language = null) {
   // Try to get tools from cache first
   const { data: tools } = configCache.getTools();
   if (!tools) {
-    logger.warn('Tools could not be loaded');
+    logger.warn('Tools could not be loaded', { component: 'ToolLoader' });
     return [];
   }
 
@@ -207,12 +207,15 @@ export async function discoverMcpTools() {
   try {
     const response = await throttledFetch('mcp', `${mcpUrl.replace(/\/$/, '')}/tools`);
     if (!response.ok) {
-      logger.error(`Failed to fetch tools from MCP server: ${response.status}`);
+      logger.error('Failed to fetch tools from MCP server', {
+        component: 'ToolLoader',
+        status: response.status
+      });
       return [];
     }
     return await response.json();
   } catch (error) {
-    logger.error('Error fetching tools from MCP server:', error);
+    logger.error('Error fetching tools from MCP server', { component: 'ToolLoader', error });
     return [];
   }
 }
@@ -304,7 +307,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
         appTools = appTools.concat(sourceTools);
       }
     } catch (error) {
-      logger.error('Error generating source tools:', error);
+      logger.error('Error generating source tools', { component: 'ToolLoader', error });
     }
   }
 
@@ -347,7 +350,7 @@ export async function getToolsForApp(app, language = null, context = {}) {
           parameters: buildWorkflowToolParams(wf, language || 'en')
         });
       } catch (error) {
-        logger.error(`Error generating workflow tool for ${ref}:`, error);
+        logger.error('Error generating workflow tool', { component: 'ToolLoader', ref, error });
       }
     }
   }
@@ -427,7 +430,7 @@ export { localizeTools };
  * @param {object} params - Parameters passed to the tool
  */
 export async function runTool(toolId, params = {}) {
-  logger.info(`Running tool: ${toolId} with params:`, JSON.stringify(params, null, 2));
+  logger.info('Running tool', { component: 'ToolLoader', toolId });
   if (!isValidId(toolId)) {
     throw new Error('Invalid tool id');
   }
@@ -438,7 +441,7 @@ export async function runTool(toolId, params = {}) {
     if (!skillName) {
       throw new Error('skill_name parameter is required');
     }
-    logger.info(`Activating skill: ${skillName}`);
+    logger.info('Activating skill', { component: 'ToolLoader', skillName });
     const content = await getSkillContent(skillName);
     if (!content) {
       return `Skill '${skillName}' not found or could not be loaded.`;
@@ -466,7 +469,7 @@ export async function runTool(toolId, params = {}) {
     if (!skillName || !filePath) {
       throw new Error('skill_name and file_path parameters are required');
     }
-    logger.info(`Reading skill resource: ${skillName}/${filePath}`);
+    logger.info('Reading skill resource', { component: 'ToolLoader', skillName, filePath });
     const content = await getSkillResource(skillName, filePath);
     if (content === null) {
       return `Resource '${filePath}' not found in skill '${skillName}' or access denied.`;
@@ -487,7 +490,7 @@ export async function runTool(toolId, params = {}) {
     const sourceToolFn = sourceManager.getToolFunction(toolId);
 
     if (sourceToolFn) {
-      logger.info(`Executing source tool: ${toolId}`);
+      logger.info('Executing source tool', { component: 'ToolLoader', toolId });
       return await sourceToolFn(params);
     } else {
       throw new Error(`Source tool ${toolId} not found in registry`);
@@ -504,7 +507,10 @@ export async function runTool(toolId, params = {}) {
   // Check if this is a special tool (like Google Search) that doesn't have a script
   if (tool.isSpecialTool) {
     // Special tools are handled by the model provider directly, not executed here
-    logger.info(`Special tool ${toolId} is handled by provider, skipping execution`);
+    logger.info('Special tool is handled by provider, skipping execution', {
+      component: 'ToolLoader',
+      toolId
+    });
     return { handled_by_provider: true };
   }
 
@@ -530,8 +536,8 @@ export async function runTool(toolId, params = {}) {
     }
 
     return await fn(params);
-  } catch (err) {
-    logger.error(`Failed to execute tool ${toolId}:`, err);
+  } catch (error) {
+    logger.error('Failed to execute tool', { component: 'ToolLoader', toolId, error: err });
     throw err;
   }
 }

@@ -113,20 +113,20 @@ async function loadWorkflows(includeDisabled = false) {
         }
 
         workflows.push(workflow);
-      } catch (err) {
+      } catch (error) {
         logger.warn('Failed to load workflow file', {
           component: 'WorkflowRoutes',
           file,
-          error: err.message
+          error: error.message
         });
       }
     }
 
     return workflows;
-  } catch (err) {
+  } catch (error) {
     logger.error('Failed to read workflows directory', {
       component: 'WorkflowRoutes',
-      error: err.message
+      error: error.message
     });
     return [];
   }
@@ -160,22 +160,22 @@ async function findWorkflowFile(workflowId, workflowsDir) {
         if (workflow.id === workflowId) {
           return file;
         }
-      } catch (err) {
+      } catch (error) {
         // Skip files that can't be read or parsed
         logger.debug('Skipping malformed workflow file', {
           component: 'WorkflowRoutes',
           file,
-          error: err.message
+          error: error.message
         });
       }
     }
 
     return null;
-  } catch (err) {
+  } catch (error) {
     logger.warn('Failed to read workflows directory', {
       component: 'WorkflowRoutes',
       workflowsDir,
-      error: err.message
+      error: error.message
     });
     return null;
   }
@@ -197,13 +197,13 @@ function validateWorkflow(workflow) {
       success: false,
       errors: result.error.errors.map(err => ({
         path: err.path.join('.'),
-        message: err.message
+        message: error.message
       }))
     };
-  } catch (err) {
+  } catch (error) {
     return {
       success: false,
-      errors: [{ path: '', message: err.message }]
+      errors: [{ path: '', message: error.message }]
     };
   }
 }
@@ -221,22 +221,22 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   // Recover persisted executions from disk on startup
   const registry = getExecutionRegistry();
-  registry
-    .loadFromDisk()
-    .then(() => {
+  (async () => {
+    try {
+      await registry.loadFromDisk();
       // Mark previously-running executions as failed (server process died)
       for (const exec of registry.getActive()) {
         if (exec.status === 'running') {
           registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
         }
       }
-    })
-    .catch(err => {
+    } catch (error) {
       logger.error('Failed to load execution registry from disk', {
         component: 'WorkflowRoutes',
-        error: err.message
+        error: error.message
       });
-    });
+    }
+  })();
 
   // ============================================================================
   // Workflow Definition Endpoints
@@ -1343,12 +1343,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
               nodeId: eventData.nodeId
             });
           }
-        } catch (err) {
+        } catch (error) {
           logger.error('Error sending SSE event', {
             component: 'WorkflowRoutes',
             executionId,
             eventType,
-            error: err.message
+            error: error.message
           });
         }
       };

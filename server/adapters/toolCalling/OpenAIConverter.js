@@ -353,7 +353,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
               if (pending.arguments.trim()) {
                 parsedArgs = JSON.parse(pending.arguments);
               }
-            } catch (e) {
+            } catch (error) {
               logger.warn('Failed to parse accumulated OpenAI tool arguments', {
                 component: 'OpenAIConverter',
                 error: e

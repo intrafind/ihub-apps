@@ -42,9 +42,8 @@ function extractReadableOutput(output, primaryOutput) {
   if (typeof output === 'string') return output;
   if (typeof output !== 'object') return String(output);
 
-  logger.info({
+  logger.info('extractReadableOutput debug', {
     component: 'workflowRunner',
-    message: 'extractReadableOutput debug',
     primaryOutput,
     outputKeys: Object.keys(output),
     primaryFieldType: primaryOutput ? typeof output[primaryOutput] : 'N/A',
@@ -157,9 +156,8 @@ export default async function workflowRunner(params = {}) {
     initialData._userHint = input;
   }
 
-  logger.info({
+  logger.info('Workflow runner invoked', {
     component: 'workflowRunner',
-    message: 'Workflow runner invoked',
     workflowId,
     hasFileData: !!_fileData,
     fileDataFileName: _fileData?.fileName || 'none',
@@ -189,11 +187,10 @@ export default async function workflowRunner(params = {}) {
   try {
     state = await engine.start(workflow, initialData, { user, checkpointOnNode: true });
   } catch (error) {
-    logger.error({
+    logger.error('Failed to start workflow', {
       component: 'workflowRunner',
-      message: 'Failed to start workflow',
       workflowId,
-      error: error.message
+      error
     });
     return {
       status: 'error',
@@ -215,11 +212,10 @@ export default async function workflowRunner(params = {}) {
       startedAt: new Date().toISOString(),
       source: 'chat'
     });
-  } catch (err) {
-    logger.warn({
+  } catch (error) {
+    logger.warn('Failed to register execution', {
       component: 'workflowRunner',
-      message: 'Failed to register execution',
-      error: err.message
+      error: err
     });
   }
 
@@ -413,9 +409,8 @@ export default async function workflowRunner(params = {}) {
     }, maxExecutionTime);
   });
 
-  logger.info({
+  logger.info('Workflow execution finished', {
     component: 'workflowRunner',
-    message: 'Workflow execution finished',
     workflowId,
     executionId,
     status: result.status
