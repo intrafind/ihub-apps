@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
@@ -12,7 +12,8 @@ const SetupWizard = React.lazy(() => import('./features/setup/SetupWizard'));
 const WorkflowExecutionPage = React.lazy(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
-import AppCanvas from './features/canvas/pages/AppCanvas';
+// Lazy load canvas (pulls in react-quill/ajv — vendor-forms chunk, ~370KB)
+const AppCanvas = React.lazy(() => import('./features/canvas/pages/AppCanvas'));
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
@@ -105,6 +106,22 @@ const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
+// Detect Teams environment without loading the Teams SDK (~484KB)
+function useIsTeamsEnvironment() {
+  const [isTeams] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.has('loginHint') ||
+      params.has('userObjectId') ||
+      params.has('theme') ||
+      params.has('isTeams') ||
+      window.name === 'embedded' ||
+      window.location.hostname === 'teams.microsoft.com'
+    );
+  });
+  return isTeams;
+}
+
 // Loading component for lazy-loaded admin components
 function AdminLoading() {
   return (
@@ -179,6 +196,7 @@ function App() {
   const featureFlags = useFeatureFlags();
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
+  const isTeams = useIsTeamsEnvironment();
 
   // Initialize runtime base path detection on app start
   useEffect(() => {
@@ -205,25 +223,21 @@ function App() {
   // Get base path for React Router
   const basename = getBasePath();
 
-  return (
-    <AppProviders>
-      <AuthProvider>
-        <AdminAuthProvider>
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            }
-          >
-            <TeamsWrapper>
-              <BrowserRouter basename={basename}>
-                {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
-                <MarkdownRenderer />
-                {/* Document title management - must be inside Router for useLocation/useParams */}
-                <DocumentTitle />
+  const loadingSpinner = (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
 
-                <Routes>
+  // Router content shared between Teams and non-Teams paths
+  const routerContent = (
+    <BrowserRouter basename={basename}>
+      {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
+      <MarkdownRenderer />
+      {/* Document title management - must be inside Router for useLocation/useParams */}
+      <DocumentTitle />
+
+      <Routes>
                   {/* Teams authentication routes */}
                   <Route
                     path="/teams/auth-start"
@@ -286,7 +300,14 @@ function App() {
                       </>
                     )}
                     <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
-                    <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
+                    <Route
+                      path="apps/:appId/canvas"
+                      element={
+                        <Suspense fallback={<AdminLoading />}>
+                          <SafeAppCanvas />
+                        </Suspense>
+                      }
+                    />
                     <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
                     {showAdminPage('home') && (
                       <Route path="admin" element={<LazyAdminRoute component={AdminHome} />} />
@@ -533,9 +554,20 @@ function App() {
                     <Route path="*" element={<NotFound />} />
                   </Route>
                 </Routes>
-              </BrowserRouter>
-            </TeamsWrapper>
-          </Suspense>
+            </BrowserRouter>
+  );
+
+  return (
+    <AppProviders>
+      <AuthProvider>
+        <AdminAuthProvider>
+          {isTeams ? (
+            <Suspense fallback={loadingSpinner}>
+              <TeamsWrapper>{routerContent}</TeamsWrapper>
+            </Suspense>
+          ) : (
+            routerContent
+          )}
         </AdminAuthProvider>
       </AuthProvider>
     </AppProviders>
