@@ -546,7 +546,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       return next();
     }
 
-    logger.warn('JWT Auth token validation failed', { component: 'JwtAuth', error: err });
+    logger.warn('JWT Auth token validation failed', { component: 'JwtAuth', error });
     return next();
   }
 }
