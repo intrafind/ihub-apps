@@ -441,7 +441,8 @@
       },
       "details": {
         "messages": "Messages",
-        "tokens": "Tokens"
+        "tokens": "Tokens",
+        "editModel": "Edit Model"
       },
       "edit": {
         "title": "Edit Model",
@@ -1245,27 +1246,27 @@
     "qualityHigh": "High (4K)"
   },
   "citations": {
-    "documents": "Documents",
-    "passages": "{{count}} passage",
-    "passages_plural": "{{count}} passages",
-    "referenced": "Referenced",
-    "mentioned": "Mentioned",
-    "openExternal": "Open in browser",
     "preview": "Preview (PDF)",
     "download": "Download",
     "openInApp": "Open in App",
-    "untitledDocument": "Document",
     "details": "Details",
-    "documentDetails": "Document Details",
-    "author": "Author",
+    "fileType": "File Type",
     "fileSize": "File Size",
+    "author": "Author",
+    "source": "Source",
     "modified": "Modified",
     "indexed": "Indexed",
-    "source": "Source",
-    "fileType": "File Type",
     "language": "Language",
+    "documentDetails": "Document Details",
+    "loading": "Loading...",
     "breadcrumbs": "Path",
-    "loading": "Loading..."
+    "documents": "Documents",
+    "untitledDocument": "Document",
+    "referenced": "Referenced",
+    "mentioned": "Mentioned",
+    "passages": "{{count}} passage",
+    "passages_plural": "{{count}} passages",
+    "openExternal": "Open in browser"
   },
   "chatMessage": {
     "user": "You",
@@ -1536,29 +1537,6 @@
     "preview": "Preview",
     "resetToDefaults": "Reset to Defaults",
     "colorInvalid": "Please enter a valid hex color (e.g., #4f46e5)"
-  },
-  "citations": {
-    "preview": "Preview (PDF)",
-    "download": "Download",
-    "openInApp": "Open in App",
-    "details": "Details",
-    "fileType": "File Type",
-    "fileSize": "File Size",
-    "author": "Author",
-    "source": "Source",
-    "modified": "Modified",
-    "indexed": "Indexed",
-    "language": "Language",
-    "documentDetails": "Document Details",
-    "loading": "Loading...",
-    "breadcrumbs": "Path",
-    "documents": "Documents",
-    "untitledDocument": "Document",
-    "referenced": "Referenced",
-    "mentioned": "Mentioned",
-    "passages": "{{count}} passage",
-    "passages_plural": "{{count}} passages",
-    "openExternal": "Open in browser"
   },
   "thoughts": {
     "phase": {
