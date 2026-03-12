@@ -91,7 +91,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // OAuth client credentials - this is a machine-to-machine token
       // Validate that the client is still active and token was issued after last rotation
       const oauthConfig = platform.oauth || {};
-      if (oauthConfig.clientsEnabled) {
+      if (oauthConfig.enabled?.clients) {
         try {
           const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
           const clientsConfig = loadOAuthClients(clientsFilePath);
@@ -188,7 +188,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // OAuth authorization code - this is a user-delegated token
       // The token carries user identity, validate the user is still active
       const oauthConfig = platform.oauth || {};
-      if (oauthConfig.enabled) {
+      if (oauthConfig.enabled?.authz) {
         try {
           const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
           const usersConfig = loadUsers(usersFilePath);

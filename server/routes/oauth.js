@@ -166,7 +166,7 @@ export default function registerOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       // Check if OAuth is enabled
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return sendOAuthError(res, 400, 'invalid_request', 'OAuth is not enabled on this server');
       }
 
@@ -572,7 +572,7 @@ export default function registerOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       // Check if OAuth is enabled
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return sendOAuthError(res, 400, 'invalid_request', 'OAuth is not enabled on this server');
       }
 
@@ -668,7 +668,7 @@ export default function registerOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return sendOAuthError(res, 400, 'invalid_request', 'OAuth is not enabled on this server');
       }
 
@@ -739,10 +739,10 @@ export default function registerOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return res
           .status(400)
-          .json({ error: 'invalid_request', error_description: 'OAuth is not enabled' });
+          .json({ error: 'invalid_request', error_description: 'OAuth authorization server is not enabled' });
       }
 
       // Require a Bearer token in the Authorization header
@@ -806,7 +806,7 @@ export default function registerOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return sendOAuthError(res, 400, 'invalid_request', 'OAuth is not enabled on this server');
       }
 

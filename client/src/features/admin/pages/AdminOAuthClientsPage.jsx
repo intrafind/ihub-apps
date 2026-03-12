@@ -30,7 +30,7 @@ const AdminOAuthClientsPage = () => {
     try {
       const response = await makeAdminApiCall('/admin/configs/platform');
       const data = response.data;
-      setClientsEnabled(data?.oauth?.clientsEnabled || false);
+      setClientsEnabled(data?.oauth?.enabled?.clients || false);
     } catch (error) {
       console.error('Failed to check OAuth status:', error);
     }
@@ -47,7 +47,10 @@ const AdminOAuthClientsPage = () => {
         ...platformConfig,
         oauth: {
           ...(platformConfig.oauth || {}),
-          clientsEnabled: newStatus
+          enabled: {
+            authz: platformConfig.oauth?.enabled?.authz ?? false,
+            clients: newStatus
+          }
         }
       };
 

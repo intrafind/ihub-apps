@@ -877,8 +877,10 @@ iHub Apps can act as an OAuth 2.0 authorization server, issuing access tokens to
 ```json
 {
   "oauth": {
-    "enabled": false,
-    "clientsEnabled": false,
+    "enabled": {
+      "authz": false,
+      "clients": false
+    },
     "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440,
@@ -895,8 +897,8 @@ iHub Apps can act as an OAuth 2.0 authorization server, issuing access tokens to
 
 | Field                                | Type    | Default                                | Description                                                                             |
 | ------------------------------------ | ------- | -------------------------------------- | --------------------------------------------------------------------------------------- |
-| `enabled`                            | Boolean | `false`                                | Enable the built-in OAuth 2.0 authorization server                                      |
-| `clientsEnabled`                     | Boolean | `false`                                | Enable OAuth Clients (client credentials / static API key authentication). Can be enabled independently from the authorization server. |
+| `enabled.authz`                      | Boolean | `false`                                | Enable the built-in OAuth 2.0 authorization server (authorization code flow, JWKS, etc.) |
+| `enabled.clients`                    | Boolean | `false`                                | Enable OAuth Clients (client credentials / static API key authentication). Can be toggled independently from the authorization server. |
 | `clientsFile`                        | String  | `"contents/config/oauth-clients.json"` | Path to the registered OAuth clients configuration file                                 |
 | `defaultTokenExpirationMinutes`      | Number  | `60`                                   | Default access token lifetime in minutes                                                |
 | `maxTokenExpirationMinutes`          | Number  | `1440`                                 | Maximum allowed access token lifetime in minutes                                        |

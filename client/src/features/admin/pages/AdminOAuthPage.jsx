@@ -23,8 +23,8 @@ const AdminOAuthPage = () => {
     try {
       const response = await makeAdminApiCall('/admin/configs/platform');
       const data = response.data;
-      const enabled = data?.oauth?.enabled || false;
-      const cEnabled = data?.oauth?.clientsEnabled || false;
+      const enabled = data?.oauth?.enabled?.authz || false;
+      const cEnabled = data?.oauth?.enabled?.clients || false;
       setOAuthEnabled(enabled);
       setClientsEnabled(cEnabled);
 
