@@ -12,6 +12,7 @@ import { teamsAuthMiddleware } from './teamsAuth.js';
 import ntlmAuthMiddleware from './ntlmAuth.js';
 import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
+import { buildApiPath, buildServerPath } from '../utils/basePath.js';
 import config from '../config.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
@@ -357,30 +358,30 @@ export function setupMiddleware(app, platformConfig = {}) {
 
   // Rate limiting middleware - apply early to protect all endpoints
   // Public API rate limiter for general endpoints
-  app.use('/api/apps', rateLimiters.publicApiLimiter);
-  app.use('/api/tools', rateLimiters.publicApiLimiter);
-  app.use('/api/models', rateLimiters.publicApiLimiter);
-  app.use('/api/prompts', rateLimiters.publicApiLimiter);
-  app.use('/api/styles', rateLimiters.publicApiLimiter);
-  app.use('/api/translations', rateLimiters.publicApiLimiter);
-  app.use('/api/configs', rateLimiters.publicApiLimiter);
-  app.use('/api/sessions', rateLimiters.publicApiLimiter);
-  app.use('/api/pages', rateLimiters.publicApiLimiter);
-  app.use('/api/magic-prompts', rateLimiters.publicApiLimiter);
-  app.use('/api/short-links', rateLimiters.publicApiLimiter);
-  app.use('/api/integrations', rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/apps'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/tools'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/models'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/prompts'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/styles'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/translations'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/configs'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/sessions'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/pages'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/magic-prompts'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/short-links'), rateLimiters.publicApiLimiter);
+  app.use(buildApiPath('/integrations'), rateLimiters.publicApiLimiter);
 
   // Auth API rate limiter for authentication endpoints
-  app.use('/auth', rateLimiters.authApiLimiter);
+  app.use(buildServerPath('/auth'), rateLimiters.authApiLimiter);
 
   // Inference API rate limiter for AI inference endpoints
-  app.use('/inference', rateLimiters.inferenceApiLimiter);
+  app.use(buildServerPath('/inference'), rateLimiters.inferenceApiLimiter);
 
   // Admin API rate limiter for administrative endpoints (most restrictive)
-  app.use('/api/admin', rateLimiters.adminApiLimiter);
+  app.use(buildApiPath('/admin'), rateLimiters.adminApiLimiter);
 
   // OAuth API rate limiter for authorization/token endpoints (protect against brute force)
-  app.use('/api/oauth', rateLimiters.oauthApiLimiter);
+  app.use(buildApiPath('/oauth'), rateLimiters.oauthApiLimiter);
 
   // Setup session middleware for different use cases
   setupSessionMiddleware(app, platformConfig);

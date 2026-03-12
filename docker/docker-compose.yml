@@ -39,16 +39,15 @@ services:
       - CORS_ORIGIN=http://localhost:5173
       - DEBUG_MODE=true
       - HOT_RELOAD=true
-      # Base path configuration (uncomment for subpath deployment)
-      # - BASE_PATH=/ai-hub
-      # - VITE_BASE_PATH=/ai-hub
+      # Base path is auto-detected from the X-Forwarded-Prefix header.
+      # No BASE_PATH env var is needed when using a reverse proxy.
     env_file:
       - ../.env
     restart: unless-stopped
     networks:
       - ihub-network
     healthcheck:
-      test: ['CMD', 'sh', '-c', 'curl -f "http://localhost:3000${BASE_PATH:-}/api/health"']
+      test: ['CMD', 'sh', '-c', 'curl -f "http://localhost:3000/api/health"']
       interval: 30s
       timeout: 10s
       retries: 3

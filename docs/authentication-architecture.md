@@ -537,17 +537,15 @@ This adds to `req.user`:
 
 ```javascript
 export const getBasePath = () => {
-  let basePath = process.env.BASE_PATH || '';
-  
-  // Optional: Auto-detect from reverse proxy headers
-  if (process.env.AUTO_DETECT_BASE_PATH === 'true' && global.currentRequest) {
-    const detectedPath = global.currentRequest.headers['x-forwarded-prefix'];
-    if (detectedPath && isValidBasePath(detectedPath)) {
-      basePath = detectedPath;
-    }
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+
+  // Auto-detect from current request's X-Forwarded-Prefix header
+  if (global.currentRequest) {
+    const detectedPath = global.currentRequest.headers[headerName.toLowerCase()];
+    if (detectedPath && isValidBasePath(detectedPath)) return detectedPath;
   }
-  
-  return basePath.endsWith('/') && basePath !== '/' ? basePath.slice(0, -1) : basePath;
+
+  return '';
 };
 ```
 
@@ -716,10 +714,8 @@ LDAP_ADMIN_PASSWORD=password123
 # JWT (optional - auto-generated if not provided)
 # JWT_SECRET=your-secret-key
 
-# Base Path
-BASE_PATH=/subpath                    # Optional, for subpath deployment
-AUTO_DETECT_BASE_PATH=false           # Optional, detect from reverse proxy
-BASE_PATH_HEADER=x-forwarded-prefix   # Optional, header name for detection
+# Base Path (auto-detected from X-Forwarded-Prefix header — no env vars needed)
+BASE_PATH_HEADER=x-forwarded-prefix   # Optional, customize header name for detection
 
 # CORS
 ALLOWED_ORIGINS=https://yourdomain.com,https://app.yourdomain.com
