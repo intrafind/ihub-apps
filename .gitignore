@@ -1,6 +1,9 @@
 contents/
 contents/**
 
+# Git worktrees
+.worktrees/
+
 # Node.js dependencies
 node_modules/
 npm-debug.log

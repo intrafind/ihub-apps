@@ -48,6 +48,7 @@ const AdminWorkflowsPage = React.lazy(() => import('./features/admin/pages/Admin
 const AdminWorkflowEditPage = React.lazy(
   () => import('./features/admin/pages/AdminWorkflowEditPage')
 );
+const WorkflowEditorPage = React.lazy(() => import('./features/admin/pages/WorkflowEditorPage'));
 const AdminWorkflowExecutionsPage = React.lazy(
   () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
 );
@@ -429,6 +430,12 @@ function App() {
                       <Route
                         path="admin/workflows/:id"
                         element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+                      />
+                    )}
+                    {showAdminPage('workflows') && (
+                      <Route
+                        path="admin/workflows/:id/edit"
+                        element={<LazyAdminRoute component={WorkflowEditorPage} />}
                       />
                     )}
                     {showAdminPage('sources') && (

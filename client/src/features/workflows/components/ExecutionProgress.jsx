@@ -624,6 +624,53 @@ function ExecutionProgress({ state, nodes = [] }) {
         })()}
       </div>
 
+      {/* Planned Tasks section */}
+      {state.data?.planCreated && (
+        <div className="mt-4 p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg border border-purple-200 dark:border-purple-800">
+          <div className="flex items-center gap-2 mb-3">
+            <Icon name="light-bulb" className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+            <h4 className="text-sm font-semibold text-purple-800 dark:text-purple-300">
+              {t('workflows.progress.plannedTasks', 'Planned Tasks')}
+              <span className="ml-2 text-xs font-normal text-purple-600 dark:text-purple-400">
+                ({state.data.planCreated.tasks?.length || 0}{' '}
+                {t('workflows.progress.tasks', 'tasks')})
+              </span>
+            </h4>
+          </div>
+          {state.data.planCreated.reasoning && (
+            <p className="text-sm italic text-purple-700 dark:text-purple-300 mb-3">
+              {state.data.planCreated.reasoning}
+            </p>
+          )}
+          <ol className="space-y-2">
+            {(state.data.planCreated.tasks || []).map((task, idx) => (
+              <li key={task.id || idx} className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-purple-200 dark:bg-purple-800 text-purple-700 dark:text-purple-300 text-xs flex items-center justify-center font-medium">
+                  {idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium text-gray-900 dark:text-white">
+                    {task.title || task.id}
+                  </span>
+                  {task.tools && task.tools.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {task.tools.map(tool => (
+                        <span
+                          key={tool}
+                          className="text-xs bg-purple-100 text-purple-600 dark:bg-purple-900/50 dark:text-purple-400 px-1.5 py-0.5 rounded"
+                        >
+                          {tool}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
       {/* Empty state */}
       {progressItems.length === 0 && (
         <div className="text-center py-4 text-gray-500 dark:text-gray-400">
