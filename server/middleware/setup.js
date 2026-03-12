@@ -246,7 +246,7 @@ function setupSessionMiddleware(app, platformConfig) {
 
   // OAuth Authorization Code Flow requires session state for PKCE/CSRF across login redirect
   const oauthConfig = platformConfig.oauth || {};
-  if (oauthConfig.enabled || oauthConfig.authorizationCodeEnabled) {
+  if (oauthConfig.enabled?.authz || oauthConfig.authorizationCodeEnabled) {
     logger.info('🔐 Enabling session middleware for OAuth Authorization Code Flow', {
       component: 'Middleware'
     });

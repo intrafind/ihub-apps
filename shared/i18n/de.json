@@ -795,6 +795,14 @@
           "nameRequired": "Client-Name ist erforderlich",
           "tokenExpirationInvalid": "Token-Ablauf muss zwischen 1 und {{max}} Minuten liegen",
           "expirationDaysInvalid": "Ablauf muss zwischen 1 und 3650 Tagen liegen"
+        },
+        "clients": {
+          "enable": "OAuth-Clients",
+          "enabledDesc": "OAuth-Clients sind aktiv. Externe Anwendungen können sich mit Client-Zugangsdaten authentifizieren.",
+          "disabledDesc": "Aktivieren Sie OAuth-Clients, um externen Anwendungen die Authentifizierung über Client-Zugangsdaten zu ermöglichen.",
+          "enabledSuccess": "OAuth-Clients erfolgreich aktiviert",
+          "disabledSuccess": "OAuth-Clients erfolgreich deaktiviert",
+          "disabledWarning": "OAuth-Clients sind nicht aktiviert. Verwenden Sie den Schalter oben, um sie zu aktivieren."
         }
       }
     },

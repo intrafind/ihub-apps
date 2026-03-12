@@ -46,7 +46,10 @@
     "sessionTimeoutMinutes": 480
   },
   "oauth": {
-    "enabled": false,
+    "enabled": {
+      "authz": false,
+      "clients": false
+    },
     "clientsFile": "contents/config/oauth-clients.json",
     "defaultTokenExpirationMinutes": 60,
     "maxTokenExpirationMinutes": 1440,

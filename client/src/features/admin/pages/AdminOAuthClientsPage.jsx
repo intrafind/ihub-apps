@@ -13,7 +13,7 @@ const AdminOAuthClientsPage = () => {
   const [loading, setLoading] = useState(true);
   const [clients, setClients] = useState([]);
   const [message, setMessage] = useState('');
-  const [oauthEnabled, setOAuthEnabled] = useState(false);
+  const [clientsEnabled, setClientsEnabled] = useState(false);
   const [showTokenModal, setShowTokenModal] = useState(false);
   const [generatedToken, setGeneratedToken] = useState(null);
   const [tokenExpirationDays, setTokenExpirationDays] = useState(365);
@@ -30,9 +30,55 @@ const AdminOAuthClientsPage = () => {
     try {
       const response = await makeAdminApiCall('/admin/configs/platform');
       const data = response.data;
-      setOAuthEnabled(data?.oauth?.enabled || false);
+      setClientsEnabled(data?.oauth?.enabled?.clients || false);
     } catch (error) {
       console.error('Failed to check OAuth status:', error);
+    }
+  };
+
+  const handleToggleClientsEnabled = async () => {
+    const newStatus = !clientsEnabled;
+
+    try {
+      const response = await makeAdminApiCall('/admin/configs/platform');
+      const platformConfig = response.data;
+
+      const updatedConfig = {
+        ...platformConfig,
+        oauth: {
+          ...(platformConfig.oauth || {}),
+          enabled: {
+            authz: platformConfig.oauth?.enabled?.authz ?? false,
+            clients: newStatus
+          }
+        }
+      };
+
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedConfig)
+      });
+
+      setClientsEnabled(newStatus);
+      setMessage({
+        type: 'success',
+        text: t(
+          newStatus
+            ? 'admin.auth.oauth.clients.enabledSuccess'
+            : 'admin.auth.oauth.clients.disabledSuccess',
+          `OAuth Clients ${newStatus ? 'enabled' : 'disabled'} successfully`
+        )
+      });
+
+      if (newStatus) {
+        loadClients();
+      }
+    } catch (error) {
+      setMessage({
+        type: 'error',
+        text: `${t('admin.auth.oauth.updateError', 'Failed to update client')}: ${error.message}`
+      });
     }
   };
 
@@ -42,12 +88,12 @@ const AdminOAuthClientsPage = () => {
       const data = response.data;
       setClients(data.clients || []);
     } catch (error) {
-      if (error.response?.data?.error?.includes('OAuth is not enabled')) {
+      if (error.response?.data?.error?.includes('OAuth clients are not enabled')) {
         setMessage({
           type: 'warning',
           text: t(
-            'admin.auth.oauth.disabled',
-            'OAuth is not enabled. Enable it in Authorization Server settings.'
+            'admin.auth.oauth.clients.disabledWarning',
+            'OAuth Clients are not enabled. Use the toggle above to enable them.'
           )
         });
       } else {
@@ -247,7 +293,7 @@ const AdminOAuthClientsPage = () => {
                   )}
                 </p>
               </div>
-              {oauthEnabled && (
+              {clientsEnabled && (
                 <button
                   onClick={() => navigate('/admin/oauth/clients/new')}
                   className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
@@ -262,6 +308,44 @@ const AdminOAuthClientsPage = () => {
 
         {/* Content */}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        {/* Enable/Disable Card */}
+          <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                  {t('admin.auth.oauth.clients.enable', 'OAuth Clients')}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {clientsEnabled
+                    ? t(
+                        'admin.auth.oauth.clients.enabledDesc',
+                        'OAuth Clients are active. External applications can authenticate using client credentials.'
+                      )
+                    : t(
+                        'admin.auth.oauth.clients.disabledDesc',
+                        'Enable OAuth Clients to allow external applications to authenticate using client credentials.'
+                      )}
+                </p>
+              </div>
+              <button
+                onClick={handleToggleClientsEnabled}
+                className={`ml-4 relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  clientsEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
+                }`}
+              >
+                <span className="sr-only">
+                  {t('admin.auth.oauth.clients.enable', 'OAuth Clients')}
+                </span>
+                <span
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    clientsEnabled ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+
           {message && (
             <div
               className={`mb-6 p-4 rounded-md ${
@@ -305,7 +389,7 @@ const AdminOAuthClientsPage = () => {
               <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t('admin.auth.oauth.noClients', 'No OAuth clients configured')}
               </h3>
-              {oauthEnabled && (
+              {clientsEnabled && (
                 <>
                   <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
                     Get started by creating a new OAuth client.

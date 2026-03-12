@@ -91,7 +91,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       // OAuth client credentials - this is a machine-to-machine token
       // Validate that the client is still active and token was issued after last rotation
       const oauthConfig = platform.oauth || {};
-      if (oauthConfig.enabled) {
+      if (oauthConfig.enabled?.clients) {
         try {
           const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
           const clientsConfig = loadOAuthClients(clientsFilePath);
@@ -169,8 +169,8 @@ export default function jwtAuthMiddleware(req, res, next) {
           };
         }
       } else {
-        // OAuth not enabled, but token is OAuth type - reject
-        logger.warn('[OAuth] Token rejected: OAuth not enabled');
+        // OAuth clients not enabled, but token is OAuth type - reject
+        logger.warn('[OAuth] Token rejected: OAuth clients not enabled');
         res.clearCookie('authToken', {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -181,14 +181,14 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
         return res.status(401).json({
           error: 'invalid_token',
-          error_description: 'OAuth authentication is not enabled'
+          error_description: 'OAuth clients are not enabled'
         });
       }
     } else if (decoded.authMode === 'oauth_authorization_code') {
       // OAuth authorization code - this is a user-delegated token
       // The token carries user identity, validate the user is still active
       const oauthConfig = platform.oauth || {};
-      if (oauthConfig.enabled) {
+      if (oauthConfig.enabled?.authz) {
         try {
           const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
           const usersConfig = loadUsers(usersFilePath);

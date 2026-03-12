@@ -200,7 +200,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return res.status(400).send('OAuth is not enabled on this server');
       }
 
@@ -420,7 +420,7 @@ export default function registerOAuthAuthorizeRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.authz) {
         return res.status(400).send('OAuth is not enabled on this server');
       }
 

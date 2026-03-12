@@ -39,7 +39,7 @@ const AdminOAuthServerPage = () => {
     try {
       const response = await makeAdminApiCall('/admin/configs/platform');
       const data = response.data;
-      setOAuthEnabled(data?.oauth?.enabled || false);
+      setOAuthEnabled(data?.oauth?.enabled?.authz || false);
       if (data?.oauth) {
         setOauthConfig(prev => ({
           ...prev,
@@ -98,7 +98,10 @@ const AdminOAuthServerPage = () => {
         ...platformConfig,
         oauth: {
           ...(platformConfig.oauth || {}),
-          enabled: newStatus,
+          enabled: {
+            authz: newStatus,
+            clients: platformConfig.oauth?.enabled?.clients ?? false
+          },
           clientsFile: platformConfig.oauth?.clientsFile || 'contents/config/oauth-clients.json',
           defaultTokenExpirationMinutes: platformConfig.oauth?.defaultTokenExpirationMinutes || 60,
           maxTokenExpirationMinutes: platformConfig.oauth?.maxTokenExpirationMinutes || 1440

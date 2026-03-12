@@ -53,10 +53,10 @@ export default function registerAdminOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.clients) {
         return res.status(400).json({
           success: false,
-          error: 'OAuth is not enabled on this server'
+          error: 'OAuth clients are not enabled on this server'
         });
       }
 
@@ -104,10 +104,10 @@ export default function registerAdminOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.clients) {
         return res.status(400).json({
           success: false,
-          error: 'OAuth is not enabled on this server'
+          error: 'OAuth clients are not enabled on this server'
         });
       }
 
@@ -192,10 +192,10 @@ export default function registerAdminOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.clients) {
         return res.status(400).json({
           success: false,
-          error: 'OAuth is not enabled on this server'
+          error: 'OAuth clients are not enabled on this server'
         });
       }
 
@@ -322,10 +322,10 @@ export default function registerAdminOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.clients) {
         return res.status(400).json({
           success: false,
-          error: 'OAuth is not enabled on this server'
+          error: 'OAuth clients are not enabled on this server'
         });
       }
 
@@ -400,10 +400,10 @@ export default function registerAdminOAuthRoutes(app) {
       const platform = configCache.getPlatform() || {};
       const oauthConfig = platform.oauth || {};
 
-      if (!oauthConfig.enabled) {
+      if (!oauthConfig.enabled?.clients) {
         return res.status(400).json({
           success: false,
-          error: 'OAuth is not enabled on this server'
+          error: 'OAuth clients are not enabled on this server'
         });
       }
 
@@ -467,10 +467,10 @@ export default function registerAdminOAuthRoutes(app) {
         const platform = configCache.getPlatform() || {};
         const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
+        if (!oauthConfig.enabled?.clients) {
           return res.status(400).json({
             success: false,
-            error: 'OAuth is not enabled on this server'
+            error: 'OAuth clients are not enabled on this server'
           });
         }
 
@@ -548,10 +548,10 @@ export default function registerAdminOAuthRoutes(app) {
         const platform = configCache.getPlatform() || {};
         const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
+        if (!oauthConfig.enabled?.clients) {
           return res.status(400).json({
             success: false,
-            error: 'OAuth is not enabled on this server'
+            error: 'OAuth clients are not enabled on this server'
           });
         }
 
@@ -645,10 +645,10 @@ export default function registerAdminOAuthRoutes(app) {
         const platform = configCache.getPlatform() || {};
         const oauthConfig = platform.oauth || {};
 
-        if (!oauthConfig.enabled) {
+        if (!oauthConfig.enabled?.clients) {
           return res.status(400).json({
             success: false,
-            error: 'OAuth is not enabled on this server'
+            error: 'OAuth clients are not enabled on this server'
           });
         }
 
