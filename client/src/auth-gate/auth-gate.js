@@ -419,6 +419,9 @@
     // Count auth method groups for separator logic
     var methodCount = (hasOidc ? 1 : 0) + (hasNtlm ? 1 : 0) + (hasUsernamePassword ? 1 : 0);
 
+    // When primary auth mode is local or LDAP, show username/password first
+    var isLocalPrimary = authConfig.authMode === 'local' || authConfig.authMode === 'ldap';
+
     var card = createElement('div', 'ag-card');
     card.appendChild(buildHeader());
 
@@ -429,8 +432,9 @@
       card.appendChild(errDiv);
     }
 
-    // OIDC Providers
-    if (hasOidc) {
+    // Helper: append OIDC provider buttons
+    function appendOidcSection() {
+      if (!hasOidc) return;
       methods.oidc.providers.forEach(function (provider) {
         var btn = createElement('button', 'ag-btn ag-btn-outline');
         var icon = createElement('span', 'ag-btn-icon');
@@ -442,14 +446,11 @@
         });
         card.appendChild(btn);
       });
-
-      if (methodCount > 1) {
-        card.appendChild(buildDivider());
-      }
     }
 
-    // NTLM Button
-    if (hasNtlm) {
+    // Helper: append NTLM button
+    function appendNtlmSection() {
+      if (!hasNtlm) return;
       var ntlmBtn = createElement('button', 'ag-btn ag-btn-outline');
       var ntlmIcon = createElement('span', 'ag-btn-icon');
       ntlmIcon.textContent = '\uD83D\uDD12'; // lock icon
@@ -462,9 +463,25 @@
       }
       ntlmBtn.addEventListener('click', handleNtlmLogin);
       card.appendChild(ntlmBtn);
+    }
 
-      if (hasUsernamePassword) {
-        card.appendChild(buildDivider());
+    // Default order: prepend OIDC and NTLM before username/password.
+    // When local/LDAP is primary AND username/password is available, those sections
+    // are appended after the username/password block instead (see below).
+    if (!isLocalPrimary || !hasUsernamePassword) {
+      if (hasOidc) {
+        appendOidcSection();
+        if (methodCount > 1) {
+          card.appendChild(buildDivider());
+        }
+      }
+
+      // NTLM second (default order)
+      if (hasNtlm) {
+        appendNtlmSection();
+        if (hasUsernamePassword) {
+          card.appendChild(buildDivider());
+        }
       }
     }
 
@@ -611,6 +628,18 @@
         setTimeout(function () {
           usernameInput.focus();
         }, 50);
+      }
+    }
+
+    // When local/LDAP is primary: append NTLM and OIDC AFTER the username/password section
+    if (isLocalPrimary && hasUsernamePassword) {
+      if (hasNtlm) {
+        card.appendChild(buildDivider());
+        appendNtlmSection();
+      }
+      if (hasOidc) {
+        card.appendChild(buildDivider());
+        appendOidcSection();
       }
     }
 

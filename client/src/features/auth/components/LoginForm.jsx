@@ -109,6 +109,9 @@ const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
   const totalAuthMethods =
     (hasOidcProviders ? 1 : 0) + (hasNtlmAuth ? 1 : 0) + (hasUsernamePasswordAuth ? 1 : 0);
 
+  // When primary auth mode is local or LDAP, show username/password form first
+  const isLocalPrimary = authConfig?.authMode === 'local' || authConfig?.authMode === 'ldap';
+
   // Provider icon mapping
   const getProviderIcon = providerName => {
     switch (providerName) {
@@ -127,6 +130,193 @@ const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
 
   const Wrapper = embedded ? 'div' : StandaloneWrapper;
 
+  // Reusable "or" separator between auth method sections
+  const orSeparator = (
+    <div className="my-4 flex items-center">
+      <div className="flex-grow border-t border-gray-300"></div>
+      <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
+      <div className="flex-grow border-t border-gray-300"></div>
+    </div>
+  );
+
+  // Username/password form (shared between both orderings)
+  const usernamePasswordSection = hasUsernamePasswordAuth && (
+    <>
+      {/* Show auth method selection if both local and LDAP are enabled */}
+      {showAuthMethodSelection ? (
+        <div className="space-y-3">
+          <div className="text-sm text-gray-600 text-center mb-3">
+            {t('auth.login.selectAuthMethod', 'Select authentication method:')}
+          </div>
+
+          {hasLocalAuth && (
+            <button
+              type="button"
+              onClick={() => handleAuthMethodSelect('local')}
+              disabled={isFormLoading}
+              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <span className="mr-2">🔑</span>
+              {t('auth.login.localAuth', 'Local Authentication')}
+            </button>
+          )}
+
+          {hasLdapAuth && (
+            <button
+              type="button"
+              onClick={() => handleAuthMethodSelect('ldap')}
+              disabled={isFormLoading}
+              className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+            >
+              <span className="mr-2">🏢</span>
+              {t('auth.login.ldapAuth', 'LDAP Authentication')}
+            </button>
+          )}
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Show back button if we came from method selection */}
+          {selectedAuthMethod && (
+            <button
+              type="button"
+              onClick={handleBackToMethodSelection}
+              disabled={isFormLoading}
+              className="mb-2 text-sm text-blue-600 hover:text-blue-800 flex items-center"
+            >
+              <span className="mr-1">←</span>
+              {t('auth.login.backToMethodSelection', 'Back to method selection')}
+            </button>
+          )}
+
+          {/* LDAP Provider Selection - only show if LDAP method selected and multiple providers */}
+          {selectedAuthMethod === 'ldap' && ldapProviders.length > 1 && (
+            <div>
+              <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-1">
+                {t('auth.login.ldapProvider', 'LDAP Provider')}
+              </label>
+              <select
+                id="provider"
+                name="provider"
+                value={formData.provider}
+                onChange={handleInputChange}
+                disabled={isFormLoading}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+              >
+                <option value="">{t('auth.login.selectProvider', 'Auto-detect')}</option>
+                {ldapProviders.map(provider => (
+                  <option key={provider.name} value={provider.name}>
+                    {provider.displayName || provider.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <div>
+            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
+              {t('auth.login.username', 'Username or Email')}
+            </label>
+            <input
+              type="text"
+              id="username"
+              name="username"
+              value={formData.username}
+              onChange={handleInputChange}
+              required
+              disabled={isFormLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+              placeholder={t('auth.login.usernamePlaceholder', 'Enter your username or email')}
+            />
+          </div>
+
+          <div>
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+              {t('auth.login.password', 'Password')}
+            </label>
+            <input
+              type="password"
+              id="password"
+              name="password"
+              value={formData.password}
+              onChange={handleInputChange}
+              required
+              disabled={isFormLoading}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
+              placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
+            />
+          </div>
+
+          <div className="flex gap-3 pt-4">
+            <button
+              type="submit"
+              disabled={isFormLoading || !formData.username || !formData.password}
+              className="flex-1 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+              {isFormLoading ? (
+                <>
+                  <LoadingSpinner size="sm" className="mr-2" />
+                  {t('auth.login.signingIn', 'Signing In...')}
+                </>
+              ) : (
+                t('auth.menu.signIn', 'Sign In')
+              )}
+            </button>
+
+            {onCancel && (
+              <button
+                type="button"
+                onClick={onCancel}
+                disabled={isFormLoading}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
+        </form>
+      )}
+    </>
+  );
+
+  // OIDC providers section (shared between both orderings)
+  const oidcSection = hasOidcProviders && (
+    <div className="mb-6">
+      <div className="text-sm text-gray-600 text-center mb-3">
+        {t('auth.login.signInWith', 'Sign in with:')}
+      </div>
+      <div className="space-y-2">
+        {oidcProviders.map(provider => (
+          <button
+            key={provider.name}
+            type="button"
+            onClick={() => handleOidcLogin(provider.name)}
+            disabled={isFormLoading}
+            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+          >
+            <span className="mr-2">{getProviderIcon(provider.name)}</span>
+            {provider.displayName || provider.name}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  // NTLM provider section (shared between both orderings)
+  const ntlmSection = hasNtlmAuth && (
+    <div className="mb-6">
+      <button
+        type="button"
+        onClick={handleNtlmLogin}
+        disabled={isFormLoading}
+        className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+      >
+        <span className="mr-2">🔐</span>
+        {t('auth.login.windowsAuth', 'Windows Authentication')}
+        {ntlmDomain && <span className="ml-1 text-xs text-gray-500">({ntlmDomain})</span>}
+      </button>
+    </div>
+  );
+
   return (
     <Wrapper>
       {!embedded && (
@@ -141,207 +331,47 @@ const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
         </div>
       )}
 
-      {/* OIDC Providers */}
-      {hasOidcProviders && (
-        <div className="mb-6">
-          <div className="text-sm text-gray-600 text-center mb-3">
-            {t('auth.login.signInWith', 'Sign in with:')}
-          </div>
-          <div className="space-y-2">
-            {oidcProviders.map(provider => (
-              <button
-                key={provider.name}
-                type="button"
-                onClick={() => handleOidcLogin(provider.name)}
-                disabled={isFormLoading}
-                className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-              >
-                <span className="mr-2">{getProviderIcon(provider.name)}</span>
-                {provider.displayName || provider.name}
-              </button>
-            ))}
-          </div>
-
-          {/* Show separator only if there are other auth methods */}
-          {totalAuthMethods > 1 && (
-            <div className="my-4 flex items-center">
-              <div className="flex-grow border-t border-gray-300"></div>
-              <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
-              <div className="flex-grow border-t border-gray-300"></div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* NTLM Provider */}
-      {hasNtlmAuth && (
-        <div className="mb-6">
-          {!hasOidcProviders && totalAuthMethods > 1 && (
-            <div className="text-sm text-gray-600 text-center mb-3">
-              {t('auth.login.signInWith', 'Sign in with:')}
-            </div>
-          )}
-          <button
-            type="button"
-            onClick={handleNtlmLogin}
-            disabled={isFormLoading}
-            className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-          >
-            <span className="mr-2">🔐</span>
-            {t('auth.login.windowsAuth', 'Windows Authentication')}
-            {ntlmDomain && <span className="ml-1 text-xs text-gray-500">({ntlmDomain})</span>}
-          </button>
-
-          {/* Show separator only if there are more auth methods after NTLM */}
-          {hasUsernamePasswordAuth && (
-            <div className="my-4 flex items-center">
-              <div className="flex-grow border-t border-gray-300"></div>
-              <span className="px-3 text-sm text-gray-500">{t('auth.login.or', 'or')}</span>
-              <div className="flex-grow border-t border-gray-300"></div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Username/Password Form - show if local auth OR LDAP auth is enabled */}
-      {hasUsernamePasswordAuth && (
+      {/* Auth method sections — order depends on the primary auth mode.
+          When local/LDAP is primary, username/password appears first.
+          Otherwise OIDC and NTLM appear first (default order). */}
+      {isLocalPrimary ? (
         <>
-          {/* Show auth method selection if both local and LDAP are enabled */}
-          {showAuthMethodSelection ? (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-600 text-center mb-3">
-                {t('auth.login.selectAuthMethod', 'Select authentication method:')}
-              </div>
+          {/* Username/Password FIRST when local/LDAP is the primary auth mode */}
+          {usernamePasswordSection}
+          {hasUsernamePasswordAuth && (hasNtlmAuth || hasOidcProviders) && orSeparator}
 
-              {hasLocalAuth && (
-                <button
-                  type="button"
-                  onClick={() => handleAuthMethodSelect('local')}
-                  disabled={isFormLoading}
-                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <span className="mr-2">🔑</span>
-                  {t('auth.login.localAuth', 'Local Authentication')}
-                </button>
-              )}
+          {/* NTLM second */}
+          {ntlmSection}
+          {hasNtlmAuth && hasOidcProviders && orSeparator}
 
-              {hasLdapAuth && (
-                <button
-                  type="button"
-                  onClick={() => handleAuthMethodSelect('ldap')}
-                  disabled={isFormLoading}
-                  className="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                >
-                  <span className="mr-2">🏢</span>
-                  {t('auth.login.ldapAuth', 'LDAP Authentication')}
-                </button>
-              )}
-            </div>
-          ) : (
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Show back button if we came from method selection */}
-              {selectedAuthMethod && (
-                <button
-                  type="button"
-                  onClick={handleBackToMethodSelection}
-                  disabled={isFormLoading}
-                  className="mb-2 text-sm text-blue-600 hover:text-blue-800 flex items-center"
-                >
-                  <span className="mr-1">←</span>
-                  {t('auth.login.backToMethodSelection', 'Back to method selection')}
-                </button>
-              )}
+          {/* OIDC LAST */}
+          {oidcSection}
+        </>
+      ) : (
+        <>
+          {/* OIDC FIRST (default order) */}
+          {hasOidcProviders && (
+            <>
+              {oidcSection}
+              {totalAuthMethods > 1 && orSeparator}
+            </>
+          )}
 
-              {/* LDAP Provider Selection - only show if LDAP method selected and multiple providers */}
-              {selectedAuthMethod === 'ldap' && ldapProviders.length > 1 && (
-                <div>
-                  <label
-                    htmlFor="provider"
-                    className="block text-sm font-medium text-gray-700 mb-1"
-                  >
-                    {t('auth.login.ldapProvider', 'LDAP Provider')}
-                  </label>
-                  <select
-                    id="provider"
-                    name="provider"
-                    value={formData.provider}
-                    onChange={handleInputChange}
-                    disabled={isFormLoading}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-                  >
-                    <option value="">{t('auth.login.selectProvider', 'Auto-detect')}</option>
-                    {ldapProviders.map(provider => (
-                      <option key={provider.name} value={provider.name}>
-                        {provider.displayName || provider.name}
-                      </option>
-                    ))}
-                  </select>
+          {/* NTLM second */}
+          {hasNtlmAuth && (
+            <>
+              {!hasOidcProviders && totalAuthMethods > 1 && (
+                <div className="text-sm text-gray-600 text-center mb-3">
+                  {t('auth.login.signInWith', 'Sign in with:')}
                 </div>
               )}
-
-              <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('auth.login.username', 'Username or Email')}
-                </label>
-                <input
-                  type="text"
-                  id="username"
-                  name="username"
-                  value={formData.username}
-                  onChange={handleInputChange}
-                  required
-                  disabled={isFormLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-                  placeholder={t('auth.login.usernamePlaceholder', 'Enter your username or email')}
-                />
-              </div>
-
-              <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                  {t('auth.login.password', 'Password')}
-                </label>
-                <input
-                  type="password"
-                  id="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  required
-                  disabled={isFormLoading}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed text-gray-900 bg-white"
-                  placeholder={t('auth.login.passwordPlaceholder', 'Enter your password')}
-                />
-              </div>
-
-              <div className="flex gap-3 pt-4">
-                <button
-                  type="submit"
-                  disabled={isFormLoading || !formData.username || !formData.password}
-                  className="flex-1 flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400 disabled:cursor-not-allowed"
-                >
-                  {isFormLoading ? (
-                    <>
-                      <LoadingSpinner size="sm" className="mr-2" />
-                      {t('auth.login.signingIn', 'Signing In...')}
-                    </>
-                  ) : (
-                    t('auth.menu.signIn', 'Sign In')
-                  )}
-                </button>
-
-                {onCancel && (
-                  <button
-                    type="button"
-                    onClick={onCancel}
-                    disabled={isFormLoading}
-                    className="flex-1 py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
-                  >
-                    Cancel
-                  </button>
-                )}
-              </div>
-            </form>
+              {ntlmSection}
+              {hasUsernamePasswordAuth && orSeparator}
+            </>
           )}
+
+          {/* Username/Password LAST (default order) */}
+          {usernamePasswordSection}
         </>
       )}
 
