@@ -104,10 +104,10 @@ const AdminSourcesPage = () => {
         method: 'POST'
       });
 
-      if (response.success) {
-        alert(`Source test successful:\n${JSON.stringify(response.result, null, 2)}`);
+      if (response.data.success) {
+        alert(`Source test successful:\n${JSON.stringify(response.data.result, null, 2)}`);
       } else {
-        alert(`Source test failed: ${response.error}`);
+        alert(`Source test failed: ${response.data.error}`);
       }
     } catch (err) {
       alert(`Source test failed: ${err.message}`);

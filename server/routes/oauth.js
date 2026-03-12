@@ -740,12 +740,10 @@ export default function registerOAuthRoutes(app) {
       const oauthConfig = platform.oauth || {};
 
       if (!oauthConfig.enabled?.authz) {
-        return res
-          .status(400)
-          .json({
-            error: 'invalid_request',
-            error_description: 'OAuth authorization server is not enabled'
-          });
+        return res.status(400).json({
+          error: 'invalid_request',
+          error_description: 'OAuth authorization server is not enabled'
+        });
       }
 
       // Require a Bearer token in the Authorization header

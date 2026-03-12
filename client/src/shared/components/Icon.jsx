@@ -87,7 +87,10 @@ import {
   AdjustmentsVerticalIcon as OutlineAdjustmentsVerticalIcon,
   FunnelIcon as OutlineFunnelIcon,
   DocumentIcon as OutlineDocumentIcon,
-  ShieldCheckIcon as OutlineShieldCheckIcon
+  ShieldCheckIcon as OutlineShieldCheckIcon,
+  CloudArrowUpIcon as OutlineCloudArrowUpIcon,
+  ArchiveBoxIcon as OutlineArchiveBoxIcon,
+  PlusIcon as OutlinePlusIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -159,7 +162,10 @@ import {
   AdjustmentsVerticalIcon as SolidAdjustmentsVerticalIcon,
   FunnelIcon as SolidFunnelIcon,
   DocumentIcon as SolidDocumentIcon,
-  ShieldCheckIcon as SolidShieldCheckIcon
+  ShieldCheckIcon as SolidShieldCheckIcon,
+  CloudArrowUpIcon as SolidCloudArrowUpIcon,
+  ArchiveBoxIcon as SolidArchiveBoxIcon,
+  PlusIcon as SolidPlusIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -330,7 +336,14 @@ const iconMap = {
     outline: OutlineExclamationTriangleIcon,
     solid: SolidExclamationTriangleIcon
   },
-  info: { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon }
+  info: { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon },
+  // Missing icon aliases
+  clipboard: { outline: ClipboardIcon, solid: ClipboardIcon },
+  'cloud-arrow-up': { outline: OutlineCloudArrowUpIcon, solid: SolidCloudArrowUpIcon },
+  'archive-box': { outline: OutlineArchiveBoxIcon, solid: SolidArchiveBoxIcon },
+  MagnifyingGlassIcon: { outline: MagnifyingGlassIcon, solid: MagnifyingGlassIcon },
+  PlusIcon: { outline: OutlinePlusIcon, solid: SolidPlusIcon },
+  KeyIcon: { outline: OutlineKeyIcon, solid: SolidKeyIcon }
 };
 
 const sizeClasses = {
