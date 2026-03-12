@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../shared/components/Icon';
 
-const Unauthorized = () => {
+export default function Unauthorized() {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center py-12">
@@ -21,6 +21,4 @@ const Unauthorized = () => {
       </Link>
     </div>
   );
-};
-
-export default Unauthorized;
+}

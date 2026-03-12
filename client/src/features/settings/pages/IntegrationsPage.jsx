@@ -5,7 +5,7 @@ import { useAuth } from '../../auth/hooks/useAuth';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Icon from '../../../shared/components/Icon';
 
-const IntegrationsPage = () => {
+export default function IntegrationsPage() {
   useTranslation(); // Hook called for future i18n, not currently used
   const { user } = useAuth();
   const { platformConfig } = usePlatformConfig();
@@ -603,6 +603,4 @@ const IntegrationsPage = () => {
       </div>
     </div>
   );
-};
-
-export default IntegrationsPage;
+}

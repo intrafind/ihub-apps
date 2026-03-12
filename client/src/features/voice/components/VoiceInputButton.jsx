@@ -2,7 +2,12 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import './VoiceInput.css';
 
-const VoiceInputButton = ({ isListening, toggleListening, disabled, microphoneMode }) => {
+export default function VoiceInputButton({
+  isListening,
+  toggleListening,
+  disabled,
+  microphoneMode
+}) {
   const { t } = useTranslation();
   return (
     <button
@@ -23,6 +28,4 @@ const VoiceInputButton = ({ isListening, toggleListening, disabled, microphoneMo
       <Icon name="microphone" size="md" />
     </button>
   );
-};
-
-export default VoiceInputButton;
+}

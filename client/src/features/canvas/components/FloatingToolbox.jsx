@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 
-const FloatingToolbox = ({ onAction, isProcessing, hasSelection }) => {
+export default function FloatingToolbox({ onAction, isProcessing, hasSelection }) {
   const { t } = useTranslation();
   const noSelectionActions = ['continue', 'summarize', 'outline'];
   const [expandedSection, setExpandedSection] = useState(null);
@@ -244,6 +244,4 @@ const FloatingToolbox = ({ onAction, isProcessing, hasSelection }) => {
       </div>
     </div>
   );
-};
-
-export default FloatingToolbox;
+}

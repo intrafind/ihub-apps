@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../shared/contexts/AuthContext.jsx';
 import LoginForm from '../features/auth/components/LoginForm.jsx';
 
-const LoginPage = () => {
+export default function LoginPage() {
   const [searchParams] = useSearchParams();
   const { user, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -52,6 +52,4 @@ const LoginPage = () => {
       <LoginForm />
     </div>
   );
-};
-
-export default LoginPage;
+}

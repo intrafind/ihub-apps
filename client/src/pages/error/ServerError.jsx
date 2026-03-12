@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../shared/components/Icon';
 
-const ServerError = () => {
+export default function ServerError() {
   const { t } = useTranslation();
   return (
     <div className="flex flex-col items-center justify-center py-12">
@@ -24,6 +24,4 @@ const ServerError = () => {
       </Link>
     </div>
   );
-};
-
-export default ServerError;
+}

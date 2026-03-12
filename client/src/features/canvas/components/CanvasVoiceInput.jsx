@@ -5,7 +5,7 @@ import useVoiceRecognition from '../../voice/hooks/useVoiceRecognition';
 import Icon from '../../../shared/components/Icon';
 import '../../voice/components/VoiceInput.css';
 
-const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) => {
+export default function CanvasVoiceInput({ app, onSpeechResult, disabled = false, quillRef }) {
   const { t } = useTranslation();
   const dummyInputRef = useRef(null);
 
@@ -114,6 +114,4 @@ const CanvasVoiceInput = ({ app, onSpeechResult, disabled = false, quillRef }) =
       <input ref={dummyInputRef} type="text" style={{ display: 'none' }} readOnly />
     </>
   );
-};
-
-export default CanvasVoiceInput;
+}
