@@ -742,7 +742,10 @@ export default function registerOAuthRoutes(app) {
       if (!oauthConfig.enabled?.authz) {
         return res
           .status(400)
-          .json({ error: 'invalid_request', error_description: 'OAuth authorization server is not enabled' });
+          .json({
+            error: 'invalid_request',
+            error_description: 'OAuth authorization server is not enabled'
+          });
       }
 
       // Require a Bearer token in the Authorization header
