@@ -7,6 +7,7 @@ import {
   ArrowUturnRightIcon,
   ArrowDownTrayIcon,
   CameraIcon,
+  ChatBubbleLeftIcon,
   ChatBubbleLeftRightIcon,
   CheckIcon as OutlineCheckIcon,
   CheckCircleIcon as OutlineCheckCircleIcon,
@@ -74,6 +75,7 @@ import {
 
 import {
   CameraIcon as SolidCameraIcon,
+  ChatBubbleLeftIcon as SolidChatBubbleLeftIcon,
   CheckIcon as SolidCheckIcon,
   CheckCircleIcon as SolidCheckCircleIcon,
   CloudIcon as SolidCloudIcon,
@@ -133,6 +135,9 @@ const iconMap = {
   redo: { outline: ArrowUturnRightIcon, solid: ArrowUturnRightIcon },
   camera: { outline: CameraIcon, solid: SolidCameraIcon },
   chat: { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
+  'chat-bubble': { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
+  'chat-bubble-left': { outline: ChatBubbleLeftIcon, solid: SolidChatBubbleLeftIcon },
+  'chat-bubble-left-right': { outline: ChatBubbleLeftRightIcon, solid: ChatBubbleLeftRightIcon },
   check: { outline: OutlineCheckIcon, solid: SolidCheckIcon },
   cloud: { outline: CloudIcon, solid: SolidCloudIcon },
   'check-circle': { outline: OutlineCheckCircleIcon, solid: SolidCheckCircleIcon },

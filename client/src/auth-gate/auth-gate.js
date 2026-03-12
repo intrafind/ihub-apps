@@ -379,6 +379,10 @@
     var header = createElement('div', 'ag-header');
 
     // Logo — use configured logo or fall back to app icon
+    // Prepend base path for root-relative logo URLs so they work behind a subpath proxy
+    if (logoUrl && logoUrl.charAt(0) === '/' && logoUrl.charAt(1) !== '/') {
+      logoUrl = (window.__BASE_PATH__ || '') + logoUrl;
+    }
     var logoDiv = createElement('div', 'ag-logo');
     var img = document.createElement('img');
     img.src = logoUrl || (window.__BASE_PATH__ || '') + '/icons/apps-svg-logo.svg';
