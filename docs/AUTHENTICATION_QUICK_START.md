@@ -283,27 +283,17 @@ Add to `platform.json`:
 
 ## Base Path Deployment
 
-### Server-Side Configuration
+### Automatic Detection
+
+The base path is detected automatically at runtime. No environment variables are needed.
+
+- **Server side:** The `X-Forwarded-Prefix` header (set by your reverse proxy) is used to detect the subpath. Both stripping and non-stripping proxy configurations are supported.
+- **Client side:** The client detects the base path from `window.location.pathname`. No build-time configuration needed.
+
+To customize the header name (default: `x-forwarded-prefix`):
 
 ```bash
-# Set base path for subpath deployments
-export BASE_PATH=/ai-hub
-
-# Or use environment variable substitution
-export BASE_PATH=/my-apps
-```
-
-### Client-Side Detection
-
-The client automatically detects the base path at runtime from `window.location.pathname`. No build-time configuration needed.
-
-### Reverse Proxy Detection
-
-For reverse proxies, enable header-based detection:
-
-```bash
-export AUTO_DETECT_BASE_PATH=true
-export BASE_PATH_HEADER=x-forwarded-prefix
+export BASE_PATH_HEADER=x-custom-prefix
 ```
 
 ---
@@ -456,8 +446,8 @@ PROXY_AUTH_GROUPS_HEADER=x-forwarded-groups
 ### Base Path
 
 ```bash
-BASE_PATH=/subpath
-AUTO_DETECT_BASE_PATH=true
+# Auto-detected from X-Forwarded-Prefix header — no env vars needed.
+# Optionally customize the header name:
 BASE_PATH_HEADER=x-forwarded-prefix
 ```
 

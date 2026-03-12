@@ -6,30 +6,34 @@ import logger from './logger.js';
  * the application is deployed at a subpath like /ai-hub/ instead of the root.
  *
  * Key features:
- * - Configurable via BASE_PATH environment variable
- * - Auto-detection from reverse proxy headers (optional)
+ * - Automatic detection from reverse proxy X-Forwarded-Prefix header
+ * - URL rewriting middleware for non-stripping reverse proxies
  * - Route path building utilities
- * - Backward compatibility with root path deployments
+ * - Zero-config: works with both stripping and non-stripping proxies
  */
 
 /**
- * Get the configured base path from environment or configuration
- * @returns {string} Base path
+ * Get the detected base path from the current request's X-Forwarded-Prefix header.
+ * At startup (no request), returns '' so routes register at root paths.
+ * At request time, returns the forwarded prefix for response URL generation.
+ * @returns {string} Base path (e.g., '/ihub') or '' for root deployment
  */
 export const getBasePath = () => {
-  let basePath = process.env.BASE_PATH || '';
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
 
-  // Auto-detection from request headers (if enabled)
-  if (process.env.AUTO_DETECT_BASE_PATH === 'true' && global.currentRequest) {
-    const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  // Auto-detect from current request headers
+  if (global.currentRequest) {
     const detectedPath = global.currentRequest.headers[headerName.toLowerCase()];
-    if (detectedPath && isValidBasePath(detectedPath)) {
-      basePath = detectedPath;
+    if (detectedPath) {
+      const normalized =
+        detectedPath.endsWith('/') && detectedPath !== '/'
+          ? detectedPath.slice(0, -1)
+          : detectedPath;
+      if (isValidBasePath(normalized)) return normalized;
     }
   }
 
-  // Remove trailing slash except for root path
-  return basePath.endsWith('/') && basePath !== '/' ? basePath.slice(0, -1) : basePath;
+  return '';
 };
 
 /**
@@ -195,30 +199,56 @@ export const toAbsolutePath = relativePath => {
 };
 
 /**
- * Middleware to detect base path from headers
+ * Middleware to rewrite request URL by stripping the X-Forwarded-Prefix.
+ * This allows non-stripping reverse proxies to work with root-registered routes.
+ * Safe no-op when the proxy already strips the prefix or when no header is present.
+ *
+ * Must be registered BEFORE all other middleware and routes.
+ *
  * @param {Object} req - Express request
  * @param {Object} res - Express response
  * @param {Function} next - Next middleware
  */
-export const basePathDetectionMiddleware = (req, res, next) => {
-  if (process.env.AUTO_DETECT_BASE_PATH === 'true') {
-    global.currentRequest = req;
+export const basePathRewriteMiddleware = (req, res, next) => {
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  let prefix = req.headers[headerName.toLowerCase()];
+
+  if (prefix) {
+    // Normalize: remove trailing slashes
+    prefix = prefix.replace(/\/+$/, '');
+
+    if (prefix && isValidBasePath(prefix) && req.url.startsWith(prefix)) {
+      req.url = req.url.substring(prefix.length) || '/';
+    }
   }
   next();
 };
 
 /**
- * Middleware to validate base path configuration
+ * Middleware to store the current request for base path auto-detection.
+ * This allows getBasePath() to read the X-Forwarded-Prefix header
+ * at request time for response URL generation (e.g., manifest start_url).
+ *
+ * @param {Object} req - Express request
+ * @param {Object} res - Express response
+ * @param {Function} next - Next middleware
+ */
+export const basePathDetectionMiddleware = (req, res, next) => {
+  global.currentRequest = req;
+  next();
+};
+
+/**
+ * Middleware to validate the X-Forwarded-Prefix header value
  * @param {Object} req - Express request
  * @param {Object} res - Express response
  * @param {Function} next - Next middleware
  */
 export const basePathValidationMiddleware = (req, res, next) => {
-  const basePath = getBasePath();
-  if (basePath && !isValidBasePath(basePath)) {
-    logger.warn(`Invalid base path configuration: ${basePath}. Using root path as fallback.`);
-    // Override with empty base path for safety
-    process.env.BASE_PATH = '';
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  const prefix = req.headers[headerName.toLowerCase()];
+  if (prefix && !isValidBasePath(prefix.replace(/\/+$/, ''))) {
+    logger.warn(`Invalid base path from header ${headerName}: ${prefix}. Ignoring.`);
   }
   next();
 };
@@ -233,8 +263,6 @@ export const getBasePathInfo = () => {
     basePath,
     isSubpath: isSubpathDeployment(),
     isValid: isValidBasePath(basePath),
-    envVariable: process.env.BASE_PATH,
-    autoDetect: process.env.AUTO_DETECT_BASE_PATH === 'true',
     headerName: process.env.BASE_PATH_HEADER || 'x-forwarded-prefix',
     nodeEnv: process.env.NODE_ENV
   };

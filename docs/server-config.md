@@ -85,9 +85,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | `JWT_SECRET`               | HMAC secret for signing JWTs. **Only required when `jwt.algorithm` is `HS256`.** RS256 (the default) uses auto-generated RSA key files instead. | – |
 | `JWT_PRIVATE_KEY`          | PEM-encoded RSA private key for RS256 JWT signing. Overrides the auto-generated key stored at `contents/.jwt-private-key.pem`. | – |
 | `JWT_PUBLIC_KEY`           | PEM-encoded RSA public key for RS256 JWT verification. Overrides the auto-generated key stored at `contents/.jwt-public-key.pem`. | – |
-| `BASE_PATH`                | Deployment subpath prefix (e.g., `/ihub`). Use this when iHub is accessed directly at a subpath without a reverse proxy stripping the prefix. | – |
-| `AUTO_DETECT_BASE_PATH`    | Set to `true` to detect the base path automatically from the `X-Forwarded-Prefix` header (or the header named by `BASE_PATH_HEADER`). Use this with reverse proxies that set forwarding headers. | `false` |
-| `BASE_PATH_HEADER`         | Header name used for auto base path detection when `AUTO_DETECT_BASE_PATH=true`. | `x-forwarded-prefix` |
+| `BASE_PATH_HEADER`         | Header name used for automatic base path detection from the reverse proxy. The server reads this header to determine the deployment subpath (e.g., `/ihub`). Works automatically with both stripping and non-stripping reverse proxies. | `x-forwarded-prefix` |
 | `AZURE_CLIENT_ID`          | Azure app registration client ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
 | `AZURE_CLIENT_SECRET`      | Azure app registration client secret for the Office 365 / Microsoft Teams cloud storage integration. | – |
 | `AZURE_TENANT_ID`          | Azure tenant ID for the Office 365 / Microsoft Teams cloud storage integration. | – |
