@@ -106,19 +106,23 @@ const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
 // Loading component for lazy-loaded admin components
-const AdminLoading = () => (
-  <div className="flex items-center justify-center p-8">
-    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-    <span className="ml-3 text-gray-600">Loading admin panel...</span>
-  </div>
-);
+function AdminLoading() {
+  return (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <span className="ml-3 text-gray-600">Loading admin panel...</span>
+    </div>
+  );
+}
 
 // Helper to wrap lazy admin components with suspense and error boundary
-const LazyAdminRoute = ({ component: Component }) => (
-  <Suspense fallback={<AdminLoading />}>
-    <Component />
-  </Suspense>
-);
+function LazyAdminRoute({ component: Component }) {
+  return (
+    <Suspense fallback={<AdminLoading />}>
+      <Component />
+    </Suspense>
+  );
+}
 
 /**
  * Checks setup status and redirects when unconfigured.
@@ -133,7 +137,7 @@ const LazyAdminRoute = ({ component: Component }) => (
  * as a fast-path so navigation back to '/' doesn't re-trigger the redirect before the
  * refreshed platform config arrives.
  */
-const SetupCheck = ({ children }) => {
+function SetupCheck({ children }) {
   const navigate = useNavigate();
   const { platformConfig, isLoading: platformLoading } = usePlatformConfig();
   // User deliberately chose "Skip" this session — don't redirect again until next session
@@ -165,7 +169,7 @@ const SetupCheck = ({ children }) => {
   }
 
   return children;
-};
+}
 
 function App() {
   // Use the custom hook for session management
