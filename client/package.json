@@ -1,7 +1,7 @@
 {
   "name": "ihub-apps-client",
   "private": true,
-  "version": "4.2.0",
+  "version": "fix-issue-1137-lVuXg",
   "type": "module",
   "scripts": {
     "dev": "vite --host",
