@@ -343,27 +343,27 @@
     "qualityHigh": "Hoch (4K)"
   },
   "citations": {
-    "documents": "Dokumente",
-    "passages": "{{count}} Passage",
-    "passages_plural": "{{count}} Passagen",
-    "referenced": "Referenziert",
-    "mentioned": "Erwähnt",
-    "openExternal": "Im Browser öffnen",
     "preview": "Vorschau (PDF)",
     "download": "Herunterladen",
     "openInApp": "In App öffnen",
-    "untitledDocument": "Dokument",
     "details": "Details",
-    "documentDetails": "Dokumentdetails",
-    "author": "Autor",
-    "fileSize": "Dateigröße",
-    "modified": "Geändert",
-    "indexed": "Indexiert",
-    "source": "Quelle",
     "fileType": "Dateityp",
+    "fileSize": "Dateigröße",
+    "author": "Autor",
+    "source": "Quelle",
+    "modified": "Geändert",
+    "indexed": "Indiziert",
     "language": "Sprache",
+    "documentDetails": "Dokumentdetails",
+    "loading": "Wird geladen...",
     "breadcrumbs": "Pfad",
-    "loading": "Laden..."
+    "documents": "Dokumente",
+    "untitledDocument": "Dokument",
+    "referenced": "Referenziert",
+    "mentioned": "Erwähnt",
+    "passages": "{{count}} Passage",
+    "passages_plural": "{{count}} Passagen",
+    "openExternal": "Im Browser öffnen"
   },
   "chatMessage": {
     "user": "Du",
@@ -628,7 +628,8 @@
       },
       "details": {
         "messages": "Nachrichten",
-        "tokens": "Token"
+        "tokens": "Token",
+        "editModel": "Modell bearbeiten"
       },
       "edit": {
         "title": "Modell bearbeiten",
@@ -1499,29 +1500,6 @@
     "preview": "Vorschau",
     "resetToDefaults": "Auf Standardwerte zurücksetzen",
     "colorInvalid": "Bitte geben Sie eine gültige Hex-Farbe ein (z.B. #4f46e5)"
-  },
-  "citations": {
-    "preview": "Vorschau (PDF)",
-    "download": "Herunterladen",
-    "openInApp": "In App öffnen",
-    "details": "Details",
-    "fileType": "Dateityp",
-    "fileSize": "Dateigröße",
-    "author": "Autor",
-    "source": "Quelle",
-    "modified": "Geändert",
-    "indexed": "Indiziert",
-    "language": "Sprache",
-    "documentDetails": "Dokumentdetails",
-    "loading": "Wird geladen...",
-    "breadcrumbs": "Pfad",
-    "documents": "Dokumente",
-    "untitledDocument": "Dokument",
-    "referenced": "Referenziert",
-    "mentioned": "Erwähnt",
-    "passages": "{{count}} Passage",
-    "passages_plural": "{{count}} Passagen",
-    "openExternal": "Im Browser öffnen"
   },
   "thoughts": {
     "phase": {

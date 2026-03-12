@@ -70,7 +70,24 @@ import {
   PresentationChartBarIcon as OutlinePresentationChartBarIcon,
   SunIcon as OutlineSunIcon,
   MoonIcon as OutlineMoonIcon,
-  ComputerDesktopIcon as OutlineComputerDesktopIcon
+  ComputerDesktopIcon as OutlineComputerDesktopIcon,
+  ChartBarIcon as OutlineChartBarIcon,
+  ShieldExclamationIcon as OutlineShieldExclamationIcon,
+  HomeIcon as OutlineHomeIcon,
+  ArrowUpTrayIcon as OutlineArrowUpTrayIcon,
+  WrenchIcon as OutlineWrenchIcon,
+  RectangleStackIcon as OutlineRectangleStackIcon,
+  CircleStackIcon as OutlineCircleStackIcon,
+  BeakerIcon as OutlineBeakerIcon,
+  DocumentPlusIcon as OutlineDocumentPlusIcon,
+  SignalIcon as OutlineSignalIcon,
+  TicketIcon as OutlineTicketIcon,
+  KeyIcon as OutlineKeyIcon,
+  ChevronLeftIcon as OutlineChevronLeftIcon,
+  AdjustmentsVerticalIcon as OutlineAdjustmentsVerticalIcon,
+  FunnelIcon as OutlineFunnelIcon,
+  DocumentIcon as OutlineDocumentIcon,
+  ShieldCheckIcon as OutlineShieldCheckIcon
 } from '@heroicons/react/24/outline';
 
 import {
@@ -125,7 +142,24 @@ import {
   PresentationChartBarIcon as SolidPresentationChartBarIcon,
   SunIcon as SolidSunIcon,
   MoonIcon as SolidMoonIcon,
-  ComputerDesktopIcon as SolidComputerDesktopIcon
+  ComputerDesktopIcon as SolidComputerDesktopIcon,
+  ChartBarIcon as SolidChartBarIcon,
+  ShieldExclamationIcon as SolidShieldExclamationIcon,
+  HomeIcon as SolidHomeIcon,
+  ArrowUpTrayIcon as SolidArrowUpTrayIcon,
+  WrenchIcon as SolidWrenchIcon,
+  RectangleStackIcon as SolidRectangleStackIcon,
+  CircleStackIcon as SolidCircleStackIcon,
+  BeakerIcon as SolidBeakerIcon,
+  DocumentPlusIcon as SolidDocumentPlusIcon,
+  SignalIcon as SolidSignalIcon,
+  TicketIcon as SolidTicketIcon,
+  KeyIcon as SolidKeyIcon,
+  ChevronLeftIcon as SolidChevronLeftIcon,
+  AdjustmentsVerticalIcon as SolidAdjustmentsVerticalIcon,
+  FunnelIcon as SolidFunnelIcon,
+  DocumentIcon as SolidDocumentIcon,
+  ShieldCheckIcon as SolidShieldCheckIcon
 } from '@heroicons/react/24/solid';
 
 const iconMap = {
@@ -239,7 +273,64 @@ const iconMap = {
   // Dark mode toggle icons
   sun: { outline: OutlineSunIcon, solid: SolidSunIcon },
   moon: { outline: OutlineMoonIcon, solid: SolidMoonIcon },
-  'computer-desktop': { outline: OutlineComputerDesktopIcon, solid: SolidComputerDesktopIcon }
+  'computer-desktop': { outline: OutlineComputerDesktopIcon, solid: SolidComputerDesktopIcon },
+  // Additional icons
+  'chart-bar': { outline: OutlineChartBarIcon, solid: SolidChartBarIcon },
+  chart: { outline: OutlineChartBarIcon, solid: SolidChartBarIcon },
+  'shield-alert': { outline: OutlineShieldExclamationIcon, solid: SolidShieldExclamationIcon },
+  home: { outline: OutlineHomeIcon, solid: SolidHomeIcon },
+  upload: { outline: OutlineArrowUpTrayIcon, solid: SolidArrowUpTrayIcon },
+  wrench: { outline: OutlineWrenchIcon, solid: SolidWrenchIcon },
+  layers: { outline: OutlineRectangleStackIcon, solid: SolidRectangleStackIcon },
+  database: { outline: OutlineCircleStackIcon, solid: SolidCircleStackIcon },
+  beaker: { outline: OutlineBeakerIcon, solid: SolidBeakerIcon },
+  'document-plus': { outline: OutlineDocumentPlusIcon, solid: SolidDocumentPlusIcon },
+  signal: { outline: OutlineSignalIcon, solid: SolidSignalIcon },
+  ticket: { outline: OutlineTicketIcon, solid: SolidTicketIcon },
+  key: { outline: OutlineKeyIcon, solid: SolidKeyIcon },
+  'chevron-left': { outline: OutlineChevronLeftIcon, solid: SolidChevronLeftIcon },
+  'adjustments-vertical': {
+    outline: OutlineAdjustmentsVerticalIcon,
+    solid: SolidAdjustmentsVerticalIcon
+  },
+  funnel: { outline: OutlineFunnelIcon, solid: SolidFunnelIcon },
+  document: { outline: OutlineDocumentIcon, solid: SolidDocumentIcon },
+  'shield-check': { outline: OutlineShieldCheckIcon, solid: SolidShieldCheckIcon },
+  // Aliases for PascalCase icon names
+  ArrowLeftIcon: { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
+  ExclamationTriangleIcon: {
+    outline: OutlineExclamationTriangleIcon,
+    solid: SolidExclamationTriangleIcon
+  },
+  InformationCircleIcon: {
+    outline: OutlineInformationCircleIcon,
+    solid: SolidInformationCircleIcon
+  },
+  AdjustmentsHorizontalIcon: {
+    outline: AdjustmentsHorizontalIcon,
+    solid: AdjustmentsHorizontalIcon
+  },
+  AdjustmentsVerticalIcon: {
+    outline: OutlineAdjustmentsVerticalIcon,
+    solid: SolidAdjustmentsVerticalIcon
+  },
+  CheckCircleIcon: { outline: OutlineCheckCircleIcon, solid: SolidCheckCircleIcon },
+  DocumentTextIcon: { outline: OutlineDocumentTextIcon, solid: SolidDocumentTextIcon },
+  FunnelIcon: { outline: OutlineFunnelIcon, solid: SolidFunnelIcon },
+  DocumentIcon: { outline: OutlineDocumentIcon, solid: SolidDocumentIcon },
+  ShieldCheckIcon: { outline: OutlineShieldCheckIcon, solid: SolidShieldCheckIcon },
+  CheckIcon: { outline: OutlineCheckIcon, solid: SolidCheckIcon },
+  SignalIcon: { outline: OutlineSignalIcon, solid: SolidSignalIcon },
+  // Aliases for kebab-case names that match existing imported icons
+  'arrow-left': { outline: ArrowLeftIcon, solid: ArrowLeftIcon },
+  'code-bracket': { outline: OutlineCodeBracketIcon, solid: SolidCodeBracketIcon },
+  'magnifying-glass': { outline: MagnifyingGlassIcon, solid: MagnifyingGlassIcon },
+  'arrow-path': { outline: ArrowPathIcon, solid: ArrowPathIcon },
+  exclamationTriangle: {
+    outline: OutlineExclamationTriangleIcon,
+    solid: SolidExclamationTriangleIcon
+  },
+  info: { outline: OutlineInformationCircleIcon, solid: SolidInformationCircleIcon }
 };
 
 const sizeClasses = {
