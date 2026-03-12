@@ -8,6 +8,12 @@ import { buildServerPath } from '../utils/basePath.js';
 import { atomicWriteJSON } from '../utils/atomicWrite.js';
 import logger from '../utils/logger.js';
 import { adminAuth } from '../middleware/adminAuth.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../utils/responseHelpers.js';
 
 // Cloud LLM providers that require API keys
 const LLM_PROVIDER_IDS = ['openai', 'anthropic', 'google', 'mistral'];
@@ -46,7 +52,7 @@ async function testApiKey(providerId, apiKey) {
       return { valid: false, error: 'Invalid API key' };
     }
     return { valid: false, error: `Provider returned status ${response.status}` };
-  } catch (err) {
+  } catch (error) {
     return { valid: false, error: 'Could not reach provider API' };
   }
 }
@@ -89,15 +95,17 @@ export default function registerSetupRoutes(app) {
     const { providerId, apiKey } = req.body;
 
     if (!providerId || !LLM_PROVIDER_IDS.includes(providerId)) {
-      return res.status(400).json({ valid: false, error: 'Invalid provider ID' });
+      return sendBadRequest(res, 'Invalid provider ID');
     }
     if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-      return res.status(400).json({ valid: false, error: 'API key is required' });
+      return sendBadRequest(res, 'API key is required');
     }
 
     const result = await testApiKey(providerId, apiKey.trim());
-    logger.info(`Setup test for provider "${providerId}": ${result.valid ? 'valid' : 'invalid'}`, {
-      component: 'Setup'
+    logger.info('Setup test for provider', {
+      component: 'Setup',
+      providerId,
+      valid: result.valid
     });
     res.json(result);
   });
@@ -113,15 +121,17 @@ export default function registerSetupRoutes(app) {
       // Only allow when not yet configured
       const platform = configCache.getPlatform() || {};
       if (platform.setup?.configured) {
-        return res.status(403).json({
-          error: 'System is already configured. Use Admin › Providers to manage API keys.'
-        });
+        return sendErrorResponse(
+          res,
+          403,
+          'System is already configured. Use Admin › Providers to manage API keys.'
+        );
       }
 
       const { providerId, apiKey } = req.body;
 
       if (!providerId) {
-        return res.status(400).json({ error: 'providerId is required' });
+        return sendBadRequest(res, 'providerId is required');
       }
 
       // Local provider: no API key needed — just mark setup as complete
@@ -133,10 +143,10 @@ export default function registerSetupRoutes(app) {
 
       // Cloud provider: validate and save API key
       if (!LLM_PROVIDER_IDS.includes(providerId)) {
-        return res.status(400).json({ error: 'Invalid provider ID' });
+        return sendBadRequest(res, 'Invalid provider ID');
       }
       if (!apiKey || typeof apiKey !== 'string' || apiKey.trim().length === 0) {
-        return res.status(400).json({ error: 'API key must be a non-empty string' });
+        return sendBadRequest(res, 'API key must be a non-empty string');
       }
 
       const trimmedKey = apiKey.trim();
@@ -148,7 +158,7 @@ export default function registerSetupRoutes(app) {
 
       const providerIndex = providers.findIndex(p => p.id === providerId);
       if (providerIndex === -1) {
-        return res.status(404).json({ error: 'Provider not found' });
+        return sendNotFound(res, 'Provider');
       }
 
       providers[providerIndex] = {
@@ -168,14 +178,14 @@ export default function registerSetupRoutes(app) {
       // Mark setup as complete in platform.json
       await markSetupConfigured();
 
-      logger.info(`Setup: API key configured for provider "${providerId}"`, {
-        component: 'Setup'
+      logger.info('Setup: API key configured for provider', {
+        component: 'Setup',
+        providerId
       });
 
       res.json({ success: true });
     } catch (error) {
-      logger.error('Error saving setup configuration:', { component: 'Setup', error });
-      res.status(500).json({ error: 'Failed to save configuration' });
+      return sendInternalError(res, error, 'save setup configuration');
     }
   });
 }

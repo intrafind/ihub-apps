@@ -1,5 +1,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -43,8 +44,7 @@ export default function registerAdminSSLRoutes(app) {
 
       res.json(sslConfig);
     } catch (error) {
-      logger.error('Error getting SSL config:', error);
-      res.status(500).json({ error: 'Failed to get SSL configuration' });
+      return sendInternalError(res, error, 'get SSL configuration');
     }
   });
 
@@ -83,23 +83,23 @@ export default function registerAdminSSLRoutes(app) {
 
       // Validate configuration
       if (typeof ignoreInvalidCertificates !== 'boolean') {
-        return res.status(400).json({
-          error: 'Invalid SSL configuration: ignoreInvalidCertificates must be a boolean'
-        });
+        return sendBadRequest(
+          res,
+          'Invalid SSL configuration: ignoreInvalidCertificates must be a boolean'
+        );
       }
 
       if (!Array.isArray(domainWhitelist)) {
-        return res.status(400).json({
-          error: 'Invalid SSL configuration: domainWhitelist must be an array'
-        });
+        return sendBadRequest(res, 'Invalid SSL configuration: domainWhitelist must be an array');
       }
 
       // Validate domain patterns
       for (const domain of domainWhitelist) {
         if (typeof domain !== 'string' || !domain.trim()) {
-          return res.status(400).json({
-            error: 'Invalid SSL configuration: all domains must be non-empty strings'
-          });
+          return sendBadRequest(
+            res,
+            'Invalid SSL configuration: all domains must be non-empty strings'
+          );
         }
       }
 
@@ -123,9 +123,11 @@ export default function registerAdminSSLRoutes(app) {
       // Refresh config cache
       await configCache.refreshCacheEntry('config/platform.json');
 
-      logger.info(
-        `SSL configuration updated: ignoreInvalidCertificates=${ignoreInvalidCertificates}, domainWhitelist=[${domainWhitelist.join(', ')}]`
-      );
+      logger.info('SSL configuration updated', {
+        component: 'AdminSSL',
+        ignoreInvalidCertificates,
+        domainWhitelist
+      });
 
       res.json({
         message: 'SSL configuration updated successfully',
@@ -135,8 +137,7 @@ export default function registerAdminSSLRoutes(app) {
         }
       });
     } catch (error) {
-      logger.error('Error updating SSL config:', error);
-      res.status(500).json({ error: 'Failed to update SSL configuration' });
+      return sendInternalError(res, error, 'update SSL configuration');
     }
   });
 }

@@ -167,7 +167,7 @@ export function verifyJwt(token, options = {}) {
     const verificationKey = getJwtVerificationKey();
 
     if (!verificationKey) {
-      logger.warn(`JWT verification key not configured for ${algorithm}`);
+      logger.warn('JWT verification key not configured', { component: 'TokenService', algorithm });
       return null;
     }
 
@@ -177,7 +177,7 @@ export function verifyJwt(token, options = {}) {
       algorithms: [algorithm]
     });
   } catch (error) {
-    logger.warn('JWT verification failed:', error.message);
+    logger.warn('JWT verification failed', { component: 'TokenService', error });
     return null;
   }
 }
@@ -191,7 +191,7 @@ export function decodeJwt(token) {
   try {
     return jwt.decode(token, { complete: true });
   } catch (error) {
-    logger.warn('JWT decode failed:', error.message);
+    logger.warn('JWT decode failed', { component: 'TokenService', error });
     return null;
   }
 }

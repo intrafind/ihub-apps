@@ -9,6 +9,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 import { isLastAdmin } from '../../utils/adminRescue.js';
 
 /**
@@ -169,8 +175,7 @@ export default function registerAdminAuthRoutes(app) {
         authenticated: !authRequired || req.headers.authorization?.startsWith('Bearer ')
       });
     } catch (error) {
-      logger.error('Error checking admin auth status:', error);
-      res.status(500).json({ error: 'Failed to check authentication status' });
+      return sendInternalError(res, error, 'check authentication status');
     }
   });
 
@@ -212,8 +217,7 @@ export default function registerAdminAuthRoutes(app) {
     try {
       res.json({ message: 'Admin authentication successful', authenticated: true });
     } catch (error) {
-      logger.error('Error testing admin auth:', error);
-      res.status(500).json({ error: 'Failed to test authentication' });
+      return sendInternalError(res, error, 'test authentication');
     }
   });
 
@@ -254,13 +258,14 @@ export default function registerAdminAuthRoutes(app) {
         usersData = JSON.parse(usersFileData);
       } catch {
         // File doesn't exist or is invalid, return empty users
-        logger.info('Users file not found or invalid, returning empty list');
+        logger.info('Users file not found or invalid, returning empty list', {
+          component: 'AdminAuth'
+        });
       }
 
       res.json(usersData);
     } catch (error) {
-      logger.error('Error getting users:', error);
-      res.status(500).json({ error: 'Failed to get users' });
+      return sendInternalError(res, error, 'get users');
     }
   });
 
@@ -350,18 +355,16 @@ export default function registerAdminAuthRoutes(app) {
       const isLocalAuth = authMethods.includes('local');
 
       if (!username) {
-        return res.status(400).json({ error: 'Username is required' });
+        return sendBadRequest(res, 'Username is required');
       }
 
       // Only require password for local auth users
       if (isLocalAuth && !password) {
-        return res
-          .status(400)
-          .json({ error: 'Password is required for local authentication users' });
+        return sendBadRequest(res, 'Password is required for local authentication users');
       }
 
       if (password && password.length < 6) {
-        return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+        return sendBadRequest(res, 'Password must be at least 6 characters long');
       }
 
       const rootDir = getRootDir();
@@ -386,7 +389,7 @@ export default function registerAdminAuthRoutes(app) {
       // Check if username already exists
       const existingUser = Object.values(usersData.users).find(user => user.username === username);
       if (existingUser) {
-        return res.status(409).json({ error: 'Username already exists' });
+        return sendErrorResponse(res, 409, 'Username already exists');
       }
 
       // Create new user
@@ -418,16 +421,18 @@ export default function registerAdminAuthRoutes(app) {
       // Refresh cache to ensure new user is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(
-        `👤 Created new user: ${username} (${userId}) with auth methods: ${authMethods.join(', ')}`
-      );
+      logger.info('Created new user', {
+        component: 'AdminAuth',
+        username,
+        userId,
+        authMethods: authMethods.join(', ')
+      });
 
       // Return user without password hash
       const { passwordHash: _passwordHash, ...userResponse } = newUser;
       res.json({ user: userResponse });
     } catch (error) {
-      logger.error('Error creating user:', error);
-      res.status(500).json({ error: 'Failed to create user' });
+      return sendInternalError(res, error, 'create user');
     }
   });
 
@@ -504,7 +509,7 @@ export default function registerAdminAuthRoutes(app) {
 
       // Additional hardening: explicitly block prototype-polluting keys
       if (userId === '__proto__' || userId === 'constructor' || userId === 'prototype') {
-        return res.status(400).json({ error: 'Invalid user ID' });
+        return sendBadRequest(res, 'Invalid user ID');
       }
 
       const { email, name, password, internalGroups, active } = req.body;
@@ -518,12 +523,12 @@ export default function registerAdminAuthRoutes(app) {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
         usersData = JSON.parse(usersFileData);
       } catch {
-        return res.status(404).json({ error: 'Users file not found' });
+        return sendNotFound(res, 'Users file');
       }
 
       // Check if user exists
       if (!usersData.users[userId]) {
-        return res.status(404).json({ error: 'User not found' });
+        return sendNotFound(res, 'User');
       }
 
       const user = usersData.users[userId];
@@ -538,7 +543,7 @@ export default function registerAdminAuthRoutes(app) {
       // Update password if provided
       if (password) {
         if (password.length < 6) {
-          return res.status(400).json({ error: 'Password must be at least 6 characters long' });
+          return sendBadRequest(res, 'Password must be at least 6 characters long');
         }
         user.passwordHash = await hashPasswordWithUserId(password, userId);
       }
@@ -552,15 +557,14 @@ export default function registerAdminAuthRoutes(app) {
       // Refresh cache to ensure updated user data is available in cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(`👤 Updated user: ${user.username} (${userId})`);
+      logger.info('Updated user', { component: 'AdminAuth', username: user.username, userId });
 
       // Return user without password hash
       // eslint-disable-next-line no-unused-vars
       const { passwordHash, ...userResponse } = user;
       res.json({ user: userResponse });
     } catch (error) {
-      logger.error('Error updating user:', error);
-      res.status(500).json({ error: 'Failed to update user' });
+      return sendInternalError(res, error, 'update user');
     }
   });
 
@@ -624,21 +628,21 @@ export default function registerAdminAuthRoutes(app) {
         const usersFileData = await fs.readFile(usersFilePath, 'utf8');
         usersData = JSON.parse(usersFileData);
       } catch {
-        return res.status(404).json({ error: 'Users file not found' });
+        return sendNotFound(res, 'Users file');
       }
 
       // Check if user exists
       if (!usersData.users[userId]) {
-        return res.status(404).json({ error: 'User not found' });
+        return sendNotFound(res, 'User');
       }
 
       // Check if user is the last admin - prevent deletion
       if (isLastAdmin(userId, usersFilePath)) {
-        return res.status(403).json({
-          error: 'Cannot delete the last admin user',
-          message:
-            'At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
-        });
+        return sendErrorResponse(
+          res,
+          403,
+          'Cannot delete the last admin user. At least one admin user must exist in the system. Please assign admin rights to another user before deleting this account.'
+        );
       }
 
       const username = usersData.users[userId].username;
@@ -653,12 +657,11 @@ export default function registerAdminAuthRoutes(app) {
       // Refresh cache to ensure deleted user is removed from cache
       await configCache.refreshCacheEntry('config/users.json');
 
-      logger.info(`👤 Deleted user: ${username} (${userId})`);
+      logger.info('Deleted user', { component: 'AdminAuth', username, userId });
 
       res.json({ message: 'User deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting user:', error);
-      res.status(500).json({ error: 'Failed to delete user' });
+      return sendInternalError(res, error, 'delete user');
     }
   });
 }

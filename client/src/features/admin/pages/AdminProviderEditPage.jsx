@@ -7,7 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
-const AdminProviderEditPage = () => {
+function AdminProviderEditPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { providerId } = useParams();
@@ -359,6 +359,6 @@ const AdminProviderEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminProviderEditPage;

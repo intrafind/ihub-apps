@@ -7,7 +7,7 @@ import { fetchPageContent } from '../api/api';
 import { configureMarked } from '../shared/components/MarkdownRenderer';
 import ReactComponentRenderer from '../shared/components/ReactComponentRenderer';
 
-const UnifiedPage = () => {
+export default function UnifiedPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -135,6 +135,4 @@ const UnifiedPage = () => {
   };
 
   return <div className="container text-gray-900 dark:text-gray-100">{renderContent()}</div>;
-};
-
-export default UnifiedPage;
+}

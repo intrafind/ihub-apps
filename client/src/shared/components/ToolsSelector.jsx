@@ -4,7 +4,7 @@ import Icon from './Icon';
 import { fetchTools } from '../../api/api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
-const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
+function ToolsSelector({ selectedTools = [], onToolsChange }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [searchTerm, setSearchTerm] = useState('');
@@ -181,6 +181,6 @@ const ToolsSelector = ({ selectedTools = [], onToolsChange }) => {
       </p>
     </div>
   );
-};
+}
 
 export default ToolsSelector;

@@ -20,7 +20,7 @@ import {
  *
  * Follows the exact same patterns as AdminToolsPage.jsx.
  */
-const AdminWorkflowsPage = () => {
+function AdminWorkflowsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -556,6 +556,6 @@ const AdminWorkflowsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminWorkflowsPage;

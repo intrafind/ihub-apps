@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { buildUploadUrl } from '../../../utils/runtimeBasePath';
 
-const AssetManager = ({ t }) => {
+function AssetManager({ t }) {
   const [assets, setAssets] = useState([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -535,6 +535,6 @@ const AssetManager = ({ t }) => {
       </div>
     </div>
   );
-};
+}
 
 export default AssetManager;

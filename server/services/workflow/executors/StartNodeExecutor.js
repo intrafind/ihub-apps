@@ -68,9 +68,8 @@ export class StartNodeExecutor extends BaseNodeExecutor {
    * // result.stateUpdates = { query: 'Search for documents', maxResults: 10 }
    */
   async execute(node, state, context) {
-    this.logger.info({
+    this.logger.info('Executing start node', {
       component: 'StartNodeExecutor',
-      message: `Executing start node '${node.id}'`,
       nodeId: node.id,
       hasInitialData: !!context.initialData
     });
@@ -116,9 +115,8 @@ export class StartNodeExecutor extends BaseNodeExecutor {
       mappedFields: Object.keys(stateUpdates)
     };
 
-    this.logger.info({
+    this.logger.info('Start node completed', {
       component: 'StartNodeExecutor',
-      message: `Start node '${node.id}' completed`,
       nodeId: node.id,
       mappedFieldCount: Object.keys(stateUpdates).length
     });

@@ -66,18 +66,18 @@ export function consumeCode(code) {
   const entry = codeStore.get(code);
 
   if (!entry) {
-    logger.warn('[AuthCodeStore] Code not found');
+    logger.warn('Code not found', { component: 'AuthCodeStore' });
     return null;
   }
 
   if (entry.used) {
-    logger.warn('[AuthCodeStore] Code already used - possible replay attack');
+    logger.warn('Code already used - possible replay attack', { component: 'AuthCodeStore' });
     codeStore.delete(code);
     return null;
   }
 
   if (Date.now() > entry.expiresAt) {
-    logger.warn('[AuthCodeStore] Code expired');
+    logger.warn('Code expired', { component: 'AuthCodeStore' });
     codeStore.delete(code);
     return null;
   }

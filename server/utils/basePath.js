@@ -248,7 +248,11 @@ export const basePathValidationMiddleware = (req, res, next) => {
   const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
   const prefix = req.headers[headerName.toLowerCase()];
   if (prefix && !isValidBasePath(prefix.replace(/\/+$/, ''))) {
-    logger.warn(`Invalid base path from header ${headerName}: ${prefix}. Ignoring.`);
+    logger.warn('Invalid base path header value, ignoring', {
+      component: 'BasePath',
+      headerName,
+      prefix
+    });
   }
   next();
 };

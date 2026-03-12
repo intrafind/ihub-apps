@@ -66,7 +66,7 @@ const OIDC_PROVIDER_TEMPLATES = {
 /**
  * PlatformFormEditor - Form-based editor for platform configuration
  */
-const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => {
+function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
   const { t } = useTranslation();
   const [showProviderModal, setShowProviderModal] = useState(false);
 
@@ -1732,6 +1732,6 @@ const PlatformFormEditor = ({ value: config, onChange, onValidationChange }) => 
       )}
     </div>
   );
-};
+}
 
 export default PlatformFormEditor;

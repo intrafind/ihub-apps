@@ -3,6 +3,7 @@ import config from '../config.js';
 import { throttledFetch } from '../requestThrottler.js';
 import configCache from '../configCache.js';
 import tokenStorageService from './TokenStorageService.js';
+import logger from '../utils/logger.js';
 
 /**
  * Base Search Provider Interface
@@ -50,12 +51,18 @@ class BraveSearchProvider extends SearchProvider {
         try {
           return tokenStorageService.decryptString(braveProvider.apiKey);
         } catch (error) {
-          console.error('Failed to decrypt Brave provider API key:', error);
+          logger.error('Failed to decrypt Brave provider API key', {
+            component: 'WebSearch',
+            error
+          });
           // Fall through to environment variable
         }
       }
     } catch (error) {
-      console.error('Failed to load Brave provider configuration:', error);
+      logger.error('Failed to load Brave provider configuration', {
+        component: 'WebSearch',
+        error
+      });
       // Fall through to environment variable
     }
 
@@ -131,12 +138,18 @@ class TavilySearchProvider extends SearchProvider {
         try {
           return tokenStorageService.decryptString(tavilyProvider.apiKey);
         } catch (error) {
-          console.error('Failed to decrypt Tavily provider API key:', error);
+          logger.error('Failed to decrypt Tavily provider API key', {
+            component: 'WebSearch',
+            error
+          });
           // Fall through to environment variable
         }
       }
     } catch (error) {
-      console.error('Failed to load Tavily provider configuration:', error);
+      logger.error('Failed to load Tavily provider configuration', {
+        component: 'WebSearch',
+        error
+      });
       // Fall through to environment variable
     }
 

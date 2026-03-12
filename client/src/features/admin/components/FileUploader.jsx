@@ -5,7 +5,7 @@ import Icon from '../../../shared/components/Icon';
 
 const MonacoEditor = lazy(() => import('@monaco-editor/react'));
 
-const FileUploader = ({ source, onChange, isEditing }) => {
+function FileUploader({ source, onChange, isEditing }) {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -613,6 +613,6 @@ const FileUploader = ({ source, onChange, isEditing }) => {
       </div>
     </div>
   );
-};
+}
 
 export default FileUploader;

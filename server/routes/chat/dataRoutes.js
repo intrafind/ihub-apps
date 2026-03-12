@@ -11,6 +11,7 @@ import { isValidLanguageCode } from '../../utils/pathSecurity.js';
 import { resolveFeatures, requireFeature } from '../../featureRegistry.js';
 import crypto from 'crypto';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendFailedOperationError } from '../../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -243,17 +244,15 @@ export default function registerDataRoutes(app) {
       let { data: styles = [] } = configCache.getStyles();
 
       if (!styles) {
-        return res.status(500).json({ error: 'Failed to load styles configuration' });
+        return sendFailedOperationError(
+          res,
+          'load styles configuration',
+          new Error('styles is null')
+        );
       }
       res.json(styles);
     } catch (error) {
-      logger.error({
-        component: 'DataRoutes',
-        message: 'Error fetching styles',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch styles');
     }
   });
 
@@ -378,7 +377,11 @@ export default function registerDataRoutes(app) {
         let { data: prompts, etag } = configCache.getPrompts();
 
         if (!prompts) {
-          return res.status(500).json({ error: 'Failed to load prompts configuration' });
+          return sendFailedOperationError(
+            res,
+            'load prompts configuration',
+            new Error('prompts is null')
+          );
         }
 
         // Force permission enhancement if not already done
@@ -435,13 +438,7 @@ export default function registerDataRoutes(app) {
 
         res.json(prompts);
       } catch (error) {
-        logger.error({
-          component: 'DataRoutes',
-          message: 'Error fetching prompts',
-          error: error.message,
-          stack: error.stack
-        });
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch prompts');
       }
     }
   );
@@ -538,9 +535,8 @@ export default function registerDataRoutes(app) {
     let requestId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     try {
-      logger.info({
+      logger.info('Translation request', {
         component: 'DataRoutes',
-        message: 'Translation request',
         requestId,
         language: originalLang
       });
@@ -550,9 +546,8 @@ export default function registerDataRoutes(app) {
 
       // Validate language parameter using centralized validation
       if (!isValidLanguageCode(lang)) {
-        logger.warn({
+        logger.warn('Suspicious language parameter received', {
           component: 'DataRoutes',
-          message: 'Suspicious language parameter received',
           requestId,
           lang
         });
@@ -564,9 +559,8 @@ export default function registerDataRoutes(app) {
       const baseLanguage = lang.split('-')[0].toLowerCase();
 
       if (!supportedLanguages.includes(lang) && supportedLanguages.includes(baseLanguage)) {
-        logger.info({
+        logger.info('Language not directly supported, falling back to base language', {
           component: 'DataRoutes',
-          message: 'Language not directly supported, falling back to base language',
           requestId,
           requestedLang: lang,
           fallbackLang: baseLanguage
@@ -575,9 +569,8 @@ export default function registerDataRoutes(app) {
       }
 
       if (!supportedLanguages.includes(lang)) {
-        logger.info({
+        logger.info('Language not supported, falling back to default language', {
           component: 'DataRoutes',
-          message: 'Language not supported, falling back to default language',
           requestId,
           requestedLang: lang,
           defaultLang
@@ -589,9 +582,8 @@ export default function registerDataRoutes(app) {
       let translations = configCache.getLocalizations(lang);
 
       if (!translations) {
-        logger.warn({
+        logger.warn('Translations not in cache, attempting to load', {
           component: 'DataRoutes',
-          message: 'Translations not in cache, attempting to load',
           requestId,
           lang
         });
@@ -601,9 +593,8 @@ export default function registerDataRoutes(app) {
           await configCache.loadAndCacheLocale(lang);
           translations = configCache.getLocalizations(lang);
         } catch (loadError) {
-          logger.error({
+          logger.error('Failed to load locale', {
             component: 'DataRoutes',
-            message: 'Failed to load locale',
             requestId,
             lang,
             error: loadError.message,
@@ -613,17 +604,15 @@ export default function registerDataRoutes(app) {
       }
 
       if (!translations) {
-        logger.error({
+        logger.error('Failed to load translations for language', {
           component: 'DataRoutes',
-          message: 'Failed to load translations for language',
           requestId,
           lang
         });
 
         if (lang !== defaultLang) {
-          logger.info({
+          logger.info('Attempting fallback to default language', {
             component: 'DataRoutes',
-            message: 'Attempting fallback to default language',
             requestId,
             defaultLang
           });
@@ -636,9 +625,8 @@ export default function registerDataRoutes(app) {
               await configCache.loadAndCacheLocale(defaultLang);
               enTranslations = configCache.getLocalizations(defaultLang);
             } catch (fallbackLoadError) {
-              logger.error({
+              logger.error('Failed to load fallback locale', {
                 component: 'DataRoutes',
-                message: 'Failed to load fallback locale',
                 requestId,
                 defaultLang,
                 error: fallbackLoadError.message,
@@ -648,9 +636,8 @@ export default function registerDataRoutes(app) {
           }
 
           if (enTranslations) {
-            logger.info({
+            logger.info('Returning fallback translations', {
               component: 'DataRoutes',
-              message: 'Returning fallback translations',
               requestId,
               defaultLang
             });
@@ -658,23 +645,22 @@ export default function registerDataRoutes(app) {
           }
         }
 
-        return res.status(500).json({
-          error: `Failed to load translations for language: ${lang}`,
-          requestId: requestId
-        });
+        return sendFailedOperationError(
+          res,
+          `load translations for language: ${lang}`,
+          new Error(`requestId: ${requestId}`)
+        );
       }
 
-      logger.info({
+      logger.info('Successfully returning translations', {
         component: 'DataRoutes',
-        message: 'Successfully returning translations',
         requestId,
         lang
       });
       res.json(translations);
     } catch (error) {
-      logger.error({
+      logger.error('Error fetching translations', {
         component: 'DataRoutes',
-        message: 'Error fetching translations',
         requestId,
         language: originalLang,
         error: error.message,
@@ -692,9 +678,8 @@ export default function registerDataRoutes(app) {
             await configCache.loadAndCacheLocale(defaultLang);
             enTranslations = configCache.getLocalizations(defaultLang);
           } catch (fallbackLoadError) {
-            logger.error({
+            logger.error('Failed to load fallback locale', {
               component: 'DataRoutes',
-              message: 'Failed to load fallback locale',
               requestId,
               error: fallbackLoadError.message,
               stack: fallbackLoadError.stack
@@ -703,27 +688,22 @@ export default function registerDataRoutes(app) {
         }
 
         if (enTranslations) {
-          logger.info({
+          logger.info('Returning emergency fallback translations', {
             component: 'DataRoutes',
-            message: 'Returning emergency fallback translations',
             requestId
           });
           return res.json(enTranslations);
         }
       } catch (fallbackError) {
-        logger.error({
+        logger.error('Failed to load fallback translations', {
           component: 'DataRoutes',
-          message: 'Failed to load fallback translations',
           requestId,
           error: fallbackError.message,
           stack: fallbackError.stack
         });
       }
 
-      res.status(500).json({
-        error: 'Internal server error',
-        requestId: requestId
-      });
+      sendInternalError(res, error, 'fetch translations');
     }
   });
 
@@ -801,7 +781,11 @@ export default function registerDataRoutes(app) {
       let { data: uiConfig = {}, etag: uiConfigEtag } = configCache.getUI();
 
       if (!uiConfig) {
-        return res.status(500).json({ error: 'Failed to load UI configuration' });
+        return sendFailedOperationError(
+          res,
+          'load UI configuration',
+          new Error('uiConfig is null')
+        );
       }
 
       // Get platform config for additional UI-related fields
@@ -837,13 +821,7 @@ export default function registerDataRoutes(app) {
       res.setHeader('ETag', uiConfigEtag);
       res.json(enhancedUiConfig);
     } catch (error) {
-      logger.error({
-        component: 'DataRoutes',
-        message: 'Error fetching UI configuration',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch UI configuration');
     }
   });
 
@@ -896,19 +874,17 @@ export default function registerDataRoutes(app) {
       const { data: mimetypesConfig = {}, etag: mimetypesEtag } = configCache.getMimetypes();
 
       if (!mimetypesConfig) {
-        return res.status(500).json({ error: 'Failed to load mimetypes configuration' });
+        return sendFailedOperationError(
+          res,
+          'load mimetypes configuration',
+          new Error('mimetypesConfig is null')
+        );
       }
 
       res.setHeader('ETag', mimetypesEtag);
       res.json(mimetypesConfig);
     } catch (error) {
-      logger.error({
-        component: 'DataRoutes',
-        message: 'Error fetching mimetypes configuration',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch mimetypes configuration');
     }
   });
 
@@ -956,7 +932,11 @@ export default function registerDataRoutes(app) {
       const platform = configCache.getPlatform();
 
       if (!platform) {
-        return res.status(500).json({ error: 'Failed to load platform configuration' });
+        return sendFailedOperationError(
+          res,
+          'load platform configuration',
+          new Error('platform is null')
+        );
       }
 
       // Sanitize platform config - remove all sensitive fields and auth-related data
@@ -1004,13 +984,7 @@ export default function registerDataRoutes(app) {
 
       res.json(cleanedConfig);
     } catch (error) {
-      logger.error({
-        component: 'DataRoutes',
-        message: 'Error fetching platform configuration',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch platform configuration');
     }
   });
 }

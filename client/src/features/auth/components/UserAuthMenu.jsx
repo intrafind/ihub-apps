@@ -15,7 +15,7 @@ import { Link } from 'react-router-dom';
  * @param {string} props.className - Additional CSS classes to apply to the root element
  * @returns {JSX.Element|null} The user authentication menu component
  */
-const UserAuthMenu = ({ variant = 'header', className = '' }) => {
+export default function UserAuthMenu({ variant = 'header', className = '' }) {
   const { t } = useTranslation();
   const { user, isAuthenticated, logout, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
@@ -333,6 +333,4 @@ const UserAuthMenu = ({ variant = 'header', className = '' }) => {
         )}
     </div>
   );
-};
-
-export default UserAuthMenu;
+}

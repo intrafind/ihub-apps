@@ -38,7 +38,7 @@ const TYPE_COLORS = {
  * @param {Function} props.onClick - Called when the card body is clicked (open detail panel)
  * @param {Function} [props.onAction] - Called after a successful install to refresh the parent list
  */
-const MarketplaceItemCard = ({ item, onClick, onAction }) => {
+function MarketplaceItemCard({ item, onClick, onAction }) {
   const { t, i18n } = useTranslation();
   const [installing, setInstalling] = useState(false);
   const [error, setError] = useState(null);
@@ -153,6 +153,6 @@ const MarketplaceItemCard = ({ item, onClick, onAction }) => {
       {error && <p className="text-xs text-red-500 mt-2">{error}</p>}
     </div>
   );
-};
+}
 
 export default MarketplaceItemCard;

@@ -6,7 +6,7 @@ const isValidHexColor = color => {
   return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(color);
 };
 
-const StyleEditor = ({ config, onUpdate, t }) => {
+function StyleEditor({ config, onUpdate, t }) {
   const [activeSection, setActiveSection] = useState('theme');
   const [colorErrors, setColorErrors] = useState({});
 
@@ -580,6 +580,6 @@ const StyleEditor = ({ config, onUpdate, t }) => {
       )}
     </div>
   );
-};
+}
 
 export default StyleEditor;

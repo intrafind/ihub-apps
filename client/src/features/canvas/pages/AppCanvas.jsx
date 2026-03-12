@@ -25,7 +25,7 @@ import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
 // Import AI-assisted canvas specific styles
 import './AppCanvas.css';
 
-const AppCanvas = () => {
+export default function AppCanvas() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { appId } = useParams();
@@ -678,6 +678,4 @@ const AppCanvas = () => {
       )}
     </div>
   );
-};
-
-export default AppCanvas;
+}

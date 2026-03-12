@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useUIConfig } from '../contexts/UIConfigContext';
 import { i18nService } from '../../i18n/i18n';
 
-const LanguageSelector = () => {
+function LanguageSelector() {
   const { i18n, t } = useTranslation();
   const { uiConfig, isLoading } = useUIConfig();
   const [isChanging, setIsChanging] = useState(false);
@@ -82,6 +82,6 @@ const LanguageSelector = () => {
       </select>
     </div>
   );
-};
+}
 
 export default LanguageSelector;

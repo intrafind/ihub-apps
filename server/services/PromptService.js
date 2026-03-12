@@ -121,11 +121,14 @@ class PromptService {
   ) {
     const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
     const lang = language || defaultLang;
-    logger.info(`Using language '${lang}' for message templates`);
+    logger.info('Using language for message templates', { component: 'PromptService', lang });
 
     // Resolve global prompt variables once for use throughout the function
     const globalPromptVariables = this.resolveGlobalPromptVariables(user, modelName, lang, style);
-    logger.info(`Resolved ${Object.keys(globalPromptVariables).length} global prompt variables`);
+    logger.info('Resolved global prompt variables', {
+      component: 'PromptService',
+      count: Object.keys(globalPromptVariables).length
+    });
 
     let llmMessages = [...messages].map(msg => {
       if (msg.role === 'user' && msg.promptTemplate && msg.variables) {
@@ -250,7 +253,10 @@ class PromptService {
             sourceContent = result.content;
 
             if (result.metadata.errors.length > 0) {
-              logger.warn('Source loading errors:', result.metadata.errors);
+              logger.warn('Source loading errors', {
+                component: 'PromptService',
+                errors: result.metadata.errors
+              });
             }
           }
 
@@ -272,7 +278,7 @@ class PromptService {
           }
         }
       } catch (error) {
-        logger.error('Error in source resolution system:', error);
+        logger.error('Error in source resolution system', { component: 'PromptService', error });
         throw new Error(`Failed to process sources: ${error.message}`);
       }
 
@@ -297,13 +303,17 @@ class PromptService {
             const skillsBlock = `\n\n<available_skills>\n${skillEntries}\n</available_skills>`;
             systemPrompt += skillsBlock;
 
-            logger.info(
-              `Injected ${appSkills.length} skills into system prompt for app ${app.id}`,
-              { component: 'PromptService' }
-            );
+            logger.info('Injected skills into system prompt for app', {
+              component: 'PromptService',
+              skillCount: appSkills.length,
+              appId: app.id
+            });
           }
-        } catch (err) {
-          logger.error('Error loading skills for system prompt:', err);
+        } catch (error) {
+          logger.error('Error loading skills for system prompt', {
+            component: 'PromptService',
+            error: err
+          });
         }
       }
 
@@ -321,12 +331,17 @@ class PromptService {
               systemPrompt += `\nAvailable skill resources: ${allResources.join(', ')}`;
             }
 
-            logger.info(`Pre-activated skill '${requestedSkill}' via slash command`, {
-              component: 'PromptService'
+            logger.info('Pre-activated skill via slash command', {
+              component: 'PromptService',
+              requestedSkill
             });
           }
-        } catch (err) {
-          logger.error(`Error pre-activating skill '${requestedSkill}':`, err);
+        } catch (error) {
+          logger.error('Error pre-activating skill', {
+            component: 'PromptService',
+            requestedSkill,
+            error: err
+          });
         }
       }
 
@@ -338,10 +353,13 @@ class PromptService {
           if (styles && styles[style] && style !== 'keep') {
             systemPrompt += `\n\n${styles[style]}`;
           } else {
-            logger.info(`No specific style found for '${style}'. Nothing added to system prompt.`);
+            logger.info('No specific style found, nothing added to system prompt', {
+              component: 'PromptService',
+              style
+            });
           }
-        } catch (err) {
-          logger.error('Error loading styles:', err);
+        } catch (error) {
+          logger.error('Error loading styles', { component: 'PromptService', error: err });
         }
       }
 

@@ -5,7 +5,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import { getSkillContent, getSkillResource } from '../services/skillLoader.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
-import logger from '../utils/logger.js';
+import { sendInternalError, sendNotFound, sendBadRequest } from '../utils/responseHelpers.js';
 
 export default function registerSkillRoutes(app) {
   /**
@@ -44,8 +44,7 @@ export default function registerSkillRoutes(app) {
 
         res.json(safeSkills);
       } catch (error) {
-        logger.error('Error fetching skills:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch skills');
       }
     }
   );
@@ -72,14 +71,13 @@ export default function registerSkillRoutes(app) {
         const skill = skills.find(s => s.name === req.params.name);
 
         if (!skill) {
-          return res.status(404).json({ error: 'Skill not found' });
+          return sendNotFound(res, 'Skill');
         }
 
         const { name, displayName, description, license, compatibility, metadata } = skill;
         res.json({ name, displayName, description, license, compatibility, metadata });
       } catch (error) {
-        logger.error('Error fetching skill:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch skill');
       }
     }
   );
@@ -107,12 +105,12 @@ export default function registerSkillRoutes(app) {
         const skill = skills.find(s => s.name === req.params.name);
 
         if (!skill) {
-          return res.status(404).json({ error: 'Skill not found' });
+          return sendNotFound(res, 'Skill');
         }
 
         const content = await getSkillContent(req.params.name);
         if (!content) {
-          return res.status(404).json({ error: 'Skill content not found' });
+          return sendNotFound(res, 'Skill content');
         }
 
         res.json({
@@ -124,8 +122,7 @@ export default function registerSkillRoutes(app) {
           assets: content.assets
         });
       } catch (error) {
-        logger.error('Error fetching skill content:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch skill content');
       }
     }
   );
@@ -143,7 +140,7 @@ export default function registerSkillRoutes(app) {
 
         const filePath = req.params[0];
         if (!filePath) {
-          return res.status(400).json({ error: 'File path is required' });
+          return sendBadRequest(res, 'File path is required');
         }
 
         const platformConfig = req.app.get('platform') || {};
@@ -158,18 +155,17 @@ export default function registerSkillRoutes(app) {
         const skill = skills.find(s => s.name === req.params.name);
 
         if (!skill) {
-          return res.status(404).json({ error: 'Skill not found' });
+          return sendNotFound(res, 'Skill');
         }
 
         const content = await getSkillResource(req.params.name, filePath);
         if (content === null) {
-          return res.status(404).json({ error: 'Resource not found' });
+          return sendNotFound(res, 'Resource');
         }
 
         res.type('text/plain').send(content);
       } catch (error) {
-        logger.error('Error fetching skill resource:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch skill resource');
       }
     }
   );

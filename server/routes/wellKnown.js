@@ -3,6 +3,7 @@ import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import { getJwtAlgorithm } from '../utils/tokenService.js';
 import logger from '../utils/logger.js';
+import { sendInternalError, sendErrorResponse } from '../utils/responseHelpers.js';
 import crypto from 'crypto';
 import * as jose from 'jose';
 
@@ -132,12 +133,7 @@ export default function registerWellKnownRoutes(app) {
 
       res.json(discovery);
     } catch (error) {
-      logger.error('Error serving OpenID Connect Discovery:', {
-        component: 'WellKnown',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'serve OpenID Connect Discovery');
     }
   });
 
@@ -189,10 +185,7 @@ export default function registerWellKnownRoutes(app) {
 
       if (!keyPair || !keyPair.publicKey) {
         logger.error('No RSA key pair available for JWKS', { component: 'WellKnown' });
-        return res.status(501).json({
-          error: 'JWKS not configured',
-          message: 'RSA key pair not initialized. Server may need to be restarted.'
-        });
+        return sendErrorResponse(res, 501, 'JWKS not configured');
       }
 
       // Convert PEM to JWK
@@ -215,12 +208,7 @@ export default function registerWellKnownRoutes(app) {
 
       res.json({ keys: [jwk] });
     } catch (error) {
-      logger.error('Error serving JWKS:', {
-        component: 'WellKnown',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'serve JWKS');
     }
   });
 }

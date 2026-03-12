@@ -8,7 +8,7 @@ import { createFavoriteItemHelpers } from '../../utils/favoriteItems';
 import { getRecentAppIds } from '../../utils/recentApps';
 import SearchModal from './SearchModal';
 
-const SmartSearch = () => {
+function SmartSearch() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -116,6 +116,6 @@ const SmartSearch = () => {
       )}
     />
   );
-};
+}
 
 export default SmartSearch;

@@ -106,7 +106,7 @@ const renderStartupState = (app, welcomeMessage, handleStarterPromptClick) => {
   return <NoMessagesView />;
 };
 
-const AppChat = ({ preloadedApp = null }) => {
+function AppChat({ preloadedApp = null }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { appId } = useParams();
@@ -1877,6 +1877,6 @@ const AppChat = ({ preloadedApp = null }) => {
       )}
     </div>
   );
-};
+}
 
 export default AppChat;

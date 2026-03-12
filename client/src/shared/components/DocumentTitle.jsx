@@ -9,7 +9,7 @@ import { fetchAppDetails } from '../../api/api';
  * DocumentTitle component manages the browser tab title dynamically
  * based on UI configuration, current language, and current page/app
  */
-const DocumentTitle = () => {
+function DocumentTitle() {
   const { i18n, t } = useTranslation();
   const { uiConfig, isLoading } = useUIConfig();
   const location = useLocation();
@@ -83,6 +83,6 @@ const DocumentTitle = () => {
 
   // This component doesn't render anything visible
   return null;
-};
+}
 
 export default DocumentTitle;

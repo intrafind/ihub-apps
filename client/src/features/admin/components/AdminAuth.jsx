@@ -3,7 +3,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 import { buildPath } from '../../../utils/runtimeBasePath';
 
-const AdminAuth = ({ children }) => {
+function AdminAuth({ children }) {
   const { isAuthenticated, authRequired, isLoading } = useAdminAuth();
   const { isAuthenticated: userIsAuthenticated } = useAuth();
 
@@ -59,6 +59,6 @@ const AdminAuth = ({ children }) => {
       </div>
     </div>
   );
-};
+}
 
 export default AdminAuth;

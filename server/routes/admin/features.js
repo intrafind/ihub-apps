@@ -7,6 +7,7 @@ import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { resolveFeatures, featureCategories, featureRegistry } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 export default function registerAdminFeaturesRoutes(app) {
   /**
@@ -68,17 +69,17 @@ export default function registerAdminFeaturesRoutes(app) {
       const updates = req.body;
 
       if (!updates || typeof updates !== 'object' || Array.isArray(updates)) {
-        return res.status(400).json({ error: 'Request body must be an object of feature flags' });
+        return sendBadRequest(res, 'Request body must be an object of feature flags');
       }
 
       // Validate that all keys are known feature IDs and values are booleans
       const knownIds = new Set(featureRegistry.map(f => f.id));
       for (const [key, value] of Object.entries(updates)) {
         if (!knownIds.has(key)) {
-          return res.status(400).json({ error: `Unknown feature ID: ${key}` });
+          return sendBadRequest(res, `Unknown feature ID: ${key}`);
         }
         if (typeof value !== 'boolean') {
-          return res.status(400).json({ error: `Feature "${key}" must be a boolean value` });
+          return sendBadRequest(res, `Feature "${key}" must be a boolean value`);
         }
       }
 
@@ -114,11 +115,7 @@ export default function registerAdminFeaturesRoutes(app) {
         categories: featureCategories
       });
     } catch (error) {
-      logger.error('Error updating feature flags:', {
-        component: 'AdminFeatures',
-        error: error.message
-      });
-      res.status(500).json({ error: 'Failed to update feature flags' });
+      return sendInternalError(res, error, 'update feature flags');
     }
   });
 }

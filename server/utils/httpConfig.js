@@ -24,20 +24,24 @@ export function getSSLConfig() {
 
   // Log SSL config on first access for debugging
   if (!getSSLConfig._logged) {
-    logger.info(
-      `🔒 SSL Configuration: ignoreInvalidCertificates = ${sslConfig.ignoreInvalidCertificates}, domainWhitelist = [${sslConfig.domainWhitelist.join(', ')}]`
-    );
+    logger.info('SSL configuration loaded', {
+      component: 'HttpConfig',
+      ignoreInvalidCertificates: sslConfig.ignoreInvalidCertificates,
+      domainWhitelist: sslConfig.domainWhitelist
+    });
 
     // Only set NODE_TLS_REJECT_UNAUTHORIZED globally if ignoreInvalidCertificates is true AND whitelist is empty
     // NEW BEHAVIOR: Empty whitelist means NO SSL bypass (security improvement)
     if (sslConfig.ignoreInvalidCertificates && sslConfig.domainWhitelist.length === 0) {
       logger.info(
-        '⚠️  SSL validation is enabled but no domains are whitelisted. SSL certificates will be validated for ALL connections.'
+        'SSL validation enabled but no domains whitelisted, certificates will be validated for all connections',
+        { component: 'HttpConfig' }
       );
     } else if (sslConfig.ignoreInvalidCertificates && sslConfig.domainWhitelist.length > 0) {
-      logger.info(
-        `⚠️  SSL certificate verification will be disabled ONLY for whitelisted domains: [${sslConfig.domainWhitelist.join(', ')}]`
-      );
+      logger.info('SSL certificate verification disabled only for whitelisted domains', {
+        component: 'HttpConfig',
+        domainWhitelist: sslConfig.domainWhitelist
+      });
     }
 
     getSSLConfig._logged = true;
@@ -117,12 +121,15 @@ export function shouldIgnoreSSLForURL(url, sslConfig = null) {
     const isWhitelisted = isDomainWhitelisted(hostname, config.domainWhitelist);
 
     if (isWhitelisted) {
-      logger.debug(`SSL validation will be ignored for whitelisted domain: ${hostname}`);
+      logger.debug('SSL validation will be ignored for whitelisted domain', {
+        component: 'HttpConfig',
+        hostname
+      });
     }
 
     return isWhitelisted;
   } catch (error) {
-    logger.warn(`Error parsing URL for SSL whitelist check: ${error.message}`);
+    logger.warn('Error parsing URL for SSL whitelist check', { component: 'HttpConfig', error });
     return false;
   }
 }
@@ -147,13 +154,14 @@ export function getProxyConfig() {
   // Log proxy configuration on first access for debugging
   if (!getProxyConfig._logged) {
     if (result.http || result.https) {
-      logger.info(
-        `Proxy configuration: HTTP=${result.http || 'none'}, HTTPS=${result.https || 'none'}, NO_PROXY=${result.noProxy || 'none'}`
-      );
+      logger.info('Proxy configuration loaded', {
+        component: 'HttpConfig',
+        http: result.http || 'none',
+        https: result.https || 'none',
+        noProxy: result.noProxy || 'none'
+      });
     } else {
-      logger.info(
-        'Proxy configuration: No proxy configured. If behind a corporate proxy, set HTTPS_PROXY environment variable.'
-      );
+      logger.info('No proxy configured', { component: 'HttpConfig' });
     }
     getProxyConfig._logged = true;
   }
@@ -200,7 +208,7 @@ export function shouldBypassProxy(url, noProxy) {
       // CIDR notation and IP ranges are not fully supported here for simplicity
     }
   } catch (error) {
-    logger.warn(`Error parsing URL for proxy bypass: ${error.message}`);
+    logger.warn('Error parsing URL for proxy bypass', { component: 'HttpConfig', error });
   }
 
   return false;
@@ -223,7 +231,7 @@ export function matchesProxyPattern(url, patterns) {
       }
     }
   } catch (error) {
-    logger.warn(`Error matching proxy pattern: ${error.message}`);
+    logger.warn('Error matching proxy pattern', { component: 'HttpConfig', error });
   }
 
   return false;
@@ -253,7 +261,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
 
   // Check if proxy should be bypassed for this URL
   if (proxyConfig.enabled && proxyConfig.noProxy && shouldBypassProxy(url, proxyConfig.noProxy)) {
-    logger.info(`Bypassing proxy for URL: ${url}`);
+    logger.info('Bypassing proxy for URL', { component: 'HttpConfig', url });
     // Return standard agent with SSL configuration if needed
     if (isHttps && shouldIgnoreSSL) {
       return new https.Agent({ rejectUnauthorized: false });
@@ -268,7 +276,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     proxyConfig.urlPatterns.length > 0 &&
     !matchesProxyPattern(url, proxyConfig.urlPatterns)
   ) {
-    logger.info(`URL does not match proxy patterns: ${url}`);
+    logger.info('URL does not match proxy patterns', { component: 'HttpConfig', url });
     // Return standard agent with SSL configuration if needed
     if (isHttps && shouldIgnoreSSL) {
       return new https.Agent({ rejectUnauthorized: false });
@@ -279,9 +287,11 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
   // Apply proxy configuration
   if (proxyConfig.enabled && ((isHttps && proxyConfig.https) || (isHttp && proxyConfig.http))) {
     const proxyUrl = isHttps ? proxyConfig.https : proxyConfig.http;
-    logger.info(`Using proxy ${proxyUrl} for URL: ${url}`);
+    logger.info('Using proxy for URL', { component: 'HttpConfig', proxyUrl, url });
     if (shouldIgnoreSSL) {
-      logger.info(`SSL certificate verification disabled (rejectUnauthorized: false)`);
+      logger.info('SSL certificate verification disabled for proxied request', {
+        component: 'HttpConfig'
+      });
     }
 
     try {
@@ -294,7 +304,7 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
     } catch (error) {
-      logger.error(`Failed to create proxy agent: ${error.message}`);
+      logger.error('Failed to create proxy agent', { component: 'HttpConfig', error });
     }
   }
 

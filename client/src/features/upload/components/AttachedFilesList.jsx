@@ -7,7 +7,7 @@ import { formatFileSize } from '../utils/cloudFileProcessing';
  * with source icon, file type icon, name, size, and remove buttons.
  * Always visible when files are attached, independent of uploader state.
  */
-const AttachedFilesList = ({ files, onRemoveFile, onRemoveAll, disabled = false }) => {
+export default function AttachedFilesList({ files, onRemoveFile, onRemoveAll, disabled = false }) {
   const { t } = useTranslation();
 
   if (!files || files.length === 0) {
@@ -131,6 +131,4 @@ const AttachedFilesList = ({ files, onRemoveFile, onRemoveAll, disabled = false 
       </div>
     </div>
   );
-};
-
-export default AttachedFilesList;
+}

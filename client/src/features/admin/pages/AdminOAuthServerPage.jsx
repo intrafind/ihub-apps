@@ -9,7 +9,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
 
-const AdminOAuthServerPage = () => {
+function AdminOAuthServerPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { refreshConfig } = usePlatformConfig();
@@ -645,6 +645,6 @@ const AdminOAuthServerPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminOAuthServerPage;

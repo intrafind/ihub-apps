@@ -50,7 +50,7 @@ class ErrorBoundaryComponent extends Component {
 }
 
 // Error fallback display component with reset capability and translation
-const ErrorFallback = ({ error, resetErrorBoundary }) => {
+function ErrorFallback({ error, resetErrorBoundary }) {
   const { t } = useTranslation();
 
   if (error?.status === 401) {
@@ -102,7 +102,7 @@ const ErrorFallback = ({ error, resetErrorBoundary }) => {
       </div>
     </div>
   );
-};
+}
 
 // Higher-order component creator for easier use
 const withErrorBoundary = WrappedComponent => {
@@ -114,9 +114,9 @@ const withErrorBoundary = WrappedComponent => {
 };
 
 // Main ErrorBoundary component for export
-const ErrorBoundary = ({ children }) => {
+function ErrorBoundary({ children }) {
   return <ErrorBoundaryComponent>{children}</ErrorBoundaryComponent>;
-};
+}
 
 export default ErrorBoundary;
 export { withErrorBoundary };

@@ -1,7 +1,7 @@
 import Icon from './Icon';
 import './MagicPrompt.css';
 
-const MagicPromptLoader = () => {
+export default function MagicPromptLoader() {
   return (
     <div className="magic-prompt-stars">
       <Icon name="star" size="xs" className="magic-prompt-star" />
@@ -9,6 +9,4 @@ const MagicPromptLoader = () => {
       <Icon name="star" size="xs" className="magic-prompt-star" />
     </div>
   );
-};
-
-export default MagicPromptLoader;
+}

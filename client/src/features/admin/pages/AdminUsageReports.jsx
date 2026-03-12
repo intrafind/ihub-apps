@@ -11,28 +11,30 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import UsageTimeline from '../components/UsageTimeline';
 
-const StatCard = ({ title, value, icon, color, change, changeType }) => (
-  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
-        <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-          {typeof value === 'number' ? new Intl.NumberFormat().format(value) : value}
-        </p>
-        {change && (
-          <p
-            className={`text-sm ${changeType === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} mt-1`}
-          >
-            {changeType === 'positive' ? '↗' : '↘'} {change}
+function StatCard({ title, value, icon, color, change, changeType }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-medium text-gray-600 dark:text-gray-400">{title}</p>
+          <p className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            {typeof value === 'number' ? new Intl.NumberFormat().format(value) : value}
           </p>
-        )}
+          {change && (
+            <p
+              className={`text-sm ${changeType === 'positive' ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'} mt-1`}
+            >
+              {changeType === 'positive' ? '↗' : '↘'} {change}
+            </p>
+          )}
+        </div>
+        <div className={`p-3 rounded-full ${color}`}>{icon}</div>
       </div>
-      <div className={`p-3 rounded-full ${color}`}>{icon}</div>
     </div>
-  </div>
-);
+  );
+}
 
-const TopUsersCard = ({ title, data, color, showRating = false }) => {
+function TopUsersCard({ title, data, color, showRating = false }) {
   const sortedData = Object.entries(data || {})
     .sort(([, a], [, b]) => {
       const valueA = typeof a === 'object' ? a.total || (a.good || 0) + (a.bad || 0) : a;
@@ -97,9 +99,9 @@ const TopUsersCard = ({ title, data, color, showRating = false }) => {
       </div>
     </div>
   );
-};
+}
 
-const AppUsageCard = ({ data }) => {
+function AppUsageCard({ data }) {
   const { t } = useTranslation();
   const apps = Object.entries(data || {});
   const total = apps.reduce(
@@ -145,9 +147,9 @@ const AppUsageCard = ({ data }) => {
       </div>
     </div>
   );
-};
+}
 
-const FeedbackCard = ({ data }) => {
+function FeedbackCard({ data }) {
   const { t } = useTranslation();
 
   // New star rating data (merge with legacy feedback)
@@ -246,9 +248,9 @@ const FeedbackCard = ({ data }) => {
       </div>
     </div>
   );
-};
+}
 
-const AdminUsageReports = () => {
+function AdminUsageReports() {
   const { t } = useTranslation();
   const [usage, setUsage] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1113,6 +1115,6 @@ const AdminUsageReports = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminUsageReports;

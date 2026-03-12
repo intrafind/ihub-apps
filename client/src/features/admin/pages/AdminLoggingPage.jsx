@@ -5,7 +5,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const AdminLoggingPage = () => {
+function AdminLoggingPage() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -868,6 +868,6 @@ const AdminLoggingPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminLoggingPage;

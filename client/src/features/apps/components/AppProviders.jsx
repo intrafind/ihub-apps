@@ -11,7 +11,7 @@ import { initializeForceRefresh } from '../../../utils/forceRefresh';
  * HeaderColorProvider has been consolidated into UIConfigProvider
  * for better performance and reduced component nesting
  */
-const AppProviders = ({ children }) => {
+function AppProviders({ children }) {
   // Initialize force refresh check early in the application startup
   useEffect(() => {
     const checkForceRefresh = async () => {
@@ -33,6 +33,6 @@ const AppProviders = ({ children }) => {
       </PlatformConfigProvider>
     </ErrorBoundaryFallback>
   );
-};
+}
 
 export default AppProviders;

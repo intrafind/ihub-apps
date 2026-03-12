@@ -13,7 +13,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-const ExportDialog = ({ isOpen, onClose, messages = [], settings = {}, appId, chatId }) => {
+function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, chatId }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
@@ -407,6 +407,6 @@ const ExportDialog = ({ isOpen, onClose, messages = [], settings = {}, appId, ch
       </div>
     </div>
   );
-};
+}
 
 export default ExportDialog;

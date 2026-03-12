@@ -29,7 +29,12 @@ export async function removeMarketplaceInstallation(type, itemId) {
       await atomicWriteJSON(installationsPath, installations);
       await configCache.refreshInstallationsCache();
     }
-  } catch (err) {
-    logger.warn(`Failed to clean up installation tracking for ${type} '${itemId}': ${err.message}`);
+  } catch (error) {
+    logger.warn('Failed to clean up installation tracking', {
+      component: 'InstallationCleanup',
+      type,
+      itemId,
+      error: err
+    });
   }
 }

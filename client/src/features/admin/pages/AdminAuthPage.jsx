@@ -10,7 +10,7 @@ import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getSchemaByType } from '../../../utils/schemaService';
 
-const AdminAuthPage = () => {
+function AdminAuthPage() {
   const { t } = useTranslation();
   const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
@@ -263,6 +263,6 @@ const AdminAuthPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminAuthPage;

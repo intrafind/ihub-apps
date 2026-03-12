@@ -8,6 +8,8 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import {
   sendNotFound,
   sendBadRequest,
+  sendErrorResponse,
+  sendInternalError,
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -42,16 +44,24 @@ async function findAppFile(appId, appsDir) {
         if (app.id === appId) {
           return file;
         }
-      } catch (err) {
+      } catch (error) {
         // Skip files that can't be read or parsed
-        console.debug(`Skipping malformed app file: ${file}`, err.message);
+        logger.debug('Skipping malformed app file', {
+          component: 'AdminApps',
+          file,
+          error: error.message
+        });
         continue;
       }
     }
 
     return null;
-  } catch (err) {
-    console.warn(`Failed to read apps directory: ${appsDir}`, err.message);
+  } catch (error) {
+    logger.warn('Failed to read apps directory', {
+      component: 'AdminApps',
+      appsDir,
+      error: error.message
+    });
     return null;
   }
 }
@@ -606,7 +616,7 @@ export default function registerAdminAppsRoutes(app) {
       // Find the actual file for this app ID (may not match ${appId}.json)
       const filename = await findAppFile(appId, appsDir);
       if (!filename) {
-        return res.status(404).json({ error: 'App file not found on disk' });
+        return sendNotFound(res, 'App file');
       }
       const appFilePath = join(appsDir, filename);
       await atomicWriteJSON(appFilePath, updatedApp);
@@ -698,7 +708,7 @@ export default function registerAdminAppsRoutes(app) {
     try {
       const newApp = req.body;
       if (!newApp.id || !newApp.name || !newApp.description) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return sendBadRequest(res, 'Missing required fields');
       }
 
       // Validate newApp.id for security
@@ -711,7 +721,7 @@ export default function registerAdminAppsRoutes(app) {
       const appFilePath = join(appsDir, `${newApp.id}.json`);
       try {
         readFileSync(appFilePath, 'utf8');
-        return res.status(409).json({ error: 'App with this ID already exists' });
+        return sendErrorResponse(res, 409, 'App with this ID already exists');
       } catch {
         // file does not exist
       }
@@ -721,8 +731,7 @@ export default function registerAdminAppsRoutes(app) {
       await configCache.refreshAppsCache();
       res.json({ message: 'App created successfully', app: newApp });
     } catch (error) {
-      logger.error('Error creating app:', error);
-      res.status(500).json({ error: 'Failed to create app' });
+      return sendInternalError(res, error, 'create app');
     }
   });
 
@@ -800,7 +809,7 @@ export default function registerAdminAppsRoutes(app) {
       // Find the actual file for this app ID (may not match ${appId}.json)
       const filename = await findAppFile(appId, appsDir);
       if (!filename) {
-        return res.status(404).json({ error: 'App file not found on disk' });
+        return sendNotFound(res, 'App file');
       }
       const appFilePath = join(appsDir, filename);
       await fs.writeFile(appFilePath, JSON.stringify(app, null, 2));
@@ -811,8 +820,7 @@ export default function registerAdminAppsRoutes(app) {
         enabled: newEnabledState
       });
     } catch (error) {
-      logger.error('Error toggling app:', error);
-      res.status(500).json({ error: 'Failed to toggle app' });
+      return sendInternalError(res, error, 'toggle app');
     }
   });
 
@@ -889,7 +897,7 @@ export default function registerAdminAppsRoutes(app) {
       const { appIds } = req.params;
       const { enabled } = req.body;
       if (typeof enabled !== 'boolean') {
-        return res.status(400).json({ error: 'Missing enabled flag' });
+        return sendBadRequest(res, 'Missing enabled flag');
       }
 
       // Validate appIds for security
@@ -913,7 +921,7 @@ export default function registerAdminAppsRoutes(app) {
           // Find the actual file for this app ID (may not match ${id}.json)
           const filename = await findAppFile(id, appsDir);
           if (!filename) {
-            console.warn(`App file not found for ID: ${id}`);
+            logger.warn('App file not found', { component: 'AdminApps', id });
             continue;
           }
           const appFilePath = join(appsDir, filename);
@@ -928,8 +936,7 @@ export default function registerAdminAppsRoutes(app) {
         ids: resolvedIds
       });
     } catch (error) {
-      logger.error('Error toggling apps:', error);
-      res.status(500).json({ error: 'Failed to toggle apps' });
+      return sendInternalError(res, error, 'toggle apps');
     }
   });
 
@@ -1001,15 +1008,14 @@ export default function registerAdminAppsRoutes(app) {
       try {
         readFileSync(appFilePath, 'utf8');
       } catch {
-        return res.status(404).json({ error: 'App not found' });
+        return sendNotFound(res, 'App');
       }
       await fs.unlink(appFilePath);
       await configCache.refreshAppsCache();
       await removeMarketplaceInstallation('app', appId);
       res.json({ message: 'App deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting app:', error);
-      res.status(500).json({ error: 'Failed to delete app' });
+      return sendInternalError(res, error, 'delete app');
     }
   });
 }

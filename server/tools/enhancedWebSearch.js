@@ -21,7 +21,10 @@ export default async function enhancedWebSearch({
   maxResults = 3,
   contentMaxLength = 3000
 }) {
-  logger.info(`Starting enhanced web search for: "${query || q}"`);
+  logger.info('Starting enhanced web search', {
+    component: 'EnhancedWebSearch',
+    query: query || q
+  });
   // Accept both 'query' and 'q' parameters for flexibility
   const searchQuery = query || q;
 
@@ -31,7 +34,7 @@ export default async function enhancedWebSearch({
 
   try {
     // First, perform the brave search
-    logger.info(`Searching for: "${searchQuery}"`);
+    logger.info('Searching', { component: 'EnhancedWebSearch', searchQuery });
     const searchResults = await braveSearch({ query: searchQuery });
 
     if (!searchResults.results || searchResults.results.length === 0) {
@@ -48,12 +51,18 @@ export default async function enhancedWebSearch({
     const extractedContent = [];
 
     if (extractContent) {
-      logger.info(`Extracting content from top ${resultsToProcess.length} results...`);
+      logger.info('Extracting content from top results', {
+        component: 'EnhancedWebSearch',
+        count: resultsToProcess.length
+      });
 
       // Extract content from each URL in parallel
       const contentPromises = resultsToProcess.map(async result => {
         try {
-          logger.info(`Extracting content from: ${result.url}`);
+          logger.info('Extracting content from URL', {
+            component: 'EnhancedWebSearch',
+            url: result.url
+          });
           const content = await webContentExtractor({
             url: result.url,
             maxLength: contentMaxLength
@@ -66,7 +75,11 @@ export default async function enhancedWebSearch({
             extractionError: null
           };
         } catch (error) {
-          logger.warn(`Failed to extract content from ${result.url}: ${error.message}`);
+          logger.warn('Failed to extract content from URL', {
+            component: 'EnhancedWebSearch',
+            url: result.url,
+            error
+          });
           return {
             ...result,
             extractedContent: null,
@@ -161,8 +174,12 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   // Remove options from query
   const cleanQuery = args.filter(arg => !arg.startsWith('--')).join(' ');
 
-  logger.info(`Enhanced search for: "${cleanQuery}"`);
-  logger.info(`Extract content: ${extractContent}, Max results: ${maxResults}`);
+  logger.info('Starting enhanced search', {
+    component: 'EnhancedWebSearch',
+    query: cleanQuery,
+    extractContent,
+    maxResults
+  });
 
   try {
     const result = await enhancedWebSearch({
@@ -171,29 +188,26 @@ if (import.meta.url === `file://${process.argv[1]}`) {
       maxResults
     });
 
-    logger.info('\n' + '='.repeat(50));
-    logger.info('ENHANCED WEB SEARCH RESULTS');
-    logger.info('='.repeat(50));
-    logger.info(`Summary: ${result.summary}`);
-    logger.info(`Stats: ${JSON.stringify(result.stats, null, 2)}`);
+    logger.info('Enhanced web search results', {
+      component: 'EnhancedWebSearch',
+      summary: result.summary,
+      stats: result.stats
+    });
 
     result.extractedContent.forEach((item, index) => {
-      logger.info(`\n${index + 1}. ${item.title}`);
-      logger.info(`   URL: ${item.url}`);
-      logger.info(`   Description: ${item.description}`);
-
-      if (item.contentExtracted && item.extractedContent) {
-        logger.info(`   Content extracted: Yes (${item.extractedContent.wordCount} words)`);
-        logger.info(`   Content preview: ${item.extractedContent.content.substring(0, 200)}...`);
-      } else {
-        logger.info('   Content extracted: No');
-        if (item.extractionError) {
-          logger.info(`   Extraction error: ${item.extractionError}`);
-        }
-      }
+      logger.info('Search result', {
+        component: 'EnhancedWebSearch',
+        index: index + 1,
+        title: item.title,
+        url: item.url,
+        description: item.description,
+        contentExtracted: item.contentExtracted,
+        wordCount: item.extractedContent?.wordCount,
+        extractionError: item.extractionError
+      });
     });
   } catch (error) {
-    logger.error('Error performing enhanced search:', error.message);
+    logger.error('Error performing enhanced search', { component: 'EnhancedWebSearch', error });
     process.exit(1);
   }
 }

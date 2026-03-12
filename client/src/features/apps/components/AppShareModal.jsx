@@ -20,7 +20,7 @@ const getUsername = () => {
   }
 };
 
-const AppShareModal = ({ appId, path, params, onClose }) => {
+function AppShareModal({ appId, path, params, onClose }) {
   const { t } = useTranslation();
   const [code, setCode] = useState(generateCode());
   const [includeParams, setIncludeParams] = useState(true);
@@ -185,6 +185,6 @@ const AppShareModal = ({ appId, path, params, onClose }) => {
       </div>
     </div>
   );
-};
+}
 
 export default AppShareModal;

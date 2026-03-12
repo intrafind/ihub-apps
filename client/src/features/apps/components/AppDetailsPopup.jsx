@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 
-const AppDetailsPopup = ({ app, isOpen, onClose }) => {
+function AppDetailsPopup({ app, isOpen, onClose }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -203,6 +203,6 @@ const AppDetailsPopup = ({ app, isOpen, onClose }) => {
       </div>
     </div>
   );
-};
+}
 
 export default AppDetailsPopup;

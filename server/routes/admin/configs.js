@@ -8,6 +8,7 @@ import { reconfigureOidcProviders } from '../../middleware/oidcAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 /**
  * Check if a value is an environment variable placeholder
@@ -212,7 +213,7 @@ function reconfigureAuthenticationMethods(oldConfig = {}, newConfig = {}) {
       results.reconfigured.push('OIDC providers');
       results.notes.push('OIDC providers reconfigured successfully');
     } catch (error) {
-      logger.error('Failed to reconfigure OIDC providers:', error);
+      logger.error('Failed to reconfigure OIDC providers', { component: 'AdminConfigs', error });
       results.notes.push(`OIDC reconfiguration failed: ${error.message}`);
     }
   }
@@ -295,7 +296,9 @@ export default function registerAdminConfigRoutes(app) {
         const platformConfigData = await fs.readFile(platformConfigPath, 'utf8');
         platformConfig = JSON.parse(platformConfigData);
       } catch {
-        logger.info('Platform config not found, returning default config');
+        logger.info('Platform config not found, returning default config', {
+          component: 'AdminConfigs'
+        });
         platformConfig = {
           auth: {
             mode: 'proxy',
@@ -428,8 +431,7 @@ export default function registerAdminConfigRoutes(app) {
 
       res.json(sanitizedConfig);
     } catch (error) {
-      logger.error('Error getting platform configuration:', error);
-      res.status(500).json({ error: 'Failed to get platform configuration' });
+      return sendInternalError(res, error, 'get platform configuration');
     }
   });
 
@@ -441,7 +443,7 @@ export default function registerAdminConfigRoutes(app) {
       const newConfig = req.body;
 
       if (!newConfig || typeof newConfig !== 'object') {
-        return res.status(400).json({ error: 'Invalid configuration data' });
+        return sendBadRequest(res, 'Invalid configuration data');
       }
 
       const rootDir = getRootDir();
@@ -454,7 +456,7 @@ export default function registerAdminConfigRoutes(app) {
         existingConfig = JSON.parse(existingConfigData);
       } catch {
         // File doesn't exist, start with empty config
-        logger.info('Creating new platform config file');
+        logger.info('Creating new platform config file', { component: 'AdminConfigs' });
       }
 
       // Decrypt existing secrets so restoreSecretIfRedacted compares against plaintext
@@ -598,9 +600,11 @@ export default function registerAdminConfigRoutes(app) {
             await import('../../services/integrations/iFinderService.js');
           iAssistantService.resetConfig();
           iFinderService.resetConfig();
-          logger.info('iFinder/iAssistant service caches reset after config change');
-        } catch (err) {
-          logger.warn('Could not reset iFinder/iAssistant service caches:', err.message);
+          logger.info('iFinder/iAssistant service caches reset after config change', {
+            component: 'AdminConfigs'
+          });
+        } catch (error) {
+          logger.warn('Could not reset iFinder caches', { component: 'AdminConfigs', error: err });
         }
       }
 
@@ -609,14 +613,22 @@ export default function registerAdminConfigRoutes(app) {
 
       // Log results
       if (reconfigResults.reconfigured.length > 0) {
-        logger.info(`🔄 Reconfigured: ${reconfigResults.reconfigured.join(', ')}`);
+        logger.info('Reconfigured authentication methods', {
+          component: 'AdminConfigs',
+          reconfigured: reconfigResults.reconfigured.join(', ')
+        });
       }
       if (reconfigResults.requiresRestart.length > 0) {
-        logger.info(`⚠️  Requires restart: ${reconfigResults.requiresRestart.join(', ')}`);
+        logger.info('Authentication methods require restart', {
+          component: 'AdminConfigs',
+          requiresRestart: reconfigResults.requiresRestart.join(', ')
+        });
       }
-      reconfigResults.notes.forEach(note => logger.info(`ℹ️  ${note}`));
+      reconfigResults.notes.forEach(note =>
+        logger.info('Authentication reconfiguration note', { component: 'AdminConfigs', note })
+      );
 
-      logger.info('🔧 Platform authentication configuration updated');
+      logger.info('Platform authentication configuration updated', { component: 'AdminConfigs' });
 
       // Decrypt for sanitization before sending response (mergedConfig has encrypted values on disk)
       const responseConfig = JSON.parse(JSON.stringify(mergedConfig));
@@ -670,8 +682,7 @@ export default function registerAdminConfigRoutes(app) {
         }
       });
     } catch (error) {
-      logger.error('Error updating platform configuration:', error);
-      res.status(500).json({ error: 'Failed to update platform configuration' });
+      return sendInternalError(res, error, 'update platform configuration');
     }
   });
 }

@@ -7,7 +7,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
-const AdminUserViewPage = () => {
+function AdminUserViewPage() {
   const { t } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -320,6 +320,6 @@ const AdminUserViewPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminUserViewPage;

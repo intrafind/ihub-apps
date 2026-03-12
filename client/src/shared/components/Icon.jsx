@@ -373,7 +373,7 @@ const isSafeImgSrc = url => {
   return !url.includes(':');
 };
 
-const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest }) => {
+function Icon({ name, size = 'md', className = '', solid = false, title, ...rest }) {
   const [imgError, setImgError] = useState(false);
 
   // Handle undefined, null, or empty names
@@ -415,6 +415,6 @@ const Icon = ({ name, size = 'md', className = '', solid = false, title, ...rest
       {...rest}
     />
   );
-};
+}
 
 export default Icon;

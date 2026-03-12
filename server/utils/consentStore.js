@@ -37,7 +37,7 @@ async function saveStore(store) {
     await fs.promises.mkdir(path.dirname(STORE_PATH), { recursive: true });
     await atomicWriteJSON(STORE_PATH, store);
   } catch (error) {
-    logger.error('[ConsentStore] Failed to save:', error.message);
+    logger.error('Failed to save consent store', { component: 'ConsentStore', error });
     throw error;
   }
 }
@@ -141,9 +141,12 @@ export async function grantConsent(clientId, userId, scopes, ttlDays = 90) {
   }
 
   await saveStore(store);
-  logger.info(
-    `[ConsentStore] Consent granted | client=${clientId} | user=${userId} | scopes=${scopes.join(',')}`
-  );
+  logger.info('Consent granted', {
+    component: 'ConsentStore',
+    clientId,
+    userId,
+    scopes: scopes.join(',')
+  });
 }
 
 /**
@@ -167,7 +170,7 @@ export async function revokeConsent(clientId, userId) {
   if (store.consents[key]) {
     delete store.consents[key];
     await saveStore(store);
-    logger.info(`[ConsentStore] Consent revoked | client=${clientId} | user=${userId}`);
+    logger.info('Consent revoked', { component: 'ConsentStore', clientId, userId });
     return true;
   }
   return false;

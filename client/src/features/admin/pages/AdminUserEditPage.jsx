@@ -10,7 +10,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { getSchemaByType } from '../../../utils/schemaService';
 
-const AdminUserEditPage = () => {
+function AdminUserEditPage() {
   const { t } = useTranslation();
   const { userId } = useParams();
   const navigate = useNavigate();
@@ -281,6 +281,6 @@ const AdminUserEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminUserEditPage;

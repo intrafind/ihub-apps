@@ -21,7 +21,7 @@ const TYPES = ['all', 'app', 'model', 'prompt', 'skill', 'workflow'];
  *   counts={{ all: 42, app: 10, model: 5, prompt: 12, skill: 8, workflow: 7 }}
  * />
  */
-const MarketplaceTypeTabs = ({ activeType, onChange, counts = {} }) => {
+function MarketplaceTypeTabs({ activeType, onChange, counts = {} }) {
   const { t } = useTranslation();
 
   return (
@@ -67,6 +67,6 @@ const MarketplaceTypeTabs = ({ activeType, onChange, counts = {} }) => {
       })}
     </div>
   );
-};
+}
 
 export default MarketplaceTypeTabs;

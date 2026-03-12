@@ -8,15 +8,15 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 export default function registerAdminCacheRoutes(app) {
   app.get(buildServerPath('/api/admin/usage'), adminAuth, async (req, res) => {
     try {
       const data = await getUsage();
       res.json(data);
-    } catch (e) {
-      logger.error('Error loading usage data:', e);
-      res.status(500).json({ error: 'Failed to load usage data' });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage data');
     }
   });
 
@@ -24,9 +24,8 @@ export default function registerAdminCacheRoutes(app) {
     try {
       const stats = configCache.getStats();
       res.json(stats);
-    } catch (e) {
-      logger.error('Error getting cache stats:', e);
-      res.status(500).json({ error: 'Failed to get cache statistics' });
+    } catch (error) {
+      return sendInternalError(res, error, 'get cache statistics');
     }
   });
 
@@ -34,9 +33,8 @@ export default function registerAdminCacheRoutes(app) {
     try {
       await configCache.refreshAll();
       res.json({ message: 'Configuration cache refreshed successfully' });
-    } catch (e) {
-      logger.error('Error refreshing cache:', e);
-      res.status(500).json({ error: 'Failed to refresh cache' });
+    } catch (error) {
+      return sendInternalError(res, error, 'refresh cache');
     }
   });
 
@@ -50,9 +48,8 @@ export default function registerAdminCacheRoutes(app) {
       configCache.clear();
       await configCache.initialize();
       res.json({ message: 'Configuration cache cleared successfully' });
-    } catch (e) {
-      logger.error('Error clearing cache:', e);
-      res.status(500).json({ error: 'Failed to clear cache' });
+    } catch (error) {
+      return sendInternalError(res, error, 'clear cache');
     }
   });
 
@@ -75,15 +72,17 @@ export default function registerAdminCacheRoutes(app) {
       await atomicWriteJSON(platformConfigPath, platformConfig);
       await new Promise(resolve => setTimeout(resolve, 100));
       await configCache.refreshCacheEntry('config/platform.json');
-      logger.info(`🔄 Force refresh triggered. New admin salt: ${platformConfig.refreshSalt.salt}`);
+      logger.info('Force refresh triggered', {
+        component: 'AdminCache',
+        newAdminSalt: platformConfig.refreshSalt.salt
+      });
       res.json({
         message: 'Force refresh triggered successfully',
         newAdminSalt: platformConfig.refreshSalt.salt,
         timestamp: platformConfig.refreshSalt.lastUpdated
       });
     } catch (error) {
-      logger.error('Error triggering force refresh:', error);
-      res.status(500).json({ error: 'Failed to trigger force refresh' });
+      return sendInternalError(res, error, 'trigger force refresh');
     }
   });
 
@@ -112,16 +111,12 @@ export default function registerAdminCacheRoutes(app) {
 
       // Validate input
       if (!value || typeof value !== 'string' || value.trim() === '') {
-        return res.status(400).json({
-          error: 'Invalid value: must be a non-empty string'
-        });
+        return sendBadRequest(res, 'Invalid value: must be a non-empty string');
       }
 
       // Check if value is already encrypted
       if (tokenStorageService.isEncrypted(value)) {
-        return res.status(400).json({
-          error: 'Value is already encrypted'
-        });
+        return sendBadRequest(res, 'Value is already encrypted');
       }
 
       // Encrypt the value
@@ -134,14 +129,7 @@ export default function registerAdminCacheRoutes(app) {
         message: 'Value encrypted successfully'
       });
     } catch (error) {
-      logger.error('Error encrypting value:', {
-        component: 'AdminEncryption',
-        error: error.message
-      });
-      res.status(500).json({
-        error: 'Failed to encrypt value',
-        details: error.message
-      });
+      return sendInternalError(res, error, 'encrypt value');
     }
   });
 }

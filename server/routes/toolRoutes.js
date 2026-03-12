@@ -8,7 +8,7 @@ import { isAnonymousAccessAllowed, enhanceUserWithPermissions } from '../utils/a
 import { buildServerPath } from '../utils/basePath.js';
 import { validateIdForPath } from '../utils/pathSecurity.js';
 import { requireFeature } from '../featureRegistry.js';
-import logger from '../utils/logger.js';
+import { sendInternalError } from '../utils/responseHelpers.js';
 
 export default function registerToolRoutes(app) {
   app.get(
@@ -44,8 +44,7 @@ export default function registerToolRoutes(app) {
         res.setHeader('ETag', userSpecificEtag);
         res.json(tools);
       } catch (error) {
-        logger.error('Error fetching tools:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch tools');
       }
     }
   );
@@ -77,8 +76,7 @@ export default function registerToolRoutes(app) {
         });
         res.json(result);
       } catch (error) {
-        logger.error(`Tool ${toolId} error:`, error);
-        res.status(500).json({ error: 'Tool execution failed' });
+        return sendInternalError(res, error, `execute tool ${toolId}`);
       }
     }
   );

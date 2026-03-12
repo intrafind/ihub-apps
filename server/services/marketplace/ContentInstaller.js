@@ -241,8 +241,8 @@ async function buildSkillContent(item, skillMd, authHeaders) {
   ) {
     try {
       companions = await registryService.discoverCompanions(item.source.url, authHeaders);
-    } catch (err) {
-      logger.warn(`Companion discovery fallback failed: ${err.message}`, { component: COMPONENT });
+    } catch (error) {
+      logger.warn('Companion discovery fallback failed', { component: COMPONENT, error: err });
     }
   }
 
@@ -268,13 +268,17 @@ async function buildSkillContent(item, skillMd, authHeaders) {
         if (res.ok) {
           files[relativePath] = await res.text();
         } else {
-          logger.warn(`Companion file not found (${res.status}): ${companionUrl}`, {
-            component: COMPONENT
+          logger.warn('Companion file not found', {
+            component: COMPONENT,
+            httpStatus: res.status,
+            companionUrl
           });
         }
-      } catch (err) {
-        logger.warn(`Failed to fetch companion file ${relativePath}: ${err.message}`, {
-          component: COMPONENT
+      } catch (error) {
+        logger.warn('Failed to fetch companion file', {
+          component: COMPONENT,
+          relativePath,
+          error: err
         });
       }
     })
@@ -308,8 +312,11 @@ class ContentInstaller {
    * @throws {Error} On validation failure, duplicate installation, or fetch error
    */
   async install(registryId, type, name, installedBy = 'admin') {
-    logger.info(`Installing ${type}:${name} from registry '${registryId}'`, {
-      component: COMPONENT
+    logger.info('Installing content item from registry', {
+      component: COMPONENT,
+      type,
+      name,
+      registryId
     });
 
     const config = CONTENT_CONFIG[type];
@@ -361,8 +368,11 @@ class ContentInstaller {
       await cc[config.cacheRefresh]();
     }
 
-    logger.info(`Installed ${type}:${name} from registry '${registryId}'`, {
-      component: COMPONENT
+    logger.info('Content item installed from registry', {
+      component: COMPONENT,
+      type,
+      name,
+      registryId
     });
     return manifest;
   }
@@ -377,7 +387,7 @@ class ContentInstaller {
    * @throws {Error} When the item is not found in the installations manifest
    */
   async uninstall(type, name) {
-    logger.info(`Uninstalling ${type}:${name}`, { component: COMPONENT });
+    logger.info('Uninstalling content item', { component: COMPONENT, type, name });
 
     const config = CONTENT_CONFIG[type];
     if (!config) throw new Error(`Unknown content type: ${type}`);
@@ -399,7 +409,7 @@ class ContentInstaller {
       await cc[config.cacheRefresh]();
     }
 
-    logger.info(`Uninstalled ${type}:${name}`, { component: COMPONENT });
+    logger.info('Content item uninstalled', { component: COMPONENT, type, name });
   }
 
   /**
@@ -414,7 +424,7 @@ class ContentInstaller {
    * @throws {Error} When the item is not tracked in the installations manifest
    */
   async update(type, name, updatedBy = 'admin') {
-    logger.info(`Updating ${type}:${name}`, { component: COMPONENT });
+    logger.info('Updating content item', { component: COMPONENT, type, name });
 
     const installations = await readInstallations();
     const key = `${type}:${name}`;
@@ -446,7 +456,7 @@ class ContentInstaller {
       await cc[config.cacheRefresh]();
     }
 
-    logger.info(`Updated ${type}:${name}`, { component: COMPONENT });
+    logger.info('Content item updated', { component: COMPONENT, type, name });
     return existing;
   }
 
@@ -470,7 +480,11 @@ class ContentInstaller {
     delete installations.installations[key];
     await saveInstallations(installations);
 
-    logger.info(`Detached ${type}:${name} from marketplace tracking`, { component: COMPONENT });
+    logger.info('Content item detached from marketplace tracking', {
+      component: COMPONENT,
+      type,
+      name
+    });
   }
 
   // --------------------------------------------------------------------------

@@ -33,7 +33,7 @@ async function rehashUserPasswords() {
     // Read existing users file
     const usersData = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
 
-    logger.info('Rehashing passwords for existing users...');
+    logger.info('Rehashing passwords for existing users', { component: 'RehashPasswords' });
 
     // Known passwords for demo users (in production, you'd need to handle this differently)
     const knownPasswords = {
@@ -47,9 +47,17 @@ async function rehashUserPasswords() {
         const newHash = await hashPasswordWithUserId(plainPassword, userId);
 
         usersData.users[userId].passwordHash = newHash;
-        logger.info(`✅ Rehashed password for user: ${user.username} (${userId})`);
+        logger.info('Rehashed password for user', {
+          component: 'RehashPasswords',
+          username: user.username,
+          userId
+        });
       } else {
-        logger.info(`⚠️  Skipped user ${user.username} (${userId}) - password unknown`);
+        logger.info('Skipped user - password unknown', {
+          component: 'RehashPasswords',
+          username: user.username,
+          userId
+        });
       }
     }
 
@@ -64,24 +72,23 @@ async function rehashUserPasswords() {
 
     // Write updated file
     fs.writeFileSync(usersFilePath, JSON.stringify(usersData, null, 2));
-    logger.info('✅ Users file updated with new password hashes');
+    logger.info('Users file updated with new password hashes', { component: 'RehashPasswords' });
   } catch (error) {
-    logger.error('❌ Error rehashing passwords:', error);
+    logger.error('Error rehashing passwords', { component: 'RehashPasswords', error });
     throw error;
   }
 }
 
 // Run if called directly
 if (import.meta.url === `file://${process.argv[1]}`) {
-  rehashUserPasswords()
-    .then(() => {
-      logger.info('🎉 Password rehashing completed successfully');
-      process.exit(0);
-    })
-    .catch(error => {
-      logger.error('💥 Password rehashing failed:', error);
-      process.exit(1);
-    });
+  try {
+    await rehashUserPasswords();
+    logger.info('Password rehashing completed successfully', { component: 'RehashPasswords' });
+    process.exit(0);
+  } catch (error) {
+    logger.error('Password rehashing failed', { component: 'RehashPasswords', error });
+    process.exit(1);
+  }
 }
 
 export { hashPasswordWithUserId, rehashUserPasswords };

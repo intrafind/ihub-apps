@@ -93,14 +93,17 @@ class JiraService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ Error exchanging authorization code:', errorData);
+        logger.error('Error exchanging authorization code', {
+          component: 'JiraService',
+          error: errorData
+        });
         throw new Error('Failed to exchange authorization code for tokens');
       }
 
       const tokens = await response.json();
 
       if (!tokens.refresh_token) {
-        logger.warn('⚠️ WARNING: No refresh token received from Atlassian OAuth');
+        logger.warn('No refresh token received from Atlassian OAuth', { component: 'JiraService' });
       }
 
       return {
@@ -111,7 +114,7 @@ class JiraService {
       };
     } catch (error) {
       if (error.message === 'Failed to exchange authorization code for tokens') throw error;
-      logger.error('❌ Error exchanging authorization code:', error.message);
+      logger.error('Error exchanging authorization code', { component: 'JiraService', error });
       throw new Error('Failed to exchange authorization code for tokens');
     }
   }
@@ -130,14 +133,17 @@ class JiraService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ Error fetching accessible resources:', errorData);
+        logger.error('Error fetching accessible resources', {
+          component: 'JiraService',
+          error: errorData
+        });
         throw new Error('Failed to fetch accessible resources');
       }
 
       return await response.json();
     } catch (error) {
       if (error.message === 'Failed to fetch accessible resources') throw error;
-      logger.error('❌ Error fetching accessible resources:', error.message);
+      logger.error('Error fetching accessible resources', { component: 'JiraService', error });
       throw new Error('Failed to fetch accessible resources');
     }
   }
@@ -175,7 +181,7 @@ class JiraService {
    */
   async refreshAccessToken(refreshToken) {
     try {
-      logger.info('🔄 Attempting to refresh JIRA access token...');
+      logger.info('Attempting to refresh JIRA access token', { component: 'JiraService' });
 
       const jiraConfig = this.getConfig();
       const tokenData = new URLSearchParams({
@@ -193,7 +199,10 @@ class JiraService {
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ Error refreshing JIRA access token:', errorData);
+        logger.error('Error refreshing JIRA access token', {
+          component: 'JiraService',
+          error: errorData
+        });
 
         if (response.status === 400) {
           if (errorData.error === 'invalid_grant') {
@@ -208,7 +217,7 @@ class JiraService {
       }
 
       const tokens = await response.json();
-      logger.info('✅ JIRA token refresh successful');
+      logger.info('JIRA token refresh successful', { component: 'JiraService' });
 
       return {
         accessToken: tokens.access_token,
@@ -224,7 +233,7 @@ class JiraService {
       ) {
         throw error;
       }
-      logger.error('❌ Error refreshing JIRA access token:', error.message);
+      logger.error('Error refreshing JIRA access token', { component: 'JiraService', error });
       throw new Error(`Failed to refresh access token: ${error.message}`);
     }
   }
@@ -235,18 +244,20 @@ class JiraService {
   async storeUserTokens(userId, tokens) {
     try {
       if (!tokens.refreshToken) {
-        logger.warn(
-          '⚠️ WARNING: No refresh token - user will need to reconnect when access token expires'
-        );
+        logger.warn('No refresh token - user will need to reconnect when access token expires', {
+          component: 'JiraService'
+        });
       }
 
       await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
-      logger.info(
-        `✅ JIRA tokens stored for user ${userId}${!tokens.refreshToken ? ' (NO REFRESH CAPABILITY)' : ''}`
-      );
+      logger.info('JIRA tokens stored for user', {
+        component: 'JiraService',
+        userId,
+        hasRefreshToken: !!tokens.refreshToken
+      });
       return true;
     } catch (error) {
-      logger.error('❌ Error storing user tokens:', error.message);
+      logger.error('Error storing user tokens', { component: 'JiraService', error });
       throw new Error('Failed to store user tokens');
     }
   }
@@ -260,15 +271,16 @@ class JiraService {
       const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
 
       if (expired) {
-        logger.info(`🔄 Tokens expired for user ${userId}, attempting refresh...`);
+        logger.info('Tokens expired, attempting refresh', { component: 'JiraService', userId });
 
         try {
           const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
 
           if (!expiredTokens.refreshToken) {
-            logger.error('❌ No refresh token available for user:', userId);
-            logger.error('   This means the initial OAuth did not provide offline_access');
-            logger.error('   The user must reconnect their JIRA account to get new tokens');
+            logger.error('No refresh token available for user, must reconnect JIRA account', {
+              component: 'JiraService',
+              userId
+            });
             throw new Error('No refresh token available - user needs to reconnect JIRA account');
           }
 
@@ -276,10 +288,17 @@ class JiraService {
 
           // Store the refreshed tokens
           await this.storeUserTokens(userId, refreshedTokens);
-          logger.info(`✅ Successfully refreshed and stored JIRA tokens for user ${userId}`);
+          logger.info('Successfully refreshed and stored JIRA tokens for user', {
+            component: 'JiraService',
+            userId
+          });
           return refreshedTokens;
         } catch (refreshError) {
-          logger.error(`❌ Failed to refresh tokens for user ${userId}:`, refreshError.message);
+          logger.error('Failed to refresh tokens for user', {
+            component: 'JiraService',
+            userId,
+            error: refreshError
+          });
 
           // If refresh fails, delete the invalid tokens so user can reconnect
           await this.deleteUserTokens(userId);
@@ -293,7 +312,7 @@ class JiraService {
       if (error.message.includes('not authenticated')) {
         throw new Error('User not authenticated with JIRA');
       }
-      logger.error('❌ Error retrieving user tokens:', error.message);
+      logger.error('Error retrieving user tokens', { component: 'JiraService', error });
       throw new Error('Failed to retrieve user tokens');
     }
   }
@@ -305,11 +324,11 @@ class JiraService {
     try {
       const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
       if (result) {
-        logger.info(`✅ JIRA tokens deleted for user ${userId}`);
+        logger.info('JIRA tokens deleted for user', { component: 'JiraService', userId });
       }
       return result;
     } catch (error) {
-      logger.error('❌ Error deleting user tokens:', error.message);
+      logger.error('Error deleting user tokens', { component: 'JiraService', error });
       return false;
     }
   }
@@ -343,9 +362,11 @@ class JiraService {
 
       if (!response.ok) {
         if (response.status === 401 && retryCount < maxRetries) {
-          logger.info(
-            `🔄 Received 401 error, attempting to force token refresh and retry (attempt ${retryCount + 1}/${maxRetries + 1})`
-          );
+          logger.info('Received 401 error, attempting to force token refresh and retry', {
+            component: 'JiraService',
+            attempt: retryCount + 1,
+            maxAttempts: maxRetries + 1
+          });
 
           try {
             // Force refresh tokens by getting them directly and refreshing them
@@ -359,12 +380,18 @@ class JiraService {
 
             await this.storeUserTokens(userId, refreshedTokens);
 
-            logger.info(`✅ Forced token refresh successful for user ${userId}`);
+            logger.info('Forced token refresh successful for user', {
+              component: 'JiraService',
+              userId
+            });
 
             // Retry the request with fresh tokens
             return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
           } catch (refreshError) {
-            logger.error(`❌ Forced token refresh failed:`, refreshError.message);
+            logger.error('Forced token refresh failed', {
+              component: 'JiraService',
+              error: refreshError
+            });
 
             // Clean up invalid tokens
             await this.deleteUserTokens(userId);
@@ -375,7 +402,7 @@ class JiraService {
         }
 
         const errorData = await response.json().catch(() => ({}));
-        logger.error('❌ JIRA API request failed:', errorData);
+        logger.error('JIRA API request failed', { component: 'JiraService', error: errorData });
         throw new Error(`JIRA API error: ${errorData.errorMessages?.[0] || response.statusText}`);
       }
 
@@ -389,7 +416,7 @@ class JiraService {
       ) {
         throw error;
       }
-      logger.error('❌ JIRA API request failed:', error.message);
+      logger.error('JIRA API request failed', { component: 'JiraService', error });
       throw new Error(`JIRA API error: ${error.message}`);
     }
   }
@@ -427,7 +454,7 @@ class JiraService {
         }))
       };
     } catch (error) {
-      logger.error('❌ Error searching JIRA tickets:', error.message);
+      logger.error('Error searching JIRA tickets', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -483,7 +510,7 @@ class JiraService {
 
       return ticket;
     } catch (error) {
-      logger.error('❌ Error getting JIRA ticket:', error.message);
+      logger.error('Error getting JIRA ticket', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -526,7 +553,7 @@ class JiraService {
         created: response.created
       };
     } catch (error) {
-      logger.error('❌ Error adding comment to JIRA ticket:', error.message);
+      logger.error('Error adding comment to JIRA ticket', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -550,7 +577,7 @@ class JiraService {
         }))
       };
     } catch (error) {
-      logger.error('❌ Error getting JIRA ticket transitions:', error.message);
+      logger.error('Error getting JIRA ticket transitions', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -604,7 +631,7 @@ class JiraService {
         message: `Ticket ${issueKey} successfully transitioned to ${updatedTicket.status}`
       };
     } catch (error) {
-      logger.error('❌ Error transitioning JIRA ticket:', error.message);
+      logger.error('Error transitioning JIRA ticket', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -654,7 +681,7 @@ class JiraService {
         stream: contentResponse.body
       };
     } catch (error) {
-      logger.error('❌ Error getting JIRA attachment for proxy:', error.message);
+      logger.error('Error getting JIRA attachment for proxy', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -681,11 +708,12 @@ class JiraService {
 
       const attachmentInfo = await metaResponse.json();
 
-      logger.info(`📎 Attachment metadata for ${attachmentId}:`, {
+      logger.info('Attachment metadata retrieved', {
+        component: 'JiraService',
+        attachmentId,
         filename: attachmentInfo.filename,
         mimeType: attachmentInfo.mimeType,
-        size: attachmentInfo.size,
-        content: attachmentInfo.content
+        size: attachmentInfo.size
       });
 
       // JIRA Cloud API returns attachment content URLs that need special handling
@@ -696,7 +724,11 @@ class JiraService {
         throw new Error(`Invalid attachment content URL: ${contentUrl}`);
       }
 
-      logger.info(`📎 Downloading attachment: ${attachmentInfo.filename} from ${contentUrl}`);
+      logger.info('Downloading attachment', {
+        component: 'JiraService',
+        filename: attachmentInfo.filename,
+        contentUrl
+      });
 
       // Get attachment content with proper authorization
       const controller = new AbortController();
@@ -737,7 +769,7 @@ class JiraService {
         clearTimeout(timeoutId);
       }
     } catch (error) {
-      logger.error('❌ Error getting JIRA attachment:', error.message);
+      logger.error('Error getting JIRA attachment', { component: 'JiraService', error });
       throw error;
     }
   }
@@ -754,10 +786,10 @@ class JiraService {
       // Double-check by trying to make a lightweight API call
       await this.makeApiRequest('/myself', 'GET', null, userId);
 
-      logger.info(`✅ User ${userId} has valid JIRA authentication`);
+      logger.info('User has valid JIRA authentication', { component: 'JiraService', userId });
       return true;
     } catch (error) {
-      logger.info(`❌ User ${userId} authentication failed: ${error.message}`);
+      logger.info('User JIRA authentication failed', { component: 'JiraService', userId, error });
       return false;
     }
   }
@@ -778,7 +810,7 @@ class JiraService {
         accountType: data.accountType
       };
     } catch (error) {
-      logger.error('❌ Error getting JIRA user info:', error.message);
+      logger.error('Error getting JIRA user info', { component: 'JiraService', error });
       throw error;
     }
   }

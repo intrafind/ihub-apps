@@ -8,7 +8,7 @@ import configCache from '../../configCache.js';
 import { getTrackingMode, reloadConfig } from '../../usageTracker.js';
 import { getDailyRollups, getMonthlyRollups, runRollups } from '../../services/UsageAggregator.js';
 import { readEvents } from '../../services/UsageEventLog.js';
-import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 function parseRange(range) {
   if (!range) return { startDate: null, endDate: null, granularity: 'daily' };
@@ -62,9 +62,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ granularity, range, data });
-    } catch (e) {
-      logger.error('Error loading usage timeline:', e);
-      res.status(500).json({ error: 'Failed to load usage timeline' });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage timeline');
     }
   });
 
@@ -88,9 +87,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ range, users });
-    } catch (e) {
-      logger.error('Error loading usage users:', e);
-      res.status(500).json({ error: 'Failed to load usage user data' });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage user data');
     }
   });
 
@@ -112,9 +110,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ range, apps });
-    } catch (e) {
-      logger.error('Error loading usage apps:', e);
-      res.status(500).json({ error: 'Failed to load usage app data' });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage app data');
     }
   });
 
@@ -137,9 +134,8 @@ export default function registerAdminUsageRoutes(app) {
       }
 
       res.json({ range, models });
-    } catch (e) {
-      logger.error('Error loading usage models:', e);
-      res.status(500).json({ error: 'Failed to load usage model data' });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage model data');
     }
   });
 
@@ -148,9 +144,8 @@ export default function registerAdminUsageRoutes(app) {
     try {
       const mode = await getTrackingMode();
       res.json({ trackingMode: mode });
-    } catch (e) {
-      logger.error('Error loading usage meta:', e);
-      res.status(500).json({ error: 'Failed to load usage metadata' });
+    } catch (error) {
+      return sendInternalError(res, error, 'load usage metadata');
     }
   });
 
@@ -160,9 +155,10 @@ export default function registerAdminUsageRoutes(app) {
       const { trackingMode } = req.body;
       const validModes = ['anonymous', 'pseudonymous', 'identified'];
       if (!validModes.includes(trackingMode)) {
-        return res
-          .status(400)
-          .json({ error: `Invalid tracking mode. Must be one of: ${validModes.join(', ')}` });
+        return sendBadRequest(
+          res,
+          `Invalid tracking mode. Must be one of: ${validModes.join(', ')}`
+        );
       }
 
       const rootDir = getRootDir();
@@ -182,9 +178,8 @@ export default function registerAdminUsageRoutes(app) {
       reloadConfig();
 
       res.json({ trackingMode, message: 'Tracking mode updated successfully' });
-    } catch (e) {
-      logger.error('Error updating tracking mode:', e);
-      res.status(500).json({ error: 'Failed to update tracking mode' });
+    } catch (error) {
+      return sendInternalError(res, error, 'update tracking mode');
     }
   });
 
@@ -195,9 +190,8 @@ export default function registerAdminUsageRoutes(app) {
       const retentionConfig = platform?.usageTracking || {};
       const stats = await runRollups(retentionConfig);
       res.json({ message: 'Rollup generation completed successfully', ...stats });
-    } catch (e) {
-      logger.error('Error generating rollups:', e);
-      res.status(500).json({ error: 'Failed to generate rollups' });
+    } catch (error) {
+      return sendInternalError(res, error, 'generate rollups');
     }
   });
 
@@ -240,9 +234,8 @@ export default function registerAdminUsageRoutes(app) {
       } else {
         res.json({ range, events });
       }
-    } catch (e) {
-      logger.error('Error exporting usage data:', e);
-      res.status(500).json({ error: 'Failed to export usage data' });
+    } catch (error) {
+      return sendInternalError(res, error, 'export usage data');
     }
   });
 }

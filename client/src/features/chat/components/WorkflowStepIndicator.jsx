@@ -19,7 +19,7 @@ import Icon from '../../../shared/components/Icon';
  * @param {Object} [props.result]    - Completion result (null while running)
  * @param {boolean} props.loading    - Whether workflow is still in progress
  */
-const WorkflowStepIndicator = ({ steps = [], currentStep, result, loading }) => {
+function WorkflowStepIndicator({ steps = [], currentStep, result, loading }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
 
@@ -164,6 +164,6 @@ const WorkflowStepIndicator = ({ steps = [], currentStep, result, loading }) => 
 
   // Fallback: steps exist but no result and not loading (edge case)
   return null;
-};
+}
 
 export default WorkflowStepIndicator;

@@ -1,7 +1,7 @@
 /**
  * A component to display message variables such as target language or other metadata
  */
-const MessageVariables = ({ variables }) => {
+function MessageVariables({ variables }) {
   if (!variables || Object.keys(variables).length === 0) {
     return null;
   }
@@ -17,6 +17,6 @@ const MessageVariables = ({ variables }) => {
       </div>
     </div>
   );
-};
+}
 
 export default MessageVariables;

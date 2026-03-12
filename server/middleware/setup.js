@@ -191,7 +191,7 @@ function setupSessionMiddleware(app, platformConfig) {
 
   // Setup OIDC user authentication sessions
   if (needsOidcSessions) {
-    logger.info('🔐 Enabling session middleware for OIDC user authentication', {
+    logger.info('Enabling session middleware for OIDC user authentication', {
       component: 'Middleware'
     });
     const oidcMaxAge = 30 * 60 * 1000; // 30 minutes for user auth
@@ -220,12 +220,13 @@ function setupSessionMiddleware(app, platformConfig) {
   if (jiraEnabled) enabledIntegrations.push('JIRA');
   if (cloudStorageEnabled) enabledIntegrations.push('Office 365');
 
-  logger.info(
-    enabledIntegrations.length > 0
-      ? `🔗 Enabling session middleware for OAuth integrations: ${enabledIntegrations.join(', ')}`
-      : '🔗 Enabling session middleware for OAuth integrations (ready for dynamic configuration)',
-    { component: 'Middleware' }
-  );
+  logger.info('Enabling session middleware for OAuth integrations', {
+    component: 'Middleware',
+    enabledIntegrations:
+      enabledIntegrations.length > 0
+        ? enabledIntegrations.join(', ')
+        : 'ready for dynamic configuration'
+  });
   const integrationMaxAge = 15 * 60 * 1000; // 15 minutes for OAuth flows
   app.use(
     '/api/integrations',
@@ -248,7 +249,7 @@ function setupSessionMiddleware(app, platformConfig) {
   // OAuth Authorization Code Flow requires session state for PKCE/CSRF across login redirect
   const oauthConfig = platformConfig.oauth || {};
   if (oauthConfig.enabled?.authz || oauthConfig.authorizationCodeEnabled) {
-    logger.info('🔐 Enabling session middleware for OAuth Authorization Code Flow', {
+    logger.info('Enabling session middleware for OAuth Authorization Code Flow', {
       component: 'Middleware'
     });
     const oauthMaxAge = 15 * 60 * 1000; // 15 minutes - auth code flow is short-lived
@@ -276,7 +277,7 @@ function setupSessionMiddleware(app, platformConfig) {
   if (!needsOidcSessions && !needsIntegrationSessions) {
     const authConfig = platformConfig.auth || {};
     if (authConfig.mode === 'local' || authConfig.mode === 'ldap') {
-      logger.info('🍪 Enabling minimal session middleware for local/LDAP authentication', {
+      logger.info('Enabling minimal session middleware for local/LDAP authentication', {
         component: 'Middleware'
       });
       const appMaxAge = 24 * 60 * 60 * 1000; // 24 hours for regular app sessions
@@ -311,8 +312,11 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Debug middleware - log all requests (helpful for debugging NTLM/proxy issues)
   if (process.env.NODE_ENV === 'development') {
     app.use((req, res, next) => {
-      logger.debug(`${req.method} ${req.url} - Origin: ${req.get('origin') || 'none'}`, {
-        component: 'Middleware'
+      logger.debug('Incoming request', {
+        component: 'Middleware',
+        method: req.method,
+        url: req.url,
+        origin: req.get('origin') || 'none'
       });
       next();
     });

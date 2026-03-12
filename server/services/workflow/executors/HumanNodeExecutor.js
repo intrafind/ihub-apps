@@ -106,9 +106,8 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       }
     }
 
-    this.logger.info({
+    this.logger.info('Human checkpoint created', {
       component: 'HumanNodeExecutor',
-      message: 'Human checkpoint created',
       executionId: context.executionId,
       nodeId: node.id,
       checkpointId: checkpoint.id
@@ -152,9 +151,8 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
   async resume(node, state, humanResponse, context) {
     const { checkpointId, response, data } = humanResponse;
 
-    this.logger.info({
+    this.logger.info('Resuming from human checkpoint', {
       component: 'HumanNodeExecutor',
-      message: 'Resuming from human checkpoint',
       executionId: context?.executionId,
       nodeId: node.id,
       checkpointId,
@@ -166,9 +164,8 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
     if (config.options && Array.isArray(config.options)) {
       const validOptions = config.options.map(opt => opt.value);
       if (!validOptions.includes(response)) {
-        this.logger.warn({
+        this.logger.warn('Invalid response option', {
           component: 'HumanNodeExecutor',
-          message: 'Invalid response option',
           response,
           validOptions
         });

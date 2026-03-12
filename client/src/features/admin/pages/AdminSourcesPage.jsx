@@ -6,7 +6,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const AdminSourcesPage = () => {
+function AdminSourcesPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [sources, setSources] = useState([]);
@@ -523,6 +523,6 @@ const AdminSourcesPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminSourcesPage;

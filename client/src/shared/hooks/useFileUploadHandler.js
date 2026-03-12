@@ -14,7 +14,7 @@ import { useState } from 'react';
  * @returns {Function} returns.setSelectedFile - Direct state setter for selected file
  * @returns {Function} returns.setShowUploader - Direct state setter for uploader visibility
  */
-export const useFileUploadHandler = () => {
+export function useFileUploadHandler() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [showUploader, setShowUploader] = useState(false);
 
@@ -207,6 +207,6 @@ export const useFileUploadHandler = () => {
     setSelectedFile,
     setShowUploader
   };
-};
+}
 
 export default useFileUploadHandler;

@@ -7,6 +7,12 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -221,13 +227,14 @@ export default function registerAdminGroupRoutes(app) {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        logger.info('Groups file not found or invalid, returning empty list');
+        logger.info('Groups file not found or invalid, returning empty list', {
+          component: 'AdminGroups'
+        });
       }
 
       res.json(groupsData);
     } catch (error) {
-      logger.error('Error getting groups:', error);
-      res.status(500).json({ error: 'Failed to get groups' });
+      return sendInternalError(res, error, 'get groups');
     }
   });
 
@@ -303,7 +310,11 @@ export default function registerAdminGroupRoutes(app) {
               name: app.name || { en: app.id, de: app.id }
             });
           } catch (error) {
-            logger.warn(`Error reading app file ${file}:`, error.message);
+            logger.warn('Error reading app file', {
+              component: 'AdminGroups',
+              file,
+              error: error.message
+            });
           }
         }
       }
@@ -323,7 +334,11 @@ export default function registerAdminGroupRoutes(app) {
               name: model.name || { en: model.id, de: model.id }
             });
           } catch (error) {
-            logger.warn(`Error reading model file ${file}:`, error.message);
+            logger.warn('Error reading model file', {
+              component: 'AdminGroups',
+              file,
+              error: error.message
+            });
           }
         }
       }
@@ -344,12 +359,16 @@ export default function registerAdminGroupRoutes(app) {
                 name: prompt.name || { en: prompt.id, de: prompt.id }
               });
             } catch (error) {
-              logger.warn(`Error reading prompt file ${file}:`, error.message);
+              logger.warn('Error reading prompt file', {
+                component: 'AdminGroups',
+                file,
+                error: error.message
+              });
             }
           }
         }
       } catch {
-        logger.info('Prompts directory not found or empty');
+        logger.info('Prompts directory not found or empty', { component: 'AdminGroups' });
       }
 
       // Get workflows
@@ -368,12 +387,16 @@ export default function registerAdminGroupRoutes(app) {
                 name: workflow.name || { en: workflow.id, de: workflow.id }
               });
             } catch (error) {
-              logger.warn(`Error reading workflow file ${file}:`, error.message);
+              logger.warn('Error reading workflow file', {
+                component: 'AdminGroups',
+                file,
+                error: error.message
+              });
             }
           }
         }
       } catch {
-        logger.info('Workflows directory not found or empty');
+        logger.info('Workflows directory not found or empty', { component: 'AdminGroups' });
       }
 
       // Get skills
@@ -391,8 +414,7 @@ export default function registerAdminGroupRoutes(app) {
         skills: skills.sort((a, b) => a.id.localeCompare(b.id))
       });
     } catch (error) {
-      logger.error('Error getting resources:', error);
-      res.status(500).json({ error: 'Failed to get resources' });
+      return sendInternalError(res, error, 'get resources');
     }
   });
 
@@ -500,7 +522,7 @@ export default function registerAdminGroupRoutes(app) {
       const { id, name, description, permissions, mappings = [] } = req.body;
 
       if (!id || !name) {
-        return res.status(400).json({ error: 'Group ID and name are required' });
+        return sendBadRequest(res, 'Group ID and name are required');
       }
 
       // Validate group ID for security
@@ -510,7 +532,7 @@ export default function registerAdminGroupRoutes(app) {
 
       // Validate permissions structure
       if (!permissions || typeof permissions !== 'object') {
-        return res.status(400).json({ error: 'Valid permissions object is required' });
+        return sendBadRequest(res, 'Valid permissions object is required');
       }
 
       const rootDir = getRootDir();
@@ -535,7 +557,7 @@ export default function registerAdminGroupRoutes(app) {
 
       // Check if group ID already exists
       if (groupsData.groups[id]) {
-        return res.status(409).json({ error: 'Group ID already exists' });
+        return sendErrorResponse(res, 409, 'Group ID already exists');
       }
 
       // Create new group
@@ -562,12 +584,11 @@ export default function registerAdminGroupRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      logger.info(`👥 Created new group: ${name} (${id})`);
+      logger.info('Created new group', { component: 'AdminGroups', name, id });
 
       res.json({ group: newGroup });
     } catch (error) {
-      logger.error('Error creating group:', error);
-      res.status(500).json({ error: 'Failed to create group' });
+      return sendInternalError(res, error, 'create group');
     }
   });
 
@@ -655,12 +676,12 @@ export default function registerAdminGroupRoutes(app) {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        return res.status(404).json({ error: 'Groups file not found' });
+        return sendNotFound(res, 'Groups file');
       }
 
       // Check if group exists
       if (!groupsData.groups[groupId]) {
-        return res.status(404).json({ error: 'Group not found' });
+        return sendNotFound(res, 'Group');
       }
 
       const group = groupsData.groups[groupId];
@@ -698,12 +719,11 @@ export default function registerAdminGroupRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      logger.info(`👥 Updated group: ${group.name} (${groupId})`);
+      logger.info('Updated group', { component: 'AdminGroups', groupName: group.name, groupId });
 
       res.json({ group });
     } catch (error) {
-      logger.error('Error updating group:', error);
-      res.status(500).json({ error: 'Failed to update group' });
+      return sendInternalError(res, error, 'update group');
     }
   });
 
@@ -785,7 +805,7 @@ export default function registerAdminGroupRoutes(app) {
       // Prevent deletion of core system groups
       const protectedGroups = ['admin', 'user', 'anonymous', 'authenticated'];
       if (protectedGroups.includes(groupId)) {
-        return res.status(400).json({ error: `Cannot delete protected system group: ${groupId}` });
+        return sendBadRequest(res, `Cannot delete protected system group: ${groupId}`);
       }
 
       const rootDir = getRootDir();
@@ -797,12 +817,12 @@ export default function registerAdminGroupRoutes(app) {
         const groupsFileData = await fs.readFile(groupsFilePath, 'utf8');
         groupsData = JSON.parse(groupsFileData);
       } catch {
-        return res.status(404).json({ error: 'Groups file not found' });
+        return sendNotFound(res, 'Groups file');
       }
 
       // Check if group exists
       if (!groupsData.groups[groupId]) {
-        return res.status(404).json({ error: 'Group not found' });
+        return sendNotFound(res, 'Group');
       }
 
       const groupName = groupsData.groups[groupId].name;
@@ -817,12 +837,11 @@ export default function registerAdminGroupRoutes(app) {
       // Refresh cache
       await configCache.refreshCacheEntry('config/groups.json');
 
-      logger.info(`👥 Deleted group: ${groupName} (${groupId})`);
+      logger.info('Deleted group', { component: 'AdminGroups', groupName, groupId });
 
       res.json({ message: 'Group deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting group:', error);
-      res.status(500).json({ error: 'Failed to delete group' });
+      return sendInternalError(res, error, 'delete group');
     }
   });
 }

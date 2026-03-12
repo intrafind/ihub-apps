@@ -12,7 +12,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from './Icon';
 import useDarkMode from '../../hooks/useDarkMode';
 
-const DarkModeToggle = ({ className = '' }) => {
+function DarkModeToggle({ className = '' }) {
   const { t } = useTranslation();
   const { preference, toggleMode } = useDarkMode();
 
@@ -58,6 +58,6 @@ const DarkModeToggle = ({ className = '' }) => {
       )}
     </button>
   );
-};
+}
 
 export default DarkModeToggle;

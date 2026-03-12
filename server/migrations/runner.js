@@ -129,7 +129,7 @@ async function validateAppliedMigrations(history, migrationFiles, mode) {
       if (mode === 'strict') {
         throw new Error(msg);
       }
-      logger.warn({ component: 'Migration', message: msg });
+      logger.warn(msg, { component: 'Migration' });
       continue;
     }
 
@@ -139,7 +139,7 @@ async function validateAppliedMigrations(history, migrationFiles, mode) {
       if (mode === 'strict') {
         throw new Error(msg);
       }
-      logger.warn({ component: 'Migration', message: msg });
+      logger.warn(msg, { component: 'Migration' });
     }
   }
 }
@@ -207,16 +207,8 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
     transformWhere,
 
     // Logging (prefixed with migration version)
-    log: message =>
-      logger.info({
-        component: 'Migration',
-        message: `[V${migration.version}] ${message}`
-      }),
-    warn: message =>
-      logger.warn({
-        component: 'Migration',
-        message: `[V${migration.version}] ${message}`
-      }),
+    log: message => logger.info(message, { component: 'Migration', version: migration.version }),
+    warn: message => logger.warn(message, { component: 'Migration', version: migration.version }),
 
     // Metadata
     version: migration.version,
@@ -243,9 +235,9 @@ async function acquireLock(contentsDir) {
           `If the process is no longer running, delete ${lockPath}`
       );
     }
-    logger.warn({
+    logger.warn('Stale migration lock detected, overriding', {
       component: 'Migration',
-      message: `Stale migration lock detected (age: ${Math.round(age / 1000)}s), overriding`
+      ageSeconds: Math.round(age / 1000)
     });
   } catch (error) {
     if (error.code !== 'ENOENT' && !(error instanceof SyntaxError)) {
@@ -304,10 +296,7 @@ export async function runConfigMigrations() {
   // Load migration config
   const migrationConfig = await loadMigrationConfig(contentsDir);
   if (!migrationConfig.enabled) {
-    logger.info({
-      component: 'Migration',
-      message: 'Configuration migrations are disabled'
-    });
+    logger.info('Configuration migrations are disabled', { component: 'Migration' });
     return;
   }
 
@@ -318,10 +307,7 @@ export async function runConfigMigrations() {
     // Scan for migration files
     const migrationFiles = await scanMigrationFiles(migrationsDir);
     if (migrationFiles.length === 0) {
-      logger.info({
-        component: 'Migration',
-        message: 'No migration files found'
-      });
+      logger.info('No migration files found', { component: 'Migration' });
       return;
     }
 
@@ -348,9 +334,8 @@ export async function runConfigMigrations() {
           status: 'success'
         });
         await saveHistory(contentsDir, history);
-        logger.info({
-          component: 'Migration',
-          message: 'Baseline established for existing installation (V001 auto-recorded)'
+        logger.info('Baseline established for existing installation (V001 auto-recorded)', {
+          component: 'Migration'
         });
       }
     }
@@ -367,16 +352,16 @@ export async function runConfigMigrations() {
     const pending = migrationFiles.filter(f => !appliedVersions.has(f.version));
 
     if (pending.length === 0) {
-      logger.info({
+      logger.info('All migrations already applied', {
         component: 'Migration',
-        message: `All ${migrationFiles.length} migration(s) already applied`
+        count: migrationFiles.length
       });
       return;
     }
 
-    logger.info({
+    logger.info('Found pending migrations to apply', {
       component: 'Migration',
-      message: `Found ${pending.length} pending migration(s) to apply`
+      count: pending.length
     });
 
     // Execute pending migrations
@@ -409,9 +394,10 @@ export async function runConfigMigrations() {
             history.migrations.push(entry);
             await saveHistory(contentsDir, history);
             skipped++;
-            logger.info({
+            logger.info('Migration skipped (precondition not met)', {
               component: 'Migration',
-              message: `[V${migration.version}] Skipped (precondition not met): ${migration.description}`
+              version: migration.version,
+              description: migration.description
             });
             continue;
           }
@@ -432,9 +418,11 @@ export async function runConfigMigrations() {
         history.migrations.push(entry);
         await saveHistory(contentsDir, history);
         applied++;
-        logger.info({
+        logger.info('Migration applied', {
           component: 'Migration',
-          message: `[V${migration.version}] Applied: ${migration.description} (${entry.executionTimeMs}ms)`
+          version: migration.version,
+          description: migration.description,
+          executionTimeMs: entry.executionTimeMs
         });
       } catch (error) {
         const entry = {
@@ -451,11 +439,11 @@ export async function runConfigMigrations() {
         await saveHistory(contentsDir, history);
         failed++;
 
-        logger.error({
+        logger.error('Migration failed', {
           component: 'Migration',
-          message: `[V${migration.version}] Failed: ${migration.description}`,
-          error: error.message,
-          stack: error.stack
+          version: migration.version,
+          description: migration.description,
+          error
         });
 
         if (migrationConfig.onFailure === 'halt') {
@@ -466,9 +454,11 @@ export async function runConfigMigrations() {
       }
     }
 
-    logger.info({
+    logger.info('Migration run complete', {
       component: 'Migration',
-      message: `Migration complete: ${applied} applied, ${skipped} skipped, ${failed} failed`
+      applied,
+      skipped,
+      failed
     });
   } finally {
     await releaseLock(contentsDir);

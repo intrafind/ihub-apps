@@ -111,9 +111,12 @@ class IFinderService {
     const config = this.getConfig();
     const profileId = searchProfile || config.defaultSearchProfile;
 
-    logger.info(
-      `iFinder Search: User ${JSON.stringify(user)}searching for "${query}" in profile "${profileId}"`
-    );
+    logger.info('Searching for query in profile', {
+      component: 'IFinderService',
+      userId: user?.id,
+      query,
+      profileId
+    });
 
     // Track the action
     actionTracker.trackAction(chatId, {
@@ -161,7 +164,7 @@ class IFinderService {
       }
 
       const searchUrl = `${baseUrl}?${params.toString()}`;
-      logger.debug(`iFinder Search: Sending search request to profile "${profileId}"`);
+      logger.debug('Sending search request to profile', { component: 'IFinderService', profileId });
       // Make API request
       const response = await throttledFetch('iFinderSearch', searchUrl, {
         method: 'GET',
@@ -174,10 +177,12 @@ class IFinderService {
 
       if (!response.ok) {
         const errorText = await response.text();
-        logger.error(
-          `iFinder Search: Error fetching results for "${query}" in profile "${profileId}":`,
-          errorText
-        );
+        logger.error('Error fetching search results', {
+          component: 'IFinderService',
+          query,
+          profileId,
+          error: errorText
+        });
         throw new Error(`iFinder search failed with status ${response.status}: ${errorText}`);
       }
 
@@ -191,9 +196,17 @@ class IFinderService {
           const v = rawDoc[k];
           return v == null || (Array.isArray(v) && v.length === 0);
         });
-        logger.info(`iFinder Metadata raw doc keys (${rawKeys.length}): ${rawKeys.join(', ')}`);
+        logger.info('Metadata raw doc keys', {
+          component: 'IFinderService',
+          keyCount: rawKeys.length,
+          keys: rawKeys
+        });
         if (emptyKeys.length > 0) {
-          logger.info(`iFinder Metadata empty keys (${emptyKeys.length}): ${emptyKeys.join(', ')}`);
+          logger.info('Metadata empty keys', {
+            component: 'IFinderService',
+            emptyKeyCount: emptyKeys.length,
+            emptyKeys
+          });
         }
       }
 
@@ -300,13 +313,14 @@ class IFinderService {
         });
       }
 
-      logger.info(
-        `iFinder Search: Found ${results.totalFound} results in ${results.took || 'unknown time'}`
-      );
-      // logger.info('iFinder Search: Results:', JSON.stringify(results, null, 2));
+      logger.info('Search results found', {
+        component: 'IFinderService',
+        totalFound: results.totalFound,
+        took: results.took
+      });
       return results;
     } catch (error) {
-      logger.error('iFinder search error:', error);
+      logger.error('Search error', { component: 'IFinderService', error });
       this._handleError(error);
     }
   }
@@ -343,9 +357,12 @@ class IFinderService {
         .replace('{docId}', encodeURIComponent(documentId));
       const documentUrl = `${config.baseUrl.replace(/\/+$/, '')}${documentEndpoint}`;
 
-      logger.info(
-        `iFinder Content: Fetching content for document ${documentId} from profile "${profileId}" as user ${user.email || user.id}`
-      );
+      logger.info('Fetching content for document', {
+        component: 'IFinderService',
+        documentId,
+        profileId,
+        userId: user.email || user.id
+      });
 
       // Make API request
       const response = await throttledFetch('iFinderContent', documentUrl, {
@@ -408,19 +425,24 @@ class IFinderService {
 
       // Validate and truncate content if necessary
       if (result.content.length === 0) {
-        logger.warn(`iFinder Content: No content extracted for document ${documentId}`);
+        logger.warn('No content extracted for document', {
+          component: 'IFinderService',
+          documentId
+        });
       } else if (result.content.length > maxLength) {
-        logger.warn(`iFinder Content: Content truncated to ${maxLength} characters`);
+        logger.warn('Content truncated', { component: 'IFinderService', documentId, maxLength });
         result.content = result.content.substring(0, maxLength) + '... [Content truncated]';
         result.truncated = true;
       }
 
-      logger.info(
-        `iFinder Content: Successfully fetched ${result.contentLength} characters for document ${documentId}`
-      );
+      logger.info('Successfully fetched document content', {
+        component: 'IFinderService',
+        documentId,
+        contentLength: result.contentLength
+      });
       return result;
     } catch (error) {
-      logger.error('iFinder content fetch error:', error);
+      logger.error('Content fetch error', { component: 'IFinderService', error });
       this._handleError(error);
     }
   }
@@ -490,9 +512,12 @@ class IFinderService {
     ];
     const present = metaFields.filter(f => result[f] != null && result[f] !== '');
     const missing = metaFields.filter(f => result[f] == null || result[f] === '');
-    logger.info(
-      `iFinder Metadata for ${documentId}: present=[${present.join(', ')}], missing=[${missing.join(', ')}]`
-    );
+    logger.info('Metadata fields status', {
+      component: 'IFinderService',
+      documentId,
+      present,
+      missing
+    });
 
     // Add metadata-specific fields and logging
     const metadata = {
@@ -509,9 +534,12 @@ class IFinderService {
       rawSearchResult: searchResult
     };
 
-    logger.info(
-      `iFinder Metadata: Successfully fetched document ${documentId} metadata in ${metadata.took || 'unknown time'} (score: ${metadata.score})`
-    );
+    logger.info('Successfully fetched document metadata', {
+      component: 'IFinderService',
+      documentId,
+      took: metadata.took,
+      score: metadata.score
+    });
 
     return metadata;
   }
@@ -555,9 +583,11 @@ class IFinderService {
 
       if (action === 'content') {
         // Return document content info without saving
-        logger.info(
-          `iFinder Download: Fetching document ${documentId} content info for user ${user.email || user.id}`
-        );
+        logger.info('Fetching document content info', {
+          component: 'IFinderService',
+          documentId,
+          userId: user.email || user.id
+        });
 
         return {
           documentId: documentId,
@@ -573,9 +603,11 @@ class IFinderService {
       }
 
       // Server-side save of document content
-      logger.info(
-        `iFinder Download: Saving document ${documentId} content as user ${user.email || user.id}`
-      );
+      logger.info('Saving document content', {
+        component: 'IFinderService',
+        documentId,
+        userId: user.email || user.id
+      });
 
       // Make API request to get document content
       const response = await throttledFetch('iFinderDownload', documentUrl, {
@@ -671,12 +703,14 @@ class IFinderService {
         localPath: metadataPath
       };
 
-      logger.info(
-        `iFinder Download: Successfully saved document ${documentId} content (${result.sizeFormatted})`
-      );
+      logger.info('Successfully saved document content', {
+        component: 'IFinderService',
+        documentId,
+        sizeFormatted: result.sizeFormatted
+      });
       return result;
     } catch (error) {
-      logger.error('iFinder download error:', error);
+      logger.error('Download error', { component: 'IFinderService', error });
       this._handleError(error);
     }
   }
@@ -752,7 +786,7 @@ class IFinderService {
         limit: '1'
       });
 
-    logger.info(`iFinder resolveDocumentLink: Searching for document ${documentId}`);
+    logger.info('Searching for document link', { component: 'IFinderService', documentId });
 
     const response = await throttledFetch('iFinderDocLink', searchUrl, {
       method: 'GET',
@@ -768,7 +802,10 @@ class IFinderService {
     const data = await response.json();
 
     // The internal search API may return results under various keys — log for debugging
-    logger.debug('iFinder resolveDocumentLink response keys:', Object.keys(data));
+    logger.debug('Document link search response keys', {
+      component: 'IFinderService',
+      keys: Object.keys(data)
+    });
 
     const result = data.documents?.[0] || data.results?.[0] || data[0];
     if (!result) {
@@ -779,13 +816,15 @@ class IFinderService {
     const accessLink = links.find(l => l.type === 'ACCESS');
     if (!accessLink?.url) {
       const linkTypes = links.map(l => l.type).join(', ');
-      logger.warn(
-        `iFinder resolveDocumentLink: No ACCESS link found for ${documentId}. Available link types: [${linkTypes}]`
-      );
+      logger.warn('No ACCESS link found for document', {
+        component: 'IFinderService',
+        documentId,
+        availableLinkTypes: linkTypes
+      });
       throw new Error(`No download link found for document: ${documentId}`);
     }
 
-    logger.info(`iFinder resolveDocumentLink: Resolved download link for ${documentId}`);
+    logger.info('Resolved download link for document', { component: 'IFinderService', documentId });
     return accessLink.url;
   }
 

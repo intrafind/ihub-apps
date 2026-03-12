@@ -300,9 +300,10 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
         const basePath = buildServerPath('').replace(/\/$/, '');
         const loginUrl = `${basePath}/login?returnUrl=${encodeURIComponent(req.originalUrl)}`;
-        logger.info(
-          `[OAuth Authorize] User not logged in, redirecting to login | client=${client_id}`
-        );
+        logger.info('[OAuth Authorize] User not logged in, redirecting to login', {
+          component: 'OAuthAuthorize',
+          clientId: client_id
+        });
         return res.redirect(loginUrl);
       }
 
@@ -326,9 +327,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
         callbackUrl.searchParams.set('code', code);
         if (state) callbackUrl.searchParams.set('state', state);
 
-        logger.info(
-          `[OAuth Authorize] Code issued (trusted client) | client=${client_id} | user=${currentUser.sub}`
-        );
+        logger.info('[OAuth Authorize] Code issued (trusted client)', {
+          component: 'OAuthAuthorize',
+          clientId: client_id,
+          userId: currentUser.sub
+        });
         return res.redirect(callbackUrl.toString());
       }
 
@@ -354,9 +357,11 @@ export default function registerOAuthAuthorizeRoutes(app) {
         callbackUrl.searchParams.set('code', code);
         if (state) callbackUrl.searchParams.set('state', state);
 
-        logger.info(
-          `[OAuth Authorize] Code issued (remembered consent) | client=${client_id} | user=${currentUser.sub}`
-        );
+        logger.info('[OAuth Authorize] Code issued (remembered consent)', {
+          component: 'OAuthAuthorize',
+          clientId: client_id,
+          userId: currentUser.sub
+        });
         return res.redirect(callbackUrl.toString());
       }
 
@@ -390,14 +395,19 @@ export default function registerOAuthAuthorizeRoutes(app) {
         baseUrl
       });
 
-      logger.info(
-        `[OAuth Authorize] Showing consent screen | client=${client_id} | user=${currentUser.sub}`
-      );
+      logger.info('[OAuth Authorize] Showing consent screen', {
+        component: 'OAuthAuthorize',
+        clientId: client_id,
+        userId: currentUser.sub
+      });
       res.setHeader('Content-Type', 'text/html; charset=utf-8');
       res.setHeader('Cache-Control', 'no-store');
       res.send(html);
     } catch (error) {
-      logger.error('[OAuth Authorize] Error in GET /authorize:', error);
+      logger.error('[OAuth Authorize] Error in GET /authorize', {
+        component: 'OAuthAuthorize',
+        error
+      });
       res.status(500).send('server_error: An internal error occurred');
     }
   });
@@ -509,19 +519,24 @@ export default function registerOAuthAuthorizeRoutes(app) {
       // Fire-and-forget: a storage failure must not block the authorization response.
       const consentMemoryDays = oauthConfig.consentMemoryDays || 90;
       grantConsent(client_id, currentUser.sub, requestedScopes, consentMemoryDays).catch(err => {
-        logger.warn('[OAuth Authorize] Failed to store consent:', err.message);
+        logger.warn('Failed to store consent', { component: 'OAuthAuthorize', error: err });
       });
 
       const callbackUrl = new URL(redirect_uri);
       callbackUrl.searchParams.set('code', code);
       if (state) callbackUrl.searchParams.set('state', state);
 
-      logger.info(
-        `[OAuth Authorize] Authorization code issued | client=${client_id} | user=${currentUser.sub}`
-      );
+      logger.info('[OAuth Authorize] Authorization code issued', {
+        component: 'OAuthAuthorize',
+        clientId: client_id,
+        userId: currentUser.sub
+      });
       return res.redirect(callbackUrl.toString());
     } catch (error) {
-      logger.error('[OAuth Authorize] Error in POST /authorize/decision:', error);
+      logger.error('[OAuth Authorize] Error in POST /authorize/decision', {
+        component: 'OAuthAuthorize',
+        error
+      });
       res.status(500).send('server_error: An internal error occurred');
     }
   });

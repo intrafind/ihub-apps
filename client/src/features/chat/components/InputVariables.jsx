@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 /**
  * A component to handle user input variables for chat applications
  */
-const InputVariables = ({ variables, setVariables, localizedVariables, className = '' }) => {
+function InputVariables({ variables, setVariables, localizedVariables, className = '' }) {
   const { t } = useTranslation();
 
   if (!localizedVariables || localizedVariables.length === 0) {
@@ -89,6 +89,6 @@ const InputVariables = ({ variables, setVariables, localizedVariables, className
       ))}
     </div>
   );
-};
+}
 
 export default InputVariables;

@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { highlightVariables } from '../../../utils/highlightVariables';
 
-const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
+function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
   const [copyStatus, setCopyStatus] = useState('idle');
   const [shareStatus, setShareStatus] = useState('idle');
 
@@ -116,6 +116,6 @@ const PromptModal = ({ prompt, onClose, isFavorite, onToggleFavorite, t }) => {
       </div>
     </div>
   );
-};
+}
 
 export default PromptModal;

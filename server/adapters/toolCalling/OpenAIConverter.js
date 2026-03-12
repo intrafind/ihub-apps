@@ -30,14 +30,19 @@ export function convertGenericToolsToOpenAI(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      logger.info(
-        `[OpenAI Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
-      );
+      logger.info('Filtering out provider-specific tool', {
+        component: 'OpenAIConverter',
+        toolId: tool.id || tool.name,
+        provider: tool.provider
+      });
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      logger.info(`[OpenAI Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info('Filtering out special tool', {
+        component: 'OpenAIConverter',
+        toolId: tool.id || tool.name
+      });
       return false;
     }
     // Universal tool - include it
@@ -155,8 +160,11 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
           } catch (error) {
             // If parsing fails, keep as raw string for later accumulation (preserving original spacing)
             logger.warn(
-              'Failed to parse OpenAI tool call arguments (likely streaming partial JSON):',
-              error.message
+              'Failed to parse OpenAI tool call arguments (likely streaming partial JSON)',
+              {
+                component: 'OpenAIConverter',
+                error
+              }
             );
             args = { __raw_arguments: argsStr };
           }
@@ -257,7 +265,10 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       result.error = true;
       result.errorMessage = parsed.error.message || 'Unknown error';
       result.complete = true;
-      logger.info(`[OpenAI Converter] Detected error response: ${result.errorMessage}`);
+      logger.info('Detected error response', {
+        component: 'OpenAIConverter',
+        errorMessage: result.errorMessage
+      });
       return result;
     }
 
@@ -310,10 +321,10 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
         }
 
         // Log accumulation progress for debugging
-        logger.debug(
-          `[OpenAI Converter] Accumulated tool calls:`,
-          Array.from(state.pendingToolCalls.values())
-        );
+        logger.debug('Accumulated tool calls', {
+          component: 'OpenAIConverter',
+          pendingToolCalls: Array.from(state.pendingToolCalls.values())
+        });
       }
     }
 
@@ -323,15 +334,18 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       state.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'openai');
       result.finishReason = state.finishReason;
 
-      logger.debug(
-        `[OpenAI Converter] Finish reason: ${state.finishReason}, pending tool calls: ${state.pendingToolCalls.size}`
-      );
+      logger.debug('Finish reason received', {
+        component: 'OpenAIConverter',
+        finishReason: state.finishReason,
+        pendingToolCallCount: state.pendingToolCalls.size
+      });
 
       // For OpenAI, finalize tool calls on tool_calls finish reason or if we have pending calls
       if (state.pendingToolCalls.size > 0) {
-        logger.debug(
-          `[OpenAI Converter] Finalizing ${state.pendingToolCalls.size} pending tool calls`
-        );
+        logger.debug('Finalizing pending tool calls', {
+          component: 'OpenAIConverter',
+          pendingToolCallCount: state.pendingToolCalls.size
+        });
         for (const [index, pending] of state.pendingToolCalls.entries()) {
           if (pending.id && pending.name) {
             let parsedArgs = {};
@@ -339,15 +353,19 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
               if (pending.arguments.trim()) {
                 parsedArgs = JSON.parse(pending.arguments);
               }
-            } catch (e) {
-              logger.warn('Failed to parse accumulated OpenAI tool arguments:', e);
+            } catch (error) {
+              logger.warn('Failed to parse accumulated OpenAI tool arguments', {
+                component: 'OpenAIConverter',
+                error: e
+              });
               parsedArgs = { __raw_arguments: pending.arguments };
             }
 
-            logger.debug(
-              `[OpenAI Converter] Adding tool call: ${pending.name} with args:`,
+            logger.debug('Adding tool call', {
+              component: 'OpenAIConverter',
+              toolName: pending.name,
               parsedArgs
-            );
+            });
             result.tool_calls.push(
               createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
                 originalFormat: 'openai',
@@ -361,7 +379,10 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
       streamingState.delete(streamId);
     }
   } catch (error) {
-    logger.error('Error parsing OpenAI response chunk:', error);
+    logger.error('Error parsing OpenAI response chunk', {
+      component: 'OpenAIConverter',
+      error
+    });
     result.error = true;
     result.errorMessage = `Error parsing OpenAI response: ${error.message}`;
   }

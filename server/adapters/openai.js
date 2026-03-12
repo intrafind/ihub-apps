@@ -94,9 +94,8 @@ class OpenAIAdapterClass extends BaseAdapter {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
       const enforceNoExtras = node => {
-        logger.info({
+        logger.info('Enforcing no extras on schema node', {
           component: 'OpenAIAdapter',
-          message: 'Enforcing no extras on schema node',
           nodeType: node?.type
         });
         if (node && node.type === 'object') {
@@ -120,9 +119,8 @@ class OpenAIAdapterClass extends BaseAdapter {
           strict: true
         }
       };
-      logger.info({
+      logger.info('Using response schema for structured output', {
         component: 'OpenAIAdapter',
-        message: 'Using response schema for structured output',
         responseFormat: body.response_format
       });
     } else if (responseFormat === 'json') {
@@ -216,11 +214,9 @@ class OpenAIAdapterClass extends BaseAdapter {
         result.finishReason = parsed.choices[0].finish_reason;
       }
     } catch (error) {
-      logger.error({
+      logger.error('Error parsing OpenAI response chunk', {
         component: 'OpenAIAdapter',
-        message: 'Error parsing OpenAI response chunk',
-        error: error.message,
-        stack: error.stack
+        error
       });
       result.error = true;
       result.errorMessage = `Error parsing OpenAI response: ${error.message}`;

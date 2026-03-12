@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
  * Generic hook to detect integration authentication errors in chat responses
  * and manage connection state for OAuth-based integrations
  */
-export const useIntegrationAuth = () => {
+export function useIntegrationAuth() {
   const { t } = useTranslation();
   const [authRequests, setAuthRequests] = useState(new Map()); // integration -> {required, connecting, error, lastFailedRequest, tokenInfo}
 
@@ -471,4 +471,4 @@ export const useIntegrationAuth = () => {
     getAuthState,
     getRequiredIntegrations
   };
-};
+}

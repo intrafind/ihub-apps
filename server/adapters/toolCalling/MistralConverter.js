@@ -36,14 +36,19 @@ export function convertGenericToolsToMistral(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      logger.info(
-        `[Mistral Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
-      );
+      logger.info('Filtering out provider-specific tool', {
+        component: 'MistralConverter',
+        toolId: tool.id || tool.name,
+        provider: tool.provider
+      });
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      logger.info(`[Mistral Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info('Filtering out special tool', {
+        component: 'MistralConverter',
+        toolId: tool.id || tool.name
+      });
       return false;
     }
     // Universal tool - include it
@@ -160,7 +165,10 @@ export function convertMistralResponseToGeneric(data, _streamId = 'default') {
       result.finishReason = normalizeFinishReason(parsed.choices[0].finish_reason, 'mistral');
     }
   } catch (error) {
-    logger.error('Error parsing Mistral response chunk:', error);
+    logger.error('Error parsing Mistral response chunk', {
+      component: 'MistralConverter',
+      error
+    });
     result.error = true;
     result.errorMessage = `Error parsing Mistral response: ${error.message}`;
   }

@@ -105,9 +105,8 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
     const { config = {} } = node;
     const operations = config.operations || [];
 
-    this.logger.info({
+    this.logger.info('Executing transform node', {
       component: 'TransformNodeExecutor',
-      message: `Executing transform node '${node.id}'`,
       nodeId: node.id,
       operationCount: operations.length
     });
@@ -119,9 +118,8 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         this.processOperation(operation, state, stateUpdates, context);
       }
 
-      this.logger.info({
+      this.logger.info('Transform node completed', {
         component: 'TransformNodeExecutor',
-        message: `Transform node '${node.id}' completed`,
         nodeId: node.id,
         updatedVariables: Object.keys(stateUpdates)
       });
@@ -131,12 +129,10 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         { stateUpdates }
       );
     } catch (error) {
-      this.logger.error({
+      this.logger.error('Transform node failed', {
         component: 'TransformNodeExecutor',
-        message: `Transform node '${node.id}' failed`,
         nodeId: node.id,
-        error: error.message,
-        stack: error.stack
+        error
       });
 
       return this.createErrorResult(`Transform execution failed: ${error.message}`, {
@@ -173,9 +169,9 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
 
       this.setNestedValue(variableName, value, stateUpdates);
 
-      this.logger.debug({
+      this.logger.debug('SET operation', {
         component: 'TransformNodeExecutor',
-        message: `SET ${variableName}`,
+        variableName,
         value: typeof value === 'object' ? '[object]' : value
       });
     }
@@ -197,15 +193,16 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
 
         this.setNestedValue(targetPath, clonedValue, stateUpdates);
 
-        this.logger.debug({
+        this.logger.debug('COPY operation', {
           component: 'TransformNodeExecutor',
-          message: `COPY ${sourcePath} -> ${targetPath}`,
+          sourcePath,
+          targetPath,
           value: typeof clonedValue === 'object' ? '[object]' : clonedValue
         });
       } else {
-        this.logger.warn({
+        this.logger.warn('COPY source not found', {
           component: 'TransformNodeExecutor',
-          message: `COPY source not found: ${sourcePath}`
+          sourcePath
         });
       }
     }
@@ -224,9 +221,10 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
 
       this.setNestedValue(variablePath, newValue, stateUpdates);
 
-      this.logger.debug({
+      this.logger.debug('INCREMENT operation', {
         component: 'TransformNodeExecutor',
-        message: `INCREMENT ${variablePath} by ${incrementBy}`,
+        variablePath,
+        incrementBy,
         oldValue: numericValue,
         newValue
       });
@@ -242,10 +240,7 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       const item = this.getNestedValue(itemPath, mergedData);
 
       if (item === undefined) {
-        this.logger.warn({
-          component: 'TransformNodeExecutor',
-          message: `PUSH item not found: ${itemPath}`
-        });
+        this.logger.warn('PUSH item not found', { component: 'TransformNodeExecutor', itemPath });
         return;
       }
 
@@ -261,9 +256,10 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
 
       this.setNestedValue(arrayPath, array, stateUpdates);
 
-      this.logger.debug({
+      this.logger.debug('PUSH operation', {
         component: 'TransformNodeExecutor',
-        message: `PUSH ${itemPath} -> ${arrayPath}`,
+        itemPath,
+        arrayPath,
         arrayLength: array.length
       });
     }
@@ -282,15 +278,16 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
         const merged = { ...targetObj, ...sourceObj };
         this.setNestedValue(targetPath, merged, stateUpdates);
 
-        this.logger.debug({
+        this.logger.debug('MERGE operation', {
           component: 'TransformNodeExecutor',
-          message: `MERGE ${sourcePath} -> ${targetPath}`,
+          sourcePath,
+          targetPath,
           mergedKeys: Object.keys(merged)
         });
       } else {
-        this.logger.warn({
+        this.logger.warn('MERGE source is not an object', {
           component: 'TransformNodeExecutor',
-          message: `MERGE source is not an object: ${sourcePath}`
+          sourcePath
         });
       }
     }
@@ -317,17 +314,20 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
 
         this.setNestedValue(targetPath, clonedValue, stateUpdates);
 
-        this.logger.debug({
+        this.logger.debug('ARRAY_GET operation', {
           component: 'TransformNodeExecutor',
-          message: `ARRAY_GET ${arrayPath}[${index}] -> ${targetPath}`,
+          arrayPath,
+          index,
+          targetPath,
           value: typeof clonedValue === 'object' ? '[object]' : clonedValue
         });
       } else {
         // Set empty string if out of bounds
         this.setNestedValue(targetPath, '', stateUpdates);
-        this.logger.warn({
+        this.logger.warn('ARRAY_GET index out of bounds or not an array', {
           component: 'TransformNodeExecutor',
-          message: `ARRAY_GET index out of bounds or not an array: ${arrayPath}[${index}]`
+          arrayPath,
+          index
         });
       }
     }
@@ -343,9 +343,10 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
       const length = Array.isArray(array) ? array.length : 0;
       this.setNestedValue(targetPath, length, stateUpdates);
 
-      this.logger.debug({
+      this.logger.debug('LENGTH_OF operation', {
         component: 'TransformNodeExecutor',
-        message: `LENGTH_OF ${arrayPath} -> ${targetPath}`,
+        arrayPath,
+        targetPath,
         length
       });
     }
@@ -370,9 +371,10 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
 
       this.setNestedValue(targetPath, finalValue, stateUpdates);
 
-      this.logger.debug({
+      this.logger.debug('CONDITIONAL operation', {
         component: 'TransformNodeExecutor',
-        message: `CONDITIONAL ${conditionExpr} -> ${targetPath}`,
+        conditionExpr,
+        targetPath,
         conditionResult,
         value: typeof finalValue === 'object' ? '[object]' : finalValue
       });
@@ -395,9 +397,9 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
     );
 
     if (!match) {
-      this.logger.warn({
+      this.logger.warn('Invalid condition expression', {
         component: 'TransformNodeExecutor',
-        message: `Invalid condition expression: ${expression}`
+        expression
       });
       return false;
     }

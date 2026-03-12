@@ -3,7 +3,7 @@ import Icon from '../../../shared/components/Icon';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
 /** Display a list of starter prompts for quick start */
-const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
+function StarterPromptsView({ starterPrompts = [], onSelectPrompt }) {
   const { t, i18n } = useTranslation();
 
   return (
@@ -60,6 +60,6 @@ const StarterPromptsView = ({ starterPrompts = [], onSelectPrompt }) => {
       </div>
     </div>
   );
-};
+}
 
 export default StarterPromptsView;

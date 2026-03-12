@@ -26,6 +26,7 @@ import { createSourceManager } from '../../../sources/index.js';
 import config from '../../../config.js';
 import { getRootDir } from '../../../pathUtils.js';
 import path from 'path';
+import logger from '../../../utils/logger.js';
 
 /**
  * Agent node configuration
@@ -97,9 +98,8 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     const { config = {} } = node;
     const { language = 'en' } = context;
 
-    this.logger.info({
+    this.logger.info('Executing agent node', {
       component: 'AgentNodeExecutor',
-      message: `Executing agent node '${node.id}'`,
       nodeId: node.id,
       hasTools: (config.tools || []).length > 0
     });
@@ -148,9 +148,8 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         output = this.parseStructuredOutput(response.content, config.outputSchema, node.id);
       }
 
-      this.logger.info({
+      this.logger.info('Agent node completed', {
         component: 'AgentNodeExecutor',
-        message: `Agent node '${node.id}' completed`,
         nodeId: node.id,
         hasOutput: output !== undefined,
         model: model.id
@@ -186,12 +185,10 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       return result;
     } catch (error) {
-      this.logger.error({
+      this.logger.error('Agent node failed', {
         component: 'AgentNodeExecutor',
-        message: `Agent node '${node.id}' failed`,
         nodeId: node.id,
-        error: error.message,
-        stack: error.stack
+        error
       });
 
       return this.createErrorResult(`Agent execution failed: ${error.message}`, {
@@ -274,9 +271,17 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       for (const varName of config.inputFiles) {
         const raw = state.data?.[varName] || state.data?._fileData;
-        console.log(
-          `[AgentNodeExecutor] inputFiles lookup: varName="${varName}", raw type="${typeof raw}", isObject=${raw && typeof raw === 'object'}, hasContent=${!!(raw && raw.content)}, hasPageImages=${!!(raw && Array.isArray(raw.pageImages) && raw.pageImages.length > 0)}, pageImagesCount=${raw?.pageImages?.length || 0}, hasFileName=${!!(raw && raw.fileName)}, stateDataKeys=${Object.keys(state.data || {}).join(', ')}`
-        );
+        logger.info('inputFiles lookup', {
+          component: 'AgentNodeExecutor',
+          varName,
+          rawType: typeof raw,
+          isObject: raw && typeof raw === 'object',
+          hasContent: !!(raw && raw.content),
+          hasPageImages: !!(raw && Array.isArray(raw.pageImages) && raw.pageImages.length > 0),
+          pageImagesCount: raw?.pageImages?.length || 0,
+          hasFileName: !!(raw && raw.fileName),
+          stateDataKeys: Object.keys(state.data || {}).join(', ')
+        });
         if (!raw || typeof raw !== 'object') continue;
 
         // Ensure we have a file data object (not a plain string from text mapping)
@@ -433,9 +438,9 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
             comparisonResult = leftVal !== rightVal;
             break;
           default:
-            this.logger.warn({
+            this.logger.warn('Unknown comparison operator', {
               component: 'AgentNodeExecutor',
-              message: `Unknown comparison operator: ${operator}`
+              operator
             });
         }
 
@@ -564,9 +569,9 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       if (closingIndex === -1) {
         // Couldn't find matching closing tag
-        this.logger.warn({
+        this.logger.warn('Unbalanced {{#each}} block', {
           component: 'AgentNodeExecutor',
-          message: `Unbalanced {{#each}} block for path: ${arrayPath}`
+          arrayPath
         });
         break;
       }
@@ -721,9 +726,8 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     const cacheKey = [...sourceIds].sort().join(',');
     const cachedContent = state.data?._sourceContent?.[cacheKey];
     if (cachedContent) {
-      this.logger.debug({
+      this.logger.debug('Using cached source content', {
         component: 'AgentNodeExecutor',
-        message: 'Using cached source content',
         sourceIds
       });
       return { content: cachedContent, cacheUpdates: null };
@@ -758,9 +762,8 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       const result = await sourceManager.loadSources(resolvedSources, sourceContext);
 
       if (result.metadata.errors.length > 0) {
-        this.logger.warn({
+        this.logger.warn('Source loading errors', {
           component: 'AgentNodeExecutor',
-          message: 'Source loading errors',
           errors: result.metadata.errors
         });
       }
@@ -771,11 +774,10 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       return { content: result.content || null, cacheUpdates };
     } catch (error) {
-      this.logger.error({
+      this.logger.error('Failed to load sources', {
         component: 'AgentNodeExecutor',
-        message: 'Failed to load sources',
         sourceIds,
-        error: error.message
+        error
       });
       return { content: null, cacheUpdates: null };
     }
@@ -817,10 +819,10 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     while (iteration < maxIterations) {
       iteration++;
 
-      this.logger.debug({
+      this.logger.debug('LLM iteration', {
         component: 'AgentNodeExecutor',
-        message: `LLM iteration ${iteration} for node '${nodeId}'`,
         nodeId,
+        iteration,
         messageCount: currentMessages.length
       });
 
@@ -886,10 +888,10 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     }
 
     if (iteration >= maxIterations) {
-      this.logger.warn({
+      this.logger.warn('Max iterations reached for node', {
         component: 'AgentNodeExecutor',
-        message: `Max iterations (${maxIterations}) reached for node '${nodeId}'`,
-        nodeId
+        nodeId,
+        maxIterations
       });
     }
 
@@ -923,11 +925,11 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       if (toolCall.function.arguments) {
         args = JSON.parse(toolCall.function.arguments);
       }
-    } catch (e) {
-      this.logger.warn({
+    } catch (error) {
+      this.logger.warn('Failed to parse tool arguments', {
         component: 'AgentNodeExecutor',
-        message: `Failed to parse tool arguments for ${toolId}`,
-        error: e.message
+        toolId,
+        error: e
       });
     }
 
@@ -946,10 +948,10 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         content: JSON.stringify(result)
       };
     } catch (error) {
-      this.logger.error({
+      this.logger.error('Tool execution failed', {
         component: 'AgentNodeExecutor',
-        message: `Tool execution failed: ${toolId}`,
-        error: error.message
+        toolId,
+        error
       });
 
       return {
@@ -998,17 +1000,16 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       }
 
       // If no JSON found, return content as-is
-      this.logger.warn({
+      this.logger.warn('Could not parse structured output, returning raw content', {
         component: 'AgentNodeExecutor',
-        message: `Could not parse structured output for node '${nodeId}', returning raw content`,
         nodeId
       });
       return content;
     } catch (error) {
-      this.logger.warn({
+      this.logger.warn('JSON parse error for structured output', {
         component: 'AgentNodeExecutor',
-        message: `JSON parse error for node '${nodeId}': ${error.message}`,
-        nodeId
+        nodeId,
+        error
       });
       return content;
     }

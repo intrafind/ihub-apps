@@ -109,23 +109,27 @@ export function convertGenericToolsToOpenaiResponses(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      logger.info(
-        `[OpenAI Responses Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
-      );
+      logger.info('Filtering out provider-specific tool', {
+        component: 'OpenAIResponsesConverter',
+        toolId: tool.id || tool.name,
+        provider: tool.provider
+      });
       continue;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      logger.info(
-        `[OpenAI Responses Converter] Filtering out special tool: ${tool.id || tool.name}`
-      );
+      logger.info('Filtering out special tool', {
+        component: 'OpenAIResponsesConverter',
+        toolId: tool.id || tool.name
+      });
       continue;
     }
     // If webSearch is present, filter out other web search tools (but not webSearch itself)
     if (hasWebSearch && webSearchToolIds.includes(tool.id)) {
-      console.log(
-        `[OpenAI Responses Converter] Filtering out web search tool ${tool.id} because webSearch (native) is available`
-      );
+      logger.info('Filtering out web search tool because native webSearch is available', {
+        component: 'OpenAIResponsesConverter',
+        toolId: tool.id
+      });
       continue;
     }
     // Universal tool - include it
@@ -558,7 +562,10 @@ export function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'defau
       metadata
     );
   } catch (error) {
-    logger.error('Error parsing OpenAI Responses API response:', error);
+    logger.error('Error parsing OpenAI Responses API response', {
+      component: 'OpenAIResponsesConverter',
+      error
+    });
     return createGenericStreamingResponse(
       [],
       [],

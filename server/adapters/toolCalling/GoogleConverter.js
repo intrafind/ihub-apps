@@ -37,14 +37,19 @@ export function convertGenericToolsToGoogle(genericTools = []) {
     }
     // If tool specifies a different provider, exclude it
     if (tool.provider) {
-      logger.info(
-        `[Google Converter] Filtering out provider-specific tool: ${tool.id || tool.name} (provider: ${tool.provider})`
-      );
+      logger.info('Filtering out provider-specific tool', {
+        component: 'GoogleConverter',
+        toolId: tool.id || tool.name,
+        provider: tool.provider
+      });
       return false;
     }
     // If tool is marked as special but has no matching provider, exclude it
     if (tool.isSpecialTool) {
-      logger.info(`[Google Converter] Filtering out special tool: ${tool.id || tool.name}`);
+      logger.info('Filtering out special tool', {
+        component: 'GoogleConverter',
+        toolId: tool.id || tool.name
+      });
       return false;
     }
     // Universal tool - include it
@@ -59,8 +64,12 @@ export function convertGenericToolsToGoogle(genericTools = []) {
     // If both are present, prioritize google_search and warn about skipped function tools
     if (functionTools.length > 0) {
       logger.warn(
-        `Google API limitation: Cannot combine google_search with function calling. ` +
-          `Skipping ${functionTools.length} function tool(s): ${functionTools.map(t => t.name).join(', ')}`
+        'Google API limitation: cannot combine google_search with function calling, skipping function tools',
+        {
+          component: 'GoogleConverter',
+          skippedToolCount: functionTools.length,
+          skippedTools: functionTools.map(t => t.name)
+        }
       );
     }
   }
@@ -319,10 +328,10 @@ export function convertGoogleResponseToGeneric(data, _streamId = 'default') {
         // Handle partial function calls during streaming - ignore incomplete ones
         else if (part.functionCall && !part.functionCall.name) {
           // Log partial function call for debugging but don't create incomplete tool calls
-          logger.info(
-            'Google streaming: Ignoring partial function call without name:',
-            part.functionCall
-          );
+          logger.info('Google streaming: ignoring partial function call without name', {
+            component: 'GoogleConverter',
+            functionCall: part.functionCall
+          });
         }
         // Collect thought signatures for multi-turn conversations (for backward compatibility)
         if (part.thoughtSignature) {
@@ -351,7 +360,10 @@ export function convertGoogleResponseToGeneric(data, _streamId = 'default') {
       }
     }
   } catch (jsonError) {
-    logger.error('Failed to parse Google response as JSON:', jsonError.message);
+    logger.error('Failed to parse Google response as JSON', {
+      component: 'GoogleConverter',
+      error: jsonError
+    });
     result.error = true;
     result.errorMessage = `Error parsing Google response: ${jsonError.message}`;
 
@@ -477,7 +489,10 @@ export function processMessageForGoogle(message) {
             ? JSON.parse(toolCall.function.arguments)
             : toolCall.function.arguments;
       } catch (error) {
-        logger.warn('Failed to parse tool call arguments:', error);
+        logger.warn('Failed to parse tool call arguments', {
+          component: 'GoogleConverter',
+          error
+        });
         args = {};
       }
 

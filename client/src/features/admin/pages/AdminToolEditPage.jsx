@@ -15,7 +15,7 @@ import {
 } from '../../../api/adminApi';
 import { clearApiCache } from '../../../api/api';
 
-const AdminToolEditPage = () => {
+function AdminToolEditPage() {
   const { t } = useTranslation();
   const { toolId } = useParams();
   const navigate = useNavigate();
@@ -372,6 +372,6 @@ const AdminToolEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminToolEditPage;

@@ -3,7 +3,7 @@ import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
 
 /** Simple greeting component used when there are no messages */
-const GreetingView = ({ welcomeMessage }) => {
+function GreetingView({ welcomeMessage }) {
   const { t } = useTranslation();
 
   let title;
@@ -39,6 +39,6 @@ const GreetingView = ({ welcomeMessage }) => {
       </div>
     </div>
   );
-};
+}
 
 export default GreetingView;

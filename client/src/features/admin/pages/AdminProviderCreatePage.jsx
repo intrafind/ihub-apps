@@ -7,7 +7,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 
-const AdminProviderCreatePage = () => {
+function AdminProviderCreatePage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -286,6 +286,6 @@ const AdminProviderCreatePage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminProviderCreatePage;

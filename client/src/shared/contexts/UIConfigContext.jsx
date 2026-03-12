@@ -16,7 +16,7 @@ const UIConfigContext = createContext({
   refreshUIConfig: () => {}
 });
 
-export const UIConfigProvider = ({ children }) => {
+export function UIConfigProvider({ children }) {
   const [uiConfig, setUiConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -172,7 +172,7 @@ export const UIConfigProvider = ({ children }) => {
       {children}
     </UIConfigContext.Provider>
   );
-};
+}
 
 /**
  * Hook to access UI configuration context.
@@ -186,6 +186,8 @@ export const UIConfigProvider = ({ children }) => {
  * @returns {Function} returns.resetHeaderColor - Function to reset header to default
  * @returns {Function} returns.refreshUIConfig - Function to reload UI configuration
  */
-export const useUIConfig = () => useContext(UIConfigContext);
+export function useUIConfig() {
+  return useContext(UIConfigContext);
+}
 
 export default UIConfigContext;

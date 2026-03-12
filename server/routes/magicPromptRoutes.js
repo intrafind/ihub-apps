@@ -7,6 +7,11 @@ import { authRequired } from '../middleware/authRequired.js';
 import { simpleCompletion } from '../utils.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
+import {
+  sendInternalError,
+  sendBadRequest,
+  sendFailedOperationError
+} from '../utils/responseHelpers.js';
 
 export default function registerMagicPromptRoutes(app) {
   app.post(
@@ -19,7 +24,7 @@ export default function registerMagicPromptRoutes(app) {
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         req.headers['accept-language']?.split(',')[0] || defaultLang;
         if (!input) {
-          return res.status(400).json({ error: 'Missing input' });
+          return sendBadRequest(res, 'Missing input');
         }
 
         // Get available models and default model
@@ -28,7 +33,11 @@ export default function registerMagicPromptRoutes(app) {
 
         // Check if any models are available
         if (!models || models.length === 0) {
-          return res.status(500).json({ error: 'No models available for magic prompt generation' });
+          return sendFailedOperationError(
+            res,
+            'generate magic prompt: no models available',
+            new Error('No models available')
+          );
         }
 
         // Determine the model to use with fallback chain
@@ -47,7 +56,10 @@ export default function registerMagicPromptRoutes(app) {
           // Double-check fallback model exists
           const fallbackExists = models.some(m => m.id === fallbackModel);
           if (!fallbackExists) {
-            logger.warn(`Fallback model '${fallbackModel}' not found, using first available model`);
+            logger.warn('Fallback model not found, using first available model', {
+              component: 'MagicPrompt',
+              fallbackModel
+            });
             selectedModelId = models[0]?.id;
           }
         }
@@ -82,8 +94,7 @@ export default function registerMagicPromptRoutes(app) {
 
         return res.json({ prompt: newPrompt });
       } catch (error) {
-        logger.error('Error generating magic prompt:', error);
-        return res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'generate magic prompt');
       }
     }
   );

@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const LoggingConfig = () => {
+function LoggingConfig() {
   const { t } = useTranslation();
   const [currentLevel, setCurrentLevel] = useState('info');
   const [availableLevels, setAvailableLevels] = useState([]);
@@ -181,6 +181,6 @@ const LoggingConfig = () => {
       </div>
     </div>
   );
-};
+}
 
 export default LoggingConfig;

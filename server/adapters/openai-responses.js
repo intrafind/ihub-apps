@@ -194,7 +194,10 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       // Deep clone incoming schema and enforce additionalProperties:false on all objects
       const schemaClone = JSON.parse(JSON.stringify(responseSchema));
       const enforceNoExtras = node => {
-        logger.info('Enforcing no extras on schema node:', node);
+        logger.info('Enforcing no extras on schema node', {
+          component: 'OpenAIResponsesAdapter',
+          nodeType: node?.type
+        });
         if (node && node.type === 'object') {
           node.additionalProperties = false;
         }
@@ -216,16 +219,19 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         strict: true,
         schema: schemaClone
       };
-      logger.info(
-        'Using response schema for structured output:',
-        JSON.stringify(body.text, null, 2)
-      );
+      logger.info('Using response schema for structured output', {
+        component: 'OpenAIResponsesAdapter',
+        textFormat: JSON.stringify(body.text, null, 2)
+      });
     } else if (responseFormat === 'json') {
       // For simple JSON mode - merge with existing text configuration
       body.text.format = { type: 'json_object' };
     }
 
-    logger.info('OpenAI Responses API request body:', JSON.stringify(body, null, 2));
+    logger.info('OpenAI Responses API request body', {
+      component: 'OpenAIResponsesAdapter',
+      body: JSON.stringify(body, null, 2)
+    });
 
     return {
       url: model.url,
@@ -260,7 +266,10 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
       const parsed = JSON.parse(data);
 
       // Add debugging to see what we're receiving
-      logger.debug('[RESPONSES API DEBUG] Received chunk:', JSON.stringify(parsed, null, 2));
+      logger.debug('Received chunk', {
+        component: 'OpenAIResponsesAdapter',
+        chunk: JSON.stringify(parsed, null, 2)
+      });
 
       // Extract usage from Responses API (available on response.completed or full response)
       const usageData = parsed.response?.usage || parsed.usage;
@@ -357,8 +366,11 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
         result.errorMessage = parsed.error?.message || 'Response generation failed';
       }
     } catch (error) {
-      logger.error('Error parsing OpenAI Responses API response chunk:', error);
-      logger.error('Data that caused error:', data);
+      logger.error('Error parsing OpenAI Responses API response chunk', {
+        component: 'OpenAIResponsesAdapter',
+        error,
+        data
+      });
       result.error = true;
       result.errorMessage = `Error parsing OpenAI Responses API response: ${error.message}`;
     }

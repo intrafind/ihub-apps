@@ -8,7 +8,7 @@ const PlatformConfigContext = createContext({
   refreshConfig: () => {}
 });
 
-export const PlatformConfigProvider = ({ children }) => {
+export function PlatformConfigProvider({ children }) {
   const [platformConfig, setPlatformConfig] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -93,7 +93,7 @@ export const PlatformConfigProvider = ({ children }) => {
       {children}
     </PlatformConfigContext.Provider>
   );
-};
+}
 
 /**
  * Hook to access platform configuration context.
@@ -104,6 +104,8 @@ export const PlatformConfigProvider = ({ children }) => {
  * @returns {string|null} returns.error - Error message if loading failed
  * @returns {Function} returns.refreshConfig - Function to reload configuration
  */
-export const usePlatformConfig = () => useContext(PlatformConfigContext);
+export function usePlatformConfig() {
+  return useContext(PlatformConfigContext);
+}
 
 export default PlatformConfigContext;

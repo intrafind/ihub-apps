@@ -39,8 +39,8 @@ function scheduleFlush() {
     saveTimer = null;
     try {
       await flushQueue();
-    } catch (e) {
-      logger.error('Failed to save feedback data', e);
+    } catch (error) {
+      logger.error('Failed to save feedback data', { component: 'FeedbackStorage', error: e });
     }
   }, SAVE_INTERVAL_MS);
 }
@@ -56,7 +56,9 @@ export function storeFeedback({
 }) {
   // Load config asynchronously if not loaded yet
   if (!configLoaded) {
-    loadConfig().catch(e => logger.error('Failed to load feedback config:', e));
+    loadConfig().catch(e =>
+      logger.error('Failed to load feedback config', { component: 'FeedbackStorage', error: e })
+    );
   }
 
   if (!trackingEnabled || !messageId) return;
@@ -82,6 +84,8 @@ export async function reloadConfig() {
 // Start periodic flush interval
 setInterval(() => {
   if (queue.length > 0) {
-    flushQueue().catch(e => logger.error('Feedback save error:', e));
+    flushQueue().catch(e =>
+      logger.error('Feedback save error', { component: 'FeedbackStorage', error: e })
+    );
   }
 }, SAVE_INTERVAL_MS);

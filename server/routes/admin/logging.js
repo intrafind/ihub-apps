@@ -1,5 +1,6 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 import configCache from '../../configCache.js';
 import { promises as fs } from 'fs';
 import { join } from 'path';
@@ -38,8 +39,7 @@ export default function registerAdminLoggingRoutes(app) {
       const levelInfo = logger.getLogLevelInfo();
       res.json(levelInfo);
     } catch (error) {
-      logger.error('Error getting log level:', error);
-      res.status(500).json({ error: 'Failed to get log level' });
+      return sendInternalError(res, error, 'get log level');
     }
   });
 
@@ -80,15 +80,12 @@ export default function registerAdminLoggingRoutes(app) {
       // Validate log level
       const validLevels = ['error', 'warn', 'info', 'http', 'verbose', 'debug', 'silly'];
       if (!validLevels.includes(level)) {
-        return res.status(400).json({
-          error: 'Invalid log level',
-          validLevels
-        });
+        return sendBadRequest(res, 'Invalid log level');
       }
 
       // Update logger immediately
       logger.setLogLevel(level);
-      logger.info(`Log level changed to: ${level}`);
+      logger.info('Log level changed', { component: 'AdminLogging', level });
 
       // Optionally persist to platform.json
       if (persist) {
@@ -115,7 +112,7 @@ export default function registerAdminLoggingRoutes(app) {
         // Reconfigure logger to pick up any other changes
         logger.reconfigureLogger();
 
-        logger.info(`Log level persisted to platform.json: ${level}`);
+        logger.info('Log level persisted to platform.json', { component: 'AdminLogging', level });
       }
 
       res.json({
@@ -125,8 +122,7 @@ export default function registerAdminLoggingRoutes(app) {
         message: `Log level updated to ${level}${persist ? ' and saved to configuration' : ' (runtime only)'}`
       });
     } catch (error) {
-      logger.error('Error updating log level:', error);
-      res.status(500).json({ error: 'Failed to update log level' });
+      return sendInternalError(res, error, 'update log level');
     }
   });
 
@@ -158,8 +154,7 @@ export default function registerAdminLoggingRoutes(app) {
 
       res.json(loggingConfig);
     } catch (error) {
-      logger.error('Error getting logging config:', error);
-      res.status(500).json({ error: 'Failed to get logging configuration' });
+      return sendInternalError(res, error, 'get logging configuration');
     }
   });
 
@@ -222,7 +217,7 @@ export default function registerAdminLoggingRoutes(app) {
       // Reconfigure logger to pick up changes
       logger.reconfigureLogger();
 
-      logger.info('Logging configuration updated:', newLoggingConfig);
+      logger.info('Logging configuration updated', { component: 'AdminLogging', newLoggingConfig });
 
       res.json({
         success: true,
@@ -230,8 +225,7 @@ export default function registerAdminLoggingRoutes(app) {
         message: 'Logging configuration updated successfully'
       });
     } catch (error) {
-      logger.error('Error updating logging config:', error);
-      res.status(500).json({ error: 'Failed to update logging configuration' });
+      return sendInternalError(res, error, 'update logging configuration');
     }
   });
 }

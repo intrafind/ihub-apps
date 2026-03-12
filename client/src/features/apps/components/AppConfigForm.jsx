@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 
-const AppConfigForm = ({
+function AppConfigForm({
   app,
   models,
   styles,
@@ -26,7 +26,7 @@ const AppConfigForm = ({
   onImageAspectRatioChange: _onImageAspectRatioChange,
   onImageQualityChange: _onImageQualityChange,
   currentLanguage
-}) => {
+}) {
   const { t } = useTranslation();
 
   // Filter models if app has allowedModels specified
@@ -256,6 +256,6 @@ const AppConfigForm = ({
       )}
     </div>
   );
-};
+}
 
 export default AppConfigForm;

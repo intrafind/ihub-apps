@@ -10,6 +10,12 @@ import { validateIdForPath, validateIdsForPath } from '../../utils/pathSecurity.
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { removeMarketplaceInstallation } from '../../utils/installationCleanup.js';
+import {
+  sendInternalError,
+  sendNotFound,
+  sendBadRequest,
+  sendErrorResponse
+} from '../../utils/responseHelpers.js';
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -68,13 +74,7 @@ export default function registerAdminModelsRoutes(app) {
       res.setHeader('ETag', modelsEtag);
       res.json(maskedModels);
     } catch (error) {
-      logger.error({
-        component: 'ModelsRoutes',
-        message: 'Error fetching all models',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Failed to fetch models' });
+      return sendInternalError(res, error, 'fetch all models');
     }
   });
 
@@ -90,7 +90,7 @@ export default function registerAdminModelsRoutes(app) {
       const { data: models, etag: modelsEtag } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
       if (!model) {
-        return res.status(404).json({ error: 'Model not found' });
+        return sendNotFound(res, 'Model');
       }
 
       // Mask API key in the response for security
@@ -108,14 +108,7 @@ export default function registerAdminModelsRoutes(app) {
       res.setHeader('ETag', modelsEtag);
       res.json(maskedModel);
     } catch (error) {
-      logger.error({
-        component: 'ModelsRoutes',
-        message: 'Error fetching model',
-        modelId: req.params.modelId,
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Failed to fetch model' });
+      return sendInternalError(res, error, 'fetch model');
     }
   });
 
@@ -136,10 +129,10 @@ export default function registerAdminModelsRoutes(app) {
         !getLocalizedContent(updatedModel.description, defaultLang) ||
         !updatedModel.provider
       ) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return sendBadRequest(res, 'Missing required fields');
       }
       if (updatedModel.id !== modelId) {
-        return res.status(400).json({ error: 'Model ID cannot be changed' });
+        return sendBadRequest(res, 'Model ID cannot be changed');
       }
 
       // Handle API key encryption
@@ -150,8 +143,7 @@ export default function registerAdminModelsRoutes(app) {
           try {
             updatedModel.apiKey = tokenStorageService.encryptString(updatedModel.apiKey);
           } catch (error) {
-            logger.error('Error encrypting API key:', error);
-            return res.status(500).json({ error: 'Failed to encrypt API key' });
+            return sendInternalError(res, error, 'encrypt API key');
           }
         } else {
           // Masked value - need to preserve existing key
@@ -175,7 +167,10 @@ export default function registerAdminModelsRoutes(app) {
               delete updatedModel.apiKey;
             }
           } catch (error) {
-            logger.error('Error reading existing model from disk:', error);
+            logger.error('Error reading existing model from disk', {
+              component: 'ModelsRoutes',
+              error
+            });
             // Fallback to removing the masked placeholder
             delete updatedModel.apiKey;
           }
@@ -203,14 +198,7 @@ export default function registerAdminModelsRoutes(app) {
       await configCache.refreshModelsCache();
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
-      logger.error({
-        component: 'ModelsRoutes',
-        message: 'Error updating model',
-        modelId: req.params.modelId,
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Failed to update model' });
+      return sendInternalError(res, error, 'update model');
     }
   });
 
@@ -224,7 +212,7 @@ export default function registerAdminModelsRoutes(app) {
         !getLocalizedContent(newModel.description, defaultLang) ||
         !newModel.provider
       ) {
-        return res.status(400).json({ error: 'Missing required fields' });
+        return sendBadRequest(res, 'Missing required fields');
       }
 
       // Validate newModel.id for security
@@ -238,8 +226,7 @@ export default function registerAdminModelsRoutes(app) {
         try {
           newModel.apiKey = tokenStorageService.encryptString(newModel.apiKey);
         } catch (error) {
-          logger.error('Error encrypting API key:', error);
-          return res.status(500).json({ error: 'Failed to encrypt API key' });
+          return sendInternalError(res, error, 'encrypt API key');
         }
       } else if (newModel.apiKey === '••••••••') {
         // Remove masked placeholder if no real key
@@ -254,7 +241,7 @@ export default function registerAdminModelsRoutes(app) {
       const modelFilePath = join(rootDir, 'contents', 'models', `${newModel.id}.json`);
       try {
         readFileSync(modelFilePath, 'utf8');
-        return res.status(409).json({ error: 'Model with this ID already exists' });
+        return sendErrorResponse(res, 409, 'Model with this ID already exists');
       } catch {
         // file not found, continue
       }
@@ -273,13 +260,7 @@ export default function registerAdminModelsRoutes(app) {
       await configCache.refreshModelsCache();
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
-      logger.error({
-        component: 'ModelsRoutes',
-        message: 'Error creating model',
-        error: error.message,
-        stack: error.stack
-      });
-      res.status(500).json({ error: 'Failed to create model' });
+      return sendInternalError(res, error, 'create model');
     }
   });
 
@@ -295,7 +276,7 @@ export default function registerAdminModelsRoutes(app) {
       const { data: models } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
       if (!model) {
-        return res.status(404).json({ error: 'Model not found' });
+        return sendNotFound(res, 'Model');
       }
       const newEnabledState = !model.enabled;
       model.enabled = newEnabledState;
@@ -323,8 +304,7 @@ export default function registerAdminModelsRoutes(app) {
         enabled: newEnabledState
       });
     } catch (error) {
-      logger.error('Error toggling model:', error);
-      res.status(500).json({ error: 'Failed to toggle model' });
+      return sendInternalError(res, error, 'toggle model');
     }
   });
 
@@ -333,7 +313,7 @@ export default function registerAdminModelsRoutes(app) {
       const { modelIds } = req.params;
       const { enabled } = req.body;
       if (typeof enabled !== 'boolean') {
-        return res.status(400).json({ error: 'Missing enabled flag' });
+        return sendBadRequest(res, 'Missing enabled flag');
       }
 
       // Validate modelIds for security
@@ -372,8 +352,7 @@ export default function registerAdminModelsRoutes(app) {
         ids: resolvedIds
       });
     } catch (error) {
-      logger.error('Error toggling models:', error);
-      res.status(500).json({ error: 'Failed to toggle models' });
+      return sendInternalError(res, error, 'toggle models');
     }
   });
 
@@ -389,7 +368,7 @@ export default function registerAdminModelsRoutes(app) {
       const { data: models } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
       if (!model) {
-        return res.status(404).json({ error: 'Model not found' });
+        return sendNotFound(res, 'Model');
       }
       if (model.default === true) {
         const otherModels = models.filter(m => m.id !== modelId && m.enabled === true);
@@ -407,15 +386,14 @@ export default function registerAdminModelsRoutes(app) {
       const rootDir = getRootDir();
       const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
       if (!existsSync(modelFilePath)) {
-        return res.status(404).json({ error: 'Model file not found' });
+        return sendNotFound(res, 'Model file');
       }
       await fs.unlink(modelFilePath);
       await configCache.refreshModelsCache();
       await removeMarketplaceInstallation('model', modelId);
       res.json({ message: 'Model deleted successfully' });
     } catch (error) {
-      logger.error('Error deleting model:', error);
-      res.status(500).json({ error: 'Failed to delete model' });
+      return sendInternalError(res, error, 'delete model');
     }
   });
 
@@ -431,7 +409,7 @@ export default function registerAdminModelsRoutes(app) {
       const { data: models } = configCache.getModels(true);
       const model = models.find(m => m.id === modelId);
       if (!model) {
-        return res.status(404).json({ error: 'Model not found' });
+        return sendNotFound(res, 'Model');
       }
       const testMessage = 'Hello, can you respond with a simple "Test successful" message?';
       const { simpleCompletion } = await import('../../utils.js');
@@ -452,7 +430,7 @@ export default function registerAdminModelsRoutes(app) {
           model: model
         });
       } catch (testError) {
-        logger.error('Model test failed:', testError);
+        logger.error('Model test failed', { component: 'ModelsRoutes', error: testError });
         let errorMessage = 'Unknown error occurred';
         let userMessage = 'Model test failed';
         if (testError.message.includes('fetch failed')) {
@@ -497,20 +475,11 @@ export default function registerAdminModelsRoutes(app) {
         } else {
           errorMessage = testError.message;
         }
-        res.status(500).json({
-          success: false,
-          message: userMessage,
-          error: errorMessage,
-          model: model
-        });
+        sendInternalError(res, new Error(errorMessage), `test model: ${userMessage}`);
       }
     } catch (error) {
-      logger.error('Error testing model:', error);
-      res.status(500).json({
-        success: false,
-        message: 'System error',
-        error: 'Failed to test model due to a system error. Please try again.'
-      });
+      logger.error('Error testing model', { component: 'ModelsRoutes', error });
+      sendInternalError(res, error, 'test model');
     }
   });
 }

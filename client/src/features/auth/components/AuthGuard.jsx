@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 const AuthGuard = ({
   children,

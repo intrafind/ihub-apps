@@ -22,7 +22,7 @@ import MarketplaceItemDetail from '../components/marketplace/MarketplaceItemDeta
  * in useCallback to allow stable dependency arrays and prevent infinite
  * render loops.
  */
-const AdminMarketplacePage = () => {
+function AdminMarketplacePage() {
   const { t } = useTranslation();
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
@@ -316,6 +316,6 @@ const AdminMarketplacePage = () => {
       )}
     </AdminAuth>
   );
-};
+}
 
 export default AdminMarketplacePage;

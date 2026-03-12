@@ -8,7 +8,7 @@ import ChatActionsMenu from './ChatActionsMenu';
 /**
  * A reusable header component for chat interfaces
  */
-const ChatHeader = ({
+function ChatHeader({
   title,
   description,
   color,
@@ -32,7 +32,7 @@ const ChatHeader = ({
   appId,
   chatId,
   conversationTitle = null
-}) => {
+}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -159,5 +159,5 @@ const ChatHeader = ({
       </div>
     </div>
   );
-};
+}
 export default ChatHeader;

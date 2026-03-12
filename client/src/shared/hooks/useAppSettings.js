@@ -7,7 +7,7 @@ import { useUIConfig } from '../contexts/UIConfigContext';
  * Custom hook for managing app settings across chat and canvas modes
  * Provides shared state management for model, style, temperature, etc.
  */
-const useAppSettings = (appId, app) => {
+function useAppSettings(appId, app) {
   const { setHeaderColor } = useUIConfig();
 
   // Configuration states
@@ -203,6 +203,6 @@ const useAppSettings = (appId, app) => {
     settings,
     setters
   };
-};
+}
 
 export default useAppSettings;

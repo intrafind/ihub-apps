@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuth } from '../../../shared/contexts/AuthContext.jsx';
-import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext.jsx';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner.jsx';
+import { useAuth } from '../../../shared/contexts/AuthContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
 // Defined outside LoginForm to ensure a stable reference across renders.
 // Defining component types inside a render function causes React to unmount
@@ -11,7 +11,7 @@ const StandaloneWrapper = ({ children }) => (
   <div className="max-w-md mx-auto bg-white shadow-lg rounded-lg p-6">{children}</div>
 );
 
-const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
+export default function LoginForm({ onSuccess, onCancel, embedded = false }) {
   const { t } = useTranslation();
   const { loginLocal, loginLdap, loginWithOidc, isLoading, error, authConfig } = useAuth();
   const { platformConfig } = usePlatformConfig();
@@ -395,6 +395,4 @@ const LoginForm = ({ onSuccess, onCancel, embedded = false }) => {
       )}
     </Wrapper>
   );
-};
-
-export default LoginForm;
+}

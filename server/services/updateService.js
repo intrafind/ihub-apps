@@ -145,9 +145,9 @@ async function acquireLock() {
       if (lockAge < 10 * 60 * 1000) {
         throw new Error('Another update operation is in progress');
       }
-      logger.warn('Removing stale update lock');
-    } catch (e) {
-      if (e.message === 'Another update operation is in progress') throw e;
+      logger.warn('Removing stale update lock', { component: 'UpdateService' });
+    } catch (error) {
+      if (error.message === 'Another update operation is in progress') throw error;
       // Invalid lock file, remove it
     }
   }
@@ -294,7 +294,9 @@ export async function downloadUpdate(updateInfo) {
       await downloadFile(updateInfo.checksumsUrl, checksumsPath);
       await verifyChecksum(archivePath, checksumsPath, updateInfo);
     } else {
-      logger.warn('No checksums file available, skipping verification');
+      logger.warn('No checksums file available, skipping verification', {
+        component: 'UpdateService'
+      });
     }
 
     // Validate archive contents before extraction to prevent path traversal
@@ -351,7 +353,10 @@ export async function downloadUpdate(updateInfo) {
       stagedVersion: updateInfo.latestVersion
     });
 
-    logger.info(`Update ${updateInfo.latestVersion} downloaded and staged successfully`);
+    logger.info('Update downloaded and staged successfully', {
+      component: 'UpdateService',
+      version: updateInfo.latestVersion
+    });
 
     return { success: true, stagedVersion: updateInfo.latestVersion };
   } catch (error) {
@@ -400,7 +405,10 @@ export async function applyUpdate() {
       const backupPath = join(backupDir, relPath);
 
       if (!existsSync(stagedPath)) {
-        logger.debug(`Staged path ${relPath} does not exist, skipping`);
+        logger.debug('Staged path does not exist, skipping', {
+          component: 'UpdateService',
+          relPath
+        });
         continue;
       }
 
@@ -450,7 +458,11 @@ export async function applyUpdate() {
       backupVersion: currentVersion
     });
 
-    logger.info(`Update applied successfully: ${currentVersion} → ${newVersion}`);
+    logger.info('Update applied successfully', {
+      component: 'UpdateService',
+      currentVersion,
+      newVersion
+    });
 
     return {
       success: true,
@@ -459,7 +471,7 @@ export async function applyUpdate() {
       restartCode: UPDATE_RESTART_CODE
     };
   } catch (error) {
-    logger.error('Update apply failed, attempting rollback:', error);
+    logger.error('Update apply failed, attempting rollback', { component: 'UpdateService', error });
     setState({ status: 'error', error: error.message, message: 'Apply failed, rolling back...' });
 
     // Attempt automatic rollback
@@ -471,7 +483,7 @@ export async function applyUpdate() {
         message: 'Update rolled back'
       });
     } catch (rollbackError) {
-      logger.error('Rollback also failed:', rollbackError);
+      logger.error('Rollback also failed', { component: 'UpdateService', error: rollbackError });
       setState({
         status: 'error',
         error: `Update AND rollback failed: ${error.message}. Rollback error: ${rollbackError.message}`,
@@ -526,7 +538,7 @@ export async function rollback() {
       backupVersion: null
     });
 
-    logger.info(`Rollback completed to version ${restoredVersion}`);
+    logger.info('Rollback completed', { component: 'UpdateService', restoredVersion });
 
     return { success: true, restoredVersion, restartCode: UPDATE_RESTART_CODE };
   } catch (error) {
@@ -619,7 +631,7 @@ async function restoreLauncherScript(rootDir, backupDir) {
       }
     }
   } catch (error) {
-    logger.warn('Error restoring launcher script:', error);
+    logger.warn('Error restoring launcher script', { component: 'UpdateService', error });
   }
 }
 
@@ -664,7 +676,12 @@ async function downloadFile(url, destPath, expectedSize = null) {
       lastError = error;
       if (attempt < maxRetries) {
         const delay = Math.pow(2, attempt) * 1000;
-        logger.warn(`Download attempt ${attempt} failed, retrying in ${delay}ms: ${error.message}`);
+        logger.warn('Download attempt failed, retrying', {
+          component: 'UpdateService',
+          attempt,
+          delay,
+          error
+        });
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
@@ -684,7 +701,10 @@ async function verifyChecksum(filePath, checksumsPath, updateInfo) {
     const expectedLine = checksumsContent.split('\n').find(line => line.includes(fileName));
 
     if (!expectedLine) {
-      logger.warn(`No checksum found for ${fileName}, skipping verification`);
+      logger.warn('No checksum found, skipping verification', {
+        component: 'UpdateService',
+        fileName
+      });
       return;
     }
 
@@ -701,12 +721,12 @@ async function verifyChecksum(filePath, checksumsPath, updateInfo) {
       throw new Error(`Checksum mismatch: expected ${expectedHash}, got ${actualHash}`);
     }
 
-    logger.info('Checksum verification passed');
+    logger.info('Checksum verification passed', { component: 'UpdateService' });
   } catch (error) {
     if (error.message.startsWith('Checksum mismatch')) {
       throw error;
     }
-    logger.warn(`Checksum verification skipped: ${error.message}`);
+    logger.warn('Checksum verification skipped', { component: 'UpdateService', error });
   }
 }
 

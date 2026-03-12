@@ -4,6 +4,7 @@ import { getAppVersion } from '../../utils/versionHelper.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import { compareVersions } from '../../services/updateService.js';
 import logger from '../../utils/logger.js';
+import { sendInternalError } from '../../utils/responseHelpers.js';
 
 export default function registerAdminVersionRoutes(app) {
   /**
@@ -29,8 +30,7 @@ export default function registerAdminVersionRoutes(app) {
         node: process.version
       });
     } catch (error) {
-      logger.error('Error getting version information:', error);
-      res.status(500).json({ error: 'Failed to get version information' });
+      return sendInternalError(res, error, 'get version information');
     }
   });
 
@@ -95,7 +95,7 @@ export default function registerAdminVersionRoutes(app) {
         publishedAt: releaseData.published_at
       });
     } catch (error) {
-      logger.error('Error checking for updates:', error);
+      logger.error('Error checking for updates', { component: 'AdminVersion', error });
 
       // Return graceful response with no update available on error
       const currentVersion = getAppVersion();

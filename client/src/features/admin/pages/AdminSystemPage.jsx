@@ -7,7 +7,7 @@ import SSLConfig from '../components/SSLConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
-const AdminSystemPage = () => {
+function AdminSystemPage() {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const fileInputRef = useRef(null);
@@ -1240,6 +1240,6 @@ const AdminSystemPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminSystemPage;

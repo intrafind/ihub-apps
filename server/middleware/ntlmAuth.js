@@ -38,30 +38,22 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     ...ntlmConfig.options
   };
 
-  logger.info(
-    `[NTLM Auth] Configuring NTLM middleware with domain: ${options.domain || 'default'}`
-  );
-  logger.info(`[NTLM Auth] Domain controller: ${options.domaincontroller || 'NOT CONFIGURED'}`);
-  logger.info(`[NTLM Auth] Get groups enabled: ${options.getGroups}`);
-  logger.info(
-    `[NTLM Auth] LDAP bind user: ${options.domaincontrolleruser ? '✓ Configured' : '✗ NOT CONFIGURED'}`
-  );
-  logger.info(
-    `[NTLM Auth] LDAP bind password: ${options.domaincontrollerpassword ? '✓ Configured' : '✗ NOT CONFIGURED'}`
-  );
-  logger.info(`[NTLM Auth] Debug mode: ${options.debug}`);
+  logger.info('NTLM Auth: configuring NTLM middleware', {
+    component: 'NtlmAuth',
+    domain: options.domain || 'default',
+    domainController: options.domaincontroller || 'NOT CONFIGURED',
+    getGroups: options.getGroups,
+    ldapBindUserConfigured: !!options.domaincontrolleruser,
+    ldapBindPasswordConfigured: !!options.domaincontrollerpassword,
+    debugMode: options.debug
+  });
 
   // Warn if getGroups is enabled but no domain controller is configured
   if (options.getGroups && !options.domaincontroller) {
     logger.warn(
-      '⚠️  [NTLM Auth] WARNING: getGroups is enabled but no domain controller is configured.'
+      'NTLM Auth: getGroups is enabled but no domain controller is configured, users will be assigned default groups only',
+      { component: 'NtlmAuth' }
     );
-    logger.warn('⚠️  [NTLM Auth] Group retrieval requires a domain controller for LDAP queries.');
-    logger.warn('⚠️  [NTLM Auth] Users will be assigned default groups only.');
-    logger.warn(
-      '⚠️  [NTLM Auth] To fix: Configure "domainController" in platform.json ntlmAuth section'
-    );
-    logger.warn('⚠️  [NTLM Auth] Example: "domainController": "ldap://dc.yourdomain.com"');
   }
 
   // Warn if getGroups is enabled but LDAP credentials are missing
@@ -71,19 +63,8 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     (!options.domaincontrolleruser || !options.domaincontrollerpassword)
   ) {
     logger.warn(
-      '⚠️  [NTLM Auth] WARNING: getGroups is enabled with domain controller, but LDAP credentials are missing.'
-    );
-    logger.warn(
-      '⚠️  [NTLM Auth] Group retrieval requires LDAP bind credentials to query Active Directory.'
-    );
-    logger.warn(
-      '⚠️  [NTLM Auth] Configure "domainControllerUser" and "domainControllerPassword" in platform.json'
-    );
-    logger.warn(
-      '⚠️  [NTLM Auth] Example: "domainControllerUser": "CN=Service Account,OU=Users,DC=muc,DC=intrafind,DC=de"'
-    );
-    logger.warn(
-      '⚠️  [NTLM Auth] Or use environment variables: NTLM_LDAP_USER and NTLM_LDAP_PASSWORD'
+      'NTLM Auth: getGroups is enabled with domain controller but LDAP credentials are missing',
+      { component: 'NtlmAuth' }
     );
   }
 
@@ -113,25 +94,30 @@ function getNtlmMiddleware(ntlmConfig) {
  */
 function processNtlmUser(req, ntlmConfig) {
   if (!req.ntlm) {
-    logger.debug('[NTLM Auth] No NTLM data in request');
+    logger.debug('NTLM Auth: no NTLM data in request', { component: 'NtlmAuth' });
     return null;
   }
 
   const ntlmUser = req.ntlm;
 
-  logger.debug('[NTLM Auth] Raw NTLM data:', JSON.stringify(ntlmUser, null, 2));
+  logger.debug('NTLM Auth: raw NTLM data', {
+    component: 'NtlmAuth',
+    ntlmUser: JSON.stringify(ntlmUser, null, 2)
+  });
 
   // Check if user is authenticated
   if (!ntlmUser.Authenticated) {
-    logger.warn(
-      `[NTLM Auth] User not authenticated: ${ntlmUser.UserName || ntlmUser.username || 'unknown'}`
-    );
+    logger.warn('NTLM Auth: user not authenticated', {
+      component: 'NtlmAuth',
+      username: ntlmUser.UserName || ntlmUser.username || 'unknown'
+    });
     return null;
   }
 
-  logger.info(
-    `[NTLM Auth] Processing authenticated user: ${ntlmUser.UserName || ntlmUser.username}`
-  );
+  logger.info('NTLM Auth: processing authenticated user', {
+    component: 'NtlmAuth',
+    username: ntlmUser.UserName || ntlmUser.username
+  });
 
   // Extract user information
   const userId = ntlmUser.username || ntlmUser.UserName;
@@ -142,38 +128,41 @@ function processNtlmUser(req, ntlmConfig) {
   let groups = [];
   if (ntlmUser.groups && Array.isArray(ntlmUser.groups)) {
     groups = ntlmUser.groups;
-    logger.debug('[NTLM Auth] Found groups in ntlmUser.groups:', groups);
+    logger.debug('NTLM Auth: found groups in ntlmUser.groups', { component: 'NtlmAuth', groups });
   } else if (ntlmUser.Groups && Array.isArray(ntlmUser.Groups)) {
     groups = ntlmUser.Groups;
-    logger.debug('[NTLM Auth] Found groups in ntlmUser.Groups:', groups);
+    logger.debug('NTLM Auth: found groups in ntlmUser.Groups', { component: 'NtlmAuth', groups });
   } else {
-    logger.debug(
-      '[NTLM Auth] No groups found in NTLM data. Available fields:',
-      Object.keys(ntlmUser)
-    );
-    logger.debug('[NTLM Auth] NTLM config getGroups setting:', ntlmConfig.getGroups);
-    logger.debug(
-      '[NTLM Auth] NTLM config domainController:',
-      ntlmConfig.domainController || 'NOT CONFIGURED'
-    );
+    logger.debug('NTLM Auth: no groups found in NTLM data', {
+      component: 'NtlmAuth',
+      availableFields: Object.keys(ntlmUser),
+      getGroups: ntlmConfig.getGroups,
+      domainController: ntlmConfig.domainController || 'NOT CONFIGURED'
+    });
 
     if (ntlmConfig.getGroups && !ntlmConfig.domainController) {
       logger.warn(
-        '⚠️  [NTLM Auth] Groups cannot be retrieved without a domain controller configuration'
+        'NTLM Auth: groups cannot be retrieved without a domain controller configuration',
+        {
+          component: 'NtlmAuth'
+        }
       );
     }
   }
 
-  logger.debug('[NTLM Auth] Extracted groups before mapping:', groups);
+  logger.debug('NTLM Auth: extracted groups before mapping', { component: 'NtlmAuth', groups });
 
   // Apply group mapping using centralized function
   const mappedGroups = mapExternalGroups(groups);
 
-  logger.debug('[NTLM Auth] Groups after mapping:', mappedGroups);
+  logger.debug('NTLM Auth: groups after mapping', { component: 'NtlmAuth', mappedGroups });
 
   // Add default groups if configured
   if (ntlmConfig.defaultGroups && Array.isArray(ntlmConfig.defaultGroups)) {
-    logger.debug('[NTLM Auth] Adding default groups:', ntlmConfig.defaultGroups);
+    logger.debug('NTLM Auth: adding default groups', {
+      component: 'NtlmAuth',
+      defaultGroups: ntlmConfig.defaultGroups
+    });
     ntlmConfig.defaultGroups.forEach(g => {
       if (!mappedGroups.includes(g)) {
         mappedGroups.push(g);
@@ -181,7 +170,7 @@ function processNtlmUser(req, ntlmConfig) {
     });
   }
 
-  logger.debug('[NTLM Auth] Final groups for user:', mappedGroups);
+  logger.debug('NTLM Auth: final groups for user', { component: 'NtlmAuth', mappedGroups });
 
   // Create normalized user object
   const user = {
@@ -199,7 +188,8 @@ function processNtlmUser(req, ntlmConfig) {
     raw: ntlmUser // Keep raw NTLM data for debugging
   };
 
-  logger.debug('[NTLM Auth] Created user object:', {
+  logger.debug('NTLM Auth: created user object', {
+    component: 'NtlmAuth',
     id: user.id,
     name: user.name,
     groups: user.groups,
@@ -245,7 +235,8 @@ export function ntlmAuthMiddleware(req, res, next) {
   if (req.user && req.user.id && req.user.id !== 'anonymous') {
     // Debug logging in development
     if (process.env.NODE_ENV === 'development') {
-      logger.debug('[NTLM Debug] Skipping NTLM - user already authenticated:', {
+      logger.debug('NTLM Debug: skipping NTLM - user already authenticated', {
+        component: 'NtlmAuth',
         userId: req.user.id,
         authMode: req.user.authMode,
         url: req.url
@@ -257,7 +248,8 @@ export function ntlmAuthMiddleware(req, res, next) {
   // Debug logging in development
   const isDev = process.env.NODE_ENV === 'development';
   if (isDev) {
-    logger.debug('[NTLM Debug] Request:', {
+    logger.debug('NTLM Debug: request', {
+      component: 'NtlmAuth',
       url: req.url,
       hostname: req.hostname,
       origin: req.headers.origin,
@@ -278,9 +270,7 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   if (isViteProxy) {
     if (isDev) {
-      logger.info(
-        '[NTLM Debug] Skipping NTLM for Vite proxy (set SKIP_NTLM_VITE_PROXY=false to test NTLM through Vite)'
-      );
+      logger.info('NTLM Debug: skipping NTLM for Vite proxy', { component: 'NtlmAuth' });
     }
     return next();
   }
@@ -296,15 +286,15 @@ export function ntlmAuthMiddleware(req, res, next) {
 
   if (multipleProviders && !ntlmRequested && !isNtlmLoginEndpoint) {
     if (isDev) {
-      logger.info(
-        '[NTLM Debug] Multiple providers configured, skipping auto-NTLM (not explicitly requested)'
-      );
+      logger.info('NTLM Debug: multiple providers configured, skipping auto-NTLM', {
+        component: 'NtlmAuth'
+      });
     }
     return next();
   }
 
   if (isDev) {
-    logger.debug('[NTLM Debug] Applying NTLM middleware');
+    logger.debug('NTLM Debug: applying NTLM middleware', { component: 'NtlmAuth' });
   }
 
   // Get or create the express-ntlm middleware instance
@@ -319,9 +309,15 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.end = function (...args) {
     responseSent = true;
     if (isDev) {
-      logger.debug('[NTLM Debug] Response sent by express-ntlm, status:', res.statusCode);
+      logger.debug('NTLM Debug: response sent by express-ntlm', {
+        component: 'NtlmAuth',
+        status: res.statusCode
+      });
       if (res.statusCode === 401) {
-        logger.debug('[NTLM Debug] NTLM challenge sent, headers:', res.getHeaders());
+        logger.debug('NTLM Debug: NTLM challenge sent', {
+          component: 'NtlmAuth',
+          headers: res.getHeaders()
+        });
       }
     }
     return originalEnd.apply(this, args);
@@ -330,12 +326,12 @@ export function ntlmAuthMiddleware(req, res, next) {
   res.send = function (...args) {
     responseSent = true;
     if (isDev) {
-      logger.debug(
-        '[NTLM Debug] Response sent by express-ntlm (via send), status:',
-        res.statusCode
-      );
+      logger.debug('NTLM Debug: response sent by express-ntlm via send', {
+        component: 'NtlmAuth',
+        status: res.statusCode
+      });
       if (res.statusCode === 500 && args.length > 0) {
-        logger.error('[NTLM Debug] 500 Error body:', args[0]);
+        logger.error('NTLM Debug: 500 error body', { component: 'NtlmAuth', body: args[0] });
       }
     }
     return originalSend.apply(this, args);
@@ -344,7 +340,9 @@ export function ntlmAuthMiddleware(req, res, next) {
   // Set a timeout to prevent hanging
   const timeout = setTimeout(() => {
     if (!responseSent) {
-      logger.error('[NTLM Auth] express-ntlm middleware timed out after 5 seconds');
+      logger.error('NTLM Auth: express-ntlm middleware timed out after 5 seconds', {
+        component: 'NtlmAuth'
+      });
       res.end = originalEnd;
       res.send = originalSend;
       if (!res.headersSent) {
@@ -362,15 +360,17 @@ export function ntlmAuthMiddleware(req, res, next) {
 
       if (responseSent) {
         if (isDev) {
-          logger.debug('[NTLM Debug] express-ntlm sent response directly, not calling next()');
+          logger.debug('NTLM Debug: express-ntlm sent response directly, not calling next', {
+            component: 'NtlmAuth'
+          });
         }
         return; // Don't call next() if response was already sent
       }
 
       if (err) {
-        logger.error('[NTLM Auth] Error in express-ntlm middleware:', err.message);
-        logger.error('[NTLM Auth] Error stack:', err.stack);
-        logger.error('[NTLM Auth] Request details:', {
+        logger.error('NTLM Auth: error in express-ntlm middleware', {
+          component: 'NtlmAuth',
+          error: err,
           url: req.url,
           method: req.method,
           headers: req.headers
@@ -382,14 +382,16 @@ export function ntlmAuthMiddleware(req, res, next) {
       // Now process the NTLM data if available
       try {
         if (isDev) {
-          logger.debug('[NTLM Debug] After express-ntlm, req.ntlm:', req.ntlm);
+          logger.debug('NTLM Debug: after express-ntlm', { component: 'NtlmAuth', ntlm: req.ntlm });
         }
 
         // Check if NTLM data is available (should be set by express-ntlm middleware)
         if (!req.ntlm) {
           // This is normal for public endpoints - just continue without authentication
           if (isDev) {
-            logger.debug('[NTLM Debug] No NTLM data, continuing without auth');
+            logger.debug('NTLM Debug: no NTLM data, continuing without auth', {
+              component: 'NtlmAuth'
+            });
           }
           return next();
         }
@@ -409,9 +411,11 @@ export function ntlmAuthMiddleware(req, res, next) {
         // Validate and persist NTLM user (similar to OIDC/Proxy)
         // User must be persisted - if this fails, authentication fails
         user = await validateAndPersistExternalUser(user, platform);
-        logger.info(
-          `[NTLM Auth] User persisted: ${user.id} with groups: ${user.groups.join(', ')}`
-        );
+        logger.info('NTLM Auth: user persisted', {
+          component: 'NtlmAuth',
+          userId: user.id,
+          groups: user.groups.join(', ')
+        });
 
         // Set user in request
         req.user = user;
@@ -440,18 +444,25 @@ export function ntlmAuthMiddleware(req, res, next) {
               maxAge: expiresIn * 1000
             });
           } catch (tokenError) {
-            logger.error('[NTLM Auth] JWT token generation failed:', tokenError.message);
+            logger.error('NTLM Auth: JWT token generation failed', {
+              component: 'NtlmAuth',
+              error: tokenError
+            });
             // Continue without token - NTLM auth still valid
           }
         }
 
-        logger.info(
-          `[NTLM Auth] User authenticated: ${user.id} with groups: ${user.groups.join(', ')}`
-        );
+        logger.info('NTLM Auth: user authenticated', {
+          component: 'NtlmAuth',
+          userId: user.id,
+          groups: user.groups.join(', ')
+        });
         next();
       } catch (error) {
-        logger.error('[NTLM Auth] Error processing NTLM authentication:', error);
-        logger.error('[NTLM Auth] Stack trace:', error.stack);
+        logger.error('NTLM Auth: error processing NTLM authentication', {
+          component: 'NtlmAuth',
+          error
+        });
         // Don't block the request - continue without authentication
         next();
       }
@@ -460,8 +471,10 @@ export function ntlmAuthMiddleware(req, res, next) {
     clearTimeout(timeout);
     res.end = originalEnd;
     res.send = originalSend;
-    logger.error('[NTLM Auth] Unexpected error in NTLM middleware:', error.message);
-    logger.error('[NTLM Auth] Stack trace:', error.stack);
+    logger.error('NTLM Auth: unexpected error in NTLM middleware', {
+      component: 'NtlmAuth',
+      error
+    });
     // Continue without NTLM authentication on error
     next();
   }
@@ -503,9 +516,12 @@ export async function processNtlmLogin(req, ntlmConfig) {
   // Validate and persist NTLM user (similar to OIDC/Proxy)
   try {
     user = await validateAndPersistExternalUser(user, platform);
-    logger.info(`[NTLM Auth] User persisted via login: ${user.id}`);
+    logger.info('NTLM Auth: user persisted via login', { component: 'NtlmAuth', userId: user.id });
   } catch (userError) {
-    logger.error('[NTLM Auth] User persistence error during login:', userError.message);
+    logger.error('NTLM Auth: user persistence error during login', {
+      component: 'NtlmAuth',
+      error: userError
+    });
     // Continue with authentication even if persistence fails
   }
 

@@ -21,7 +21,7 @@ import {
  *
  * Follows the same layout conventions as AdminToolsPage.
  */
-const AdminSkillsPage = () => {
+function AdminSkillsPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
 
@@ -497,6 +497,6 @@ const AdminSkillsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminSkillsPage;

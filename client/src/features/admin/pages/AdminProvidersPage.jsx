@@ -11,7 +11,7 @@ import JiraConfig from '../components/JiraConfig';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const HealthBadge = ({ status }) => {
+function HealthBadge({ status }) {
   const { t } = useTranslation();
 
   if (!status || status === 'idle') {
@@ -58,9 +58,9 @@ const HealthBadge = ({ status }) => {
       {config.label}
     </span>
   );
-};
+}
 
-const AdminProvidersPage = () => {
+function AdminProvidersPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -658,6 +658,6 @@ const AdminProvidersPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminProvidersPage;

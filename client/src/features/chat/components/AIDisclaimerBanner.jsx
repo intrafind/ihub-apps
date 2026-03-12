@@ -7,7 +7,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
  * AI Disclaimer Banner Component
  * Displays a short disclaimer below the chat input that links to full disclaimer
  */
-const AIDisclaimerBanner = () => {
+function AIDisclaimerBanner() {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const currentLanguage = i18n.language;
@@ -51,6 +51,6 @@ const AIDisclaimerBanner = () => {
       </ElementTag>
     </div>
   );
-};
+}
 
 export default AIDisclaimerBanner;

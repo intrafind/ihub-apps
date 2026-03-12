@@ -6,7 +6,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 
-const AdminUsersPage = () => {
+function AdminUsersPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
@@ -597,6 +597,6 @@ const AdminUsersPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminUsersPage;

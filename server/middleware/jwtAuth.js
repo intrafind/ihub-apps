@@ -52,13 +52,13 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     if (!decoded) {
-      logger.warn('🔐 JWT Auth: Token verification failed');
+      logger.warn('JWT Auth: Token verification failed', { component: 'JwtAuth' });
       return next(); // Invalid token, continue as anonymous
     }
 
     // Debug: Log JWT payload in development
     if (process.env.NODE_ENV === 'development') {
-      logger.info('🔐 JWT User authenticated:', {
+      logger.info('JWT user authenticated', {
         component: 'JwtAuth',
         userId: decoded.sub || decoded.username || decoded.id,
         name: decoded.name,
@@ -71,7 +71,9 @@ export default function jwtAuthMiddleware(req, res, next) {
       // For /api/auth/status endpoint, don't return 401 on expired token
       // Allow the endpoint to respond with proper auth status and auto-redirect info
       if (req.path === '/api/auth/status') {
-        logger.info('🔐 JWT Auth: Token expired, continuing to status endpoint');
+        logger.info('JWT Auth: Token expired, continuing to status endpoint', {
+          component: 'JwtAuth'
+        });
         return next();
       }
 
@@ -98,9 +100,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           const client = findClientById(clientsConfig, decoded.client_id);
 
           if (!client) {
-            logger.warn(
-              `[OAuth] Token rejected: client not found | client_id=${decoded.client_id}`
-            );
+            logger.warn('OAuth token rejected: client not found', {
+              component: 'JwtAuth',
+              clientId: decoded.client_id
+            });
             return res.status(401).json({
               error: 'invalid_token',
               error_description: 'OAuth client no longer exists'
@@ -108,9 +111,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           }
 
           if (!client.active) {
-            logger.warn(
-              `[OAuth] Token rejected: client suspended | client_id=${decoded.client_id}`
-            );
+            logger.warn('OAuth token rejected: client suspended', {
+              component: 'JwtAuth',
+              clientId: decoded.client_id
+            });
             return res.status(403).json({
               error: 'access_denied',
               error_description: 'OAuth client has been suspended'
@@ -123,9 +127,12 @@ export default function jwtAuthMiddleware(req, res, next) {
             const lastRotatedAt = new Date(client.lastRotated).getTime();
 
             if (tokenIssuedAt < lastRotatedAt) {
-              logger.warn(
-                `[OAuth] Token rejected: issued before secret rotation | client_id=${decoded.client_id} | token_iat=${new Date(tokenIssuedAt).toISOString()} | last_rotated=${client.lastRotated}`
-              );
+              logger.warn('OAuth token rejected: issued before secret rotation', {
+                component: 'JwtAuth',
+                clientId: decoded.client_id,
+                tokenIssuedAt: new Date(tokenIssuedAt).toISOString(),
+                lastRotated: client.lastRotated
+              });
               return res.status(401).json({
                 error: 'invalid_token',
                 error_description: 'Token was issued before the last secret rotation'
@@ -151,7 +158,10 @@ export default function jwtAuthMiddleware(req, res, next) {
             staticKey: decoded.static_key || false
           };
         } catch (loadError) {
-          logger.error('[OAuth] Failed to validate client status:', loadError);
+          logger.error('OAuth failed to validate client status', {
+            component: 'JwtAuth',
+            error: loadError
+          });
           // Continue anyway to avoid breaking on config errors
           user = {
             id: decoded.client_id,
@@ -170,7 +180,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         // OAuth clients not enabled, but token is OAuth type - reject
-        logger.warn('[OAuth] Token rejected: OAuth clients not enabled');
+        logger.warn('OAuth token rejected: OAuth clients not enabled', { component: 'JwtAuth' });
         res.clearCookie('authToken', {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -196,7 +206,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           const userRecord = usersConfig.users?.[userId];
 
           if (userRecord && !isUserActive(userRecord)) {
-            logger.warn(`[OAuth] Token rejected: user account disabled | user_id=${userId}`);
+            logger.warn('OAuth token rejected: user account disabled', {
+              component: 'JwtAuth',
+              userId
+            });
             return res.status(403).json({
               error: 'access_denied',
               error_description: 'User account has been disabled'
@@ -216,14 +229,17 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || []
           };
         } catch (loadError) {
-          logger.error('[OAuth] Failed to validate user for auth code token:', loadError);
+          logger.error('OAuth failed to validate user for auth code token', {
+            component: 'JwtAuth',
+            error: loadError
+          });
           return res.status(503).json({
             error: 'service_unavailable',
             error_description: 'Unable to validate user credentials. Please try again later.'
           });
         }
       } else {
-        logger.warn('[OAuth] Auth code token rejected: OAuth not enabled');
+        logger.warn('OAuth auth code token rejected: OAuth not enabled', { component: 'JwtAuth' });
         res.clearCookie('authToken', {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -250,7 +266,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           const userRecord = usersConfig.users?.[userId];
 
           if (!userRecord) {
-            logger.warn(`[JWT Auth] Token rejected: user not found | user_id=${userId}`);
+            logger.warn('JWT Auth token rejected: user not found', {
+              component: 'JwtAuth',
+              userId
+            });
             return res.status(401).json({
               error: 'invalid_token',
               error_description: 'User account no longer exists'
@@ -258,7 +277,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           }
 
           if (!isUserActive(userRecord)) {
-            logger.warn(`[JWT Auth] Token rejected: user account disabled | user_id=${userId}`);
+            logger.warn('JWT Auth token rejected: user account disabled', {
+              component: 'JwtAuth',
+              userId
+            });
             return res.status(403).json({
               error: 'access_denied',
               error_description: 'User account has been disabled'
@@ -276,7 +298,10 @@ export default function jwtAuthMiddleware(req, res, next) {
             timestamp: Date.now()
           };
         } catch (loadError) {
-          logger.error('[JWT Auth] Failed to validate user status:', loadError);
+          logger.error('JWT Auth failed to validate user status', {
+            component: 'JwtAuth',
+            error: loadError
+          });
           // Return 503 error to prevent authentication bypass
           // We cannot safely validate the user, so we must reject the request
           return res.status(503).json({
@@ -286,7 +311,9 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         // Local auth not enabled, but token is local type - reject
-        logger.warn('[JWT Auth] Token rejected: Local authentication is not enabled');
+        logger.warn('JWT Auth token rejected: local authentication is not enabled', {
+          component: 'JwtAuth'
+        });
         res.clearCookie('authToken', {
           httpOnly: true,
           secure: process.env.NODE_ENV === 'production',
@@ -319,9 +346,10 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
 
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(
-            `[JWT Auth] Token rejected: OIDC user account disabled | user_id=${userRecord.id}`
-          );
+          logger.warn('JWT Auth token rejected: OIDC user account disabled', {
+            component: 'JwtAuth',
+            userId: userRecord.id
+          });
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
@@ -339,7 +367,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           timestamp: Date.now()
         };
       } catch (loadError) {
-        logger.error('[JWT Auth] Failed to validate OIDC user status:', loadError);
+        logger.error('JWT Auth failed to validate OIDC user status', {
+          component: 'JwtAuth',
+          error: loadError
+        });
         // Return 503 error to prevent authentication bypass
         return res.status(503).json({
           error: 'service_unavailable',
@@ -364,9 +395,10 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
 
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(
-            `[JWT Auth] Token rejected: LDAP user account disabled | user_id=${userRecord.id}`
-          );
+          logger.warn('JWT Auth token rejected: LDAP user account disabled', {
+            component: 'JwtAuth',
+            userId: userRecord.id
+          });
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
@@ -383,7 +415,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           timestamp: Date.now()
         };
       } catch (loadError) {
-        logger.error('[JWT Auth] Failed to validate LDAP user status:', loadError);
+        logger.error('JWT Auth failed to validate LDAP user status', {
+          component: 'JwtAuth',
+          error: loadError
+        });
         return res.status(503).json({
           error: 'service_unavailable',
           error_description: 'Unable to validate user credentials. Please try again later.'
@@ -407,9 +442,10 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
 
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(
-            `[JWT Auth] Token rejected: Teams user account disabled | user_id=${userRecord.id}`
-          );
+          logger.warn('JWT Auth token rejected: Teams user account disabled', {
+            component: 'JwtAuth',
+            userId: userRecord.id
+          });
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
@@ -426,7 +462,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           timestamp: Date.now()
         };
       } catch (loadError) {
-        logger.error('[JWT Auth] Failed to validate Teams user status:', loadError);
+        logger.error('JWT Auth failed to validate Teams user status', {
+          component: 'JwtAuth',
+          error: loadError
+        });
         return res.status(503).json({
           error: 'service_unavailable',
           error_description: 'Unable to validate user credentials. Please try again later.'
@@ -452,9 +491,10 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
 
         if (userRecord && !isUserActive(userRecord)) {
-          logger.warn(
-            `[JWT Auth] Token rejected: NTLM user account disabled | user_id=${userRecord.id}`
-          );
+          logger.warn('JWT Auth token rejected: NTLM user account disabled', {
+            component: 'JwtAuth',
+            userId: userRecord.id
+          });
           return res.status(403).json({
             error: 'access_denied',
             error_description: 'User account has been disabled'
@@ -472,7 +512,10 @@ export default function jwtAuthMiddleware(req, res, next) {
           timestamp: Date.now()
         };
       } catch (loadError) {
-        logger.error('[JWT Auth] Failed to validate NTLM user status:', loadError);
+        logger.error('JWT Auth failed to validate NTLM user status', {
+          component: 'JwtAuth',
+          error: loadError
+        });
         return res.status(503).json({
           error: 'service_unavailable',
           error_description: 'Unable to validate user credentials. Please try again later.'
@@ -493,15 +536,17 @@ export default function jwtAuthMiddleware(req, res, next) {
 
     req.user = user;
     return next();
-  } catch (err) {
+  } catch (error) {
     // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
     // so the endpoint can respond with proper auth status and auto-redirect info
-    if (req.path === '/api/auth/status' && err.name === 'TokenExpiredError') {
-      logger.info('🔐 JWT Auth: Expired token on status endpoint, continuing');
+    if (req.path === '/api/auth/status' && error.name === 'TokenExpiredError') {
+      logger.info('JWT Auth: expired token on status endpoint, continuing', {
+        component: 'JwtAuth'
+      });
       return next();
     }
 
-    logger.warn('🔐 jwtAuth: Token validation failed:', err.message);
+    logger.warn('JWT Auth token validation failed', { component: 'JwtAuth', error });
     return next();
   }
 }

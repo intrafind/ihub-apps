@@ -20,7 +20,7 @@ import RegistryFormDialog from '../components/marketplace/RegistryFormDialog';
  *
  * Follows the same layout and UX patterns as AdminProvidersPage.
  */
-const AdminMarketplaceRegistriesPage = () => {
+function AdminMarketplaceRegistriesPage() {
   const { t } = useTranslation();
   const [registries, setRegistries] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -302,6 +302,6 @@ const AdminMarketplaceRegistriesPage = () => {
       )}
     </AdminAuth>
   );
-};
+}
 
 export default AdminMarketplaceRegistriesPage;

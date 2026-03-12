@@ -8,7 +8,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
 
-const AdminModelsPage = () => {
+function AdminModelsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -609,6 +609,6 @@ const AdminModelsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminModelsPage;

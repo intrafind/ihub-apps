@@ -25,7 +25,8 @@ import {
   sendNotFound,
   sendBadRequest,
   sendFailedOperationError,
-  sendInsufficientPermissions
+  sendInsufficientPermissions,
+  sendErrorResponse
 } from '../../utils/responseHelpers.js';
 import { filterResourcesByPermissions } from '../../utils/authorization.js';
 import logger from '../../utils/logger.js';
@@ -112,22 +113,20 @@ async function loadWorkflows(includeDisabled = false) {
         }
 
         workflows.push(workflow);
-      } catch (err) {
-        logger.warn({
+      } catch (error) {
+        logger.warn('Failed to load workflow file', {
           component: 'WorkflowRoutes',
-          message: 'Failed to load workflow file',
           file,
-          error: err.message
+          error: error.message
         });
       }
     }
 
     return workflows;
-  } catch (err) {
-    logger.error({
+  } catch (error) {
+    logger.error('Failed to read workflows directory', {
       component: 'WorkflowRoutes',
-      message: 'Failed to read workflows directory',
-      error: err.message
+      error: error.message
     });
     return [];
   }
@@ -161,24 +160,22 @@ async function findWorkflowFile(workflowId, workflowsDir) {
         if (workflow.id === workflowId) {
           return file;
         }
-      } catch (err) {
+      } catch (error) {
         // Skip files that can't be read or parsed
-        logger.debug({
+        logger.debug('Skipping malformed workflow file', {
           component: 'WorkflowRoutes',
-          message: 'Skipping malformed workflow file',
           file,
-          error: err.message
+          error: error.message
         });
       }
     }
 
     return null;
-  } catch (err) {
-    logger.warn({
+  } catch (error) {
+    logger.warn('Failed to read workflows directory', {
       component: 'WorkflowRoutes',
-      message: 'Failed to read workflows directory',
       workflowsDir,
-      error: err.message
+      error: error.message
     });
     return null;
   }
@@ -200,13 +197,13 @@ function validateWorkflow(workflow) {
       success: false,
       errors: result.error.errors.map(err => ({
         path: err.path.join('.'),
-        message: err.message
+        message: error.message
       }))
     };
-  } catch (err) {
+  } catch (error) {
     return {
       success: false,
-      errors: [{ path: '', message: err.message }]
+      errors: [{ path: '', message: error.message }]
     };
   }
 }
@@ -224,23 +221,22 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   // Recover persisted executions from disk on startup
   const registry = getExecutionRegistry();
-  registry
-    .loadFromDisk()
-    .then(() => {
+  (async () => {
+    try {
+      await registry.loadFromDisk();
       // Mark previously-running executions as failed (server process died)
       for (const exec of registry.getActive()) {
         if (exec.status === 'running') {
           registry.updateStatus(exec.executionId, 'failed', { currentNode: null });
         }
       }
-    })
-    .catch(err => {
-      logger.error({
+    } catch (error) {
+      logger.error('Failed to load execution registry from disk', {
         component: 'WorkflowRoutes',
-        message: 'Failed to load execution registry from disk',
-        error: err.message
+        error: error.message
       });
-    });
+    }
+  })();
 
   // ============================================================================
   // Workflow Definition Endpoints
@@ -486,16 +482,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         const existingFile = await findWorkflowFile(workflowData.id, workflowsDir);
         if (existingFile) {
-          return res.status(409).json({ error: 'Workflow with this ID already exists' });
+          return sendErrorResponse(res, 409, 'Workflow with this ID already exists');
         }
 
         // Write workflow file
         const workflowPath = join(workflowsDir, `${workflowData.id}.json`);
         await atomicWriteJSON(workflowPath, validation.data);
 
-        logger.info({
+        logger.info('Workflow created', {
           component: 'WorkflowRoutes',
-          message: 'Workflow created',
           workflowId: workflowData.id
         });
 
@@ -593,9 +588,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const workflowPath = join(workflowsDir, filename);
         await atomicWriteJSON(workflowPath, validation.data);
 
-        logger.info({
+        logger.info('Workflow updated', {
           component: 'WorkflowRoutes',
-          message: 'Workflow updated',
           workflowId: id
         });
 
@@ -671,9 +665,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const workflowPath = join(workflowsDir, filename);
         await fs.unlink(workflowPath);
 
-        logger.info({
+        logger.info('Workflow deleted', {
           component: 'WorkflowRoutes',
-          message: 'Workflow deleted',
           workflowId: id
         });
 
@@ -811,9 +804,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           startedAt: state.createdAt
         });
 
-        logger.info({
+        logger.info('Workflow execution started', {
           component: 'WorkflowRoutes',
-          message: 'Workflow execution started',
           workflowId: id,
           executionId: state.executionId,
           userId: req.user?.id
@@ -1010,9 +1002,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         const state = await workflowEngine.resume(executionId, resumeData, options);
 
-        logger.info({
+        logger.info('Workflow execution resumed', {
           component: 'WorkflowRoutes',
-          message: 'Workflow execution resumed',
           executionId,
           userId: req.user?.id
         });
@@ -1097,9 +1088,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         const state = await workflowEngine.cancel(executionId, reason);
 
-        logger.info({
+        logger.info('Workflow execution cancelled', {
           component: 'WorkflowRoutes',
-          message: 'Workflow execution cancelled',
           executionId,
           reason,
           userId: req.user?.id
@@ -1205,9 +1195,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         res.json(exportData);
 
-        logger.info({
+        logger.info('Workflow execution exported', {
           component: 'WorkflowRoutes',
-          message: 'Workflow execution exported',
           executionId,
           userId: req.user?.id
         });
@@ -1287,9 +1276,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       // Send initial connection event
       res.write(`event: connected\ndata: ${JSON.stringify({ executionId })}\n\n`);
 
-      logger.info({
+      logger.info('SSE connection established for workflow execution', {
         component: 'WorkflowRoutes',
-        message: 'SSE connection established for workflow execution',
         executionId
       });
 
@@ -1334,9 +1322,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Log event details for debugging
-        logger.debug({
+        logger.debug('Sending SSE event to client', {
           component: 'WorkflowRoutes',
-          message: 'Sending SSE event to client',
           executionId,
           eventType,
           nodeId: eventData.nodeId,
@@ -1349,20 +1336,19 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
           // Log successful send for important events
           if (eventType === 'workflow.node.complete' || eventType === 'workflow.complete') {
-            logger.info({
+            logger.info('SSE event sent', {
               component: 'WorkflowRoutes',
-              message: `SSE event sent: ${eventType}`,
               executionId,
+              eventType,
               nodeId: eventData.nodeId
             });
           }
-        } catch (err) {
-          logger.error({
+        } catch (error) {
+          logger.error('Error sending SSE event', {
             component: 'WorkflowRoutes',
-            message: 'Error sending SSE event',
             executionId,
             eventType,
-            error: err.message
+            error: error.message
           });
         }
       };
@@ -1378,9 +1364,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // Remove client from map
         workflowClients.delete(executionId);
 
-        logger.info({
+        logger.info('SSE connection closed for workflow execution', {
           component: 'WorkflowRoutes',
-          message: 'SSE connection closed for workflow execution',
           executionId
         });
       });
@@ -1564,9 +1549,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // Get next nodes based on the human response branch
         const nextNodes = scheduler.getNextNodes(humanNode.id, humanResult, workflow, state);
 
-        logger.info({
+        logger.info('Human checkpoint routing', {
           component: 'WorkflowRoutes',
-          message: 'Human checkpoint routing',
           executionId,
           humanNodeId: humanNode.id,
           response,
@@ -1604,9 +1588,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           }
         );
 
-        logger.info({
+        logger.info('Human checkpoint responded', {
           component: 'WorkflowRoutes',
-          message: 'Human checkpoint responded',
           executionId,
           checkpointId,
           response,
@@ -1737,10 +1720,10 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // Save updated workflow
         await atomicWriteJSON(workflowPath, workflow);
 
-        logger.info({
+        logger.info('Workflow toggled', {
           component: 'WorkflowRoutes',
-          message: `Workflow ${newEnabledState ? 'enabled' : 'disabled'}`,
-          workflowId: id
+          workflowId: id,
+          enabled: newEnabledState
         });
 
         res.json({

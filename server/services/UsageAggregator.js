@@ -143,7 +143,9 @@ export async function generateDailyRollups() {
   try {
     const events = await readEvents();
     if (events.length === 0) {
-      logger.info('No usage events found for daily rollup generation');
+      logger.info('No usage events found for daily rollup generation', {
+        component: 'UsageAggregator'
+      });
       return { eventsProcessed: 0, daysGenerated: 0 };
     }
 
@@ -165,10 +167,10 @@ export async function generateDailyRollups() {
     }
 
     const daysGenerated = Object.keys(byDate).length;
-    logger.info(`Generated daily rollups for ${daysGenerated} days`);
+    logger.info('Generated daily rollups', { component: 'UsageAggregator', daysGenerated });
     return { eventsProcessed: events.length, daysGenerated };
-  } catch (e) {
-    logger.error('Failed to generate daily rollups', e);
+  } catch (error) {
+    logger.error('Failed to generate daily rollups', { component: 'UsageAggregator', error: e });
     return { eventsProcessed: 0, daysGenerated: 0 };
   }
 }
@@ -206,10 +208,10 @@ export async function generateMonthlyRollups() {
     }
 
     const monthsGenerated = Object.keys(byMonth).length;
-    logger.info(`Generated monthly rollups for ${monthsGenerated} months`);
+    logger.info('Generated monthly rollups', { component: 'UsageAggregator', monthsGenerated });
     return { monthsGenerated };
-  } catch (e) {
-    logger.error('Failed to generate monthly rollups', e);
+  } catch (error) {
+    logger.error('Failed to generate monthly rollups', { component: 'UsageAggregator', error: e });
     return { monthsGenerated: 0 };
   }
 }
@@ -276,8 +278,12 @@ let rollupInterval = null;
 export function startRollupScheduler(retentionConfig = {}) {
   if (rollupInterval) return;
   // Run immediately on start
-  runRollups(retentionConfig).catch(e => logger.error('Initial rollup failed', e));
+  runRollups(retentionConfig).catch(e =>
+    logger.error('Initial rollup failed', { component: 'UsageAggregator', error: e })
+  );
   rollupInterval = setInterval(() => {
-    runRollups(retentionConfig).catch(e => logger.error('Scheduled rollup failed', e));
+    runRollups(retentionConfig).catch(e =>
+      logger.error('Scheduled rollup failed', { component: 'UsageAggregator', error: e })
+    );
   }, ROLLUP_INTERVAL_MS);
 }

@@ -1,6 +1,6 @@
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 
-const FooterCustomization = ({ config, onUpdate, t }) => {
+function FooterCustomization({ config, onUpdate, t }) {
   // Map config links to component format
   const mappedLinks = (config.links || []).map(link => ({
     text: link.name || link.text || { en: '' },
@@ -208,6 +208,6 @@ const FooterCustomization = ({ config, onUpdate, t }) => {
       </div>
     </div>
   );
-};
+}
 
 export default FooterCustomization;

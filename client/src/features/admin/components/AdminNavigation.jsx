@@ -5,7 +5,7 @@ import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-const AdminNavigation = () => {
+function AdminNavigation() {
   const { t } = useTranslation();
   const location = useLocation();
   const { platformConfig } = usePlatformConfig();
@@ -464,6 +464,6 @@ const AdminNavigation = () => {
       </div>
     </nav>
   );
-};
+}
 
 export default AdminNavigation;

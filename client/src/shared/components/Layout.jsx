@@ -16,7 +16,7 @@ import { pathnameStartsWith, isActivePath } from '../../utils/pathUtils';
 import { buildAssetUrl } from '../../utils/runtimeBasePath';
 import { useOAuthCallbackCleanup } from '../hooks/useOAuthCallbackCleanup';
 
-const Layout = () => {
+function Layout() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const { headerColor, uiConfig, resetHeaderColor } = useUIConfig();
@@ -249,6 +249,6 @@ const Layout = () => {
       )}
     </div>
   );
-};
+}
 
 export default Layout;

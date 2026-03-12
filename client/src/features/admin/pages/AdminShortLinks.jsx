@@ -8,7 +8,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import ShortLinkDetailsPopup from '../../../shared/components/ShortLinkDetailsPopup';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
 
-const AdminShortLinks = () => {
+function AdminShortLinks() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { copyText } = useClipboard();
@@ -385,6 +385,6 @@ const AdminShortLinks = () => {
       />
     </AdminAuth>
   );
-};
+}
 
 export default AdminShortLinks;

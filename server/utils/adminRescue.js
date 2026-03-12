@@ -72,10 +72,11 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
 
       // Skip users whose authentication method is disabled (they can't login)
       if (!isUserAuthMethodEnabled(user, platform)) {
-        logger.debug(
-          `[AdminRescue] Skipping user ${user.username} (${userId}) - auth method disabled`,
-          { component: 'Utils' }
-        );
+        logger.debug('Skipping user - auth method disabled', {
+          component: 'AdminRescue',
+          username: user.username,
+          userId
+        });
         continue;
       }
 
@@ -87,10 +88,11 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
       });
 
       if (userHasAdminAccess) {
-        logger.debug(
-          `[AdminRescue] Found admin user in persisted users: ${user.username} (${userId})`,
-          { component: 'Utils' }
-        );
+        logger.debug('Found admin user in persisted users', {
+          component: 'AdminRescue',
+          username: user.username,
+          userId
+        });
         return true;
       }
     }
@@ -109,10 +111,10 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
           });
 
           if (hasAdminGroup) {
-            logger.debug(
-              `[AdminRescue] Found admin in LDAP provider default groups: ${ldapProvider.name}`,
-              { component: 'Utils' }
-            );
+            logger.debug('Found admin in LDAP provider default groups', {
+              component: 'AdminRescue',
+              providerName: ldapProvider.name
+            });
             return true;
           }
         }
@@ -131,18 +133,18 @@ export function hasAnyAdmin(usersFilePath = 'contents/config/users.json') {
         });
 
         if (hasAdminGroup) {
-          logger.debug('[AdminRescue] Found admin in NTLM default groups', { component: 'Utils' });
+          logger.debug('Found admin in NTLM default groups', { component: 'AdminRescue' });
           return true;
         }
       }
     }
 
-    logger.debug('[AdminRescue] No admin found in any authentication method', {
-      component: 'Utils'
+    logger.debug('No admin found in any authentication method', {
+      component: 'AdminRescue'
     });
     return false;
   } catch (error) {
-    logger.error('[AdminRescue] Error checking for admin:', { component: 'Utils', error });
+    logger.error('Error checking for admin', { component: 'AdminRescue', error });
     // In case of error, assume there's an admin to avoid unintended changes
     return true;
   }
@@ -160,7 +162,7 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
     const users = usersConfig.users || {};
 
     if (!users[userId]) {
-      logger.error(`[AdminRescue] User not found: ${userId}`, { component: 'Utils' });
+      logger.error('User not found', { component: 'AdminRescue', userId });
       return false;
     }
 
@@ -179,8 +181,10 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
     });
 
     if (hasAdminGroup) {
-      logger.debug(`[AdminRescue] User ${user.username} (${userId}) already has admin access`, {
-        component: 'Utils'
+      logger.debug('User already has admin access', {
+        component: 'AdminRescue',
+        username: user.username,
+        userId
       });
       return false;
     }
@@ -194,8 +198,8 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
       });
 
     if (!adminGroupId) {
-      logger.error('[AdminRescue] No admin group found in groups configuration', {
-        component: 'Utils'
+      logger.error('No admin group found in groups configuration', {
+        component: 'AdminRescue'
       });
       return false;
     }
@@ -207,12 +211,15 @@ export async function assignAdminGroup(userId, usersFilePath = 'contents/config/
     // Save users configuration
     await saveUsers(usersConfig, usersFilePath);
 
-    logger.info(
-      `✅ [AdminRescue] Assigned admin group '${adminGroupId}' to user ${user.username} (${userId})`
-    );
+    logger.info('Admin group assigned to user', {
+      component: 'AdminRescue',
+      adminGroupId,
+      username: user.username,
+      userId
+    });
     return true;
   } catch (error) {
-    logger.error(`[AdminRescue] Error assigning admin group to user ${userId}:`, error);
+    logger.error('Error assigning admin group', { component: 'AdminRescue', userId, error });
     return false;
   }
 }
@@ -251,14 +258,18 @@ export async function ensureFirstUserIsAdmin(
     const hasAdmin = hasAnyAdmin(usersFilePath);
 
     if (hasAdmin) {
-      logger.debug(`[AdminRescue] Admin exists in system, no action needed for user ${user.id}`);
+      logger.debug('Admin exists, no action needed', {
+        component: 'AdminRescue',
+        userId: user.id
+      });
       return user;
     }
 
     // No admin exists in the system, make this user an admin
-    logger.warn(
-      `⚠️ [AdminRescue] No admin found in system. Assigning admin rights to first user: ${user.username || user.name || user.id}`
-    );
+    logger.warn('No admin found, assigning admin rights to first user', {
+      component: 'AdminRescue',
+      username: user.username || user.name || user.id
+    });
 
     const assigned = await assignAdminGroup(user.id, usersFilePath);
 
@@ -289,7 +300,7 @@ export async function ensureFirstUserIsAdmin(
 
     return user;
   } catch (error) {
-    logger.error(`[AdminRescue] Error ensuring first user is admin:`, error);
+    logger.error('Error ensuring first user is admin', { component: 'AdminRescue', error });
     return user;
   }
 }
@@ -338,12 +349,19 @@ export function isLastAdmin(userId, usersFilePath = 'contents/config/users.json'
     const result = isUserAdmin && adminCount === 1;
 
     if (result) {
-      logger.debug(`[AdminRescue] User ${userId} is the last admin (total admins: ${adminCount})`);
+      logger.debug('User is the last admin', {
+        component: 'AdminRescue',
+        userId,
+        adminCount
+      });
     }
 
     return result;
   } catch (error) {
-    logger.error(`[AdminRescue] Error checking if user is last admin:`, error);
+    logger.error('Error checking if user is last admin', {
+      component: 'AdminRescue',
+      error
+    });
     // In case of error, assume user is NOT the last admin to allow deletion
     // This is safer than blocking all deletions
     return false;

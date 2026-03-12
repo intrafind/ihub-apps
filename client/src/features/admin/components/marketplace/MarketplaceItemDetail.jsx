@@ -61,7 +61,7 @@ const TYPE_COLORS = {
  * @param {Function} props.onClose - Called when the panel should be dismissed
  * @param {Function} [props.onAction] - Called after any install/update/uninstall/detach action
  */
-const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
+function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
   const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const [item, setItem] = useState(initialItem);
@@ -406,6 +406,6 @@ const MarketplaceItemDetail = ({ item: initialItem, onClose, onAction }) => {
       </div>
     </div>
   );
-};
+}
 
 export default MarketplaceItemDetail;

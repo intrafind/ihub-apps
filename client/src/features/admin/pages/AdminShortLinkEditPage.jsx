@@ -5,7 +5,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import AdminAuth from '../components/AdminAuth';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-const AdminShortLinkEditPage = () => {
+function AdminShortLinkEditPage() {
   const { code } = useParams();
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -212,6 +212,6 @@ const AdminShortLinkEditPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminShortLinkEditPage;

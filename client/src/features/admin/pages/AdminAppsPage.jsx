@@ -11,7 +11,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 
-const AdminAppsPage = () => {
+function AdminAppsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -688,6 +688,6 @@ const AdminAppsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminAppsPage;

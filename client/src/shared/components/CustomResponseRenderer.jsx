@@ -16,7 +16,7 @@ import ReactComponentRenderer from './ReactComponentRenderer';
  * @param {object} data - Parsed JSON data to pass to the component
  * @param {string} className - Optional CSS classes for the container
  */
-const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
+function CustomResponseRenderer({ componentName, data, className = '' }) {
   const [rendererCode, setRendererCode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -145,6 +145,6 @@ const CustomResponseRenderer = ({ componentName, data, className = '' }) => {
       </Suspense>
     </div>
   );
-};
+}
 
 export default CustomResponseRenderer;

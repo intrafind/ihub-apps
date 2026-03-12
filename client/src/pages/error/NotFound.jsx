@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../shared/components/Icon';
 
-const NotFound = () => {
+export default function NotFound() {
   const { t } = useTranslation();
 
   return (
@@ -23,6 +23,4 @@ const NotFound = () => {
       </Link>
     </div>
   );
-};
-
-export default NotFound;
+}

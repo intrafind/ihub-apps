@@ -8,7 +8,12 @@ import { formatFileSize, isCloudFileSupported } from '../utils/cloudFileProcessi
  * Google Drive File Browser component
  * Provides drive selection and file browsing for Google Drive (My Drive, Shared Drives, Shared with Me)
  */
-const GoogleDriveFileBrowser = ({ provider, onFilesProcessed, onClose, uploadConfig }) => {
+export default function GoogleDriveFileBrowser({
+  provider,
+  onFilesProcessed,
+  onClose,
+  uploadConfig
+}) {
   const { t } = useTranslation();
   const {
     authStatus,
@@ -587,6 +592,4 @@ const GoogleDriveFileBrowser = ({ provider, onFilesProcessed, onClose, uploadCon
       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
     </div>
   );
-};
-
-export default GoogleDriveFileBrowser;
+}

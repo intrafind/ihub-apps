@@ -2,7 +2,11 @@ import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
 import { buildServerPath } from '../utils/basePath.js';
-import logger from '../utils/logger.js';
+import {
+  sendInternalError,
+  sendFailedOperationError,
+  sendErrorResponse
+} from '../utils/responseHelpers.js';
 
 /**
  * @swagger
@@ -183,14 +187,13 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
       );
 
       if (!apps) {
-        return res.status(500).json({ error: 'Failed to load apps configuration' });
+        return sendFailedOperationError(res, 'load apps configuration', new Error('apps is null'));
       }
 
       res.setHeader('ETag', userSpecificEtag);
       res.json(apps);
     } catch (error) {
-      logger.error('Error fetching apps:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      return sendInternalError(res, error, 'fetch apps');
     }
   });
 
@@ -319,12 +322,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         environment: process.env.NODE_ENV || 'development'
       });
     } catch (error) {
-      logger.error('Health check error:', error);
-      res.status(500).json({
-        status: 'ERROR',
-        error: 'Health check failed',
-        timestamp: new Date().toISOString()
-      });
+      return sendInternalError(res, error, 'health check');
     }
   });
 
@@ -343,12 +341,16 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         const { data: apps } = configCache.getApps();
 
         if (!apps) {
-          return res.status(500).json({ error: 'Failed to load apps configuration' });
+          return sendFailedOperationError(
+            res,
+            'load apps configuration',
+            new Error('apps is null')
+          );
         }
         const appData = apps.find(a => a.id === appId);
         if (!appData) {
           const errorMessage = await getLocalizedError('appNotFound', {}, language);
-          return res.status(404).json({ error: errorMessage });
+          return sendErrorResponse(res, 404, errorMessage);
         }
 
         // Check if user has permission to access this app
@@ -356,14 +358,13 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
           const allowedApps = req.user.permissions.apps || new Set();
           if (!allowedApps.has('*') && !allowedApps.has(appId)) {
             const errorMessage = await getLocalizedError('appNotFound', {}, language);
-            return res.status(404).json({ error: errorMessage });
+            return sendErrorResponse(res, 404, errorMessage);
           }
         }
 
         res.json(appData);
       } catch (error) {
-        logger.error('Error fetching app details:', error);
-        res.status(500).json({ error: 'Internal server error' });
+        return sendInternalError(res, error, 'fetch app details');
       }
     }
   );

@@ -60,14 +60,14 @@ const getEnvironmentVariableNames = model => {
  * @param {Object} props.errors - Validation errors object
  * @param {boolean} props.isNewModel - Whether this is a new model
  */
-const ModelFormEditor = ({
+function ModelFormEditor({
   value: data,
   onChange,
   onValidationChange,
   errors = {},
   isNewModel = false,
   jsonSchema
-}) => {
+}) {
   const { t } = useTranslation();
   const [validationErrors, setValidationErrors] = useState({});
 
@@ -643,6 +643,6 @@ const ModelFormEditor = ({
       </div>
     </div>
   );
-};
+}
 
 export default ModelFormEditor;

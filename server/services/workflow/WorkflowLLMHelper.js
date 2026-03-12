@@ -112,9 +112,8 @@ export class WorkflowLLMHelper {
     // Create the request using centralized adapter infrastructure
     const request = createCompletionRequest(model, messages, apiKey, filteredOptions);
 
-    logger.debug({
+    logger.debug('Executing streaming request', {
       component: 'WorkflowLLMHelper',
-      message: 'Executing streaming request',
       modelId: model.id,
       provider: model.provider,
       messageCount: messages.length,
@@ -136,9 +135,8 @@ export class WorkflowLLMHelper {
         language
       );
 
-      logger.error({
+      logger.error('LLM request failed', {
         component: 'WorkflowLLMHelper',
-        message: 'LLM request failed',
         modelId: model.id,
         status: response.status,
         errorCode: errorInfo.code,

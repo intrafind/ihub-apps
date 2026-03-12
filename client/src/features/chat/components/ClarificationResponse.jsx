@@ -31,7 +31,7 @@ import Icon from '../../../shared/components/Icon';
  * @param {string} props.context - Optional context that was shown with the question
  * @returns {JSX.Element} The ClarificationResponse component
  */
-const ClarificationResponse = ({
+function ClarificationResponse({
   question,
   response,
   answer: answerProp,
@@ -39,7 +39,7 @@ const ClarificationResponse = ({
   inputType = 'text',
   skipped: skippedProp = false,
   context
-}) => {
+}) {
   // Support both response object and explicit props
   const answer = response?.value ?? answerProp;
   const skipped = response?.skipped ?? skippedProp;
@@ -143,6 +143,6 @@ const ClarificationResponse = ({
       </div>
     </div>
   );
-};
+}
 
 export default ClarificationResponse;

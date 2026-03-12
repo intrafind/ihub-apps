@@ -26,7 +26,7 @@ import Icon from '../../../shared/components/Icon';
  * @param {boolean} props.required - Whether the input is required
  * @returns {JSX.Element} The ClarificationInput component
  */
-const ClarificationInput = ({
+function ClarificationInput({
   inputType = 'text',
   value,
   onChange,
@@ -37,7 +37,7 @@ const ClarificationInput = ({
   maxDate,
   disabled = false,
   required = false
-}) => {
+}) {
   const { t } = useTranslation();
   const textareaRef = useRef(null);
   const [validationError, setValidationError] = useState('');
@@ -345,6 +345,6 @@ const ClarificationInput = ({
       )}
     </div>
   );
-};
+}
 
 export default ClarificationInput;

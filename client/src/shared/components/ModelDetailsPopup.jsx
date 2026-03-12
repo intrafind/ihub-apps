@@ -5,7 +5,7 @@ import { getLocalizedContent } from '../../utils/localizeContent';
 import Icon from './Icon';
 import { fetchAdminUsageData, fetchAdminApps } from '../../api/adminApi';
 
-const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
+function ModelDetailsPopup({ model, isOpen, onClose }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -351,6 +351,6 @@ const ModelDetailsPopup = ({ model, isOpen, onClose }) => {
       </div>
     </div>
   );
-};
+}
 
 export default ModelDetailsPopup;

@@ -19,7 +19,7 @@ import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
 import './ChatMessage.css';
 
-const ChatMessage = ({
+function ChatMessage({
   message,
   outputFormat = 'markdown',
   onDelete,
@@ -38,7 +38,7 @@ const ChatMessage = ({
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
   onDocumentAction = null // Callback for citation document actions (preview, download, openInApp)
-}) => {
+}) {
   const { t } = useTranslation();
 
   // Debug loading state changes
@@ -1071,6 +1071,6 @@ const ChatMessage = ({
       )}
     </div>
   );
-};
+}
 
 export default ChatMessage;

@@ -17,8 +17,8 @@ async function getJwks(jwkUrl) {
     const jwks = await res.json();
     jwksCache.set(jwkUrl, jwks);
     return jwks;
-  } catch (err) {
-    logger.error('Error fetching JWKs', err);
+  } catch (error) {
+    logger.error('Error fetching JWKs', { component: 'ProxyAuth', error: err });
     return null;
   }
 }
@@ -40,8 +40,8 @@ async function verifyJwt(token, provider) {
     });
 
     return payload;
-  } catch (err) {
-    logger.error('JWT verification failed', err.message);
+  } catch (error) {
+    logger.error('JWT verification failed', { component: 'ProxyAuth', error: err });
     return null;
   }
 }
@@ -67,7 +67,10 @@ export async function proxyAuth(req, res, next) {
       // Admin authentication will be handled by the adminAuth middleware
       // Only warn for non-admin routes
       if (!req.path.startsWith('/api/admin/')) {
-        logger.warn(`🔐 Token rejected: JWT token not valid in ${currentAuthMode} mode`);
+        logger.warn('Token rejected: JWT token not valid in current auth mode', {
+          component: 'ProxyAuth',
+          currentAuthMode
+        });
       }
       // Don't set req.user, let it continue as anonymous (admin auth will handle admin routes)
     }
@@ -113,7 +116,10 @@ export async function proxyAuth(req, res, next) {
       }
 
       if (!authMethodEnabled) {
-        logger.warn(`🔐 Token rejected: ${tokenPayload.authMode} authentication is disabled`);
+        logger.warn('Token rejected: authentication mode is disabled', {
+          component: 'ProxyAuth',
+          authMode: tokenPayload.authMode
+        });
         tokenPayload = null; // Invalidate token from disabled auth method
         continue;
       }
@@ -126,9 +132,10 @@ export async function proxyAuth(req, res, next) {
           : [];
 
         if (!enabledProviders.includes(tokenPayload.authProvider)) {
-          logger.warn(
-            `🔐 Token rejected: OIDC provider '${tokenPayload.authProvider}' is no longer enabled`
-          );
+          logger.warn('Token rejected: OIDC provider is no longer enabled', {
+            component: 'ProxyAuth',
+            authProvider: tokenPayload.authProvider
+          });
           tokenPayload = null; // Invalidate token from disabled provider
           continue;
         }
@@ -184,7 +191,7 @@ export async function proxyAuth(req, res, next) {
     req.user = user;
     next();
   } catch (error) {
-    logger.error('Proxy user validation error:', error.message);
+    logger.error('Proxy user validation error', { component: 'ProxyAuth', error });
     // Return a 403 Forbidden with a user-friendly error message
     res.status(403).json({
       error: 'Access Denied',

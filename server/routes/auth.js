@@ -11,6 +11,7 @@ import { teamsTokenExchange, teamsTabConfigSave } from '../middleware/teamsAuth.
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
+import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
 
 /**
  * Sanitize and validate authentication input
@@ -99,32 +100,30 @@ export default function registerAuthRoutes(app) {
         sanitizedUsername = sanitizeAuthInput(username, 'Username', 255);
         sanitizedPassword = sanitizeAuthInput(password, 'Password', 1024);
       } catch (error) {
-        return res.status(400).json({ error: error.message });
+        return sendBadRequest(res, error.message);
       }
 
       if (!sanitizedUsername || !sanitizedPassword) {
-        return res.status(400).json({ error: 'Username and password are required' });
+        return sendBadRequest(res, 'Username and password are required');
       }
 
       // Check if local authentication is enabled
       if (!localAuthConfig.enabled) {
-        return res.status(400).json({
-          error: 'Local authentication is not enabled. Please contact your administrator.'
-        });
+        return sendBadRequest(
+          res,
+          'Local authentication is not enabled. Please contact your administrator.'
+        );
       }
 
       // Try local authentication
       let result = null;
       try {
-        logger.info('[Auth] Attempting local authentication (explicit)');
+        logger.info('[Auth] Attempting local authentication (explicit)', { component: 'Auth' });
         result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
-        logger.info('[Auth] Local authentication succeeded');
+        logger.info('[Auth] Local authentication succeeded', { component: 'Auth' });
       } catch (error) {
-        logger.warn('[Auth] Local authentication failed:', { error: error.message });
-        return res.status(401).json({
-          success: false,
-          error: 'Invalid credentials'
-        });
+        logger.warn('Local authentication failed', { component: 'Auth', error });
+        return sendErrorResponse(res, 401, 'Invalid credentials');
       }
 
       // Set HTTP-only cookie for authentication
@@ -142,11 +141,8 @@ export default function registerAuthRoutes(app) {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('Local login error:', error);
-      res.status(401).json({
-        success: false,
-        error: error.message || 'Authentication failed'
-      });
+      logger.error('Local login error', { component: 'Auth', error });
+      return sendErrorResponse(res, 401, error.message || 'Authentication failed');
     }
   });
 
@@ -204,18 +200,19 @@ export default function registerAuthRoutes(app) {
         sanitizedPassword = sanitizeAuthInput(password, 'Password', 1024);
         sanitizedProvider = sanitizeAuthInput(provider, 'Provider', 100);
       } catch (error) {
-        return res.status(400).json({ error: error.message });
+        return sendBadRequest(res, error.message);
       }
 
       if (!sanitizedUsername || !sanitizedPassword) {
-        return res.status(400).json({ error: 'Username and password are required' });
+        return sendBadRequest(res, 'Username and password are required');
       }
 
       // Check if LDAP authentication is enabled
       if (!ldapAuthConfig.enabled || !ldapAuthConfig.providers?.length) {
-        return res.status(400).json({
-          error: 'LDAP authentication is not enabled. Please contact your administrator.'
-        });
+        return sendBadRequest(
+          res,
+          'LDAP authentication is not enabled. Please contact your administrator.'
+        );
       }
 
       let result = null;
@@ -224,38 +221,44 @@ export default function registerAuthRoutes(app) {
       if (sanitizedProvider) {
         const ldapProvider = ldapAuthConfig.providers.find(p => p.name === sanitizedProvider);
         if (!ldapProvider) {
-          return res.status(400).json({ error: `LDAP provider '${sanitizedProvider}' not found` });
+          return sendBadRequest(res, `LDAP provider '${sanitizedProvider}' not found`);
         }
 
         try {
-          logger.info(
-            `[Auth] Attempting LDAP authentication (explicit) with provider: ${sanitizedProvider}`
-          );
+          logger.info('[Auth] Attempting LDAP authentication (explicit)', {
+            component: 'Auth',
+            provider: sanitizedProvider
+          });
           result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
-          logger.info('[Auth] LDAP authentication succeeded');
+          logger.info('[Auth] LDAP authentication succeeded', { component: 'Auth' });
         } catch (error) {
-          logger.warn(`[Auth] LDAP authentication failed for provider '${sanitizedProvider}':`, {
+          logger.warn('[Auth] LDAP authentication failed', {
+            component: 'Auth',
+            provider: sanitizedProvider,
             error: error.message
           });
-          return res.status(401).json({
-            success: false,
-            error: 'Invalid credentials'
-          });
+          return sendErrorResponse(res, 401, 'Invalid credentials');
         }
       } else {
         // Try each LDAP provider until one succeeds
         for (const ldapProvider of ldapAuthConfig.providers) {
           try {
-            logger.info(`[Auth] Trying LDAP provider (explicit): ${ldapProvider.name}`);
+            logger.info('[Auth] Trying LDAP provider (explicit)', {
+              component: 'Auth',
+              provider: ldapProvider.name
+            });
             result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
             if (result) {
-              logger.info(
-                `[Auth] LDAP authentication succeeded with provider: ${ldapProvider.name}`
-              );
+              logger.info('[Auth] LDAP authentication succeeded', {
+                component: 'Auth',
+                provider: ldapProvider.name
+              });
               break;
             }
           } catch (error) {
-            logger.warn(`[Auth] LDAP provider '${ldapProvider.name}' failed:`, {
+            logger.warn('[Auth] LDAP provider failed', {
+              component: 'Auth',
+              provider: ldapProvider.name,
               error: error.message
             });
             // Continue to next provider
@@ -263,10 +266,7 @@ export default function registerAuthRoutes(app) {
         }
 
         if (!result) {
-          return res.status(401).json({
-            success: false,
-            error: 'Invalid credentials'
-          });
+          return sendErrorResponse(res, 401, 'Invalid credentials');
         }
       }
 
@@ -285,11 +285,8 @@ export default function registerAuthRoutes(app) {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('LDAP login error:', error);
-      res.status(401).json({
-        success: false,
-        error: error.message || 'Authentication failed'
-      });
+      logger.error('LDAP login error', { component: 'Auth', error });
+      return sendErrorResponse(res, 401, error.message || 'Authentication failed');
     }
   });
 
@@ -303,7 +300,7 @@ export default function registerAuthRoutes(app) {
       const ntlmAuthConfig = platform.ntlmAuth || {};
 
       if (!ntlmAuthConfig.enabled) {
-        return res.status(400).json({ error: 'NTLM authentication is not enabled' });
+        return sendBadRequest(res, 'NTLM authentication is not enabled');
       }
 
       // Mark session to indicate NTLM was explicitly requested
@@ -316,10 +313,11 @@ export default function registerAuthRoutes(app) {
       if (!req.ntlm || !req.ntlm.Authenticated) {
         // NTLM middleware will handle the challenge-response
         // This response should not be reached if middleware is working
-        return res.status(401).json({
-          error:
-            'NTLM authentication in progress. Please ensure Windows Integrated Authentication is enabled in your browser.'
-        });
+        return sendErrorResponse(
+          res,
+          401,
+          'NTLM authentication in progress. Please ensure Windows Integrated Authentication is enabled in your browser.'
+        );
       }
 
       // User is authenticated via NTLM
@@ -345,7 +343,10 @@ export default function registerAuthRoutes(app) {
 
           // Only allow same-origin redirects
           if (returnUrlObj.host !== currentHost) {
-            logger.warn(`[Security] Blocked open redirect attempt to: ${returnUrl}`);
+            logger.warn('[Security] Blocked open redirect attempt', {
+              component: 'Auth',
+              returnUrl
+            });
             returnUrl = '/';
           }
         } else if (!returnUrl.startsWith('/')) {
@@ -358,18 +359,15 @@ export default function registerAuthRoutes(app) {
           returnUrl = '/';
         }
       } catch (error) {
-        logger.error('[Security] Invalid return URL:', returnUrl, error);
+        logger.error('[Security] Invalid return URL', { component: 'Auth', returnUrl, error });
         returnUrl = '/';
       }
 
       // Redirect to the validated return URL with success indicator
       res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
     } catch (error) {
-      logger.error('NTLM login error:', error);
-      res.status(401).json({
-        success: false,
-        error: error.message || 'NTLM authentication failed'
-      });
+      logger.error('NTLM login error', { component: 'Auth', error });
+      return sendErrorResponse(res, 401, error.message || 'NTLM authentication failed');
     }
   });
 
@@ -382,7 +380,7 @@ export default function registerAuthRoutes(app) {
       const ntlmAuthConfig = platform.ntlmAuth || {};
 
       if (!ntlmAuthConfig.enabled) {
-        return res.status(400).json({ error: 'NTLM authentication is not enabled' });
+        return sendBadRequest(res, 'NTLM authentication is not enabled');
       }
 
       // Mark session to indicate NTLM was explicitly requested
@@ -392,10 +390,11 @@ export default function registerAuthRoutes(app) {
 
       // Check if NTLM data is available from the middleware
       if (!req.ntlm || !req.ntlm.Authenticated) {
-        return res.status(401).json({
-          error:
-            'NTLM authentication required. This endpoint requires Windows Integrated Authentication.'
-        });
+        return sendErrorResponse(
+          res,
+          401,
+          'NTLM authentication required. This endpoint requires Windows Integrated Authentication.'
+        );
       }
 
       const result = await processNtlmLogin(req, ntlmAuthConfig);
@@ -415,11 +414,8 @@ export default function registerAuthRoutes(app) {
         expiresIn: result.expiresIn
       });
     } catch (error) {
-      logger.error('NTLM login error:', error);
-      res.status(401).json({
-        success: false,
-        error: error.message || 'NTLM authentication failed'
-      });
+      logger.error('NTLM login error', { component: 'Auth', error });
+      return sendErrorResponse(res, 401, error.message || 'NTLM authentication failed');
     }
   });
 
@@ -428,7 +424,7 @@ export default function registerAuthRoutes(app) {
    */
   app.get(buildServerPath('/api/auth/user'), (req, res) => {
     if (!req.user || req.user.id === 'anonymous') {
-      return res.status(401).json({ error: 'Not authenticated' });
+      return sendAuthRequired(res);
     }
 
     res.json({
@@ -463,7 +459,7 @@ export default function registerAuthRoutes(app) {
       // Regenerate session to ensure clean state
       req.session.regenerate(err => {
         if (err) {
-          logger.error('Session regeneration error:', err);
+          logger.error('Session regeneration error', { component: 'Auth', error: err });
         }
 
         // Set flag in the new session to prevent NTLM auto-login
@@ -473,7 +469,7 @@ export default function registerAuthRoutes(app) {
 
     // Log the event for analytics
     if (req.user && req.user.id !== 'anonymous') {
-      logger.info(`User ${req.user.id} logged out`);
+      logger.info('User logged out', { component: 'Auth', userId: req.user.id });
     }
 
     res.json({
@@ -494,7 +490,7 @@ export default function registerAuthRoutes(app) {
         const localAuthConfig = platform.localAuth || {};
 
         if (!localAuthConfig.enabled) {
-          return res.status(400).json({ error: 'Local authentication is not enabled' });
+          return sendBadRequest(res, 'Local authentication is not enabled');
         }
 
         const userData = req.body;
@@ -507,11 +503,8 @@ export default function registerAuthRoutes(app) {
           user: newUser
         });
       } catch (error) {
-        logger.error('User creation error:', error);
-        res.status(400).json({
-          success: false,
-          error: error.message || 'Failed to create user'
-        });
+        logger.error('User creation error', { component: 'Auth', error });
+        return sendBadRequest(res, error.message || 'Failed to create user');
       }
     }
   );

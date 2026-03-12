@@ -23,11 +23,11 @@ export default function validate(schemas = {}) {
         req.params = schemas.params.parse(req.params);
       }
       next();
-    } catch (err) {
-      if (err instanceof ZodError) {
-        return res.status(400).json({ error: 'Invalid request', details: err.errors });
+    } catch (error) {
+      if (error instanceof ZodError) {
+        return res.status(400).json({ error: 'Invalid request', details: error.errors });
       }
-      return next(err);
+      return next(error);
     }
   };
 }

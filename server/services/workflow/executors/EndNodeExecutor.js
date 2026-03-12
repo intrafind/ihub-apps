@@ -66,9 +66,8 @@ export class EndNodeExecutor extends BaseNodeExecutor {
    * // result.output = { result: '...', summary: '...' }
    */
   async execute(node, state, _context) {
-    this.logger.info({
+    this.logger.info('Executing end node', {
       component: 'EndNodeExecutor',
-      message: `Executing end node '${node.id}'`,
       nodeId: node.id,
       stateDataKeys: Object.keys(state.data || {})
     });
@@ -139,9 +138,8 @@ export class EndNodeExecutor extends BaseNodeExecutor {
     // Determine custom workflow status if specified
     const workflowStatus = config.status || config.statusCode || null;
 
-    this.logger.info({
+    this.logger.info('End node completed - workflow finished', {
       component: 'EndNodeExecutor',
-      message: `End node '${node.id}' completed - workflow finished`,
       nodeId: node.id,
       outputKeys: typeof output === 'object' ? Object.keys(output) : ['formatted'],
       workflowStatus

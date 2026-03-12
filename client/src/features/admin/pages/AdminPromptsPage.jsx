@@ -9,7 +9,7 @@ import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 
-const AdminPromptsPage = () => {
+function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
@@ -610,6 +610,6 @@ const AdminPromptsPage = () => {
       </div>
     </AdminAuth>
   );
-};
+}
 
 export default AdminPromptsPage;

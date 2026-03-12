@@ -8,7 +8,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
  * Supports four severity levels: hint, info, warning, alert
  * Alert level requires explicit acknowledgment before use
  */
-const ModelHintBanner = ({ hint, currentLanguage, onAcknowledge }) => {
+function ModelHintBanner({ hint, currentLanguage, onAcknowledge }) {
   const { t } = useTranslation();
   const [isDismissed, setIsDismissed] = useState(false);
   const [isAcknowledged, setIsAcknowledged] = useState(false);
@@ -108,6 +108,6 @@ const ModelHintBanner = ({ hint, currentLanguage, onAcknowledge }) => {
       )}
     </div>
   );
-};
+}
 
 export default ModelHintBanner;

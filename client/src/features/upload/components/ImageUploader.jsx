@@ -7,7 +7,12 @@ import { processTiffFile } from '../utils/fileProcessing';
 /**
  * Lightweight wrapper for uploading images.
  */
-const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, config = {} }) => {
+export default function ImageUploader({
+  onImageSelect,
+  disabled = false,
+  imageData = null,
+  config = {}
+}) {
   const { t } = useTranslation();
   const MAX_FILE_SIZE_MB = config.maxFileSizeMB || 10;
   const SUPPORTED_FORMATS = config.supportedFormats || [
@@ -259,6 +264,4 @@ const ImageUploader = ({ onImageSelect, disabled = false, imageData = null, conf
       )}
     </Uploader>
   );
-};
-
-export default ImageUploader;
+}

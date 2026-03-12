@@ -72,7 +72,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
 
     // Lazy conversation creation: create on first message if no conversation exists
     if (!state?.conversationId) {
-      logger.info('iAssistant Conversation: Creating new conversation', {
+      logger.info('Creating new conversation', {
+        component: 'IAssistantConversationAdapter',
         chatId,
         profileId: config.profileId
       });
@@ -102,7 +103,8 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       };
       conversationStateManager.setState(chatId, state);
 
-      logger.info('iAssistant Conversation: Conversation created', {
+      logger.info('Conversation created', {
+        component: 'IAssistantConversationAdapter',
         chatId,
         conversationId: conversation.id
       });
@@ -314,7 +316,11 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         case 'error': {
           const parsed = this.safeJsonParse(data);
           const errorType = parsed.type || 'TECHNICAL';
-          logger.error(`iAssistant Conversation: Error event received: ${errorType}`, parsed);
+          logger.error('Error event received', {
+            component: 'IAssistantConversationAdapter',
+            errorType,
+            parsed
+          });
 
           if (errorType === 'REFUSAL') {
             result.content.push(parsed.message || 'The request was refused by the system.');
@@ -365,9 +371,11 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
 
         default: {
           // Log unhandled events for diagnostics
-          logger.debug(
-            `iAssistant Conversation: Unhandled event '${eventType}': ${data.substring(0, 200)}`
-          );
+          logger.debug('Unhandled event', {
+            component: 'IAssistantConversationAdapter',
+            eventType,
+            dataPreview: data.substring(0, 200)
+          });
           // Check if the data itself contains completion info
           try {
             const parsed = JSON.parse(data);
@@ -386,7 +394,11 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         }
       }
     } catch (error) {
-      logger.error(`iAssistant Conversation: Error processing event ${eventType}:`, error.message);
+      logger.error('Error processing event', {
+        component: 'IAssistantConversationAdapter',
+        eventType,
+        error
+      });
     }
   }
 

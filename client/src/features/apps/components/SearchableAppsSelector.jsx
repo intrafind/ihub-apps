@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 
-const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLanguage }) => {
+function SearchableAppsSelector({ apps, value, onChange, placeholder, currentLanguage }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -152,6 +152,6 @@ const SearchableAppsSelector = ({ apps, value, onChange, placeholder, currentLan
       )}
     </div>
   );
-};
+}
 
 export default SearchableAppsSelector;

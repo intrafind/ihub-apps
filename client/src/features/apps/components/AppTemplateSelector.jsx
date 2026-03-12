@@ -4,7 +4,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { fetchAdminAppTemplates } from '../../../api/adminApi';
 
-const AppTemplateSelector = ({ onSelect, onClose }) => {
+function AppTemplateSelector({ onSelect, onClose }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [apps, setApps] = useState([]);
@@ -185,6 +185,6 @@ const AppTemplateSelector = ({ onSelect, onClose }) => {
       </div>
     </div>
   );
-};
+}
 
 export default AppTemplateSelector;

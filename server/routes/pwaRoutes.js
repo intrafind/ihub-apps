@@ -7,6 +7,7 @@ import {
   resolvePwaConfig
 } from '../services/pwa/PwaService.js';
 import logger from '../utils/logger.js';
+import { sendInternalError, sendNotFound } from '../utils/responseHelpers.js';
 
 export default function registerPwaRoutes(app) {
   /**
@@ -20,7 +21,7 @@ export default function registerPwaRoutes(app) {
       const rawPwaConfig = uiConfig?.data?.pwa;
 
       if (!rawPwaConfig?.enabled) {
-        return res.status(404).json({ error: 'PWA not enabled' });
+        return sendNotFound(res, 'PWA');
       }
 
       const pwaConfig = resolvePwaConfig(rawPwaConfig);
@@ -37,12 +38,8 @@ export default function registerPwaRoutes(app) {
       });
 
       res.json(buildManifest(pwaConfig));
-    } catch (err) {
-      logger.error('Error serving manifest.json', {
-        component: 'PwaRoutes',
-        error: err.message
-      });
-      res.status(500).json({ error: 'Internal server error' });
+    } catch (error) {
+      return sendInternalError(res, error, 'serve manifest.json');
     }
   });
 
@@ -70,10 +67,10 @@ self.addEventListener('activate', () => self.clients.claim());
       });
 
       res.send(script);
-    } catch (err) {
+    } catch (error) {
       logger.error('Error serving sw.js', {
         component: 'PwaRoutes',
-        error: err.message
+        error: error.message
       });
       res.status(500).send('// Service worker error');
     }

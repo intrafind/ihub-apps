@@ -84,8 +84,9 @@ export default function registerAdminMarketplaceRoutes(app) {
         try {
           await registryService.refreshRegistry(registry.id);
         } catch (refreshError) {
-          logger.warn(`Initial registry refresh failed: ${refreshError.message}`, {
-            component: COMPONENT
+          logger.warn('Initial registry refresh failed', {
+            component: COMPONENT,
+            error: refreshError.message
           });
         }
 

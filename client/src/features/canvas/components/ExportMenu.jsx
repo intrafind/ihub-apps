@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
 
-const ExportMenu = ({ content, onClose }) => {
+export default function ExportMenu({ content, onClose }) {
   const { t } = useTranslation();
   const { copyText, copyMarkdown, copyHTML } = useClipboard();
 
@@ -91,6 +91,4 @@ const ExportMenu = ({ content, onClose }) => {
       </div>
     </div>
   );
-};
-
-export default ExportMenu;
+}

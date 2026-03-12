@@ -96,9 +96,8 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
     const { config = {} } = node;
     const { type = 'expression' } = config;
 
-    this.logger.info({
+    this.logger.info('Executing decision node', {
       component: 'DecisionNodeExecutor',
-      message: `Executing decision node '${node.id}'`,
       nodeId: node.id,
       decisionType: type
     });
@@ -126,9 +125,8 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
         });
     }
 
-    this.logger.info({
+    this.logger.info('Decision node evaluated', {
       component: 'DecisionNodeExecutor',
-      message: `Decision node '${node.id}' evaluated`,
       nodeId: node.id,
       branch: result.branch,
       value: result.value
@@ -155,9 +153,8 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
    */
   evaluateExpression(expression, state, nodeId) {
     if (!expression || typeof expression !== 'string') {
-      this.logger.warn({
+      this.logger.warn('No expression provided for decision node, defaulting to false', {
         component: 'DecisionNodeExecutor',
-        message: `No expression provided for decision node '${nodeId}', defaulting to false`,
         nodeId
       });
       return { branch: 'false', value: false };
@@ -178,12 +175,11 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
         processedExpression
       };
     } catch (error) {
-      this.logger.error({
+      this.logger.error('Failed to evaluate expression in node', {
         component: 'DecisionNodeExecutor',
-        message: `Failed to evaluate expression in node '${nodeId}'`,
         nodeId,
         expression,
-        error: error.message
+        error
       });
 
       // On error, default to false branch
@@ -304,9 +300,8 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
     const { variable, conditions = [], defaultBranch = 'default' } = config;
 
     if (!variable) {
-      this.logger.warn({
+      this.logger.warn('No variable specified for switch in node', {
         component: 'DecisionNodeExecutor',
-        message: `No variable specified for switch in node '${nodeId}'`,
         nodeId
       });
       return { branch: defaultBranch, value: null, matched: false };
@@ -420,9 +415,8 @@ export class DecisionNodeExecutor extends BaseNodeExecutor {
     // This could use the chatService to ask an LLM to make a routing decision
     // based on the current state and provided routing rules
 
-    this.logger.warn({
+    this.logger.warn('LLM-based decision not yet implemented for node', {
       component: 'DecisionNodeExecutor',
-      message: `LLM-based decision not yet implemented for node '${nodeId}'`,
       nodeId
     });
 
