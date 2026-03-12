@@ -67,6 +67,17 @@ export default function SetupWizard() {
 
   const userIsAdmin = user?.isAdmin === true;
 
+  // Ensure authReturnUrl points to this page so the embedded login form does not
+  // trigger a full-page redirect to the root URL in subpath deployments (e.g. nginx
+  // with base path /ihub).  The root cause is a race condition: loadAuthStatus() may
+  // store authReturnUrl as "/" (or "/ihub/") before SetupCheck has had a chance to
+  // navigate to "/setup" (or "/ihub/setup").  By overwriting it here – once the
+  // wizard is actually mounted at its own URL – we guarantee that loginLocal /
+  // loginLdap will compare identical paths and skip the redirect.
+  useEffect(() => {
+    sessionStorage.setItem('authReturnUrl', window.location.href);
+  }, []);
+
   // Persist wizard step to survive component remounts and redirects (e.g. OIDC/NTLM)
   useEffect(() => {
     if (step > 1 && step < TOTAL_STEPS) {
@@ -75,6 +86,16 @@ export default function SetupWizard() {
       sessionStorage.removeItem('setup_wizard_step');
     }
   }, [step]);
+
+  // Defensive recovery: if the wizard is restored at the login step (step 2) but
+  // the user is already authenticated as an admin (e.g. after an unexpected redirect
+  // caused a full-page reload), advance directly to the provider step (step 3).
+  useEffect(() => {
+    if (step === 2 && !authLoading && isAuthenticated && userIsAdmin) {
+      setLoginError(null);
+      setStep(3);
+    }
+  }, [step, authLoading, isAuthenticated, userIsAdmin]);
 
   // After login completes, check admin access and advance
   useEffect(() => {
