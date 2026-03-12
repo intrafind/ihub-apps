@@ -264,6 +264,21 @@
       document.head.appendChild(link);
     });
 
+    // Inject font stylesheets (deferred until after auth to avoid ~500KB on login page)
+    (assets.fontStylesheets || []).forEach(function (href) {
+      var link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = href;
+      document.head.appendChild(link);
+    });
+
+    // Inject font style block (body font-family and variable font support)
+    if (assets.fontStyleBlock) {
+      var style = document.createElement('style');
+      style.textContent = assets.fontStyleBlock;
+      document.head.appendChild(style);
+    }
+
     // Inject modulepreload hints
     (assets.preloads || []).forEach(function (href) {
       var link = document.createElement('link');

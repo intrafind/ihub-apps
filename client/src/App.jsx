@@ -1,4 +1,4 @@
-import React, { useEffect, Suspense } from 'react';
+import React, { useEffect, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
@@ -12,7 +12,8 @@ const SetupWizard = React.lazy(() => import('./features/setup/SetupWizard'));
 const WorkflowExecutionPage = React.lazy(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
-import AppCanvas from './features/canvas/pages/AppCanvas';
+// Lazy load canvas (pulls in react-quill/ajv — vendor-forms chunk, ~370KB)
+const AppCanvas = React.lazy(() => import('./features/canvas/pages/AppCanvas'));
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
@@ -105,6 +106,22 @@ const SafeAppCanvas = withSafeRoute(AppCanvas);
 const SafeUnifiedPage = withSafeRoute(UnifiedPage);
 const SafePromptsList = withSafeRoute(PromptsList);
 
+// Detect Teams environment without loading the Teams SDK (~484KB)
+function useIsTeamsEnvironment() {
+  const [isTeams] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (
+      params.has('loginHint') ||
+      params.has('userObjectId') ||
+      params.has('theme') ||
+      params.has('isTeams') ||
+      window.name === 'embedded' ||
+      window.location.hostname === 'teams.microsoft.com'
+    );
+  });
+  return isTeams;
+}
+
 // Loading component for lazy-loaded admin components
 function AdminLoading() {
   return (
@@ -179,6 +196,7 @@ function App() {
   const featureFlags = useFeatureFlags();
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
+  const isTeams = useIsTeamsEnvironment();
 
   // Initialize runtime base path detection on app start
   useEffect(() => {
@@ -205,337 +223,303 @@ function App() {
   // Get base path for React Router
   const basename = getBasePath();
 
+  const loadingSpinner = (
+    <div className="flex items-center justify-center min-h-screen">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+    </div>
+  );
+
+  // Router content shared between Teams and non-Teams paths
+  const routerContent = (
+    <BrowserRouter basename={basename}>
+      {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
+      <MarkdownRenderer />
+      {/* Document title management - must be inside Router for useLocation/useParams */}
+      <DocumentTitle />
+
+      <Routes>
+        {/* Teams authentication routes */}
+        <Route
+          path="/teams/auth-start"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <TeamsAuthStart />
+            </Suspense>
+          }
+        />
+        <Route
+          path="/teams/auth-end"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <TeamsAuthEnd />
+            </Suspense>
+          }
+        />
+        <Route path="/teams/tab" element={<Layout />}>
+          <Route index element={<SafeAppsList />} />
+        </Route>
+
+        {/* Standalone login page — rendered outside Layout (no sidebar/header) */}
+        <Route path="login" element={<LoginPage />} />
+
+        {/* First-run setup wizard — rendered outside Layout */}
+        <Route
+          path="setup"
+          element={
+            <Suspense fallback={<AdminLoading />}>
+              <SetupWizard />
+            </Suspense>
+          }
+        />
+
+        {/* Regular application routes */}
+        <Route path="/" element={<Layout />}>
+          <Route
+            index
+            element={
+              <SetupCheck>
+                <SafeAppsList />
+              </SetupCheck>
+            }
+          />
+          {uiConfig?.promptsList?.enabled !== false &&
+            featureFlags.isEnabled('promptsLibrary', true) && (
+              <Route path="prompts" element={<SafePromptsList />} />
+            )}
+          {/* Workflow routes - conditionally rendered based on feature flag */}
+          {featureFlags.isEnabled('workflows', true) && (
+            <>
+              <Route path="workflows" element={<LazyAdminRoute component={WorkflowsPage} />} />
+              <Route
+                path="workflows/executions/:executionId"
+                element={<LazyAdminRoute component={WorkflowExecutionPage} />}
+              />
+            </>
+          )}
+          <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
+          <Route
+            path="apps/:appId/canvas"
+            element={
+              <Suspense fallback={<AdminLoading />}>
+                <SafeAppCanvas />
+              </Suspense>
+            }
+          />
+          <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
+          {showAdminPage('home') && (
+            <Route path="admin" element={<LazyAdminRoute component={AdminHome} />} />
+          )}
+          {showAdminPage('usage') && (
+            <Route path="admin/usage" element={<LazyAdminRoute component={AdminUsageReports} />} />
+          )}
+          {showAdminPage('system') && (
+            <Route path="admin/system" element={<LazyAdminRoute component={AdminSystemPage} />} />
+          )}
+          {showAdminPage('logging') && (
+            <Route path="admin/logging" element={<LazyAdminRoute component={AdminLoggingPage} />} />
+          )}
+          {showAdminPage('apps') && (
+            <Route path="admin/apps" element={<LazyAdminRoute component={AdminAppsPage} />} />
+          )}
+          {showAdminPage('apps') && (
+            <Route
+              path="admin/apps/:appId"
+              element={<LazyAdminRoute component={AdminAppEditPage} />}
+            />
+          )}
+          {showAdminPage('shortlinks') && (
+            <Route
+              path="admin/shortlinks"
+              element={<LazyAdminRoute component={AdminShortLinks} />}
+            />
+          )}
+          {showAdminPage('shortlinks') && (
+            <Route
+              path="admin/shortlinks/:code"
+              element={<LazyAdminRoute component={AdminShortLinkEditPage} />}
+            />
+          )}
+          {showAdminPage('models') && (
+            <Route path="admin/models" element={<LazyAdminRoute component={AdminModelsPage} />} />
+          )}
+          {showAdminPage('models') && (
+            <Route
+              path="admin/models/:modelId"
+              element={<LazyAdminRoute component={AdminModelEditPage} />}
+            />
+          )}
+          {showAdminPage('providers') && (
+            <Route
+              path="admin/providers"
+              element={<LazyAdminRoute component={AdminProvidersPage} />}
+            />
+          )}
+          {showAdminPage('providers') && (
+            <Route
+              path="admin/providers/new"
+              element={<LazyAdminRoute component={AdminProviderCreatePage} />}
+            />
+          )}
+          {showAdminPage('providers') && (
+            <Route
+              path="admin/providers/:providerId"
+              element={<LazyAdminRoute component={AdminProviderEditPage} />}
+            />
+          )}
+          {showAdminPage('pages') && (
+            <Route path="admin/pages" element={<LazyAdminRoute component={AdminPagesPage} />} />
+          )}
+          {showAdminPage('pages') && (
+            <Route
+              path="admin/pages/:pageId"
+              element={<LazyAdminRoute component={AdminPageEditPage} />}
+            />
+          )}
+          {showAdminPage('prompts') && (
+            <Route path="admin/prompts" element={<LazyAdminRoute component={AdminPromptsPage} />} />
+          )}
+          {showAdminPage('prompts') && (
+            <Route
+              path="admin/prompts/:promptId"
+              element={<LazyAdminRoute component={AdminPromptEditPage} />}
+            />
+          )}
+          {showAdminPage('tools') && (
+            <Route path="admin/tools" element={<LazyAdminRoute component={AdminToolsPage} />} />
+          )}
+          {showAdminPage('tools') && (
+            <Route
+              path="admin/tools/:toolId"
+              element={<LazyAdminRoute component={AdminToolEditPage} />}
+            />
+          )}
+          {showAdminPage('skills') && (
+            <Route path="admin/skills" element={<LazyAdminRoute component={AdminSkillsPage} />} />
+          )}
+          {showAdminPage('skills') && (
+            <Route
+              path="admin/skills/:skillName"
+              element={<LazyAdminRoute component={AdminSkillEditPage} />}
+            />
+          )}
+          {showAdminPage('workflows') && (
+            <Route
+              path="admin/workflows"
+              element={<LazyAdminRoute component={AdminWorkflowsPage} />}
+            />
+          )}
+          {showAdminPage('workflows') && (
+            <Route
+              path="admin/workflows/new"
+              element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+            />
+          )}
+          {showAdminPage('workflows') && (
+            <Route
+              path="admin/workflows/executions"
+              element={<LazyAdminRoute component={AdminWorkflowExecutionsPage} />}
+            />
+          )}
+          {showAdminPage('workflows') && (
+            <Route
+              path="admin/workflows/:id"
+              element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+            />
+          )}
+          {showAdminPage('sources') && (
+            <Route path="admin/sources" element={<LazyAdminRoute component={AdminSourcesPage} />} />
+          )}
+          {showAdminPage('sources') && (
+            <Route
+              path="admin/sources/:id"
+              element={<LazyAdminRoute component={AdminSourceEditPage} />}
+            />
+          )}
+          {showAdminPage('auth') && (
+            <Route path="admin/auth" element={<LazyAdminRoute component={AdminAuthPage} />} />
+          )}
+          <Route path="admin/oauth" element={<LazyAdminRoute component={AdminOAuthPage} />} />
+          <Route
+            path="admin/oauth/clients"
+            element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
+          />
+          <Route
+            path="admin/oauth/clients/:clientId"
+            element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
+          />
+          <Route
+            path="admin/oauth/server"
+            element={<LazyAdminRoute component={AdminOAuthServerPage} />}
+          />
+          {showAdminPage('users') && (
+            <Route path="admin/users" element={<LazyAdminRoute component={AdminUsersPage} />} />
+          )}
+          {showAdminPage('users') && (
+            <Route
+              path="admin/users/:userId/view"
+              element={<LazyAdminRoute component={AdminUserViewPage} />}
+            />
+          )}
+          {showAdminPage('users') && (
+            <Route
+              path="admin/users/:userId"
+              element={<LazyAdminRoute component={AdminUserEditPage} />}
+            />
+          )}
+          {showAdminPage('groups') && (
+            <Route path="admin/groups" element={<LazyAdminRoute component={AdminGroupsPage} />} />
+          )}
+          {showAdminPage('groups') && (
+            <Route
+              path="admin/groups/:groupId"
+              element={<LazyAdminRoute component={AdminGroupEditPage} />}
+            />
+          )}
+          {showAdminPage('ui') && (
+            <Route path="admin/ui" element={<LazyAdminRoute component={AdminUICustomization} />} />
+          )}
+          {showAdminPage('features') && (
+            <Route
+              path="admin/features"
+              element={<LazyAdminRoute component={AdminFeaturesPage} />}
+            />
+          )}
+          {featureFlags.isEnabled('marketplace', true) && (
+            <Route
+              path="admin/marketplace"
+              element={<LazyAdminRoute component={AdminMarketplacePage} />}
+            />
+          )}
+          {featureFlags.isEnabled('marketplace', true) && (
+            <Route
+              path="admin/marketplace/registries"
+              element={<LazyAdminRoute component={AdminMarketplaceRegistriesPage} />}
+            />
+          )}
+          <Route
+            path="settings/integrations"
+            element={<LazyAdminRoute component={IntegrationsPage} />}
+          />
+          <Route path="unauthorized" element={<Unauthorized />} />
+          <Route path="forbidden" element={<Forbidden />} />
+          <Route path="server-error" element={<ServerError />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+
   return (
     <AppProviders>
       <AuthProvider>
         <AdminAuthProvider>
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center min-h-screen">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              </div>
-            }
-          >
-            <TeamsWrapper>
-              <BrowserRouter basename={basename}>
-                {/* Global markdown renderer for Mermaid diagrams and other markdown features */}
-                <MarkdownRenderer />
-                {/* Document title management - must be inside Router for useLocation/useParams */}
-                <DocumentTitle />
-
-                <Routes>
-                  {/* Teams authentication routes */}
-                  <Route
-                    path="/teams/auth-start"
-                    element={
-                      <Suspense fallback={<AdminLoading />}>
-                        <TeamsAuthStart />
-                      </Suspense>
-                    }
-                  />
-                  <Route
-                    path="/teams/auth-end"
-                    element={
-                      <Suspense fallback={<AdminLoading />}>
-                        <TeamsAuthEnd />
-                      </Suspense>
-                    }
-                  />
-                  <Route path="/teams/tab" element={<Layout />}>
-                    <Route index element={<SafeAppsList />} />
-                  </Route>
-
-                  {/* Standalone login page — rendered outside Layout (no sidebar/header) */}
-                  <Route path="login" element={<LoginPage />} />
-
-                  {/* First-run setup wizard — rendered outside Layout */}
-                  <Route
-                    path="setup"
-                    element={
-                      <Suspense fallback={<AdminLoading />}>
-                        <SetupWizard />
-                      </Suspense>
-                    }
-                  />
-
-                  {/* Regular application routes */}
-                  <Route path="/" element={<Layout />}>
-                    <Route
-                      index
-                      element={
-                        <SetupCheck>
-                          <SafeAppsList />
-                        </SetupCheck>
-                      }
-                    />
-                    {uiConfig?.promptsList?.enabled !== false &&
-                      featureFlags.isEnabled('promptsLibrary', true) && (
-                        <Route path="prompts" element={<SafePromptsList />} />
-                      )}
-                    {/* Workflow routes - conditionally rendered based on feature flag */}
-                    {featureFlags.isEnabled('workflows', true) && (
-                      <>
-                        <Route
-                          path="workflows"
-                          element={<LazyAdminRoute component={WorkflowsPage} />}
-                        />
-                        <Route
-                          path="workflows/executions/:executionId"
-                          element={<LazyAdminRoute component={WorkflowExecutionPage} />}
-                        />
-                      </>
-                    )}
-                    <Route path="apps/:appId" element={<SafeAppRouterWrapper />} />
-                    <Route path="apps/:appId/canvas" element={<SafeAppCanvas />} />
-                    <Route path="pages/:pageId" element={<SafeUnifiedPage />} />
-                    {showAdminPage('home') && (
-                      <Route path="admin" element={<LazyAdminRoute component={AdminHome} />} />
-                    )}
-                    {showAdminPage('usage') && (
-                      <Route
-                        path="admin/usage"
-                        element={<LazyAdminRoute component={AdminUsageReports} />}
-                      />
-                    )}
-                    {showAdminPage('system') && (
-                      <Route
-                        path="admin/system"
-                        element={<LazyAdminRoute component={AdminSystemPage} />}
-                      />
-                    )}
-                    {showAdminPage('logging') && (
-                      <Route
-                        path="admin/logging"
-                        element={<LazyAdminRoute component={AdminLoggingPage} />}
-                      />
-                    )}
-                    {showAdminPage('apps') && (
-                      <Route
-                        path="admin/apps"
-                        element={<LazyAdminRoute component={AdminAppsPage} />}
-                      />
-                    )}
-                    {showAdminPage('apps') && (
-                      <Route
-                        path="admin/apps/:appId"
-                        element={<LazyAdminRoute component={AdminAppEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('shortlinks') && (
-                      <Route
-                        path="admin/shortlinks"
-                        element={<LazyAdminRoute component={AdminShortLinks} />}
-                      />
-                    )}
-                    {showAdminPage('shortlinks') && (
-                      <Route
-                        path="admin/shortlinks/:code"
-                        element={<LazyAdminRoute component={AdminShortLinkEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('models') && (
-                      <Route
-                        path="admin/models"
-                        element={<LazyAdminRoute component={AdminModelsPage} />}
-                      />
-                    )}
-                    {showAdminPage('models') && (
-                      <Route
-                        path="admin/models/:modelId"
-                        element={<LazyAdminRoute component={AdminModelEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('providers') && (
-                      <Route
-                        path="admin/providers"
-                        element={<LazyAdminRoute component={AdminProvidersPage} />}
-                      />
-                    )}
-                    {showAdminPage('providers') && (
-                      <Route
-                        path="admin/providers/new"
-                        element={<LazyAdminRoute component={AdminProviderCreatePage} />}
-                      />
-                    )}
-                    {showAdminPage('providers') && (
-                      <Route
-                        path="admin/providers/:providerId"
-                        element={<LazyAdminRoute component={AdminProviderEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('pages') && (
-                      <Route
-                        path="admin/pages"
-                        element={<LazyAdminRoute component={AdminPagesPage} />}
-                      />
-                    )}
-                    {showAdminPage('pages') && (
-                      <Route
-                        path="admin/pages/:pageId"
-                        element={<LazyAdminRoute component={AdminPageEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('prompts') && (
-                      <Route
-                        path="admin/prompts"
-                        element={<LazyAdminRoute component={AdminPromptsPage} />}
-                      />
-                    )}
-                    {showAdminPage('prompts') && (
-                      <Route
-                        path="admin/prompts/:promptId"
-                        element={<LazyAdminRoute component={AdminPromptEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('tools') && (
-                      <Route
-                        path="admin/tools"
-                        element={<LazyAdminRoute component={AdminToolsPage} />}
-                      />
-                    )}
-                    {showAdminPage('tools') && (
-                      <Route
-                        path="admin/tools/:toolId"
-                        element={<LazyAdminRoute component={AdminToolEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('skills') && (
-                      <Route
-                        path="admin/skills"
-                        element={<LazyAdminRoute component={AdminSkillsPage} />}
-                      />
-                    )}
-                    {showAdminPage('skills') && (
-                      <Route
-                        path="admin/skills/:skillName"
-                        element={<LazyAdminRoute component={AdminSkillEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('workflows') && (
-                      <Route
-                        path="admin/workflows"
-                        element={<LazyAdminRoute component={AdminWorkflowsPage} />}
-                      />
-                    )}
-                    {showAdminPage('workflows') && (
-                      <Route
-                        path="admin/workflows/new"
-                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('workflows') && (
-                      <Route
-                        path="admin/workflows/executions"
-                        element={<LazyAdminRoute component={AdminWorkflowExecutionsPage} />}
-                      />
-                    )}
-                    {showAdminPage('workflows') && (
-                      <Route
-                        path="admin/workflows/:id"
-                        element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('sources') && (
-                      <Route
-                        path="admin/sources"
-                        element={<LazyAdminRoute component={AdminSourcesPage} />}
-                      />
-                    )}
-                    {showAdminPage('sources') && (
-                      <Route
-                        path="admin/sources/:id"
-                        element={<LazyAdminRoute component={AdminSourceEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('auth') && (
-                      <Route
-                        path="admin/auth"
-                        element={<LazyAdminRoute component={AdminAuthPage} />}
-                      />
-                    )}
-                    <Route
-                      path="admin/oauth"
-                      element={<LazyAdminRoute component={AdminOAuthPage} />}
-                    />
-                    <Route
-                      path="admin/oauth/clients"
-                      element={<LazyAdminRoute component={AdminOAuthClientsPage} />}
-                    />
-                    <Route
-                      path="admin/oauth/clients/:clientId"
-                      element={<LazyAdminRoute component={AdminOAuthClientEditPage} />}
-                    />
-                    <Route
-                      path="admin/oauth/server"
-                      element={<LazyAdminRoute component={AdminOAuthServerPage} />}
-                    />
-                    {showAdminPage('users') && (
-                      <Route
-                        path="admin/users"
-                        element={<LazyAdminRoute component={AdminUsersPage} />}
-                      />
-                    )}
-                    {showAdminPage('users') && (
-                      <Route
-                        path="admin/users/:userId/view"
-                        element={<LazyAdminRoute component={AdminUserViewPage} />}
-                      />
-                    )}
-                    {showAdminPage('users') && (
-                      <Route
-                        path="admin/users/:userId"
-                        element={<LazyAdminRoute component={AdminUserEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('groups') && (
-                      <Route
-                        path="admin/groups"
-                        element={<LazyAdminRoute component={AdminGroupsPage} />}
-                      />
-                    )}
-                    {showAdminPage('groups') && (
-                      <Route
-                        path="admin/groups/:groupId"
-                        element={<LazyAdminRoute component={AdminGroupEditPage} />}
-                      />
-                    )}
-                    {showAdminPage('ui') && (
-                      <Route
-                        path="admin/ui"
-                        element={<LazyAdminRoute component={AdminUICustomization} />}
-                      />
-                    )}
-                    {showAdminPage('features') && (
-                      <Route
-                        path="admin/features"
-                        element={<LazyAdminRoute component={AdminFeaturesPage} />}
-                      />
-                    )}
-                    {featureFlags.isEnabled('marketplace', true) && (
-                      <Route
-                        path="admin/marketplace"
-                        element={<LazyAdminRoute component={AdminMarketplacePage} />}
-                      />
-                    )}
-                    {featureFlags.isEnabled('marketplace', true) && (
-                      <Route
-                        path="admin/marketplace/registries"
-                        element={<LazyAdminRoute component={AdminMarketplaceRegistriesPage} />}
-                      />
-                    )}
-                    <Route
-                      path="settings/integrations"
-                      element={<LazyAdminRoute component={IntegrationsPage} />}
-                    />
-                    <Route path="unauthorized" element={<Unauthorized />} />
-                    <Route path="forbidden" element={<Forbidden />} />
-                    <Route path="server-error" element={<ServerError />} />
-                    <Route path="*" element={<NotFound />} />
-                  </Route>
-                </Routes>
-              </BrowserRouter>
-            </TeamsWrapper>
-          </Suspense>
+          {isTeams ? (
+            <Suspense fallback={loadingSpinner}>
+              <TeamsWrapper>{routerContent}</TeamsWrapper>
+            </Suspense>
+          ) : (
+            routerContent
+          )}
         </AdminAuthProvider>
       </AuthProvider>
     </AppProviders>

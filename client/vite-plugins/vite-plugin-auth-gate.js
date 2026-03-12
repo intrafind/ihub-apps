@@ -81,11 +81,29 @@ function transformForBuild(html, gateJS, gateCSS, gateI18n) {
     stylesheets.push(match[1]);
   }
 
+  // Extract <link rel="stylesheet" href="./fonts/..."> tags (font CSS — deferred until after auth)
+  // Also captures an optional preceding HTML comment (e.g. <!-- Import local font -->)
+  const fontStylesheetRegex =
+    /(?:<!--[^>]*-->\s*)?<link\s+rel="stylesheet"[^>]*\s+href="(\.[^"]*\/fonts\/[^"]+\.css)"[^>]*\/?>/g;
+  const fontStylesheets = [];
+  while ((match = fontStylesheetRegex.exec(html)) !== null) {
+    fontStylesheets.push(match[1]);
+  }
+
+  // Extract inline <style> block with font-family settings (the "Fallback font settings" block)
+  const fontStyleBlockRegex = /<style>\s*\/\*\s*Fallback font settings\s*\*\/[\s\S]*?<\/style>/;
+  const fontStyleBlockMatch = fontStyleBlockRegex.exec(html);
+  const fontStyleBlock = fontStyleBlockMatch
+    ? fontStyleBlockMatch[0].replace(/^<style>\s*/, '').replace(/\s*<\/style>$/, '')
+    : null;
+
   // Build asset data JSON
   const assetData = {
     scripts: moduleScripts,
     preloads: preloads,
-    stylesheets: stylesheets
+    stylesheets: stylesheets,
+    fontStylesheets: fontStylesheets,
+    fontStyleBlock: fontStyleBlock
   };
 
   // Remove extracted tags from HTML
@@ -93,6 +111,10 @@ function transformForBuild(html, gateJS, gateCSS, gateI18n) {
   result = result.replace(moduleScriptRegex, '');
   result = result.replace(preloadRegex, '');
   result = result.replace(stylesheetRegex, '');
+  result = result.replace(fontStylesheetRegex, '');
+  if (fontStyleBlockMatch) {
+    result = result.replace(fontStyleBlockRegex, '');
+  }
 
   // Clean up empty lines left behind
   result = result.replace(/^\s*\n/gm, '');

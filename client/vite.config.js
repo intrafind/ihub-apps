@@ -8,6 +8,15 @@ export default defineConfig({
   base: './', // Use relative paths for all assets - works with dynamic base tag
   envDir: '../',
   build: {
+    modulePreload: {
+      resolveDependencies: (_filename, deps) => {
+        // Only preload critical vendor chunks needed on initial render.
+        // Heavy lazy-loaded chunks (mermaid, teams, pdf, babel, monaco, vendor-forms)
+        // will load on-demand when actually needed.
+        const lazyChunks = ['mermaid', 'teams', 'pdf', 'babel', 'monaco', 'vendor-forms'];
+        return deps.filter(dep => !lazyChunks.some(chunk => dep.includes(chunk)));
+      }
+    },
     rollupOptions: {
       output: {
         manualChunks: {
