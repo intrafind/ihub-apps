@@ -84,28 +84,18 @@ Edit `contents/config/platform.json`:
 
 ## Environment Variables for Subpath Deployment
 
-### For Reverse Proxy Setup (Scenario 1)
+The base path is detected automatically from the `X-Forwarded-Prefix` header set by
+your reverse proxy. No `BASE_PATH` or `AUTO_DETECT_BASE_PATH` environment variables
+are required. The server handles both stripping and non-stripping proxy configurations.
 
 ```bash
-# Backend runs at root, relies on X-Forwarded-Prefix header
+# Just set CORS origins and start — the reverse proxy header does the rest
 export ALLOWED_ORIGINS="https://www.myserver.com"
 PORT=3001 npm start
 ```
 
-### For Direct Access Setup (Scenario 2)
-
-```bash
-# Frontend build-time configuration
-export VITE_BASE_PATH="/ihub"
-
-# Backend runtime configuration  
-export BASE_PATH="/ihub"
-export ALLOWED_ORIGINS="https://www.myserver.com"
-
-# Build and start
-VITE_BASE_PATH=/ihub npm run build
-BASE_PATH=/ihub PORT=3001 npm start
-```
+> **Tip:** If your proxy uses a custom header instead of `X-Forwarded-Prefix`, set
+> `BASE_PATH_HEADER` to the header name (e.g., `export BASE_PATH_HEADER=x-custom-prefix`).
 
 ## Nginx Configuration
 
@@ -386,21 +376,22 @@ For Apache reverse proxy:
 
 #### Base Path Detection (server/utils/basePath.js)
 
+The server automatically detects the deployment subpath from the `X-Forwarded-Prefix`
+header at request time. No environment variables are needed for base path configuration.
+
+A rewrite middleware (`basePathRewriteMiddleware`) normalizes incoming request URLs by
+stripping the forwarded prefix, so routes always match regardless of whether the proxy
+strips the subpath or not. At response time, `getBasePath()` reads the header to
+generate correct URLs (e.g., in the PWA manifest).
+
 ```javascript
 export const getBasePath = () => {
-  // Option 1: From environment variable (direct access)
-  let basePath = process.env.BASE_PATH || '';
-  
-  // Option 2: From reverse proxy header (if enabled)
-  if (process.env.AUTO_DETECT_BASE_PATH === 'true' && global.currentRequest) {
-    const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
+  if (global.currentRequest) {
     const detectedPath = global.currentRequest.headers[headerName.toLowerCase()];
-    if (detectedPath && isValidBasePath(detectedPath)) {
-      basePath = detectedPath;
-    }
+    if (detectedPath && isValidBasePath(detectedPath)) return detectedPath;
   }
-  
-  return basePath;
+  return '';
 };
 ```
 
@@ -442,9 +433,6 @@ services:
   ihub-apps:
     build:
       context: .
-      args:
-        BASE_PATH: /ihub
-        VITE_BASE_PATH: /ihub
     environment:
       - ALLOWED_ORIGINS=https://www.myserver.com
       - PORT=3000
@@ -466,6 +454,10 @@ services:
       - ihub-apps
     restart: unless-stopped
 ```
+
+> **Note:** No `BASE_PATH` or `VITE_BASE_PATH` build args are needed. The Nginx
+> configuration sets the `X-Forwarded-Prefix` header, and the server detects the
+> subpath automatically at runtime.
 
 ## Kubernetes Deployment
 
@@ -623,14 +615,16 @@ location /ihub/ {
         https://www.myserver.com/ihub/api/health
    ```
 
-### For Direct Access Setup
+### Testing with X-Forwarded-Prefix header
 
 ```bash
-# Test backend with BASE_PATH
-curl http://localhost:3001/ihub/api/health
+# Simulate a non-stripping proxy sending the full subpath URL
+curl -H "X-Forwarded-Prefix: /ihub" http://localhost:3001/ihub/api/health
 
-# Should NOT work without prefix
-curl http://localhost:3001/api/health  # Should return 404
+# Simulate a stripping proxy (prefix already removed)
+curl -H "X-Forwarded-Prefix: /ihub" http://localhost:3001/api/health
+
+# Both should return a successful health response
 ```
 
 ## Troubleshooting
@@ -654,9 +648,9 @@ Access to fetch at 'https://www.myserver.com/ihub/api' from origin 'https://www.
 **Symptom:** CSS, JS, or images return 404
 
 **Solution:**
-- Verify `VITE_BASE_PATH` was set during build
-- Check that `BASE_PATH` matches at runtime
+- Ensure your reverse proxy sets the `X-Forwarded-Prefix` header
 - Inspect browser network tab for actual request paths
+- Check that the `<base>` tag in the HTML `<head>` matches your subpath
 
 #### 3. API Calls Failing
 

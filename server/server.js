@@ -51,6 +51,8 @@ import { runConfigMigrations } from './migrations/runner.js';
 import { getProxyConfig } from './utils/httpConfig.js';
 import {
   getBasePath,
+  buildApiPath,
+  basePathRewriteMiddleware,
   basePathDetectionMiddleware,
   basePathValidationMiddleware
 } from './utils/basePath.js';
@@ -280,7 +282,11 @@ if (cluster.isPrimary && workerCount > 1) {
   // Middleware
   setupMiddleware(app, platformConfig);
 
-  // Add base path detection and validation middleware
+  // Add base path middleware chain:
+  // 1. Rewrite: strips X-Forwarded-Prefix from req.url (handles non-stripping proxies)
+  // 2. Detection: stores current request for runtime base path resolution
+  // 3. Validation: warns on invalid X-Forwarded-Prefix values
+  app.use(basePathRewriteMiddleware);
   app.use(basePathDetectionMiddleware);
   app.use(basePathValidationMiddleware);
 
@@ -318,10 +324,10 @@ if (cluster.isPrimary && workerCount > 1) {
 
   // --- Integration Routes ---
   // Note: These must be registered after authentication middleware is set up
-  app.use('/api/integrations/jira', jiraRoutes);
-  app.use('/api/integrations/office365', office365Routes);
-  app.use('/api/integrations/googledrive', googledriveRoutes);
-  app.use('/api/integrations/ifinder', ifinderRoutes);
+  app.use(buildApiPath('/integrations/jira'), jiraRoutes);
+  app.use(buildApiPath('/integrations/office365'), office365Routes);
+  app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes);
+  app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 

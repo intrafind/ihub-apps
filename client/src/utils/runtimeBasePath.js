@@ -70,8 +70,14 @@ export const detectBasePath = () => {
     return '/' + segments.slice(0, routeSegmentIndex).join('/');
   }
 
-  // No known routes found, return empty string
-  // (in normal operation, we should always find a route)
+  // No known routes found in URL path.
+  // Fall back to window.__BASE_PATH__ set by index.html's inline script,
+  // which uses the same detection logic but runs before React mounts.
+  // This handles the case where the user lands on the subpath root (e.g., /ihub/).
+  if (typeof window !== 'undefined' && window.__BASE_PATH__) {
+    return window.__BASE_PATH__;
+  }
+
   return '';
 };
 
