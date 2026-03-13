@@ -12,44 +12,25 @@ import { convertResponseToGeneric } from '../../../adapters/toolCalling/ToolCall
  * Designed so that each table row is self-contained (includes column context)
  * and visual elements get meaningful text representations for downstream LLM consumption.
  */
-export const DEFAULT_OCR_PROMPT = `You are a precision OCR engine. Extract ALL content from this scanned document page exactly as it appears.
+export const DEFAULT_OCR_PROMPT = `Extract ALL text from this document page into clean markdown. Output each content block exactly once.
 
-## General Text
-- Preserve the original layout, line breaks, paragraphs, and formatting.
-- Reproduce headings, subheadings, lists (bulleted and numbered), and captions faithfully.
-- Do not add commentary, explanations, or markdown formatting unless the original document uses it.
-
-## Tables
-- Before each table, add a brief descriptive sentence summarizing what the table contains (e.g., "Table: Quarterly revenue by region for fiscal year 2024.").
-- Reproduce tables in markdown table format.
-- Prefix each data row with a comment restating the column headers so rows remain self-contained when chunked:
-  Table: Employee directory listing name, age, and city of residence.
+Rules:
+- Headings: use # / ## / ### as appropriate.
+- Paragraphs and lists: preserve as-is with line breaks.
+- Tables: output as markdown tables with a brief description before each table. Prefix every data row with an HTML comment restating the column headers for chunking context:
+  Table: Employee directory.
   | Name | Age | City |
   |------|-----|------|
   <!-- Columns: Name, Age, City -->
   | Alice | 30 | Berlin |
   <!-- Columns: Name, Age, City -->
   | Bob | 25 | Munich |
-- For complex multi-level header tables, flatten headers into a single row with full header paths (e.g., "Q1 - Revenue").
-- If the table has a visible caption or title in the document, use that as the descriptive text.
-
-## Charts and Graphs
-- Format as: [CHART: <type>] followed by a description.
-- Include: chart type (bar, line, pie, scatter, etc.), axis labels, units, scale, data points or series values when readable, and a one-sentence key trend summary.
-
-## Drawings and Diagrams
-- Format as: [DIAGRAM] followed by a description.
-- Describe: shapes, labels, arrows, connections, flow direction, and spatial relationships.
-- Preserve all text labels exactly as written.
-
-## Mixed Content
-- Process each content block (text, table, chart, diagram) in reading order (top-to-bottom, left-to-right).
-- Separate distinct content blocks with a blank line.
-
-## Empty Pages
-- If there is no text or visual content on the page, output exactly: [BLANK PAGE]
-
-Output ONLY the extracted and described content. No preamble, no closing remarks.`;
+- Multi-level table headers: flatten into single row (e.g., "Q1 - Revenue").
+- Charts/graphs: [CHART: <type>] then describe axes, data points, and key trend.
+- Diagrams/drawings: [DIAGRAM] then describe shapes, labels, arrows, and connections.
+- Process in reading order (top-to-bottom, left-to-right). Separate blocks with a blank line.
+- Empty page: output exactly [BLANK PAGE].
+- Do NOT duplicate content. Do NOT add commentary or preamble.`;
 
 /**
  * Call the LLM with a page image and extract text via vision.
@@ -70,7 +51,7 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
 
   const request = createCompletionRequest(model, messages, apiKey, {
     temperature: 0.1,
-    maxTokens: 4096,
+    maxTokens: 8192,
     stream: false
   });
 
