@@ -304,7 +304,7 @@ export async function processOcrJob(job) {
 
     job.result = Buffer.from(pdfBytes);
     job.resultContentType = 'application/pdf';
-    job.resultFilename = 'ocr-result.pdf';
+    job.resultFilename = job.data.outputFilename || 'ocr-result.pdf';
     job.status = 'completed';
 
     // Free image data to save memory

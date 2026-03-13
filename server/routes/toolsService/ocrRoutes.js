@@ -22,7 +22,15 @@ const MAX_PROMPT_LENGTH = 2000;
  */
 router.post('/ocr/process', authRequired, async (req, res) => {
   try {
-    const { inputType = 'pdf', pageImages, originalPdf, images, modelId, prompt } = req.body;
+    const {
+      inputType = 'pdf',
+      pageImages,
+      originalPdf,
+      images,
+      modelId,
+      prompt,
+      fileName
+    } = req.body;
 
     // Validate prompt
     if (prompt && (typeof prompt !== 'string' || prompt.length > MAX_PROMPT_LENGTH)) {
@@ -59,12 +67,22 @@ router.post('/ocr/process', authRequired, async (req, res) => {
       jobOriginalPdf = Buffer.from(originalPdf, 'base64');
     }
 
+    // Derive output filename: keep original name but ensure .pdf extension
+    let outputFilename = 'ocr-result.pdf';
+    if (fileName && typeof fileName === 'string') {
+      const sanitized = fileName.replace(/[^\w.\-() ]/g, '_');
+      const ext = sanitized.split('.').pop()?.toLowerCase();
+      outputFilename =
+        ext === 'pdf' ? sanitized : sanitized.replace(/\.[^.]+$/, '.pdf') || sanitized + '.pdf';
+    }
+
     const job = createJob('ocr', req.user?.id, {
       inputType,
       pageImages: jobPageImages,
       originalPdf: jobOriginalPdf,
       modelId: modelId || null,
-      prompt: prompt || null
+      prompt: prompt || null,
+      outputFilename
     });
 
     job.progress = { current: 0, total: jobPageImages.length };

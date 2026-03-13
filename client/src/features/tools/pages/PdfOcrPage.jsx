@@ -244,7 +244,8 @@ export default function PdfOcrPage() {
           pageImages: images,
           originalPdf: originalPdfBase64,
           modelId: selectedModel || undefined,
-          prompt: customPrompt.trim() || undefined
+          prompt: customPrompt.trim() || undefined,
+          fileName: pdfFile.name
         };
 
         setOcrProgress({ current: 0, total: numPages });
@@ -258,11 +259,18 @@ export default function PdfOcrPage() {
           imageBase64s.push(base64);
         }
 
+        // Use first image's name with .pdf extension, or fallback
+        const firstFileName = files[0]?.name || 'ocr-result.png';
+        const baseName = firstFileName.replace(/\.[^.]+$/, '');
+        const outputName =
+          files.length === 1 ? `${baseName}.pdf` : `${baseName}-and-${files.length - 1}-more.pdf`;
+
         requestBody = {
           inputType: 'images',
           images: imageBase64s,
           modelId: selectedModel || undefined,
-          prompt: customPrompt.trim() || undefined
+          prompt: customPrompt.trim() || undefined,
+          fileName: outputName
         };
 
         setOcrProgress({ current: 0, total: files.length });
