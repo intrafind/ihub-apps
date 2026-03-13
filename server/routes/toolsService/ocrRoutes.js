@@ -100,21 +100,19 @@ router.post('/ocr/process', authRequired, async (req, res) => {
  * GET /ocr/models
  * Get list of models suitable for OCR (vision-capable).
  */
-router.get('/ocr/models', authRequired, (req, res) => {
+router.get('/ocr/models', authRequired, async (req, res) => {
   try {
-    const { data: models } = configCache.getModels();
+    const { data: models } = await configCache.getModelsForUser(req.user);
     if (!models) {
       return res.json([]);
     }
 
-    const ocrModels = models
-      .filter(m => m.enabled !== false)
-      .map(m => ({
-        id: m.id,
-        name: m.name,
-        supportsVision: !!(m.supportsImages || m.supportsVision),
-        isDefault: !!m.default
-      }));
+    const ocrModels = models.map(m => ({
+      id: m.id,
+      name: m.name,
+      supportsVision: !!(m.supportsImages || m.supportsVision),
+      isDefault: !!m.default
+    }));
 
     res.json(ocrModels);
   } catch (err) {

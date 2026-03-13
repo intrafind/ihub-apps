@@ -87,7 +87,9 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => 'Unknown error');
-    throw new Error(`LLM API error (${response.status}) for page ${pageNum}: ${errorText}`);
+    const err = new Error(`LLM API error (${response.status}) for page ${pageNum}: ${errorText}`);
+    err.statusCode = response.status;
+    throw err;
   }
 
   const data = await response.json();
@@ -283,6 +285,19 @@ export async function processOcrJob(job) {
           page: i + 1,
           error: err.message
         });
+
+        // Non-retryable model error (4xx) — abort immediately
+        if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+          job.status = 'error';
+          job.error =
+            err.statusCode === 404
+              ? 'Model not found. Please select a different model.'
+              : `Model error (${err.statusCode}): The selected model rejected the request.`;
+          notifyClients(job);
+          return;
+        }
+
+        // Transient error — continue with next page
         pageTexts[i] = { text: '', pageNum: i + 1, error: err.message };
       }
 
