@@ -1,0 +1,419 @@
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { apiClient } from '../../../api/client';
+
+const STATUS_LABELS = {
+  idle: 'Ready',
+  rendering: 'Rendering PDF pages...',
+  uploading: 'Starting OCR processing...',
+  processing: 'Extracting text with AI...',
+  building: 'Building PDF with text layer...',
+  completed: 'OCR complete!',
+  error: 'An error occurred'
+};
+
+/**
+ * Render a single PDF page to a base64 PNG image using pdfjs-dist
+ */
+async function renderPageToImage(pdfDoc, pageNum, scale = 2) {
+  const page = await pdfDoc.getPage(pageNum);
+  const viewport = page.getViewport({ scale });
+
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+
+  const ctx = canvas.getContext('2d');
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  // Return base64 without the data URL prefix
+  const dataUrl = canvas.toDataURL('image/png');
+  return dataUrl.split(',')[1];
+}
+
+/**
+ * Load pdfjs-dist and render all pages to images
+ */
+async function renderPdfToImages(file, onProgress) {
+  const pdfjsLib = await import('pdfjs-dist');
+
+  // Set worker source
+  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+    'pdfjs-dist/build/pdf.worker.mjs',
+    import.meta.url
+  ).toString();
+
+  const arrayBuffer = await file.arrayBuffer();
+  const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  const numPages = pdf.numPages;
+  const images = [];
+
+  for (let i = 1; i <= numPages; i++) {
+    onProgress(i, numPages);
+    const base64 = await renderPageToImage(pdf, i);
+    images.push(base64);
+  }
+
+  return { images, numPages };
+}
+
+function ProgressBar({ value, max, label }) {
+  const pct = max > 0 ? Math.round((value / max) * 100) : 0;
+  return (
+    <div className="w-full">
+      {label && <div className="text-sm text-gray-600 dark:text-gray-400 mb-1">{label}</div>}
+      <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 overflow-hidden">
+        <div
+          className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 text-right">
+        {value} / {max} ({pct}%)
+      </div>
+    </div>
+  );
+}
+
+export default function PdfOcrPage() {
+  const [file, setFile] = useState(null);
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = useState('');
+  const [status, setStatus] = useState('idle');
+  const [renderProgress, setRenderProgress] = useState({ current: 0, total: 0 });
+  const [ocrProgress, setOcrProgress] = useState({ current: 0, total: 0 });
+  const [errorMessage, setErrorMessage] = useState('');
+  const [jobId, setJobId] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
+  const eventSourceRef = useRef(null);
+
+  // Fetch available models on mount
+  useEffect(() => {
+    apiClient
+      .get('/pdf-ocr/models')
+      .then(res => {
+        const data = res.data;
+        setModels(data);
+        // Default to a vision-capable model or the first model
+        const defaultModel =
+          data.find(m => m.supportsVision) || data.find(m => m.isDefault) || data[0];
+        if (defaultModel) setSelectedModel(defaultModel.id);
+      })
+      .catch(() => {
+        // Silently fail - models dropdown will just be empty
+      });
+  }, []);
+
+  const cleanup = useCallback(() => {
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    return cleanup;
+  }, [cleanup]);
+
+  const handleFileSelect = useCallback(selectedFile => {
+    if (selectedFile && selectedFile.type === 'application/pdf') {
+      setFile(selectedFile);
+      setStatus('idle');
+      setErrorMessage('');
+      setJobId(null);
+      setOcrProgress({ current: 0, total: 0 });
+      setRenderProgress({ current: 0, total: 0 });
+    }
+  }, []);
+
+  const handleDrop = useCallback(
+    e => {
+      e.preventDefault();
+      setDragOver(false);
+      const droppedFile = e.dataTransfer.files[0];
+      handleFileSelect(droppedFile);
+    },
+    [handleFileSelect]
+  );
+
+  const handleDragOver = useCallback(e => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(e => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
+
+  const startOcr = async () => {
+    if (!file) return;
+    cleanup();
+    setErrorMessage('');
+    setStatus('rendering');
+
+    try {
+      // Step 1: Render PDF pages to images on the client
+      const { images, numPages } = await renderPdfToImages(file, (current, total) => {
+        setRenderProgress({ current, total });
+      });
+
+      // Get the original PDF as base64
+      const arrayBuffer = await file.arrayBuffer();
+      const originalPdfBase64 = btoa(
+        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+      );
+
+      setStatus('uploading');
+      setOcrProgress({ current: 0, total: numPages });
+
+      // Step 2: Send to server
+      const response = await apiClient.post(
+        '/pdf-ocr/process',
+        {
+          pageImages: images,
+          originalPdf: originalPdfBase64,
+          modelId: selectedModel || undefined
+        },
+        { timeout: 0 } // No timeout for large uploads
+      );
+
+      const { jobId: newJobId, totalPages } = response.data;
+      setJobId(newJobId);
+      setOcrProgress(prev => ({ ...prev, total: totalPages }));
+
+      // Step 3: Connect to SSE for progress
+      const progressUrl = buildApiUrl(`/pdf-ocr/progress/${newJobId}`);
+      const es = new EventSource(progressUrl, { withCredentials: true });
+      eventSourceRef.current = es;
+
+      es.onmessage = event => {
+        const data = JSON.parse(event.data);
+        setOcrProgress({ current: data.completedPages, total: data.totalPages });
+
+        if (data.status === 'processing' || data.status === 'building') {
+          setStatus(data.status);
+        } else if (data.status === 'completed') {
+          setStatus('completed');
+          es.close();
+          eventSourceRef.current = null;
+        } else if (data.status === 'error') {
+          setStatus('error');
+          setErrorMessage(data.error || 'Unknown error during OCR processing');
+          es.close();
+          eventSourceRef.current = null;
+        }
+      };
+
+      es.onerror = () => {
+        // SSE connection lost — check if we already completed
+        if (status !== 'completed') {
+          setStatus('error');
+          setErrorMessage('Lost connection to server. The job may still be processing.');
+        }
+        es.close();
+        eventSourceRef.current = null;
+      };
+    } catch (err) {
+      setStatus('error');
+      setErrorMessage(err.response?.data?.error || err.message || 'Failed to start OCR');
+    }
+  };
+
+  const handleDownload = () => {
+    if (!jobId) return;
+    const downloadUrl = buildApiUrl(`/pdf-ocr/download/${jobId}`);
+    // Open in new tab to trigger download
+    window.open(downloadUrl, '_blank');
+  };
+
+  const handleReset = () => {
+    cleanup();
+    setFile(null);
+    setStatus('idle');
+    setErrorMessage('');
+    setJobId(null);
+    setOcrProgress({ current: 0, total: 0 });
+    setRenderProgress({ current: 0, total: 0 });
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const isProcessing = ['rendering', 'uploading', 'processing', 'building'].includes(status);
+
+  return (
+    <div className="max-w-2xl mx-auto p-6">
+      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">PDF OCR</h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
+        Upload a scanned PDF to extract text using AI vision. The text is embedded as a searchable
+        layer in the PDF.
+      </p>
+
+      {/* Model selector */}
+      {models.length > 0 && (
+        <div className="mb-4">
+          <label
+            htmlFor="model-select"
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            AI Model
+          </label>
+          <select
+            id="model-select"
+            value={selectedModel}
+            onChange={e => setSelectedModel(e.target.value)}
+            disabled={isProcessing}
+            className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+          >
+            {models.map(m => (
+              <option key={m.id} value={m.id}>
+                {typeof m.name === 'object' ? m.name.en || m.name[Object.keys(m.name)[0]] : m.name}
+                {m.supportsVision ? ' (Vision)' : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {/* File upload area */}
+      <div
+        className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
+          dragOver
+            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+            : file
+              ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
+              : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
+        } ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
+        onClick={() => !isProcessing && fileInputRef.current?.click()}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+      >
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf"
+          className="hidden"
+          onChange={e => handleFileSelect(e.target.files[0])}
+        />
+
+        {file ? (
+          <div>
+            <svg
+              className="mx-auto h-10 w-10 text-green-500 mb-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              {(file.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+          </div>
+        ) : (
+          <div>
+            <svg
+              className="mx-auto h-10 w-10 text-gray-400 mb-2"
+              fill="none"
+              viewBox="0 0 24 24"
+              strokeWidth={1.5}
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m6.75 12l-3-3m0 0l-3 3m3-3v6m-1.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z"
+              />
+            </svg>
+            <p className="text-gray-600 dark:text-gray-400">
+              Drop a PDF here or <span className="text-blue-600 dark:text-blue-400">browse</span>
+            </p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">PDF files only</p>
+          </div>
+        )}
+      </div>
+
+      {/* Progress section */}
+      {status !== 'idle' && (
+        <div className="mt-6 space-y-4">
+          <div className="flex items-center gap-2">
+            {isProcessing && (
+              <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent" />
+            )}
+            <span
+              className={`text-sm font-medium ${
+                status === 'completed'
+                  ? 'text-green-600 dark:text-green-400'
+                  : status === 'error'
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-blue-600 dark:text-blue-400'
+              }`}
+            >
+              {STATUS_LABELS[status] || status}
+            </span>
+          </div>
+
+          {status === 'rendering' && renderProgress.total > 0 && (
+            <ProgressBar
+              value={renderProgress.current}
+              max={renderProgress.total}
+              label="Rendering pages..."
+            />
+          )}
+
+          {['uploading', 'processing', 'building', 'completed'].includes(status) &&
+            ocrProgress.total > 0 && (
+              <ProgressBar
+                value={ocrProgress.current}
+                max={ocrProgress.total}
+                label="OCR progress"
+              />
+            )}
+
+          {status === 'error' && errorMessage && (
+            <div className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+              {errorMessage}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Action buttons */}
+      <div className="mt-6 flex gap-3">
+        {status === 'idle' && file && (
+          <button
+            onClick={startOcr}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+          >
+            Start OCR
+          </button>
+        )}
+
+        {status === 'completed' && (
+          <button
+            onClick={handleDownload}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm"
+          >
+            Download PDF
+          </button>
+        )}
+
+        {(file || status !== 'idle') && !isProcessing && (
+          <button
+            onClick={handleReset}
+            className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium text-sm"
+          >
+            Reset
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}

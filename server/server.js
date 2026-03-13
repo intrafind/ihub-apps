@@ -32,6 +32,7 @@ import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerSetupRoutes from './routes/setup.js';
 import registerPwaRoutes from './routes/pwaRoutes.js';
 import registerThemeRoutes from './routes/themeRoutes.js';
+import registerPdfOcrRoutes from './routes/pdfOcr.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import office365Routes from './routes/integrations/office365.js';
 import googledriveRoutes from './routes/integrations/googledrive.js';
@@ -340,6 +341,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // so the extension guard in staticRoutes does not 404 them
   registerPwaRoutes(app);
   registerThemeRoutes(app);
+  registerPdfOcrRoutes(app);
 
   // Register static file and SPA routes after API routes
   registerStaticRoutes(app, { isPackaged, rootDir, basePath });
