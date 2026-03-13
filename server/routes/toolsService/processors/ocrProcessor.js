@@ -57,17 +57,11 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
   const messages = [
     {
       role: 'user',
-      content: [
+      content: prompt,
+      imageData: [
         {
-          type: 'text',
-          text: prompt
-        },
-        {
-          type: 'image_url',
-          image_url: {
-            url: `data:image/png;base64,${base64Image}`,
-            detail: 'high'
-          }
+          base64: base64Image,
+          fileType: 'image/png'
         }
       ]
     }
