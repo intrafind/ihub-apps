@@ -10,28 +10,25 @@ export default defineConfig({
   build: {
     modulePreload: {
       resolveDependencies: (_filename, deps) => {
-        // Only preload critical vendor chunks needed on initial render.
-        // Heavy lazy-loaded chunks (mermaid, teams, pdf, babel, monaco, vendor-forms)
-        // will load on-demand when actually needed.
-        const lazyChunks = ['mermaid', 'teams', 'pdf', 'babel', 'monaco', 'vendor-forms'];
-        return deps.filter(dep => !lazyChunks.some(chunk => dep.includes(chunk)));
+        // Only preload the vendor chunks needed on initial render.
+        // Everything else loads on-demand via dynamic import / React.lazy.
+        return deps.filter(
+          dep =>
+            dep.includes('vendor-react') ||
+            dep.includes('vendor-ui') ||
+            dep.includes('vendor-utils')
+        );
       }
     },
     rollupOptions: {
       output: {
         manualChunks: {
-          // Vendor chunks
+          // Only eagerly-loaded shared vendor code.
+          // Heavy/lazy deps (mermaid, teams, pdf, babel, monaco, react-quill)
+          // are NOT listed here — they split naturally via import() / React.lazy.
           'vendor-react': ['react', 'react-dom', 'react-router-dom'],
           'vendor-ui': ['@heroicons/react', 'react-icons', 'tailwindcss'],
-          'vendor-forms': ['react-quill', 'ajv', 'ajv-formats'],
-          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown'],
-
-          // Heavy dependencies that should be separate
-          mermaid: ['mermaid'],
-          monaco: ['@monaco-editor/react'],
-          teams: ['@microsoft/teams-js', 'microsoft-cognitiveservices-speech-sdk'],
-          pdf: ['pdfjs-dist'],
-          babel: ['@babel/standalone']
+          'vendor-utils': ['axios', 'uuid', 'file-saver', 'fuse.js', 'marked', 'turndown']
         }
       }
     },
