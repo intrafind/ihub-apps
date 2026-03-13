@@ -2,9 +2,14 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { apiClient } from '../../../api/client';
 
+const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/tiff', 'image/webp'];
+
+const ACCEPTED_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'tiff', 'tif', 'webp'];
+
 const STATUS_LABELS = {
   idle: 'Ready',
   rendering: 'Rendering PDF pages...',
+  preparing: 'Preparing images...',
   uploading: 'Starting OCR processing...',
   processing: 'Extracting text with AI...',
   building: 'Building PDF with text layer...',
@@ -26,7 +31,6 @@ async function renderPageToImage(pdfDoc, pageNum, scale = 2) {
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
 
-  // Return base64 without the data URL prefix
   const dataUrl = canvas.toDataURL('image/png');
   return dataUrl.split(',')[1];
 }
@@ -37,7 +41,6 @@ async function renderPageToImage(pdfDoc, pageNum, scale = 2) {
 async function renderPdfToImages(file, onProgress) {
   const pdfjsLib = await import('pdfjs-dist');
 
-  // Set worker source
   pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
     'pdfjs-dist/build/pdf.worker.mjs',
     import.meta.url
@@ -55,6 +58,58 @@ async function renderPdfToImages(file, onProgress) {
   }
 
   return { images, numPages };
+}
+
+/**
+ * Read an image file as base64 (without the data URL prefix).
+ * Converts TIFF/WebP to PNG via canvas for pdf-lib compatibility.
+ */
+async function readImageAsBase64(file) {
+  const needsConversion = file.type === 'image/tiff' || file.type === 'image/webp';
+
+  if (needsConversion) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        canvas.getContext('2d').drawImage(img, 0, 0);
+        URL.revokeObjectURL(url);
+        const dataUrl = canvas.toDataURL('image/png');
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error(`Failed to load image: ${file.name}`));
+      };
+      img.src = url;
+    });
+  }
+
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      resolve(dataUrl.split(',')[1]);
+    };
+    reader.onerror = () => reject(new Error(`Failed to read file: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * Check if a file is an accepted type by MIME or extension fallback.
+ */
+function isAcceptedFile(file) {
+  if (ACCEPTED_TYPES.includes(file.type)) return true;
+  const ext = file.name.split('.').pop()?.toLowerCase();
+  return ACCEPTED_EXTENSIONS.includes(ext);
+}
+
+function isPdfFile(file) {
+  return file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 }
 
 function ProgressBar({ value, max, label }) {
@@ -76,9 +131,12 @@ function ProgressBar({ value, max, label }) {
 }
 
 export default function PdfOcrPage() {
-  const [file, setFile] = useState(null);
+  const [files, setFiles] = useState([]);
+  const [inputType, setInputType] = useState(null); // 'pdf' or 'images'
   const [models, setModels] = useState([]);
   const [selectedModel, setSelectedModel] = useState('');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [status, setStatus] = useState('idle');
   const [renderProgress, setRenderProgress] = useState({ current: 0, total: 0 });
   const [ocrProgress, setOcrProgress] = useState({ current: 0, total: 0 });
@@ -91,11 +149,10 @@ export default function PdfOcrPage() {
   // Fetch available models on mount
   useEffect(() => {
     apiClient
-      .get('/pdf-ocr/models')
+      .get('/tools-service/ocr/models')
       .then(res => {
         const data = res.data;
         setModels(data);
-        // Default to a vision-capable model or the first model
         const defaultModel =
           data.find(m => m.supportsVision) || data.find(m => m.isDefault) || data[0];
         if (defaultModel) setSelectedModel(defaultModel.id);
@@ -116,23 +173,35 @@ export default function PdfOcrPage() {
     return cleanup;
   }, [cleanup]);
 
-  const handleFileSelect = useCallback(selectedFile => {
-    if (selectedFile && selectedFile.type === 'application/pdf') {
-      setFile(selectedFile);
-      setStatus('idle');
-      setErrorMessage('');
-      setJobId(null);
-      setOcrProgress({ current: 0, total: 0 });
-      setRenderProgress({ current: 0, total: 0 });
+  const handleFileSelect = useCallback(selectedFiles => {
+    const fileList = Array.isArray(selectedFiles) ? selectedFiles : [selectedFiles];
+    const accepted = fileList.filter(f => f && isAcceptedFile(f));
+    if (accepted.length === 0) return;
+
+    // If first file is PDF, use PDF mode (single file only)
+    if (isPdfFile(accepted[0])) {
+      setFiles([accepted[0]]);
+      setInputType('pdf');
+    } else {
+      // Image mode — accept all image files
+      const imageFiles = accepted.filter(f => !isPdfFile(f));
+      setFiles(imageFiles);
+      setInputType('images');
     }
+
+    setStatus('idle');
+    setErrorMessage('');
+    setJobId(null);
+    setOcrProgress({ current: 0, total: 0 });
+    setRenderProgress({ current: 0, total: 0 });
   }, []);
 
   const handleDrop = useCallback(
     e => {
       e.preventDefault();
       setDragOver(false);
-      const droppedFile = e.dataTransfer.files[0];
-      handleFileSelect(droppedFile);
+      const droppedFiles = Array.from(e.dataTransfer.files);
+      handleFileSelect(droppedFiles);
     },
     [handleFileSelect]
   );
@@ -148,49 +217,78 @@ export default function PdfOcrPage() {
   }, []);
 
   const startOcr = async () => {
-    if (!file) return;
+    if (files.length === 0) return;
     cleanup();
     setErrorMessage('');
-    setStatus('rendering');
 
     try {
-      // Step 1: Render PDF pages to images on the client
-      const { images, numPages } = await renderPdfToImages(file, (current, total) => {
-        setRenderProgress({ current, total });
-      });
+      let requestBody;
 
-      // Get the original PDF as base64
-      const arrayBuffer = await file.arrayBuffer();
-      const originalPdfBase64 = btoa(
-        new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
-      );
+      if (inputType === 'pdf') {
+        setStatus('rendering');
+        const pdfFile = files[0];
 
-      setStatus('uploading');
-      setOcrProgress({ current: 0, total: numPages });
+        // Render PDF pages to images on the client
+        const { images, numPages } = await renderPdfToImages(pdfFile, (current, total) => {
+          setRenderProgress({ current, total });
+        });
 
-      // Step 2: Send to server
-      const response = await apiClient.post(
-        '/pdf-ocr/process',
-        {
+        // Get the original PDF as base64
+        const arrayBuffer = await pdfFile.arrayBuffer();
+        const originalPdfBase64 = btoa(
+          new Uint8Array(arrayBuffer).reduce((data, byte) => data + String.fromCharCode(byte), '')
+        );
+
+        requestBody = {
+          inputType: 'pdf',
           pageImages: images,
           originalPdf: originalPdfBase64,
-          modelId: selectedModel || undefined
-        },
-        { timeout: 0 } // No timeout for large uploads
-      );
+          modelId: selectedModel || undefined,
+          prompt: customPrompt.trim() || undefined
+        };
+
+        setOcrProgress({ current: 0, total: numPages });
+      } else {
+        // Image mode
+        setStatus('preparing');
+        const imageBase64s = [];
+        for (let i = 0; i < files.length; i++) {
+          setRenderProgress({ current: i + 1, total: files.length });
+          const base64 = await readImageAsBase64(files[i]);
+          imageBase64s.push(base64);
+        }
+
+        requestBody = {
+          inputType: 'images',
+          images: imageBase64s,
+          modelId: selectedModel || undefined,
+          prompt: customPrompt.trim() || undefined
+        };
+
+        setOcrProgress({ current: 0, total: files.length });
+      }
+
+      setStatus('uploading');
+
+      // Send to server
+      const response = await apiClient.post('/tools-service/ocr/process', requestBody, {
+        timeout: 0
+      });
 
       const { jobId: newJobId, totalPages } = response.data;
       setJobId(newJobId);
       setOcrProgress(prev => ({ ...prev, total: totalPages }));
 
-      // Step 3: Connect to SSE for progress
-      const progressUrl = buildApiUrl(`/pdf-ocr/progress/${newJobId}`);
+      // Connect to SSE for progress
+      const progressUrl = buildApiUrl(`/tools-service/jobs/${newJobId}/progress`);
       const es = new EventSource(progressUrl, { withCredentials: true });
       eventSourceRef.current = es;
 
       es.onmessage = event => {
         const data = JSON.parse(event.data);
-        setOcrProgress({ current: data.completedPages, total: data.totalPages });
+        if (data.progress) {
+          setOcrProgress({ current: data.progress.current, total: data.progress.total });
+        }
 
         if (data.status === 'processing' || data.status === 'building') {
           setStatus(data.status);
@@ -207,7 +305,6 @@ export default function PdfOcrPage() {
       };
 
       es.onerror = () => {
-        // SSE connection lost — check if we already completed
         if (status !== 'completed') {
           setStatus('error');
           setErrorMessage('Lost connection to server. The job may still be processing.');
@@ -223,14 +320,14 @@ export default function PdfOcrPage() {
 
   const handleDownload = () => {
     if (!jobId) return;
-    const downloadUrl = buildApiUrl(`/pdf-ocr/download/${jobId}`);
-    // Open in new tab to trigger download
+    const downloadUrl = buildApiUrl(`/tools-service/jobs/${jobId}/download`);
     window.open(downloadUrl, '_blank');
   };
 
   const handleReset = () => {
     cleanup();
-    setFile(null);
+    setFiles([]);
+    setInputType(null);
     setStatus('idle');
     setErrorMessage('');
     setJobId(null);
@@ -239,14 +336,22 @@ export default function PdfOcrPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
-  const isProcessing = ['rendering', 'uploading', 'processing', 'building'].includes(status);
+  const isProcessing = ['rendering', 'preparing', 'uploading', 'processing', 'building'].includes(
+    status
+  );
+
+  const fileLabel =
+    files.length === 1
+      ? files[0].name
+      : `${files.length} image${files.length !== 1 ? 's' : ''} selected`;
+  const fileSize = files.reduce((sum, f) => sum + f.size, 0);
 
   return (
     <div className="max-w-2xl mx-auto p-6">
       <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">PDF OCR</h1>
       <p className="text-gray-600 dark:text-gray-400 mb-6">
-        Upload a scanned PDF to extract text using AI vision. The text is embedded as a searchable
-        layer in the PDF.
+        Upload a scanned PDF or images to extract text using AI vision. The text is embedded as a
+        searchable layer in the resulting PDF.
       </p>
 
       {/* Model selector */}
@@ -275,12 +380,56 @@ export default function PdfOcrPage() {
         </div>
       )}
 
+      {/* Advanced options */}
+      <div className="mb-4">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          disabled={isProcessing}
+          className="flex items-center gap-1 text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors disabled:opacity-50"
+        >
+          <svg
+            className={`h-4 w-4 transition-transform ${showAdvanced ? 'rotate-90' : ''}`}
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
+          </svg>
+          Advanced Options
+        </button>
+        {showAdvanced && (
+          <div className="mt-2">
+            <label
+              htmlFor="custom-prompt"
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+            >
+              Custom OCR Prompt
+            </label>
+            <textarea
+              id="custom-prompt"
+              value={customPrompt}
+              onChange={e => setCustomPrompt(e.target.value)}
+              disabled={isProcessing}
+              rows={4}
+              maxLength={2000}
+              placeholder="Leave empty to use the default prompt (handles tables, charts, diagrams, and mixed content)..."
+              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 resize-y"
+            />
+            <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 text-right">
+              {customPrompt.length} / 2000
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* File upload area */}
       <div
         className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors cursor-pointer ${
           dragOver
             ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-            : file
+            : files.length > 0
               ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
               : 'border-gray-300 dark:border-gray-600 hover:border-blue-400 dark:hover:border-blue-500'
         } ${isProcessing ? 'pointer-events-none opacity-60' : ''}`}
@@ -292,12 +441,13 @@ export default function PdfOcrPage() {
         <input
           ref={fileInputRef}
           type="file"
-          accept="application/pdf"
+          accept=".pdf,.jpg,.jpeg,.png,.tiff,.tif,.webp"
+          multiple
           className="hidden"
-          onChange={e => handleFileSelect(e.target.files[0])}
+          onChange={e => handleFileSelect(Array.from(e.target.files))}
         />
 
-        {file ? (
+        {files.length > 0 ? (
           <div>
             <svg
               className="mx-auto h-10 w-10 text-green-500 mb-2"
@@ -312,9 +462,11 @@ export default function PdfOcrPage() {
                 d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            <p className="font-medium text-gray-900 dark:text-white">{file.name}</p>
+            <p className="font-medium text-gray-900 dark:text-white">{fileLabel}</p>
             <p className="text-sm text-gray-500 dark:text-gray-400">
-              {(file.size / 1024 / 1024).toFixed(2)} MB
+              {(fileSize / 1024 / 1024).toFixed(2)} MB
+              {inputType === 'images' &&
+                ` \u2022 ${files.length} image${files.length !== 1 ? 's' : ''}`}
             </p>
           </div>
         ) : (
@@ -333,9 +485,11 @@ export default function PdfOcrPage() {
               />
             </svg>
             <p className="text-gray-600 dark:text-gray-400">
-              Drop a PDF here or <span className="text-blue-600 dark:text-blue-400">browse</span>
+              Drop files here or <span className="text-blue-600 dark:text-blue-400">browse</span>
             </p>
-            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">PDF files only</p>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+              PDF, JPEG, PNG, TIFF, or WebP
+            </p>
           </div>
         )}
       </div>
@@ -360,11 +514,11 @@ export default function PdfOcrPage() {
             </span>
           </div>
 
-          {status === 'rendering' && renderProgress.total > 0 && (
+          {(status === 'rendering' || status === 'preparing') && renderProgress.total > 0 && (
             <ProgressBar
               value={renderProgress.current}
               max={renderProgress.total}
-              label="Rendering pages..."
+              label={status === 'rendering' ? 'Rendering pages...' : 'Preparing images...'}
             />
           )}
 
@@ -387,7 +541,7 @@ export default function PdfOcrPage() {
 
       {/* Action buttons */}
       <div className="mt-6 flex gap-3">
-        {status === 'idle' && file && (
+        {status === 'idle' && files.length > 0 && (
           <button
             onClick={startOcr}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
@@ -405,7 +559,7 @@ export default function PdfOcrPage() {
           </button>
         )}
 
-        {(file || status !== 'idle') && !isProcessing && (
+        {(files.length > 0 || status !== 'idle') && !isProcessing && (
           <button
             onClick={handleReset}
             className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors font-medium text-sm"
