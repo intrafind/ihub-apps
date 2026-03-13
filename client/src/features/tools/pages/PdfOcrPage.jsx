@@ -18,11 +18,19 @@ const STATUS_LABELS = {
 };
 
 /**
- * Render a single PDF page to a base64 PNG image using pdfjs-dist
+ * Render a single PDF page to a base64 JPEG image using pdfjs-dist.
+ * Uses adaptive scaling: target ~1600px on the long edge for good OCR
+ * quality while keeping file sizes manageable for large documents.
  */
 async function renderPageToImage(pdfDoc, pageNum, scale = 2) {
   const page = await pdfDoc.getPage(pageNum);
-  const viewport = page.getViewport({ scale });
+  const defaultViewport = page.getViewport({ scale: 1 });
+  const longEdge = Math.max(defaultViewport.width, defaultViewport.height);
+
+  // Target ~1600px on the long edge; cap at the requested scale
+  const TARGET_LONG_EDGE = 1600;
+  const adaptiveScale = Math.min(scale, TARGET_LONG_EDGE / longEdge);
+  const viewport = page.getViewport({ scale: adaptiveScale });
 
   const canvas = document.createElement('canvas');
   canvas.width = viewport.width;
@@ -31,7 +39,8 @@ async function renderPageToImage(pdfDoc, pageNum, scale = 2) {
   const ctx = canvas.getContext('2d');
   await page.render({ canvasContext: ctx, viewport }).promise;
 
-  const dataUrl = canvas.toDataURL('image/png');
+  // JPEG at 0.85 quality is ~5-10x smaller than PNG for document pages
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
   return dataUrl.split(',')[1];
 }
 

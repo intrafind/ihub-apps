@@ -43,7 +43,7 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
       imageData: [
         {
           base64: base64Image,
-          fileType: 'image/png'
+          fileType: detectImageFormat(base64Image) === 'jpg' ? 'image/jpeg' : 'image/png'
         }
       ]
     }
