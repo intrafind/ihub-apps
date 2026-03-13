@@ -5,6 +5,7 @@ import { getApiKeyForModel } from '../../../utils.js';
 import { throttledFetch } from '../../../requestThrottler.js';
 import logger from '../../../utils/logger.js';
 import { notifyClients } from '../jobStore.js';
+import { convertResponseToGeneric } from '../../../adapters/toolCalling/ToolCallingConverter.js';
 
 /**
  * Default OCR prompt optimized for complex documents with tables, charts, and diagrams.
@@ -91,20 +92,18 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
 
   const data = await response.json();
 
-  // Extract text from response — handle different provider formats
-  if (data.choices?.[0]?.message?.content) {
-    return data.choices[0].message.content;
-  }
-  if (data.content?.[0]?.text) {
-    return data.content[0].text;
-  }
-  if (data.candidates?.[0]?.content?.parts?.[0]?.text) {
-    return data.candidates[0].content.parts[0].text;
+  // Use the adapter converter to extract text — handles provider-specific
+  // formats and filters out thinking/reasoning content automatically
+  const genericResponse = convertResponseToGeneric(JSON.stringify(data), model.provider);
+
+  if (genericResponse.content && genericResponse.content.length > 0) {
+    return genericResponse.content.join('');
   }
 
   logger.warn('Could not extract text from LLM response', {
     component: 'OcrProcessor',
     pageNum,
+    provider: model.provider,
     responseKeys: Object.keys(data)
   });
   return '';
