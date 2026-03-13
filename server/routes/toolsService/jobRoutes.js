@@ -1,6 +1,6 @@
 import express from 'express';
 import { authRequired } from '../../middleware/authRequired.js';
-import { getJob } from './jobStore.js';
+import { getJob, canAccessJob } from './jobStore.js';
 import { sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 
 const router = express.Router();
@@ -11,7 +11,7 @@ const router = express.Router();
  */
 router.get('/jobs/:jobId/progress', authRequired, (req, res) => {
   const job = getJob(req.params.jobId);
-  if (!job) {
+  if (!job || !canAccessJob(job, req.user)) {
     return sendNotFound(res, 'Job');
   }
 
@@ -54,7 +54,7 @@ router.get('/jobs/:jobId/progress', authRequired, (req, res) => {
  */
 router.get('/jobs/:jobId/download', authRequired, (req, res) => {
   const job = getJob(req.params.jobId);
-  if (!job) {
+  if (!job || !canAccessJob(job, req.user)) {
     return sendNotFound(res, 'Job');
   }
 

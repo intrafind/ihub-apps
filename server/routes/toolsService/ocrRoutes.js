@@ -59,7 +59,7 @@ router.post('/ocr/process', authRequired, async (req, res) => {
       jobOriginalPdf = Buffer.from(originalPdf, 'base64');
     }
 
-    const job = createJob('ocr', {
+    const job = createJob('ocr', req.user?.id, {
       inputType,
       pageImages: jobPageImages,
       originalPdf: jobOriginalPdf,

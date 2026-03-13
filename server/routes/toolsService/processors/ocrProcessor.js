@@ -19,8 +19,10 @@ export const DEFAULT_OCR_PROMPT = `You are a precision OCR engine. Extract ALL c
 - Do not add commentary, explanations, or markdown formatting unless the original document uses it.
 
 ## Tables
+- Before each table, add a brief descriptive sentence summarizing what the table contains (e.g., "Table: Quarterly revenue by region for fiscal year 2024.").
 - Reproduce tables in markdown table format.
 - Prefix each data row with a comment restating the column headers so rows remain self-contained when chunked:
+  Table: Employee directory listing name, age, and city of residence.
   | Name | Age | City |
   |------|-----|------|
   <!-- Columns: Name, Age, City -->
@@ -28,6 +30,7 @@ export const DEFAULT_OCR_PROMPT = `You are a precision OCR engine. Extract ALL c
   <!-- Columns: Name, Age, City -->
   | Bob | 25 | Munich |
 - For complex multi-level header tables, flatten headers into a single row with full header paths (e.g., "Q1 - Revenue").
+- If the table has a visible caption or title in the document, use that as the descriptive text.
 
 ## Charts and Graphs
 - Format as: [CHART: <type>] followed by a description.

@@ -21,14 +21,16 @@ setInterval(
 /**
  * Create a new job with common fields and insert into the store.
  * @param {string} toolType - Tool identifier (e.g. 'ocr', 'websearch')
+ * @param {string} userId - ID of the user who created the job
  * @param {object} data - Tool-specific data
  * @returns {object} The created job
  */
-export function createJob(toolType, data = {}) {
+export function createJob(toolType, userId, data = {}) {
   const id = crypto.randomUUID();
   const job = {
     id,
     toolType,
+    userId,
     status: 'queued',
     progress: { current: 0, total: 0 },
     result: null,
@@ -49,6 +51,16 @@ export function createJob(toolType, data = {}) {
  */
 export function getJob(jobId) {
   return jobs.get(jobId) || null;
+}
+
+/**
+ * Check if a user can access a job.
+ * Admins can access all jobs; regular users can only access their own.
+ */
+export function canAccessJob(job, user) {
+  if (!job || !user) return false;
+  if (user.permissions?.adminAccess === true) return true;
+  return job.userId === user.id;
 }
 
 /**
