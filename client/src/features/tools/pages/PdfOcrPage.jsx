@@ -313,6 +313,14 @@ export default function PdfOcrPage() {
           setStatus('completed');
           es.close();
           eventSourceRef.current = null;
+          // Auto-download the result (use <a> click to avoid popup blockers)
+          const downloadUrl = buildApiUrl(`/tools-service/jobs/${newJobId}/download`);
+          const a = document.createElement('a');
+          a.href = downloadUrl;
+          a.download = '';
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
         } else if (data.status === 'error') {
           setStatus('error');
           setErrorMessage(data.error || 'Unknown error during OCR processing');

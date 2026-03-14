@@ -1,4 +1,8 @@
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import { PDFDocument, rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import configCache from '../../../configCache.js';
 import { createCompletionRequest } from '../../../adapters/index.js';
 import { getApiKeyForModel } from '../../../utils.js';
@@ -7,6 +11,13 @@ import logger from '../../../utils/logger.js';
 import { notifyClients } from '../jobStore.js';
 import { convertResponseToGeneric } from '../../../adapters/toolCalling/ToolCallingConverter.js';
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Load a Unicode-capable font once at module init for PDF text layers. */
+const UNICODE_FONT_BYTES = readFileSync(
+  join(__dirname, '..', '..', '..', 'assets', 'fonts', 'LiberationSans-Regular.ttf')
+);
+
 /**
  * Default OCR prompt optimized for complex documents with tables, charts, and diagrams.
  * Designed so that each table row is self-contained (includes column context)
@@ -14,20 +25,24 @@ import { convertResponseToGeneric } from '../../../adapters/toolCalling/ToolCall
  */
 export const DEFAULT_OCR_PROMPT = `Extract ALL text from this document page into clean markdown. Output each content block exactly once.
 
+IMPORTANT: All descriptive text you add (table summaries, chart descriptions, diagram descriptions) MUST be written in the same language as the document content. Detect the document language and use it consistently.
+
 Rules:
 - Headings: use # / ## / ### as appropriate.
 - Paragraphs and lists: preserve as-is with line breaks.
-- Tables: output as markdown tables with a brief description before each table. Prefix every data row with an HTML comment restating the column headers for chunking context:
-  Table: Employee directory.
-  | Name | Age | City |
-  |------|-----|------|
-  <!-- Columns: Name, Age, City -->
+- Tables: output as markdown tables with a brief description before each table in the document's language. Prefix every data row with an HTML comment restating the column headers for chunking context. After the table, add a **summary paragraph** that explains the key data points, notable values, trends, totals, or comparisons — so a reader can understand the table content without seeing it:
+  Tabelle: Mitarbeiterverzeichnis.
+  | Name | Alter | Stadt |
+  |------|-------|-------|
+  <!-- Spalten: Name, Alter, Stadt -->
   | Alice | 30 | Berlin |
-  <!-- Columns: Name, Age, City -->
-  | Bob | 25 | Munich |
+  <!-- Spalten: Name, Alter, Stadt -->
+  | Bob | 25 | München |
+
+  Zusammenfassung: Die Tabelle listet zwei Mitarbeiter. Alice (30) arbeitet in Berlin, Bob (25) in München. Das Durchschnittsalter beträgt 27,5 Jahre.
 - Multi-level table headers: flatten into single row (e.g., "Q1 - Revenue").
-- Charts/graphs: [CHART: <type>] then describe axes, data points, and key trend.
-- Diagrams/drawings: [DIAGRAM] then describe shapes, labels, arrows, and connections.
+- Charts/graphs: [CHART: <type>] then write a **comprehensive description** that includes: the chart type, axis labels and units, all data points or series, the key trend or pattern, highest and lowest values, and any notable comparisons — all in the document's language.
+- Diagrams/drawings: [DIAGRAM] then write a **comprehensive description** that explains: the overall purpose, all shapes/nodes and their labels, all arrows/connections and their direction, the process flow or relationships depicted, and any decision points or branches — all in the document's language.
 - Process in reading order (top-to-bottom, left-to-right). Separate blocks with a blank line.
 - Empty page: output exactly [BLANK PAGE].
 - Do NOT duplicate content. Do NOT add commentary or preamble.`;
@@ -97,8 +112,9 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
  */
 async function buildOcrPdf(pageTexts, originalPdfBytes) {
   const srcDoc = await PDFDocument.load(originalPdfBytes);
+  srcDoc.registerFontkit(fontkit);
+  const font = await srcDoc.embedFont(UNICODE_FONT_BYTES, { subset: true });
   const srcPages = srcDoc.getPages();
-  const font = await srcDoc.embedFont(StandardFonts.Helvetica);
 
   for (let i = 0; i < srcPages.length; i++) {
     const page = srcPages[i];
@@ -148,7 +164,8 @@ function detectImageFormat(base64String) {
  */
 async function buildOcrPdfFromImages(imageDataList, pageTexts) {
   const pdfDoc = await PDFDocument.create();
-  const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  pdfDoc.registerFontkit(fontkit);
+  const font = await pdfDoc.embedFont(UNICODE_FONT_BYTES, { subset: true });
 
   for (let i = 0; i < imageDataList.length; i++) {
     const base64 = imageDataList[i];
