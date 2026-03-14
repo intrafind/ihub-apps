@@ -7,7 +7,7 @@ import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.j
 
 const router = express.Router();
 
-const MAX_PAGES = 200;
+const MAX_PAGES = 500;
 const MAX_PROMPT_LENGTH = 2000;
 
 /**
