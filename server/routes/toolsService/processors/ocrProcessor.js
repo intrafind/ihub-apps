@@ -108,20 +108,74 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
 }
 
 /**
- * Build a PDF with an invisible text layer overlaid on the original PDF pages.
+ * Draw visible text on a page with word-wrapping to fit within margins.
  */
-async function buildOcrPdf(pageTexts, originalPdfBytes) {
+function drawVisibleText(page, text, font, fontSize, margin) {
+  const { width, height } = page.getSize();
+  const lineHeight = fontSize * 1.4;
+  const maxWidth = width - margin * 2;
+  let y = height - margin;
+
+  for (const rawLine of text.split('\n')) {
+    if (y < margin) break;
+
+    // Word-wrap long lines
+    const words = rawLine.split(/(\s+)/);
+    let currentLine = '';
+
+    for (const word of words) {
+      const testLine = currentLine + word;
+      const testWidth = font.widthOfTextAtSize(testLine, fontSize);
+
+      if (testWidth > maxWidth && currentLine.length > 0) {
+        page.drawText(currentLine, {
+          x: margin,
+          y,
+          size: fontSize,
+          font,
+          color: rgb(0, 0, 0)
+        });
+        y -= lineHeight;
+        if (y < margin) break;
+        currentLine = word.trimStart();
+      } else {
+        currentLine = testLine;
+      }
+    }
+
+    if (y >= margin && currentLine.length > 0) {
+      page.drawText(currentLine, {
+        x: margin,
+        y,
+        size: fontSize,
+        font,
+        color: rgb(0, 0, 0)
+      });
+      y -= lineHeight;
+    }
+  }
+}
+
+/**
+ * Build a PDF with an invisible text layer overlaid on the original PDF pages.
+ * When debugMode is true, a blank page with the visible extracted text is
+ * inserted after each original page.
+ */
+async function buildOcrPdf(pageTexts, originalPdfBytes, debugMode) {
   const srcDoc = await PDFDocument.load(originalPdfBytes);
   srcDoc.registerFontkit(fontkit);
   const font = await srcDoc.embedFont(UNICODE_FONT_BYTES, { subset: true });
   const srcPages = srcDoc.getPages();
+
+  // Collect debug pages to insert after iteration (inserting during would shift indices)
+  const debugInserts = [];
 
   for (let i = 0; i < srcPages.length; i++) {
     const page = srcPages[i];
     const text = pageTexts[i]?.text || '';
     if (!text || text === '[BLANK PAGE]') continue;
 
-    const { height } = page.getSize();
+    const { width, height } = page.getSize();
     const fontSize = 10;
     const lineHeight = fontSize * 1.2;
 
@@ -140,6 +194,17 @@ async function buildOcrPdf(pageTexts, originalPdfBytes) {
       });
       y -= lineHeight;
     }
+
+    if (debugMode) {
+      debugInserts.push({ afterIndex: i, width, height, text });
+    }
+  }
+
+  // Insert debug pages in reverse order so indices stay valid
+  for (let d = debugInserts.length - 1; d >= 0; d--) {
+    const { afterIndex, width, height, text } = debugInserts[d];
+    const debugPage = srcDoc.insertPage(afterIndex + 1, [width, height]);
+    drawVisibleText(debugPage, text, font, 9, 30);
   }
 
   return await srcDoc.save();
@@ -161,8 +226,10 @@ function detectImageFormat(base64String) {
 /**
  * Build a new PDF from raw images with an invisible text layer.
  * Used when the user uploads images (not a PDF).
+ * When debugMode is true, a blank page with the visible extracted text is
+ * appended after each image page.
  */
-async function buildOcrPdfFromImages(imageDataList, pageTexts) {
+async function buildOcrPdfFromImages(imageDataList, pageTexts, debugMode) {
   const pdfDoc = await PDFDocument.create();
   pdfDoc.registerFontkit(fontkit);
   const font = await pdfDoc.embedFont(UNICODE_FONT_BYTES, { subset: true });
@@ -202,6 +269,11 @@ async function buildOcrPdfFromImages(imageDataList, pageTexts) {
           opacity: 0
         });
         y -= lineHeight;
+      }
+
+      if (debugMode) {
+        const debugPage = pdfDoc.addPage([width, height]);
+        drawVisibleText(debugPage, text, font, 9, 30);
       }
     }
   }
@@ -308,10 +380,11 @@ export async function processOcrJob(job) {
     notifyClients(job);
 
     let pdfBytes;
+    const debugMode = job.data.debugMode;
     if (job.data.inputType === 'images') {
-      pdfBytes = await buildOcrPdfFromImages(pageImages, pageTexts);
+      pdfBytes = await buildOcrPdfFromImages(pageImages, pageTexts, debugMode);
     } else {
-      pdfBytes = await buildOcrPdf(pageTexts, job.data.originalPdf);
+      pdfBytes = await buildOcrPdf(pageTexts, job.data.originalPdf, debugMode);
     }
 
     job.result = Buffer.from(pdfBytes);

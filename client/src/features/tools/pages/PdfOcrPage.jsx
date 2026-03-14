@@ -146,6 +146,8 @@ export default function PdfOcrPage() {
   const [selectedModel, setSelectedModel] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [autoDownload, setAutoDownload] = useState(true);
+  const [debugMode, setDebugMode] = useState(false);
   const [status, setStatus] = useState('idle');
   const [renderProgress, setRenderProgress] = useState({ current: 0, total: 0 });
   const [ocrProgress, setOcrProgress] = useState({ current: 0, total: 0 });
@@ -254,7 +256,8 @@ export default function PdfOcrPage() {
           originalPdf: originalPdfBase64,
           modelId: selectedModel || undefined,
           prompt: customPrompt.trim() || undefined,
-          fileName: pdfFile.name
+          fileName: pdfFile.name,
+          debugMode: debugMode || undefined
         };
 
         setOcrProgress({ current: 0, total: numPages });
@@ -279,7 +282,8 @@ export default function PdfOcrPage() {
           images: imageBase64s,
           modelId: selectedModel || undefined,
           prompt: customPrompt.trim() || undefined,
-          fileName: outputName
+          fileName: outputName,
+          debugMode: debugMode || undefined
         };
 
         setOcrProgress({ current: 0, total: files.length });
@@ -313,14 +317,15 @@ export default function PdfOcrPage() {
           setStatus('completed');
           es.close();
           eventSourceRef.current = null;
-          // Auto-download the result (use <a> click to avoid popup blockers)
-          const downloadUrl = buildApiUrl(`/tools-service/jobs/${newJobId}/download`);
-          const a = document.createElement('a');
-          a.href = downloadUrl;
-          a.download = '';
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
+          if (autoDownload) {
+            const downloadUrl = buildApiUrl(`/tools-service/jobs/${newJobId}/download`);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+          }
         } else if (data.status === 'error') {
           setStatus('error');
           setErrorMessage(data.error || 'Unknown error during OCR processing');
@@ -447,6 +452,30 @@ export default function PdfOcrPage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Options */}
+      <div className="mb-4 flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={autoDownload}
+            onChange={e => setAutoDownload(e.target.checked)}
+            disabled={isProcessing}
+            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+          />
+          Auto-download on completion
+        </label>
+        <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={debugMode}
+            onChange={e => setDebugMode(e.target.checked)}
+            disabled={isProcessing}
+            className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+          />
+          Debug mode — add visible text pages
+        </label>
       </div>
 
       {/* File upload area */}

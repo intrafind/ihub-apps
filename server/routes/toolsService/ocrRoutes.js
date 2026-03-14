@@ -29,7 +29,8 @@ router.post('/ocr/process', authRequired, async (req, res) => {
       images,
       modelId,
       prompt,
-      fileName
+      fileName,
+      debugMode
     } = req.body;
 
     // Validate prompt
@@ -82,7 +83,8 @@ router.post('/ocr/process', authRequired, async (req, res) => {
       originalPdf: jobOriginalPdf,
       modelId: modelId || null,
       prompt: prompt || null,
-      outputFilename
+      outputFilename,
+      debugMode: !!debugMode
     });
 
     job.progress = { current: 0, total: jobPageImages.length };
