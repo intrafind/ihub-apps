@@ -23,7 +23,7 @@ const UNICODE_FONT_BYTES = readFileSync(
  * Designed so that each table row is self-contained (includes column context)
  * and visual elements get meaningful text representations for downstream LLM consumption.
  */
-export const DEFAULT_OCR_PROMPT = `Extract ALL text from this document page into clean markdown. Output each content block exactly once.
+export const DEFAULT_OCR_PROMPT2 = `Extract ALL text from this document page into clean markdown. Output each content block exactly once.
 
 IMPORTANT: All descriptive text you add (table summaries, chart descriptions, diagram descriptions) MUST be written in the same language as the document content. Detect the document language and use it consistently.
 
@@ -46,6 +46,54 @@ Rules:
 - Process in reading order (top-to-bottom, left-to-right). Separate blocks with a blank line.
 - Empty page: output exactly [BLANK PAGE].
 - Do NOT duplicate content. Do NOT add commentary or preamble.`;
+
+export const DEFAULT_OCR_PROMPT = `You are a production-grade document extraction system optimized for Retrieval-Augmented Generation (RAG) and full-text search indexing. Convert this document page image into structured, annotated Markdown following these rules precisely.
+
+### GLOBAL RULES & NEGATIVE CONSTRAINTS:
+- Transcribe ALL visible text exactly as it appears—omit nothing. 
+- Transcribe all text in its original language.
+- Do NOT add commentary, preamble, interpretation, or information not visible in the image.
+- Do NOT skip headers, footers, page numbers, or footnotes (transcribe them accurately).
+- If text is partially or completely illegible, transcribe what is visible and mark unclear portions exactly with '[ILLEGIBLE]'.
+
+### METADATA & ANNOTATIONS:
+Start the extraction with page-level metadata using HTML comments. Generate a 1-2 sentence summary of the page to aid contextual retrieval:
+<!-- page_summary:[Brief summary of page content in the document's language] -->
+<!-- primary_language: [ISO language code, e.g., en, de, fr] -->
+
+### STRUCTURE & FORMATTING:
+- **Reading Order:** Follow the logical human reading order (e.g., left-to-right, top-to-bottom for Western documents; process full columns before moving to the next).
+- **Hierarchy:** Use Markdown heading levels ('#', '##', '###') to preserve the document's section hierarchy.
+- **Math & Equations:** Use LaTeX formatting ('$...$' for inline, '$$...$$' for block) for mathematical formulas.
+- **Forms:** Keep form labels and values clearly associated. For checkboxes, strictly use '[x]' for checked/selected and '[ ]' for unchecked/empty.
+- **Authentication:** Explicitly tag signatures as '[SIGNATURE: <Name/Role or "Unreadable">]' and stamps as '[STAMP: <Description of text/graphic>]'.
+
+### TABLES (DUAL-CHUNK STRATEGY):
+You MUST use HTML '<table>' tags for all tables to preserve merged cells ('colspan') and multi-level headers ('rowspan'). Markdown pipe-tables destroy complex structures.
+1. **Pre-annotate:** Above every table, add:
+   '<!-- content_type: table -->'
+   '<!-- chunk_hint: keep_together -->'
+2. **Extract:** Output the precise HTML '<table>' structure.
+3. **Summarize:** Immediately following the '</table>' tag, add a **summary paragraph** prefixed with 'Table Summary: '. Explain the key data points, notable values, trends, totals, or comparisons — so a human reader or AI agent can fully understand the table content and answer complex questions without ever seeing the table itself. Write this summary in the document's language.
+
+### VISUAL DATA (CHARTS, DIAGRAMS, IMAGES):
+Before ANY visual data description, add the annotation:
+'<!-- content_type: figure -->'
+'<!-- chunk_hint: keep_together -->'
+Then, process the visual based on its type:
+
+- **Charts/Graphs:** Output '[FIGURE: <type>]' then write a **comprehensive description** that includes: the chart type, axis labels and units, all data points or series, the key trend or pattern, highest and lowest values, and any notable comparisons — all in the document's language.
+- **Diagrams/Drawings:** Output '[DIAGRAM]' then write a **comprehensive description** that explains: the overall purpose, all shapes/nodes and their labels, all arrows/connections and their direction, the process flow or relationships depicted, and any decision points or branches — all in the document's language.
+- **Photographs/Scans:** Output '[IMAGE: <subject>]' then write a **factual, detailed visual description** of everything shown in the document's language.
+
+### HEADERS, FOOTERS & MARGINALIA:
+To prevent vector pollution while preserving data, isolate repeating page numbers, document IDs, or legal footer disclaimers by wrapping them in:
+'<!-- content_type: header -->' or '<!-- content_type: footer -->'.
+
+### EMPTY PAGES:
+If the page contains no meaningful text or visuals, output exactly '[BLANK PAGE]'.
+
+Output ONLY the final annotated Markdown content. Do NOT include any explanatory text, apologies, or preambles.`;
 
 /**
  * Call the LLM with a page image and extract text via vision.
