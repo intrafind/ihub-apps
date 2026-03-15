@@ -1,5 +1,6 @@
 {
   "skills": false,
   "workflows": false,
-  "usageTracking": true
+  "usageTracking": true,
+  "toolsService": false
 }

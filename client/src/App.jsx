@@ -501,7 +501,9 @@ function App() {
             path="settings/integrations"
             element={<LazyAdminRoute component={IntegrationsPage} />}
           />
-          <Route path="tools/pdf-ocr" element={<LazyAdminRoute component={PdfOcrPage} />} />
+          {featureFlags.isEnabled('toolsService', true) && (
+            <Route path="tools/pdf-ocr" element={<LazyAdminRoute component={PdfOcrPage} />} />
+          )}
           <Route path="unauthorized" element={<Unauthorized />} />
           <Route path="forbidden" element={<Forbidden />} />
           <Route path="server-error" element={<ServerError />} />
