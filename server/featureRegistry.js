@@ -112,6 +112,17 @@ export const featureRegistry = [
     },
     category: 'content',
     default: true
+  },
+  {
+    id: 'toolsService',
+    name: { en: 'Tools Service', de: 'Tools-Dienst' },
+    description: {
+      en: 'Background processing tools like PDF OCR with progress tracking',
+      de: 'Hintergrund-Verarbeitungstools wie PDF-OCR mit Fortschrittsverfolgung'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
   }
 ];
 
