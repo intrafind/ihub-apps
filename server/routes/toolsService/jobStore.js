@@ -64,6 +64,31 @@ export function canAccessJob(job, user) {
 }
 
 /**
+ * List jobs with optional filtering.
+ * Admins see all jobs; regular users only see their own.
+ */
+export function listJobs(userId, isAdmin, filters = {}) {
+  const result = [];
+  for (const [id, job] of jobs) {
+    if (!isAdmin && job.userId !== userId) continue;
+    if (filters.status && job.status !== filters.status) continue;
+    if (filters.toolType && job.toolType !== filters.toolType) continue;
+    result.push({
+      id,
+      toolType: job.toolType,
+      userId: job.userId,
+      status: job.status,
+      progress: job.progress,
+      error: job.error,
+      model: job.model,
+      resultFilename: job.resultFilename,
+      createdAt: job.createdAt
+    });
+  }
+  return result.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
  * Send SSE update to all connected clients for a job.
  */
 export function notifyClients(job) {
@@ -80,12 +105,12 @@ export function notifyClients(job) {
 
   for (const res of job.clients) {
     res.write(message);
-    if (job.status === 'completed' || job.status === 'error') {
+    if (job.status === 'completed' || job.status === 'error' || job.status === 'cancelled') {
       res.end();
     }
   }
 
-  if (job.status === 'completed' || job.status === 'error') {
+  if (job.status === 'completed' || job.status === 'error' || job.status === 'cancelled') {
     job.clients = [];
   }
 }

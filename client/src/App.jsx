@@ -84,7 +84,8 @@ const AdminMarketplaceRegistriesPage = React.lazy(
   () => import('./features/admin/pages/AdminMarketplaceRegistriesPage')
 );
 const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
-const PdfOcrPage = React.lazy(() => import('./features/tools/pages/PdfOcrPage'));
+const OcrPage = React.lazy(() => import('./features/tools/pages/OcrPage'));
+const JobListPage = React.lazy(() => import('./features/tools/pages/JobListPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -502,7 +503,10 @@ function App() {
             element={<LazyAdminRoute component={IntegrationsPage} />}
           />
           {featureFlags.isEnabled('toolsService', true) && (
-            <Route path="tools/pdf-ocr" element={<LazyAdminRoute component={PdfOcrPage} />} />
+            <>
+              <Route path="tools/ocr-ai" element={<LazyAdminRoute component={OcrPage} />} />
+              <Route path="tools/jobs" element={<LazyAdminRoute component={JobListPage} />} />
+            </>
           )}
           <Route path="unauthorized" element={<Unauthorized />} />
           <Route path="forbidden" element={<Forbidden />} />
