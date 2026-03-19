@@ -1,4 +1,5 @@
 import express from 'express';
+import multer from 'multer';
 import { authRequired } from '../../middleware/authRequired.js';
 import configCache from '../../configCache.js';
 import { createJob } from './jobStore.js';
@@ -7,96 +8,141 @@ import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.j
 
 const router = express.Router();
 
-const MAX_PAGES = 500;
 const MAX_PROMPT_LENGTH = 2000;
+const MAX_FILE_SIZE = 200 * 1024 * 1024; // 200 MB per file
+const MAX_FILES = 20;
+const VALID_OCR_MODES = ['full', 'smart', 'text-only'];
+
+const ACCEPTED_MIME_TYPES = new Set([
+  'application/pdf',
+  'image/jpeg',
+  'image/png',
+  'image/tiff',
+  'image/webp'
+]);
+
+// Configure multer for memory storage (files stay in RAM as Buffer)
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: MAX_FILE_SIZE,
+    files: MAX_FILES
+  },
+  fileFilter(_req, file, cb) {
+    if (ACCEPTED_MIME_TYPES.has(file.mimetype)) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}`));
+    }
+  }
+});
 
 /**
  * POST /ocr/process
- * Start an OCR job.
+ * Start OCR job(s) from uploaded files.
  *
- * Body for PDF input:
- *   { inputType: 'pdf', pageImages: string[], originalPdf: string, modelId?: string, prompt?: string }
- *
- * Body for image input:
- *   { inputType: 'images', images: string[], modelId?: string, prompt?: string }
+ * Multipart form fields:
+ *   files:     File[] (one or more PDFs or images)
+ *   modelId:   string (optional)
+ *   prompt:    string (optional, max 2000 chars)
+ *   ocrMode:   'full' | 'smart' | 'text-only' (default: 'full')
+ *   debugMode: 'true' | 'false' (optional)
  */
-router.post('/ocr/process', authRequired, async (req, res) => {
-  try {
-    const {
-      inputType = 'pdf',
-      pageImages,
-      originalPdf,
-      images,
-      modelId,
-      prompt,
-      fileName,
-      debugMode
-    } = req.body;
-
-    // Validate prompt
-    if (prompt && (typeof prompt !== 'string' || prompt.length > MAX_PROMPT_LENGTH)) {
-      return sendBadRequest(
-        res,
-        `prompt must be a string of at most ${MAX_PROMPT_LENGTH} characters`
-      );
-    }
-
-    let jobPageImages;
-    let jobOriginalPdf = null;
-
-    if (inputType === 'images') {
-      // Image input mode
-      if (!images || !Array.isArray(images) || images.length === 0) {
-        return sendBadRequest(res, 'images array is required for inputType "images"');
+router.post(
+  '/ocr/process',
+  authRequired,
+  (req, res, next) => {
+    upload.array('files', MAX_FILES)(req, res, err => {
+      if (err) {
+        if (err instanceof multer.MulterError) {
+          return sendBadRequest(res, `Upload error: ${err.message}`);
+        }
+        return sendBadRequest(res, err.message);
       }
-      if (images.length > MAX_PAGES) {
-        return sendBadRequest(res, `Maximum ${MAX_PAGES} images allowed`);
-      }
-      jobPageImages = images;
-    } else {
-      // PDF input mode (default)
-      if (!pageImages || !Array.isArray(pageImages) || pageImages.length === 0) {
-        return sendBadRequest(res, 'pageImages array is required');
-      }
-      if (!originalPdf) {
-        return sendBadRequest(res, 'originalPdf is required for inputType "pdf"');
-      }
-      if (pageImages.length > MAX_PAGES) {
-        return sendBadRequest(res, `Maximum ${MAX_PAGES} pages allowed`);
-      }
-      jobPageImages = pageImages;
-      jobOriginalPdf = Buffer.from(originalPdf, 'base64');
-    }
-
-    // Derive output filename: keep original name but ensure .pdf extension
-    let outputFilename = 'ocr-result.pdf';
-    if (fileName && typeof fileName === 'string') {
-      const sanitized = fileName.replace(/[^\w.\-() ]/g, '_');
-      const ext = sanitized.split('.').pop()?.toLowerCase();
-      outputFilename =
-        ext === 'pdf' ? sanitized : sanitized.replace(/\.[^.]+$/, '.pdf') || sanitized + '.pdf';
-    }
-
-    const job = createJob('ocr', req.user?.id, {
-      inputType,
-      pageImages: jobPageImages,
-      originalPdf: jobOriginalPdf,
-      modelId: modelId || null,
-      prompt: prompt || null,
-      outputFilename,
-      debugMode: !!debugMode
+      next();
     });
+  },
+  async (req, res) => {
+    try {
+      const files = req.files;
+      if (!files || files.length === 0) {
+        return sendBadRequest(res, 'At least one file is required');
+      }
 
-    job.progress = { current: 0, total: jobPageImages.length };
+      const { modelId, prompt, ocrMode = 'full', debugMode } = req.body;
 
-    res.json({ jobId: job.id, totalPages: jobPageImages.length });
+      // Validate ocrMode
+      if (!VALID_OCR_MODES.includes(ocrMode)) {
+        return sendBadRequest(res, `ocrMode must be one of: ${VALID_OCR_MODES.join(', ')}`);
+      }
 
-    // Start processing asynchronously
-    processOcrJob(job);
-  } catch (err) {
-    return sendInternalError(res, err, 'start OCR job');
+      // Validate prompt
+      if (prompt && (typeof prompt !== 'string' || prompt.length > MAX_PROMPT_LENGTH)) {
+        return sendBadRequest(
+          res,
+          `prompt must be a string of at most ${MAX_PROMPT_LENGTH} characters`
+        );
+      }
+
+      const jobs = [];
+
+      for (const file of files) {
+        const isPdf =
+          file.mimetype === 'application/pdf' || file.originalname?.toLowerCase().endsWith('.pdf');
+
+        // Derive output filename
+        let outputFilename = 'ocr-result.pdf';
+        if (file.originalname) {
+          const sanitized = file.originalname.replace(/[^\w.\-() ]/g, '_');
+          const ext = sanitized.split('.').pop()?.toLowerCase();
+          outputFilename =
+            ext === 'pdf' ? sanitized : sanitized.replace(/\.[^.]+$/, '.pdf') || sanitized + '.pdf';
+        }
+
+        if (isPdf) {
+          const job = createJob('ocr', req.user?.id, {
+            inputType: 'pdf',
+            fileBuffer: file.buffer,
+            modelId: modelId || null,
+            prompt: prompt || null,
+            ocrMode,
+            outputFilename,
+            debugMode: debugMode === 'true'
+          });
+
+          // We'll determine total pages during processing (server-side)
+          job.progress = { current: 0, total: 0 };
+          jobs.push({ jobId: job.id, fileName: file.originalname, totalPages: 0 });
+
+          // Start processing asynchronously
+          processOcrJob(job);
+        } else {
+          // Image file — convert to base64 for the existing image pipeline
+          const base64 = file.buffer.toString('base64');
+
+          const job = createJob('ocr', req.user?.id, {
+            inputType: 'images',
+            pageImages: [base64],
+            modelId: modelId || null,
+            prompt: prompt || null,
+            ocrMode: 'full', // images always use full VLM
+            outputFilename,
+            debugMode: debugMode === 'true'
+          });
+
+          job.progress = { current: 0, total: 1 };
+          jobs.push({ jobId: job.id, fileName: file.originalname, totalPages: 1 });
+
+          processOcrJob(job);
+        }
+      }
+
+      res.json({ jobs });
+    } catch (err) {
+      return sendInternalError(res, err, 'start OCR job');
+    }
   }
-});
+);
 
 /**
  * GET /ocr/models

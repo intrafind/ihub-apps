@@ -45,7 +45,7 @@ export const detectBasePath = () => {
     'workflows', // Workflow management and execution
     's', // Short links
     'setup', // First-run setup wizard
-    'tools' // Tool pages (PDF OCR, etc.)
+    'tools' // Tool pages (AI OCR, etc.)
   ];
 
   // Split path into segments and find the first known route

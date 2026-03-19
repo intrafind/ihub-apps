@@ -3,6 +3,8 @@ import fontkit from '@pdf-lib/fontkit';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
+import { createCanvas } from 'canvas';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
 import { createCompletionRequest } from '../../../adapters/index.js';
 import { getApiKeyForModel } from '../../../utils.js';
@@ -17,6 +19,9 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const UNICODE_FONT_BYTES = readFileSync(
   join(__dirname, '..', '..', '..', 'assets', 'fonts', 'LiberationSans-Regular.ttf')
 );
+
+/** Max concurrent VLM calls per job */
+const OCR_PAGE_CONCURRENCY = 5;
 
 /**
  * Default OCR prompt optimized for complex documents with tables, charts, and diagrams.
@@ -50,7 +55,7 @@ Rules:
 export const DEFAULT_OCR_PROMPT = `You are a production-grade document extraction system optimized for Retrieval-Augmented Generation (RAG) and full-text search indexing. Convert this document page image into structured, annotated Markdown following these rules precisely.
 
 ### GLOBAL RULES & NEGATIVE CONSTRAINTS:
-- Transcribe ALL visible text exactly as it appears—omit nothing. 
+- Transcribe ALL visible text exactly as it appears—omit nothing.
 - Transcribe all text in its original language.
 - Do NOT add commentary, preamble, interpretation, or information not visible in the image.
 - Do NOT skip headers, footers, page numbers, or footnotes (transcribe them accurately).
@@ -94,6 +99,161 @@ To prevent vector pollution while preserving data, isolate repeating page number
 If the page contains no meaningful text or visuals, output exactly '[BLANK PAGE]'.
 
 Output ONLY the final annotated Markdown content. Do NOT include any explanatory text, apologies, or preambles.`;
+
+// ─── Server-side PDF rendering ───────────────────────────────────────────────
+
+/**
+ * Render a single PDF page to a base64 JPEG using pdfjs-dist + node-canvas.
+ * Targets ~1600px on the long edge for good OCR quality.
+ */
+async function renderPageToImage(pdfDoc, pageNum) {
+  const page = await pdfDoc.getPage(pageNum);
+  const defaultViewport = page.getViewport({ scale: 1 });
+  const longEdge = Math.max(defaultViewport.width, defaultViewport.height);
+
+  const TARGET_LONG_EDGE = 1600;
+  const scale = Math.min(2, TARGET_LONG_EDGE / longEdge);
+  const viewport = page.getViewport({ scale });
+
+  const canvas = createCanvas(Math.floor(viewport.width), Math.floor(viewport.height));
+  const ctx = canvas.getContext('2d');
+
+  await page.render({ canvasContext: ctx, viewport }).promise;
+
+  // JPEG at 85% quality — good balance of quality vs size
+  const jpegBuffer = canvas.toBuffer('image/jpeg', { quality: 0.85 });
+  return jpegBuffer.toString('base64');
+}
+
+/**
+ * Load a PDF from a Buffer and return a pdfjs document.
+ */
+async function loadPdfDocument(pdfBuffer) {
+  const loadingTask = pdfjs.getDocument({
+    data: new Uint8Array(pdfBuffer),
+    verbosity: 0,
+    // Provide a canvas factory for node-canvas
+    canvasFactory: {
+      create(width, height) {
+        const canvas = createCanvas(width, height);
+        return { canvas, context: canvas.getContext('2d') };
+      },
+      reset(canvasAndContext, width, height) {
+        canvasAndContext.canvas.width = width;
+        canvasAndContext.canvas.height = height;
+      },
+      destroy(canvasAndContext) {
+        canvasAndContext.canvas = null;
+        canvasAndContext.context = null;
+      }
+    }
+  });
+  return loadingTask.promise;
+}
+
+// ─── Smart text detection (page analysis) ────────────────────────────────────
+
+/** Minimum chars of extracted text to consider a page "text-rich" */
+const MIN_TEXT_CHARS = 50;
+
+/** pdfjs operator list opcodes for image drawing */
+const IMAGE_OPS = new Set(
+  [
+    pdfjs.OPS?.paintImageXObject,
+    pdfjs.OPS?.paintJpegXObject,
+    pdfjs.OPS?.paintImageXObjectRepeat
+  ].filter(Boolean)
+);
+
+/**
+ * Analyze all pages of a PDF to determine which need VLM and which have
+ * enough embedded text to skip VLM.
+ *
+ * Returns an array of per-page analysis results.
+ */
+async function analyzePdfPages(pdfDoc) {
+  const numPages = pdfDoc.numPages;
+  const results = [];
+
+  for (let i = 1; i <= numPages; i++) {
+    const page = await pdfDoc.getPage(i);
+
+    // Extract embedded text
+    const textContent = await page.getTextContent();
+    const extractedText = textContent.items
+      .map(item => item.str)
+      .join(' ')
+      .trim();
+
+    // Check for images and complex drawings via operator list
+    const opList = await page.getOperatorList();
+    let hasImages = false;
+    let pathCount = 0;
+
+    for (let j = 0; j < opList.fnArray.length; j++) {
+      const op = opList.fnArray[j];
+      if (IMAGE_OPS.has(op)) {
+        hasImages = true;
+      }
+      // constructPath / rectangle ops suggest tables or diagrams
+      if (op === pdfjs.OPS?.constructPath || op === pdfjs.OPS?.rectangle) {
+        pathCount++;
+      }
+    }
+
+    // Heuristic: >20 path ops in a grid-like pattern suggests tables
+    const hasTables = pathCount > 20;
+
+    // Decision logic
+    let needsVlm;
+    if (hasImages || hasTables) {
+      needsVlm = true;
+    } else if (extractedText.length > MIN_TEXT_CHARS) {
+      needsVlm = false;
+    } else {
+      // Very little text and no visuals — likely scanned
+      needsVlm = true;
+    }
+
+    results.push({
+      pageNum: i,
+      extractedText,
+      hasImages,
+      hasTables,
+      pathCount,
+      needsVlm
+    });
+  }
+
+  return results;
+}
+
+// ─── Concurrent page processing ──────────────────────────────────────────────
+
+/**
+ * Process items concurrently with a max concurrency limit.
+ * Like p-map but inline — no external dependency.
+ */
+async function pMap(items, fn, concurrency) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const i = nextIndex++;
+      results[i] = await fn(items[i], i);
+    }
+  }
+
+  const workers = [];
+  for (let w = 0; w < Math.min(concurrency, items.length); w++) {
+    workers.push(worker());
+  }
+  await Promise.all(workers);
+  return results;
+}
+
+// ─── LLM interaction ─────────────────────────────────────────────────────────
 
 /**
  * Call the LLM with a page image and extract text via vision.
@@ -154,6 +314,8 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
   });
   return '';
 }
+
+// ─── PDF building ────────────────────────────────────────────────────────────
 
 /**
  * Draw visible text on a page with word-wrapping to fit within margins.
@@ -345,113 +507,286 @@ function findVisionModel(models, preferredModelId) {
   );
 }
 
+// ─── Main job processor ──────────────────────────────────────────────────────
+
 /**
- * Process an OCR job: iterate over page images, call LLM, build result PDF.
+ * Process an OCR job: analyze pages, render images server-side, call LLM
+ * in parallel, and build result PDF.
  */
 export async function processOcrJob(job) {
   try {
-    const { data: models } = configCache.getModels();
-    if (!models || models.length === 0) {
-      job.status = 'error';
-      job.error = 'No AI models available';
-      notifyClients(job);
-      return;
+    const ocrMode = job.data.ocrMode || 'full';
+
+    // For text-only mode, we don't need a model
+    let model = null;
+    let apiKey = null;
+
+    if (ocrMode !== 'text-only') {
+      const { data: models } = configCache.getModels();
+      if (!models || models.length === 0) {
+        job.status = 'error';
+        job.error = 'No AI models available';
+        notifyClients(job);
+        return;
+      }
+
+      model = findVisionModel(models, job.data.modelId);
+      if (!model) {
+        job.status = 'error';
+        job.error = 'No suitable AI model found for OCR';
+        notifyClients(job);
+        return;
+      }
+
+      apiKey = await getApiKeyForModel(model.id);
+      if (!apiKey) {
+        job.status = 'error';
+        job.error = `No API key configured for model ${model.id}`;
+        notifyClients(job);
+        return;
+      }
+
+      job.model = model.id;
     }
 
-    const model = findVisionModel(models, job.data.modelId);
-    if (!model) {
-      job.status = 'error';
-      job.error = 'No suitable AI model found for OCR';
-      notifyClients(job);
-      return;
-    }
-
-    const apiKey = await getApiKeyForModel(model.id);
-    if (!apiKey) {
-      job.status = 'error';
-      job.error = `No API key configured for model ${model.id}`;
-      notifyClients(job);
-      return;
-    }
-
-    job.model = model.id;
     const prompt = job.data.prompt || DEFAULT_OCR_PROMPT;
-    const pageImages = job.data.pageImages;
-    const pageTexts = [];
+    const inputType = job.data.inputType;
 
-    for (let i = 0; i < pageImages.length; i++) {
-      if (job.status === 'cancelled') return;
+    // ── PDF input: server-side rendering + optional smart detection ──
+    if (inputType === 'pdf') {
+      const pdfBuffer = job.data.fileBuffer;
+      const pdfDoc = await loadPdfDocument(pdfBuffer);
+      const numPages = pdfDoc.numPages;
 
-      job.progress = { current: i, total: pageImages.length };
+      job.progress = { current: 0, total: numPages };
       job.status = 'processing';
       notifyClients(job);
 
-      try {
-        const text = await extractTextFromPageImage(pageImages[i], model, apiKey, i + 1, prompt);
-        pageTexts[i] = { text, pageNum: i + 1 };
+      // Analyze pages for smart mode
+      let pageAnalysis = null;
+      if (ocrMode === 'smart' || ocrMode === 'text-only') {
+        pageAnalysis = await analyzePdfPages(pdfDoc);
 
-        logger.info('OCR completed for page', {
+        const vlmPages = pageAnalysis.filter(p => p.needsVlm).length;
+        const textPages = numPages - vlmPages;
+
+        logger.info('PDF page analysis complete', {
           component: 'OcrProcessor',
           jobId: job.id,
-          page: i + 1,
-          textLength: text.length
+          numPages,
+          vlmPages,
+          textPages,
+          ocrMode
         });
-      } catch (err) {
-        logger.error('OCR failed for page', {
-          component: 'OcrProcessor',
-          jobId: job.id,
-          page: i + 1,
-          error: err.message
-        });
-
-        // Non-retryable model error (4xx) — abort immediately
-        if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
-          job.status = 'error';
-          job.error =
-            err.statusCode === 404
-              ? 'Model not found. Please select a different model.'
-              : `Model error (${err.statusCode}): The selected model rejected the request.`;
-          notifyClients(job);
-          return;
-        }
-
-        // Transient error — continue with next page
-        pageTexts[i] = { text: '', pageNum: i + 1, error: err.message };
       }
 
-      job.progress = { current: i + 1, total: pageImages.length };
+      // Build page processing tasks
+      const pageIndices = Array.from({ length: numPages }, (_, i) => i);
+      let completed = 0;
+      const pageTexts = new Array(numPages);
+
+      await pMap(
+        pageIndices,
+        async idx => {
+          if (job.status === 'cancelled') return;
+
+          const pageNum = idx + 1;
+          const analysis = pageAnalysis?.[idx];
+
+          // text-only mode: always use extracted text
+          if (ocrMode === 'text-only') {
+            pageTexts[idx] = {
+              text: analysis?.extractedText || '',
+              pageNum,
+              source: 'text-extraction'
+            };
+            completed++;
+            job.progress = { current: completed, total: numPages };
+            notifyClients(job);
+            return;
+          }
+
+          // smart mode: skip VLM for text-rich pages without images/tables
+          if (ocrMode === 'smart' && analysis && !analysis.needsVlm) {
+            pageTexts[idx] = {
+              text: analysis.extractedText,
+              pageNum,
+              source: 'text-extraction'
+            };
+            completed++;
+            job.progress = { current: completed, total: numPages };
+            notifyClients(job);
+            return;
+          }
+
+          // VLM processing: render page to image, then call LLM
+          try {
+            const base64Image = await renderPageToImage(pdfDoc, pageNum);
+
+            // For smart mode pages that have some text + visual elements,
+            // prepend the extracted text to give context
+            let pagePrompt = prompt;
+            if (ocrMode === 'smart' && analysis?.extractedText?.length > MIN_TEXT_CHARS) {
+              pagePrompt = `Existing embedded text on this page:\n${analysis.extractedText}\n\nNow analyze the visual elements (tables, charts, images, diagrams) and provide the complete structured output including both the text and visual content.\n\n${prompt}`;
+            }
+
+            const text = await extractTextFromPageImage(
+              base64Image,
+              model,
+              apiKey,
+              pageNum,
+              pagePrompt
+            );
+            pageTexts[idx] = { text, pageNum, source: 'vlm' };
+
+            logger.info('OCR completed for page', {
+              component: 'OcrProcessor',
+              jobId: job.id,
+              page: pageNum,
+              textLength: text.length,
+              source: 'vlm'
+            });
+          } catch (err) {
+            logger.error('OCR failed for page', {
+              component: 'OcrProcessor',
+              jobId: job.id,
+              page: pageNum,
+              error: err.message
+            });
+
+            // Non-retryable model error (4xx) — abort immediately
+            if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+              job.status = 'error';
+              job.error =
+                err.statusCode === 404
+                  ? 'Model not found. Please select a different model.'
+                  : `Model error (${err.statusCode}): The selected model rejected the request.`;
+              notifyClients(job);
+              return;
+            }
+
+            // Transient error — continue with next page
+            pageTexts[idx] = { text: '', pageNum, error: err.message };
+          }
+
+          completed++;
+          job.progress = { current: completed, total: numPages };
+          notifyClients(job);
+        },
+        OCR_PAGE_CONCURRENCY
+      );
+
+      // Check if job was cancelled or errored during processing
+      if (job.status === 'cancelled' || job.status === 'error') return;
+
+      // Build the result PDF
+      job.status = 'building';
       notifyClients(job);
-    }
 
-    // Build the result PDF
-    job.status = 'building';
-    notifyClients(job);
+      const pdfBytes = await buildOcrPdf(pageTexts, pdfBuffer, job.data.debugMode);
 
-    let pdfBytes;
-    const debugMode = job.data.debugMode;
-    if (job.data.inputType === 'images') {
-      pdfBytes = await buildOcrPdfFromImages(pageImages, pageTexts, debugMode);
+      job.result = Buffer.from(pdfBytes);
+      job.resultContentType = 'application/pdf';
+      job.resultFilename = job.data.outputFilename || 'ocr-result.pdf';
+      job.status = 'completed';
+
+      // Free buffer data to save memory
+      job.data.fileBuffer = null;
+
+      notifyClients(job);
+
+      logger.info('OCR job completed', {
+        component: 'OcrProcessor',
+        jobId: job.id,
+        pages: numPages,
+        ocrMode,
+        resultSize: job.result.length
+      });
     } else {
-      pdfBytes = await buildOcrPdf(pageTexts, job.data.originalPdf, debugMode);
+      // ── Image input mode (legacy base64 path) ──
+      const pageImages = job.data.pageImages;
+      const pageTexts = [];
+      let completed = 0;
+
+      job.status = 'processing';
+      notifyClients(job);
+
+      await pMap(
+        pageImages,
+        async (base64Image, idx) => {
+          if (job.status === 'cancelled') return;
+
+          const pageNum = idx + 1;
+
+          try {
+            const text = await extractTextFromPageImage(
+              base64Image,
+              model,
+              apiKey,
+              pageNum,
+              prompt
+            );
+            pageTexts[idx] = { text, pageNum };
+
+            logger.info('OCR completed for page', {
+              component: 'OcrProcessor',
+              jobId: job.id,
+              page: pageNum,
+              textLength: text.length
+            });
+          } catch (err) {
+            logger.error('OCR failed for page', {
+              component: 'OcrProcessor',
+              jobId: job.id,
+              page: pageNum,
+              error: err.message
+            });
+
+            if (err.statusCode && err.statusCode >= 400 && err.statusCode < 500) {
+              job.status = 'error';
+              job.error =
+                err.statusCode === 404
+                  ? 'Model not found. Please select a different model.'
+                  : `Model error (${err.statusCode}): The selected model rejected the request.`;
+              notifyClients(job);
+              return;
+            }
+
+            pageTexts[idx] = { text: '', pageNum, error: err.message };
+          }
+
+          completed++;
+          job.progress = { current: completed, total: pageImages.length };
+          notifyClients(job);
+        },
+        OCR_PAGE_CONCURRENCY
+      );
+
+      if (job.status === 'cancelled' || job.status === 'error') return;
+
+      // Build the result PDF
+      job.status = 'building';
+      notifyClients(job);
+
+      const pdfBytes = await buildOcrPdfFromImages(pageImages, pageTexts, job.data.debugMode);
+
+      job.result = Buffer.from(pdfBytes);
+      job.resultContentType = 'application/pdf';
+      job.resultFilename = job.data.outputFilename || 'ocr-result.pdf';
+      job.status = 'completed';
+
+      // Free image data to save memory
+      job.data.pageImages = null;
+
+      notifyClients(job);
+
+      logger.info('OCR job completed', {
+        component: 'OcrProcessor',
+        jobId: job.id,
+        pages: pageImages.length,
+        resultSize: job.result.length
+      });
     }
-
-    job.result = Buffer.from(pdfBytes);
-    job.resultContentType = 'application/pdf';
-    job.resultFilename = job.data.outputFilename || 'ocr-result.pdf';
-    job.status = 'completed';
-
-    // Free image data to save memory
-    job.data.pageImages = null;
-    job.data.originalPdf = null;
-
-    notifyClients(job);
-
-    logger.info('OCR job completed', {
-      component: 'OcrProcessor',
-      jobId: job.id,
-      pages: pageImages.length,
-      resultSize: job.result.length
-    });
   } catch (err) {
     job.status = 'error';
     job.error = err.message;
