@@ -176,7 +176,10 @@ Setting `enabled` to `false` will completely remove the disclaimer from the appl
 
 ### Icons Configuration
 
-The `icons` section allows overriding which icon is used for certain UI elements. Icon names can be any built-in name from the `Icon` component or a custom SVG placed under `public/icons` (or the directory specified by `VITE_ICON_BASE_URL`).
+The `icons` section allows overriding which icon is used for certain UI elements. Icon names can
+be any built-in name from the `Icon` component or a custom SVG placed under `public/icons` (or the
+directory specified by `VITE_ICON_BASE_URL`). See [Icons](icons.md) for the complete list of
+built-in icons and instructions for adding custom SVGs.
 
 ```json
 "icons": {

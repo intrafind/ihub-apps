@@ -979,28 +979,31 @@ The `thinking` property enables extended thinking for models that support it (e.
 
 ### Available Icons
 
-The system supports these icons:
+For a complete list of all built-in icons, their names, and how to add custom SVG icons, see the
+[Icons documentation](icons.md).
 
-- `question-mark-circle` - Question mark in a circle
-- `information-circle` - Information icon
-- `chat-bubbles` - Chat conversation bubbles
-- `globe` - Globe/Earth icon
-- `document-text` - Document with text
-- `mail` - Email/envelope
-- `light-bulb` - Light bulb for ideas
-- `sparkles` - Sparkles/magic effect
-- `calendar` - Calendar
-- `code` - Code brackets
-- `users` - People/users
-- `document-search` - Document with search
-- `share` - Share icon
-- And more as defined in the system's Icon component
+Common icons used for apps include:
 
-Additional icons can be provided by placing custom SVG files in the
-`public/icons` directory (or any directory specified by the
-`VITE_ICON_BASE_URL` environment variable). The file name should match the
-icon identifier (e.g., `my-icon.svg`). Files in this directory override
-icons of the same name from the built-in set.
+| Name                  | Description                   |
+| --------------------- | ----------------------------- |
+| `academic-cap`        | Graduation cap                |
+| `briefcase`           | Briefcase / work              |
+| `calendar`            | Calendar                      |
+| `chart-bar`           | Bar chart                     |
+| `chat-bubbles`        | Chat conversation bubbles     |
+| `code`                | Code brackets                 |
+| `document-search`     | Document with search          |
+| `document-text`       | Document with text            |
+| `globe`               | Globe / Earth                 |
+| `information-circle`  | Information icon              |
+| `light-bulb`          | Light bulb / idea             |
+| `mail`                | Email / envelope              |
+| `question-mark-circle`| Question mark in a circle     |
+| `share`               | Share icon                    |
+| `sparkles`            | Sparkles / magic effect       |
+| `users`               | Group of people               |
+
+See [Icons](icons.md) for the full reference, including how to add custom SVG icons.
 
 ### Settings Configuration Examples
 
