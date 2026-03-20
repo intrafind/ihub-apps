@@ -8,6 +8,7 @@
     - [Custom Response Renderers](custom-renderers.md)
     - [Models](models.md)
     - [UI Configuration](ui.md)
+    - [Icons](icons.md)
     - [Platform Configuration](platform.md)
     - [Styles](styles.md)
     - [Prompts Database](prompts.md)
