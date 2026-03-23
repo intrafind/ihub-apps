@@ -677,7 +677,10 @@ export async function processOcrJob(job) {
       );
 
       // Check if job was cancelled or errored during processing
-      if (job.status === 'cancelled' || job.status === 'error') return;
+      if (job.status === 'cancelled' || job.status === 'error') {
+        job.data.fileBuffer = null;
+        return;
+      }
 
       // Build the result PDF
       job.status = 'building';
@@ -762,7 +765,10 @@ export async function processOcrJob(job) {
         OCR_PAGE_CONCURRENCY
       );
 
-      if (job.status === 'cancelled' || job.status === 'error') return;
+      if (job.status === 'cancelled' || job.status === 'error') {
+        job.data.fileBuffer = null;
+        return;
+      }
 
       // Build the result PDF
       job.status = 'building';
