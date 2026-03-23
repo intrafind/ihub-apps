@@ -1,4 +1,5 @@
 import { useLayoutEffect, useState, useRef, useEffect, useCallback } from 'react';
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import {
@@ -52,7 +53,7 @@ function StreamingMarkdown({ content, hasCitations }) {
           citationsAppliedRef.current = true;
         }
 
-        setHtmlContent(parsedContent);
+        setHtmlContent(DOMPurify.sanitize(parsedContent));
         contentLengthRef.current = content.length;
 
         // Force a complete re-render by updating the key
@@ -75,8 +76,7 @@ function StreamingMarkdown({ content, hasCitations }) {
       key={renderKey}
       ref={containerRef}
       className="markdown-content break-words whitespace-normal streaming-markdown"
-      // Content is sanitized via marked's built-in escaping - same pattern used throughout the codebase
-      dangerouslySetInnerHTML={{ __html: htmlContent }}
+      dangerouslySetInnerHTML={{ __html: htmlContent }} // sanitized with DOMPurify before setState
     />
   );
 }

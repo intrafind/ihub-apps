@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
@@ -155,7 +156,7 @@ function AdminSkillEditPage() {
   const renderMarkdown = markdown => {
     if (!markdown) return '';
     try {
-      return marked(markdown);
+      return DOMPurify.sanitize(marked(markdown));
     } catch {
       return `<pre>${markdown}</pre>`;
     }
