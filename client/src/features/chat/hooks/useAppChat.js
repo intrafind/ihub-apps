@@ -320,6 +320,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       }
     },
     [
+      appId,
       pendingMessageDataRef,
       updateAssistantMessage,
       mergeCitations,

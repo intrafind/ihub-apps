@@ -588,7 +588,7 @@ export async function processOcrJob(job) {
       await pMap(
         pageIndices,
         async idx => {
-          if (job.status === 'cancelled') return;
+          if (job.status === 'cancelled' || job.status === 'error') return;
 
           const pageNum = idx + 1;
           const analysis = pageAnalysis?.[idx];
@@ -717,7 +717,7 @@ export async function processOcrJob(job) {
       await pMap(
         pageImages,
         async (base64Image, idx) => {
-          if (job.status === 'cancelled') return;
+          if (job.status === 'cancelled' || job.status === 'error') return;
 
           const pageNum = idx + 1;
 

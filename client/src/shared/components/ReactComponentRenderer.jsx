@@ -280,7 +280,7 @@ UserComponent;
     return () => {
       isMounted = false;
     };
-  }, [memoizedJsxCode, componentProps]);
+  }, [memoizedJsxCode]);
 
   if (isLoading) {
     return <LoadingComponent t={t} />;

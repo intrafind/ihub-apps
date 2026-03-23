@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../shared/components/LoadingSpinner';
+import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import { fetchPageContent } from '../api/api';
 import { configureMarked } from '../shared/components/MarkdownRenderer';
@@ -122,7 +123,7 @@ export default function UnifiedPage() {
       );
     } else {
       // Default to markdown rendering
-      const parsedContent = marked(pageContent || '');
+      const parsedContent = DOMPurify.sanitize(marked(pageContent || ''));
       return (
         <div className="prose prose-sm sm:prose lg:prose-lg mx-auto dark:prose-invert">
           <div

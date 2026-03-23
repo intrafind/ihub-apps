@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import { useTranslation } from 'react-i18next';
 import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
@@ -21,7 +22,7 @@ function GreetingView({ welcomeMessage }) {
   }
 
   // Parse subtitle as markdown to support links
-  const subtitleHtml = subtitle ? marked.parseInline(subtitle) : '';
+  const subtitleHtml = subtitle ? DOMPurify.sanitize(marked.parseInline(subtitle)) : '';
 
   return (
     <div className="text-center text-gray-500 dark:text-gray-400 space-y-6 w-full">
