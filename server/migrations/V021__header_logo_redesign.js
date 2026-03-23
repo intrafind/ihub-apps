@@ -1,5 +1,5 @@
 /**
- * Migration V012 — Header logo redesign
+ * Migration V021 — Header logo redesign
  *
  * Migrates existing ui.json configs to the new integrated header layout:
  * - Updates logo.url from the old company wordmark to the app icon
@@ -7,7 +7,7 @@
  * - Adds header.tagline with default localized values
  */
 
-export const version = '012';
+export const version = '021';
 export const description = 'Header logo redesign: app icon + tagline, remove badge styles';
 
 export async function precondition(ctx) {

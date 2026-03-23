@@ -1,11 +1,11 @@
 /**
- * Migration V013 — Enhanced Usage Tracking
+ * Migration V022 — Enhanced Usage Tracking
  *
  * Adds usageTrackingMode feature flag and usageTracking retention config
  * to platform.json. Also adds tokenSources to existing usage.json.
  */
 
-export const version = '013';
+export const version = '022';
 export const description = 'Enhanced usage tracking configuration';
 
 export async function precondition(ctx) {
