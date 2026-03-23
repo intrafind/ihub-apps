@@ -126,7 +126,7 @@
     "react-resizable-panels": "^3.0.4"
   },
   "devDependencies": {
-    "@babel/preset-env": "^7.29.0",
+    "@babel/preset-env": "^7.29.2",
     "@babel/preset-react": "^7.28.5",
     "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
