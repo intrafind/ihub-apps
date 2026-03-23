@@ -351,21 +351,22 @@ The client detects the base path at runtime:
 
 ```javascript
 // client/src/utils/runtimeBasePath.js
-export const detectBasePath = () => {
-  const pathname = window.location.pathname;
-  let basePath = pathname.replace(/\/index\.html$/, '').replace(/\/$/, '');
-  
-  const knownRoutes = ['/apps', '/admin', '/auth', '/login', '/chat', '/pages', '/s/'];
-  for (const route of knownRoutes) {
-    const routeIndex = basePath.indexOf(route);
-    if (routeIndex > 0) {
-      basePath = basePath.substring(0, routeIndex);
-      break;
-    }
-  }
-  
-  return basePath;
-};
+// The list of known top-level routes used to detect the base path at runtime.
+// If a path segment matches one of these, everything before it is the base path.
+const knownRoutes = [
+  'apps',      // App listing and individual app routes
+  'admin',     // Admin panel routes
+  'auth',      // Authentication routes
+  'login',     // Login page
+  'chat',      // Direct chat routes
+  'pages',     // Dynamic pages
+  'prompts',   // Prompts listing
+  'settings',  // Settings pages
+  'teams',     // Microsoft Teams routes
+  'workflows', // Workflow management
+  's',         // Short links
+  'setup'      // First-run setup wizard
+];
 ```
 
 **Why?** Allows the same build to run at any subpath without build-time configuration.

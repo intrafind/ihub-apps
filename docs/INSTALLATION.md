@@ -319,6 +319,22 @@ npm run docker:down
 npm run docker:clean
 ```
 
+#### Docker Production Workflow
+
+```bash
+# Start production services
+npm run docker:prod:up
+
+# View production logs
+npm run docker:prod:logs
+
+# Access production container shell
+npm run docker:prod:shell
+
+# Stop production services
+npm run docker:prod:down
+```
+
 #### Access URLs
 
 - **Development**: 
@@ -369,8 +385,8 @@ npm --version
 
 **Linux (Ubuntu/Debian):**
 ```bash
-# Install Node.js 20.x
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+# Install Node.js 24.x
+curl -fsSL https://deb.nodesource.com/setup_24.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
 # Verify installation
@@ -442,17 +458,18 @@ This will:
 # Code quality
 npm run lint          # Check linting issues
 npm run lint:fix      # Auto-fix linting issues
-npm run format        # Format with Prettier
+npm run format        # Check formatting with Prettier
+npm run format:fix    # Fix formatting with Prettier
 
 # Testing
-npm run test:openai   # Test OpenAI integration
-npm run test:anthropic # Test Anthropic integration
-npm run test:all      # Run all tests
+npm run test:unit        # Unit tests
+npm run test:integration # Integration tests
+npm run test:e2e         # End-to-end tests (requires Playwright)
+npm run test:all         # Run all tests
 
 # Building
-npm run build         # Production build
 npm run prod:build    # Complete production build
-./build.sh --binary   # Create standalone binary
+npm run build:binary  # Build standalone binary (Node.js 20+ required)
 ```
 
 ### Method 4: Electron Desktop Application
@@ -461,7 +478,7 @@ npm run prod:build    # Complete production build
 
 #### Prerequisites
 
-- Node.js 20.0+ and npm 8.0+ (same as npm installation)
+- Node.js 24.0+ and npm 8.0+ (same as npm installation)
 - Platform-specific build tools
 
 #### Installation Steps
@@ -841,17 +858,17 @@ npm run docker:build:prod
 ```
 
 #### Node.js Version Incompatible
-**Error**: "node: ^20.0.0 (current: v18.x.x)"
+**Error**: "node: >=24.0.0 (current: v20.x.x or lower)"
 
 **Solutions:**
 ```bash
 # Update Node.js using nvm (recommended)
-nvm install 20
-nvm use 20
+nvm install 24
+nvm use 24
 
 # Or download from nodejs.org
 # Or use package manager
-brew install node@20  # macOS
+brew install node@24  # macOS
 choco install nodejs  # Windows
 ```
 

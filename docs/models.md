@@ -162,7 +162,7 @@ The iHub provides a flexible system for selecting which AI model an app uses. Th
     "preferredModel": "gpt-4"
     ```
 
-3.  **System-Wide Default Model**: If an app does not have a `preferredModel` configured, the system will look for a globally defined default model. To configure a system-wide default, add `"default": true` to a model's definition in `contents/config/models.json`.
+3.  **System-Wide Default Model**: If an app does not have a `preferredModel` configured, the system will look for a globally defined default model. To configure a system-wide default, add `"default": true` to a model's individual JSON file in `contents/models/`.
 
     ```json
     {
@@ -194,7 +194,7 @@ Apps can also specify which models are allowed to be used via the `allowedModels
 
 To add a new model:
 
-1. Add a new object to the models.json array
+1. Create a new JSON file in `contents/models/` (e.g., `contents/models/my-model.json`)
 2. Ensure the provider adapter in `server/adapters/` supports the provider
 3. Provide required credentials in your environment variables
 

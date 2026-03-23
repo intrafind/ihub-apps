@@ -14,7 +14,7 @@ npm run install:all
 npm run dev
 
 # 3. Open your browser
-# Visit http://localhost:5173
+# Visit http://localhost:3000
 ```
 
 **That's it!** The server automatically creates default configuration files on first startup.
@@ -105,15 +105,14 @@ Consider enabling authentication if you need:
 
 ## Next Steps
 
-1. **Start using the apps**: Visit http://localhost:5173 and explore the available applications
-2. **Check the admin panel**: Visit http://localhost:5173/admin for configuration options
+1. **Start using the apps**: Visit http://localhost:3000 and explore the available applications
+2. **Check the admin panel**: Visit http://localhost:3000/admin for configuration options
 3. **Review authentication options**: See [docs/external-authentication.md](external-authentication.md) for detailed configuration
 4. **Configure API keys**: Add your AI provider API keys in `.env` for full functionality
 
 ## Need Help?
 
 - 📖 **Full Documentation**: [docs/external-authentication.md](external-authentication.md)
-- 🧪 **Test Authentication**: Run `./test-authentication.sh`
 - 🔧 **Configuration Examples**: See [docs/external-authentication.md#quick-start-scenarios](external-authentication.md#quick-start-scenarios)
 
 ---

@@ -26,12 +26,12 @@ The system supports six different types of rate limiters, each configurable thro
   - `/api/short-links`
 
 ### 2. Admin API Rate Limiter
-- **Default Limit**: 100 requests per 1 minute per IP address (more restrictive)
+- **Default Limit**: 500 requests per 1 minute per IP address
 - **Applied to**: Administrative endpoints:
   - `/api/admin/*` (all admin routes)
 
 ### 3. Auth API Rate Limiter
-- **Default Limit**: 30 requests per 15 minutes per IP address (most restrictive)
+- **Default Limit**: 50 requests per 15 minutes per IP address (most restrictive)
 - **Applied to**: Authentication endpoints:
   - `/auth/*` (all authentication routes)
 
@@ -41,7 +41,7 @@ The system supports six different types of rate limiters, each configurable thro
   - `/inference/*` (all inference routes)
 
 ### 5. Default Rate Limiter
-- **Default Limit**: 100 requests per 1 minute per IP address
+- **Default Limit**: 500 requests per 1 minute per IP address
 - **Purpose**: Base configuration that other limiters inherit from
 
 ### 6. OAuth API Rate Limiter
@@ -51,7 +51,7 @@ The system supports six different types of rate limiters, each configurable thro
 
 ## Configuration
 
-Rate limiting is now fully configurable through the `platform.json` configuration file. Add the following section to customize rate limiting:
+Rate limiting is fully configurable through the `platform.json` configuration file. The built-in defaults are generous (500 req/min for most endpoints); add the `rateLimit` section to override them for your deployment. The example below shows a more restrictive configuration suitable for production:
 
 ```json
 {
@@ -91,6 +91,8 @@ Rate limiting is now fully configurable through the `platform.json` configuratio
   }
 }
 ```
+
+> **Note**: The `limit` values shown above are example overrides. The built-in defaults (500 req/min for most types, 50 req/15 min for auth/oauth) apply when no `rateLimit` section is present in `platform.json`.
 
 ### Configuration Options
 
