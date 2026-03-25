@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component
@@ -52,18 +52,16 @@ function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }
   const [CompiledComponent, setCompiledComponent] = useState(null);
   const [compileError, setCompileError] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [compileVersion, setCompileVersion] = useState(0);
 
   // Extract t function for internal components
   const { t } = componentProps;
-
-  // Memoize the JSX code to prevent unnecessary recompilation
-  const memoizedJsxCode = useMemo(() => jsxCode, [jsxCode]);
 
   useEffect(() => {
     let isMounted = true;
 
     const compileJSX = async () => {
-      if (!memoizedJsxCode?.trim()) {
+      if (!jsxCode?.trim()) {
         setCompiledComponent(null);
         setCompileError(null);
         setIsLoading(false);
@@ -138,7 +136,7 @@ function ReactComponentRenderer({ jsxCode, componentProps = {}, className = '' }
         }
 
         // Prepare the JSX code with imports and proper component structure
-        let fullCode = memoizedJsxCode.trim();
+        let fullCode = jsxCode.trim();
 
         // Check if code already starts with import or const/function declarations
         const hasImports = /^(import\s|const\s|function\s|class\s|export\s)/m.test(fullCode);
@@ -226,6 +224,16 @@ UserComponent;
         );
 
         // Execute the compiled code
+        const compileTimeProps = {
+          React,
+          useState: React.useState,
+          useEffect: React.useEffect,
+          useMemo: React.useMemo,
+          useCallback: React.useCallback,
+          useRef: React.useRef,
+          useId: React.useId
+        };
+
         const ComponentFunction = executeInContext(
           React,
           React.useState,
@@ -234,17 +242,17 @@ UserComponent;
           React.useCallback,
           React.useRef,
           React.useId,
-          componentProps
+          compileTimeProps
         );
 
         if (!ComponentFunction) {
           throw new Error('No component was exported from the provided code');
         }
 
-        // Create a wrapper component that provides the React hooks as props
+        // Keep the wrapper stable and inject caller props only at render time
+        // so prop identity changes do not retrigger Babel compilation.
         const WrappedComponent = props => {
-          const combinedProps = {
-            ...componentProps,
+          const runtimeProps = {
             ...props,
             React,
             useState: React.useState,
@@ -255,7 +263,7 @@ UserComponent;
             useId: React.useId
           };
 
-          return React.createElement(ComponentFunction, combinedProps);
+          return React.createElement(ComponentFunction, runtimeProps);
         };
 
         if (isMounted) {
@@ -280,7 +288,7 @@ UserComponent;
     return () => {
       isMounted = false;
     };
-  }, [memoizedJsxCode, componentProps]);
+  }, [jsxCode, compileVersion]);
 
   if (isLoading) {
     return <LoadingComponent t={t} />;
@@ -329,10 +337,12 @@ UserComponent;
         onReset={() => {
           // Force recompilation on reset
           setCompiledComponent(null);
+          setCompileError(null);
           setIsLoading(true);
+          setCompileVersion(version => version + 1);
         }}
       >
-        <CompiledComponent />
+        <CompiledComponent {...componentProps} />
       </ErrorBoundary>
     </div>
   );
