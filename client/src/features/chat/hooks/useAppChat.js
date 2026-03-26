@@ -325,7 +325,8 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       mergeCitations,
       onMessageComplete,
       t,
-      messagesRef
+      messagesRef,
+      appId
     ]
   );
 
