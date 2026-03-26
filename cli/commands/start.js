@@ -17,7 +17,7 @@ const HELP = `
 
   ${c.bold('Options:')}
     --port <port>    Port to listen on (default: 3000, or $PORT)
-    --host <host>    Host to bind to (default: 0.0.0.0, or $HOST)
+    --host <host>    Host to bind to (default: localhost, or $HOST)
     --daemon         Run in background and write PID file
     -h, --help       Show this help
 

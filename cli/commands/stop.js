@@ -72,24 +72,38 @@ export default async function stop(args) {
 
   try {
     process.kill(pid, signal);
-    unlinkSync(pidFile);
 
-    // Wait briefly for process to die
+    // Wait briefly for process to die before checking health and removing PID file
     let attempts = 0;
+    let processDead = false;
     while (attempts < 20) {
       await new Promise(r => setTimeout(r, 250));
       try {
         process.kill(pid, 0);
         attempts++;
       } catch {
+        processDead = true;
         break; // Process is gone
       }
     }
 
-    const health = await checkHealth(port);
+    // Use the parsed host for health check to match the server bind address
+    const { host } = parseServerArgs(args);
+    const health = await checkHealth(port, host);
+
     if (health) {
-      console.error(`${symbols.error} Server is still responding on port ${port}. Try --force.`);
-      process.exit(1);
+      if (!force) {
+        console.error(`${symbols.error} Server is still responding on port ${port}. Try --force.`);
+        process.exit(1);
+      } else {
+        console.error(`${symbols.error} Server did not stop after SIGKILL.`);
+        process.exit(1);
+      }
+    }
+
+    // Only remove PID file after confirming the process is dead and server is not responding
+    if (processDead && !health && existsSync(pidFile)) {
+      unlinkSync(pidFile);
     }
 
     console.log(`${symbols.success} Server stopped.`);

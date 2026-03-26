@@ -249,6 +249,11 @@ async function resetConfig(args) {
           cancel('Reset cancelled.');
           return;
         }
+      } else {
+        console.error(
+          `${symbols.warning} Use --no-confirm to skip confirmation without @clack/prompts`
+        );
+        process.exit(1);
       }
     }
 

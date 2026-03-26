@@ -2,7 +2,7 @@
  * ihub open — Open the iHub interface in a browser
  * Usage: ihub open [--port <port>]
  */
-import { exec } from 'child_process';
+import { execFile, spawn } from 'child_process';
 import { c, symbols } from '../utils/colors.js';
 import { checkHealth, parseServerArgs, getServerUrl } from '../utils/api.js';
 
@@ -21,22 +21,45 @@ const HELP = `
 
 function openBrowser(url) {
   const platform = process.platform;
-  let cmd;
+  let command, args;
 
   if (platform === 'darwin') {
-    cmd = `open "${url}"`;
+    command = 'open';
+    args = [url];
   } else if (platform === 'win32') {
-    cmd = `start "" "${url}"`;
+    command = 'cmd';
+    args = ['/c', 'start', '', url];
   } else {
     // Linux — try common browser openers
-    cmd = `xdg-open "${url}" 2>/dev/null || sensible-browser "${url}" 2>/dev/null || x-www-browser "${url}" 2>/dev/null`;
+    command = 'xdg-open';
+    args = [url];
   }
 
   return new Promise((resolve, reject) => {
-    exec(cmd, err => {
-      if (err) reject(err);
-      else resolve();
+    const child = spawn(command, args, {
+      stdio: 'ignore',
+      detached: true,
+      shell: false
     });
+
+    child.on('error', err => {
+      // Try fallback on Linux
+      if (platform === 'linux' && command === 'xdg-open') {
+        const fallback = spawn('sensible-browser', [url], {
+          stdio: 'ignore',
+          detached: true,
+          shell: false
+        });
+        fallback.on('error', reject);
+        fallback.unref();
+        resolve();
+      } else {
+        reject(err);
+      }
+    });
+
+    child.unref();
+    resolve();
   });
 }
 

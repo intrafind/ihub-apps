@@ -65,5 +65,16 @@ export function parseServerArgs(args) {
     }
   }
 
+  // Validate port
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    const message = `Invalid port: ${String(port)}. Port must be an integer between 1 and 65535.`;
+    if (typeof process !== 'undefined' && process.stderr && typeof process.exit === 'function') {
+      // eslint-disable-next-line no-console
+      console.error(message);
+      process.exit(1);
+    }
+    throw new Error(message);
+  }
+
   return { port, host };
 }

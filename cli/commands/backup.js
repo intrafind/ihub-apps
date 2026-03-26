@@ -40,7 +40,8 @@ export default async function backup(args) {
   const dirIdx = args.indexOf('--dir');
   const sourceDir = dirIdx !== -1 ? args[dirIdx + 1] : getContentsDir();
 
-  const outputArg = args.filter(a => !a.startsWith('--') && a !== args[dirIdx + 1])[0];
+  const dirValue = dirIdx !== -1 ? args[dirIdx + 1] : null;
+  const outputArg = args.filter(a => !a.startsWith('--') && a !== dirValue)[0];
   const outputFile = outputArg || path.join(getRootDir(), `ihub-backup-${formatTimestamp()}.zip`);
 
   if (!existsSync(sourceDir)) {

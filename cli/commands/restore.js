@@ -39,7 +39,8 @@ export default async function restore(args) {
   const noConfirm = args.includes('--no-confirm');
   const destIdx = args.indexOf('--dest');
   const destDir = destIdx !== -1 ? args[destIdx + 1] : getContentsDir();
-  const backupFile = args.filter(a => !a.startsWith('--') && a !== args[destIdx + 1])[0];
+  const destValue = destIdx !== -1 ? args[destIdx + 1] : null;
+  const backupFile = args.filter(a => !a.startsWith('--') && a !== destValue)[0];
 
   if (!backupFile) {
     console.error(`${symbols.error} No backup file specified.`);
@@ -74,16 +75,21 @@ export default async function restore(args) {
         cancel('Restore cancelled.');
         return;
       }
+    } else {
+      console.error(
+        `${symbols.warning} Use --no-confirm to skip confirmation without @clack/prompts`
+      );
+      process.exit(1);
     }
   }
 
-  // Use yauzl for extraction (already in server dependencies)
+  // Use yauzl for extraction (must be installed as a runtime dependency)
   let yauzl;
   try {
     yauzl = (await import('yauzl')).default;
   } catch {
     console.error(`${symbols.error} yauzl package not found.`);
-    console.error(`  Run: cd server && npm install yauzl`);
+    console.error(`  Please add 'yauzl' to the root package.json dependencies and run: npm install yauzl`);
     process.exit(1);
   }
 
@@ -106,7 +112,16 @@ export default async function restore(args) {
           entryPath = entryPath.slice('contents/'.length);
         }
 
-        const fullPath = path.join(destDir, entryPath);
+        // Prevent zip slip: normalize and validate the path
+        const resolvedDest = path.resolve(destDir);
+        const fullPath = path.resolve(destDir, entryPath);
+
+        // Ensure fullPath is within destDir
+        if (!fullPath.startsWith(resolvedDest + path.sep) && fullPath !== resolvedDest) {
+          console.error(`${symbols.error} Invalid path in archive (zip slip detected): ${entry.fileName}`);
+          zipfile.close();
+          return reject(new Error(`Invalid path in archive: ${entry.fileName}`));
+        }
 
         if (/\/$/.test(entry.fileName)) {
           // Directory entry

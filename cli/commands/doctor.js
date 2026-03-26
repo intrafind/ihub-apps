@@ -17,7 +17,6 @@ const HELP = `
 
   ${c.bold('Options:')}
     --port <port>    Port to check (default: 3000)
-    --fix            Attempt to auto-fix issues where possible
     -h, --help       Show this help
 
   ${c.bold('Checks:')}
