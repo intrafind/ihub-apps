@@ -187,9 +187,8 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
         let interimTranscript = '';
         let finalTranscript = '';
 
-        'text' in event ? event.text : event.results;
-
         if (!isAzure) {
+          // Browser SpeechRecognition API
           for (let i = event.resultIndex; i < event.results.length; i++) {
             const transcript = event.results[i][0].transcript;
             const isFinal = event.results[i].isFinal;
@@ -200,7 +199,17 @@ const useVoiceRecognition = ({ app, inputRef, onSpeechResult, onCommand, disable
             }
           }
         } else {
-          finalTranscript = event.text;
+          // Azure Speech Recognition API
+          if ('text' in event) {
+            // Check if this is a final or interim result
+            if (event.isFinal === false) {
+              // Interim result from continuous recognition
+              interimTranscript = event.text;
+            } else {
+              // Final result (from either recognizeOnceAsync or continuous recognition)
+              finalTranscript = event.text;
+            }
+          }
         }
 
         setTranscript(interimTranscript || finalTranscript);

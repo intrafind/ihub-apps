@@ -8,12 +8,39 @@ class AzureSpeechRecognition {
   recognition;
   lang = 'de-DE';
   host = '';
+  continuous = false;
+  interimResults = false;
 
   constructor() {}
 
   start() {
     this.#triggerOnStart();
 
+    if (this.continuous) {
+      // Use continuous recognition for manual mode
+      this.#startContinuousRecognition();
+    } else {
+      // Use single-shot recognition for automatic mode
+      this.#startSingleShotRecognition();
+    }
+  }
+
+  stop() {
+    if (this.continuous && this.recognition) {
+      this.recognition.stopContinuousRecognitionAsync(
+        () => {
+          console.log('Continuous recognition stopped');
+          this.#triggerOnEnd();
+        },
+        err => {
+          console.error('Error stopping continuous recognition:', err);
+          this.#triggerOnError({ error: 'network' });
+        }
+      );
+    }
+  }
+
+  #startSingleShotRecognition() {
     this.recognition.recognizeOnceAsync(result => {
       switch (result.reason) {
         case speechSdk.ResultReason.RecognizedSpeech:
@@ -47,6 +74,61 @@ class AzureSpeechRecognition {
       }
       this.recognition.close();
     });
+  }
+
+  #startContinuousRecognition() {
+    // Set up event handlers for continuous recognition
+    this.recognition.recognizing = (s, e) => {
+      if (this.interimResults && e.result.reason === speechSdk.ResultReason.RecognizingSpeech) {
+        // Trigger interim results
+        this.#triggerOnResult({ text: e.result.text, isFinal: false });
+      }
+    };
+
+    this.recognition.recognized = (s, e) => {
+      if (e.result.reason === speechSdk.ResultReason.RecognizedSpeech) {
+        // Trigger final results
+        this.#triggerOnResult({ text: e.result.text, isFinal: true });
+      } else if (e.result.reason === speechSdk.ResultReason.NoMatch) {
+        console.log('No match found for current segment');
+      }
+    };
+
+    this.recognition.canceled = (s, e) => {
+      if (e.reason === speechSdk.CancellationReason.Error) {
+        switch (e.errorCode) {
+          case speechSdk.CancellationErrorCode.Forbidden:
+          case speechSdk.CancellationErrorCode.ServiceError:
+          case speechSdk.CancellationErrorCode.TooManyRequests:
+          case speechSdk.CancellationErrorCode.AuthenticationFailure:
+            this.#triggerOnError({ error: 'not-allowed' });
+            break;
+          case speechSdk.CancellationErrorCode.ServiceTimeout:
+          case speechSdk.CancellationErrorCode.ConnectionFailure:
+            this.#triggerOnError({ error: 'network' });
+            break;
+          default:
+            this.#triggerOnError({ error: '' });
+        }
+      }
+      this.#triggerOnEnd();
+    };
+
+    this.recognition.sessionStopped = (s, e) => {
+      console.log('Session stopped');
+      this.#triggerOnEnd();
+    };
+
+    // Start continuous recognition
+    this.recognition.startContinuousRecognitionAsync(
+      () => {
+        console.log('Continuous recognition started');
+      },
+      err => {
+        console.error('Error starting continuous recognition:', err);
+        this.#triggerOnError({ error: 'network' });
+      }
+    );
   }
 
   initRecognizer() {
