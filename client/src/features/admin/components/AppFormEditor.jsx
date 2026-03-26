@@ -1722,8 +1722,8 @@ function AppFormEditor({
                             <option value="manual">
                               {t('admin.apps.edit.manualMode', 'Manual (Click to Record)')}
                             </option>
-                            <option value="continuous">
-                              {t('admin.apps.edit.continuousMode', 'Continuous (Voice Activation)')}
+                            <option value="automatic">
+                              {t('admin.apps.edit.automaticMode', 'Automatic (Voice Activation)')}
                             </option>
                           </select>
                         </div>

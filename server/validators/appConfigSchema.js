@@ -104,7 +104,7 @@ const inputModeSchema = z
     microphone: z
       .object({
         enabled: z.boolean().optional().default(true),
-        mode: z.enum(['manual', 'auto']).optional().default('manual'),
+        mode: z.enum(['manual', 'automatic']).optional().default('manual'),
         showTranscript: z.boolean().optional().default(true)
       })
       .optional()
