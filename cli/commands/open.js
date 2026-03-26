@@ -2,7 +2,7 @@
  * ihub open — Open the iHub interface in a browser
  * Usage: ihub open [--port <port>]
  */
-import { execFile, spawn } from 'child_process';
+import { spawn } from 'child_process';
 import { c, symbols } from '../utils/colors.js';
 import { checkHealth, parseServerArgs, getServerUrl } from '../utils/api.js';
 

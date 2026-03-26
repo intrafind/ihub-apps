@@ -231,7 +231,7 @@ async function testModel(args) {
   if (failed > 0) process.exit(1);
 }
 
-async function addModel(args) {
+async function addModel(_args) {
   let clack;
   try {
     clack = await import('@clack/prompts');

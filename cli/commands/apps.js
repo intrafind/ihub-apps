@@ -168,7 +168,7 @@ async function setAppEnabled(id, enabled) {
   console.log(`${symbols.success} App ${c.bold(getAppName(app))} ${action}`);
 }
 
-async function addApp(args) {
+async function addApp(_args) {
   let clack;
   try {
     clack = await import('@clack/prompts');
