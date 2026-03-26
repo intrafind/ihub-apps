@@ -677,7 +677,11 @@ export async function processOcrJob(job) {
       );
 
       // Check if job was cancelled or errored during processing
-      if (job.status === 'cancelled' || job.status === 'error') return;
+      if (job.status === 'cancelled' || job.status === 'error') {
+        // Free buffer data to save memory
+        job.data.fileBuffer = null;
+        return;
+      }
 
       // Build the result PDF
       job.status = 'building';
@@ -762,7 +766,11 @@ export async function processOcrJob(job) {
         OCR_PAGE_CONCURRENCY
       );
 
-      if (job.status === 'cancelled' || job.status === 'error') return;
+      if (job.status === 'cancelled' || job.status === 'error') {
+        // Free image data to save memory
+        job.data.pageImages = null;
+        return;
+      }
 
       // Build the result PDF
       job.status = 'building';
@@ -790,6 +798,15 @@ export async function processOcrJob(job) {
   } catch (err) {
     job.status = 'error';
     job.error = err.message;
+
+    // Free buffer data to save memory
+    if (job.data.fileBuffer) {
+      job.data.fileBuffer = null;
+    }
+    if (job.data.pageImages) {
+      job.data.pageImages = null;
+    }
+
     notifyClients(job);
 
     logger.error('OCR job failed', {
