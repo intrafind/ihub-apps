@@ -121,7 +121,7 @@ async function renderPageToImage(pdfDoc, pageNum) {
   await page.render({ canvasContext: ctx, viewport }).promise;
 
   // JPEG at 85% quality — good balance of quality vs size
-  // @napi-rs/canvas uses 0-100 scale (node-canvas used 0-1 scale)
+  // @napi-rs/canvas uses 0-100 integer scale (equivalent to node-canvas 0-1 float: 0.85 → 85)
   const jpegBuffer = canvas.toBuffer('image/jpeg', 85);
   return jpegBuffer.toString('base64');
 }
