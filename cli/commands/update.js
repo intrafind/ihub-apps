@@ -8,18 +8,18 @@ import { c, symbols } from '../utils/colors.js';
 import { getRootDir } from '../utils/paths.js';
 
 const HELP = `
-  ${c.bold('ihub update')} — Check for and apply updates
+  ${c.bold('ihub update')} — Check for updates
 
   ${c.bold('Usage:')}
     ihub update [options]
 
   ${c.bold('Options:')}
-    --check          Check for updates without installing
+    --check          Check for updates without displaying installation instructions
     -h, --help       Show this help
 
   ${c.bold('Description:')}
     Checks the npm registry for a newer version of ihub-apps
-    and provides instructions for updating.
+    and provides manual installation instructions.
 `;
 
 export default async function update(args) {

@@ -149,7 +149,21 @@ async function listModels(args) {
 
 async function testModel(args) {
   const { port, host } = parseServerArgs(args);
-  const targetId = args.filter(a => !a.startsWith('-') && !a.match(/^\d+$/))[0];
+
+  // Parse positional argument by filtering out options and their values
+  const knownFlags = ['--port', '-p', '--host'];
+  let targetId = null;
+  for (let i = 0; i < args.length; i++) {
+    const arg = args[i];
+    if (knownFlags.includes(arg)) {
+      i++; // Skip the next argument (the value)
+      continue;
+    }
+    if (!arg.startsWith('-') && !arg.match(/^\d+$/)) {
+      targetId = arg;
+      break;
+    }
+  }
 
   // Check if server is running
   const health = await checkHealth(port, host);
@@ -238,7 +252,7 @@ async function addModel(args) {
       { value: 'google', label: 'Google (Gemini)' },
       { value: 'mistral', label: 'Mistral' },
       { value: 'azure-openai', label: 'Azure OpenAI' },
-      { value: 'openai', label: 'Local (LM Studio, vLLM, etc.) — uses OpenAI-compatible API' }
+      { value: 'local-openai', label: 'Local (LM Studio, vLLM, Jan.ai) — OpenAI-compatible API' }
     ]
   });
   if (isCancel(provider)) {
@@ -269,13 +283,63 @@ async function addModel(args) {
   }
 
   const nameEn = await text({
-    message: 'Display name:',
+    message: 'Display name (English):',
     placeholder: 'GPT-4o',
     initialValue: id
   });
   if (isCancel(nameEn)) {
     cancel('Cancelled.');
     return;
+  }
+
+  const nameDe = await text({
+    message: 'Display name (German):',
+    placeholder: 'GPT-4o',
+    initialValue: nameEn
+  });
+  if (isCancel(nameDe)) {
+    cancel('Cancelled.');
+    return;
+  }
+
+  const descriptionEn = await text({
+    message: 'Description (English, optional):',
+    placeholder: 'OpenAI GPT-4o - Advanced language model'
+  });
+  if (isCancel(descriptionEn)) {
+    cancel('Cancelled.');
+    return;
+  }
+
+  const descriptionDe = await text({
+    message: 'Description (German, optional):',
+    placeholder: 'OpenAI GPT-4o - Fortschrittliches Sprachmodell',
+    initialValue: descriptionEn
+  });
+  if (isCancel(descriptionDe)) {
+    cancel('Cancelled.');
+    return;
+  }
+
+  let url = null;
+  if (provider === 'local-openai') {
+    const urlInput = await text({
+      message: 'Local endpoint URL:',
+      placeholder: 'http://localhost:1234/v1/chat/completions',
+      validate: val => {
+        if (!val) return 'URL is required for local providers';
+        try {
+          new URL(val);
+        } catch {
+          return 'Invalid URL format';
+        }
+      }
+    });
+    if (isCancel(urlInput)) {
+      cancel('Cancelled.');
+      return;
+    }
+    url = urlInput.trim();
   }
 
   const tokenLimit = await text({
@@ -293,12 +357,23 @@ async function addModel(args) {
   const modelConfig = {
     id: id.trim(),
     modelId: modelId.trim(),
-    name: { en: nameEn.trim() },
-    provider: provider,
+    name: { en: nameEn.trim(), de: nameDe.trim() },
+    provider: provider === 'local-openai' ? 'openai' : provider,
     tokenLimit: parseInt(tokenLimit, 10),
     enabled: true,
     supportsTools: false
   };
+
+  if (descriptionEn.trim()) {
+    modelConfig.description = { en: descriptionEn.trim() };
+    if (descriptionDe.trim()) {
+      modelConfig.description.de = descriptionDe.trim();
+    }
+  }
+
+  if (url) {
+    modelConfig.url = url;
+  }
 
   const contentsDir = getContentsDir();
   const modelsDir = path.join(contentsDir, 'models');

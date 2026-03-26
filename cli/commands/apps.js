@@ -196,7 +196,7 @@ async function addApp(args) {
   }
 
   const name = await text({
-    message: 'App name:',
+    message: 'App name (English):',
     placeholder: 'My Assistant',
     validate: val => {
       if (!val) return 'Name is required';
@@ -207,11 +207,31 @@ async function addApp(args) {
     return;
   }
 
+  const nameDe = await text({
+    message: 'App name (German):',
+    placeholder: 'Mein Assistent',
+    initialValue: name
+  });
+  if (isCancel(nameDe)) {
+    cancel('Cancelled.');
+    return;
+  }
+
   const description = await text({
-    message: 'Short description:',
+    message: 'Short description (English):',
     placeholder: 'A helpful AI assistant'
   });
   if (isCancel(description)) {
+    cancel('Cancelled.');
+    return;
+  }
+
+  const descriptionDe = await text({
+    message: 'Short description (German):',
+    placeholder: 'Ein hilfreicher KI-Assistent',
+    initialValue: description
+  });
+  if (isCancel(descriptionDe)) {
     cancel('Cancelled.');
     return;
   }
@@ -226,13 +246,23 @@ async function addApp(args) {
   }
 
   const systemPrompt = await text({
-    message: 'System prompt:',
+    message: 'System prompt (English):',
     placeholder: 'You are a helpful assistant.',
     validate: val => {
       if (!val) return 'System prompt is required';
     }
   });
   if (isCancel(systemPrompt)) {
+    cancel('Cancelled.');
+    return;
+  }
+
+  const systemPromptDe = await text({
+    message: 'System prompt (German):',
+    placeholder: 'Du bist ein hilfreicher Assistent.',
+    initialValue: systemPrompt
+  });
+  if (isCancel(systemPromptDe)) {
     cancel('Cancelled.');
     return;
   }
@@ -251,11 +281,11 @@ async function addApp(args) {
 
   const appConfig = {
     id: id.trim(),
-    name: { en: name.trim() },
-    description: { en: (description || '').trim() },
+    name: { en: name.trim(), de: nameDe.trim() },
+    description: { en: (description || '').trim(), de: (descriptionDe || '').trim() },
     color: color.trim(),
     icon: 'robot',
-    system: { en: systemPrompt.trim() },
+    system: { en: systemPrompt.trim(), de: systemPromptDe.trim() },
     tokenLimit: 4096,
     enabled: true,
     ...(model && model.trim() ? { preferredModel: model.trim() } : {})
