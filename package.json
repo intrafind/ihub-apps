@@ -126,7 +126,8 @@
     "https-proxy-agent": "^8.0.0",
     "react-icons": "^5.5.0",
     "react-resizable-panels": "^3.0.4",
-    "yauzl": "^3.2.0"
+    "yauzl": "^3.2.0",
+    "eventsource": "^2.0.2"
   },
   "devDependencies": {
     "@babel/preset-env": "^7.29.2",

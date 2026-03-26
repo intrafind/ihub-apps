@@ -58,6 +58,19 @@ const HELP = `
     backup             Archive contents/ directory with timestamp
     restore <file>     Restore from a backup archive
 
+  ${c.bold('Remote Management:')}
+    remote add <name> <url>  Add a remote instance
+    remote list              List configured remote instances
+    remote test <name>       Test connection to remote instance
+    auth login [instance]    Authenticate with OAuth 2.0
+    auth whoami              Show current authenticated user
+    auth logout              Clear authentication token
+    chat <app-id>            Interactive chat with AI apps
+    admin users list         Manage remote users (list, create, delete)
+    admin groups list        Manage remote groups and permissions
+    admin config get <key>   View/modify remote configuration
+    admin cache clear        Clear remote cache
+
   ${c.bold('Other:')}
     completions <shell> Generate shell completions (bash|zsh|fish|powershell)
 
@@ -66,6 +79,9 @@ const HELP = `
     -v, --version      Show version
     --port <port>      Server port (default: $PORT or 3000)
     --host <host>      Server host (default: $HOST or localhost)
+    --url <url>        Remote instance URL (e.g., https://ihub.example.com)
+    --token <token>    Authentication token for remote instance
+    --instance <name>  Use saved remote instance
 
   ${c.bold('Examples:')}
     ihub start
@@ -91,6 +107,10 @@ const COMMAND_MAP = {
   logs: './commands/logs.js',
   backup: './commands/backup.js',
   restore: './commands/restore.js',
+  remote: './commands/remote.js',
+  auth: './commands/auth.js',
+  chat: './commands/chat.js',
+  admin: './commands/admin.js',
   completions: './commands/completions.js'
 };
 
