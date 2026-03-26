@@ -25,7 +25,7 @@
     "archiver": "^7.0.1",
     "bcryptjs": "^2.4.3",
     "cached-dns": "^0.0.4",
-    "canvas": "^2.11.2",
+    "@napi-rs/canvas": "^0.1.88",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^16.0.3",

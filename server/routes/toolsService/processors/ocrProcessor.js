@@ -3,7 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { createCanvas } from 'canvas';
+import { createCanvas } from '@napi-rs/canvas';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
 import { createCompletionRequest } from '../../../adapters/index.js';
@@ -121,7 +121,8 @@ async function renderPageToImage(pdfDoc, pageNum) {
   await page.render({ canvasContext: ctx, viewport }).promise;
 
   // JPEG at 85% quality — good balance of quality vs size
-  const jpegBuffer = canvas.toBuffer('image/jpeg', { quality: 0.85 });
+  // @napi-rs/canvas uses 0-100 scale (node-canvas used 0-1 scale)
+  const jpegBuffer = canvas.toBuffer('image/jpeg', 85);
   return jpegBuffer.toString('base64');
 }
 
