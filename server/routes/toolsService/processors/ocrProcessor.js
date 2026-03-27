@@ -3,7 +3,6 @@ import fontkit from '@pdf-lib/fontkit';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { createCanvas } from 'canvas';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
 import { createCompletionRequest } from '../../../adapters/index.js';
@@ -12,6 +11,24 @@ import { throttledFetch } from '../../../requestThrottler.js';
 import logger from '../../../utils/logger.js';
 import { notifyClients } from '../jobStore.js';
 import { convertResponseToGeneric } from '../../../adapters/toolCalling/ToolCallingConverter.js';
+
+// canvas is an optional dependency (native module requiring system libraries).
+// It is loaded lazily so the server can start even when canvas is not installed.
+let _createCanvas;
+async function getCreateCanvas() {
+  if (!_createCanvas) {
+    try {
+      const canvasModule = await import('canvas');
+      _createCanvas = canvasModule.createCanvas;
+    } catch {
+      throw new Error(
+        'The "canvas" package is not available. ' +
+          'Install system libraries (cairo, pango, pixman) and run "npm install canvas" to enable OCR.'
+      );
+    }
+  }
+  return _createCanvas;
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -107,6 +124,7 @@ Output ONLY the final annotated Markdown content. Do NOT include any explanatory
  * Targets ~1600px on the long edge for good OCR quality.
  */
 async function renderPageToImage(pdfDoc, pageNum) {
+  const createCanvas = await getCreateCanvas();
   const page = await pdfDoc.getPage(pageNum);
   const defaultViewport = page.getViewport({ scale: 1 });
   const longEdge = Math.max(defaultViewport.width, defaultViewport.height);
@@ -129,6 +147,7 @@ async function renderPageToImage(pdfDoc, pageNum) {
  * Load a PDF from a Buffer and return a pdfjs document.
  */
 async function loadPdfDocument(pdfBuffer) {
+  const createCanvas = await getCreateCanvas();
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(pdfBuffer),
     verbosity: 0,

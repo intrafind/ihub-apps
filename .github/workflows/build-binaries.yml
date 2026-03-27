@@ -32,6 +32,11 @@ jobs:
           node-version: '24'
           cache: 'npm'
 
+      - name: Install canvas system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@v1
         with:
@@ -127,6 +132,17 @@ jobs:
         with:
           node-version: '24'
           cache: 'npm'
+
+      - name: Install canvas system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential libcairo2-dev libpango1.0-dev libjpeg-dev libgif-dev librsvg2-dev
+
+      - name: Install canvas system dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install pkg-config cairo pango libpng jpeg giflib librsvg pixman
 
       - name: Install mdBook
         uses: peaceiris/actions-mdbook@v1
