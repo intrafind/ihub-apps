@@ -7,7 +7,7 @@
 # -----------------------------------------------------------------------------
 FROM node:24-alpine AS dependencies
 
-# Install system dependencies required for build
+# Install system dependencies required for build (including canvas native module)
 RUN apk add --update --no-cache \
     dumb-init \
     git \
@@ -15,7 +15,13 @@ RUN apk add --update --no-cache \
     make \
     g++ \
     curl \
-    musl-dev
+    musl-dev \
+    cairo-dev \
+    pango-dev \
+    jpeg-dev \
+    giflib-dev \
+    librsvg-dev \
+    pixman-dev
 
 # Install Rust (required for mdbook and mdbook-mermaid)
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -73,12 +79,18 @@ FROM node:24-alpine AS production
 # Set production environment
 ENV NODE_ENV=production
 
-# Install runtime dependencies
+# Install runtime dependencies (including canvas native module runtime libs)
 RUN apk add --update --no-cache \
     dumb-init \
     curl \
     tini \
-    netcat-openbsd
+    netcat-openbsd \
+    cairo \
+    pango \
+    jpeg \
+    giflib \
+    librsvg \
+    pixman
 
 # Create non-root user for security
 RUN addgroup -S ihub && \
