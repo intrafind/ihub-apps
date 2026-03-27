@@ -101,5 +101,27 @@ export default [
         ...globals.es2024
       }
     }
+  },
+  {
+    files: ['**/*.cjs'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'commonjs',
+      globals: {
+        ...globals.node,
+        ...globals.commonjs
+      }
+    }
+  },
+  {
+    files: ['cli/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'module',
+      globals: {
+        ...globals.node,
+        ...globals.es2024
+      }
+    }
   }
 ];
