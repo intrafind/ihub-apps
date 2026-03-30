@@ -332,7 +332,22 @@ export default function registerAuthRoutes(app) {
       });
 
       // Validate and sanitize return URL to prevent open redirect attacks
-      let returnUrl = req.query.returnUrl || '/';
+      const rawReturnUrl = req.query.returnUrl;
+      let returnUrl;
+
+      if (rawReturnUrl == null) {
+        // No return URL provided, use default
+        returnUrl = '/';
+      } else if (typeof rawReturnUrl === 'string') {
+        returnUrl = rawReturnUrl;
+      } else {
+        // Reject array or non-string values to prevent type confusion attacks
+        logger.warn('[Security] Invalid return URL type', {
+          component: 'Auth',
+          type: typeof rawReturnUrl
+        });
+        return sendBadRequest(res, 'Invalid return URL');
+      }
 
       // Only allow relative URLs (starting with /) and same-origin URLs
       try {
