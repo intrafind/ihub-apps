@@ -407,19 +407,42 @@ if (cluster.isPrimary && workerCount > 1) {
   // Start server
   server.listen(PORT, HOST, () => {
     const protocol = server instanceof https.Server ? 'https' : 'http';
+
+    // Log bind address
     logger.info({
       component: 'Server',
-      message: 'Server is running',
+      message: 'Server is listening on all interfaces',
       protocol,
-      host: HOST,
-      port: PORT,
-      url: `${protocol}://${HOST}:${PORT}`
+      bindAddress: HOST,
+      port: PORT
     });
-    logger.info({
-      component: 'Server',
-      message: 'Open in browser to use iHub Apps',
-      url: `${protocol}://${HOST}:${PORT}`
-    });
+
+    // Provide access URLs based on bind address
+    if (HOST === '0.0.0.0' || HOST === '::') {
+      // Server is bound to all interfaces - provide recommended access URLs
+      logger.info({
+        component: 'Server',
+        message: 'Access the application at one of these URLs:',
+        urls: [
+          `${protocol}://localhost:${PORT}`,
+          `${protocol}://127.0.0.1:${PORT}`,
+          "(or use your machine's hostname/IP address)"
+        ]
+      });
+      logger.warn({
+        component: 'Server',
+        message: '⚠️  IMPORTANT: Do not access via http://0.0.0.0:* in your browser',
+        reason: 'Browsers will reject cookies from 0.0.0.0, causing authentication to fail',
+        recommendation: 'Always use localhost, 127.0.0.1, or your actual hostname'
+      });
+    } else {
+      // Server is bound to specific interface
+      logger.info({
+        component: 'Server',
+        message: 'Access the application at',
+        url: `${protocol}://${HOST}:${PORT}`
+      });
+    }
   });
 
   const handleShutdownSignal = async () => {

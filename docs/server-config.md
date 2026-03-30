@@ -52,7 +52,7 @@ The server reads settings from the environment or a `.env` file such as `config.
 | Variable                   | Description                                                       | Default                                          |
 | -------------------------- | ----------------------------------------------------------------- | ------------------------------------------------ |
 | `PORT`                     | Port the HTTP server listens on                                   | `3000`                                           |
-| `HOST`                     | Host interface to bind to                                         | `0.0.0.0`                                        |
+| `HOST`                     | Host interface to bind to. Use `0.0.0.0` to listen on all interfaces (recommended), then access via `localhost` or `127.0.0.1` in your browser. **Never access via `http://0.0.0.0:*` as browsers will reject cookies.** | `0.0.0.0`                                        |
 | `NODE_ENV`                 | Runtime environment (`development`, `production`, `test`). Affects cookie security flags, debug logging, and cache TTLs. | – |
 | `REQUEST_TIMEOUT`          | LLM request timeout in milliseconds                               | `300000`                                         |
 | `WORKERS`                  | Number of Node.js cluster workers (alias: `NUM_WORKERS`)          | `1`                                              |

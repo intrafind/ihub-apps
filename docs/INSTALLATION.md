@@ -660,7 +660,7 @@ For detailed configuration documentation, see the main README.md Configuration s
 | Variable | Description | Default | Required |
 |----------|-------------|---------|----------|
 | `PORT` | Server port | 3000 | No |
-| `HOST` | Bind address | 0.0.0.0 | No |
+| `HOST` | Bind address (use `0.0.0.0` to listen on all interfaces, then access via `localhost` or `127.0.0.1` in browser) | 0.0.0.0 | No |
 | `JWT_SECRET` | JWT signing key (auto-generated if not set) | - | No* |
 | `ADMIN_SECRET` | Admin access key | - | No |
 | `OPENAI_API_KEY` | OpenAI API key | - | No |
