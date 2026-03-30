@@ -56,21 +56,45 @@ export function getJob(jobId) {
 /**
  * Check if a user can access a job.
  * Admins can access all jobs; regular users can only access their own.
+ * Anonymous users (undefined/null user or userId) can access anonymous jobs.
  */
 export function canAccessJob(job, user) {
-  if (!job || !user) return false;
-  if (user.permissions?.adminAccess === true) return true;
-  return job.userId === user.id;
+  if (!job) return false;
+
+  // Admin access
+  if (user?.permissions?.adminAccess === true) return true;
+
+  // Both job and user are anonymous (undefined/null userId)
+  if (!job.userId && !user?.id) return true;
+
+  // Regular user accessing their own job
+  if (user?.id && job.userId === user.id) return true;
+
+  return false;
 }
 
 /**
  * List jobs with optional filtering.
  * Admins see all jobs; regular users only see their own.
+ * Anonymous users (undefined/null userId) only see anonymous jobs.
  */
 export function listJobs(userId, isAdmin, filters = {}) {
   const result = [];
   for (const [id, job] of jobs) {
-    if (!isAdmin && job.userId !== userId) continue;
+    // Admin sees all jobs
+    if (isAdmin) {
+      // Continue to filter checks below
+    } else if (!userId && !job.userId) {
+      // Anonymous user (undefined userId) can only see anonymous jobs
+      // Continue to filter checks below
+    } else if (userId && job.userId === userId) {
+      // Regular user can only see their own jobs
+      // Continue to filter checks below
+    } else {
+      // Skip this job - user cannot access it
+      continue;
+    }
+
     if (filters.status && job.status !== filters.status) continue;
     if (filters.toolType && job.toolType !== filters.toolType) continue;
     result.push({
