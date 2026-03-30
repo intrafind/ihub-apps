@@ -393,7 +393,12 @@ function AdminNavigation() {
                             {groupIndex > 0 && <div className="border-t border-gray-200 my-1" />}
                             <GroupHeader groupName={group.name} />
                             {groupItems.map(item => (
-                              <TabItem key={item.key} item={item} isDropdownItem setShowMoreMenu={setShowMoreMenu} />
+                              <TabItem
+                                key={item.key}
+                                item={item}
+                                isDropdownItem
+                                setShowMoreMenu={setShowMoreMenu}
+                              />
                             ))}
                           </div>
                         );
@@ -451,7 +456,12 @@ function AdminNavigation() {
                             {groupIndex > 0 && <div className="border-t border-gray-200 my-1" />}
                             <GroupHeader groupName={group.name} />
                             {groupItems.map(item => (
-                              <TabItem key={item.key} item={item} isDropdownItem setShowMoreMenu={setShowMoreMenu} />
+                              <TabItem
+                                key={item.key}
+                                item={item}
+                                isDropdownItem
+                                setShowMoreMenu={setShowMoreMenu}
+                              />
                             ))}
                           </div>
                         );
