@@ -1,7 +1,5 @@
 import globals from 'globals';
-import { fixupPluginRules } from '@eslint/compat';
-import reactPlugin from 'eslint-plugin-react';
-import reactHooksPlugin from 'eslint-plugin-react-hooks';
+import eslintReact from '@eslint-react/eslint-plugin';
 
 export default [
   {
@@ -52,10 +50,7 @@ export default [
   },
   {
     files: ['client/**/*.jsx', 'client/**/*.js'],
-    plugins: {
-      react: fixupPluginRules(reactPlugin),
-      'react-hooks': fixupPluginRules(reactHooksPlugin)
-    },
+    ...eslintReact.configs.recommended,
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'module',
@@ -69,26 +64,10 @@ export default [
         ...globals.es2024
       }
     },
-    settings: {
-      react: {
-        version: 'detect'
-      }
-    },
     rules: {
-      // React 17+ JSX Transform - React import not needed
-      'react/jsx-uses-react': 'off',
-      'react/react-in-jsx-scope': 'off',
-
-      // JSX-specific rules (jsx-uses-vars removed - ESLint 10 natively tracks JSX references)
-      'react/jsx-no-undef': 'error',
-
-      // React hooks rules
-      'react-hooks/rules-of-hooks': 'error',
-      'react-hooks/exhaustive-deps': 'warn',
-
-      // Disable some overly strict React rules
-      'react/prop-types': 'off',
-      'react/display-name': 'off'
+      ...eslintReact.configs.recommended.rules,
+      // Disable RSC rules — not a React Server Components project
+      '@eslint-react/rsc/function-definition': 'off'
     }
   },
   {
