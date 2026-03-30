@@ -313,6 +313,13 @@ export class StateManager {
    * console.log('Restored from checkpoint:', state.status);
    */
   async restore(executionId) {
+    if (!validateIdForPath(executionId, 'executionId')) {
+      logger.warn('Invalid executionId for state restore', {
+        component: 'StateManager',
+        executionId
+      });
+      return null;
+    }
     const checkpointPath = path.join(this.stateDir, executionId, 'latest.json');
 
     try {
@@ -531,6 +538,13 @@ export class StateManager {
    * await stateManager.cleanup('exec-123', true);
    */
   async cleanup(executionId, keepCheckpoints = false) {
+    if (!validateIdForPath(executionId, 'executionId')) {
+      logger.warn('Invalid executionId for state cleanup', {
+        component: 'StateManager',
+        executionId
+      });
+      return;
+    }
     // Remove from active states
     this.activeStates.delete(executionId);
 

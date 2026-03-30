@@ -176,7 +176,15 @@ app.get('/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
 
   if (error) {
-    return res.status(400).send(`OAuth Error: ${error} - ${error_description}`);
+    const escapeHtml = s =>
+      String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    return res
+      .status(400)
+      .send(`OAuth Error: ${escapeHtml(error)} - ${escapeHtml(error_description)}`);
   }
 
   // Verify state to prevent CSRF attacks

@@ -350,6 +350,13 @@ export function enhanceFetchOptions(options = {}, url = '', forceIgnoreSSL = nul
  * @returns {Promise<Response>} node-fetch Response
  */
 export async function httpFetch(url, options = {}, forceIgnoreSSL = null) {
+  // Validate URL scheme - admin-configured URLs are trusted but must use http(s)
+  if (url && typeof url === 'string') {
+    const scheme = url.split(':')[0].toLowerCase();
+    if (scheme !== 'http' && scheme !== 'https') {
+      throw new Error(`Unsupported URL scheme: ${scheme}`);
+    }
+  }
   const enhanced = enhanceFetchOptions(options, url, forceIgnoreSSL);
   return nodeFetch(url, enhanced);
 }

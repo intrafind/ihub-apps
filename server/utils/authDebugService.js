@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import configCache from '../configCache.js';
 import logger from './logger.js';
 
@@ -119,7 +120,7 @@ class AuthDebugService {
    * Generate session ID for tracking auth flows
    */
   generateSessionId() {
-    return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    return `session_${Date.now()}_${crypto.randomBytes(6).toString('hex')}`;
   }
 }
 

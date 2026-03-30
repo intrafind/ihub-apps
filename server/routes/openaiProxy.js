@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { getApiKeyForModel } from '../utils.js';
 import { createCompletionRequest } from '../adapters/index.js';
 import { throttledFetch } from '../requestThrottler.js';
@@ -281,7 +282,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         let buffer = '';
 
         // Generate a unique ID for this completion
-        const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
+        const completionId = `chatcmpl-${crypto.randomUUID().replace(/-/g, '')}`;
         const streamId = completionId; // Use completion ID as stream ID for state isolation
         let isFirstChunk = true;
 
@@ -468,7 +469,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
             result: JSON.stringify(genericResult, null, 2)
           });
 
-          const completionId = `chatcmpl-${Date.now()}${Math.random().toString(36).substring(2, 11)}`;
+          const completionId = `chatcmpl-${crypto.randomUUID().replace(/-/g, '')}`;
 
           // Convert to OpenAI non-streaming format
           const openAIResponse = {

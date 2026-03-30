@@ -32,6 +32,8 @@ jobs:
   # Check if workflow should run
   check-trigger:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     outputs:
       should-run: ${{ steps.check.outputs.should-run }}
     steps:

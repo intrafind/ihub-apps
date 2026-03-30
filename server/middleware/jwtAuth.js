@@ -47,7 +47,20 @@ export default function jwtAuthMiddleware(req, res, next) {
         peeked?.payload?.aud &&
         peeked.payload.aud !== 'ihub-apps'
       ) {
-        decoded = verifyJwt(token, { audience: peeked.payload.aud });
+        // Verify the audience against registered OAuth clients before using it
+        // This prevents an attacker from using an arbitrary audience claim to influence verification
+        const oauthConfig = platform.oauth || {};
+        if (oauthConfig.enabled?.clients) {
+          try {
+            const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+            const clientsConfig = loadOAuthClients(clientsFilePath);
+            if (clientsConfig.clients[peeked.payload.aud]) {
+              decoded = verifyJwt(token, { audience: peeked.payload.aud });
+            }
+          } catch {
+            // If we can't load clients, don't allow the alternative audience
+          }
+        }
       }
     }
 

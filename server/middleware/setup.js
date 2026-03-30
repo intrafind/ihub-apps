@@ -114,7 +114,7 @@ function createAuthChain(authMiddlewares, platformConfig = {}) {
  * @returns {Array|string|boolean} - Processed origins
  */
 function processCorsOrigins(origins) {
-  if (!origins) return true; // Allow all if not specified
+  if (!origins) return false; // Deny cross-origin if not configured
 
   if (typeof origins === 'string') {
     // Handle environment variable replacement
@@ -153,7 +153,7 @@ function processCorsOrigins(origins) {
         processed.push(origin);
       }
     }
-    return processed.length ? processed : true;
+    return processed.length ? processed : false;
   }
 
   return origins;
@@ -328,7 +328,7 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Configure CORS with platform configuration
   const corsConfig = platformConfig.cors || {};
   const corsOptions = {
-    origin: processCorsOrigins(corsConfig.origin) || true, // Allow all origins by default
+    origin: processCorsOrigins(corsConfig.origin),
     methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
     allowedHeaders: corsConfig.allowedHeaders || [
       'Content-Type',

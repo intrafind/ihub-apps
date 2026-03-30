@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -169,7 +170,7 @@ export async function createUser(userData, usersFilePath) {
   }
 
   // Create user ID first (needed for password hashing)
-  const userId = `user_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+  const userId = `user_${Date.now()}_${crypto.randomBytes(8).toString('hex')}`;
 
   // Hash password with user ID for unique hash
   const passwordHash = await hashPasswordWithUserId(password, userId);

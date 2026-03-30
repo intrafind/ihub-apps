@@ -215,7 +215,7 @@ export const basePathRewriteMiddleware = (req, res, next) => {
 
   if (prefix) {
     // Normalize: remove trailing slashes
-    prefix = prefix.replace(/\/+$/, '');
+    while (prefix.endsWith('/')) prefix = prefix.slice(0, -1);
 
     if (prefix && isValidBasePath(prefix) && req.url.startsWith(prefix)) {
       req.url = req.url.substring(prefix.length) || '/';
@@ -247,7 +247,9 @@ export const basePathDetectionMiddleware = (req, res, next) => {
 export const basePathValidationMiddleware = (req, res, next) => {
   const headerName = process.env.BASE_PATH_HEADER || 'x-forwarded-prefix';
   const prefix = req.headers[headerName.toLowerCase()];
-  if (prefix && !isValidBasePath(prefix.replace(/\/+$/, ''))) {
+  let trimmedPrefix = prefix;
+  while (trimmedPrefix.endsWith('/')) trimmedPrefix = trimmedPrefix.slice(0, -1);
+  if (prefix && !isValidBasePath(trimmedPrefix)) {
     logger.warn('Invalid base path header value, ignoring', {
       component: 'BasePath',
       headerName,

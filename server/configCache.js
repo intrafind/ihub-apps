@@ -456,9 +456,9 @@ class ConfigCache {
    * Generate ETag for data
    */
   generateETag(data) {
-    const hash = createHash('md5');
+    const hash = createHash('sha256');
     hash.update(JSON.stringify(data));
-    return `"${hash.digest('hex')}"`;
+    return `"${hash.digest('hex').substring(0, 32)}"`;
   }
 
   mergeLocaleData(base = {}, overrides = {}, path = '') {

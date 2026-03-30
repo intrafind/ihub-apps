@@ -23,7 +23,7 @@ const router = express.Router();
  */
 function isValidReturnUrl(returnUrl, req) {
   if (!returnUrl) return false;
-  if (returnUrl.startsWith('/')) return true;
+  if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return true;
   try {
     const url = new URL(returnUrl);
     return url.hostname === req.hostname;
