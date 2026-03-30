@@ -19,7 +19,8 @@ export default [
       'logs/**',
       '*.log',
       '.github/**',
-      '.claude/**'
+      '.claude/**',
+      '.worktrees/**'
     ]
   },
   {
