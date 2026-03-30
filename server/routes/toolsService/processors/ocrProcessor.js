@@ -3,7 +3,7 @@ import fontkit from '@pdf-lib/fontkit';
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { createCanvas } from 'canvas';
+import { PNG } from 'pngjs';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import configCache from '../../../configCache.js';
 import { createCompletionRequest } from '../../../adapters/index.js';
@@ -100,53 +100,54 @@ If the page contains no meaningful text or visuals, output exactly '[BLANK PAGE]
 
 Output ONLY the final annotated Markdown content. Do NOT include any explanatory text, apologies, or preambles.`;
 
+// ─── PDFium singleton (pure WASM, no native binaries) ────────────────────────
+
+let _pdfiumLib = null;
+
+async function getPdfiumLibrary() {
+  if (!_pdfiumLib) {
+    const { PDFiumLibrary } = await import('@hyzyla/pdfium');
+    _pdfiumLib = await PDFiumLibrary.init();
+  }
+  return _pdfiumLib;
+}
+
 // ─── Server-side PDF rendering ───────────────────────────────────────────────
 
 /**
- * Render a single PDF page to a base64 JPEG using pdfjs-dist + node-canvas.
- * Targets ~1600px on the long edge for good OCR quality.
+ * Render a single PDF page to a base64 PNG using @hyzyla/pdfium (pure WASM).
+ * Renders at scale 2 (~1190px wide for A4) for good OCR quality.
+ *
+ * @param {Buffer} pdfBuffer - raw PDF bytes
+ * @param {number} pageIndex - 0-based page index
  */
-async function renderPageToImage(pdfDoc, pageNum) {
-  const page = await pdfDoc.getPage(pageNum);
-  const defaultViewport = page.getViewport({ scale: 1 });
-  const longEdge = Math.max(defaultViewport.width, defaultViewport.height);
+async function renderPageToImage(pdfBuffer, pageIndex) {
+  const library = await getPdfiumLibrary();
+  const doc = await library.loadDocument(pdfBuffer);
+  try {
+    const pages = [...doc.pages()];
+    const page = pages[pageIndex];
 
-  const TARGET_LONG_EDGE = 1600;
-  const scale = Math.min(2, TARGET_LONG_EDGE / longEdge);
-  const viewport = page.getViewport({ scale });
+    const image = await page.render({ scale: 2, render: 'bitmap' });
 
-  const canvas = createCanvas(Math.floor(viewport.width), Math.floor(viewport.height));
-  const ctx = canvas.getContext('2d');
-
-  await page.render({ canvasContext: ctx, viewport }).promise;
-
-  // JPEG at 85% quality — good balance of quality vs size
-  const jpegBuffer = canvas.toBuffer('image/jpeg', { quality: 0.85 });
-  return jpegBuffer.toString('base64');
+    const png = new PNG({ width: image.width, height: image.height });
+    png.data = Buffer.from(image.data);
+    const pngBuffer = PNG.sync.write(png);
+    return pngBuffer.toString('base64');
+  } finally {
+    doc.destroy();
+  }
 }
 
 /**
  * Load a PDF from a Buffer and return a pdfjs document.
+ * pdfjs is used exclusively for text extraction and page analysis —
+ * rendering is handled by pdfium.
  */
 async function loadPdfDocument(pdfBuffer) {
   const loadingTask = pdfjs.getDocument({
     data: new Uint8Array(pdfBuffer),
-    verbosity: 0,
-    // Provide a canvas factory for node-canvas
-    canvasFactory: {
-      create(width, height) {
-        const canvas = createCanvas(width, height);
-        return { canvas, context: canvas.getContext('2d') };
-      },
-      reset(canvasAndContext, width, height) {
-        canvasAndContext.canvas.width = width;
-        canvasAndContext.canvas.height = height;
-      },
-      destroy(canvasAndContext) {
-        canvasAndContext.canvas = null;
-        canvasAndContext.context = null;
-      }
-    }
+    verbosity: 0
   });
   return loadingTask.promise;
 }
@@ -621,7 +622,7 @@ export async function processOcrJob(job) {
 
           // VLM processing: render page to image, then call LLM
           try {
-            const base64Image = await renderPageToImage(pdfDoc, pageNum);
+            const base64Image = await renderPageToImage(pdfBuffer, pageNum - 1);
 
             // For smart mode pages that have some text + visual elements,
             // prepend the extracted text to give context
