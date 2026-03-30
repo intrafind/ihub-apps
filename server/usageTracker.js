@@ -174,11 +174,13 @@ function scheduleSave() {
 
 function inc(map, key, amount) {
   if (!key) return;
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
   map[key] = (map[key] || 0) + amount;
 }
 
 function incFeedback(map, key, rating) {
   if (!key) return;
+  if (key === '__proto__' || key === 'constructor' || key === 'prototype') return;
   map[key] = map[key] || {
     total: 0,
     ratings: { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 },

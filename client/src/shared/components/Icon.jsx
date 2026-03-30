@@ -369,8 +369,7 @@ const isSafeImgSrc = url => {
   if (!url || typeof url !== 'string') return false;
   if (url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) return true;
   if (url.startsWith('http://') || url.startsWith('https://')) return true;
-  // Relative paths without protocol are safe (e.g., "icons/foo.svg")
-  return !url.includes(':');
+  return false;
 };
 
 function Icon({ name, size = 'md', className = '', solid = false, title, ...rest }) {

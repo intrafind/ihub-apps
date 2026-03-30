@@ -15,7 +15,7 @@ const SESSION_EXPIRY_KEY = 'ai_hub_session_expiry';
  */
 const generateSessionId = () => {
   const timestamp = Date.now();
-  const random = Math.random().toString(36).substring(2, 10);
+  const random = crypto.randomUUID().replace(/-/g, '').substring(0, 8);
   return `session-${timestamp}-${random}`;
 };
 

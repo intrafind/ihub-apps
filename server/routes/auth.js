@@ -351,6 +351,9 @@ export default function registerAuthRoutes(app) {
 
       // Only allow relative URLs (starting with /) and same-origin URLs
       try {
+        // Normalize backslashes to prevent bypass via \evil.com interpreted as /evil.com
+        returnUrl = returnUrl.replace(/\\/g, '/');
+
         // If returnUrl is an absolute URL, validate it's same origin
         if (returnUrl.startsWith('http://') || returnUrl.startsWith('https://')) {
           const returnUrlObj = new URL(returnUrl);

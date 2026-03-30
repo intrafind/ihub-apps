@@ -510,6 +510,8 @@ export class TransformNodeExecutor extends BaseNodeExecutor {
     }
 
     const parts = path.split('.');
+    const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+    if (parts.some(p => DANGEROUS_KEYS.has(p))) return;
 
     // For single-level path, just set directly
     if (parts.length === 1) {

@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from './pathUtils.js';
@@ -57,9 +58,10 @@ function scheduleSave() {
 
 function generateCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const bytes = crypto.randomBytes(length);
   let code = '';
   for (let i = 0; i < length; i++) {
-    code += chars[Math.floor(Math.random() * chars.length)];
+    code += chars[bytes[i] % chars.length];
   }
   return code;
 }

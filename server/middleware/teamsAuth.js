@@ -139,7 +139,11 @@ export async function teamsAuthMiddleware(req, res, next) {
   // Check if this is a Teams SSO token (not our JWT)
   try {
     const decoded = jwt.decode(ssoToken);
-    if (!decoded || decoded.iss?.includes('microsoftonline.com') === false) {
+    const isTeamsToken =
+      decoded?.iss &&
+      (decoded.iss.startsWith('https://login.microsoftonline.com/') ||
+        decoded.iss.startsWith('https://sts.windows.net/'));
+    if (!decoded || !isTeamsToken) {
       // Not a Teams token, continue with normal auth flow
       return next();
     }

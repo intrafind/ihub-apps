@@ -108,12 +108,28 @@ function transformForBuild(html, gateJS, gateCSS, gateI18n) {
 
   // Remove extracted tags from HTML
   let result = html;
-  result = result.replace(moduleScriptRegex, '');
-  result = result.replace(preloadRegex, '');
-  result = result.replace(stylesheetRegex, '');
-  result = result.replace(fontStylesheetRegex, '');
+  let prev;
+  do {
+    prev = result;
+    result = result.replace(moduleScriptRegex, '');
+  } while (result !== prev);
+  do {
+    prev = result;
+    result = result.replace(preloadRegex, '');
+  } while (result !== prev);
+  do {
+    prev = result;
+    result = result.replace(stylesheetRegex, '');
+  } while (result !== prev);
+  do {
+    prev = result;
+    result = result.replace(fontStylesheetRegex, '');
+  } while (result !== prev);
   if (fontStyleBlockMatch) {
-    result = result.replace(fontStyleBlockRegex, '');
+    do {
+      prev = result;
+      result = result.replace(fontStyleBlockRegex, '');
+    } while (result !== prev);
   }
 
   // Clean up empty lines left behind

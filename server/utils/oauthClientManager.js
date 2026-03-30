@@ -295,6 +295,9 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
  * @returns {Promise<Object>} Updated client (without secret)
  */
 export async function updateOAuthClient(clientId, updates, clientsFilePath, updatedBy) {
+  if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
+    throw new Error(`Invalid client ID: ${clientId}`);
+  }
   const clientsConfig = loadOAuthClients(clientsFilePath);
   const client = clientsConfig.clients[clientId];
 
@@ -353,6 +356,9 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
  * @returns {Promise<Object>} New client secret (plain text - only time it's shown)
  */
 export async function rotateClientSecret(clientId, clientsFilePath, rotatedBy) {
+  if (clientId === '__proto__' || clientId === 'constructor' || clientId === 'prototype') {
+    throw new Error(`Invalid client ID: ${clientId}`);
+  }
   const clientsConfig = loadOAuthClients(clientsFilePath);
   const client = clientsConfig.clients[clientId];
 

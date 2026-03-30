@@ -392,6 +392,12 @@ class ContentInstaller {
     const config = CONTENT_CONFIG[type];
     if (!config) throw new Error(`Unknown content type: ${type}`);
 
+    if (!isValidId(name)) {
+      throw new Error(
+        `Invalid content name: only alphanumeric characters, dots, underscores, and hyphens are allowed`
+      );
+    }
+
     const installations = await readInstallations();
     const key = `${type}:${name}`;
 
@@ -434,6 +440,12 @@ class ContentInstaller {
 
     const config = CONTENT_CONFIG[type];
     if (!config) throw new Error(`Unknown content type: ${type}`);
+
+    if (!isValidId(name)) {
+      throw new Error(
+        `Invalid content name: only alphanumeric characters, dots, underscores, and hyphens are allowed`
+      );
+    }
 
     const { item, content } = await fetchItemContent(existing.registryId, type, name);
 

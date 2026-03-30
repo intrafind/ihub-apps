@@ -256,8 +256,13 @@
       return;
     }
 
+    function isSafeAssetUrl(url) {
+      return typeof url === 'string' && /^[./]/.test(url) && !url.includes('//');
+    }
+
     // Inject stylesheets
     (assets.stylesheets || []).forEach(function (href) {
+      if (!isSafeAssetUrl(href)) return;
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = href;
@@ -266,6 +271,7 @@
 
     // Inject font stylesheets (deferred until after auth to avoid ~500KB on login page)
     (assets.fontStylesheets || []).forEach(function (href) {
+      if (!isSafeAssetUrl(href)) return;
       var link = document.createElement('link');
       link.rel = 'stylesheet';
       link.href = href;
@@ -281,6 +287,7 @@
 
     // Inject modulepreload hints
     (assets.preloads || []).forEach(function (href) {
+      if (!isSafeAssetUrl(href)) return;
       var link = document.createElement('link');
       link.rel = 'modulepreload';
       link.href = href;
@@ -289,6 +296,7 @@
 
     // Inject module scripts (entry points)
     (assets.scripts || []).forEach(function (src) {
+      if (!isSafeAssetUrl(src)) return;
       var script = document.createElement('script');
       script.type = 'module';
       script.src = src;

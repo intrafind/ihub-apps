@@ -17,6 +17,7 @@
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { requireFeature } from '../../featureRegistry.js';
+import { validateIdForPath, isValidId } from '../../utils/pathSecurity.js';
 import registryService from '../../services/marketplace/RegistryService.js';
 import contentInstaller from '../../services/marketplace/ContentInstaller.js';
 import logger from '../../utils/logger.js';
@@ -110,6 +111,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { registryId } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
         const registries = await registryService.listRegistries();
         const registry = registries.find(r => r.id === registryId);
         if (!registry) return sendError(res, 404, `Registry '${registryId}' not found`);
@@ -135,6 +137,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { registryId } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
         const updated = await registryService.updateRegistry(registryId, req.body);
         res.json(updated);
       } catch (error) {
@@ -156,6 +159,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { registryId } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
         await registryService.deleteRegistry(registryId);
         res.json({ success: true });
       } catch (error) {
@@ -177,6 +181,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { registryId } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
         const catalog = await registryService.refreshRegistry(registryId);
         res.json({ success: true, itemCount: (catalog.items || []).length });
       } catch (error) {
@@ -221,13 +226,15 @@ export default function registerAdminMarketplaceRoutes(app) {
     featureGuard,
     async (req, res) => {
       try {
+        const { registryId } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
         if (req.body && req.body.source) {
           // Test an unsaved / draft registry config from the request body
           const result = await registryService.testRegistry(req.body);
           res.json(result);
         } else {
           // Test the saved registry (with decrypted auth)
-          const registry = await registryService.getRegistryWithAuth(req.params.registryId);
+          const registry = await registryService.getRegistryWithAuth(registryId);
           const result = await registryService.testRegistry(registry);
           res.json(result);
         }
@@ -278,6 +285,8 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { registryId, type, name } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
+        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const item = await registryService.getItemDetail(registryId, type, name);
         res.json(item);
       } catch (error) {
@@ -303,6 +312,8 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { registryId, type, name } = req.params;
+        if (!validateIdForPath(registryId, 'registryId', res)) return;
+        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const installedBy = req.user?.email || req.user?.username || 'admin';
         const manifest = await contentInstaller.install(registryId, type, name, installedBy);
         res.status(201).json(manifest);
@@ -325,6 +336,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { type, name } = req.params;
+        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         const updatedBy = req.user?.email || req.user?.username || 'admin';
         const manifest = await contentInstaller.update(type, name, updatedBy);
         res.json(manifest);
@@ -347,6 +359,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { type, name } = req.params;
+        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         await contentInstaller.uninstall(type, name);
         res.json({ success: true });
       } catch (error) {
@@ -368,6 +381,7 @@ export default function registerAdminMarketplaceRoutes(app) {
     async (req, res) => {
       try {
         const { type, name } = req.params;
+        if (!isValidId(name)) return sendError(res, 400, 'Invalid item name');
         await contentInstaller.detach(type, name);
         res.json({ success: true });
       } catch (error) {

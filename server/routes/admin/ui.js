@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -24,7 +25,7 @@ export default function registerAdminUIRoutes(app) {
     },
     filename: (req, file, cb) => {
       // Generate unique filename with timestamp
-      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      const uniqueSuffix = Date.now() + '-' + crypto.randomBytes(6).toString('hex');
       const ext = path.extname(file.originalname);
       const name = path.basename(file.originalname, ext);
       cb(null, `${name}-${uniqueSuffix}${ext}`);

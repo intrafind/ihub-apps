@@ -77,15 +77,13 @@ async function saveStore(store) {
 }
 
 /**
- * Compute a SHA-256 hex digest of a token value.
- *
- * Used as the map key so the plaintext token is never stored unprotected in the
- * store index.
+ * Compute a SHA-256 index key for a plaintext refresh token.
+ * Used only as a store lookup key — NOT as a password hash.
  *
  * @param {string} token - Plaintext refresh token.
  * @returns {string} 64-char lowercase hex string.
  */
-function sha256(token) {
+function tokenIndexKey(token) {
   return crypto.createHash('sha256').update(token).digest('hex');
 }
 
@@ -128,7 +126,7 @@ export function generateRefreshToken() {
  */
 export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
   const store = loadStore();
-  const tokenHash = sha256(token);
+  const tokenHash = tokenIndexKey(token);
   const bcryptHash = await bcrypt.hash(token, 10);
   const expiresAt = new Date(Date.now() + ttlDays * 24 * 60 * 60 * 1000).toISOString();
 
@@ -174,7 +172,7 @@ export async function storeRefreshToken(token, data, ttlDays = TOKEN_TTL_DAYS) {
  */
 export async function consumeRefreshToken(token) {
   const store = loadStore();
-  const tokenHash = sha256(token);
+  const tokenHash = tokenIndexKey(token);
   const entry = store.tokens[tokenHash];
 
   if (!entry) {
@@ -218,7 +216,7 @@ export async function consumeRefreshToken(token) {
  */
 export async function revokeRefreshToken(token) {
   const store = loadStore();
-  const tokenHash = sha256(token);
+  const tokenHash = tokenIndexKey(token);
 
   if (!store.tokens[tokenHash]) {
     return false;
