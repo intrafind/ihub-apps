@@ -138,6 +138,19 @@ export default function SetupWizard() {
     await logout();
   };
 
+  // Build headers for authenticated setup API calls.
+  // Include the Authorization header as a fallback alongside the HTTP-only cookie
+  // to ensure the JWT is transmitted even if the cookie is not forwarded (e.g. by
+  // a reverse proxy or in certain SameSite/cross-port dev-server scenarios).
+  const buildAuthHeaders = () => {
+    const headers = { 'Content-Type': 'application/json' };
+    const authToken = localStorage.getItem('authToken');
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+    return headers;
+  };
+
   const handleTestKey = async () => {
     if (!apiKey.trim()) return;
     setTesting(true);
@@ -146,7 +159,7 @@ export default function SetupWizard() {
       const response = await fetch(buildApiUrl('setup/test'), {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthHeaders(),
         body: JSON.stringify({ providerId: selectedProvider.id, apiKey: apiKey.trim() })
       });
       const data = await response.json();
@@ -175,7 +188,7 @@ export default function SetupWizard() {
       const response = await fetch(buildApiUrl('setup/configure'), {
         method: 'POST',
         credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
+        headers: buildAuthHeaders(),
         body: JSON.stringify(body)
       });
       const data = await response.json();

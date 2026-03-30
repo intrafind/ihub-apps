@@ -1,4 +1,3 @@
-import configCache from '../configCache.js';
 import { loadGroupsConfiguration } from '../utils/authorization.js';
 import logger from '../utils/logger.js';
 
@@ -17,7 +16,14 @@ export function adminAuth(req, res, next) {
       return next();
     }
 
-    // User is not authenticated or does not have admin privileges
+    // Distinguish unauthenticated (401) from insufficient privileges (403)
+    if (!req.user || req.user.id === 'anonymous') {
+      return res.status(401).json({
+        error: 'Authentication required',
+        message: 'Admin access requires authentication with admin privileges.'
+      });
+    }
+
     return res.status(403).json({
       error: 'Access denied',
       message: 'Admin access requires authentication with admin privileges.'
@@ -39,6 +45,13 @@ export function adminAuth(req, res, next) {
 export function isAdminAuthRequired(req = null) {
   // Check if authenticated user has admin privileges
   if (req && req.user && req.user.id !== 'anonymous') {
+    // Fast path: trust the isAdmin flag already set by enhanceUserWithPermissions()
+    // in the global middleware chain. This avoids redundant file reads and ensures
+    // that the admin check stays consistent with the permission enhancement step.
+    if (req.user.isAdmin === true) {
+      return false;
+    }
+
     const userGroups = req.user.groups || [];
 
     try {
