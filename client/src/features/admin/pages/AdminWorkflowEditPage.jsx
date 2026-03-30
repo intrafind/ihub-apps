@@ -69,7 +69,7 @@ function AdminWorkflowEditPage() {
       setWorkflowData(defaultWf);
       setJsonText(JSON.stringify(defaultWf, null, 2));
     }
-  }, [id, isNewWorkflow]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, isNewWorkflow]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   /**
    * Loads an existing workflow definition by ID from the API.

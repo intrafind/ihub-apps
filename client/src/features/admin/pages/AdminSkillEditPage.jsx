@@ -55,7 +55,7 @@ function AdminSkillEditPage() {
 
   useEffect(() => {
     loadSkill();
-  }, [skillName]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [skillName]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   /**
    * Loads the full skill detail from the admin API and populates local state.

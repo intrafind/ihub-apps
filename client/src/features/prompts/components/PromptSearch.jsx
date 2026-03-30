@@ -27,7 +27,7 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
       setFavoritePromptIds(getFavoritePrompts());
       setRecentPromptIds(getRecentPromptIds());
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [isOpen]);
 
   useEffect(() => {
@@ -82,7 +82,7 @@ function PromptSearch({ isOpen, onClose, onSelect, appId, appSkills = [], prompt
           .catch(err => console.error('Failed to load prompts', err));
       }
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [isOpen, i18n.language, prompts.length]);
 
   // Combine prompts and skills for unified search

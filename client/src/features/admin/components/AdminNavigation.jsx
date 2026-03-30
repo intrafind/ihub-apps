@@ -5,12 +5,65 @@ import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
+function TabItem({ item, isDropdownItem = false, setShowMoreMenu }) {
+  const content = (
+    <>
+      <Icon name={item.icon} className="w-4 h-4 mr-2" />
+      {item.name}
+    </>
+  );
+
+  const className = isDropdownItem
+    ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
+        item.current
+          ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-medium'
+          : 'text-gray-700 dark:text-gray-300'
+      }`
+    : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
+        item.current
+          ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+          : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+      }`;
+
+  if (item.external) {
+    return (
+      <a
+        href={item.href}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={className}
+        onClick={() => isDropdownItem && setShowMoreMenu(false)}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      to={item.href}
+      className={className}
+      onClick={() => isDropdownItem && setShowMoreMenu(false)}
+    >
+      {content}
+    </Link>
+  );
+}
+
+function GroupHeader({ groupName }) {
+  return (
+    <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
+      {groupName}
+    </div>
+  );
+}
+
 function AdminNavigation() {
   const { t } = useTranslation();
   const location = useLocation();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line @eslint-react/exhaustive-deps
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = useCallback(
     key => {
@@ -288,57 +341,6 @@ function AdminNavigation() {
       };
     }, [navGroups, isEnabled]);
 
-  const TabItem = ({ item, isDropdownItem = false }) => {
-    const content = (
-      <>
-        <Icon name={item.icon} className="w-4 h-4 mr-2" />
-        {item.name}
-      </>
-    );
-
-    const className = isDropdownItem
-      ? `flex items-center w-full px-4 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 ${
-          item.current
-            ? 'bg-indigo-50 dark:bg-indigo-900/50 text-indigo-600 dark:text-indigo-400 font-medium'
-            : 'text-gray-700 dark:text-gray-300'
-        }`
-      : `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium ${
-          item.current
-            ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-            : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-        }`;
-
-    if (item.external) {
-      return (
-        <a
-          href={item.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className={className}
-          onClick={() => isDropdownItem && setShowMoreMenu(false)}
-        >
-          {content}
-        </a>
-      );
-    }
-
-    return (
-      <Link
-        to={item.href}
-        className={className}
-        onClick={() => isDropdownItem && setShowMoreMenu(false)}
-      >
-        {content}
-      </Link>
-    );
-  };
-
-  const GroupHeader = ({ groupName }) => (
-    <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider bg-gray-50 dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
-      {groupName}
-    </div>
-  );
-
   return (
     <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -347,7 +349,7 @@ function AdminNavigation() {
             {/* Desktop layout - always show specific items */}
             <div className="hidden md:flex items-center space-x-8">
               {desktopVisibleItems.map(item => (
-                <TabItem key={item.name} item={item} />
+                <TabItem key={item.name} item={item} setShowMoreMenu={setShowMoreMenu} />
               ))}
 
               {/* Desktop More button */}
@@ -391,7 +393,7 @@ function AdminNavigation() {
                             {groupIndex > 0 && <div className="border-t border-gray-200 my-1" />}
                             <GroupHeader groupName={group.name} />
                             {groupItems.map(item => (
-                              <TabItem key={item.key} item={item} isDropdownItem />
+                              <TabItem key={item.key} item={item} isDropdownItem setShowMoreMenu={setShowMoreMenu} />
                             ))}
                           </div>
                         );
@@ -405,7 +407,7 @@ function AdminNavigation() {
             {/* Mobile layout - show first 3 items */}
             <div className="flex md:hidden items-center space-x-8">
               {mobileVisibleItems.map(item => (
-                <TabItem key={item.name} item={item} />
+                <TabItem key={item.name} item={item} setShowMoreMenu={setShowMoreMenu} />
               ))}
 
               {/* Mobile More button */}
@@ -449,7 +451,7 @@ function AdminNavigation() {
                             {groupIndex > 0 && <div className="border-t border-gray-200 my-1" />}
                             <GroupHeader groupName={group.name} />
                             {groupItems.map(item => (
-                              <TabItem key={item.key} item={item} isDropdownItem />
+                              <TabItem key={item.key} item={item} isDropdownItem setShowMoreMenu={setShowMoreMenu} />
                             ))}
                           </div>
                         );

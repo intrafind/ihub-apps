@@ -347,6 +347,19 @@ function ExecutionProgress({ state, nodes = [] }) {
     }
   };
 
+  const groupedItems = useMemo(() => {
+    const groupOrder = [];
+    const groupMap = new Map();
+    progressItems.forEach(item => {
+      if (!groupMap.has(item.nodeId)) {
+        groupMap.set(item.nodeId, []);
+        groupOrder.push(item.nodeId);
+      }
+      groupMap.get(item.nodeId).push(item);
+    });
+    return groupOrder.map(nodeId => ({ nodeId, items: groupMap.get(nodeId) }));
+  }, [progressItems]);
+
   if (!state) {
     return null;
   }
@@ -402,20 +415,7 @@ function ExecutionProgress({ state, nodes = [] }) {
 
       {/* Progress timeline — groups repeated iterations of the same node */}
       <div className="space-y-3">
-        {(() => {
-          // Group items by nodeId, preserving first-occurrence order
-          const groupOrder = [];
-          const groupMap = new Map();
-          progressItems.forEach(item => {
-            if (!groupMap.has(item.nodeId)) {
-              groupMap.set(item.nodeId, []);
-              groupOrder.push(item.nodeId);
-            }
-            groupMap.get(item.nodeId).push(item);
-          });
-
-          return groupOrder.map(nodeId => {
-            const items = groupMap.get(nodeId);
+        {groupedItems.map(({ nodeId, items }) => {
             const isGrouped = items.length > 1;
             const groupKey = `group-${nodeId}`;
             const isGroupExpanded = expandedNodes.has(groupKey);
@@ -620,8 +620,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                 {isExpanded && hasDetails && <ItemDetails item={item} t={t} />}
               </div>
             );
-          });
-        })()}
+        })}
       </div>
 
       {/* Empty state */}

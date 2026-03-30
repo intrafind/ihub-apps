@@ -25,6 +25,7 @@ class I18nService {
 
     try {
       // Initialize i18next with minimal setup first (synchronous)
+      // eslint-disable-next-line @eslint-react/error-boundaries
       i18n
         .use(LanguageDetector)
         .use(initReactI18next)

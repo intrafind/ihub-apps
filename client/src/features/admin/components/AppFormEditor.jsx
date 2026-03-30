@@ -121,7 +121,7 @@ function AppFormEditor({
     if (app) {
       validateApp(app);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [app, jsonSchema]);
 
   const handleInputChange = (field, value) => {

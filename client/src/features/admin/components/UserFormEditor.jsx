@@ -104,7 +104,7 @@ function UserFormEditor({
     if (user) {
       validateUser(user);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [user, confirmPassword, jsonSchema]);
 
   const handleInputChange = (field, value) => {

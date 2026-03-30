@@ -99,7 +99,7 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
     if (config) {
       validateConfig(config);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [config]);
 
   const updateAuthMode = mode => {
