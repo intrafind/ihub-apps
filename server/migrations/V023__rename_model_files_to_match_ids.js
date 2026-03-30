@@ -31,6 +31,7 @@ export async function up(ctx) {
         // Delete the old file if both exist
         await ctx.deleteFile(from);
         ctx.log(`Deleted old file ${from} as ${to} already exists`);
+        changes++;
       } else {
         await ctx.moveFile(from, to);
         ctx.log(`Renamed ${from} → ${to}`);
@@ -68,6 +69,7 @@ export async function up(ctx) {
           // Both files exist - delete the misnamed one
           await ctx.deleteFile(proImagePath);
           ctx.log(`Deleted misnamed ${proImagePath} (was actually flash-image model)`);
+          changes++;
         } else {
           // Rename to correct filename and fix ID
           await ctx.moveFile(proImagePath, flashImagePath);
