@@ -31,7 +31,7 @@ function AdminProviderEditPage() {
 
   useEffect(() => {
     loadProvider();
-  }, [providerId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [providerId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadProvider = useCallback(async () => {
     try {

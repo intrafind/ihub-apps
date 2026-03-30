@@ -113,7 +113,7 @@ function ModelFormEditor({
     if (data) {
       validateModel(data);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [data, jsonSchema]);
 
   const handleChange = (field, value) => {

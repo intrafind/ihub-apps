@@ -124,7 +124,7 @@ export function useIntegrationAuth() {
     }
 
     return false;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   /**
@@ -205,7 +205,7 @@ export function useIntegrationAuth() {
         );
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
     [authRequests, t]
   );
 
@@ -253,7 +253,7 @@ export function useIntegrationAuth() {
       console.error(`Error checking ${integration} connection status:`, error);
       return false;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   /**
@@ -311,7 +311,7 @@ export function useIntegrationAuth() {
         return false;
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
     [t, checkConnectionStatus]
   );
 
@@ -355,7 +355,7 @@ export function useIntegrationAuth() {
         return false;
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
     [t]
   );
 
@@ -405,7 +405,7 @@ export function useIntegrationAuth() {
         );
       }
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [t]);
 
   /**
@@ -451,7 +451,7 @@ export function useIntegrationAuth() {
       }
     });
     return required;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [authRequests]);
 
   // Check for post-auth callback on mount

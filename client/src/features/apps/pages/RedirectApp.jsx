@@ -51,7 +51,7 @@ function RedirectApp({ app }) {
     if (!showWarning && redirectUrl) {
       handleRedirect();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [showWarning, redirectUrl]);
 
   return (

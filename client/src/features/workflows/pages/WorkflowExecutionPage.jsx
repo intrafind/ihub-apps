@@ -294,6 +294,126 @@ function WorkflowExecutionPage() {
   const isActive = state.status === 'running' || state.status === 'paused';
   const hasCheckpoint = !!state.pendingCheckpoint;
 
+  const workflowOutput = getDisplayableOutput(state.data);
+  const workflowOutputKeys = Object.keys(workflowOutput);
+  const primaryOutputKey = state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
+  const hasPrimaryOutput = primaryOutputKey && workflowOutput[primaryOutputKey] !== undefined;
+  const additionalKeys = hasPrimaryOutput
+    ? workflowOutputKeys.filter(k => k !== primaryOutputKey)
+    : workflowOutputKeys;
+
+  const renderFieldActions = (key, value) => (
+    <div className="flex items-center gap-1.5">
+      <button
+        onClick={e => {
+          e.stopPropagation();
+          copyToClipboard(key, value);
+        }}
+        className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
+        title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}
+      >
+        <Icon name={copiedFields.has(key) ? 'check' : 'copy'} className="w-3 h-3" />
+        {copiedFields.has(key)
+          ? t('workflows.output.copied', 'Copied')
+          : t('workflows.output.copy', 'Copy')}
+      </button>
+      {typeof value === 'string' &&
+        (key.toLowerCase().includes('report') ||
+          key.toLowerCase().includes('summary') ||
+          value.length > 200) && (
+          <button
+            onClick={e => {
+              e.stopPropagation();
+              downloadAsFile(value, `${key}-${state.executionId.slice(0, 8)}.md`);
+            }}
+            className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
+          >
+            <Icon name="arrow-down-tray" className="w-3 h-3" />
+            {t('workflows.download', 'Download')}
+          </button>
+        )}
+    </div>
+  );
+
+  const renderFieldContent = (key, value) => {
+    if (
+      typeof value === 'string' &&
+      value.length > LONG_STRING_THRESHOLD &&
+      !fullyShownFields.has(key)
+    ) {
+      return (
+        <div>
+          {renderValue(value.substring(0, LONG_STRING_THRESHOLD) + '...')}
+          <button
+            onClick={() => toggleFullyShown(key)}
+            className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
+          >
+            {t('workflows.output.showFull', 'Show full content')}
+          </button>
+        </div>
+      );
+    }
+    if (
+      typeof value === 'string' &&
+      value.length > LONG_STRING_THRESHOLD &&
+      fullyShownFields.has(key)
+    ) {
+      return (
+        <div>
+          {renderValue(value)}
+          <button
+            onClick={() => toggleFullyShown(key)}
+            className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
+          >
+            {t('workflows.output.showLess', 'Show less')}
+          </button>
+        </div>
+      );
+    }
+    return renderValue(value);
+  };
+
+  const renderAccordionPanel = key => {
+    const value = workflowOutput[key];
+    const isExpanded = expandedOutputFields.has(key);
+    return (
+      <div
+        key={key}
+        className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
+      >
+        <button
+          onClick={() => toggleOutputField(key)}
+          className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Icon
+              name={isExpanded ? 'chevron-up' : 'chevron-down'}
+              className="w-4 h-4 text-gray-400 flex-shrink-0"
+            />
+            <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
+              {key.replace(/_/g, ' ')}
+            </h4>
+            <span className="text-xs text-gray-400 dark:text-gray-500">
+              {typeof value === 'string'
+                ? `${value.length} ${t('workflows.output.chars', 'chars')}`
+                : typeof value === 'object'
+                  ? Array.isArray(value)
+                    ? `[${value.length}]`
+                    : `{${Object.keys(value).length}}`
+                  : typeof value}
+            </span>
+          </div>
+          {isExpanded && renderFieldActions(key, value)}
+        </button>
+        {isExpanded && (
+          <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/30">
+            {renderFieldContent(key, value)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
@@ -582,238 +702,93 @@ function WorkflowExecutionPage() {
         {(state.status === 'completed' ||
           state.status === 'approved' ||
           state.status === 'rejected') &&
-          (() => {
-            const output = getDisplayableOutput(state.data);
-            const keys = Object.keys(output);
-            if (keys.length === 0) return null;
-
-            const primaryOutputKey =
-              state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
-            const hasPrimaryOutput = primaryOutputKey && output[primaryOutputKey] !== undefined;
-            const additionalKeys = hasPrimaryOutput
-              ? keys.filter(k => k !== primaryOutputKey)
-              : keys;
-
-            /**
-             * Renders the per-field action buttons (copy + download).
-             * @param {string} key - Field key
-             * @param {*} value - Field value
-             */
-            const renderFieldActions = (key, value) => (
-              <div className="flex items-center gap-1.5">
-                {/* Copy to clipboard */}
+          workflowOutputKeys.length > 0 && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
+              {/* Output header with download-all button */}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  {t('workflows.output', 'Workflow Output')}
+                </h3>
                 <button
-                  onClick={e => {
-                    e.stopPropagation();
-                    copyToClipboard(key, value);
-                  }}
-                  className="px-2 py-1 text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1"
-                  title={t('workflows.output.copyToClipboard', 'Copy to clipboard')}
+                  onClick={() =>
+                    downloadAsFile(
+                      JSON.stringify(workflowOutput, null, 2),
+                      `workflow-output-${state.executionId.slice(0, 8)}.json`,
+                      'application/json'
+                    )
+                  }
+                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
+                  title={t('workflows.downloadAllJson', 'Download all output as JSON')}
                 >
-                  <Icon name={copiedFields.has(key) ? 'check' : 'copy'} className="w-3 h-3" />
-                  {copiedFields.has(key)
-                    ? t('workflows.output.copied', 'Copied')
-                    : t('workflows.output.copy', 'Copy')}
+                  <Icon name="arrow-down-tray" className="w-4 h-4" />
+                  {t('workflows.downloadJson', 'Download JSON')}
                 </button>
-                {/* Download as file */}
-                {typeof value === 'string' &&
-                  (key.toLowerCase().includes('report') ||
-                    key.toLowerCase().includes('summary') ||
-                    value.length > 200) && (
-                    <button
-                      onClick={e => {
-                        e.stopPropagation();
-                        downloadAsFile(value, `${key}-${state.executionId.slice(0, 8)}.md`);
-                      }}
-                      className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
-                    >
-                      <Icon name="arrow-down-tray" className="w-3 h-3" />
-                      {t('workflows.download', 'Download')}
-                    </button>
-                  )}
               </div>
-            );
 
-            /**
-             * Renders the content of an output field, handling truncation for long strings.
-             * @param {string} key - Field key
-             * @param {*} value - Field value
-             */
-            const renderFieldContent = (key, value) => {
-              // Long string truncation (only for non-primary or accordion views)
-              if (
-                typeof value === 'string' &&
-                value.length > LONG_STRING_THRESHOLD &&
-                !fullyShownFields.has(key)
-              ) {
-                return (
+              {/* Primary output mode: show primary field prominently, rest in collapsible section */}
+              {hasPrimaryOutput ? (
+                <div className="space-y-6">
+                  {/* Primary output - always visible */}
                   <div>
-                    {renderValue(value.substring(0, LONG_STRING_THRESHOLD) + '...')}
-                    <button
-                      onClick={() => toggleFullyShown(key)}
-                      className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
-                    >
-                      {t('workflows.output.showFull', 'Show full content')}
-                    </button>
-                  </div>
-                );
-              }
-              if (
-                typeof value === 'string' &&
-                value.length > LONG_STRING_THRESHOLD &&
-                fullyShownFields.has(key)
-              ) {
-                return (
-                  <div>
-                    {renderValue(value)}
-                    <button
-                      onClick={() => toggleFullyShown(key)}
-                      className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
-                    >
-                      {t('workflows.output.showLess', 'Show less')}
-                    </button>
-                  </div>
-                );
-              }
-              return renderValue(value);
-            };
-
-            /**
-             * Renders a single accordion panel for an output field.
-             * @param {string} key - Field key
-             */
-            const renderAccordionPanel = key => {
-              const value = output[key];
-              const isExpanded = expandedOutputFields.has(key);
-
-              return (
-                <div
-                  key={key}
-                  className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden"
-                >
-                  {/* Accordion header */}
-                  <button
-                    onClick={() => toggleOutputField(key)}
-                    className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Icon
-                        name={isExpanded ? 'chevron-up' : 'chevron-down'}
-                        className="w-4 h-4 text-gray-400 flex-shrink-0"
-                      />
+                    <div className="flex items-center justify-between mb-2">
                       <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                        {key.replace(/_/g, ' ')}
+                        {primaryOutputKey.replace(/_/g, ' ')}
                       </h4>
-                      {/* Type hint badge */}
-                      <span className="text-xs text-gray-400 dark:text-gray-500">
-                        {typeof value === 'string'
-                          ? `${value.length} ${t('workflows.output.chars', 'chars')}`
-                          : typeof value === 'object'
-                            ? Array.isArray(value)
-                              ? `[${value.length}]`
-                              : `{${Object.keys(value).length}}`
-                            : typeof value}
-                      </span>
+                      {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
                     </div>
-                    {isExpanded && renderFieldActions(key, value)}
-                  </button>
+                    {renderValue(workflowOutput[primaryOutputKey])}
+                  </div>
 
-                  {/* Accordion content */}
-                  {isExpanded && (
-                    <div className="border-t border-gray-200 dark:border-gray-700 p-4 bg-gray-50/50 dark:bg-gray-900/30">
-                      {renderFieldContent(key, value)}
+                  {/* Additional data - collapsible */}
+                  {additionalKeys.length > 0 && (
+                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                      <button
+                        onClick={() => setAdditionalDataExpanded(prev => !prev)}
+                        className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Icon
+                            name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
+                            className="w-4 h-4 text-gray-400"
+                          />
+                          <span className="font-medium text-gray-600 dark:text-gray-400">
+                            {t('workflows.output.additionalData', 'Additional Data')}
+                          </span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
+                            ({additionalKeys.length}{' '}
+                            {additionalKeys.length === 1
+                              ? t('workflows.output.field', 'field')
+                              : t('workflows.output.fields', 'fields')}
+                            )
+                          </span>
+                        </div>
+                      </button>
+                      {additionalDataExpanded && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                          {additionalKeys.map(key => (
+                            <div key={key}>
+                              <div className="flex items-center justify-between mb-2">
+                                <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
+                                  {key.replace(/_/g, ' ')}
+                                </h4>
+                                {renderFieldActions(key, workflowOutput[key])}
+                              </div>
+                              {renderFieldContent(key, workflowOutput[key])}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              );
-            };
-
-            return (
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
-                {/* Output header with download-all button */}
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    {t('workflows.output', 'Workflow Output')}
-                  </h3>
-                  <button
-                    onClick={() =>
-                      downloadAsFile(
-                        JSON.stringify(output, null, 2),
-                        `workflow-output-${state.executionId.slice(0, 8)}.json`,
-                        'application/json'
-                      )
-                    }
-                    className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
-                    title={t('workflows.downloadAllJson', 'Download all output as JSON')}
-                  >
-                    <Icon name="arrow-down-tray" className="w-4 h-4" />
-                    {t('workflows.downloadJson', 'Download JSON')}
-                  </button>
+              ) : (
+                /* Accordion mode: each field in its own collapsible panel */
+                <div className="space-y-2">
+                  {workflowOutputKeys.map(key => renderAccordionPanel(key))}
                 </div>
-
-                {/* Primary output mode: show primary field prominently, rest in collapsible section */}
-                {hasPrimaryOutput ? (
-                  <div className="space-y-6">
-                    {/* Primary output - always visible */}
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                          {primaryOutputKey.replace(/_/g, ' ')}
-                        </h4>
-                        {renderFieldActions(primaryOutputKey, output[primaryOutputKey])}
-                      </div>
-                      {renderValue(output[primaryOutputKey])}
-                    </div>
-
-                    {/* Additional data - collapsible */}
-                    {additionalKeys.length > 0 && (
-                      <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                        <button
-                          onClick={() => setAdditionalDataExpanded(prev => !prev)}
-                          className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                        >
-                          <div className="flex items-center gap-2">
-                            <Icon
-                              name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
-                              className="w-4 h-4 text-gray-400"
-                            />
-                            <span className="font-medium text-gray-600 dark:text-gray-400">
-                              {t('workflows.output.additionalData', 'Additional Data')}
-                            </span>
-                            <span className="text-xs text-gray-400 dark:text-gray-500">
-                              ({additionalKeys.length}{' '}
-                              {additionalKeys.length === 1
-                                ? t('workflows.output.field', 'field')
-                                : t('workflows.output.fields', 'fields')}
-                              )
-                            </span>
-                          </div>
-                        </button>
-                        {additionalDataExpanded && (
-                          <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-                            {additionalKeys.map(key => (
-                              <div key={key}>
-                                <div className="flex items-center justify-between mb-2">
-                                  <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                    {key.replace(/_/g, ' ')}
-                                  </h4>
-                                  {renderFieldActions(key, output[key])}
-                                </div>
-                                {renderFieldContent(key, output[key])}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  /* Accordion mode: each field in its own collapsible panel */
-                  <div className="space-y-2">{keys.map(key => renderAccordionPanel(key))}</div>
-                )}
-              </div>
-            );
-          })()}
+              )}
+            </div>
+          )}
       </div>
 
       {/* App selection modal for "Chat with Results" */}

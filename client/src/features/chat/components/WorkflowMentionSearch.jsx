@@ -61,7 +61,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
     } catch (err) {
       console.error('Failed to load workflows for @mention:', err);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [i18n.language, app?.id, featureFlags]);
 
   // Fetch workflows when dropdown opens

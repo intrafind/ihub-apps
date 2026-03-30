@@ -17,7 +17,7 @@ function ModelDetailsPopup({ model, isOpen, onClose }) {
     if (isOpen && model) {
       loadModelData();
     }
-  }, [isOpen, model]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isOpen, model]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadModelData = useCallback(async () => {
     setLoading(true);

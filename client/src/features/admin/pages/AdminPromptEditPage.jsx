@@ -73,7 +73,7 @@ function AdminPromptEditPage() {
     if (!isNewPrompt) {
       loadPrompt();
     }
-  }, [promptId, isNewPrompt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [promptId, isNewPrompt]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadApps = useCallback(async () => {
     try {

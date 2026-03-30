@@ -93,7 +93,7 @@ function MarketplaceItemDetail({ item: initialItem, onClose, onAction }) {
         setItem(initialItem);
       })
       .finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [initialItem?.registryId, initialItem?.type, initialItem?.name]);
 
   /**

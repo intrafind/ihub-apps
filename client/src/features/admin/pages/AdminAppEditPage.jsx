@@ -138,7 +138,7 @@ function AdminAppEditPage() {
     } else {
       loadApp();
     }
-  }, [appId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [appId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadApp = useCallback(async () => {
     try {

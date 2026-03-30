@@ -288,7 +288,7 @@ export function AuthProvider({ children }) {
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: error.message });
       return { success: false, error: error.message };
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   // Guard to prevent concurrent/recursive execution of the token-expired handler

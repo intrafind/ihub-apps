@@ -16,7 +16,7 @@ export default function LoginPage() {
     if (returnUrl && !sessionStorage.getItem('authReturnUrl')) {
       sessionStorage.setItem('authReturnUrl', returnUrl);
     }
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []); // eslint-disable-line @eslint-react/exhaustive-deps
 
   // Redirect authenticated users immediately (handles NTLM return and already-logged-in users)
   useEffect(() => {

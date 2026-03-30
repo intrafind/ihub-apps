@@ -62,7 +62,7 @@ function AdminToolEditPage() {
     } else if (!isNewTool) {
       loadTool();
     }
-  }, [toolId, isNewTool]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [toolId, isNewTool]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadTool = async () => {
     try {

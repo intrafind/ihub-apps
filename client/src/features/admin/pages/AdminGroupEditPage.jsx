@@ -43,7 +43,7 @@ function AdminGroupEditPage() {
     } else {
       loadGroup();
     }
-  }, [groupId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [groupId]); // eslint-disable-line @eslint-react/exhaustive-deps
 
   const loadResources = async () => {
     try {
