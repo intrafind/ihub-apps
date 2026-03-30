@@ -73,7 +73,7 @@ if (cluster.isPrimary && workerCount > 1) {
     pid: process.pid,
     workerCount
   });
-  for (let i = 0; i < workerCount; i++) {
+  for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
     cluster.fork();
   }
 
@@ -182,7 +182,7 @@ if (cluster.isPrimary && workerCount > 1) {
   } catch (error) {
     logger.error('Failed to initialize encryption key or JWT secret', {
       component: 'Server',
-      error: err
+      error
     });
     logger.warn('Encrypted API keys, tokens, or JWT authentication may not work properly', {
       component: 'Server'
@@ -243,7 +243,7 @@ if (cluster.isPrimary && workerCount > 1) {
     const retentionConfig = platform?.usageTracking || {};
     startRollupScheduler(retentionConfig);
   } catch (error) {
-    logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error: err });
+    logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
   }
 
   // Create Express application
