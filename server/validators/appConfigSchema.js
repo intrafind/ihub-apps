@@ -36,7 +36,7 @@ const variableSchema = z.object({
   required: z.boolean().optional().default(false),
   defaultValue: z
     .record(
-      z.string().regex(/^[a-z]{2}(-[A-Z]{2})?$/),
+      z.string().regex(LANGUAGE_CODE_PATTERN),
       z.string() // Allow empty strings for default values
     )
     .optional(),
@@ -89,7 +89,7 @@ const settingsSchema = z
       .optional(),
     speechRecognition: z
       .object({
-        service: z.enum(['default', 'azure']).optional().default('default'),
+        service: z.enum(['default', 'custom']).optional().default('default'),
         host: z.string().url().optional()
       })
       .optional()
