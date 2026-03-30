@@ -137,7 +137,6 @@ export default function registerAuthRoutes(app) {
       res.json({
         success: true,
         user: result.user,
-        token: result.token,
         expiresIn: result.expiresIn
       });
     } catch (error) {
@@ -281,7 +280,6 @@ export default function registerAuthRoutes(app) {
       res.json({
         success: true,
         user: result.user,
-        token: result.token,
         expiresIn: result.expiresIn
       });
     } catch (error) {
@@ -335,7 +333,7 @@ export default function registerAuthRoutes(app) {
       const rawReturnUrl = req.query.returnUrl;
       let returnUrl;
 
-      if (rawReturnUrl == null) {
+      if (rawReturnUrl === null || rawReturnUrl === undefined) {
         // No return URL provided, use default
         returnUrl = '/';
       } else if (typeof rawReturnUrl === 'string') {
@@ -428,7 +426,6 @@ export default function registerAuthRoutes(app) {
       res.json({
         success: true,
         user: result.user,
-        token: result.token, // Still return token for backward compatibility
         expiresIn: result.expiresIn
       });
     } catch (error) {
@@ -478,6 +475,9 @@ export default function registerAuthRoutes(app) {
       req.session.regenerate(err => {
         if (err) {
           logger.error('Session regeneration error', { component: 'Auth', error: err });
+          // Even if regeneration fails, ensure NTLM auto-login is disabled
+          req.session.ntlmRequested = false;
+          return;
         }
 
         // Set flag in the new session to prevent NTLM auto-login
