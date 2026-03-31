@@ -136,6 +136,7 @@ export default function registerAuthRoutes(app) {
 
       res.json({
         success: true,
+        token: result.token,
         user: result.user,
         expiresIn: result.expiresIn
       });
@@ -279,6 +280,7 @@ export default function registerAuthRoutes(app) {
 
       res.json({
         success: true,
+        token: result.token,
         user: result.user,
         expiresIn: result.expiresIn
       });
@@ -425,6 +427,7 @@ export default function registerAuthRoutes(app) {
 
       res.json({
         success: true,
+        token: result.token,
         user: result.user,
         expiresIn: result.expiresIn
       });
