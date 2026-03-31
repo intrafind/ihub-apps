@@ -737,8 +737,12 @@
       .then(function (data) {
         isSubmitting = false;
 
-        if (data.success && data.token) {
-          storeToken(data.token);
+        if (data.success) {
+          // Token is set as HTTP-only cookie by the server for security (XSS protection)
+          // Store token in localStorage only if provided (for backward compatibility)
+          if (data.token) {
+            storeToken(data.token);
+          }
           currentError = null;
 
           // Clean ?logout=true from URL so the app doesn't think we just logged out
