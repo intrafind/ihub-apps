@@ -415,9 +415,12 @@ export function AuthProvider({ children }) {
 
       const data = response.data;
 
-      if (data.success && data.token) {
-        // Store token
-        localStorage.setItem('authToken', data.token);
+      if (data.success) {
+        // Token is set as HTTP-only cookie by the server for security (XSS protection)
+        // Store token in localStorage only if provided (for backward compatibility)
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+        }
 
         // Clear any existing cached data to prevent permission leakage
         try {
@@ -481,9 +484,12 @@ export function AuthProvider({ children }) {
 
       const data = response.data;
 
-      if (data.success && data.token) {
-        // Store token
-        localStorage.setItem('authToken', data.token);
+      if (data.success) {
+        // Token is set as HTTP-only cookie by the server for security (XSS protection)
+        // Store token in localStorage only if provided (for backward compatibility)
+        if (data.token) {
+          localStorage.setItem('authToken', data.token);
+        }
 
         // Clear any existing cached data to prevent permission leakage
         try {
