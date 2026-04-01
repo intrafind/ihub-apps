@@ -138,23 +138,18 @@ function ChatHeader({
               <span className="hidden sm:inline">{t('pages.appChat.canvas', 'Canvas')}</span>
             </button>
           )}
-          <ChatActionsMenu
-            onClearChat={onClearChat}
-            onToggleConfig={onToggleConfig}
-            onShare={onShare}
-            showShareButton={showShareButton}
-            showConfigButton={showConfigButton}
-            showClearButton={showClearButton}
-            messages={messages}
-            exportSettings={exportSettings}
-            onToggleCanvas={onToggleCanvas}
-            showCanvasButton={showCanvasButton}
-            onToggleParameters={onToggleParameters}
-            showParametersButton={showParametersButton}
-            parametersVisible={parametersVisible}
-            appId={appId}
-            chatId={chatId}
-          />
+          {showClearButton && (
+            <button
+              onClick={onClearChat}
+              className="border-2 rounded-lg px-3 py-1 flex items-center hover:opacity-80 transition-opacity"
+              style={{ borderColor: 'var(--ih-primary)', color: 'var(--ih-primary)' }}
+              title={t('pages.appChat.clearChat', 'Chat Löschen')}
+            >
+              <span className="hidden sm:inline">
+                {t('pages.appChat.clearChat', 'Chat Löschen')}
+              </span>
+            </button>
+          )}
         </div>
       </div>
     </div>
