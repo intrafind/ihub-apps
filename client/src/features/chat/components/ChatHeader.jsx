@@ -4,6 +4,8 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { useNavigate } from 'react-router-dom';
 import ChatActionsMenu from './ChatActionsMenu';
+import ExportDialog from './ExportDialog';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 
 /**
  * A reusable header component for chat interfaces
@@ -35,12 +37,14 @@ function ChatHeader({
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
 
   // Toggle visibility of the description tooltip on mobile
   const [showDescription, setShowDescription] = useState(false);
+  const [showExportDialog, setShowExportDialog] = useState(false);
 
   // Auto hide description tooltip on mobile after 3 seconds
   useEffect(() => {
@@ -115,48 +119,113 @@ function ChatHeader({
         </div>
 
         {/* Action buttons on the right */}
-        <div className="flex flex-col items-start space-y-2 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-2">
-          {showBackToChatButton && (
-            <button
-              onClick={onToggleCanvas}
-              className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1 rounded flex items-center"
-              title={t('pages.appCanvas.backToChat', 'Back to Chat')}
-            >
-              <Icon name="chat" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">
-                {t('pages.appCanvas.backToChat', 'Back to Chat')}
-              </span>
-            </button>
-          )}
-          {showCanvasButton && (
-            <button
-              onClick={onToggleCanvas}
-              className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1 rounded flex items-center"
-              title={t('pages.appChat.canvasMode', 'Canvas Mode')}
-            >
-              <Icon name="document-text" size="sm" className="sm:mr-1" />
-              <span className="hidden sm:inline">{t('pages.appChat.canvas', 'Canvas')}</span>
-            </button>
-          )}
-          <ChatActionsMenu
-            onClearChat={onClearChat}
-            onToggleConfig={onToggleConfig}
-            onShare={onShare}
-            showShareButton={showShareButton}
-            showConfigButton={showConfigButton}
-            showClearButton={showClearButton}
-            messages={messages}
-            exportSettings={exportSettings}
-            onToggleCanvas={onToggleCanvas}
-            showCanvasButton={showCanvasButton}
-            onToggleParameters={onToggleParameters}
-            showParametersButton={showParametersButton}
-            parametersVisible={parametersVisible}
-            appId={appId}
-            chatId={chatId}
-          />
+        <div className="flex items-center gap-2">
+          {/* Desktop action buttons - hidden on mobile */}
+          <div className="hidden md:flex items-center gap-2">
+            {showBackToChatButton && (
+              <button
+                onClick={onToggleCanvas}
+                className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                title={t('pages.appCanvas.backToChat', 'Back to Chat')}
+              >
+                <Icon name="chat" size="sm" />
+                <span>{t('pages.appCanvas.backToChat', 'Back to Chat')}</span>
+              </button>
+            )}
+            {showCanvasButton && (
+              <button
+                onClick={onToggleCanvas}
+                className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                title={t('pages.appChat.canvasMode', 'Canvas Mode')}
+              >
+                <Icon name="document-text" size="sm" />
+                <span>{t('pages.appChat.canvas', 'Canvas')}</span>
+              </button>
+            )}
+            {showClearButton && (
+              <button
+                onClick={onClearChat}
+                className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                title={t('pages.appChat.newChat', 'New Chat')}
+              >
+                <Icon name="plus-circle" size="sm" />
+                <span>{t('pages.appChat.newChat', 'New Chat')}</span>
+              </button>
+            )}
+            {messages && messages.length > 0 && exportSettings && (
+              <button
+                onClick={() => setShowExportDialog(true)}
+                className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                title={t('common.export', 'Export')}
+              >
+                <Icon name="download" size="sm" />
+                <span>{t('common.export', 'Export')}</span>
+              </button>
+            )}
+            {showShareButton && (
+              <button
+                onClick={onShare}
+                className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                title={t('pages.appChat.share', 'Share')}
+              >
+                <Icon name="share" size="sm" />
+                <span>{t('pages.appChat.share', 'Share')}</span>
+              </button>
+            )}
+            {user?.isAdmin && appId && (
+              <button
+                onClick={() => navigate(`/admin/apps/${appId}`)}
+                className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                title={t('pages.appChat.editApp', 'Edit App')}
+              >
+                <Icon name="edit" size="sm" />
+                <span>{t('pages.appChat.editApp', 'Edit App')}</span>
+              </button>
+            )}
+            {showConfigButton && (
+              <button
+                onClick={onToggleConfig}
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
+                title={t('settings.title')}
+                aria-label={t('settings.title')}
+              >
+                <Icon name="settings" size="sm" />
+              </button>
+            )}
+          </div>
+
+          {/* Mobile burger menu - shown on mobile/tablet */}
+          <div className="md:hidden">
+            <ChatActionsMenu
+              onClearChat={onClearChat}
+              onToggleConfig={onToggleConfig}
+              onShare={onShare}
+              showShareButton={showShareButton}
+              showConfigButton={showConfigButton}
+              showClearButton={showClearButton}
+              messages={messages}
+              exportSettings={exportSettings}
+              onToggleCanvas={onToggleCanvas}
+              showCanvasButton={showCanvasButton}
+              onToggleParameters={onToggleParameters}
+              showParametersButton={showParametersButton}
+              parametersVisible={parametersVisible}
+              appId={appId}
+              chatId={chatId}
+            />
+          </div>
         </div>
       </div>
+
+      {/* Export Dialog */}
+      <ExportDialog
+        isOpen={showExportDialog}
+        onClose={() => setShowExportDialog(false)}
+        messages={messages}
+        settings={exportSettings}
+        appId={appId}
+        chatId={chatId}
+      />
     </div>
   );
 }

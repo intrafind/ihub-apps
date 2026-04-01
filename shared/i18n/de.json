@@ -101,7 +101,8 @@
     "downloadSVG": "SVG herunterladen",
     "downloadPNG": "PNG herunterladen",
     "downloadPDF": "PDF herunterladen",
-    "viewFullscreen": "Vollbild anzeigen"
+    "viewFullscreen": "Vollbild anzeigen",
+    "export": "Exportieren"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
