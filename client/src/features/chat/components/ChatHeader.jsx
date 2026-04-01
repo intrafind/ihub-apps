@@ -149,7 +149,7 @@ function ChatHeader({
                 title={t('pages.appChat.newChat', 'New Chat')}
                 aria-label={t('pages.appChat.newChat', 'New Chat')}
               >
-                <Icon name="chat-bubble-left" size="sm" />
+                <Icon name="trash" size="sm" />
               </button>
             )}
             {messages && messages.length > 0 && exportSettings && (
