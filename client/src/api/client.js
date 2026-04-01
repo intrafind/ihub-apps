@@ -97,7 +97,7 @@ const addResponseInterceptor = client => {
       }
 
       // Only retry GET requests, and only once
-      if (originalRequest.method === 'get' && !originalRequest._retry && !error.response) {
+      if (originalRequest?.method === 'get' && !originalRequest._retry && !error.response) {
         originalRequest._retry = true;
         console.log('Network error, retrying request once:', originalRequest.url);
 
