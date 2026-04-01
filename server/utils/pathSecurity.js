@@ -20,6 +20,12 @@ import { promises as fs } from 'fs';
 const SAFE_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
+ * Property names that must be rejected to prevent prototype pollution.
+ * These names have special meaning in JavaScript's prototype chain.
+ */
+const DANGEROUS_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+/**
  * Language code pattern: "en", "de", "en-US", "pt-BR", etc.
  * Also allows simple base languages with numeric suffixes for flexibility.
  */
@@ -43,6 +49,11 @@ export function isValidId(id) {
 
   // Prevent path traversal sequences like ".." or "/.."
   if (id.includes('..') || id.includes('/') || id.includes('\\')) {
+    return false;
+  }
+
+  // Prevent prototype pollution via dangerous property names
+  if (DANGEROUS_KEYS.has(id)) {
     return false;
   }
 

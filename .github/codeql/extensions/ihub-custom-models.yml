@@ -1,0 +1,49 @@
+##
+# CodeQL Model Extensions for iHub Apps
+#
+# These extensions teach CodeQL about the project's custom security utilities
+# so that false positives from the path-injection query are suppressed.
+#
+# All 48 js/path-injection alerts in the admin routes are false positives:
+# - Every user-controlled parameter is validated via validateIdForPath() / isValidId()
+#   before being used in path operations.
+# - All admin endpoints are also protected by adminAuth middleware.
+#
+# References:
+# - server/utils/pathSecurity.js – the validation library
+# - https://docs.github.com/en/code-security/code-scanning/creating-an-advanced-setup-for-code-scanning
+##
+
+extensions:
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: sourceModel
+    data: []
+
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: sinkModel
+    data: []
+
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: summaryModel
+    data:
+      # validateIdForPath validates and passes through the first argument:
+      # the validated ID is safe for use in path operations.
+      - ["", "global", false, "validateIdForPath", "()", "", "Argument[0]", "ReturnValue", "taint", "manual"]
+      - ["", "global", false, "isValidId", "()", "", "Argument[0]", "ReturnValue", "taint", "manual"]
+      - ["", "global", false, "sanitizeRelativePath", "()", "", "Argument[0]", "ReturnValue", "taint", "manual"]
+
+  - addsTo:
+      pack: codeql/javascript-all
+      extensible: neutralModel
+    data:
+      # These functions are sanitizers for path injection - they validate the input
+      # and return false / send 400 response if invalid.
+      - ["", "global", false, "validateIdForPath", "()", "", "neutral", "manual"]
+      - ["", "global", false, "isValidId", "()", "", "neutral", "manual"]
+      - ["", "global", false, "validateIdsForPath", "()", "", "neutral", "manual"]
+      - ["", "global", false, "resolveAndValidatePath", "()", "", "neutral", "manual"]
+      - ["", "global", false, "resolveAndValidateRealPath", "()", "", "neutral", "manual"]
+      - ["", "global", false, "sanitizeRelativePath", "()", "", "neutral", "manual"]

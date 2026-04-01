@@ -236,8 +236,9 @@ export const processMermaidCode = code => {
 
   // Clean up common syntax errors
   // Remove duplicate node IDs at the end of arrow lines
-  processedCode = processedCode.replace(/(\w+\s*-->\s*\w+\[[^\]]+\])\s+\1/g, '$1');
-  processedCode = processedCode.replace(/(\w+\s*-->\s*\w+\[[^\]]+\])\s+(\w+)$/gm, '$1');
+  // Note: --> here is Mermaid diagram syntax, not an HTML tag filter -- lgtm[js/bad-tag-filter]
+  processedCode = processedCode.replace(/(\w+\s*-->\s*\w+\[[^\]]+\])\s+\1/g, '$1'); // lgtm[js/bad-tag-filter]
+  processedCode = processedCode.replace(/(\w+\s*-->\s*\w+\[[^\]]+\])\s+(\w+)$/gm, '$1'); // lgtm[js/bad-tag-filter]
 
   // Remove trailing node IDs that appear after complete arrow statements
   processedCode = processedCode

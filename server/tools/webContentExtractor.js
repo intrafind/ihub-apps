@@ -1,3 +1,4 @@
+import dns from 'dns';
 import { JSDOM } from 'jsdom';
 import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { throttledFetch } from '../requestThrottler.js';
@@ -5,6 +6,38 @@ import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 import { enhanceFetchOptions } from '../utils/httpConfig.js';
+
+const dnsLookupAsync = dns.promises.lookup;
+
+// IPv4 and IPv6 private/internal address patterns
+const PRIVATE_IP_RE = [
+  /^127\./, // 127.0.0.0/8 loopback
+  /^10\./, // 10.0.0.0/8 private
+  /^172\.(1[6-9]|2\d|3[01])\./, // 172.16.0.0/12 private
+  /^192\.168\./, // 192.168.0.0/16 private
+  /^169\.254\./, // 169.254.0.0/16 link-local (cloud metadata endpoints)
+  /^::1$/, // IPv6 loopback
+  /^fc/i, // IPv6 unique local fc00::/7
+  /^fd/i, // IPv6 unique local fd00::/8
+  /^fe80:/i // IPv6 link-local
+];
+
+function isPrivateIp(ip) {
+  return PRIVATE_IP_RE.some(re => re.test(ip));
+}
+
+async function assertNotPrivateIp(hostname) {
+  let address;
+  try {
+    const result = await dnsLookupAsync(hostname);
+    address = result.address;
+  } catch {
+    throw createError(`Could not resolve hostname: ${hostname}`, 'DNS_RESOLUTION_FAILED');
+  }
+  if (isPrivateIp(address)) {
+    throw createError('Access to private/internal IP addresses is not allowed', 'SSRF_BLOCKED');
+  }
+}
 
 function createError(message, code) {
   const err = new Error(message);
@@ -59,6 +92,9 @@ export default async function webContentExtractor({
   } catch (error) {
     throw createError(`Invalid URL: ${error.message}`, 'INVALID_URL');
   }
+
+  // Block SSRF: prevent LLM tool from accessing internal/cloud metadata services
+  await assertNotPrivateIp(validUrl.hostname);
 
   // Determine SSL ignore setting: explicit parameter > global config > default false
   const platformConfig = configCache.getPlatform() || {};
@@ -173,7 +209,12 @@ export default async function webContentExtractor({
       type: 'html'
     });
     // Pre-emptively remove style tags to prevent CSS parsing errors from JSDOM
-    html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+    // Loop to handle nested/overlapping patterns that a single pass would miss
+    let prevHtml;
+    do {
+      prevHtml = html;
+      html = html.replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, '');
+    } while (html !== prevHtml);
 
     const dom = new JSDOM(html);
     const document = dom.window.document;

@@ -462,8 +462,8 @@ export function createOidcCallbackHandler(providerName) {
       {
         provider: providerName,
         queryParams: req.query,
-        hasState: !!req.query.state,
-        hasCode: !!req.query.code,
+        hasState: !!req.query.state, // lgtm[js/sensitive-get-query] -- OIDC callback state by design (RFC 6749)
+        hasCode: !!req.query.code, // lgtm[js/sensitive-get-query] -- OIDC authorization code by design (RFC 6749)
         hasError: !!req.query.error
       },
       sessionId

@@ -143,9 +143,15 @@ class URLHandler extends SourceHandler {
 
           // Basic HTML content cleaning if requested
           if (cleanContent) {
+            // Remove script/style blocks - loop to handle nested/overlapping patterns
+            let prevContent = null;
+            while (content !== prevContent) {
+              prevContent = content;
+              content = content
+                .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+                .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+            }
             content = content
-              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
               .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
               .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
               .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
