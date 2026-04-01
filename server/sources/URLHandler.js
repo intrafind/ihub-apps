@@ -155,7 +155,9 @@ class URLHandler extends SourceHandler {
                 { selector: 'header', format: 'skip' },
                 { selector: 'aside', format: 'skip' }
               ]
-            }).replace(/\s+/g, ' ').trim();
+            })
+              .replace(/\s+/g, ' ')
+              .trim();
           }
 
           // Truncate content if too long
