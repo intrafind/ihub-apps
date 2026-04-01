@@ -56,7 +56,8 @@
     "winston": "^3.19.0",
     "yauzl": "^3.2.1",
     "zod": "^3.25.74",
-    "zod-to-json-schema": "^3.24.6"
+    "zod-to-json-schema": "^3.24.6",
+    "html-to-text": "^9.0.5"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
