@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
+import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
 /**
  * Inline model selector component for next-gen chat input
@@ -18,6 +19,7 @@ function ModelSelector({
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const menuRef = useRef(null);
 
   // Filter models if app has allowedModels specified
   const availableModels =
@@ -46,6 +48,27 @@ function ModelSelector({
       return true;
     });
   }
+
+  /** Closes the model selector dropdown */
+  const handleClose = useCallback(() => setIsOpen(false), []);
+
+  /** Handles model selection via keyboard navigation */
+  const handleSelect = useCallback(
+    index => {
+      const modelId = filteredModels[index]?.id;
+      if (modelId) {
+        onModelChange(modelId);
+        setIsOpen(false);
+      }
+    },
+    [filteredModels, onModelChange]
+  );
+
+  useKeyboardNavigation(menuRef, {
+    isActive: isOpen,
+    onClose: handleClose,
+    onSelect: handleSelect
+  });
 
   // Get current selected model data
   const selectedModelData = filteredModels.find(m => m.id === selectedModel);
@@ -99,7 +122,12 @@ function ModelSelector({
       </button>
 
       {isOpen && !disabled && (
-        <div className="absolute bottom-full left-0 mb-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label={t('appConfig.selectModel', 'Select Model')}
+          className="absolute bottom-full left-0 mb-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+        >
           <div className="p-2">
             <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
               {t('appConfig.selectModel', 'Select Model')}
@@ -113,11 +141,13 @@ function ModelSelector({
                 <button
                   key={model.id}
                   type="button"
+                  role="menuitem"
+                  tabIndex={-1}
                   onClick={() => handleModelSelect(model.id)}
                   className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
                     isSelected
                       ? 'bg-indigo-50 dark:bg-indigo-900/20'
-                      : 'hover:bg-gray-50 dark:hover:bg-gray-700'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset'
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">

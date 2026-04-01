@@ -328,7 +328,7 @@ function ChatInputActionsMenu({
                   }}
                   disabled={disabled || isProcessing}
                   title={t('chatActions.attachFile', 'Attach File')}
-                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:bg-gray-200 dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   <Icon name="paper-clip" size="sm" />
                 </button>
@@ -345,7 +345,7 @@ function ChatInputActionsMenu({
                   }}
                   disabled={disabled || isProcessing}
                   title={t('common.magicPrompt', 'Magic Prompt')}
-                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:bg-gray-200 dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="sm" />}
                 </button>
@@ -361,7 +361,7 @@ function ChatInputActionsMenu({
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:bg-gray-200 dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 rounded-lg text-sm disabled:opacity-50 transition-colors"
                 >
                   <Icon name="arrowLeft" size="sm" />
                   <span>{t('common.undo', 'Undo')}</span>
@@ -417,7 +417,7 @@ function ChatInputActionsMenu({
                       setIsOpen(false);
                     }}
                     disabled={disabled || isProcessing}
-                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 transition-colors text-left"
+                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg disabled:opacity-50 transition-colors text-left"
                   >
                     <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
                       <Icon name="cloud" size="md" className="text-blue-600 dark:text-blue-300" />
@@ -475,7 +475,7 @@ function ChatInputActionsMenu({
                         role="menuitemcheckbox"
                         aria-checked={allEnabled ? 'true' : someEnabled ? 'mixed' : 'false'}
                         tabIndex={-1}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg"
                         onClick={() => toggleTool(group.id, true, group.matchedTools)}
                         onKeyDown={e => {
                           if (e.key === ' ') {
@@ -526,7 +526,7 @@ function ChatInputActionsMenu({
                         role="menuitemcheckbox"
                         aria-checked={isEnabled}
                         tabIndex={-1}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg"
                         onClick={() => toggleTool(toolId)}
                         onKeyDown={e => {
                           if (e.key === ' ') {
