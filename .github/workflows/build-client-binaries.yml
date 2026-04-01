@@ -27,22 +27,12 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ${{ fromJSON(
-          inputs.os == 'all'     && '["ubuntu-latest","macos-latest","windows-latest"]' ||
-          inputs.os == 'windows' && '["windows-latest"]' ||
-          inputs.os == 'macos'   && '["macos-latest"]' ||
-          inputs.os == 'linux'   && '["ubuntu-latest"]'
+        include: ${{ fromJSON(
+          inputs.os == 'all'     && '[{"os":"ubuntu-latest","platform":"linux","binary_extension":""},{"os":"macos-latest","platform":"macos","binary_extension":""},{"os":"windows-latest","platform":"win","binary_extension":".exe"}]' ||
+          inputs.os == 'windows' && '[{"os":"windows-latest","platform":"win","binary_extension":".exe"}]' ||
+          inputs.os == 'macos'   && '[{"os":"macos-latest","platform":"macos","binary_extension":""}]' ||
+          inputs.os == 'linux'   && '[{"os":"ubuntu-latest","platform":"linux","binary_extension":""}]'
           ) }}
-        include:
-          - os: ubuntu-latest
-            platform: linux
-            binary_extension: ''
-          - os: macos-latest
-            platform: macos
-            binary_extension: ''
-          - os: windows-latest
-            platform: win
-            binary_extension: '.exe'
 
     steps:
       - name: Checkout code
@@ -51,7 +41,7 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install mdBook
@@ -96,6 +86,8 @@ jobs:
       - name: Set version
         run: |
           echo "VERSION=${{ inputs.version_tag }}" >> $GITHUB_ENV
+          # Set versioned name for binary
+          echo "VERSIONED_NAME=ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}${{ matrix.binary_extension }}" >> $GITHUB_ENV
         shell: bash
 
       - name: Sync package.json version
@@ -111,10 +103,31 @@ jobs:
           ./build-sea.sh ${{ matrix.platform }}
         shell: bash
 
+      - name: Windows-specific setup
+        if: matrix.platform == 'win'
+        run: |
+          # Check Windows binary architecture
+          node -e "console.log('Windows build: Node.js architecture is ' + process.arch)"
+
+          # Create a simple diagnostic script for Windows
+          echo '@echo off
+          echo Windows Diagnostic Information:
+          echo -----------------------------
+          echo Node Version: %NODE_VERSION%
+          echo Architecture: %PROCESSOR_ARCHITECTURE%
+          echo Processor: %PROCESSOR_IDENTIFIER%
+          echo System Type: %PROCESSOR_ARCHITECTURE%
+          echo Number of Processors: %NUMBER_OF_PROCESSORS%
+          pause
+          ' > dist-bin/windows-check.bat
+
+          chmod +x dist-bin/windows-check.bat
+        shell: bash
+
       - name: Upload binary artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}
+          name: binary-${{ matrix.platform }}-${{ env.VERSION }}
           path: |
             dist-bin/ihub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
             dist-bin/ihub-apps-v*-win.bat
@@ -123,18 +136,63 @@ jobs:
       - name: Create platform-specific archive
         run: |
           cd dist-bin
+          # Create versioned archive name
           if [ "${{ matrix.os }}" == "windows-latest" ]; then
-            7z a -tzip ../ihub-apps-${{ env.VERSION }}-win.zip .
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-win"
+            7z a -tzip ../$VERSIONED_ARCHIVE_NAME.zip .
           else
-            tar -czf ../ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz .
+            VERSIONED_ARCHIVE_NAME="ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}"
+            tar -czf ../$VERSIONED_ARCHIVE_NAME.tar.gz .
           fi
+          echo "VERSIONED_ARCHIVE_NAME=$VERSIONED_ARCHIVE_NAME" >> $GITHUB_ENV
           cd ..
+        shell: bash
+
+      - name: Create base64 encoded archives
+        run: |
+          # Create base64 encoded versions for customers who cannot download zip files
+          # These text files contain the entire binary archive encoded as base64
+          # Customers can download the .txt file and decode it to get the original archive
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip"
+            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.zip.base64.txt"
+          else
+            ARCHIVE_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz"
+            BASE64_FILE="${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz.base64.txt"
+          fi
+
+          # Generate base64 encoded version
+          echo "Creating base64 encoded version of $ARCHIVE_FILE..."
+          # Use platform-specific base64 command syntax
+          if [ "${{ matrix.os }}" == "macos-latest" ]; then
+            # macOS requires -i flag for input file
+            base64 -i "$ARCHIVE_FILE" -o "$BASE64_FILE"
+          else
+            # Linux and Windows (Git Bash) use standard syntax
+            base64 "$ARCHIVE_FILE" > "$BASE64_FILE"
+          fi
+
+          # Verify the base64 file was created and has content
+          if [ -f "$BASE64_FILE" ] && [ -s "$BASE64_FILE" ]; then
+            echo "✅ Successfully created base64 encoded file: $BASE64_FILE"
+            echo "File size: $(wc -c < "$BASE64_FILE") bytes"
+            echo "First 100 characters:"
+            head -c 100 "$BASE64_FILE"
+            echo ""
+          else
+            echo "❌ Failed to create base64 encoded file"
+            exit 1
+          fi
+
+          # Set environment variable for the base64 file name
+          echo "BASE64_FILE=$BASE64_FILE" >> $GITHUB_ENV
         shell: bash
 
       - name: Upload archive artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}-archive
+          name: archive-${{ matrix.platform }}-${{ env.VERSION }}
           path: |
-            ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz
-            ihub-apps-${{ env.VERSION }}-win.zip
+            ${{ env.VERSIONED_ARCHIVE_NAME }}.tar.gz
+            ${{ env.VERSIONED_ARCHIVE_NAME }}.zip
+            ${{ env.BASE64_FILE }}
