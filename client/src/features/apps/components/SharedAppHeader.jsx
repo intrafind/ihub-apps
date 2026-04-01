@@ -93,9 +93,10 @@ function SharedAppHeader({
   const showClearButton =
     mode === 'canvas' ? messages.length > 0 || editorContent.trim() : messages.length > 0;
 
-  // App icon based on mode
+  // App icon: use app-configured icon if available, otherwise fall back to mode-based icon
+  const defaultIconName = mode === 'canvas' ? 'edit' : 'chat';
   const appIcon = (
-    <Icon name={mode === 'canvas' ? 'edit' : 'chat'} size="lg" className="text-white" />
+    <Icon name={app?.icon || defaultIconName} size="lg" className="text-white" />
   );
 
   const exportSettings = {
