@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "Skip to main content"
+  },
   "attachedFiles": {
     "removeAll": "Remove All",
     "filesCount": "{{count}} file(s) attached",
@@ -99,7 +102,10 @@
     "downloadSVG": "Download SVG",
     "downloadPNG": "Download PNG",
     "downloadPDF": "Download PDF",
-    "viewFullscreen": "View Fullscreen"
+    "viewFullscreen": "View Fullscreen",
+    "mainNavigation": "Main navigation",
+    "mobileNavigation": "Mobile navigation",
+    "selectLanguage": "Select language"
   },
   "chatActions": {
     "menu": "Actions menu",
@@ -296,7 +302,9 @@
         "acknowledge": "I Understand",
         "alertTitle": "Important Notice"
       }
-    }
+    },
+    "messageList": "Chat messages",
+    "inputLabel": "Type your message"
   },
   "auth": {
     "login": {
@@ -1643,5 +1651,12 @@
       "goToApps": "Go to Apps",
       "goToAdmin": "Open Admin"
     }
+  },
+  "apps": {
+    "searchApps": "Search apps",
+    "sortBy": "Sort by"
+  },
+  "search": {
+    "dialogLabel": "Search applications"
   }
 }

@@ -74,6 +74,7 @@
     "test:unit": "jest --config tests/config/jest.config.js tests/unit",
     "test:integration": "jest --config tests/config/jest.config.js tests/integration",
     "test:e2e": "playwright test --config tests/config/playwright.config.js",
+    "test:a11y": "npx playwright test --config tests/config/playwright.config.js tests/e2e/accessibility.spec.js",
     "test:api": "jest --config tests/config/jest.config.js tests/integration/api",
     "test:models": "jest --config tests/config/jest.config.js tests/integration/models",
     "test:ui": "jest --config tests/config/jest.config.js tests/unit/client",
@@ -126,8 +127,10 @@
     "react-resizable-panels": "^4.8.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.1",
     "@babel/preset-env": "^7.29.2",
     "@babel/preset-react": "^7.28.5",
+    "@eslint-react/eslint-plugin": "^3.0.0",
     "@playwright/test": "^1.58.2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.2.0",
@@ -137,8 +140,8 @@
     "electron": "^41.1.0",
     "electron-builder": "^26.7.0",
     "esbuild": "^0.27.4",
-    "@eslint-react/eslint-plugin": "^3.0.0",
     "eslint": "^10.1.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "globals": "^17.3.0",
     "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",

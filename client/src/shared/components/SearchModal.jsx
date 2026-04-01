@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import Fuse from 'fuse.js';
 import Icon from './Icon';
 import { useTranslation } from 'react-i18next';
+import { useFocusTrap } from '../hooks/useFocusTrap';
 
 const SearchModal = ({
   isOpen,
@@ -18,7 +19,13 @@ const SearchModal = ({
   const inputRef = useRef(null);
   const fuseRef = useRef(null);
   const listRef = useRef(null);
+  const dialogRef = useRef(null);
   const { t } = useTranslation();
+
+  useFocusTrap(dialogRef, {
+    isActive: isOpen,
+    initialFocusRef: inputRef
+  });
 
   useEffect(() => {
     if (!isOpen) return;
@@ -27,12 +34,6 @@ const SearchModal = ({
     setResults([]);
     setSelectedIndex(0);
   }, [isOpen, items, fuseKeys]);
-
-  useEffect(() => {
-    if (isOpen && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -95,7 +96,13 @@ const SearchModal = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4">
+    <div
+      ref={dialogRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={t('search.dialogLabel', 'Search applications')}
+      className="fixed inset-0 bg-black/50 flex items-start justify-center z-50 p-4"
+    >
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg w-full max-w-xl mt-20">
         <div className="relative">
           <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -124,10 +131,17 @@ const SearchModal = ({
             </button>
           )}
         </div>
-        <ul ref={listRef} className="max-h-64 overflow-y-auto">
+        <ul
+          ref={listRef}
+          role="listbox"
+          aria-label={t('search.resultsList', 'Search results')}
+          className="max-h-64 overflow-y-auto"
+        >
           {results.map((item, idx) => (
             <li
               key={idx}
+              role="option"
+              aria-selected={idx === selectedIndex}
               className={`p-3 cursor-pointer border-b border-gray-100 dark:border-gray-700 last:border-b-0 hover:bg-gray-50 dark:hover:bg-gray-700 ${idx === selectedIndex ? 'bg-indigo-50 dark:bg-indigo-900/50 border-indigo-200 dark:border-indigo-700' : ''}`}
               onMouseDown={() => onSelect(item)}
             >

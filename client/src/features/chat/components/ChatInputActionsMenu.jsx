@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchToolsBasic } from '../../../api/api';
@@ -9,6 +9,7 @@ import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
@@ -50,6 +51,15 @@ function ChatInputActionsMenu({
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const actionsMenuRef = useRef(null);
+
+  /** Closes the actions menu dropdown */
+  const handleActionsMenuClose = useCallback(() => setIsOpen(false), []);
+
+  useKeyboardNavigation(actionsMenuRef, {
+    isActive: isOpen,
+    onClose: handleActionsMenuClose
+  });
 
   // Get enabled cloud storage providers
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -295,7 +305,12 @@ function ChatInputActionsMenu({
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+        <div
+          ref={actionsMenuRef}
+          role="menu"
+          aria-label={t('chatActions.menu', 'Actions menu')}
+          className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
+        >
           {/* Quick Actions Section */}
           <div className="p-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -305,6 +320,8 @@ function ChatInputActionsMenu({
               {uploadConfig?.enabled === true && (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={-1}
                   onClick={() => {
                     onToggleUploader?.();
                     setIsOpen(false);
@@ -320,6 +337,8 @@ function ChatInputActionsMenu({
               {magicPromptEnabled && !showUndoMagicPrompt && (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={-1}
                   onClick={() => {
                     onMagicPrompt?.();
                     setIsOpen(false);
@@ -335,6 +354,8 @@ function ChatInputActionsMenu({
               {showUndoMagicPrompt && (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={-1}
                   onClick={() => {
                     onUndoMagicPrompt?.();
                     setIsOpen(false);
@@ -389,6 +410,8 @@ function ChatInputActionsMenu({
                   <button
                     key={provider.id}
                     type="button"
+                    role="menuitem"
+                    tabIndex={-1}
                     onClick={() => {
                       onCloudProviderSelect?.(provider);
                       setIsOpen(false);
@@ -449,7 +472,17 @@ function ChatInputActionsMenu({
                     return (
                       <div
                         key={group.id}
+                        role="menuitemcheckbox"
+                        aria-checked={allEnabled ? 'true' : someEnabled ? 'mixed' : 'false'}
+                        tabIndex={-1}
                         className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        onClick={() => toggleTool(group.id, true, group.matchedTools)}
+                        onKeyDown={e => {
+                          if (e.key === ' ') {
+                            e.preventDefault();
+                            toggleTool(group.id, true, group.matchedTools);
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -490,7 +523,17 @@ function ChatInputActionsMenu({
                     return (
                       <div
                         key={toolId}
+                        role="menuitemcheckbox"
+                        aria-checked={isEnabled}
+                        tabIndex={-1}
                         className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        onClick={() => toggleTool(toolId)}
+                        onKeyDown={e => {
+                          if (e.key === ' ') {
+                            e.preventDefault();
+                            toggleTool(toolId);
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-gray-100">

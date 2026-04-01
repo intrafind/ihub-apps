@@ -312,9 +312,15 @@ function AppFormEditor({
                   className={`mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                     validationErrors.id ? 'border-red-300' : ''
                   }`}
+                  aria-invalid={!!validationErrors.id || undefined}
+                  aria-describedby={validationErrors.id ? 'id-error' : undefined}
                 />
                 {validationErrors.id && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  <p
+                    id="id-error"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600 dark:text-red-400"
+                  >
                     {validationErrors.id}
                   </p>
                 )}
@@ -392,6 +398,7 @@ function AppFormEditor({
                     de: 'App-Name auf Deutsch eingeben'
                   }}
                   error={validationErrors.name}
+                  name="name"
                 />
               </div>
 
@@ -412,6 +419,7 @@ function AppFormEditor({
                     de: 'App-Beschreibung auf Deutsch eingeben'
                   }}
                   error={validationErrors.description}
+                  name="description"
                 />
               </div>
 
@@ -427,9 +435,15 @@ function AppFormEditor({
                   className={`mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm ${
                     validationErrors.color ? 'border-red-300' : ''
                   }`}
+                  aria-invalid={!!validationErrors.color || undefined}
+                  aria-describedby={validationErrors.color ? 'color-error' : undefined}
                 />
                 {validationErrors.color && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  <p
+                    id="color-error"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600 dark:text-red-400"
+                  >
                     {validationErrors.color}
                   </p>
                 )}
@@ -499,9 +513,15 @@ function AppFormEditor({
                     validationErrors.tokenLimit ? 'border-red-300' : ''
                   }`}
                   required={isFieldRequired('tokenLimit', jsonSchema)}
+                  aria-invalid={!!validationErrors.tokenLimit || undefined}
+                  aria-describedby={validationErrors.tokenLimit ? 'tokenLimit-error' : undefined}
                 />
                 {validationErrors.tokenLimit && (
-                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                  <p
+                    id="tokenLimit-error"
+                    role="alert"
+                    className="mt-1 text-sm text-red-600 dark:text-red-400"
+                  >
                     {validationErrors.tokenLimit}
                   </p>
                 )}
@@ -597,6 +617,7 @@ function AppFormEditor({
                   }}
                   className="mb-6"
                   error={validationErrors.system}
+                  name="system"
                 />
 
                 <DynamicLanguageEditor

@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
+import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
+import { useFocusTrap } from '../../../shared/hooks/useFocusTrap';
 import LoginForm from './LoginForm';
 import Icon from '../../../shared/components/Icon';
 import { Link } from 'react-router-dom';
@@ -24,6 +26,46 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [showAllGroups, setShowAllGroups] = useState(false);
   const dropdownRef = useRef(null);
+  const menuRef = useRef(null);
+  const loginDialogRef = useRef(null);
+
+  useFocusTrap(loginDialogRef, {
+    isActive: showLoginModal
+  });
+
+  /** Closes the login modal when the Escape key is pressed */
+  const handleLoginModalKeyDown = useCallback(
+    event => {
+      if (event.key === 'Escape') {
+        setShowLoginModal(false);
+      }
+    },
+    [setShowLoginModal]
+  );
+
+  useEffect(() => {
+    if (!showLoginModal) return;
+    window.addEventListener('keydown', handleLoginModalKeyDown);
+    return () => window.removeEventListener('keydown', handleLoginModalKeyDown);
+  }, [showLoginModal, handleLoginModalKeyDown]);
+
+  /** Handles selecting a menu item via keyboard (Enter/Space) */
+  const handleMenuSelect = useCallback(index => {
+    const items = menuRef.current?.querySelectorAll('[role="menuitem"]');
+    items?.[index]?.click();
+  }, []);
+
+  /** Handles closing the dropdown via Escape key */
+  const handleMenuClose = useCallback(() => {
+    setShowDropdown(false);
+    setShowAllGroups(false);
+  }, []);
+
+  useKeyboardNavigation(menuRef, {
+    isActive: showDropdown,
+    onSelect: handleMenuSelect,
+    onClose: handleMenuClose
+  });
 
   const auth = platformConfig?.auth || {};
   const authMode = authConfig?.authMode || auth.mode || 'anonymous';
@@ -168,7 +210,12 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
 
       {/* Dropdown menu */}
       {showDropdown && (
-        <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+        <div
+          ref={menuRef}
+          role="menu"
+          aria-label={t('auth.userMenu', 'User menu')}
+          className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50"
+        >
           {isAuthenticated ? (
             <>
               {/* User info */}
@@ -214,6 +261,8 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
                 {/* Profile (placeholder for sidebar variant) */}
                 {variant === 'sidebar' && (
                   <button
+                    role="menuitem"
+                    tabIndex={-1}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center"
                     onClick={() => {
                       setShowDropdown(false);
@@ -230,6 +279,8 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
                   (platformConfig?.cloudStorage?.enabled || platformConfig?.jira?.enabled) && (
                     <Link
                       to="/settings/integrations"
+                      role="menuitem"
+                      tabIndex={-1}
                       className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                       onClick={() => {
                         setShowDropdown(false);
@@ -249,6 +300,8 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
                 {isAdmin && (
                   <Link
                     to="/admin"
+                    role="menuitem"
+                    tabIndex={-1}
                     className="flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
                     onClick={() => {
                       setShowDropdown(false);
@@ -266,6 +319,8 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
 
                 {/* Logout */}
                 <button
+                  role="menuitem"
+                  tabIndex={-1}
                   onClick={handleLogout}
                   className="flex items-center w-full px-4 py-2 text-sm text-red-700 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30"
                 >
@@ -296,6 +351,8 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
               </div>
 
               <button
+                role="menuitem"
+                tabIndex={-1}
                 onClick={handleLoginClick}
                 className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
               >
@@ -311,17 +368,22 @@ export default function UserAuthMenu({ variant = 'header', className = '' }) {
       {showLoginModal &&
         createPortal(
           <div
+            ref={loginDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="login-dialog-title"
             className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full"
             style={{ zIndex: 2147483647 }}
           >
             <div className="relative top-20 mx-auto p-5 border w-full max-w-md shadow-lg rounded-md bg-white">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">
+                <h3 id="login-dialog-title" className="text-lg font-medium text-gray-900">
                   {t('auth.menu.signIn', 'Sign In')}
                 </h3>
                 <button
                   onClick={() => setShowLoginModal(false)}
                   className="text-gray-400 hover:text-gray-600"
+                  aria-label={t('auth.menu.closeLogin', 'Close login dialog')}
                 >
                   <Icon name="x" size="md" />
                 </button>

@@ -49,9 +49,10 @@ function generateCsrfToken() {
  * @param {string} params.csrfToken - CSRF token embedded as a hidden form field.
  * @param {Object} params.oauthParams - Original OAuth query parameters passed through hidden fields.
  * @param {string} params.baseUrl - Absolute base URL of this server instance.
+ * @param {string} params.lang - BCP-47 primary language subtag for the HTML lang attribute (e.g. "en", "de").
  * @returns {string} Complete HTML string ready to send as a response.
  */
-function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl }) {
+function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl, lang = 'en' }) {
   const scopeDescriptions = {
     openid: 'Verify your identity',
     profile: 'Access your name and profile information',
@@ -76,7 +77,7 @@ function renderConsentScreen({ client, scopes, csrfToken, oauthParams, baseUrl }
     .join('');
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${lang}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -380,6 +381,12 @@ export default function registerOAuthAuthorizeRoutes(app) {
         };
       }
 
+      // Extract primary language from Accept-Language for the HTML lang attribute (WCAG 3.1.1).
+      // Only allow a two-letter language code to prevent header injection.
+      const acceptLang = req.headers['accept-language'];
+      const rawLang = acceptLang ? acceptLang.split(',')[0].split('-')[0].trim() : 'en';
+      const safeLang = /^[a-z]{2}$/.test(rawLang) ? rawLang : 'en';
+
       const baseUrl = getBaseUrl(req);
       const html = renderConsentScreen({
         client,
@@ -392,7 +399,8 @@ export default function registerOAuthAuthorizeRoutes(app) {
           scope: scope || 'openid',
           nonce: nonce || ''
         },
-        baseUrl
+        baseUrl,
+        lang: safeLang
       });
 
       logger.info('[OAuth Authorize] Showing consent screen', {

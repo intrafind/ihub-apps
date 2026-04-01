@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "Zum Hauptinhalt springen"
+  },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
     "filesCount": "{{count}} Datei(en) angehängt",
@@ -101,12 +104,19 @@
     "downloadSVG": "SVG herunterladen",
     "downloadPNG": "PNG herunterladen",
     "downloadPDF": "PDF herunterladen",
-    "viewFullscreen": "Vollbild anzeigen"
+    "viewFullscreen": "Vollbild anzeigen",
+    "mainNavigation": "Hauptnavigation",
+    "mobileNavigation": "Mobile Navigation",
+    "selectLanguage": "Sprache auswählen"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
     "quickActions": "Schnellaktionen",
     "attachFile": "Datei anhängen"
+  },
+  "chat": {
+    "messageList": "Chat-Nachrichten",
+    "inputLabel": "Nachricht eingeben"
   },
   "pages": {
     "home": {
@@ -1606,5 +1616,12 @@
       "goToApps": "Zu den Apps",
       "goToAdmin": "Admin öffnen"
     }
+  },
+  "apps": {
+    "searchApps": "Apps durchsuchen",
+    "sortBy": "Sortieren nach"
+  },
+  "search": {
+    "dialogLabel": "Anwendungen suchen"
   }
 }
