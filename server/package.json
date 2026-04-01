@@ -1,6 +1,6 @@
 {
   "name": "ihub-apps-server",
-  "version": "fix-issue-1137-lVuXg",
+  "version": "5.2.10-luis",
   "description": "iHub Apps Applications Server",
   "type": "module",
   "main": "server.js",

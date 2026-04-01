@@ -1,6 +1,6 @@
 # iHub Apps Documentation
 
-**Version: fix-issue-1137-lVuXg**
+**Version: 5.2.10-luis**
 
 This book contains configuration details and user instructions for the iHub Apps platform - an AI-powered applications platform with LLM integration.
 
