@@ -217,7 +217,7 @@ class ConversationApiService {
    * @param {string} conversationId
    * @param {string} messageId
    * @param {Object} params
-   * @param {string} params.rating - 'positive' or 'negative'
+   * @param {number} params.rating - Rating from -100 to +100 (negative to positive)
    * @param {string} [params.comment] - Optional feedback comment
    */
   async sendFeedback(conversationId, messageId, { user, baseUrl, rating, comment }) {
@@ -241,7 +241,7 @@ class ConversationApiService {
       throw new Error(`Failed to send feedback (${response.status}): ${errorText}`);
     }
 
-    return response.json();
+    return response.status === 201 ? null : response.json();
   }
 
   /**

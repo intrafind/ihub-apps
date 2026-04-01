@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import { sendMessageFeedback } from '../../../api/api';
+import { getConversationId } from '../../../utils/chatId';
 import StarRating from '../../../shared/components/StarRating';
 import MessageVariables from './MessageVariables';
 import Icon from '../../../shared/components/Icon';
@@ -371,6 +372,10 @@ function ChatMessage({
 
       console.log(`Submitting feedback with exact messageId: ${exactMessageId}`);
 
+      // Get conversation ID for iAssistant messages
+      const conversationId = appId ? getConversationId(appId) : null;
+      const ifinderMessageId = message.ifinderMessageId || null;
+
       await sendMessageFeedback({
         messageId: exactMessageId,
         appId,
@@ -378,7 +383,9 @@ function ChatMessage({
         modelId,
         rating: feedbackRating, // Numeric rating (1-5)
         feedback: feedbackText,
-        messageContent: message.content.substring(0, 300) // Send a snippet for context
+        messageContent: message.content.substring(0, 300), // Send a snippet for context
+        conversationId, // Include for iAssistant messages
+        ifinderMessageId // Include iFinder message ID for routing to iFinder API
       });
 
       // Keep the feedback button activated only after successful submission

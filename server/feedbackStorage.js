@@ -52,7 +52,10 @@ export function storeFeedback({
   modelId,
   rating,
   comment = '',
-  contentSnippet = ''
+  contentSnippet = '',
+  conversationId = null,
+  ifinderMessageId = null,
+  baseUrl = null
 }) {
   // Load config asynchronously if not loaded yet
   if (!configLoaded) {
@@ -70,7 +73,10 @@ export function storeFeedback({
     modelId,
     rating,
     comment,
-    contentSnippet
+    contentSnippet,
+    conversationId,
+    ifinderMessageId,
+    baseUrl
   };
   queue.push(entry);
   scheduleFlush();

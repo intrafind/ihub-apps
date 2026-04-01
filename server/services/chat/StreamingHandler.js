@@ -151,9 +151,14 @@ class StreamingHandler {
       }
     }
 
-    // Update parent ID for next message in conversation
+    // Update parent ID for next message in conversation and emit to client
     if (result.responseMessageId) {
       conversationStateManager.updateParentId(chatId, result.responseMessageId);
+      // Emit the responseMessageId to the client so it can be used for feedback
+      actionTracker.trackAction(chatId, {
+        event: 'response.message.id',
+        messageId: result.responseMessageId
+      });
     }
   }
 
