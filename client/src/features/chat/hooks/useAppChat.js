@@ -260,6 +260,22 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             setConversationId(appId, data.conversationId);
           }
           break;
+        case 'response.message.id':
+          // Store the iFinder message ID for feedback submission
+          if (data?.messageId && lastMessageIdRef.current) {
+            const currentMessages = messagesRef.current;
+            const messageIndex = currentMessages.findIndex(m => m.id === lastMessageIdRef.current);
+            if (messageIndex !== -1) {
+              const updatedMessages = [...currentMessages];
+              updatedMessages[messageIndex] = {
+                ...updatedMessages[messageIndex],
+                ifinderMessageId: data.messageId
+              };
+              setMessages(updatedMessages);
+              messagesRef.current = updatedMessages;
+            }
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message

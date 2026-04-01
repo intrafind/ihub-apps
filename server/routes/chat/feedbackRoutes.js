@@ -8,6 +8,9 @@ import { feedbackSchema } from '../../validators/index.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import logger from '../../utils/logger.js';
+import conversationApiService from '../../services/integrations/ConversationApiService.js';
+import conversationStateManager from '../../services/integrations/ConversationStateManager.js';
+import iAssistantService from '../../services/integrations/iAssistantService.js';
 
 export default function registerFeedbackRoutes(app, { getLocalizedError }) {
   /**
@@ -62,7 +65,15 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
    *                 type: string
    *                 description: Optional free-text comment
    *                 example: "Very helpful and concise!"
-   *               modelId:
+   *               conversationId:
+                 type: string
+                 description: iFinder conversation ID (for iAssistant messages)
+                 example: "conv-abc123"
+               ifinderMessageId:
+                 type: string
+                 description: iFinder message ID (for iAssistant messages)
+                 example: "msg-xyz789"
+               modelId:
    *                 type: string
    *                 description: ID of the model that generated the response
    *                 example: "gpt-4o"
@@ -97,13 +108,76 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
     validate(feedbackSchema),
     async (req, res) => {
       try {
-        const { messageId, appId, chatId, messageContent, rating, feedback, modelId } = req.body;
+        const {
+          messageId,
+          appId,
+          chatId,
+          messageContent,
+          rating,
+          feedback,
+          modelId,
+          conversationId,
+          ifinderMessageId
+        } = req.body;
         const defaultLang = configCache.getPlatform()?.defaultLanguage || 'en';
         const language = req.headers['accept-language']?.split(',')[0] || defaultLang;
         if (!messageId || !rating || !appId || !chatId) {
           const errorMessage = await getLocalizedError('missingFeedbackFields', {}, language);
           return sendBadRequest(res, errorMessage);
         }
+
+        // Check if this is an iAssistant message that should be routed to iFinder
+        let ifinderFeedbackSent = false;
+        if (conversationId && ifinderMessageId) {
+          try {
+            // Get the conversation state to find baseUrl
+            const state = conversationStateManager.getState(chatId);
+            const serviceConfig = iAssistantService.getConfig();
+            const baseUrl = state?.baseUrl || serviceConfig?.baseUrl;
+
+            if (baseUrl && req.user && req.user.id !== 'anonymous') {
+              // Convert rating from 0.5-5 scale to -100 to +100 scale
+              // 0.5-2.5 = negative (-100 to -20)
+              // 2.5 = neutral (0)
+              // 2.5-5 = positive (20 to 100)
+              let ifinderRating;
+              if (rating < 2.5) {
+                // Map 0.5-2.5 to -100 to 0
+                ifinderRating = Math.round(((rating - 2.5) / 2) * 100);
+              } else if (rating === 2.5) {
+                ifinderRating = 0;
+              } else {
+                // Map 2.5-5 to 0 to 100
+                ifinderRating = Math.round(((rating - 2.5) / 2.5) * 100);
+              }
+
+              // Send feedback to iFinder API
+              await conversationApiService.sendFeedback(conversationId, ifinderMessageId, {
+                user: req.user,
+                baseUrl,
+                rating: ifinderRating,
+                comment: feedback || undefined
+              });
+
+              ifinderFeedbackSent = true;
+              logger.info('Feedback sent to iFinder API', {
+                component: 'feedbackRoutes',
+                conversationId,
+                messageId: ifinderMessageId,
+                rating: ifinderRating
+              });
+            }
+          } catch (ifinderError) {
+            // Log error but continue with local storage
+            logger.error('Failed to send feedback to iFinder API', {
+              component: 'feedbackRoutes',
+              error: ifinderError,
+              conversationId,
+              messageId: ifinderMessageId
+            });
+          }
+        }
+
         const userSessionId = req.headers['x-session-id'];
         await logInteraction('feedback', {
           messageId,
@@ -117,7 +191,8 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
             messageId,
             rating,
             comment: feedback || '',
-            contentSnippet: messageContent ? messageContent.substring(0, 300) : ''
+            contentSnippet: messageContent ? messageContent.substring(0, 300) : '',
+            ifinderFeedbackSent
           }
         });
         storeFeedback({
@@ -127,7 +202,12 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           modelId,
           rating,
           comment: feedback || '',
-          contentSnippet: messageContent ? messageContent.substring(0, 300) : ''
+          contentSnippet: messageContent ? messageContent.substring(0, 300) : '',
+          conversationId,
+          ifinderMessageId,
+          baseUrl:
+            conversationStateManager.getState(chatId)?.baseUrl ||
+            iAssistantService.getConfig()?.baseUrl
         });
         await recordFeedback({
           userId: userSessionId,
@@ -140,7 +220,8 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
           component: 'feedbackRoutes',
           messageId,
           chatId,
-          rating
+          rating,
+          ifinderFeedbackSent
         });
         return res.status(200).json({ success: true });
       } catch (error) {
