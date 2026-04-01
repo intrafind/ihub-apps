@@ -71,14 +71,26 @@ Implemented a responsive design pattern using Tailwind CSS breakpoints (`md:` at
 
 ## Design Decisions
 
-### Color Coding
-Used color-coded buttons to create visual hierarchy and improve UX:
-- **Green** (New Chat): Primary action, most important
-- **Purple** (Export): Content-related action
-- **Orange** (Share): Collaboration action
-- **Yellow** (Edit App): Admin action
-- **Blue/Indigo** (Canvas/Back): Mode switching
-- **Gray** (Settings): Configuration
+### Button Styling (Updated)
+All action buttons now use **consistent icon-only design**:
+- **Uniform appearance**: Gray circular buttons (40x40px) with consistent styling
+- **No color coding**: Removed color-coded backgrounds per design feedback
+- **Icon-only**: No text labels, only icons visible
+- **Tooltips**: Hover reveals descriptive text via `title` attribute
+- **Dark mode support**: Uses dark mode classes for proper contrast
+- **Consistent with Settings**: All buttons match the Settings button design
+
+Button classes:
+```jsx
+className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
+```
+
+### Per-App Feature Control
+- **Export**: Controlled by existing message length check and feature flags
+- **Share**: Already controlled by `showShareButton` prop (linked to `shortLinks` feature flag)
+- **Edit App**: Admin-only (already implemented with `user?.isAdmin` check)
+- **New Chat**: Available to all users
+- **Canvas**: Controlled by app configuration (`app.features.canvas`)
 
 ### Responsive Breakpoint
 Chose `md:` (768px) as the breakpoint:

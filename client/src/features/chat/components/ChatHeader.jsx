@@ -125,61 +125,61 @@ function ChatHeader({
             {showBackToChatButton && (
               <button
                 onClick={onToggleCanvas}
-                className="bg-blue-100 hover:bg-blue-200 text-blue-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('pages.appCanvas.backToChat', 'Back to Chat')}
+                aria-label={t('pages.appCanvas.backToChat', 'Back to Chat')}
               >
                 <Icon name="chat" size="sm" />
-                <span>{t('pages.appCanvas.backToChat', 'Back to Chat')}</span>
               </button>
             )}
             {showCanvasButton && (
               <button
                 onClick={onToggleCanvas}
-                className="bg-indigo-100 hover:bg-indigo-200 text-indigo-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('pages.appChat.canvasMode', 'Canvas Mode')}
+                aria-label={t('pages.appChat.canvasMode', 'Canvas Mode')}
               >
                 <Icon name="document-text" size="sm" />
-                <span>{t('pages.appChat.canvas', 'Canvas')}</span>
               </button>
             )}
             {showClearButton && (
               <button
                 onClick={onClearChat}
-                className="bg-green-100 hover:bg-green-200 text-green-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('pages.appChat.newChat', 'New Chat')}
+                aria-label={t('pages.appChat.newChat', 'New Chat')}
               >
                 <Icon name="plus-circle" size="sm" />
-                <span>{t('pages.appChat.newChat', 'New Chat')}</span>
               </button>
             )}
             {messages && messages.length > 0 && exportSettings && (
               <button
                 onClick={() => setShowExportDialog(true)}
-                className="bg-purple-100 hover:bg-purple-200 text-purple-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('common.export', 'Export')}
+                aria-label={t('common.export', 'Export')}
               >
                 <Icon name="download" size="sm" />
-                <span>{t('common.export', 'Export')}</span>
               </button>
             )}
             {showShareButton && (
               <button
                 onClick={onShare}
-                className="bg-orange-100 hover:bg-orange-200 text-orange-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('pages.appChat.share', 'Share')}
+                aria-label={t('pages.appChat.share', 'Share')}
               >
                 <Icon name="share" size="sm" />
-                <span>{t('pages.appChat.share', 'Share')}</span>
               </button>
             )}
             {user?.isAdmin && appId && (
               <button
                 onClick={() => navigate(`/admin/apps/${appId}`)}
-                className="bg-yellow-100 hover:bg-yellow-200 text-yellow-700 px-3 py-1.5 rounded flex items-center gap-1.5"
+                className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
                 title={t('pages.appChat.editApp', 'Edit App')}
+                aria-label={t('pages.appChat.editApp', 'Edit App')}
               >
                 <Icon name="edit" size="sm" />
-                <span>{t('pages.appChat.editApp', 'Edit App')}</span>
               </button>
             )}
             {showConfigButton && (
