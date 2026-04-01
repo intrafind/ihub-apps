@@ -456,7 +456,7 @@ class ConfigCache {
    * Generate ETag for data
    */
   generateETag(data) {
-    const hash = createHash('sha256');
+    const hash = createHash('sha256'); // lgtm[js/insufficient-password-hash] -- ETag, not a password hash
     hash.update(JSON.stringify(data));
     return `"${hash.digest('hex').substring(0, 32)}"`;
   }

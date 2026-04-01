@@ -84,7 +84,7 @@ async function saveStore(store) {
  * @returns {string} 64-char lowercase hex string.
  */
 function tokenIndexKey(token) {
-  return crypto.createHash('sha256').update(token).digest('hex');
+  return crypto.createHash('sha256').update(token).digest('hex'); // lgtm[js/insufficient-password-hash] -- index key, not a stored password
 }
 
 /**

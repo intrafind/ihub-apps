@@ -58,10 +58,19 @@ function scheduleSave() {
 
 function generateCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  const bytes = crypto.randomBytes(length);
+  const charLength = chars.length; // 62
+  // Rejection sampling eliminates modulo bias: only accept bytes in [0, maxUnbiased)
+  // where maxUnbiased is the largest multiple of charLength fitting in a byte (248 = 4 * 62).
+  // Each accepted byte maps to exactly one of the 62 characters with equal probability.
+  const maxUnbiased = Math.floor(256 / charLength) * charLength;
   let code = '';
-  for (let i = 0; i < length; i++) {
-    code += chars[bytes[i] % chars.length];
+  while (code.length < length) {
+    const bytes = crypto.randomBytes(length + 10);
+    for (let i = 0; i < bytes.length && code.length < length; i++) {
+      if (bytes[i] < maxUnbiased) {
+        code += chars[bytes[i] % charLength];
+      }
+    }
   }
   return code;
 }

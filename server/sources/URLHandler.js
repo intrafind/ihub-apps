@@ -2,6 +2,7 @@ import SourceHandler from './SourceHandler.js';
 import configCache from '../configCache.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import logger from '../utils/logger.js';
+import { htmlToText } from 'html-to-text';
 
 /**
  * URL Source Handler
@@ -143,14 +144,18 @@ class URLHandler extends SourceHandler {
 
           // Basic HTML content cleaning if requested
           if (cleanContent) {
-            content = content
-              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-              .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-              .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-              .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
-              .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
-              .replace(/<[^>]*>/g, ' ')
+            // Use a robust HTML-to-text converter instead of manual regex-based sanitization
+            content = htmlToText(content, {
+              wordwrap: false,
+              selectors: [
+                { selector: 'script', format: 'skip' },
+                { selector: 'style', format: 'skip' },
+                { selector: 'nav', format: 'skip' },
+                { selector: 'footer', format: 'skip' },
+                { selector: 'header', format: 'skip' },
+                { selector: 'aside', format: 'skip' }
+              ]
+            })
               .replace(/\s+/g, ' ')
               .trim();
           }

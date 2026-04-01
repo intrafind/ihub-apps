@@ -380,7 +380,8 @@ export default function registerAuthRoutes(app) {
       }
 
       // Redirect to the validated return URL with success indicator
-      res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success');
+      // returnUrl has been validated above: same-origin check, no //, no backslash -- lgtm[js/server-side-unvalidated-url-redirection]
+      res.redirect(returnUrl + (returnUrl.includes('?') ? '&' : '?') + 'ntlm=success'); // lgtm[js/server-side-unvalidated-url-redirection]
     } catch (error) {
       logger.error('NTLM login error', { component: 'Auth', error });
       return sendErrorResponse(res, 401, error.message || 'NTLM authentication failed');

@@ -46,8 +46,8 @@ export function verifyCodeChallenge(codeVerifier, codeChallenge, codeChallengeMe
     return false;
   }
 
-  // S256: BASE64URL(SHA256(ASCII(code_verifier)))
-  const hash = crypto.createHash('sha256').update(codeVerifier, 'ascii').digest('base64url');
+  // S256: BASE64URL(SHA256(ASCII(code_verifier))) as per RFC 7636 section 4.2 -- not a password hash
+  const hash = crypto.createHash('sha256').update(codeVerifier, 'ascii').digest('base64url'); // lgtm[js/insufficient-password-hash]
 
   // timingSafeEqual requires both buffers to have the same length.
   // If they differ the challenge cannot match, so return false immediately.
@@ -69,7 +69,7 @@ export function verifyCodeChallenge(codeVerifier, codeChallenge, codeChallengeMe
  * @returns {string} BASE64URL-encoded SHA-256 hash of the verifier.
  */
 export function generateCodeChallenge(codeVerifier) {
-  return crypto.createHash('sha256').update(codeVerifier, 'ascii').digest('base64url');
+  return crypto.createHash('sha256').update(codeVerifier, 'ascii').digest('base64url'); // lgtm[js/insufficient-password-hash]
 }
 
 /**

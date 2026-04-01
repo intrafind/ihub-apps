@@ -158,7 +158,7 @@ export function generateClientId(name) {
   const sanitizedName = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores
+    .replace(/^_+|_+$/g, ''); // Remove leading/trailing underscores // lgtm[js/polynomial-redos]
 
   // Generate short UUID (first 8 characters)
   const shortUuid = uuidv4().split('-')[0];
@@ -442,7 +442,9 @@ export function listOAuthClients(clientsFilePath) {
 export async function updateClientLastUsed(clientId, clientsFilePath) {
   try {
     const clientsConfig = loadOAuthClients(clientsFilePath);
-    const client = clientsConfig.clients[clientId];
+    const client = Object.hasOwn(clientsConfig.clients, clientId)
+      ? clientsConfig.clients[clientId]
+      : undefined;
 
     if (!client) {
       return; // Client doesn't exist, skip update
@@ -474,7 +476,9 @@ export async function updateClientLastUsed(clientId, clientsFilePath) {
  */
 export async function validateClientCredentials(clientId, clientSecret, clientsFilePath) {
   const clientsConfig = loadOAuthClients(clientsFilePath);
-  const client = clientsConfig.clients[clientId];
+  const client = Object.hasOwn(clientsConfig.clients, clientId)
+    ? clientsConfig.clients[clientId]
+    : undefined;
 
   if (!client) {
     logger.info('OAuth client not found', { component: 'OAuthClientManager', clientId });
