@@ -1,0 +1,137 @@
+name: Build Client Binaries
+
+on:
+  workflow_dispatch:
+    inputs:
+      os:
+        description: 'Target OS'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - windows
+          - macos
+          - linux
+      version_tag:
+        description: 'Version label for the binary (e.g., v1.0.0-acme)'
+        required: true
+        default: 'v0.0.0-dev'
+
+jobs:
+  build:
+    name: Build for ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ${{ fromJSON(
+          inputs.os == 'all'     && '["ubuntu-latest","macos-latest","windows-latest"]' ||
+          inputs.os == 'windows' && '["windows-latest"]' ||
+          inputs.os == 'macos'   && '["macos-latest"]' ||
+          inputs.os == 'linux'   && '["ubuntu-latest"]'
+          ) }}
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            binary_extension: ''
+          - os: macos-latest
+            platform: macos
+            binary_extension: ''
+          - os: windows-latest
+            platform: win
+            binary_extension: '.exe'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install mdBook
+        uses: peaceiris/actions-mdbook@v1
+        with:
+          mdbook-version: 'latest'
+
+      - name: Install Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+
+      - name: Cache Cargo binaries
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-mdbook-${{ hashFiles('**/book.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-mdbook-
+
+      - name: Install mdbook-mermaid
+        run: |
+          if ! command -v mdbook-mermaid &> /dev/null; then
+            echo "Installing mdbook-mermaid..."
+            cargo install mdbook-mermaid
+          else
+            echo "mdbook-mermaid already installed"
+          fi
+        shell: bash
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          cd client && npm ci && npm install uuid && cd ..
+          cd server && npm ci && cd ..
+
+      - name: Set version
+        run: |
+          echo "VERSION=${{ inputs.version_tag }}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Sync package.json version
+        run: |
+          if [ -n "${{ env.VERSION }}" ]; then
+            node scripts/sync-release-version.js ${{ env.VERSION }}
+          fi
+        shell: bash
+
+      - name: Build using Node.js SEA
+        run: |
+          chmod +x ./build-sea.sh
+          ./build-sea.sh ${{ matrix.platform }}
+        shell: bash
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}
+          path: |
+            dist-bin/ihub-apps-v*-${{ matrix.platform }}${{ matrix.binary_extension }}
+            dist-bin/ihub-apps-v*-win.bat
+            dist-bin/ihub-apps-v*-${{ matrix.platform }}
+
+      - name: Create platform-specific archive
+        run: |
+          cd dist-bin
+          if [ "${{ matrix.os }}" == "windows-latest" ]; then
+            7z a -tzip ../ihub-apps-${{ env.VERSION }}-win.zip .
+          else
+            tar -czf ../ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz .
+          fi
+          cd ..
+        shell: bash
+
+      - name: Upload archive artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}-archive
+          path: |
+            ihub-apps-${{ env.VERSION }}-${{ matrix.platform }}.tar.gz
+            ihub-apps-${{ env.VERSION }}-win.zip
