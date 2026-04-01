@@ -18,6 +18,9 @@ on:
         required: true
         default: 'v0.0.0-dev'
 
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build for ${{ matrix.os }}
