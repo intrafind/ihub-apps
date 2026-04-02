@@ -231,10 +231,11 @@ export function useKeyboardNavigation(
       focusItem(items, 0);
     }
 
-    container.addEventListener('keydown', handleKeyDown);
+    // Use capture phase to ensure we intercept arrow keys before they cause scrolling
+    container.addEventListener('keydown', handleKeyDown, true);
 
     return () => {
-      container.removeEventListener('keydown', handleKeyDown);
+      container.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [isActive, containerRef, handleKeyDown, focusItem]);
 
