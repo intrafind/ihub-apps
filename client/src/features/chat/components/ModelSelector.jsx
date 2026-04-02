@@ -64,7 +64,7 @@ function ModelSelector({
     [filteredModels, onModelChange]
   );
 
-  useKeyboardNavigation(menuRef, {
+  const { activeIndex } = useKeyboardNavigation(menuRef, {
     isActive: isOpen,
     onClose: handleClose,
     onSelect: handleSelect
@@ -132,7 +132,7 @@ function ModelSelector({
             <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
               {t('appConfig.selectModel', 'Select Model')}
             </div>
-            {filteredModels.map(model => {
+            {filteredModels.map((model, index) => {
               const name = getLocalizedContent(model.name, currentLanguage);
               const desc = getLocalizedContent(model.description, currentLanguage);
               const isSelected = model.id === selectedModel;
@@ -142,7 +142,7 @@ function ModelSelector({
                   key={model.id}
                   type="button"
                   role="menuitem"
-                  tabIndex={-1}
+                  tabIndex={index === activeIndex ? 0 : -1}
                   onClick={() => handleModelSelect(model.id)}
                   className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
                     isSelected
