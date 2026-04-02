@@ -109,6 +109,12 @@ function ModelSelector({
       <button
         type="button"
         onClick={() => !disabled && setIsOpen(!isOpen)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            !disabled && setIsOpen(!isOpen);
+          }
+        }}
         disabled={disabled}
         className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
           disabled
@@ -116,6 +122,8 @@ function ModelSelector({
             : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600'
         }`}
         title={t('appConfig.selectModel', 'Select Model')}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
       >
         <span className="max-w-[150px] truncate">{selectedModelName}</span>
         <Icon name={isOpen ? 'chevronUp' : 'chevronDown'} size="sm" />
