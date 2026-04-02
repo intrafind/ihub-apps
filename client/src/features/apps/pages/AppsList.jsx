@@ -512,6 +512,7 @@ function AppsList() {
               autoComplete="off"
               data-lpignore="true"
               data-1p-ignore="true"
+              aria-label={t('apps.searchApps', 'Search apps')}
             />
             {searchTerm && (
               <button
@@ -529,6 +530,7 @@ function AppsList() {
                 className="h-full border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 rounded-lg py-2 px-3 w-full sm:w-auto"
                 value={sortMethod}
                 onChange={e => setSortMethod(e.target.value)}
+                aria-label={t('apps.sortBy', 'Sort by')}
               >
                 <option value="relevance">{t('pages.appsList.sort.relevance', 'Relevance')}</option>
                 <option value="nameAsc">{t('pages.appsList.sort.nameAsc', 'Name A-Z')}</option>

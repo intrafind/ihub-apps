@@ -352,3 +352,53 @@ div .markdown-content .code-block-toolbar > div,
 [data-theme='dark'] textarea:disabled {
   @apply bg-gray-800 text-gray-500;
 }
+
+/* ============================================
+   Accessibility: Motion & Contrast Preferences
+   ============================================ */
+
+/* WCAG 2.3.3: Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* WCAG 1.4.3: Enhanced contrast mode support */
+@media (prefers-contrast: more) {
+  .markdown-content a,
+  .rendered-html-content a {
+    text-decoration: underline;
+    text-decoration-thickness: 2px;
+  }
+
+  :focus-visible {
+    outline: 3px solid currentColor !important;
+    outline-offset: 2px !important;
+  }
+}
+
+/* Windows High Contrast Mode / Forced Colors */
+@media (forced-colors: active) {
+  button,
+  [role='button'],
+  a {
+    border: 1px solid ButtonText;
+  }
+
+  :focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: 2px !important;
+  }
+
+  input,
+  textarea,
+  select {
+    border: 1px solid ButtonText;
+  }
+}

@@ -367,6 +367,8 @@
     // Build loading UI via DOM API
     var card = createElement('div', 'ag-card');
     var wrap = createElement('div', 'ag-loading');
+    wrap.setAttribute('role', 'status');
+    wrap.setAttribute('aria-live', 'polite');
     wrap.appendChild(createElement('div', 'ag-loading-spinner'));
     var text = createElement('div', 'ag-loading-text');
     text.textContent = t('loading');
@@ -381,6 +383,7 @@
     card.appendChild(buildHeader());
 
     var errDiv = createElement('div', 'ag-error');
+    errDiv.setAttribute('role', 'alert');
     errDiv.textContent = message;
     card.appendChild(errDiv);
 
@@ -455,6 +458,7 @@
     // Error message
     if (currentError) {
       var errDiv = createElement('div', 'ag-error');
+      errDiv.setAttribute('role', 'alert');
       errDiv.textContent = currentError;
       card.appendChild(errDiv);
     }

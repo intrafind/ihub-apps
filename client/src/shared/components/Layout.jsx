@@ -80,6 +80,13 @@ function Layout() {
 
   return (
     <div className="flex flex-col min-h-screen h-full w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:p-3 focus:bg-white focus:text-indigo-600 focus:rounded-md focus:shadow-lg focus:underline dark:focus:bg-gray-800 dark:focus:text-indigo-400"
+      >
+        {t('accessibility.skipToContent', 'Skip to main content')}
+      </a>
+
       {/* Disclaimer Popup - Only render if enabled (defaults to true) */}
       {uiConfig?.disclaimer && uiConfig.disclaimer.enabled !== false && (
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
@@ -130,7 +137,10 @@ function Layout() {
                 </Link>
               </div>
 
-              <nav className="hidden md:flex items-center space-x-6">
+              <nav
+                className="hidden md:flex items-center space-x-6"
+                aria-label={t('common.mainNavigation', 'Main navigation')}
+              >
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
                     .filter(link => {
@@ -170,7 +180,10 @@ function Layout() {
           {/* Mobile Menu */}
           {mobileMenuOpen && (
             <div className="md:hidden bg-indigo-800 shadow-lg" style={headerColorStyle}>
-              <nav className="container mx-auto px-4 py-3 flex flex-col">
+              <nav
+                className="container mx-auto px-4 py-3 flex flex-col"
+                aria-label={t('common.mobileNavigation', 'Mobile navigation')}
+              >
                 {uiConfig?.header?.links &&
                   uiConfig.header.links
                     .filter(link => {
@@ -199,7 +212,7 @@ function Layout() {
         </header>
       )}
 
-      <main className="flex-grow w-full overflow-y-auto">
+      <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
         <div className="container mx-auto px-4">
           <Outlet />
         </div>

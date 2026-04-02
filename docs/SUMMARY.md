@@ -77,6 +77,8 @@
     - [Troubleshooting](troubleshooting.md)
     - [Release Process](release-process.md)
     - [Local LLM Providers](local-llm-providers.md)
+  - [Accessibility]()
+    - [Accessibility](accessibility.md)
   - [FAQ]()
     - [FAQ (English)](ihub-faq-en.md)
     - [FAQ (Deutsch)](ihub-faq-de.md)
