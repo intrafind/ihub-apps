@@ -45,11 +45,11 @@ export function createCompletionRequest(model, messages, apiKey, options = {}) {
  * Process a streaming response from the model
  * @param {string} provider - The provider name
  * @param {string} buffer - The response buffer to process
- * @returns {Object} Result containing content, completion status and a normalized finish reason
+ * @returns {Promise<Object>} Result containing content, completion status and a normalized finish reason
  */
-export function processResponseBuffer(provider, buffer) {
+export async function processResponseBuffer(provider, buffer) {
   const adapter = getAdapter(provider);
-  return adapter.processResponseBuffer(buffer);
+  return await adapter.processResponseBuffer(buffer);
 }
 
 /**

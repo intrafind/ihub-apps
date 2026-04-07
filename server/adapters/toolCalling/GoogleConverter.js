@@ -14,6 +14,7 @@ import {
   normalizeToolName
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
  * Convert generic tools to Google format
@@ -190,15 +191,16 @@ export function convertGoogleFunctionResponseToGeneric(googleResponse) {
  * Convert Google streaming response to generic format
  * @param {string} data - Raw Google response data
  * @param {string} streamId - Stream identifier for stateful processing (unused for Google)
- * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
+ * @returns {Promise<import('./GenericToolCalling.js').GenericStreamingResponse>} Generic streaming response
  */
-export function convertGoogleResponseToGeneric(data, _streamId = 'default') {
+export async function convertGoogleResponseToGeneric(data, _streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!data) return result;
 
   try {
-    const parsed = JSON.parse(data);
+    // Use async JSON parsing to avoid blocking the event loop
+    const parsed = await parseJsonAsync(data);
 
     // Extract usage metadata from Google Gemini responses
     if (parsed.usageMetadata) {

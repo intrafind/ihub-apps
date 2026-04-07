@@ -135,9 +135,9 @@ export function convertToolCallsFromGeneric(genericToolCalls, targetProvider) {
  * @param {string} data - Raw response data
  * @param {string} sourceProvider - Source provider name
  * @param {string} streamId - Stream identifier for stateful processing
- * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
+ * @returns {Promise<import('./GenericToolCalling.js').GenericStreamingResponse>} Generic streaming response
  */
-export function convertResponseToGeneric(data, sourceProvider, streamId = 'default') {
+export async function convertResponseToGeneric(data, sourceProvider, streamId = 'default') {
   const converter = CONVERTERS[sourceProvider];
   if (!converter) {
     throw new Error(`Unsupported provider for response conversion: ${sourceProvider}`);
@@ -148,7 +148,7 @@ export function convertResponseToGeneric(data, sourceProvider, streamId = 'defau
     throw new Error(`No response converter found for provider: ${sourceProvider}`);
   }
 
-  return converterFunction(data, streamId);
+  return await converterFunction(data, streamId);
 }
 
 /**
