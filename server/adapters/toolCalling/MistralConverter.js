@@ -20,6 +20,7 @@ import {
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
  * Convert generic tools to Mistral format
@@ -76,7 +77,7 @@ export const convertMistralToolCallsToGeneric = convertOpenAIToolCallsToGeneric;
  * @param {string} streamId - Stream identifier for stateful processing (unused for Mistral)
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertMistralResponseToGeneric(data, _streamId = 'default') {
+export async function convertMistralResponseToGeneric(data, _streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!data) return result;
@@ -86,7 +87,7 @@ export function convertMistralResponseToGeneric(data, _streamId = 'default') {
   }
 
   try {
-    const parsed = JSON.parse(data);
+    const parsed = await parseJsonAsync(data);
 
     // Extract usage data from streaming chunks (requires stream_options.include_usage)
     if (parsed.usage) {

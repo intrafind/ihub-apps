@@ -13,6 +13,7 @@ import {
   normalizeFinishReason
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
  * Sanitize JSON Schema for vLLM compatibility
@@ -244,7 +245,7 @@ export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
  */
 const streamingState = new Map();
 
-export function convertVLLMResponseToGeneric(data, streamId = 'default') {
+export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!streamingState.has(streamId)) {
@@ -295,7 +296,7 @@ export function convertVLLMResponseToGeneric(data, streamId = 'default') {
   }
 
   try {
-    const parsed = JSON.parse(data);
+    const parsed = await parseJsonAsync(data);
 
     // Handle error responses (vLLM specific)
     if (parsed.error) {
