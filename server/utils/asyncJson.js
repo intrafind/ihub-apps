@@ -70,8 +70,7 @@ export async function parseJsonAsync(data, options = {}) {
 }
 
 /**
- * Parse JSON with automatic fallback
- * Tries async parsing first, falls back to sync if needed
+ * Parse JSON safely, returning a fallback value on error
  *
  * @param {string} data - JSON string to parse
  * @param {any} fallbackValue - Value to return if parsing fails

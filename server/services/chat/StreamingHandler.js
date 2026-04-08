@@ -321,7 +321,7 @@ class StreamingHandler {
             if (completeEvents) {
               // Add back the delimiter for processing
               try {
-                // Await async processResponseBuffer to prevent blocking
+                // Await the adapter's async buffer processing before using the parsed result
                 result = await adapter.processResponseBuffer(completeEvents + '\n\n');
               } catch (processingError) {
                 logger.error('Error processing buffer with adapter', {
