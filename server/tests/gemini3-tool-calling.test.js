@@ -32,7 +32,7 @@ const gemini3ResponseWithToolCall = JSON.stringify({
   ]
 });
 
-const result1 = GoogleAdapter.processResponseBuffer(gemini3ResponseWithToolCall);
+const result1 = await GoogleAdapter.processResponseBuffer(gemini3ResponseWithToolCall);
 
 logger.info('Result:', JSON.stringify(result1, null, 2));
 assert.strictEqual(result1.finishReason, 'tool_calls', 'Should preserve tool_calls finish reason');
@@ -63,7 +63,7 @@ const normalResponse = JSON.stringify({
   ]
 });
 
-const result2 = GoogleAdapter.processResponseBuffer(normalResponse);
+const result2 = await GoogleAdapter.processResponseBuffer(normalResponse);
 
 logger.info('Result:', JSON.stringify(result2, null, 2));
 assert.strictEqual(result2.finishReason, 'stop', 'Should have stop finish reason for normal text');
@@ -99,7 +99,7 @@ const streamingChunkWithFinish = JSON.stringify({
 });
 
 // First chunk with function call
-const result3a = GoogleAdapter.processResponseBuffer(streamingChunkWithToolCall);
+const result3a = await GoogleAdapter.processResponseBuffer(streamingChunkWithToolCall);
 logger.info('Streaming chunk 1:', JSON.stringify(result3a, null, 2));
 assert.strictEqual(result3a.tool_calls.length, 1, 'Should have tool call from first chunk');
 assert.strictEqual(
@@ -109,7 +109,7 @@ assert.strictEqual(
 );
 
 // Second chunk with STOP finish reason
-const result3b = GoogleAdapter.processResponseBuffer(streamingChunkWithFinish);
+const result3b = await GoogleAdapter.processResponseBuffer(streamingChunkWithFinish);
 logger.info('Streaming chunk 2:', JSON.stringify(result3b, null, 2));
 
 logger.info('✓ Test 3 passed: Streaming responses work correctly\n');
@@ -142,7 +142,7 @@ const multipleToolCallsResponse = JSON.stringify({
   ]
 });
 
-const result4 = GoogleAdapter.processResponseBuffer(multipleToolCallsResponse);
+const result4 = await GoogleAdapter.processResponseBuffer(multipleToolCallsResponse);
 
 logger.info('Result:', JSON.stringify(result4, null, 2));
 assert.strictEqual(result4.finishReason, 'tool_calls', 'Should preserve tool_calls finish reason');

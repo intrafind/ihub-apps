@@ -1,12 +1,16 @@
 /**
- * Async JSON parsing utilities to prevent blocking the event loop
+ * Async JSON parsing utilities to reduce event loop blocking
  *
  * When parsing large JSON payloads (especially those containing large base64-encoded images),
  * synchronous JSON.parse() can block the event loop for hundreds of milliseconds,
  * causing the server to become unresponsive.
  *
- * This module provides utilities to parse JSON asynchronously, yielding control
- * to the event loop periodically during parsing.
+ * This module provides utilities that defer JSON parsing using setImmediate(), allowing
+ * pending I/O operations to be processed before the parse begins. Note that JSON.parse()
+ * itself still runs synchronously once started - this approach defers when parsing starts,
+ * not eliminating blocking during the parse itself.
+ *
+ * For true non-blocking parsing of very large payloads, consider using worker threads.
  */
 
 import logger from './logger.js';
@@ -18,9 +22,12 @@ import logger from './logger.js';
 const ASYNC_PARSE_THRESHOLD = 50 * 1024; // 50KB
 
 /**
- * Parse JSON asynchronously to avoid blocking the event loop
- * For small payloads, uses regular JSON.parse for performance
- * For large payloads, yields to event loop before parsing
+ * Parse JSON with deferred execution to reduce event loop blocking
+ *
+ * For small payloads, uses regular JSON.parse for performance.
+ * For large payloads, uses setImmediate() to defer parsing to the next event loop phase,
+ * allowing pending I/O operations to be processed first. Note that JSON.parse() itself
+ * still blocks while executing - this defers when it starts, not eliminates blocking.
  *
  * @param {string} data - JSON string to parse
  * @param {Object} options - Options object
@@ -40,16 +47,16 @@ export async function parseJsonAsync(data, options = {}) {
     return JSON.parse(data);
   }
 
-  // For large payloads, yield to event loop before parsing
-  // This prevents blocking other requests
+  // For large payloads, defer parsing to next event loop phase
+  // This allows pending I/O operations to be serviced before parsing starts
   logger.debug('Using async JSON parse for large payload', {
     component: 'asyncJson',
     size: dataSize,
     threshold
   });
 
-  // Use setImmediate to yield control to event loop
-  // This allows other pending I/O operations to proceed
+  // Use setImmediate to defer parsing until after current event loop phase
+  // This allows health checks and other pending work to proceed before blocking
   return new Promise((resolve, reject) => {
     setImmediate(() => {
       try {
@@ -83,33 +90,29 @@ export async function safeParseJsonAsync(data, fallbackValue = null) {
 }
 
 /**
- * Stringify JSON with optional async handling for large objects
- * For very large objects, yields to event loop before stringifying
+ * Stringify JSON with deferred execution for large objects
+ *
+ * For primitive values and small objects, uses regular JSON.stringify.
+ * For large objects/arrays, defers stringification to avoid blocking,
+ * but note that JSON.stringify() itself still blocks while executing.
  *
  * @param {any} obj - Object to stringify
  * @param {Object} options - Options object
- * @param {number} options.threshold - Size threshold for async operation
  * @param {number} options.space - Formatting space (passed to JSON.stringify)
  * @returns {Promise<string>} JSON string
  */
 export async function stringifyJsonAsync(obj, options = {}) {
-  const threshold = options.threshold ?? ASYNC_PARSE_THRESHOLD;
   const space = options.space;
 
-  // Quick estimate of object size - serialize a sample
-  const sample = JSON.stringify(obj);
-  const estimatedSize = Buffer.byteLength(sample, 'utf8');
-
-  // For small objects, use regular JSON.stringify
-  if (estimatedSize < threshold) {
+  // Primitive values are inexpensive to stringify, so use synchronous path
+  if (obj === null || (typeof obj !== 'object' && typeof obj !== 'function')) {
     return JSON.stringify(obj, null, space);
   }
 
-  // For large objects, yield to event loop before stringifying
-  logger.debug('Using async JSON stringify for large object', {
-    component: 'asyncJson',
-    estimatedSize,
-    threshold
+  // For objects and arrays, defer stringification to next event loop phase
+  // This allows pending I/O operations to be processed before stringifying
+  logger.debug('Using async JSON stringify for object', {
+    component: 'asyncJson'
   });
 
   return new Promise((resolve, reject) => {

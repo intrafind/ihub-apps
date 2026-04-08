@@ -183,9 +183,9 @@ export function convertResponseFromGeneric(genericResponse, targetProvider, opti
  * @param {string} sourceProvider - Source provider name
  * @param {string} targetProvider - Target provider name
  * @param {Object} options - Additional options for target format
- * @returns {Object} Response in target provider format
+ * @returns {Promise<Object>} Response in target provider format
  */
-export function convertResponseBetweenProviders(
+export async function convertResponseBetweenProviders(
   data,
   sourceProvider,
   targetProvider,
@@ -201,7 +201,7 @@ export function convertResponseBetweenProviders(
   }
 
   // Convert to generic format first, then to target format
-  const genericResponse = convertResponseToGeneric(data, sourceProvider);
+  const genericResponse = await convertResponseToGeneric(data, sourceProvider);
   return convertResponseFromGeneric(genericResponse, targetProvider, options);
 }
 
@@ -276,13 +276,25 @@ function capitalize(str) {
  * @param {string} sourceProvider - Source provider name
  * @param {string} targetProvider - Target provider name
  * @param {Object} options - Conversion options
- * @returns {Object[]} Array of converted responses
+ * @returns {Promise<Object[]>} Array of converted responses
  */
-export function batchConvertResponses(dataArray, sourceProvider, targetProvider, options = {}) {
-  return dataArray.map((data, index) => {
-    const indexedOptions = { ...options, index };
-    return convertResponseBetweenProviders(data, sourceProvider, targetProvider, indexedOptions);
-  });
+export async function batchConvertResponses(
+  dataArray,
+  sourceProvider,
+  targetProvider,
+  options = {}
+) {
+  return await Promise.all(
+    dataArray.map(async (data, index) => {
+      const indexedOptions = { ...options, index };
+      return await convertResponseBetweenProviders(
+        data,
+        sourceProvider,
+        targetProvider,
+        indexedOptions
+      );
+    })
+  );
 }
 
 /**
@@ -302,7 +314,7 @@ export function createUnifiedInterface(provider) {
     convertToolCallsToGeneric: toolCalls => convertToolCallsToGeneric(toolCalls, provider),
     convertToolCallsFromGeneric: genericToolCalls =>
       convertToolCallsFromGeneric(genericToolCalls, provider),
-    convertResponseToGeneric: data => convertResponseToGeneric(data, provider),
+    convertResponseToGeneric: async data => await convertResponseToGeneric(data, provider),
     convertResponseFromGeneric: (genericResponse, options) =>
       convertResponseFromGeneric(genericResponse, provider, options),
     processMessage: message => processMessageForProvider(message, provider),
@@ -310,7 +322,7 @@ export function createUnifiedInterface(provider) {
     // Convenience methods for cross-provider conversion
     convertToolsTo: (tools, targetProvider) =>
       convertToolsBetweenProviders(tools, provider, targetProvider),
-    convertResponseTo: (data, targetProvider, options) =>
-      convertResponseBetweenProviders(data, provider, targetProvider, options)
+    convertResponseTo: async (data, targetProvider, options) =>
+      await convertResponseBetweenProviders(data, provider, targetProvider, options)
   };
 }

@@ -96,19 +96,23 @@ Modified `server/adapters/index.js`:
 
 ## Technical Details
 
-### How setImmediate() Prevents Blocking
+### How setImmediate() Reduces Blocking
 
-`setImmediate()` schedules the callback to run after the current phase of the event loop completes. This allows:
-- Other pending I/O operations to be processed
-- Health checks to respond
-- New incoming requests to be handled
-- The event loop to remain responsive
+`setImmediate()` schedules the callback to run after the current phase of the event loop completes. This does **not** make `JSON.parse()` itself non-blocking - parsing still blocks the event loop while it is running. What it does provide is:
+
+- **Deferral**: Parsing is deferred to a later turn of the event loop rather than running immediately
+- **I/O Processing**: Other pending I/O operations can be processed before parsing begins
+- **Health Check Response**: Health checks already waiting in the queue can respond before the parse starts
+- **Request Acceptance**: New incoming requests can be accepted and scheduled before parsing blocks
+- **Improved Fairness**: Large parsing work doesn't monopolize the event loop immediately
+
+**Important Limitation**: The parse itself still blocks while executing. For true non-blocking parsing of very large payloads, worker threads would be required, or an incremental/streaming parsing approach.
 
 ### Performance Impact
 
 - **Small Payloads** (< 50KB): No performance impact (uses synchronous path)
-- **Large Payloads** (> 50KB): Minimal overhead (~1-5ms) but prevents blocking
-- **Net Result**: Server remains responsive during large image generation
+- **Large Payloads** (> 50KB): Minimal overhead (~1-5ms) for setImmediate deferral, parsing still blocks while executing
+- **Net Result**: Server is more responsive around large image generation due to better event loop scheduling, though individual large parses can still cause brief blocking periods
 
 ### Why 50KB Threshold?
 
