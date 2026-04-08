@@ -6,6 +6,7 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
+import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class MistralAdapterClass extends BaseAdapter {
   /**
@@ -96,7 +97,7 @@ class MistralAdapterClass extends BaseAdapter {
   /**
    * Process streaming response from Mistral
    */
-  processResponseBuffer(data) {
+  async processResponseBuffer(data) {
     const result = {
       content: [],
       tool_calls: [],
@@ -114,7 +115,7 @@ class MistralAdapterClass extends BaseAdapter {
     }
 
     try {
-      const parsed = JSON.parse(data);
+      const parsed = await parseJsonAsync(data);
 
       // Extract usage data from any chunk that contains it
       if (parsed.usage) {

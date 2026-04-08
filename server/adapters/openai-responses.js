@@ -6,6 +6,7 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
+import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class OpenAIResponsesAdapterClass extends BaseAdapter {
   /**
@@ -245,7 +246,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
    * Process streaming response from OpenAI Responses API
    * The Responses API returns output as an array of Items instead of choices
    */
-  processResponseBuffer(data) {
+  async processResponseBuffer(data) {
     const result = {
       content: [],
       tool_calls: [],
@@ -263,7 +264,7 @@ class OpenAIResponsesAdapterClass extends BaseAdapter {
     }
 
     try {
-      const parsed = JSON.parse(data);
+      const parsed = await parseJsonAsync(data);
 
       // Add debugging to see what we're receiving
       logger.debug('Received chunk', {

@@ -4,6 +4,7 @@
 import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
+import { parseJsonAsync } from '../utils/asyncJson.js';
 
 /**
  * Aspect ratio and resolution mapping table for Google Gemini image generation
@@ -435,7 +436,7 @@ class GoogleAdapterClass extends BaseAdapter {
   /**
    * Process streaming response from Gemini
    */
-  processResponseBuffer(data) {
+  async processResponseBuffer(data) {
     try {
       const result = {
         content: [],
@@ -454,7 +455,9 @@ class GoogleAdapterClass extends BaseAdapter {
       if (!data) return result;
 
       try {
-        const parsed = JSON.parse(data);
+        // Use async JSON parsing to avoid blocking the event loop
+        // This is critical for large responses containing base64-encoded images
+        const parsed = await parseJsonAsync(data);
 
         // Debug: Log the full parsed response to see what metadata we receive
         logger.info('Full Gemini response structure', {

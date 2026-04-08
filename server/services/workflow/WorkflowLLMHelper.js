@@ -187,7 +187,7 @@ export class WorkflowLLMHelper {
 
       while (events.length > 0) {
         const evt = events.shift();
-        const result = convertResponseToGeneric(evt.data, model.provider);
+        const result = await convertResponseToGeneric(evt.data, model.provider);
 
         if (result.error) {
           throw new Error(result.errorMessage || 'Error processing LLM response');

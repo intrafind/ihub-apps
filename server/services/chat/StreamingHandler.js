@@ -321,7 +321,8 @@ class StreamingHandler {
             if (completeEvents) {
               // Add back the delimiter for processing
               try {
-                result = adapter.processResponseBuffer(completeEvents + '\n\n');
+                // Await the adapter's async buffer processing before using the parsed result
+                result = await adapter.processResponseBuffer(completeEvents + '\n\n');
               } catch (processingError) {
                 logger.error('Error processing buffer with adapter', {
                   component: 'StreamingHandler',
@@ -482,7 +483,8 @@ class StreamingHandler {
 
           while (events.length > 0) {
             const evt = events.shift();
-            const result = convertResponseToGeneric(evt.data, model.provider);
+            // Use await to handle async processResponseBuffer
+            const result = await convertResponseToGeneric(evt.data, model.provider);
 
             // Accumulate usage data from converter results (via metadata.usage)
             if (result?.metadata?.usage) {
