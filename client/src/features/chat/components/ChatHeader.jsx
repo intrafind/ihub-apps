@@ -61,7 +61,12 @@ function ChatHeader({
   }, [isMobile, showDescription]);
 
   const handleBack = () => {
-    navigate('/');
+    console.log('custom back button handler');
+    if (window.self !== window.top) {
+      window.parent.postMessage({ type: 'IHUB_APP_RETURN' }, '*');
+    } else {
+      navigate('/');
+    }
   };
 
   return (
