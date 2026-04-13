@@ -134,7 +134,7 @@ const uploadSchema = z
         supportedFormats: z
           .array(z.string().regex(/^audio\//))
           .optional()
-          .default(['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg'])
+          .default(['audio/mpeg', 'audio/wav', 'audio/mp3', 'audio/flac', 'audio/ogg', 'audio/mp4'])
       })
       .optional(),
     fileUpload: z

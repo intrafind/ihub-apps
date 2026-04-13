@@ -25,18 +25,18 @@
     "audioUpload": {
       "enabled": true,
       "maxFileSizeMB": 20,
-      "supportedFormats": ["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg"]
+      "supportedFormats": ["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg", "audio/mp4"]
     }
   },
   "allowedModels": ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp-01-21"],
   "greeting": {
     "en": {
       "title": "👋 Welcome to Audio Transcription!",
-      "subtitle": "Upload an audio file (MP3, WAV, FLAC, or OGG) and I'll transcribe and analyze it for you."
+      "subtitle": "Upload an audio file (MP3, WAV, FLAC, OGG, or MP4) and I'll transcribe and analyze it for you."
     },
     "de": {
       "title": "👋 Willkommen bei der Audio-Transkription!",
-      "subtitle": "Laden Sie eine Audiodatei (MP3, WAV, FLAC oder OGG) hoch und ich transkribiere und analysiere sie für Sie."
+      "subtitle": "Laden Sie eine Audiodatei (MP3, WAV, FLAC, OGG oder MP4) hoch und ich transkribiere und analysiere sie für Sie."
     }
   },
   "starterPrompts": [
