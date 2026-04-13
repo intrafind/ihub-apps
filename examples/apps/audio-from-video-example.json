@@ -26,7 +26,7 @@
     },
     "audioUpload": {
       "enabled": true,
-      "supportedFormats": ["audio/mpeg", "audio/wav", "audio/mp3"],
+      "supportedFormats": ["audio/mpeg", "audio/wav", "audio/mp3", "audio/mp4"],
       "maxFileSizeMB": 25
     }
   },
