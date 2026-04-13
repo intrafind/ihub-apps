@@ -56,10 +56,17 @@ function ChatHeader({
 
   const handleBack = () => {
     console.log('Start custom back button handler');
-    const href = localStorage.getItem('CAIIframSrc');
     localStorage.setItem('CAIIframSrc', "")
     console.log('CAIIframSrc set to ""');
-    window.open(href, '_self', 'noopener,noreferrer');
+    try {
+      console.log('obtaining href from top window');
+      const href = window.top.location.href;
+      console.log('href', href);
+      window.open(href, '_self', 'noopener,noreferrer');
+    } catch (error) {
+      console.log('Error getting href from top window:', error);
+    }
+    
     if (window.self !== window.top) {
       window.parent.postMessage({ type: 'IHUB_APP_RETURN' }, '*');
       console.log('sent postMessage "{type: "IHUB_APP_RETURN"}');
