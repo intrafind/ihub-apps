@@ -61,10 +61,16 @@ function ChatHeader({
   }, [isMobile, showDescription]);
 
   const handleBack = () => {
-    console.log('custom back button handler');
+    console.log('Start custom back button handler');
+    const href = localStorage.getItem('CAIIframSrc');
+    localStorage.setItem('CAIIframSrc', "")
+    console.log('CAIIframSrc set to ""');
+    window.open(href, '_self', 'noopener,noreferrer');
     if (window.self !== window.top) {
       window.parent.postMessage({ type: 'IHUB_APP_RETURN' }, '*');
+      console.log('sent postMessage "{type: "IHUB_APP_RETURN"}');
     } else {
+      console.log('no iframe, default behavior, navigating to /')
       navigate('/');
     }
   };
