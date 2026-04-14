@@ -41,7 +41,10 @@ function ChatInputActionsMenu({
   onImageAspectRatioChange,
   onImageQualityChange,
   // Cloud storage props
-  onCloudProviderSelect
+  onCloudProviderSelect,
+  // Websearch props
+  websearchEnabled = false,
+  onWebsearchEnabledChange = null
 }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
@@ -60,18 +63,8 @@ function ChatInputActionsMenu({
       ? cloudStorage.providers.filter(p => p.enabled)
       : [];
 
-  // Tool grouping configuration
-  const TOOL_GROUPS = {
-    webSearch: {
-      id: 'webSearch',
-      name: { en: 'Web Search', de: 'Websuche' },
-      description: {
-        en: 'Search the web for information',
-        de: 'Im Web nach Informationen suchen'
-      },
-      tools: ['googleSearch', 'webSearch', 'enhancedWebSearch', 'braveSearch', 'tavilySearch']
-    }
-  };
+  // Tool grouping configuration (websearch is now handled via app.websearch config, not app.tools)
+  const TOOL_GROUPS = {};
 
   // Load tools and workflow metadata when component mounts
   useEffect(() => {
@@ -201,6 +194,7 @@ function ChatInputActionsMenu({
   const hasTools = app?.tools && app.tools.length > 0 && enabledTools !== null;
   const toolCount = app?.tools?.length || 0;
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
+  const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
 
   // Count quick actions (non-tools actions)
   const quickActionCount =
@@ -210,13 +204,13 @@ function ChatInputActionsMenu({
     (onVoiceInput ? 1 : 0);
 
   // Check if we have any actions to show
-  const hasActions = hasTools || quickActionCount > 0;
+  const hasActions = hasTools || hasWebsearch || quickActionCount > 0;
 
   if (!hasActions) return null;
 
   // Single action optimization: if we have exactly one action and no tools,
   // render that action directly without a menu
-  const totalActions = quickActionCount + (hasTools ? 1 : 0);
+  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (hasWebsearch ? 1 : 0);
 
   if (totalActions === 1 && quickActionCount === 1 && !hasTools) {
     // Render the single action directly
@@ -416,6 +410,36 @@ function ChatInputActionsMenu({
                     />
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Web Search Section */}
+          {hasWebsearch && (
+            <div
+              className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
+            >
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                {t('websearch.title', 'Web Search')}
+              </h3>
+              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+                <div className="flex-1 min-w-0 mr-3">
+                  <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                    {t('websearch.toggleLabel', 'Web Search')}
+                  </div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    {t('websearch.toggleDescription', 'Search the web for up-to-date information')}
+                  </div>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={websearchEnabled}
+                    onChange={e => onWebsearchEnabledChange?.(e.target.checked)}
+                    className="sr-only peer"
+                  />
+                  <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                </label>
               </div>
             </div>
           )}

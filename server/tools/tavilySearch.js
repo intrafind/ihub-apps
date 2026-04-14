@@ -1,15 +1,18 @@
 import webSearchService from '../services/WebSearchService.js';
+import webContentExtractor from './webContentExtractor.js';
 import logger from '../utils/logger.js';
 
 /**
- * Perform a web search using the Tavily Search API
+ * Perform a web search using the Tavily Search API, with optional content extraction.
  * @param {Object} params - The search parameters
  * @param {string} [params.query] - The search query
  * @param {string} [params.q] - Alternative query parameter name
  * @param {string} [params.search_depth='basic'] - Search depth ('basic' or 'advanced')
  * @param {number} [params.max_results=5] - Maximum number of results to return
+ * @param {boolean} [params.extractContent=false] - Whether to extract full content from result pages
+ * @param {number} [params.contentMaxLength=3000] - Maximum characters of extracted content per page
  * @param {string} [params.chatId] - The chat ID for context tracking
- * @returns {Promise<{results: Array<{title: string, url: string, description: string}>}>} The search results
+ * @returns {Promise<Object>} Search results, optionally with extracted page content
  * @throws {Error} If no query is provided
  */
 export default async function tavilySearch({
@@ -17,6 +20,8 @@ export default async function tavilySearch({
   q,
   search_depth = 'basic',
   max_results = 5,
+  extractContent = false,
+  contentMaxLength = 3000,
   chatId
 }) {
   const searchQuery = query || q;
@@ -24,42 +29,112 @@ export default async function tavilySearch({
     throw new Error('query parameter is required (use "query" or "q")');
   }
 
-  // Use the unified web search service with tavily provider
-  return await webSearchService.search(searchQuery, {
+  const searchResults = await webSearchService.search(searchQuery, {
     provider: 'tavily',
     chatId,
     search_depth,
     max_results
   });
+
+  if (!extractContent) {
+    return searchResults;
+  }
+
+  // Content extraction: fetch page content for the top N results
+  if (!searchResults.results || searchResults.results.length === 0) {
+    return {
+      query: searchQuery,
+      searchResults: [],
+      extractedContent: [],
+      summary: 'No search results found.'
+    };
+  }
+
+  const resultsToProcess = searchResults.results.slice(0, max_results);
+
+  logger.info('Extracting content from search results', {
+    component: 'TavilySearch',
+    count: resultsToProcess.length
+  });
+
+  const contentPromises = resultsToProcess.map(async result => {
+    try {
+      const content = await webContentExtractor({
+        url: result.url,
+        maxLength: contentMaxLength,
+        chatId
+      });
+      return {
+        ...result,
+        extractedContent: content,
+        contentExtracted: true,
+        extractionError: null
+      };
+    } catch (error) {
+      logger.warn('Failed to extract content from URL', {
+        component: 'TavilySearch',
+        url: result.url,
+        error
+      });
+      return {
+        ...result,
+        extractedContent: null,
+        contentExtracted: false,
+        extractionError: error.message
+      };
+    }
+  });
+
+  const settled = await Promise.allSettled(contentPromises);
+  const extractedContent = settled.map((r, i) =>
+    r.status === 'fulfilled'
+      ? r.value
+      : {
+          ...resultsToProcess[i],
+          extractedContent: null,
+          contentExtracted: false,
+          extractionError: r.reason?.message || 'Unknown error'
+        }
+  );
+
+  const successCount = extractedContent.filter(r => r.contentExtracted).length;
+
+  return {
+    query: searchQuery,
+    searchResults: searchResults.results,
+    extractedContent,
+    summary: `Found ${searchResults.results.length} results for "${searchQuery}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.`,
+    stats: {
+      totalSearchResults: searchResults.results.length,
+      processedResults: resultsToProcess.length,
+      successfulExtractions: successCount,
+      failedExtractions: extractedContent.length - successCount
+    }
+  };
 }
 
 // CLI interface for direct execution
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const searchQuery = process.argv.slice(2).join(' ');
+  const args = process.argv.slice(2);
+  const searchQuery = args.filter(a => !a.startsWith('--')).join(' ');
 
   if (!searchQuery) {
-    logger.error('Usage: node tavilySearch.js <search term>');
-    logger.error('Example: node tavilySearch.js "JavaScript tutorials"');
+    logger.error('Usage: node tavilySearch.js <search term> [--extract] [--max-results=N]');
     process.exit(1);
   }
 
-  logger.info('Searching', { component: 'TavilySearch', searchQuery });
+  const extractContent = args.includes('--extract');
+  const maxResultsMatch = args.find(a => a.startsWith('--max-results='));
+  const max_results = maxResultsMatch ? parseInt(maxResultsMatch.split('=')[1]) || 5 : 5;
+
+  logger.info('Searching', { component: 'TavilySearch', searchQuery, extractContent });
 
   try {
-    const result = await tavilySearch({ query: searchQuery });
-
-    if (result.results.length === 0) {
-      logger.info('No results found', { component: 'TavilySearch' });
-    } else {
-      result.results.forEach((item, index) => {
-        logger.info('Search result', {
-          component: 'TavilySearch',
-          index: index + 1,
-          title: item.title,
-          url: item.url
-        });
-      });
-    }
+    const result = await tavilySearch({ query: searchQuery, extractContent, max_results });
+    logger.info('Search complete', {
+      component: 'TavilySearch',
+      resultCount: result.results?.length ?? result.searchResults?.length
+    });
   } catch (error) {
     logger.error('Error performing search', { component: 'TavilySearch', error });
     process.exit(1);

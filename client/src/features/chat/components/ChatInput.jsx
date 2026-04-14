@@ -42,6 +42,8 @@ function ChatInput({
   magicPromptLoading = false,
   enabledTools = [],
   onEnabledToolsChange = null,
+  websearchEnabled = false,
+  onWebsearchEnabledChange = null,
   // Model selection props
   models = [],
   selectedModel = null,
@@ -443,6 +445,8 @@ function ChatInput({
               imageQuality={imageQuality}
               onImageAspectRatioChange={onImageAspectRatioChange}
               onImageQualityChange={onImageQualityChange}
+              websearchEnabled={websearchEnabled}
+              onWebsearchEnabledChange={onWebsearchEnabledChange}
             />
 
             {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
