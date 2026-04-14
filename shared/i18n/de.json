@@ -109,6 +109,11 @@
     "quickActions": "Schnellaktionen",
     "attachFile": "Datei anhängen"
   },
+  "websearch": {
+    "title": "Websuche",
+    "toggleLabel": "Websuche",
+    "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
+  },
   "pages": {
     "home": {
       "title": "iHub Apps",
@@ -1269,7 +1274,23 @@
     "apps": {
       "edit": {
         "autoStart": "Konversation automatisch starten",
-        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird"
+        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird",
+        "websearch": "Websuche",
+        "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
+        "websearchEnabled": "Websuche aktivieren",
+        "websearchProvider": "Anbieter",
+        "websearchProviderAuto": "Automatisch",
+        "websearchProviderBrave": "Brave",
+        "websearchProviderTavily": "Tavily",
+        "websearchUseNative": "Native Suche verwenden",
+        "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI)",
+        "websearchMaxResults": "Max. Ergebnisse",
+        "websearchExtractContent": "Inhalt extrahieren",
+        "websearchExtractContentDesc": "Vollständigen Seiteninhalt aus Suchergebnissen abrufen und extrahieren",
+        "websearchContentMaxLength": "Max. Inhaltslänge",
+        "websearchContentMaxLengthDesc": "Maximale Zeichen pro extrahierter Seite (500–50000)",
+        "websearchEnabledByDefault": "Standardmäßig aktiviert",
+        "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist"
       }
     },
     "features": {

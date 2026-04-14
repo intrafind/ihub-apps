@@ -248,16 +248,19 @@ export async function loadTools(language = null) {
 function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
   if (!app.websearch?.enabled) return [];
 
-  // User explicitly disabled websearch for this request
-  if (websearchEnabled === false) return [];
-
   const {
+    enabledByDefault = false,
     provider = 'auto',
     useNativeSearch = true,
     maxResults = 5,
     extractContent = true,
     contentMaxLength = 3000
   } = app.websearch;
+
+  // When websearchEnabled is undefined (client didn't send a toggle value),
+  // fall back to the admin-configured enabledByDefault setting.
+  const effectiveEnabled = websearchEnabled !== undefined ? websearchEnabled : enabledByDefault;
+  if (!effectiveEnabled) return [];
 
   let toolId;
   if (useNativeSearch && modelProvider === 'google') {

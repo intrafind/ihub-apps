@@ -29,28 +29,31 @@ export default async function tavilySearch({
     throw new Error('query parameter is required (use "query" or "q")');
   }
 
-  const searchResults = await webSearchService.search(searchQuery, {
+  const rawResults = await webSearchService.search(searchQuery, {
     provider: 'tavily',
     chatId,
     search_depth,
     max_results
   });
 
+  // Tavily already limits to max_results server-side, but truncate defensively
+  const results = rawResults.results ? rawResults.results.slice(0, max_results) : [];
+
   if (!extractContent) {
-    return searchResults;
+    return { ...rawResults, results };
   }
 
   // Content extraction: fetch page content for the top N results
-  if (!searchResults.results || searchResults.results.length === 0) {
+  if (results.length === 0) {
     return {
       query: searchQuery,
-      searchResults: [],
+      results: [],
       extractedContent: [],
       summary: 'No search results found.'
     };
   }
 
-  const resultsToProcess = searchResults.results.slice(0, max_results);
+  const resultsToProcess = results;
 
   logger.info('Extracting content from search results', {
     component: 'TavilySearch',
@@ -101,11 +104,11 @@ export default async function tavilySearch({
 
   return {
     query: searchQuery,
-    searchResults: searchResults.results,
+    results,
     extractedContent,
-    summary: `Found ${searchResults.results.length} results for "${searchQuery}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.`,
+    summary: `Found ${results.length} results for "${searchQuery}". Extracted content from ${successCount} of ${resultsToProcess.length} pages.`,
     stats: {
-      totalSearchResults: searchResults.results.length,
+      totalSearchResults: results.length,
       processedResults: resultsToProcess.length,
       successfulExtractions: successCount,
       failedExtractions: extractedContent.length - successCount
@@ -133,7 +136,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     const result = await tavilySearch({ query: searchQuery, extractContent, max_results });
     logger.info('Search complete', {
       component: 'TavilySearch',
-      resultCount: result.results?.length ?? result.searchResults?.length
+      resultCount: result.results?.length
     });
   } catch (error) {
     logger.error('Error performing search', { component: 'TavilySearch', error });

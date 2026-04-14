@@ -376,6 +376,20 @@ class ToolExecutor {
         );
       }
 
+      // Apply per-request tool parameter defaults (may differ from global schema defaults,
+      // e.g. when resolveWebsearchTool overrides maxResults/extractContent from app.websearch).
+      // This ensures admin-configured values are enforced even when the LLM omits optional params.
+      const requestToolDef = tools.find(
+        t => normalizeToolName(t.id) === toolCall.function.name || t.id === toolId
+      );
+      if (requestToolDef?.parameters?.properties) {
+        for (const [key, prop] of Object.entries(requestToolDef.parameters.properties)) {
+          if (args[key] === undefined && prop.default !== undefined) {
+            args[key] = prop.default;
+          }
+        }
+      }
+
       // Regular tool execution
       const result = await runTool(toolId, { ...args, chatId, user, appConfig: app });
       actionTracker.trackToolCallEnd(chatId, { toolName: toolId, toolOutput: result });

@@ -54,10 +54,17 @@ export async function up(ctx) {
     const extractContent =
       app.tools.includes('enhancedWebSearch') || app.tools.includes('webContentExtractor');
 
+    // Infer useNativeSearch from whether native search tools (googleSearch, webSearch) were
+    // explicitly configured. If only external providers were used, preserve that intent by
+    // setting useNativeSearch: false so migration doesn't silently switch Gemini/GPT models
+    // to their built-in search.
+    const hasNativeTools = app.tools.includes('googleSearch') || app.tools.includes('webSearch');
+    const useNativeSearch = hasNativeTools;
+
     app.websearch = {
       enabled: true,
       provider,
-      useNativeSearch: true,
+      useNativeSearch,
       maxResults: 5,
       extractContent,
       contentMaxLength: 3000,
@@ -69,7 +76,7 @@ export async function up(ctx) {
 
     await ctx.writeJson(`apps/${file}`, app);
     ctx.log(
-      `Migrated websearch config in apps/${file} (provider: ${provider}, extractContent: ${extractContent})`
+      `Migrated websearch config in apps/${file} (provider: ${provider}, useNativeSearch: ${useNativeSearch}, extractContent: ${extractContent})`
     );
     migrated++;
   }
