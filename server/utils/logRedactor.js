@@ -144,6 +144,82 @@ export function safeLog(...args) {
 }
 
 /**
+ * Redact sensitive fields from objects
+ * @param {any} obj - Object that may contain sensitive fields
+ * @returns {any} Object with redacted sensitive values
+ */
+export function redactObject(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+
+  // Handle arrays
+  if (Array.isArray(obj)) {
+    return obj.map(item => redactObject(item));
+  }
+
+  // Deep clone to avoid modifying the original
+  const redacted = { ...obj };
+
+  // List of sensitive field names (exact match, case-insensitive)
+  const sensitiveFields = [
+    'apikey',
+    'api_key',
+    'apiKey',
+    'token',
+    'accesstoken',
+    'access_token',
+    'accessToken',
+    'password',
+    'secret',
+    'clientsecret',
+    'client_secret',
+    'clientSecret',
+    'privatekey',
+    'private_key',
+    'privateKey',
+    'authorization',
+    'auth',
+    'bearer',
+    'jwt',
+    'jwttoken',
+    'jwt_token',
+    'sessionid',
+    'session_id',
+    'sessionId',
+    'refreshtoken',
+    'refresh_token',
+    'refreshToken'
+  ];
+
+  // Redact sensitive fields recursively
+  for (const key of Object.keys(redacted)) {
+    const lowerKey = key.toLowerCase();
+
+    // Check if field name exactly matches any sensitive field
+    if (sensitiveFields.includes(lowerKey)) {
+      const value = redacted[key];
+      if (typeof value === 'string' && value.length > 0) {
+        // For encrypted values starting with "ENC[", keep them as they're already masked
+        if (value.startsWith('ENC[')) {
+          redacted[key] = '[ENCRYPTED]';
+        } else if (value.length > 10) {
+          // Show first few characters for debugging
+          redacted[key] = value.substring(0, 4) + '...[REDACTED]';
+        } else {
+          redacted[key] = '[REDACTED]';
+        }
+      } else {
+        redacted[key] = '[REDACTED]';
+      }
+    } else if (typeof redacted[key] === 'object' && redacted[key] !== null) {
+      // Recursively redact nested objects
+      redacted[key] = redactObject(redacted[key]);
+    }
+  }
+
+  return redacted;
+}
+
+/**
  * Create a safe logger.error wrapper that redacts sensitive information
  * @param {...any} args - Arguments to log
  */

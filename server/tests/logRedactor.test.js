@@ -7,7 +7,8 @@ import {
   redactUrl,
   redactHeaders,
   redactRequestBody,
-  redactLogMessage
+  redactLogMessage,
+  redactObject
 } from '../utils/logRedactor.js';
 
 logger.info('Running log redaction tests...\n');
@@ -112,6 +113,63 @@ logger.info('\nTesting redactLogMessage()...');
   const redacted4 = redactLogMessage(message4);
   assert.strictEqual(redacted4, message4);
   logger.info('✓ Normal text preserved');
+}
+
+// Test redactObject (NEW)
+logger.info('\nTesting redactObject()...');
+{
+  const obj = {
+    id: 'model-1',
+    name: 'Test Model',
+    apiKey: 'sk-1234567890abcdefghijklmnop',
+    provider: 'openai',
+    tokenLimit: 4096
+  };
+  const redacted = redactObject(obj);
+  assert.strictEqual(redacted.id, 'model-1');
+  assert.strictEqual(redacted.name, 'Test Model');
+  assert.ok(redacted.apiKey.includes('[REDACTED]'), 'API key should be redacted');
+  assert.ok(!redacted.apiKey.includes('sk-1234567890abcdefghijklmnop'), 'Key should be hidden');
+  assert.strictEqual(redacted.provider, 'openai');
+  assert.strictEqual(redacted.tokenLimit, 4096);
+  logger.info('✓ Object with API key redacted correctly');
+
+  const obj2 = {
+    config: {
+      model: 'gpt-4',
+      apiKey: 'ENC[AES256_GCM,data:encrypted123,iv:abc,tag:def,type:str]',
+      settings: {
+        temperature: 0.7,
+        secret: 'my-secret-value'
+      }
+    }
+  };
+  const redacted2 = redactObject(obj2);
+  assert.strictEqual(redacted2.config.model, 'gpt-4');
+  assert.strictEqual(redacted2.config.apiKey, '[ENCRYPTED]');
+  assert.strictEqual(redacted2.config.settings.temperature, 0.7);
+  assert.ok(redacted2.config.settings.secret.includes('[REDACTED]'), 'Secret should be redacted');
+  logger.info('✓ Encrypted values handled correctly');
+
+  const obj3 = {
+    models: [
+      { id: 'model-1', apiKey: 'key1', name: 'Model 1' },
+      { id: 'model-2', token: 'token2', name: 'Model 2' }
+    ]
+  };
+  const redacted3 = redactObject(obj3);
+  assert.strictEqual(redacted3.models[0].id, 'model-1');
+  assert.ok(redacted3.models[0].apiKey.includes('[REDACTED]'), 'Array item 1 API key redacted');
+  assert.ok(redacted3.models[1].token.includes('[REDACTED]'), 'Array item 2 token redacted');
+  logger.info('✓ Arrays with sensitive fields redacted correctly');
+
+  // Ensure original is not modified
+  assert.strictEqual(
+    obj.apiKey,
+    'sk-1234567890abcdefghijklmnop',
+    'Original should not be modified'
+  );
+  logger.info('✓ Original object not modified');
 }
 
 logger.info('\n✅ All log redaction tests passed!');
