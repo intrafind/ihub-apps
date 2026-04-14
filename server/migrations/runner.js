@@ -185,7 +185,9 @@ function createMigrationContext(contentsDir, defaultsDir, migration) {
         throw error;
       }
       if (pattern) {
-        const regex = new RegExp(pattern);
+        // Convert glob pattern to regex (e.g., *.json → ^.*\.json$)
+        const escaped = pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+        const regex = new RegExp(`^${escaped}$`);
         return entries.filter(e => regex.test(e));
       }
       return entries;
