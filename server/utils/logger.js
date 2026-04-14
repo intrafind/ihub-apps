@@ -250,38 +250,154 @@ export function getLogLevelInfo() {
  * Supports two patterns:
  * 1. logger.info('message', { component: 'MyComponent', ...otherMeta })
  * 2. logger.info({ component: 'MyComponent', message: 'my message', ...otherMeta })
+ *
+ * Also automatically redacts sensitive information from objects
  */
 function processLogArgs(args) {
+  let logData;
+
   // If first arg is an object with a message property, use it directly
   if (args.length === 1 && typeof args[0] === 'object' && args[0].message) {
-    return args[0];
+    logData = args[0];
   }
-
   // If first arg is a string and second is an object, combine them
-  if (args.length >= 2 && typeof args[0] === 'string' && typeof args[1] === 'object') {
-    return { message: args[0], ...args[1] };
+  else if (args.length >= 2 && typeof args[0] === 'string' && typeof args[1] === 'object') {
+    logData = { message: args[0], ...args[1] };
   }
-
   // If first arg is a string only, convert to object
-  if (args.length === 1 && typeof args[0] === 'string') {
-    return { message: args[0] };
+  else if (args.length === 1 && typeof args[0] === 'string') {
+    logData = { message: args[0] };
   }
-
   // For backward compatibility with winston's multiple args
   // Convert to message with metadata
-  const message = args[0];
-  const meta = args.slice(1).reduce((acc, arg) => {
-    if (typeof arg === 'object') {
-      return { ...acc, ...arg };
-    }
-    return acc;
-  }, {});
+  else {
+    const message = args[0];
+    const meta = args.slice(1).reduce((acc, arg) => {
+      if (typeof arg === 'object') {
+        return { ...acc, ...arg };
+      }
+      return acc;
+    }, {});
 
-  if (typeof message === 'object') {
-    return { ...message, ...meta };
+    if (typeof message === 'object') {
+      logData = { ...message, ...meta };
+    } else {
+      logData = Object.keys(meta).length > 0 ? { message, ...meta } : { message };
+    }
   }
 
-  return Object.keys(meta).length > 0 ? { message, ...meta } : { message };
+  // Redact sensitive information from the log data
+  return redactSensitiveData(logData);
+}
+
+/**
+ * Redact API keys from URLs in query parameters
+ * @param {string} url - URL that may contain API keys
+ * @returns {string} URL with redacted API keys
+ */
+function redactUrlParams(url) {
+  if (!url || typeof url !== 'string') return url;
+
+  // Redact Google API keys in query parameters (?key=xxx or &key=xxx)
+  let redacted = url.replace(/([?&]key=)[^&]+/gi, '$1[REDACTED]');
+
+  // Redact other common API key patterns in query strings
+  redacted = redacted.replace(/([?&]api[_-]?key=)[^&]+/gi, '$1[REDACTED]');
+  redacted = redacted.replace(/([?&]apikey=)[^&]+/gi, '$1[REDACTED]');
+  redacted = redacted.replace(/([?&]token=)[^&]+/gi, '$1[REDACTED]');
+  redacted = redacted.replace(/([?&]access[_-]?token=)[^&]+/gi, '$1[REDACTED]');
+
+  return redacted;
+}
+
+/**
+ * Redact sensitive information from log data
+ * @param {Object} data - Log data object
+ * @returns {Object} Redacted log data
+ */
+function redactSensitiveData(data) {
+  if (!data || typeof data !== 'object') return data;
+
+  // List of sensitive field names (exact match or starts with pattern)
+  // Only redact these if they contain string values, not objects
+  const exactSensitiveFields = [
+    'apikey',
+    'api_key',
+    'apiKey',
+    'token',
+    'accesstoken',
+    'access_token',
+    'accessToken',
+    'password',
+    'secret',
+    'clientsecret',
+    'client_secret',
+    'clientSecret',
+    'privatekey',
+    'private_key',
+    'privateKey',
+    'authorization',
+    'bearer',
+    'jwt',
+    'jwttoken',
+    'jwt_token',
+    'sessionid',
+    'session_id',
+    'sessionId',
+    'refreshtoken',
+    'refresh_token',
+    'refreshToken'
+  ];
+
+  const redacted = {};
+
+  for (const key of Object.keys(data)) {
+    const value = data[key];
+    const lowerKey = key.toLowerCase();
+
+    // Check if this is a sensitive field (exact match)
+    const isSensitive = exactSensitiveFields.includes(lowerKey);
+
+    // Only redact if it's sensitive AND a string value (not a nested object)
+    if (
+      isSensitive &&
+      (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    ) {
+      if (typeof value === 'string' && value.length > 0) {
+        // For encrypted values starting with "ENC[", keep them as they're already masked
+        if (value.startsWith('ENC[')) {
+          redacted[key] = '[ENCRYPTED]';
+        } else if (value.length > 10) {
+          // Show first few characters for debugging
+          redacted[key] = value.substring(0, 4) + '...[REDACTED]';
+        } else {
+          redacted[key] = '[REDACTED]';
+        }
+      } else {
+        redacted[key] = '[REDACTED]';
+      }
+    }
+    // Special handling for URL fields - redact query parameters
+    else if (typeof value === 'string' && lowerKey === 'url') {
+      redacted[key] = redactUrlParams(value);
+    }
+    // Recursively redact nested objects
+    else if (typeof value === 'object' && value !== null) {
+      if (Array.isArray(value)) {
+        redacted[key] = value.map(item =>
+          typeof item === 'object' ? redactSensitiveData(item) : item
+        );
+      } else {
+        redacted[key] = redactSensitiveData(value);
+      }
+    }
+    // Keep non-sensitive values as-is
+    else {
+      redacted[key] = value;
+    }
+  }
+
+  return redacted;
 }
 
 // Export logger methods for easy use
