@@ -969,31 +969,153 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Description**: Grounds Gemini responses with real-time information from Google Search, providing verifiable and up-to-date answers with citations
 - **Type**: Provider-handled (`isSpecialTool: true`)
 - **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured Gemini API key; no additional setup required
+- **Authentication**: Uses the configured Google Gemini API key; no additional setup required
 - **Response**: Returns grounding metadata with search queries, sources, and citations
+- **How it works**: When enabled in an app's tools array, Gemini models automatically invoke Google Search when they detect queries requiring current information. The search is performed directly by Google's infrastructure and results are incorporated into the response with citations.
+- **Use Cases**: Current events, fact-checking with authoritative sources, questions requiring real-time information
 
 ### `braveSearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Brave Search API
+- **Description**: Web search powered by the Brave Search API for privacy-focused search results
 - **Type**: Server-side execution
-- **Authentication**: Requires `BRAVE_API_KEY` environment variable
-- **Use Cases**: Privacy-focused web search alternative
+- **Parameters**:
+  - `query` (string, required): The search query or search terms
+- **Authentication**: Configure via **Admin Panel → Providers → Brave Search** or set `BRAVE_SEARCH_API_KEY` environment variable
+- **Configuration**:
+  - **Admin Panel Method** (Recommended):
+    1. Navigate to Admin → Providers
+    2. Find "Brave Search" under "Web Search Providers"
+    3. Click "Configure" and enter your API key
+    4. Save changes — no server restart required
+  - **Environment Variable Method**:
+    - Add `BRAVE_SEARCH_API_KEY=your_api_key` to your `config.env` file
+    - Restart the server for changes to take effect
+  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
+- **Returns**: Array of search results with:
+  - `title`: Page title
+  - `url`: Page URL
+  - `description`: Brief excerpt from the page
+  - `language`: Detected language of the result
+- **Default Behavior**: Returns standard web search results without content extraction
+- **Use Cases**: Privacy-focused web search, general information lookup, finding URLs for further processing
+
+**Example Tool Call**:
+```json
+{
+  "tool": "braveSearch",
+  "parameters": {
+    "query": "latest AI developments 2024"
+  }
+}
+```
 
 ### `tavilySearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Tavily Search API, optimized for AI agents
+- **Description**: Web search powered by the Tavily Search API, optimized for AI agents with configurable search depth
 - **Type**: Server-side execution
-- **Authentication**: Requires `TAVILY_API_KEY` environment variable
-- **Use Cases**: Research-oriented search with rich result summaries
+- **Parameters**:
+  - `query` (string, required): The search query or search terms
+  - `search_depth` (string, optional): Search depth level — `"basic"` (default) or `"advanced"`
+  - `max_results` (integer, optional): Maximum number of results to return (default: `5`, min: `1`, max: `10`)
+- **Authentication**: Configure via **Admin Panel → Providers → Tavily Search** or set `TAVILY_SEARCH_API_KEY` environment variable
+- **Configuration**:
+  - **Admin Panel Method** (Recommended):
+    1. Navigate to Admin → Providers
+    2. Find "Tavily Search" under "Web Search Providers"
+    3. Click "Configure" and enter your API key
+    4. Save changes — no server restart required
+  - **Environment Variable Method**:
+    - Add `TAVILY_SEARCH_API_KEY=your_api_key` to your `config.env` file
+    - Restart the server for changes to take effect
+  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
+- **Returns**: Array of search results with:
+  - `title`: Page title
+  - `url`: Page URL
+  - `description`: Content snippet from the page
+  - `score`: Relevance score (when available)
+- **Defaults**:
+  - `search_depth`: `"basic"`
+  - `max_results`: `5`
+- **Use Cases**: Research-oriented search, AI agent information gathering, content discovery
+
+**Example Tool Call**:
+```json
+{
+  "tool": "tavilySearch",
+  "parameters": {
+    "query": "quantum computing breakthroughs",
+    "search_depth": "advanced",
+    "max_results": 8
+  }
+}
+```
 
 ### `enhancedWebSearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web content extraction combining multiple sources for comprehensive results
+- **Description**: Combines web search with automatic content extraction from top results, providing comprehensive information gathering perfect for "chat with web" functionality
 - **Type**: Server-side execution
-- **Use Cases**: Deep-dive research, multi-source fact gathering
+- **How it works**: First performs a Brave Search, then automatically extracts full content from the top result pages, removing ads and navigation elements to provide clean, readable content
+- **Parameters**:
+  - `query` (string, required): The search query or search terms
+  - `extractContent` (boolean, optional): Whether to extract full content from search results (default: `true`)
+  - `maxResults` (integer, optional): Maximum number of search results to process for content extraction (default: `3`, min: `1`, max: `10`)
+  - `contentMaxLength` (integer, optional): Maximum length of extracted content per page in characters (default: `3000`, min: `500`, max: `10000`)
+- **Authentication**: Uses Brave Search API — requires same configuration as `braveSearch` tool
+- **Returns**: Object containing:
+  - `query`: The original search query
+  - `searchResults`: Array of all search results from Brave
+  - `extractedContent`: Array of results with extracted content (when `extractContent: true`)
+  - `summary`: Text summary of the operation
+  - `stats`: Statistics object with:
+    - `totalSearchResults`: Total number of search results found
+    - `processedResults`: Number of results processed for extraction
+    - `successfulExtractions`: Number of successful content extractions
+    - `failedExtractions`: Number of failed extractions
+- **Defaults**:
+  - `extractContent`: `true` (automatically extracts content)
+  - `maxResults`: `3` (processes top 3 results)
+  - `contentMaxLength`: `3000` (3000 characters per page)
+- **Performance**: Content extraction happens in parallel for faster results
+- **Error Handling**: If extraction fails for a specific URL, the search result is still returned with the original description
+- **Use Cases**:
+  - "Chat with web" applications requiring full context
+  - Deep research requiring actual page content
+  - Multi-source information synthesis
+  - Comprehensive fact gathering from multiple sources
+
+**Example Tool Call (Full Extraction)**:
+```json
+{
+  "tool": "enhancedWebSearch",
+  "parameters": {
+    "query": "artificial intelligence trends 2024",
+    "extractContent": true,
+    "maxResults": 5,
+    "contentMaxLength": 2000
+  }
+}
+```
+
+**Example Tool Call (Search Only)**:
+```json
+{
+  "tool": "enhancedWebSearch",
+  "parameters": {
+    "query": "programming tutorials",
+    "extractContent": false
+  }
+}
+```
+
+**Controlling Results and Content**:
+- To control the **number of search results** processed: Adjust `maxResults` (1-10)
+- To control **content length** per page: Adjust `contentMaxLength` (500-10000 characters)
+- To disable **content extraction** entirely: Set `extractContent: false` (returns only search results)
+- For **faster responses**: Use lower `maxResults` (e.g., 1-2) or disable content extraction
+- For **comprehensive research**: Use higher `maxResults` (e.g., 5-10) with higher `contentMaxLength`
 
 ### `iFinder`
 
