@@ -8,7 +8,6 @@ import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
-import { redactUrl } from '../../utils/logRedactor.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
 import logger from '../../utils/logger.js';
 
@@ -239,7 +238,7 @@ class StreamingHandler {
           provider: model.provider,
           httpStatus: llmResponse.status,
           statusText: llmResponse.statusText,
-          url: redactUrl(request.url),
+          url: request.url,
           details: errorInfo.details,
           code: errorInfo.code
         });

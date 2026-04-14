@@ -291,6 +291,26 @@ function processLogArgs(args) {
 }
 
 /**
+ * Redact API keys from URLs in query parameters
+ * @param {string} url - URL that may contain API keys
+ * @returns {string} URL with redacted API keys
+ */
+function redactUrlParams(url) {
+  if (!url || typeof url !== 'string') return url;
+
+  // Redact Google API keys in query parameters (?key=xxx or &key=xxx)
+  let redacted = url.replace(/([?&]key=)[^&]+/gi, '$1[REDACTED]');
+
+  // Redact other common API key patterns in query strings
+  redacted = redacted.replace(/([?&]api[_-]?key=)[^&]+/gi, '$1[REDACTED]');
+  redacted = redacted.replace(/([?&]apikey=)[^&]+/gi, '$1[REDACTED]');
+  redacted = redacted.replace(/([?&]token=)[^&]+/gi, '$1[REDACTED]');
+  redacted = redacted.replace(/([?&]access[_-]?token=)[^&]+/gi, '$1[REDACTED]');
+
+  return redacted;
+}
+
+/**
  * Redact sensitive information from log data
  * @param {Object} data - Log data object
  * @returns {Object} Redacted log data
@@ -356,6 +376,10 @@ function redactSensitiveData(data) {
       } else {
         redacted[key] = '[REDACTED]';
       }
+    }
+    // Special handling for URL fields - redact query parameters
+    else if (typeof value === 'string' && lowerKey === 'url') {
+      redacted[key] = redactUrlParams(value);
     }
     // Recursively redact nested objects
     else if (typeof value === 'object' && value !== null) {
