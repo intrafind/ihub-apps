@@ -288,7 +288,7 @@ export default function registerIntegrationTestRoutes(app) {
 
         // Try to make a simple request to verify connectivity
         // iAssistant conversation API endpoint
-        const conversationUrl = `${config.baseUrl.replace(/\/+$/, '')}/rag/api/v0/conversations`;
+        const conversationUrl = `${config.baseUrl.replace(/\/+$/, '')}/public-api/rag/api/v0/conversations`;
 
         logger.info('Testing iAssistant connection', {
           component: 'IntegrationTest',
