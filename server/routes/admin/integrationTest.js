@@ -367,11 +367,7 @@ export default function registerIntegrationTestRoutes(app) {
         }
       } catch (error) {
         logger.error('iAssistant test error', { component: 'IntegrationTest', error });
-        return sendErrorResponse(
-          res,
-          500,
-          error.message || 'iAssistant integration test failed'
-        );
+        return sendErrorResponse(res, 500, error.message || 'iAssistant integration test failed');
       }
     }
   );

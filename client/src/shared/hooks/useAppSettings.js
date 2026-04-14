@@ -20,6 +20,7 @@ function useAppSettings(appId, app) {
   const [thinkingBudget, setThinkingBudget] = useState(null);
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
+  const [websearchEnabled, setWebsearchEnabled] = useState(false);
   const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
   const [imageQuality, setImageQuality] = useState('Medium');
 
@@ -80,6 +81,7 @@ function useAppSettings(appId, app) {
       thinkingBudget: app.thinking?.budget ?? null,
       thinkingThoughts: app.thinking?.thoughts ?? null,
       enabledTools: app.tools || [],
+      websearchEnabled: app.websearch?.enabledByDefault ?? false,
       imageAspectRatio: app.imageGeneration?.aspectRatio || '1:1',
       imageQuality: app.imageGeneration?.quality || 'Medium'
     };
@@ -94,6 +96,7 @@ function useAppSettings(appId, app) {
     setThinkingBudget(initialState.thinkingBudget);
     setThinkingThoughts(initialState.thinkingThoughts);
     setEnabledTools(initialState.enabledTools);
+    setWebsearchEnabled(initialState.websearchEnabled);
     setImageAspectRatio(initialState.imageAspectRatio);
     setImageQuality(initialState.imageQuality);
 
@@ -115,6 +118,8 @@ function useAppSettings(appId, app) {
       if (savedSettings.thinkingThoughts !== undefined)
         setThinkingThoughts(savedSettings.thinkingThoughts);
       if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
+      if (savedSettings.websearchEnabled !== undefined)
+        setWebsearchEnabled(savedSettings.websearchEnabled);
       if (savedSettings.imageAspectRatio !== undefined)
         setImageAspectRatio(savedSettings.imageAspectRatio);
       if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
@@ -134,6 +139,7 @@ function useAppSettings(appId, app) {
         thinkingBudget,
         thinkingThoughts,
         enabledTools,
+        websearchEnabled,
         imageAspectRatio,
         imageQuality
       });
@@ -150,6 +156,7 @@ function useAppSettings(appId, app) {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    websearchEnabled,
     imageAspectRatio,
     imageQuality
   ]);
@@ -165,6 +172,7 @@ function useAppSettings(appId, app) {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    websearchEnabled,
     imageAspectRatio,
     imageQuality
   };
@@ -180,6 +188,7 @@ function useAppSettings(appId, app) {
     setThinkingBudget,
     setThinkingThoughts,
     setEnabledTools,
+    setWebsearchEnabled,
     setImageAspectRatio,
     setImageQuality
   };
