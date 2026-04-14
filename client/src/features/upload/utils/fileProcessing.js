@@ -15,7 +15,7 @@ const buildDefaultConfig = () => {
       },
       audio: {
         name: { en: 'Audio', de: 'Audio' },
-        mimeTypes: ['audio/mpeg', 'audio/wav']
+        mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/mp4']
       },
       video: {
         name: { en: 'Video', de: 'Video' },
@@ -39,6 +39,7 @@ const buildDefaultConfig = () => {
       'image/webp': { extensions: ['.webp'], displayName: 'WEBP', category: 'images' },
       'audio/mpeg': { extensions: ['.mp3'], displayName: 'MP3', category: 'audio' },
       'audio/wav': { extensions: ['.wav'], displayName: 'WAV', category: 'audio' },
+      'audio/mp4': { extensions: ['.m4a', '.mp4'], displayName: 'MP4 Audio', category: 'audio' },
       'video/mp4': { extensions: ['.mp4'], displayName: 'MP4', category: 'video' },
       'video/webm': { extensions: ['.webm'], displayName: 'WEBM', category: 'video' },
       'application/pdf': { extensions: ['.pdf'], displayName: 'PDF', category: 'documents' },

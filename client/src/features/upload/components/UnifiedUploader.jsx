@@ -80,7 +80,8 @@ const UnifiedUploader = ({
         'audio/mp3',
         'audio/wav',
         'audio/flac',
-        'audio/ogg'
+        'audio/ogg',
+        'audio/mp4'
       ]
     : [];
 

@@ -113,7 +113,8 @@ export function useFileUploadHandler() {
           'audio/mp3',
           'audio/wav',
           'audio/flac',
-          'audio/ogg'
+          'audio/ogg',
+          'audio/mp4'
         ]
       },
       // Video-specific settings
@@ -161,7 +162,8 @@ export function useFileUploadHandler() {
             'audio/mp3',
             'audio/wav',
             'audio/flac',
-            'audio/ogg'
+            'audio/ogg',
+            'audio/mp4'
           ]
         : [],
       supportedVideoFormats: videoUploadEnabled

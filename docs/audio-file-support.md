@@ -32,6 +32,7 @@ The following audio formats are supported:
 | WAV | `audio/wav` | `.wav` | Uncompressed audio, highest quality for speech |
 | FLAC | `audio/flac` | `.flac` | Lossless compressed audio |
 | OGG | `audio/ogg` | `.ogg` | Open-source compressed audio format |
+| MP4 | `audio/mp4` | `.mp4`, `.m4a` | MPEG-4 audio (used by QuickTime and Apple devices) |
 
 ### File Size Limits
 
@@ -90,7 +91,7 @@ To enable audio upload in an application, add the `audioUpload` configuration to
 
 **Default supported formats**:
 ```json
-["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg"]
+["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg", "audio/mp4"]
 ```
 
 ### Schema Validation
@@ -104,7 +105,7 @@ audioUpload: z.object({
   supportedFormats: z
     .array(z.string().regex(/^audio\//))
     .optional()
-    .default(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg'])
+    .default(['audio/mpeg', 'audio/mp3', 'audio/wav', 'audio/flac', 'audio/ogg', 'audio/mp4'])
 }).optional()
 ```
 
