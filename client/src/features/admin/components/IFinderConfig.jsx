@@ -32,6 +32,8 @@ function IFinderConfig() {
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState({ iFinder: false, iAssistant: false });
+  const [testResults, setTestResults] = useState({ iFinder: null, iAssistant: null });
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -125,6 +127,80 @@ function IFinderConfig() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestIFinder = async () => {
+    setTesting(prev => ({ ...prev, iFinder: true }));
+    setTestResults(prev => ({ ...prev, iFinder: null }));
+    setMessage('');
+
+    try {
+      const response = await makeAdminApiCall('/admin/integrations/ifinder/_test', {
+        method: 'POST'
+      });
+
+      setTestResults(prev => ({ ...prev, iFinder: response.data }));
+
+      if (response.data.success) {
+        setMessage({
+          type: 'success',
+          text: t('admin.iFinder.testSuccess', 'Connection test successful')
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: response.data.message || t('admin.iFinder.testFailed', 'Connection test failed')
+        });
+      }
+    } catch (error) {
+      setTestResults(prev => ({
+        ...prev,
+        iFinder: { success: false, message: error.message }
+      }));
+      setMessage({
+        type: 'error',
+        text: error.message || t('admin.iFinder.testFailed', 'Connection test failed')
+      });
+    } finally {
+      setTesting(prev => ({ ...prev, iFinder: false }));
+    }
+  };
+
+  const handleTestIAssistant = async () => {
+    setTesting(prev => ({ ...prev, iAssistant: true }));
+    setTestResults(prev => ({ ...prev, iAssistant: null }));
+    setMessage('');
+
+    try {
+      const response = await makeAdminApiCall('/admin/integrations/iassistant/_test', {
+        method: 'POST'
+      });
+
+      setTestResults(prev => ({ ...prev, iAssistant: response.data }));
+
+      if (response.data.success) {
+        setMessage({
+          type: 'success',
+          text: t('admin.iFinder.testSuccess', 'Connection test successful')
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: response.data.message || t('admin.iFinder.testFailed', 'Connection test failed')
+        });
+      }
+    } catch (error) {
+      setTestResults(prev => ({
+        ...prev,
+        iAssistant: { success: false, message: error.message }
+      }));
+      setMessage({
+        type: 'error',
+        text: error.message || t('admin.iFinder.testFailed', 'Connection test failed')
+      });
+    } finally {
+      setTesting(prev => ({ ...prev, iAssistant: false }));
     }
   };
 
@@ -436,6 +512,71 @@ function IFinderConfig() {
             </>
           )}
 
+          {/* Test Results Display */}
+          {(testResults.iFinder || testResults.iAssistant) && (
+            <div className="mb-4 p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+                {t('admin.iFinder.testResults.title', 'Test Results')}
+              </h4>
+              {testResults.iFinder && (
+                <div className="mb-2">
+                  <div className="flex items-center mb-1">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                      iFinder:
+                    </span>
+                    <span
+                      className={`text-sm font-medium ${
+                        testResults.iFinder.success
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {testResults.iFinder.success
+                        ? t('admin.iFinder.testResults.success', 'Success')
+                        : t('admin.iFinder.testResults.failed', 'Failed')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {testResults.iFinder.message}
+                  </p>
+                  {testResults.iFinder.details && (
+                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 overflow-x-auto">
+                      {JSON.stringify(testResults.iFinder.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+              {testResults.iAssistant && (
+                <div>
+                  <div className="flex items-center mb-1">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                      iAssistant:
+                    </span>
+                    <span
+                      className={`text-sm font-medium ${
+                        testResults.iAssistant.success
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {testResults.iAssistant.success
+                        ? t('admin.iFinder.testResults.success', 'Success')
+                        : t('admin.iFinder.testResults.failed', 'Failed')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {testResults.iAssistant.message}
+                  </p>
+                  {testResults.iAssistant.details && (
+                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 overflow-x-auto">
+                      {JSON.stringify(testResults.iAssistant.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Messages */}
           {message && (
             <div
@@ -466,51 +607,150 @@ function IFinderConfig() {
             </div>
           )}
 
-          {/* Save Button */}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`
-              inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium
-              rounded-md shadow-sm text-white
-              ${
-                saving
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-              }
-            `}
-          >
-            {saving ? (
-              <>
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {t('admin.iFinder.saving', 'Saving...')}
-              </>
-            ) : (
-              <>
-                <Icon name="save" size="md" className="mr-2" />
-                {t('admin.iFinder.save', 'Save iFinder Configuration')}
-              </>
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-3">
+            {/* Save Button */}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={`
+                inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium
+                rounded-md shadow-sm text-white
+                ${
+                  saving
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                }
+              `}
+            >
+              {saving ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  {t('admin.iFinder.saving', 'Saving...')}
+                </>
+              ) : (
+                <>
+                  <Icon name="save" size="md" className="mr-2" />
+                  {t('admin.iFinder.save', 'Save iFinder Configuration')}
+                </>
+              )}
+            </button>
+
+            {/* Test iFinder Button */}
+            {iFinderConfig.enabled && (
+              <button
+                onClick={handleTestIFinder}
+                disabled={testing.iFinder}
+                className={`
+                  inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600
+                  text-sm font-medium rounded-md shadow-sm
+                  ${
+                    testing.iFinder
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  }
+                `}
+              >
+                {testing.iFinder ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {t('admin.iFinder.testing', 'Testing...')}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check" size="md" className="mr-2" />
+                    {t('admin.iFinder.testIFinder', 'Test iFinder')}
+                  </>
+                )}
+              </button>
             )}
-          </button>
+
+            {/* Test iAssistant Button */}
+            {iFinderConfig.enabled && (
+              <button
+                onClick={handleTestIAssistant}
+                disabled={testing.iAssistant}
+                className={`
+                  inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600
+                  text-sm font-medium rounded-md shadow-sm
+                  ${
+                    testing.iAssistant
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  }
+                `}
+              >
+                {testing.iAssistant ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {t('admin.iFinder.testing', 'Testing...')}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check" size="md" className="mr-2" />
+                    {t('admin.iFinder.testIAssistant', 'Test iAssistant')}
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>
