@@ -9,6 +9,7 @@ When iHub Apps is deployed under a subdirectory (e.g., `https://mydomain/ihub`),
 ## The Fix
 
 The fix modifies `server/middleware/oidcAuth.js` to:
+
 1. Use `buildServerPath()` utility to dynamically include base path from `X-Forwarded-Prefix` header
 2. Construct callback URLs that respect the deployment subpath
 3. Ensure all redirect URLs include the base path
@@ -18,44 +19,52 @@ The fix modifies `server/middleware/oidcAuth.js` to:
 ### Scenario 1: Root Deployment (No Subpath)
 
 **Setup:**
+
 - Deploy iHub Apps at `https://mydomain/` (root)
 - Configure OIDC provider (e.g., ADFS)
 - No `X-Forwarded-Prefix` header set
 
 **Expected Behavior:**
+
 1. Click OIDC login button
 2. User redirects to `https://adfs-provider/authorize?...&redirect_uri=https://mydomain/api/auth/oidc/adfs/callback`
 3. After authentication, ADFS redirects back to `https://mydomain/api/auth/oidc/adfs/callback`
 4. Server processes authentication and redirects to `https://mydomain/`
 
 **URLs to verify:**
+
 - Callback URL in OIDC provider config: `https://mydomain/api/auth/oidc/adfs/callback`
 - Final redirect after authentication: `https://mydomain/`
 
 ### Scenario 2: Subpath Deployment (e.g., /ihub)
 
 **Setup:**
+
 - Deploy iHub Apps at `https://mydomain/ihub/`
 - Configure nginx to set `X-Forwarded-Prefix: /ihub` header
 - Configure OIDC provider (e.g., ADFS)
 
 **Expected Behavior:**
+
 1. Click OIDC login button
 2. User redirects to `https://adfs-provider/authorize?...&redirect_uri=https://mydomain/ihub/api/auth/oidc/adfs/callback`
 3. After authentication, ADFS redirects back to `https://mydomain/ihub/api/auth/oidc/adfs/callback`
 4. Server processes authentication and redirects to `https://mydomain/ihub/`
 
 **URLs to verify:**
+
 - Callback URL in OIDC provider config: `https://mydomain/ihub/api/auth/oidc/adfs/callback`
 - Final redirect after authentication: `https://mydomain/ihub/`
 
 ### Scenario 3: Subpath with Custom Return URL
 
 **Setup:**
+
 - Same as Scenario 2
 - User initiates login from a specific page (e.g., `/ihub/apps/chat`)
 
 **Expected Behavior:**
+
 1. Click OIDC login button from `/ihub/apps/chat`
 2. User redirects to ADFS provider
 3. After authentication, redirects back to callback URL
@@ -77,6 +86,7 @@ location /ihub/ {
 ## Manual Testing Steps
 
 1. **Deploy with subpath:**
+
    ```bash
    # Set up nginx with X-Forwarded-Prefix header
    # Start iHub Apps backend on port 3000
@@ -108,12 +118,14 @@ If authentication fails:
    - NOT `https://mydomain/api/auth/oidc/{provider}/callback`
 
 2. **Verify X-Forwarded-Prefix header:**
+
    ```bash
    # Check nginx is setting the header correctly
    curl -I https://mydomain/ihub/ | grep -i x-forwarded-prefix
    ```
 
 3. **Check server logs:**
+
    ```bash
    npm run logs
    # Look for OIDC authentication logs showing callback URL
