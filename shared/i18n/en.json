@@ -524,6 +524,10 @@
       "keycloakDescription": "Open source identity management",
       "customProvider": "Custom Provider",
       "customProviderDescription": "Configure a custom OIDC provider with your own settings",
+      "callbackURL": "Callback URL",
+      "callbackURLOptional": "(Optional - Auto-generated if empty)",
+      "callbackURLPlaceholder": "/api/auth/oidc/{{providerName}}/callback",
+      "callbackURLHelp": "Leave empty to auto-generate. Override for custom domains or subpath deployments.",
       "oauth": {
         "title": "OAuth Clients",
         "subtitle": "Manage OAuth 2.0 clients for external API access",

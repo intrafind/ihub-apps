@@ -737,6 +737,10 @@
       "keycloakDescription": "Open-Source-Identitätsverwaltung",
       "customProvider": "Benutzerdefinierter Anbieter",
       "customProviderDescription": "Konfigurieren Sie einen benutzerdefinierten OIDC-Anbieter mit Ihren eigenen Einstellungen",
+      "callbackURL": "Callback-URL",
+      "callbackURLOptional": "(Optional - Wird automatisch generiert, wenn leer)",
+      "callbackURLPlaceholder": "/api/auth/oidc/{{providerName}}/callback",
+      "callbackURLHelp": "Leer lassen für automatische Generierung. Überschreiben für benutzerdefinierte Domains oder Subpfad-Deployments.",
       "oauth": {
         "title": "OAuth-Clients",
         "subtitle": "OAuth 2.0-Clients für externen API-Zugriff verwalten",

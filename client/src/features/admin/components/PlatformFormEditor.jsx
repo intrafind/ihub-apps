@@ -916,6 +916,39 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                         className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
                       />
                     </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.auth.callbackURL', 'Callback URL')}{' '}
+                        <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                          {t(
+                            'admin.auth.callbackURLOptional',
+                            '(Optional - Auto-generated if empty)'
+                          )}
+                        </span>
+                      </label>
+                      <input
+                        type="url"
+                        placeholder={t(
+                          'admin.auth.callbackURLPlaceholder',
+                          '/api/auth/oidc/{{providerName}}/callback'
+                        ).replace('{{providerName}}', provider.name || 'provider')}
+                        value={provider.callbackURL || ''}
+                        onChange={e => updateOidcProvider(index, 'callbackURL', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {t(
+                          'admin.auth.callbackURLHelp',
+                          'Leave empty to auto-generate. Override for custom domains or subpath deployments.'
+                        )}
+                      </p>
+                      {!provider.callbackURL && provider.name && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                          <Icon name="information-circle" className="h-3 w-3 inline mr-1" />
+                          Auto-generated: /api/auth/oidc/{provider.name}/callback
+                        </p>
+                      )}
+                    </div>
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                         Groups Attribute
