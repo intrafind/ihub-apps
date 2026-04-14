@@ -136,7 +136,7 @@
     "cross-env": "^10.1.0",
     "electron": "^41.1.0",
     "electron-builder": "^26.7.0",
-    "esbuild": "^0.27.4",
+    "esbuild": "^0.28.0",
     "@eslint-react/eslint-plugin": "^3.0.0",
     "eslint": "^10.2.0",
     "globals": "^17.3.0",
