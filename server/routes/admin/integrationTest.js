@@ -14,7 +14,7 @@ import { sendErrorResponse } from '../../utils/responseHelpers.js';
 export default function registerIntegrationTestRoutes(app) {
   /**
    * @swagger
-   * /admin/integrations/test/ifinder:
+   * /admin/integrations/ifinder/_test:
    *   post:
    *     summary: Test iFinder integration
    *     description: Tests the iFinder connection and JWT authentication (admin access required)
@@ -46,7 +46,7 @@ export default function registerIntegrationTestRoutes(app) {
    *         description: Test failed
    */
   app.post(
-    buildServerPath('/api/admin/integrations/test/ifinder'),
+    buildServerPath('/api/admin/integrations/ifinder/_test'),
     adminAuth,
     async (req, res) => {
       try {
@@ -195,7 +195,7 @@ export default function registerIntegrationTestRoutes(app) {
 
   /**
    * @swagger
-   * /admin/integrations/test/iassistant:
+   * /admin/integrations/iassistant/_test:
    *   post:
    *     summary: Test iAssistant integration
    *     description: Tests the iAssistant connection and configuration (admin access required)
@@ -227,7 +227,7 @@ export default function registerIntegrationTestRoutes(app) {
    *         description: Test failed
    */
   app.post(
-    buildServerPath('/api/admin/integrations/test/iassistant'),
+    buildServerPath('/api/admin/integrations/iassistant/_test'),
     adminAuth,
     async (req, res) => {
       try {
@@ -286,9 +286,9 @@ export default function registerIntegrationTestRoutes(app) {
           });
         }
 
-        // Try to make a simple health/info request to verify connectivity
-        // iAssistant typically has a conversation endpoint
-        const conversationUrl = `${config.baseUrl.replace(/\/+$/, '')}/public-api/conversation/api/v1/health`;
+        // Try to make a simple request to verify connectivity
+        // iAssistant conversation API endpoint
+        const conversationUrl = `${config.baseUrl.replace(/\/+$/, '')}/rag/api/v0/conversations`;
 
         logger.info('Testing iAssistant connection', {
           component: 'IntegrationTest',

@@ -136,7 +136,7 @@ function IFinderConfig() {
     setMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/integrations/test/ifinder', {
+      const response = await makeAdminApiCall('/admin/integrations/ifinder/_test', {
         method: 'POST'
       });
 
@@ -173,7 +173,7 @@ function IFinderConfig() {
     setMessage('');
 
     try {
-      const response = await makeAdminApiCall('/admin/integrations/test/iassistant', {
+      const response = await makeAdminApiCall('/admin/integrations/iassistant/_test', {
         method: 'POST'
       });
 
