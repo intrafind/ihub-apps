@@ -339,7 +339,10 @@ function redactSensitiveData(data) {
     const isSensitive = exactSensitiveFields.includes(lowerKey);
 
     // Only redact if it's sensitive AND a string value (not a nested object)
-    if (isSensitive && (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')) {
+    if (
+      isSensitive &&
+      (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+    ) {
       if (typeof value === 'string' && value.length > 0) {
         // For encrypted values starting with "ENC[", keep them as they're already masked
         if (value.startsWith('ENC[')) {
