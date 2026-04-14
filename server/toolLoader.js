@@ -290,6 +290,9 @@ function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
   return [cloned];
 }
 
+// Exported for unit testing only — not part of the public API
+export { resolveWebsearchTool as _resolveWebsearchTool };
+
 /**
  * Get tools applicable to a specific app
  * @param {Object} app - app configuration object
