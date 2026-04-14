@@ -60,15 +60,7 @@ export function configureOidcProviders() {
           tokenURL: provider.tokenURL,
           clientID: provider.clientId,
           clientSecret: provider.clientSecret,
-          // Use function for callbackURL to support subpath deployments
-          // The function receives the request object, allowing us to detect the base path
-          // from X-Forwarded-Prefix header for reverse proxy scenarios
-          callbackURL:
-            provider.callbackURL ||
-            function (req) {
-              // Use buildServerPath to include base path from X-Forwarded-Prefix header
-              return buildServerPath(`/api/auth/oidc/${provider.name}/callback`);
-            },
+          callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
           scope: provider.scope || ['openid', 'profile', 'email'],
           state: true,
           pkce: provider.pkce ?? true,
@@ -452,8 +444,13 @@ export function createOidcAuthHandler(providerName) {
       }
     }
 
+    // Pass callbackURL at request time so buildServerPath() can detect the base path
+    // from X-Forwarded-Prefix header for subpath deployments
+    const callbackURL =
+      provider.callbackURL || buildServerPath(`/api/auth/oidc/${providerName}/callback`);
     passport.authenticate(provider.strategyName, {
-      scope: provider.scope || ['openid', 'profile', 'email']
+      scope: provider.scope || ['openid', 'profile', 'email'],
+      callbackURL
     })(req, res, next);
   };
 }
@@ -497,7 +494,10 @@ export function createOidcCallbackHandler(providerName) {
       return res.redirect(`${buildServerPath('/')}?auth=error&message=${errorMessage}`);
     }
 
-    passport.authenticate(provider.strategyName, (err, user, info) => {
+    // Pass callbackURL at request time for subpath deployment support
+    const callbackURL =
+      provider.callbackURL || buildServerPath(`/api/auth/oidc/${providerName}/callback`);
+    passport.authenticate(provider.strategyName, { callbackURL }, (err, user, info) => {
       if (err) {
         authDebugService.log(
           'oidc',
