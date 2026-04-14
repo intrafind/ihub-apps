@@ -25,7 +25,14 @@
     "audioUpload": {
       "enabled": true,
       "maxFileSizeMB": 20,
-      "supportedFormats": ["audio/mpeg", "audio/mp3", "audio/wav", "audio/flac", "audio/ogg", "audio/mp4"]
+      "supportedFormats": [
+        "audio/mpeg",
+        "audio/mp3",
+        "audio/wav",
+        "audio/flac",
+        "audio/ogg",
+        "audio/mp4"
+      ]
     }
   },
   "allowedModels": ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp-01-21"],

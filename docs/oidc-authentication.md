@@ -4,7 +4,9 @@ This document explains how to configure and use OpenID Connect (OIDC) authentica
 
 ## Overview
 
-iHub Apps now supports OIDC authentication in addition to proxy and local authentication modes. OIDC enables integration with popular identity providers like Google, Microsoft, Auth0, and other OpenID Connect compliant providers.
+iHub Apps now supports OIDC authentication in addition to proxy and local authentication modes. OIDC enables integration with popular identity providers like Google, Microsoft, Auth0, ADFS, and other OpenID Connect compliant providers.
+
+**For ADFS-specific setup instructions, see the [ADFS Authentication Guide](./ADFS-AUTHENTICATION-GUIDE.md).**
 
 ## Features
 

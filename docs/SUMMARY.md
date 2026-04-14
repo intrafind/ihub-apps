@@ -25,6 +25,7 @@
     - [JWT Authentication](jwt-authentication.md)
     - [JWT Well-Known Endpoints](jwt-well-known-endpoints.md)
     - [OIDC Authentication](oidc-authentication.md)
+    - [ADFS Authentication Guide](ADFS-AUTHENTICATION-GUIDE.md)
     - [OAuth Authorization Code Flow](oauth-authorization-code.md)
     - [OAuth Integration Guide](oauth-integration-guide.md)
     - [API Curl Examples](oauth-api-examples.md)
