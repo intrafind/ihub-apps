@@ -66,10 +66,7 @@ export function useFileUploadHandler() {
           modelId.includes('4o')));
 
     // Determine if audio upload should be disabled based on model capabilities
-    // Use model metadata (supportsAudio) if available, fallback to name heuristics
-    const isAudioModel =
-      selectedModel?.supportsAudio ??
-      (modelId && (modelId.includes('gemini-2') || modelId.includes('gemini-3')));
+    const isAudioModel = selectedModel?.supportsAudio === true;
 
     const imageUploadEnabled = imageConfig?.enabled !== false && isVisionModel;
     const audioUploadEnabled = audioConfig?.enabled !== false && isAudioModel;

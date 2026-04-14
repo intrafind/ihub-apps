@@ -9,7 +9,7 @@
  * runtime based on the active model's provider.
  */
 
-export const version = '024';
+export const version = '025';
 export const description = 'migrate_websearch_tools';
 
 const WEBSEARCH_TOOL_IDS = [

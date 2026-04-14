@@ -11,7 +11,7 @@
  * - gemini-3.1-flash-image.json: Fix ID from "gemini-3.1-pro-image" to "gemini-3.1-flash-image"
  */
 
-export const version = '023';
+export const version = '024';
 export const description = 'rename_model_files_to_match_ids';
 
 export async function up(ctx) {

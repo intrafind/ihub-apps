@@ -475,6 +475,58 @@ function ModelFormEditor({
                     <div className="flex items-start">
                       <div className="flex items-center h-5">
                         <input
+                          id="supportsVision"
+                          name="supportsVision"
+                          type="checkbox"
+                          checked={data.supportsVision || false}
+                          onChange={handleInputChange}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label
+                          htmlFor="supportsVision"
+                          className="font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          {t('admin.models.fields.supportsVision', 'Supports Vision')}
+                        </label>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.models.hints.supportsVision',
+                            'Enable if this model can process image inputs'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="supportsAudio"
+                          name="supportsAudio"
+                          type="checkbox"
+                          checked={data.supportsAudio || false}
+                          onChange={handleInputChange}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label
+                          htmlFor="supportsAudio"
+                          className="font-medium text-gray-700 dark:text-gray-300"
+                        >
+                          {t('admin.models.fields.supportsAudio', 'Supports Audio')}
+                        </label>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.models.hints.supportsAudio',
+                            'Enable if this model can process audio inputs'
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
                           id="enabled"
                           name="enabled"
                           type="checkbox"

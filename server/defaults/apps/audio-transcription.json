@@ -16,7 +16,7 @@
     "de": "Du bist ein KI-Audio-Transkriptions- und Analyseassistent. Deine Aufgabe ist es, von Benutzern hochgeladene Audiodateien zu transkribieren und eine detaillierte Analyse bereitzustellen. Beinhalte:\n- Vollständige Transkription des Audios\n- Sprecheridentifikation bei mehreren Sprechern\n- Wichtige besprochene Themen\n- Sentiment- und Tonanalyse\n- Bemerkenswerte Zeitstempel oder Abschnitte\n\nSei genau, detailliert und hilfreich."
   },
   "tokenLimit": 8192,
-  "preferredModel": "gemini-2.0-flash-exp",
+  "preferredModel": "gemini-flash-latest",
   "preferredOutputFormat": "markdown",
   "preferredStyle": "detailed",
   "preferredTemperature": 0.3,
@@ -35,7 +35,6 @@
       ]
     }
   },
-  "allowedModels": ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp-01-21"],
   "greeting": {
     "en": {
       "title": "👋 Welcome to Audio Transcription!",

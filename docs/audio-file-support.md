@@ -1,6 +1,6 @@
 # Audio File Upload Support
 
-iHub Apps supports audio file uploads for transcription, analysis, and processing using Google Gemini 2.0+ models. This feature enables applications to work with audio content including speech-to-text, speaker identification, sentiment analysis, and audio summarization.
+iHub Apps supports audio file uploads for transcription, analysis, and processing using Google Gemini and OpenAI models. This feature enables applications to work with audio content including speech-to-text, speaker identification, sentiment analysis, and audio summarization.
 
 ## Overview
 
@@ -15,12 +15,32 @@ Audio file support allows users to upload audio files (MP3, WAV, FLAC, OGG) dire
 
 ## Supported Models
 
-Currently, audio file support is available for:
+Audio file support is available for any model with `supportsAudio: true` in its configuration. This flag can be set via the Admin UI under model settings.
 
-- **Gemini 2.0 Flash (Experimental)** - `gemini-2.0-flash-exp`
-- **Gemini 2.0 Flash Thinking (Experimental)** - `gemini-2.0-flash-thinking-exp-01-21`
+### Google Gemini
 
-Future Gemini models and other providers may add audio support as the technology evolves.
+All current Gemini models support audio input:
+
+- **Gemini 3.1 Pro** - `gemini-3.1-pro`
+- **Gemini 3.1 Flash Image** - `gemini-3.1-flash-image`
+- **Gemini 3.1 Flash Lite** - `gemini-3.1-flash-lite`
+- **Gemini 3 Pro** - `gemini-3-pro`
+- **Gemini 3 Flash** - `gemini-3-flash`
+- **Gemini 2.5 Pro** - `gemini-2.5-pro`
+- **Gemini 2.5 Flash** - `gemini-2.5-flash`
+- **Gemini Flash Latest** - `gemini-flash-latest`
+- **Gemini Flash Lite Latest** - `gemini-flash-lite-latest`
+
+### OpenAI
+
+OpenAI models with audio input support (GPT-4o and newer):
+
+- **GPT-5** - `gpt-5`
+- **GPT-4o** - `gpt-4o` (requires `supportsAudio: true` in model config)
+
+### Enabling Audio for Custom Models
+
+Set `supportsAudio: true` in the model configuration via the Admin panel or directly in the model JSON file.
 
 ## Supported Audio Formats
 
@@ -75,7 +95,7 @@ To enable audio upload in an application, add the `audioUpload` configuration to
       ]
     }
   },
-  "allowedModels": ["gemini-2.0-flash-exp", "gemini-2.0-flash-thinking-exp-01-21"]
+  "preferredModel": "gemini-flash-latest"
 }
 ```
 
@@ -115,11 +135,11 @@ Models can declare audio support using the `supportsAudio` field:
 
 ```json
 {
-  "id": "gemini-2.0-flash-exp",
-  "modelId": "gemini-2.0-flash-exp",
+  "id": "gemini-flash-latest",
+  "modelId": "gemini-flash-latest",
   "name": {
-    "en": "Gemini 2.0 Flash (Experimental)",
-    "de": "Gemini 2.0 Flash (Experimentell)"
+    "en": "Gemini Flash Latest",
+    "de": "Gemini Flash Latest"
   },
   "provider": "google",
   "supportsAudio": true,
@@ -153,26 +173,40 @@ When a user uploads an audio file:
 
 ### Server-Side Processing
 
-The Google Gemini adapter handles audio files using the same `inlineData` format as images:
+Both the Google Gemini and OpenAI adapters handle audio files, each using their provider-specific format.
+
+**Google Gemini** uses `inlineData`:
 
 ```javascript
 {
   inlineData: {
     mimeType: 'audio/mpeg',
-    data: 'base64_encoded_audio_data' // Without data URL prefix
+    data: 'base64_encoded_audio_data'
   }
 }
 ```
 
-The adapter:
-1. Detects audio data using `hasAudioData(message)` helper
-2. Strips data URL prefixes with `cleanBase64Data()`
-3. Constructs Gemini API request with audio in `parts` array
-4. Supports multiple audio files in a single message
+**OpenAI** uses `input_audio`:
+
+```javascript
+{
+  type: 'input_audio',
+  input_audio: {
+    data: 'base64_encoded_audio_data',
+    format: 'mp3'
+  }
+}
+```
+
+Both adapters:
+1. Detect audio data using `hasAudioData(message)` helper from `BaseAdapter`
+2. Strip data URL prefixes with `cleanBase64Data()`
+3. Construct provider-specific API requests
+4. Support multiple audio files in a single message
 
 ### API Request Format
 
-Audio files are sent to the Gemini API as inline data within the message parts:
+**Google Gemini:**
 
 ```javascript
 {
@@ -185,6 +219,28 @@ Audio files are sent to the Gemini API as inline data within the message parts:
           "inlineData": {
             "mimeType": "audio/wav",
             "data": "<base64-encoded-audio>"
+          }
+        }
+      ]
+    }
+  ]
+}
+```
+
+**OpenAI:**
+
+```javascript
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "text", "text": "Transcribe this audio" },
+        {
+          "type": "input_audio",
+          "input_audio": {
+            "data": "<base64-encoded-audio>",
+            "format": "wav"
           }
         }
       ]
@@ -213,8 +269,7 @@ Audio files are sent to the Gemini API as inline data within the message parts:
       "supportedFormats": ["audio/wav", "audio/mp3"]
     }
   },
-  "preferredModel": "gemini-2.0-flash-exp",
-  "allowedModels": ["gemini-2.0-flash-exp"]
+  "preferredModel": "gemini-flash-latest"
 }
 ```
 
@@ -238,7 +293,7 @@ Audio files are sent to the Gemini API as inline data within the message parts:
     }
   },
   "tokenLimit": 16384,
-  "preferredModel": "gemini-2.0-flash-exp"
+  "preferredModel": "gemini-flash-latest"
 }
 ```
 
@@ -260,7 +315,7 @@ Audio files are sent to the Gemini API as inline data within the message parts:
       "maxFileSizeMB": 20
     }
   },
-  "preferredModel": "gemini-2.0-flash-exp"
+  "preferredModel": "gemini-flash-latest"
 }
 ```
 
@@ -287,7 +342,7 @@ When `allowMultiple` is enabled, users can upload multiple audio files in a sing
 ### Application Design
 
 1. **Clear Instructions**: Provide clear system prompts explaining what the model should do with audio
-2. **Model Selection**: Restrict to audio-capable models using `allowedModels`
+2. **Model Selection**: Use `preferredModel` to default to an audio-capable model
 3. **File Size**: Set appropriate `maxFileSizeMB` based on expected use case
 4. **Starter Prompts**: Include example prompts to guide users
 
@@ -321,11 +376,11 @@ AppChat attaches audioData to message
   ↓
 Message sent to server with audioData
   ↓
-Google adapter formats for Gemini API
+Provider adapter formats for API (Google/OpenAI)
   ↓
-Audio sent as inlineData with MIME type
+Audio sent in provider-specific format
   ↓
-Gemini processes and responds
+Model processes and responds
 ```
 
 ### File Structure
@@ -339,14 +394,15 @@ Key files implementing audio support:
 - **Chat UI**: `client/src/features/apps/pages/AppChat.jsx`
 - **Base Adapter**: `server/adapters/BaseAdapter.js`
 - **Google Adapter**: `server/adapters/google.js`
+- **OpenAI Adapter**: `server/adapters/openai.js`
 
 ## Troubleshooting
 
 ### Audio upload not available
 
 - Verify `audioUpload.enabled` is `true` in app configuration
-- Check that a Gemini 2.0+ model is selected
-- Ensure model has `supportsAudio: true` in model configuration
+- Ensure the selected model has `supportsAudio: true` (check in Admin > Models)
+- The audio file picker only appears when both conditions are met
 
 ### File upload fails
 
@@ -363,8 +419,9 @@ Key files implementing audio support:
 
 ### Model doesn't process audio
 
-- Verify using a Gemini 2.0+ model
-- Check that `GOOGLE_API_KEY` is configured
+- Verify model has `supportsAudio: true` in its configuration
+- For Google models: check that `GOOGLE_API_KEY` is configured
+- For OpenAI models: check that `OPENAI_API_KEY` is configured and model supports audio input
 - Ensure model is enabled in configuration
 - Check server logs for API errors
 
@@ -377,7 +434,7 @@ Potential improvements for audio support:
 3. **Automatic detection**: Smart model selection based on file type
 4. **Audio processing**: Pre-processing options (noise reduction, normalization)
 5. **Extended formats**: Support for additional audio formats
-6. **Provider expansion**: Audio support for more LLM providers
+6. **Provider expansion**: Audio support for Anthropic Claude and Mistral providers
 
 ## References
 
