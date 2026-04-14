@@ -1306,7 +1306,19 @@
       "defaultProfileId": "Standard-Profil-ID",
       "timeout": "Anfrage-Timeout (ms)",
       "saving": "Wird gespeichert...",
-      "save": "iFinder-Konfiguration speichern"
+      "save": "iFinder-Konfiguration speichern",
+      "testConnection": "Verbindung testen",
+      "testing": "Wird getestet...",
+      "testSuccess": "Verbindungstest erfolgreich",
+      "testFailed": "Verbindungstest fehlgeschlagen",
+      "testIFinder": "iFinder testen",
+      "testIAssistant": "iAssistant testen",
+      "testResults": {
+        "title": "Testergebnisse",
+        "success": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "details": "Details"
+      }
     }
   },
   "components": {

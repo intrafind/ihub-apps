@@ -1093,7 +1093,19 @@
       "defaultProfileId": "Default Profile ID",
       "timeout": "Request Timeout (ms)",
       "saving": "Saving...",
-      "save": "Save iFinder Configuration"
+      "save": "Save iFinder Configuration",
+      "testConnection": "Test Connection",
+      "testing": "Testing...",
+      "testSuccess": "Connection test successful",
+      "testFailed": "Connection test failed",
+      "testIFinder": "Test iFinder",
+      "testIAssistant": "Test iAssistant",
+      "testResults": {
+        "title": "Test Results",
+        "success": "Success",
+        "failed": "Failed",
+        "details": "Details"
+      }
     }
   },
   "components": {
