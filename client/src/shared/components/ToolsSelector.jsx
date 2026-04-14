@@ -4,7 +4,7 @@ import Icon from './Icon';
 import { fetchTools } from '../../api/api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 
-function ToolsSelector({ selectedTools = [], onToolsChange }) {
+function ToolsSelector({ selectedTools = [], onToolsChange, excludeToolIds = [] }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,14 +32,15 @@ function ToolsSelector({ selectedTools = [], onToolsChange }) {
     loadTools();
   }, []);
 
-  // Filter tools based on search term and exclude already selected
+  // Filter tools based on search term and exclude already selected or explicitly excluded
   const filteredTools = availableTools.filter(tool => {
     const toolName = getLocalizedContent(tool.name, currentLanguage) || tool.id;
     const toolDescription = getLocalizedContent(tool.description, currentLanguage) || '';
     const searchableText = `${toolName} ${toolDescription}`.toLowerCase();
     const matchesSearch = searchableText.includes(searchTerm.toLowerCase());
     const notSelected = !selectedTools.includes(tool.id);
-    return matchesSearch && notSelected;
+    const notExcluded = !excludeToolIds.includes(tool.id);
+    return matchesSearch && notSelected && notExcluded;
   });
 
   // Close dropdown when clicking outside

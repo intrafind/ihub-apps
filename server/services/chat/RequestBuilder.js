@@ -84,8 +84,8 @@ function filterModelsForApp(models, app) {
     availableModels = availableModels.filter(model => app.allowedModels.includes(model.id));
   }
 
-  // Filter by tools requirement
-  if (app?.tools && app.tools.length > 0) {
+  // Filter by tools requirement (app.tools array or websearch config both require tool support)
+  if ((app?.tools && app.tools.length > 0) || app?.websearch?.enabled) {
     availableModels = availableModels.filter(model => model.supportsTools);
   }
 
@@ -126,6 +126,7 @@ class RequestBuilder {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    websearchEnabled,
     imageAspectRatio,
     imageQuality,
     requestedSkill,
@@ -342,7 +343,14 @@ class RequestBuilder {
         return { success: false, error: apiKeyResult.error };
       }
 
-      const context = { user, chatId, language, enabledTools };
+      const context = {
+        user,
+        chatId,
+        language,
+        enabledTools,
+        modelProvider: model.provider,
+        websearchEnabled
+      };
       const tools = await getToolsForApp(app, language, context);
 
       // Build imageConfig if image generation is supported and parameters are provided

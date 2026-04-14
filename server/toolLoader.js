@@ -237,6 +237,57 @@ export async function loadTools(language = null) {
 }
 
 /**
+ * Resolve the appropriate websearch tool based on app config and model provider.
+ * Overrides tool parameter defaults with the values from app.websearch config.
+ * @param {Object} app - App configuration with optional websearch field
+ * @param {string} modelProvider - Provider of the selected model (e.g. 'google', 'openai-responses')
+ * @param {Array} allTools - All available tool definitions
+ * @param {boolean|undefined} websearchEnabled - User toggle: undefined = use enabledByDefault, false = disabled
+ * @returns {Array} Zero or one tool definition to inject
+ */
+function resolveWebsearchTool(app, modelProvider, allTools, websearchEnabled) {
+  if (!app.websearch?.enabled) return [];
+
+  // User explicitly disabled websearch for this request
+  if (websearchEnabled === false) return [];
+
+  const {
+    provider = 'auto',
+    useNativeSearch = true,
+    maxResults = 5,
+    extractContent = true,
+    contentMaxLength = 3000
+  } = app.websearch;
+
+  let toolId;
+  if (useNativeSearch && modelProvider === 'google') {
+    toolId = 'googleSearch';
+  } else if (useNativeSearch && modelProvider === 'openai-responses') {
+    toolId = 'webSearch';
+  } else {
+    toolId = provider === 'tavily' ? 'tavilySearch' : 'braveSearch';
+  }
+
+  const toolDef = allTools.find(t => t.id === toolId);
+  if (!toolDef) {
+    logger.warn('Websearch tool definition not found', { component: 'ToolLoader', toolId });
+    return [];
+  }
+
+  // Deep-clone so we don't mutate the cached tool definition
+  const cloned = JSON.parse(JSON.stringify(toolDef));
+  const props = cloned.parameters?.properties || {};
+
+  // Override parameter defaults with admin-configured websearch values
+  if (props.maxResults) props.maxResults.default = maxResults;
+  if (props.max_results) props.max_results.default = maxResults; // tavily uses snake_case
+  if (props.extractContent) props.extractContent.default = extractContent;
+  if (props.contentMaxLength) props.contentMaxLength.default = contentMaxLength;
+
+  return [cloned];
+}
+
+/**
  * Get tools applicable to a specific app
  * @param {Object} app - app configuration object
  * @param {string} language - Optional language for localization
@@ -275,6 +326,15 @@ export async function getToolsForApp(app, language = null, context = {}) {
       });
     }
   }
+
+  // Inject websearch tool resolved from app.websearch config + model provider
+  const websearchTools = resolveWebsearchTool(
+    app,
+    context.modelProvider,
+    allTools,
+    context.websearchEnabled
+  );
+  appTools = appTools.concat(websearchTools);
 
   // Add source-generated tools
   if (Array.isArray(app.sources) && app.sources.length > 0) {

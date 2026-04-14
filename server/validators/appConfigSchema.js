@@ -52,6 +52,19 @@ const starterPromptSchema = z.object({
   autoSend: z.boolean().optional().default(false)
 });
 
+// Web search configuration schema
+const websearchSchema = z
+  .object({
+    enabled: z.boolean().optional().default(false),
+    provider: z.enum(['auto', 'brave', 'tavily']).optional().default('auto'),
+    useNativeSearch: z.boolean().optional().default(true),
+    maxResults: z.number().int().min(1).max(20).optional().default(5),
+    extractContent: z.boolean().optional().default(true),
+    contentMaxLength: z.number().int().min(500).max(50000).optional().default(3000),
+    enabledByDefault: z.boolean().optional().default(false)
+  })
+  .optional();
+
 // Settings configuration schema
 const settingsSchema = z
   .object({
@@ -312,6 +325,7 @@ const baseAppConfigSchema = z.object({
   disallowModelSelection: z.boolean().optional().default(false),
   allowEmptyContent: z.boolean().optional().default(false),
   autoStart: z.boolean().optional().default(false),
+  websearch: websearchSchema,
   tools: z.array(z.string()).optional(),
   skills: z.array(z.string()).optional(),
   skillSettings: z

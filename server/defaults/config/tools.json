@@ -40,8 +40,8 @@
       "de": "Brave Web- / Internetsuche"
     },
     "description": {
-      "en": "Search the web / internet using Brave for up-to-date information. Use the 'query' parameter with your search terms.",
-      "de": "Durchsuchen Sie das Web / Internet mit Brave für aktuelle Informationen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+      "en": "Search the web / internet using Brave for up-to-date information. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web / Internet mit Brave für aktuelle Informationen. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
     },
     "script": "braveSearch.js",
     "concurrency": 5,
@@ -54,6 +54,34 @@
             "en": "The search query or search terms to find on the web. Example: 'latest AI news' or 'Python programming tutorial'",
             "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'neueste KI-Nachrichten' oder 'Python Programmier-Tutorial'"
           }
+        },
+        "extractContent": {
+          "type": "boolean",
+          "description": {
+            "en": "Whether to extract full page content from the top search results (default: false)",
+            "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
+          },
+          "default": false
+        },
+        "maxResults": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum number of results to return / pages to extract content from (default: 10)",
+            "de": "Maximale Anzahl der zurückzugebenden Ergebnisse / Seiten, von denen Inhalte extrahiert werden (Standard: 10)"
+          },
+          "default": 10,
+          "minimum": 1,
+          "maximum": 20
+        },
+        "contentMaxLength": {
+          "type": "integer",
+          "description": {
+            "en": "Maximum length of extracted content per page in characters (default: 3000)",
+            "de": "Maximale Länge der extrahierten Inhalte pro Seite in Zeichen (Standard: 3000)"
+          },
+          "default": 3000,
+          "minimum": 500,
+          "maximum": 50000
         }
       },
       "required": ["query"]
@@ -66,8 +94,8 @@
       "de": "Tavily Websuche"
     },
     "description": {
-      "en": "Search the web using the Tavily API. Use the 'query' parameter with your search terms.",
-      "de": "Durchsuchen Sie das Web mit der Tavily API. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
+      "en": "Search the web using the Tavily API. Optionally extracts full page content from the top results. Use the 'query' parameter with your search terms.",
+      "de": "Durchsuchen Sie das Web mit der Tavily API. Extrahiert optional vollständige Seiteninhalte aus den Top-Ergebnissen. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
     },
     "script": "tavilySearch.js",
     "concurrency": 5,
@@ -98,93 +126,15 @@
           },
           "default": 5,
           "minimum": 1,
-          "maximum": 10
-        }
-      },
-      "required": ["query"]
-    }
-  },
-  {
-    "id": "webContentExtractor",
-    "name": {
-      "en": "Web Content Extractor",
-      "de": "Web-Inhalts-Extraktor"
-    },
-    "description": {
-      "en": "Extract clean, readable content from a URL. This can be content like PDFs or web pages, with advertising, headers, footers, and other non-content elements removed. Use the 'url' parameter with a valid HTTP/HTTPS URL.",
-      "de": "Extrahieren Sie saubere, lesbare Inhalte von einer URL. Dies können Inhalte wie PDFs oder Webseiten sein, wobei Werbung, Kopfzeilen, Fußzeilen und andere Nicht-Inhaltselemente entfernt werden. Verwenden Sie den 'url' Parameter mit einer gültigen HTTP/HTTPS-URL."
-    },
-    "script": "webContentExtractor.js",
-    "concurrency": 3,
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "url": {
-          "type": "string",
-          "description": {
-            "en": "The full URL of the website to extract content from. Must be a valid HTTP or HTTPS URL. Example: 'https://example.com/article'",
-            "de": "Die vollständige URL der Webseite, von der Inhalte extrahiert werden sollen. Muss eine gültige HTTP- oder HTTPS-URL sein. Beispiel: 'https://example.com/artikel'"
-          }
-        },
-        "maxLength": {
-          "type": "integer",
-          "description": {
-            "en": "Maximum length of extracted content in characters (default: 5000)",
-            "de": "Maximale Länge der extrahierten Inhalte in Zeichen (Standard: 5000)"
-          },
-          "default": 5000,
-          "minimum": 100,
-          "maximum": 50000
-        },
-        "ignoreSSL": {
-          "type": "boolean",
-          "description": {
-            "en": "Ignore invalid HTTPS certificates (uses platform SSL config if not specified)",
-            "de": "Ungültige HTTPS-Zertifikate ignorieren (verwendet Plattform-SSL-Konfiguration wenn nicht angegeben)"
-          }
-        }
-      },
-      "required": ["url"]
-    }
-  },
-  {
-    "id": "enhancedWebSearch",
-    "name": {
-      "en": "Enhanced Web Search with Content",
-      "de": "Erweiterte Websuche mit Inhalten"
-    },
-    "description": {
-      "en": "Performs web search and automatically extracts full content from top results for comprehensive information gathering. Perfect for 'chat with web' functionality. Use the 'query' parameter with your search terms.",
-      "de": "Führt eine Websuche durch und extrahiert automatisch vollständige Inhalte aus den Top-Ergebnissen für umfassende Informationsbeschaffung. Perfekt für 'Chat mit Web'-Funktionalität. Verwenden Sie den 'query' Parameter mit Ihren Suchbegriffen."
-    },
-    "script": "enhancedWebSearch.js",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": {
-          "type": "string",
-          "description": {
-            "en": "The search query or search terms for web search. Example: 'artificial intelligence trends 2024' or 'best programming languages'",
-            "de": "Die Suchanfrage oder Suchbegriffe für die Websuche. Beispiel: 'Trends der künstlichen Intelligenz 2024' oder 'beste Programmiersprachen'"
-          }
+          "maximum": 20
         },
         "extractContent": {
           "type": "boolean",
           "description": {
-            "en": "Whether to extract full content from search results (default: true)",
-            "de": "Ob vollständige Inhalte aus Suchergebnissen extrahiert werden sollen (Standard: true)"
+            "en": "Whether to extract full page content from the top search results (default: false)",
+            "de": "Ob vollständige Seiteninhalte aus den Top-Suchergebnissen extrahiert werden sollen (Standard: false)"
           },
-          "default": true
-        },
-        "maxResults": {
-          "type": "integer",
-          "description": {
-            "en": "Maximum number of search results to process and extract content from (default: 3)",
-            "de": "Maximale Anzahl der zu verarbeitenden und zu extrahierenden Suchergebnisse (Standard: 3)"
-          },
-          "default": 3,
-          "minimum": 1,
-          "maximum": 10
+          "default": false
         },
         "contentMaxLength": {
           "type": "integer",
@@ -194,7 +144,7 @@
           },
           "default": 3000,
           "minimum": 500,
-          "maximum": 10000
+          "maximum": 50000
         }
       },
       "required": ["query"]

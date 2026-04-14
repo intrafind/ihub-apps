@@ -139,6 +139,7 @@ function AppChat({ preloadedApp = null }) {
     thinkingBudget,
     thinkingThoughts,
     enabledTools,
+    websearchEnabled,
     imageAspectRatio,
     imageQuality,
     models,
@@ -152,6 +153,7 @@ function AppChat({ preloadedApp = null }) {
     setThinkingBudget,
     setThinkingThoughts,
     setEnabledTools,
+    setWebsearchEnabled,
     setImageAspectRatio,
     setImageQuality,
     modelsLoading
@@ -583,6 +585,7 @@ function AppChat({ preloadedApp = null }) {
           ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
             ? { enabledTools: effectiveEnabledTools }
             : {}),
+          ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
           ...(imageAspectRatio ? { imageAspectRatio } : {}),
           ...(imageQuality ? { imageQuality } : {})
         };
@@ -904,6 +907,7 @@ function AppChat({ preloadedApp = null }) {
         ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
           ? { enabledTools: effectiveEnabledTools }
           : {}),
+        ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
         ...(imageAspectRatio ? { imageAspectRatio } : {}),
         ...(imageQuality ? { imageQuality } : {})
       };
@@ -1346,6 +1350,7 @@ function AppChat({ preloadedApp = null }) {
       ...(effectiveEnabledTools !== null && effectiveEnabledTools !== undefined
         ? { enabledTools: effectiveEnabledTools }
         : {}),
+      ...(app?.websearch?.enabled ? { websearchEnabled } : {}),
       ...(imageAspectRatio ? { imageAspectRatio } : {}),
       ...(imageQuality ? { imageQuality } : {}),
       ...(documentId ? { documentIds: [documentId] } : {})
@@ -1548,6 +1553,8 @@ function AppChat({ preloadedApp = null }) {
       magicPromptLoading: magicPromptHandler.magicLoading,
       enabledTools: effectiveEnabledTools,
       onEnabledToolsChange: toolsFeatureEnabled ? setEnabledTools : undefined,
+      websearchEnabled,
+      onWebsearchEnabledChange: app?.websearch?.enabled ? setWebsearchEnabled : undefined,
       // Image generation props
       model: currentModel,
       imageAspectRatio,
