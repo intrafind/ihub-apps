@@ -821,14 +821,14 @@ function ChatMessage({
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
-      </div>
 
-      {/* Answer source indicator - show for completed assistant messages */}
-      {!isUser && !isError && !message.loading && (
-        <div className="mt-1 px-1">
-          <AnswerSourceBadge answerSource={message.answerSource} />
-        </div>
-      )}
+        {/* Answer source indicator - show for completed assistant messages inside bubble */}
+        {!isUser && !isError && !message.loading && (
+          <div className="flex justify-end mt-2">
+            <AnswerSourceBadge answerSource={message.answerSource} />
+          </div>
+        )}
+      </div>
 
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
