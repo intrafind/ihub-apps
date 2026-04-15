@@ -151,6 +151,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
         'skill.activation',
         'citation',
         'search.status',
+        'answer.source',
         'conversation.title',
         'conversation.id'
       ];
