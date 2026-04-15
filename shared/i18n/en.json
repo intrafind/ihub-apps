@@ -1326,7 +1326,16 @@
     "linkCopied": "Link copied!",
     "downloadMessage": "Download message",
     "downloadOptions": "Download Options",
-    "deleteMessage": "Delete message"
+    "deleteMessage": "Delete message",
+    "answerSource": {
+      "llmOnly": "Based on AI knowledge",
+      "websearch": "Based on web search",
+      "sources": "Based on configured sources",
+      "iassistant": "Based on iAssistant knowledge base",
+      "grounding": "Based on search grounding",
+      "mixed": "Based on external knowledge",
+      "tooltip": "This answer was generated using:"
+    }
   },
   "serverErrors": {
     "appNotFound": "Application not found",

@@ -27,6 +27,11 @@ class ToolExecutor {
      * @type {Map<string, number>}
      */
     this.clarificationCounts = new Map();
+    /**
+     * Map to track knowledge sources used per conversation
+     * @type {Map<string, Set<string>>}
+     */
+    this.knowledgeSources = new Map();
   }
 
   /**
@@ -57,6 +62,36 @@ class ToolExecutor {
    */
   resetClarificationCount(chatId) {
     this.clarificationCounts.delete(chatId);
+  }
+
+  /**
+   * Add a knowledge source for tracking
+   * @param {string} chatId - The conversation/chat ID
+   * @param {string} source - Source type ('websearch', 'source', 'iassistant', 'grounding')
+   */
+  addKnowledgeSource(chatId, source) {
+    if (!this.knowledgeSources.has(chatId)) {
+      this.knowledgeSources.set(chatId, new Set());
+    }
+    this.knowledgeSources.get(chatId).add(source);
+  }
+
+  /**
+   * Get knowledge sources for a conversation
+   * @param {string} chatId - The conversation/chat ID
+   * @returns {Array<string>} Array of source types
+   */
+  getKnowledgeSources(chatId) {
+    const sources = this.knowledgeSources.get(chatId);
+    return sources ? Array.from(sources) : [];
+  }
+
+  /**
+   * Reset knowledge sources for a conversation
+   * @param {string} chatId - The conversation/chat ID
+   */
+  resetKnowledgeSources(chatId) {
+    this.knowledgeSources.delete(chatId);
   }
 
   /**
@@ -347,6 +382,13 @@ class ToolExecutor {
     });
 
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
+
+    // Track knowledge sources based on tool type
+    if (toolId === 'web-search' || toolId === 'websearch' || toolId.includes('search')) {
+      this.addKnowledgeSource(chatId, 'websearch');
+    } else if (toolId.startsWith('source_') || toolId.includes('retrieval')) {
+      this.addKnowledgeSource(chatId, 'sources');
+    }
 
     try {
       // Check if this is the ask_user clarification tool
@@ -1273,6 +1315,13 @@ class ToolExecutor {
         // If no tool calls, this is the final response - stream it back to client
         if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
           clearTimeout(timeoutId);
+
+          // Emit answer source information before done event
+          const sources = this.getKnowledgeSources(chatId);
+          if (sources.length > 0) {
+            actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+          }
+
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
             'chat_response',
@@ -1284,6 +1333,10 @@ class ToolExecutor {
           if (activeRequests.get(chatId) === controller) {
             activeRequests.delete(chatId);
           }
+
+          // Reset knowledge sources after emitting
+          this.resetKnowledgeSources(chatId);
+
           return; // Exit the loop, we have the final response
         }
 
