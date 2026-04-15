@@ -391,7 +391,16 @@
     "linkCopied": "Link kopiert!",
     "downloadMessage": "Nachricht herunterladen",
     "downloadOptions": "Download-Optionen",
-    "deleteMessage": "Nachricht löschen"
+    "deleteMessage": "Nachricht löschen",
+    "answerSource": {
+      "llmOnly": "Basierend auf KI-Wissen",
+      "websearch": "Basierend auf Websuche",
+      "sources": "Basierend auf konfigurierten Quellen",
+      "iassistant": "Basierend auf iAssistant-Wissensbasis",
+      "grounding": "Basierend auf Such-Grounding",
+      "mixed": "Basierend auf externem Wissen",
+      "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
+    }
   },
   "errors": {
     "componentError": "Komponenten-Fehler",

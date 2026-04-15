@@ -19,5 +19,6 @@ export const UnifiedEvents = {
   SKILL_ACTIVATION: 'skill.activation',
   SEARCH_STATUS: 'search.status',
   CONVERSATION_TITLE: 'conversation.title',
-  CONVERSATION_ID: 'conversation.id'
+  CONVERSATION_ID: 'conversation.id',
+  ANSWER_SOURCE: 'answer.source'
 };

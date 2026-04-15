@@ -9,9 +9,52 @@ import { isFeatureEnabled } from '../featureRegistry.js';
 import logger from '../utils/logger.js';
 
 /**
+ * Module-level knowledge source tracking
+ * This allows tracking of prompt-based sources that are injected before tool execution
+ * @type {Map<string, Set<string>>}
+ */
+const promptKnowledgeSources = new Map();
+
+/**
  * Service for handling prompt processing and template resolution
  */
 class PromptService {
+  /**
+   * Track that prompt-based sources were used for a chat
+   * @param {string} chatId - The conversation/chat ID
+   */
+  trackPromptSources(chatId) {
+    if (!chatId) return;
+    if (!promptKnowledgeSources.has(chatId)) {
+      promptKnowledgeSources.set(chatId, new Set());
+    }
+    promptKnowledgeSources.get(chatId).add('sources');
+    logger.info('Tracked prompt-based sources for chat', {
+      component: 'PromptService',
+      chatId
+    });
+  }
+
+  /**
+   * Get tracked prompt sources for a chat
+   * @param {string} chatId - The conversation/chat ID
+   * @returns {Array<string>} Array of source types used in prompts
+   */
+  getPromptSources(chatId) {
+    if (!chatId) return [];
+    const sources = promptKnowledgeSources.get(chatId);
+    return sources ? Array.from(sources) : [];
+  }
+
+  /**
+   * Reset tracked prompt sources for a chat
+   * @param {string} chatId - The conversation/chat ID
+   */
+  resetPromptSources(chatId) {
+    if (!chatId) return;
+    promptKnowledgeSources.delete(chatId);
+  }
+
   /**
    * Resolve global prompt variables that should be automatically available in prompts
    * @param {object} user - User object from request
@@ -251,6 +294,17 @@ class PromptService {
             // Load content from resolved sources
             const result = await sourceManager.loadSources(resolvedSources, context);
             sourceContent = result.content;
+
+            // Track that prompt-based sources were used if content was loaded
+            if (sourceContent && sourceContent.trim()) {
+              this.trackPromptSources(chatId);
+              logger.info('Prompt-based sources loaded and tracked', {
+                component: 'PromptService',
+                chatId,
+                contentLength: sourceContent.length,
+                sourceCount: resolvedSources.length
+              });
+            }
 
             if (result.metadata.errors.length > 0) {
               logger.warn('Source loading errors', {

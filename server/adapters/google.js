@@ -514,6 +514,12 @@ class GoogleAdapterClass extends BaseAdapter {
             }
           }
           result.complete = true;
+
+          // Extract grounding metadata for non-streaming responses
+          if (parsed.candidates[0].groundingMetadata) {
+            result.groundingMetadata = parsed.candidates[0].groundingMetadata;
+          }
+
           const fr = parsed.candidates[0].finishReason;
           // Only set finishReason from Gemini if we don't already have tool_calls
           // Check both the finishReason flag AND the actual tool_calls array
@@ -567,8 +573,10 @@ class GoogleAdapterClass extends BaseAdapter {
         }
 
         // Extract grounding metadata if present (for Google Search grounding)
-        if (parsed.groundingMetadata) {
-          result.groundingMetadata = parsed.groundingMetadata;
+        // Grounding metadata is located in candidates[0].groundingMetadata
+        // Reference: https://ai.google.dev/gemini-api/docs/google-search#javascript_1
+        if (parsed.candidates && parsed.candidates[0]?.groundingMetadata) {
+          result.groundingMetadata = parsed.candidates[0].groundingMetadata;
         }
 
         // TODO we should make use of the candidate metadata

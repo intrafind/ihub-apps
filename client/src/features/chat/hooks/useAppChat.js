@@ -276,6 +276,14 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
             }
           }
           break;
+        case 'answer.source':
+          // Store answer source information
+          if (data && lastMessageIdRef.current) {
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              answerSource: data
+            });
+          }
+          break;
         case 'done':
           if (lastMessageIdRef.current) {
             // Include stored metadata (customResponseRenderer, outputFormat) in the message

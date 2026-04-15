@@ -9,6 +9,7 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
+import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -28,6 +29,11 @@ function mergeUsage(existing, incoming) {
 class StreamingHandler {
   constructor() {
     this.errorHandler = new ErrorHandler();
+    /**
+     * Map to track knowledge sources per conversation
+     * @type {Map<string, Set<string>>}
+     */
+    this.knowledgeSources = new Map();
   }
 
   /**
@@ -64,11 +70,50 @@ class StreamingHandler {
    */
   processGroundingMetadata(result, chatId) {
     if (result && result.groundingMetadata) {
+      this.addKnowledgeSource(chatId, 'grounding');
       actionTracker.trackAction(chatId, {
         event: 'grounding',
         metadata: result.groundingMetadata
       });
     }
+  }
+
+  /**
+   * Add a knowledge source for tracking
+   * @param {string} chatId - The conversation/chat ID
+   * @param {string} source - Source type ('websearch', 'sources', 'iassistant', 'grounding')
+   */
+  addKnowledgeSource(chatId, source) {
+    if (!this.knowledgeSources.has(chatId)) {
+      this.knowledgeSources.set(chatId, new Set());
+    }
+    this.knowledgeSources.get(chatId).add(source);
+  }
+
+  /**
+   * Get knowledge sources for a conversation
+   * Combines sources from both tool execution and prompt-based sources
+   * @param {string} chatId - The conversation/chat ID
+   * @returns {Array<string>} Array of source types
+   */
+  getKnowledgeSources(chatId) {
+    const toolSources = this.knowledgeSources.get(chatId);
+    const promptSources = PromptService.getPromptSources(chatId);
+
+    // Combine both sources, using a Set to avoid duplicates
+    const combined = new Set([...(toolSources ? Array.from(toolSources) : []), ...promptSources]);
+
+    return Array.from(combined);
+  }
+
+  /**
+   * Reset knowledge sources for a conversation
+   * Resets both tool-based and prompt-based sources
+   * @param {string} chatId - The conversation/chat ID
+   */
+  resetKnowledgeSources(chatId) {
+    this.knowledgeSources.delete(chatId);
+    PromptService.resetPromptSources(chatId);
   }
 
   /**
@@ -118,6 +163,7 @@ class StreamingHandler {
 
     // Emit citations (references + result_items)
     if (result.citations) {
+      this.addKnowledgeSource(chatId, 'iassistant');
       actionTracker.trackCitation(chatId, result.citations);
     }
 
@@ -388,8 +434,18 @@ class StreamingHandler {
               }
 
               if (result && result.complete) {
+                // Emit answer source information before done event
+                const sources = this.getKnowledgeSources(chatId);
+                if (sources.length > 0) {
+                  actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+                }
+
                 actionTracker.trackDone(chatId, { finishReason });
                 doneEmitted = true;
+
+                // Reset knowledge sources after emitting
+                this.resetKnowledgeSources(chatId);
+
                 await logInteraction(
                   'chat_response',
                   buildLogData(true, { responseType: 'success', response: fullResponse })
@@ -438,8 +494,18 @@ class StreamingHandler {
           this.processConversationEvents(result, chatId, request);
 
           if (result && result.complete) {
+            // Emit answer source information before done event
+            const sources = this.getKnowledgeSources(chatId);
+            if (sources.length > 0) {
+              actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+            }
+
             actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
             doneEmitted = true;
+
+            // Reset knowledge sources after emitting
+            this.resetKnowledgeSources(chatId);
+
             await logInteraction(
               'chat_response',
               buildLogData(true, { responseType: 'success', response: fullResponse })
@@ -530,8 +596,18 @@ class StreamingHandler {
             }
 
             if (result && result.complete) {
+              // Emit answer source information before done event
+              const sources = this.getKnowledgeSources(chatId);
+              if (sources.length > 0) {
+                actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+              }
+
               actionTracker.trackDone(chatId, { finishReason });
               doneEmitted = true;
+
+              // Reset knowledge sources after emitting
+              this.resetKnowledgeSources(chatId);
+
               await logInteraction(
                 'chat_response',
                 buildLogData(true, { responseType: 'success', response: fullResponse })
