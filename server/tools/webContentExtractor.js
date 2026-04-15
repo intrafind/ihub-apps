@@ -5,7 +5,7 @@ import { throttledFetch } from '../requestThrottler.js';
 import { actionTracker } from '../actionTracker.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
-import { enhanceFetchOptions } from '../utils/httpConfig.js';
+import { enhanceFetchOptions, getSSLConfig, isDomainWhitelisted } from '../utils/httpConfig.js';
 
 const dnsLookupAsync = dns.promises.lookup;
 
@@ -94,7 +94,11 @@ export default async function webContentExtractor({
   }
 
   // Block SSRF: prevent LLM tool from accessing internal/cloud metadata services
-  await assertNotPrivateIp(validUrl.hostname);
+  // Skip check for domains explicitly whitelisted by admin in SSL configuration
+  const sslConfig = getSSLConfig();
+  if (!isDomainWhitelisted(validUrl.hostname, sslConfig.domainWhitelist)) {
+    await assertNotPrivateIp(validUrl.hostname);
+  }
 
   // Determine SSL ignore setting: explicit parameter > global config > default false
   const platformConfig = configCache.getPlatform() || {};
