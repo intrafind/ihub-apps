@@ -824,7 +824,7 @@ function ChatMessage({
 
         {/* Answer source indicator - show for completed assistant messages inside bubble */}
         {!isUser && !isError && !message.loading && (
-          <div className="flex justify-end mt-2">
+          <div className="flex justify-end">
             <AnswerSourceBadge answerSource={message.answerSource} />
           </div>
         )}
