@@ -9,6 +9,7 @@ import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
 import { getReadableStream } from '../../utils/streamUtils.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
+import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -91,20 +92,28 @@ class StreamingHandler {
 
   /**
    * Get knowledge sources for a conversation
+   * Combines sources from both tool execution and prompt-based sources
    * @param {string} chatId - The conversation/chat ID
    * @returns {Array<string>} Array of source types
    */
   getKnowledgeSources(chatId) {
-    const sources = this.knowledgeSources.get(chatId);
-    return sources ? Array.from(sources) : [];
+    const toolSources = this.knowledgeSources.get(chatId);
+    const promptSources = PromptService.getPromptSources(chatId);
+
+    // Combine both sources, using a Set to avoid duplicates
+    const combined = new Set([...(toolSources ? Array.from(toolSources) : []), ...promptSources]);
+
+    return Array.from(combined);
   }
 
   /**
    * Reset knowledge sources for a conversation
+   * Resets both tool-based and prompt-based sources
    * @param {string} chatId - The conversation/chat ID
    */
   resetKnowledgeSources(chatId) {
     this.knowledgeSources.delete(chatId);
+    PromptService.resetPromptSources(chatId);
   }
 
   /**
