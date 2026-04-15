@@ -384,8 +384,22 @@ class ToolExecutor {
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
     // Track knowledge sources based on tool type
-    if (toolId === 'web-search' || toolId === 'websearch' || toolId.includes('search')) {
-      this.addKnowledgeSource(chatId, 'websearch');
+    // Use case-insensitive matching for search tools (braveSearch, tavilySearch, googleSearch, webSearch, etc.)
+    const lowerToolId = toolId.toLowerCase();
+    if (
+      lowerToolId === 'web-search' ||
+      lowerToolId === 'websearch' ||
+      lowerToolId.includes('search')
+    ) {
+      // Exclude internal/non-web search tools like entraPeopleSearch, researchPlanner, deepResearch
+      const isInternalSearch =
+        lowerToolId.includes('people') ||
+        lowerToolId.includes('planner') ||
+        lowerToolId === 'deepresearch' ||
+        lowerToolId === 'researchplanner';
+      if (!isInternalSearch) {
+        this.addKnowledgeSource(chatId, 'websearch');
+      }
     } else if (toolId.startsWith('source_') || toolId.includes('retrieval')) {
       this.addKnowledgeSource(chatId, 'sources');
     }
