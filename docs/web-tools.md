@@ -1,62 +1,217 @@
 # Web Tools Documentation
 
-This document describes the web tools available in the iHub Apps platform for extracting and searching web content.
+This document describes the web tools available in the iHub Apps platform for searching the web and extracting web content.
 
 ## Overview
 
-The platform now includes several web-related tools:
+iHub Apps provides a unified web search system that automatically selects the best search provider based on the active model. Web search is configured per-app through the `websearch` configuration object rather than through individual tool IDs.
 
-1. **braveSearch** - Basic web search using Brave Search API
-2. **tavilySearch** - Basic web search using Tavily API
-3. **webContentExtractor** - Extract clean content from web pages
-4. **enhancedWebSearch** - Combined web search with automatic content extraction
-5. **playwrightScreenshot** - Capture screenshots or PDFs using Playwright
-6. **seleniumScreenshot** - Capture screenshots or PDFs using Selenium
-7. **evaluator** - Evaluate draft answers for definitiveness, freshness and completeness
-8. **answerReducer** - Merge multiple texts into one concise article
-9. **queryRewriter** - Rewrite search queries for deeper results
+### Search Providers
 
-## Tools Description
+| Provider | Type | Best For |
+|----------|------|----------|
+| **Google Search** | Native (Gemini models) | Grounded answers with Google Search citations |
+| **OpenAI Web Search** | Native (GPT models via Responses API) | Web-augmented responses with inline citations |
+| **Brave Search** | Server-side | Privacy-focused search, any model |
+| **Tavily Search** | Server-side | AI-optimized search, any model |
 
-### 1. Brave Search (`braveSearch`)
+### Additional Web Tools
+
+| Tool | Purpose |
+|------|---------|
+| **webContentExtractor** | Extract clean content from web pages |
+| **playwrightScreenshot** | Capture screenshots or PDFs using Playwright |
+| **seleniumScreenshot** | Capture screenshots or PDFs using Selenium |
+| **deepResearch** | Iterative multi-round web research |
+| **researchPlanner** | Decompose research topics into subtasks |
+| **evaluator** | Evaluate draft answers for quality |
+| **answerReducer** | Merge multiple texts into one article |
+| **queryRewriter** | Rewrite search queries for better results |
+
+## Unified Web Search Configuration
+
+> **Changed in v5.2.11**: Web search is now configured through a unified `websearch` object on each app instead of adding individual tool IDs (like `braveSearch`, `tavilySearch`, or `enhancedWebSearch`) to the `tools` array. Existing apps are automatically migrated.
+
+### App-Level Configuration
+
+Add a `websearch` object to your app configuration:
+
+```json
+{
+  "id": "research-assistant",
+  "name": { "en": "Research Assistant" },
+  "system": { "en": "You are a research assistant with web search capabilities." },
+  "tokenLimit": 8000,
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
+    "maxResults": 5,
+    "extractContent": true,
+    "contentMaxLength": 3000,
+    "enabledByDefault": false
+  }
+}
+```
+
+### Configuration Properties
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable web search for this app |
+| `provider` | String | `"auto"` | Search provider: `"auto"`, `"brave"`, or `"tavily"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT) when available |
+| `maxResults` | Number | `5` | Maximum number of search results (1-20) |
+| `extractContent` | Boolean | `true` | Extract full page content from search results |
+| `contentMaxLength` | Number | `3000` | Maximum extracted content length per page (500-50,000 characters) |
+| `enabledByDefault` | Boolean | `false` | Whether web search is active by default (users can toggle it in the chat) |
+
+### How Provider Resolution Works
+
+The system automatically selects the best search tool at runtime based on the model and configuration:
+
+```
+┌─────────────────────────────────────────────────┐
+│              app.websearch.enabled?              │
+│                                                  │
+│  No  → No web search                            │
+│  Yes ↓                                           │
+│                                                  │
+│  useNativeSearch + Gemini model?                 │
+│    → Google Search (grounding)                   │
+│                                                  │
+│  useNativeSearch + OpenAI Responses model?       │
+│    → OpenAI Web Search                           │
+│                                                  │
+│  provider = "tavily"?                            │
+│    → Tavily Search                               │
+│                                                  │
+│  Otherwise (provider = "auto" or "brave")        │
+│    → Brave Search                                │
+└─────────────────────────────────────────────────┘
+```
+
+### Admin UI Configuration
+
+Web search settings can be configured through the admin panel:
+
+1. Navigate to **Admin → Apps → Edit App**
+2. Scroll to the **Web Search Configuration** section
+3. Toggle **Enable Web Search** to activate
+4. Configure provider, result limits, and content extraction settings
+5. Save changes — no server restart required
+
+### User Toggle
+
+When web search is enabled for an app, users see a toggle in the chat input area to enable/disable web search per conversation. The `enabledByDefault` setting controls whether this toggle starts in the on or off state.
+
+### Migration from Legacy Tool Configuration
+
+Apps that previously used websearch tool IDs in their `tools` array are automatically migrated on server startup (Migration V025). The migration:
+
+- Detects apps with `braveSearch`, `enhancedWebSearch`, `tavilySearch`, `googleSearch`, `webSearch`, or `webContentExtractor` in their `tools` array
+- Infers the provider and content extraction settings from the tools used
+- Creates a unified `websearch` configuration object
+- Removes the deprecated tool IDs from the `tools` array
+
+No manual action is required — the migration runs automatically.
+
+## Answer Source Attribution
+
+> **Added in v5.2.12**: Each AI response now displays a badge indicating the information source used.
+
+When web search or other external sources are used, an **Answer Source Badge** appears on each message showing where the information came from:
+
+| Badge | Color | Description |
+|-------|-------|-------------|
+| LLM Only | Gray | Response generated purely from the model's knowledge |
+| Web Search | Green | Response includes information from web search results |
+| Sources | Purple | Response uses configured knowledge base sources |
+| iAssistant | Indigo | Response includes information from iFinder iAssistant |
+| Grounding | Teal | Response uses Google Search grounding (Gemini) |
+| Mixed | Blue | Response combines multiple information sources |
+
+When multiple sources are used, a tooltip lists all contributing sources.
+
+## Search Provider Configuration
+
+### API Key Setup
+
+Search providers require API keys, which can be configured in two ways:
+
+#### Admin Panel (Recommended)
+
+1. Navigate to **Admin → Providers**
+2. Find your provider under **Web Search Providers**:
+   - **Brave Search**: Click "Configure" and enter your Brave API key
+   - **Tavily Search**: Click "Configure" and enter your Tavily API key
+3. Save changes — no server restart required
+
+API keys are encrypted at rest using AES-256-GCM.
+
+#### Environment Variables (Fallback)
+
+Add to your `config.env` file:
+
+```env
+BRAVE_SEARCH_API_KEY=your_brave_api_key_here
+TAVILY_SEARCH_API_KEY=your_tavily_search_api_key_here
+```
+
+The system checks admin panel configuration first, then falls back to environment variables.
+
+### Native Search Providers
+
+Native search providers (Google Search and OpenAI Web Search) use the API keys already configured for the respective LLM providers. No additional API key setup is needed.
+
+## Tools Reference
+
+### Brave Search (`braveSearch`)
 
 **Purpose**: Search the web using Brave Search API for up-to-date information.
 
 **Parameters**:
 
 - `query` (string, required): Search query
+- `extractContent` (boolean, optional): Extract full content from top results (default: configured by app)
+- `maxResults` (number, optional): Maximum results to return (default: configured by app, max: 10)
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
 
-**Returns**: List of search results with titles, URLs, descriptions, and language information.
+**Returns**: Array of search results with titles, URLs, descriptions, and optionally extracted page content.
 
-**Example Usage**:
+### Tavily Search (`tavilySearch`)
 
-```javascript
-{
-  "query": "latest AI developments 2024"
-}
-```
-
-### 2. Tavily Search (`tavilySearch`)
-
-**Purpose**: Search the web using the Tavily API for up-to-date information.
+**Purpose**: Search the web using the Tavily API, optimized for AI agents.
 
 **Parameters**:
 
 - `query` (string, required): Search query
 - `search_depth` (string, optional): `"basic"` or `"advanced"` (default: `"basic"`)
-- `max_results` (integer, optional): Number of results to return (default: `5`)
+- `max_results` (integer, optional): Number of results to return (default: configured by app, max: 10)
+- `extractContent` (boolean, optional): Extract full content from results (default: configured by app)
+- `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app)
 
-**Returns**: List of search results with titles, URLs and brief content snippets.
+**Returns**: Array of search results with titles, URLs, content snippets, and optionally extracted page content.
 
-**Example Usage**:
+### Google Search (`googleSearch`)
 
-```javascript
-{
-  "query": "latest AI developments 2024"
-}
-```
+**Purpose**: Ground Gemini model responses with real-time Google Search results.
 
-### 3. Web Content Extractor (`webContentExtractor`)
+- **Provider**: Google Gemini models only
+- **Type**: Provider-handled (native)
+- **Parameters**: None — automatically enabled
+- **Authentication**: Uses configured Gemini API key
+
+### OpenAI Web Search (`webSearch`)
+
+**Purpose**: Enable web search for OpenAI models via the Responses API.
+
+- **Provider**: OpenAI GPT models only
+- **Type**: Provider-handled (native)
+- **Parameters**: None — automatically enabled
+- **Authentication**: Uses configured OpenAI API key
+
+### Web Content Extractor (`webContentExtractor`)
 
 **Purpose**: Extract clean, readable content from any webpage URL, automatically removing headers, footers, navigation, ads, and other non-content elements.
 
@@ -73,15 +228,6 @@ The platform now includes several web-related tools:
 - Word count and extraction timestamp
 - If an error occurs, an exception is thrown with a `code` property for translation
 
-**Example Usage**:
-
-```javascript
-{
-  "url": "https://example.com/article",
-  "maxLength": 3000
-}
-```
-
 **Features**:
 
 - Removes ads, navigation menus, headers, footers
@@ -91,39 +237,10 @@ The platform now includes several web-related tools:
 - Error handling for invalid URLs or failed requests
 - Optional `ignoreSSL` flag to bypass invalid HTTPS certificates (value can be preset in `tools.json`)
 - Detects missing pages or authentication requirements and reports them clearly
-- Returned errors include a `code` field so applications can translate messages
-  and the UI automatically shows a localized error when possible
+- Returned errors include a `code` field so applications can translate messages and the UI automatically shows a localized error when possible
+- **SSRF protection**: Blocks access to private/internal IP addresses. Domains listed in the SSL whitelist configuration bypass this check (added in v5.2.12)
 
-### 4. Enhanced Web Search (`enhancedWebSearch`)
-
-**Purpose**: Performs web search and automatically extracts full content from the top results. Perfect for comprehensive information gathering and "chat with web" functionality.
-
-**Parameters**:
-
-- `query` (string, required): Search query
-- `extractContent` (boolean, optional): Whether to extract full content from search results (default: true)
-- `maxResults` (integer, optional): Maximum number of search results to process (default: 3)
-- `contentMaxLength` (integer, optional): Maximum length of extracted content per page (default: 3000)
-
-**Returns**:
-
-- Original search results
-- Extracted content from each result
-- Success/failure statistics
-- Summary of the operation
-
-**Example Usage**:
-
-```javascript
-{
-  "query": "artificial intelligence news 2024",
-  "extractContent": true,
-  "maxResults": 5,
-  "contentMaxLength": 2000
-}
-```
-
-### 5. Playwright Screenshot (`playwrightScreenshot`)
+### Playwright Screenshot (`playwrightScreenshot`)
 
 **Purpose**: Capture a screenshot or PDF of any webpage using the Playwright browser automation library. If a PDF is captured, the text is extracted and returned.
 
@@ -135,16 +252,7 @@ The platform now includes several web-related tools:
 
 **Returns**: Attachment information with a download URL and extracted text for PDFs.
 
-**Example Usage**:
-
-```javascript
-{
-  "url": "https://example.com",
-  "format": "pdf"
-}
-```
-
-### 6. Selenium Screenshot (`seleniumScreenshot`)
+### Selenium Screenshot (`seleniumScreenshot`)
 
 **Purpose**: Capture screenshots or PDFs using Selenium and Chrome DevTools.
 
@@ -156,16 +264,7 @@ The platform now includes several web-related tools:
 
 **Returns**: Attachment information with a download URL and extracted text for PDFs.
 
-**Example Usage**:
-
-```javascript
-{
-  "url": "https://example.com",
-  "format": "png"
-}
-```
-
-### 7. Answer Evaluator (`evaluator`)
+### Answer Evaluator (`evaluator`)
 
 **Purpose**: Check a draft answer for definitiveness, freshness and completeness.
 
@@ -177,16 +276,7 @@ The platform now includes several web-related tools:
 
 **Returns**: Array `evaluation` with one entry per check containing `type`, `pass`, and `think` fields.
 
-**Example Usage**:
-
-```javascript
-{
-  "question": "What are the latest AI trends?",
-  "answer": "AI is progressing rapidly..."
-}
-```
-
-### 8. Answer Reducer (`answerReducer`)
+### Answer Reducer (`answerReducer`)
 
 **Purpose**: Compress multiple text excerpts into a single well-structured article.
 
@@ -198,7 +288,7 @@ The platform now includes several web-related tools:
 }
 ```
 
-### 9. Query Rewriter (`queryRewriter`)
+### Query Rewriter (`queryRewriter`)
 
 **Purpose**: Generate optimized variations of a user search query.
 
@@ -210,75 +300,11 @@ The platform now includes several web-related tools:
 
 **Returns**: An array of rewritten queries.
 
-**Example Usage**:
-
-```javascript
-{
-  "query": "best renewable energy sources"
-}
-```
-
-## Configuration
-
-### Environment Variables
-
-Set the following environment variables in your `config.env` file:
-
-```env
-BRAVE_SEARCH_API_KEY=your_brave_api_key_here
-TAVILY_SEARCH_API_KEY=your_tavily_search_api_key
-```
-
-### Installation Requirements
-
-Run `npx playwright install` after installing dependencies. Selenium tools require a local Chrome or Chromium executable available in your `PATH`.
-
-### App Configuration
-
-To enable these tools in an app, add them to the `tools` array in your app configuration:
-
-```json
-{
-  "id": "your-app-id",
-  "tools": ["enhancedWebSearch", "webContentExtractor"],
-  "system": "You are an AI assistant with web search capabilities..."
-}
-```
-
-## Usage Examples
-
-### Chat with Web App
-
-The "Chat with Web" app has been updated to use the enhanced web search functionality:
-
-- **Tool**: `enhancedWebSearch` and `webContentExtractor`
-- **Capability**: Automatically searches the web and extracts full content for comprehensive answers. If your question contains a direct URL, the assistant loads that page using `webContentExtractor` and incorporates the contents into the response.
-- **Use Case**: Ask questions that require current information or provide a URL to analyze, and get detailed answers with source citations
-
-### Example Queries for Enhanced Web Search
-
-1. **News and Current Events**:
-   - "What are the latest developments in AI technology?"
-   - "Current stock market trends"
-   - "Recent climate change research findings"
-
-2. **Research and Analysis**:
-   - "Best practices for sustainable energy"
-   - "Comparison of different programming frameworks"
-   - "Latest medical breakthroughs in cancer treatment"
-
-3. **Product Information**:
-   - "Reviews of latest smartphone models"
-   - "Comparison of electric vehicle features"
-   - "Software pricing and features comparison"
-
-### 4. Deep Research (`deepResearch`)
+### Deep Research (`deepResearch`)
 
 **Purpose**: Perform iterative web searches and content extraction while sending progress events to the frontend.
 
 **Usage**: Include the `chatId` parameter when called from a chat session so the tool can emit progress updates.
-
-**Example**:
 
 ```json
 {
@@ -288,7 +314,7 @@ The "Chat with Web" app has been updated to use the enhanced web search function
 }
 ```
 
-### 6. Research Planner (`researchPlanner`)
+### Research Planner (`researchPlanner`)
 
 **Purpose**: Decompose a research topic into distinct tasks for a team of researchers.
 
@@ -300,13 +326,43 @@ The "Chat with Web" app has been updated to use the enhanced web search function
 
 **Returns**: JSON containing the `subproblems` array and internal reasoning in `think`.
 
-**Example Usage**:
+## Installation Requirements
+
+Run `npx playwright install` after installing dependencies. Selenium tools require a local Chrome or Chromium executable available in your `PATH`.
+
+## Complete Example
+
+Here is a complete app configuration with web search enabled:
 
 ```json
 {
-  "question": "Impacts of AI on urban transportation",
-  "teamSize": 4,
-  "soundBites": "self-driving cars, public transit optimization"
+  "id": "web-chat",
+  "name": {
+    "en": "Web Chat",
+    "de": "Web Chat"
+  },
+  "description": {
+    "en": "General chat assistant with web search",
+    "de": "Allgemeiner Chat-Assistent mit Websuche"
+  },
+  "color": "#4F46E5",
+  "icon": "chat-bubbles",
+  "system": {
+    "en": "You are a helpful AI assistant with access to web search. When the user asks a question that requires current information, use the web search tool to find relevant content. Always cite your sources with URLs.",
+    "de": "Du bist ein hilfreicher KI-Assistent mit Zugriff auf Websuche. Wenn der Benutzer eine Frage stellt, die aktuelle Informationen erfordert, nutze das Websuch-Tool. Zitiere immer deine Quellen mit URLs."
+  },
+  "tokenLimit": 8000,
+  "preferredModel": "gemini-2.5-flash-preview-05-20",
+  "preferredOutputFormat": "markdown",
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
+    "maxResults": 5,
+    "extractContent": true,
+    "contentMaxLength": 3000,
+    "enabledByDefault": false
+  }
 }
 ```
 
@@ -324,6 +380,15 @@ The web content extractor uses the following approach:
 6. **Extract metadata** (title, description, author)
 7. **Apply length limits** and return structured result
 
+### SSRF Protection
+
+The web content extractor includes protection against Server-Side Request Forgery (SSRF):
+
+- Blocks requests to private and internal IP addresses
+- Blocks access to cloud metadata services (169.254.x.x, etc.)
+- Only allows HTTP/HTTPS protocols
+- **SSL-whitelisted domains** bypass the private IP check, allowing access to internal services that have been explicitly approved by the administrator (added in v5.2.12)
+
 ### Error Handling
 
 - Invalid URLs are caught and reported
@@ -337,21 +402,7 @@ The web content extractor uses the following approach:
 - Configurable timeouts and content limits
 - Efficient DOM parsing and text extraction
 - Graceful degradation when extraction fails
-
-## Testing
-
-Use the test script to verify functionality:
-
-```bash
-cd server/tools
-node test-web-tools.js
-```
-
-This will test:
-
-- Basic content extraction
-- Error handling
-- Different webpage structures
+- Parameter defaults are overridden by admin-configured websearch values at runtime
 
 ## Security Considerations
 
@@ -360,18 +411,21 @@ This will test:
 - Request timeouts prevent hanging connections
 - Content length limits prevent memory issues
 - User-Agent headers for responsible web crawling
+- SSRF protection blocks access to internal networks
+- API keys encrypted at rest in the admin panel
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"BRAVE_SEARCH_API_KEY is not set"**
-   - Set the API key in your `config.env` file
-   - Restart the server after setting the key
+   - Configure the key via Admin → Providers → Brave Search (recommended)
+   - Or set the API key in your `config.env` file and restart the server
 
 2. **"TAVILY_SEARCH_API_KEY is not set"**
-   - Set the API key in your `config.env` file
-   - Restart the server after setting the key
+   - Configure the key via Admin → Providers → Tavily Search (recommended)
+   - Or set the API key in your `config.env` file and restart the server
+
 3. **"Failed to extract content"**
    - Check if the URL is accessible
    - Some websites may block automated requests
@@ -381,6 +435,15 @@ This will test:
    - The webpage is taking too long to load
    - Consider increasing timeout or trying a different URL
 
+5. **Web search not working after upgrade**
+   - Migration V025 automatically converts old tool-based configs to the new `websearch` format
+   - Check server logs for migration output
+   - Verify the app has `websearch.enabled: true` in its configuration
+
+6. **Native search not activating for Gemini/GPT models**
+   - Ensure `useNativeSearch` is `true` (default)
+   - Verify the model's provider is correctly identified as `google` or `openai-responses`
+
 ### Debugging
 
-Enable detailed logging by checking the console output when running the tools. The enhanced web search tool provides comprehensive statistics about success/failure rates.
+Enable detailed logging by checking the console output when running the tools. The server logs include information about which websearch tool was selected and why.

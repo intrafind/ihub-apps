@@ -38,7 +38,12 @@ Add a `tools` property to your app configuration:
     "de": "Du bist ein hilfreicher Recherche-Assistent. Nutze die Websuche, um aktuelle Informationen zu finden."
   },
   "tokenLimit": 8000,
-  "tools": ["webSearch"]
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
+    "enabledByDefault": false
+  }
 }
 ```
 
@@ -977,10 +982,13 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 ### `braveSearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Brave Search API for privacy-focused search results
+- **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
 - **Type**: Server-side execution
 - **Parameters**:
   - `query` (string, required): The search query or search terms
+  - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)
+  - `maxResults` (number, optional): Maximum results to return (default: configured by app's `websearch.maxResults`, max: 10)
+  - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
 - **Authentication**: Configure via **Admin Panel → Providers → Brave Search** or set `BRAVE_SEARCH_API_KEY` environment variable
 - **Configuration**:
   - **Admin Panel Method** (Recommended):
@@ -997,8 +1005,8 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
   - `url`: Page URL
   - `description`: Brief excerpt from the page
   - `language`: Detected language of the result
-- **Default Behavior**: Returns standard web search results without content extraction
-- **Use Cases**: Privacy-focused web search, general information lookup, finding URLs for further processing
+  - `content`: Extracted page content (when `extractContent` is enabled)
+- **Use Cases**: Privacy-focused web search, general information lookup, comprehensive research with content extraction
 
 **Example Tool Call**:
 ```json
@@ -1013,12 +1021,14 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 ### `tavilySearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Tavily Search API, optimized for AI agents with configurable search depth
+- **Description**: Web search powered by the Tavily Search API, optimized for AI agents with configurable search depth and optional content extraction
 - **Type**: Server-side execution
 - **Parameters**:
   - `query` (string, required): The search query or search terms
   - `search_depth` (string, optional): Search depth level — `"basic"` (default) or `"advanced"`
-  - `max_results` (integer, optional): Maximum number of results to return (default: `5`, min: `1`, max: `10`)
+  - `max_results` (integer, optional): Maximum number of results to return (default: configured by app's `websearch.maxResults`, min: `1`, max: `10`)
+  - `extractContent` (boolean, optional): Extract full content from results (default: configured by app's `websearch.extractContent`)
+  - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
 - **Authentication**: Configure via **Admin Panel → Providers → Tavily Search** or set `TAVILY_SEARCH_API_KEY` environment variable
 - **Configuration**:
   - **Admin Panel Method** (Recommended):
@@ -1035,10 +1045,11 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
   - `url`: Page URL
   - `description`: Content snippet from the page
   - `score`: Relevance score (when available)
+  - `content`: Extracted page content (when `extractContent` is enabled)
 - **Defaults**:
   - `search_depth`: `"basic"`
   - `max_results`: `5`
-- **Use Cases**: Research-oriented search, AI agent information gathering, content discovery
+- **Use Cases**: Research-oriented search, AI agent information gathering, comprehensive research with content extraction
 
 **Example Tool Call**:
 ```json
@@ -1052,70 +1063,45 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 }
 ```
 
-### `enhancedWebSearch`
+### Unified Web Search Configuration
 
-- **Provider**: Any model supporting function calling
-- **Description**: Combines web search with automatic content extraction from top results, providing comprehensive information gathering perfect for "chat with web" functionality
-- **Type**: Server-side execution
-- **How it works**: First performs a Brave Search, then automatically extracts full content from the top result pages, removing ads and navigation elements to provide clean, readable content
-- **Parameters**:
-  - `query` (string, required): The search query or search terms
-  - `extractContent` (boolean, optional): Whether to extract full content from search results (default: `true`)
-  - `maxResults` (integer, optional): Maximum number of search results to process for content extraction (default: `3`, min: `1`, max: `10`)
-  - `contentMaxLength` (integer, optional): Maximum length of extracted content per page in characters (default: `3000`, min: `500`, max: `10000`)
-- **Authentication**: Uses Brave Search API — requires same configuration as `braveSearch` tool
-- **Returns**: Object containing:
-  - `query`: The original search query
-  - `searchResults`: Array of all search results from Brave
-  - `extractedContent`: Array of results with extracted content (when `extractContent: true`)
-  - `summary`: Text summary of the operation
-  - `stats`: Statistics object with:
-    - `totalSearchResults`: Total number of search results found
-    - `processedResults`: Number of results processed for extraction
-    - `successfulExtractions`: Number of successful content extractions
-    - `failedExtractions`: Number of failed extractions
-- **Defaults**:
-  - `extractContent`: `true` (automatically extracts content)
-  - `maxResults`: `3` (processes top 3 results)
-  - `contentMaxLength`: `3000` (3000 characters per page)
-- **Performance**: Content extraction happens in parallel for faster results
-- **Error Handling**: If extraction fails for a specific URL, the search result is still returned with the original description
-- **Use Cases**:
-  - "Chat with web" applications requiring full context
-  - Deep research requiring actual page content
-  - Multi-source information synthesis
-  - Comprehensive fact gathering from multiple sources
+> **Changed in v5.2.11**: Web search is no longer configured by adding tool IDs to the `tools` array. Instead, use the `websearch` configuration object on each app. The server automatically resolves the best search tool at runtime based on the model's provider. See [Web Tools](web-tools.md) for full details.
 
-**Example Tool Call (Full Extraction)**:
+**Example App Configuration**:
 ```json
 {
-  "tool": "enhancedWebSearch",
-  "parameters": {
-    "query": "artificial intelligence trends 2024",
-    "extractContent": true,
+  "id": "research-assistant",
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
     "maxResults": 5,
-    "contentMaxLength": 2000
+    "extractContent": true,
+    "contentMaxLength": 3000,
+    "enabledByDefault": false
   }
 }
 ```
 
-**Example Tool Call (Search Only)**:
-```json
-{
-  "tool": "enhancedWebSearch",
-  "parameters": {
-    "query": "programming tutorials",
-    "extractContent": false
-  }
-}
-```
+**How provider resolution works**:
+- **Gemini models** + `useNativeSearch: true` → Google Search grounding
+- **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
+- **`provider: "tavily"`** → Tavily Search
+- **Otherwise** → Brave Search
 
-**Controlling Results and Content**:
-- To control the **number of search results** processed: Adjust `maxResults` (1-10)
-- To control **content length** per page: Adjust `contentMaxLength` (500-10000 characters)
-- To disable **content extraction** entirely: Set `extractContent: false` (returns only search results)
-- For **faster responses**: Use lower `maxResults` (e.g., 1-2) or disable content extraction
-- For **comprehensive research**: Use higher `maxResults` (e.g., 5-10) with higher `contentMaxLength`
+**Key properties**:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable web search for this app |
+| `provider` | String | `"auto"` | Provider: `"auto"`, `"brave"`, or `"tavily"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI models |
+| `maxResults` | Number | `5` | Maximum search results (1-20) |
+| `extractContent` | Boolean | `true` | Extract full page content from results |
+| `contentMaxLength` | Number | `3000` | Max extracted content per page (500-50,000) |
+| `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
+
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, `tavilySearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
 
 ### `iFinder`
 

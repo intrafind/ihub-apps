@@ -19,6 +19,7 @@ This comprehensive guide covers how to configure and customize AI applications i
 - [Upload Features](#upload-features)
 - [UI Customization](#ui-customization)
 - [Complete Examples](#complete-examples)
+- [Web Search Configuration](#web-search-configuration)
 - [Troubleshooting](#troubleshooting)
   - [Common Configuration Issues](#common-configuration-issues)
   - [App Type Specific Issues](#app-type-specific-issues)
@@ -66,7 +67,7 @@ That's it! Your app will:
   "system": { "en": "You are a friendly customer support agent. Help users with their questions professionally." },
   "tokenLimit": 4000,
   "preferredStyle": "professional",
-  "tools": ["webSearch"]
+  "websearch": { "enabled": true, "enabledByDefault": true }
 }
 ```
 
@@ -486,7 +487,7 @@ These optional fields work for all app types:
 The following fields are specific to chat apps and are not used for redirect or iframe types:
 - `system`, `tokenLimit`, `preferredModel`, `preferredOutputFormat`
 - `preferredStyle`, `preferredTemperature`, `sendChatHistory`
-- `tools`, `variables`, `prompt`, `outputSchema`
+- `tools`, `websearch`, `variables`, `prompt`, `outputSchema`
 - `settings`, `inputMode`, `upload`, `features`
 - `greeting`, `starterPrompts`, `messagePlaceholder`
 - `allowEmptyContent`, `allowedModels`, `disallowModelSelection`
@@ -555,6 +556,7 @@ Each app is defined with the following essential properties:
 | `imageGeneration`       | Object  | Optional. Default image generation parameters for this app. See [Image Generation](#image-generation-configuration) below |
 | `thinking`              | Object  | Optional. Extended thinking configuration for supported models. See [Thinking Configuration](#thinking-configuration) below |
 | `tools`                 | Array   | Optional. Array of tool identifiers available in this app                                                                |
+| `websearch`             | Object  | Optional. Unified web search configuration. See [Web Search Configuration](#web-search-configuration) below             |
 | `sources`               | Array   | Optional. Array of source reference IDs for knowledge base access                                                       |
 | `allowInheritance`      | Boolean | Optional. Allow child apps to inherit configuration from this app. Default: `false`                                      |
 | `parentId`              | String  | Optional. ID of the parent app to inherit configuration from                                                             |
@@ -1198,6 +1200,41 @@ Here are some practical examples of how to configure the settings for different 
 - Keep a list of embedded URLs and verify them periodically
 - Consider fallback options if embedding fails
 - Document any special requirements or limitations of the embedded app
+
+## Web Search Configuration
+
+> Added in v5.2.11
+
+Web search is configured per-app using the `websearch` object. This replaces the previous approach of adding individual websearch tool IDs to the `tools` array.
+
+```json
+{
+  "id": "my-search-app",
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
+    "maxResults": 5,
+    "extractContent": true,
+    "contentMaxLength": 3000,
+    "enabledByDefault": false
+  }
+}
+```
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable web search for this app |
+| `provider` | String | `"auto"` | Search provider: `"auto"`, `"brave"`, or `"tavily"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search (Google Search for Gemini, OpenAI Web Search for GPT) when the model supports it |
+| `maxResults` | Number | `5` | Maximum number of search results (1-20) |
+| `extractContent` | Boolean | `true` | Extract full page content from search results |
+| `contentMaxLength` | Number | `3000` | Maximum extracted content length per page in characters (500-50,000) |
+| `enabledByDefault` | Boolean | `false` | Whether web search is active by default; users can toggle it in the chat input |
+
+The server automatically selects the best search tool at runtime: native Google/OpenAI search when the model supports it, or Brave/Tavily for other models.
+
+For full details including provider setup and API keys, see **[Web Tools](web-tools.md)**.
 
 ## Related Documentation
 
