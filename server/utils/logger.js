@@ -318,6 +318,18 @@ function redactUrlParams(url) {
 function redactSensitiveData(data) {
   if (!data || typeof data !== 'object') return data;
 
+  // Serialize Error objects to plain objects — Error properties (message, stack, name)
+  // are non-enumerable and invisible to Object.keys(), which would produce empty {}
+  if (data instanceof Error) {
+    const serialized = { message: data.message, name: data.name, stack: data.stack };
+    for (const key of Object.keys(data)) {
+      if (!(key in serialized)) {
+        serialized[key] = data[key];
+      }
+    }
+    return redactSensitiveData(serialized);
+  }
+
   // List of sensitive field names (exact match or starts with pattern)
   // Only redact these if they contain string values, not objects
   const exactSensitiveFields = [
