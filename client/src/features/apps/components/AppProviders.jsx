@@ -3,6 +3,8 @@ import { UIConfigProvider } from '../../../shared/contexts/UIConfigContext';
 import { PlatformConfigProvider } from '../../../shared/contexts/PlatformConfigContext';
 import ErrorBoundaryFallback from '../../../shared/components/ErrorBoundary';
 import { initializeForceRefresh } from '../../../utils/forceRefresh';
+import { NetworkStatusProvider } from '../../../shared/hooks/useNetworkStatus';
+import OfflineOverlay from '../../../shared/components/OfflineOverlay';
 
 /**
  * Consolidates all application-level providers in a single component
@@ -28,9 +30,12 @@ function AppProviders({ children }) {
 
   return (
     <ErrorBoundaryFallback>
-      <PlatformConfigProvider>
-        <UIConfigProvider>{children}</UIConfigProvider>
-      </PlatformConfigProvider>
+      <NetworkStatusProvider>
+        <OfflineOverlay />
+        <PlatformConfigProvider>
+          <UIConfigProvider>{children}</UIConfigProvider>
+        </PlatformConfigProvider>
+      </NetworkStatusProvider>
     </ErrorBoundaryFallback>
   );
 }
