@@ -500,11 +500,7 @@ export function ntlmAuthMiddleware(req, res, next) {
         // and LDAP lookup would be too expensive.
         // Skip for login endpoints — processNtlmLogin() handles LDAP lookup
         // separately to avoid duplicate LDAP queries on the same request.
-        if (
-          ntlmAuth.ldapGroupLookupProvider &&
-          ntlmAuth.generateJwtToken &&
-          !isNtlmLoginEndpoint
-        ) {
+        if (ntlmAuth.ldapGroupLookupProvider && ntlmAuth.generateJwtToken && !isNtlmLoginEndpoint) {
           user = await enhanceUserWithLdapGroups(user, ntlmAuth);
           // Re-apply: enhanceUserWithLdapGroups replaces user.groups with freshly
           // mapped groups, so we need to re-add authenticated/provider default groups.
