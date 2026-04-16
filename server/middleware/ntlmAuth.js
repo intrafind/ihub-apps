@@ -3,6 +3,7 @@ import configCache from '../configCache.js';
 import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js';
 import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
+import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
 
 /**
@@ -195,6 +196,92 @@ function processNtlmUser(req, ntlmConfig) {
     groups: user.groups,
     externalGroups: user.externalGroups
   });
+
+  return user;
+}
+
+/**
+ * Perform LDAP group lookup for an NTLM-authenticated user and merge groups.
+ * Only called during login/session start, not on every request.
+ * @param {Object} user - Processed NTLM user object
+ * @param {Object} ntlmConfig - NTLM configuration
+ * @returns {Promise<Object>} User with merged LDAP groups
+ */
+async function enhanceUserWithLdapGroups(user, ntlmConfig) {
+  if (!ntlmConfig.ldapGroupLookupProvider) {
+    return user;
+  }
+
+  try {
+    const ldapProvider = getLdapProviderByName(ntlmConfig.ldapGroupLookupProvider);
+
+    if (!ldapProvider) {
+      logger.error('NTLM Auth: ldapGroupLookupProvider references non-existent LDAP provider', {
+        component: 'NtlmAuth',
+        ldapGroupLookupProvider: ntlmConfig.ldapGroupLookupProvider
+      });
+      return user;
+    }
+
+    if (!ldapProvider.adminDn || !ldapProvider.adminPassword) {
+      logger.error(
+        'NTLM Auth: LDAP provider for group lookup is missing adminDn or adminPassword',
+        {
+          component: 'NtlmAuth',
+          ldapProvider: ntlmConfig.ldapGroupLookupProvider
+        }
+      );
+      return user;
+    }
+
+    logger.info('NTLM Auth: performing LDAP group lookup for user', {
+      component: 'NtlmAuth',
+      username: user.username,
+      ldapProvider: ntlmConfig.ldapGroupLookupProvider
+    });
+
+    const ldapGroups = await lookupLdapGroupsForUser(user.username, ldapProvider);
+
+    if (ldapGroups.length > 0) {
+      // Merge LDAP groups with any existing external groups (deduplicate)
+      const mergedExternalGroups = [...new Set([...user.externalGroups, ...ldapGroups])];
+      user.externalGroups = mergedExternalGroups;
+
+      // Re-map all external groups to internal groups
+      const mappedGroups = mapExternalGroups(mergedExternalGroups);
+
+      // Re-add default groups
+      if (ntlmConfig.defaultGroups && Array.isArray(ntlmConfig.defaultGroups)) {
+        ntlmConfig.defaultGroups.forEach(g => {
+          if (!mappedGroups.includes(g)) {
+            mappedGroups.push(g);
+          }
+        });
+      }
+
+      user.groups = mappedGroups;
+
+      logger.info('NTLM Auth: merged LDAP groups into user', {
+        component: 'NtlmAuth',
+        username: user.username,
+        ldapGroupCount: ldapGroups.length,
+        totalExternalGroups: mergedExternalGroups.length,
+        mappedGroups: mappedGroups.join(', ')
+      });
+    } else {
+      logger.info('NTLM Auth: LDAP group lookup returned no groups', {
+        component: 'NtlmAuth',
+        username: user.username
+      });
+    }
+  } catch (error) {
+    logger.error('NTLM Auth: LDAP group lookup failed, continuing with NTLM groups only', {
+      component: 'NtlmAuth',
+      username: user.username,
+      ldapGroupLookupProvider: ntlmConfig.ldapGroupLookupProvider,
+      error: error.message
+    });
+  }
 
   return user;
 }
@@ -408,6 +495,12 @@ export function ntlmAuthMiddleware(req, res, next) {
         const authConfig = platform.auth || {};
         user = enhanceUserGroups(user, authConfig, ntlmAuth);
 
+        // LDAP group lookup - only when generating JWT (session start)
+        if (ntlmAuth.ldapGroupLookupProvider && ntlmAuth.generateJwtToken) {
+          user = await enhanceUserWithLdapGroups(user, ntlmAuth);
+          user = enhanceUserGroups(user, authConfig, ntlmAuth);
+        }
+
         // Validate and persist NTLM user (similar to OIDC/Proxy)
         // User must be persisted - if this fails, authentication fails
         user = await validateAndPersistExternalUser(user, platform);
@@ -512,6 +605,12 @@ export async function processNtlmLogin(req, ntlmConfig) {
   const authConfig = platform.auth || {};
 
   user = enhanceUserGroups(user, authConfig, ntlmConfig);
+
+  // LDAP group lookup (only during login/session start)
+  if (ntlmConfig.ldapGroupLookupProvider) {
+    user = await enhanceUserWithLdapGroups(user, ntlmConfig);
+    user = enhanceUserGroups(user, authConfig, ntlmConfig);
+  }
 
   // Validate and persist NTLM user (similar to OIDC/Proxy)
   try {

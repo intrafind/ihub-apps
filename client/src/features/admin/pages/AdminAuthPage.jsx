@@ -53,6 +53,7 @@ function AdminAuthPage() {
       debug: false,
       getUserInfo: true,
       getGroups: true,
+      ldapGroupLookupProvider: '',
       defaultGroups: [],
       sessionTimeoutMinutes: 480,
       generateJwtToken: true
