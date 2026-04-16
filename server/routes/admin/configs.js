@@ -61,7 +61,12 @@ function restoreSecretIfRedacted(newValue, existingValue) {
 function decryptIfNeeded(value) {
   if (!value || typeof value !== 'string') return value;
   if (tokenStorageService.isEncrypted(value)) {
-    return tokenStorageService.decryptString(value);
+    try {
+      return tokenStorageService.decryptString(value);
+    } catch (error) {
+      logger.error('Failed to decrypt config secret', { component: 'AdminConfigs', error });
+      return value; // Return encrypted value as-is; sanitizeSecret() will redact it downstream
+    }
   }
   return value;
 }
