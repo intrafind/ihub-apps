@@ -1259,7 +1259,21 @@
     "streamingError": "An error occurred during streaming",
     "failedToGenerateResponse": "Failed to generate response. Please try again or select a different model.",
     "sessionExpired": "Your session has expired. Please log in again to continue.",
-    "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider..."
+    "sessionExpiredReconnecting": "Session expired. Reconnecting to authentication provider...",
+    "chunkLoadTitle": "Page failed to load",
+    "chunkLoadDescription": "A required resource could not be loaded. This may be due to a network issue or an application update.",
+    "reloadPage": "Reload Page",
+    "tryAgain": "Try Again",
+    "backToHome": "Back to Home"
+  },
+  "network": {
+    "offline": {
+      "title": "Server Unreachable",
+      "description": "The connection to the server was lost. This usually happens when the VPN disconnects. Trying to reconnect...",
+      "reconnecting": "Reconnecting... (attempt {{count}})",
+      "reloadPage": "Reload Page"
+    },
+    "reconnected": "Connection restored"
   },
   "message": {
     "generationCancelled": " [Generation cancelled]"
