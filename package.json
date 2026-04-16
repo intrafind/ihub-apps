@@ -157,7 +157,7 @@
   },
   "overrides": {
     "glob": "^11.1.0",
-    "dompurify": "^3.3.3"
+    "dompurify": "^3.4.0"
   },
   "lint-staged": {
     "*.{js,jsx}": [
