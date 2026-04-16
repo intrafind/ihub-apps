@@ -1,19 +1,20 @@
-import React, { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
+import lazyWithRetry from './utils/lazyWithRetry';
 import Layout from './shared/components/Layout';
 import AppsList from './features/apps/pages/AppsList';
 import PromptsList from './features/prompts/pages/PromptsList';
 import AppRouterWrapper from './features/apps/components/AppRouterWrapper';
 // Lazy load workflow components
-const WorkflowsPage = React.lazy(() => import('./features/workflows/pages/WorkflowsPage'));
-const SetupWizard = React.lazy(() => import('./features/setup/SetupWizard'));
-const WorkflowExecutionPage = React.lazy(
+const WorkflowsPage = lazyWithRetry(() => import('./features/workflows/pages/WorkflowsPage'));
+const SetupWizard = lazyWithRetry(() => import('./features/setup/SetupWizard'));
+const WorkflowExecutionPage = lazyWithRetry(
   () => import('./features/workflows/pages/WorkflowExecutionPage')
 );
 // Lazy load canvas (pulls in react-quill/ajv — vendor-forms chunk, ~370KB)
-const AppCanvas = React.lazy(() => import('./features/canvas/pages/AppCanvas'));
+const AppCanvas = lazyWithRetry(() => import('./features/canvas/pages/AppCanvas'));
 import NotFound from './pages/error/NotFound';
 import Unauthorized from './pages/error/Unauthorized';
 import Forbidden from './pages/error/Forbidden';
@@ -21,71 +22,75 @@ import ServerError from './pages/error/ServerError';
 import UnifiedPage from './pages/UnifiedPage';
 import LoginPage from './pages/LoginPage';
 // Lazy load admin components
-const AdminHome = React.lazy(() => import('./features/admin/pages/AdminHome'));
-const AdminUsageReports = React.lazy(() => import('./features/admin/pages/AdminUsageReports'));
-const AdminSystemPage = React.lazy(() => import('./features/admin/pages/AdminSystemPage'));
-const AdminAppsPage = React.lazy(() => import('./features/admin/pages/AdminAppsPage'));
-const AdminAppEditPage = React.lazy(() => import('./features/admin/pages/AdminAppEditPage'));
-const AdminShortLinks = React.lazy(() => import('./features/admin/pages/AdminShortLinks'));
-const AdminShortLinkEditPage = React.lazy(
+const AdminHome = lazyWithRetry(() => import('./features/admin/pages/AdminHome'));
+const AdminUsageReports = lazyWithRetry(() => import('./features/admin/pages/AdminUsageReports'));
+const AdminSystemPage = lazyWithRetry(() => import('./features/admin/pages/AdminSystemPage'));
+const AdminAppsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppsPage'));
+const AdminAppEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAppEditPage'));
+const AdminShortLinks = lazyWithRetry(() => import('./features/admin/pages/AdminShortLinks'));
+const AdminShortLinkEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminShortLinkEditPage')
 );
-const AdminModelEditPage = React.lazy(() => import('./features/admin/pages/AdminModelEditPage'));
-const AdminModelsPage = React.lazy(() => import('./features/admin/pages/AdminModelsPage'));
-const AdminProvidersPage = React.lazy(() => import('./features/admin/pages/AdminProvidersPage'));
-const AdminProviderEditPage = React.lazy(
+const AdminModelEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminModelEditPage'));
+const AdminModelsPage = lazyWithRetry(() => import('./features/admin/pages/AdminModelsPage'));
+const AdminProvidersPage = lazyWithRetry(() => import('./features/admin/pages/AdminProvidersPage'));
+const AdminProviderEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminProviderEditPage')
 );
-const AdminProviderCreatePage = React.lazy(
+const AdminProviderCreatePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminProviderCreatePage')
 );
-const AdminPromptsPage = React.lazy(() => import('./features/admin/pages/AdminPromptsPage'));
-const AdminPromptEditPage = React.lazy(() => import('./features/admin/pages/AdminPromptEditPage'));
-const AdminToolsPage = React.lazy(() => import('./features/admin/pages/AdminToolsPage'));
-const AdminToolEditPage = React.lazy(() => import('./features/admin/pages/AdminToolEditPage'));
-const AdminSkillsPage = React.lazy(() => import('./features/admin/pages/AdminSkillsPage'));
-const AdminSkillEditPage = React.lazy(() => import('./features/admin/pages/AdminSkillEditPage'));
-const AdminWorkflowsPage = React.lazy(() => import('./features/admin/pages/AdminWorkflowsPage'));
-const AdminWorkflowEditPage = React.lazy(
+const AdminPromptsPage = lazyWithRetry(() => import('./features/admin/pages/AdminPromptsPage'));
+const AdminPromptEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminPromptEditPage')
+);
+const AdminToolsPage = lazyWithRetry(() => import('./features/admin/pages/AdminToolsPage'));
+const AdminToolEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminToolEditPage'));
+const AdminSkillsPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillsPage'));
+const AdminSkillEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillEditPage'));
+const AdminWorkflowsPage = lazyWithRetry(() => import('./features/admin/pages/AdminWorkflowsPage'));
+const AdminWorkflowEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowEditPage')
 );
-const AdminWorkflowExecutionsPage = React.lazy(
+const AdminWorkflowExecutionsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
 );
-const AdminSourcesPage = React.lazy(() => import('./features/admin/pages/AdminSourcesPage'));
-const AdminSourceEditPage = React.lazy(() => import('./features/admin/pages/AdminSourceEditPage'));
-const AdminPagesPage = React.lazy(() => import('./features/admin/pages/AdminPagesPage'));
-const AdminPageEditPage = React.lazy(() => import('./features/admin/pages/AdminPageEditPage'));
-const AdminAuthPage = React.lazy(() => import('./features/admin/pages/AdminAuthPage'));
-const AdminOAuthPage = React.lazy(() => import('./features/admin/pages/AdminOAuthPage'));
-const AdminOAuthClientsPage = React.lazy(
+const AdminSourcesPage = lazyWithRetry(() => import('./features/admin/pages/AdminSourcesPage'));
+const AdminSourceEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminSourceEditPage')
+);
+const AdminPagesPage = lazyWithRetry(() => import('./features/admin/pages/AdminPagesPage'));
+const AdminPageEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminPageEditPage'));
+const AdminAuthPage = lazyWithRetry(() => import('./features/admin/pages/AdminAuthPage'));
+const AdminOAuthPage = lazyWithRetry(() => import('./features/admin/pages/AdminOAuthPage'));
+const AdminOAuthClientsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthClientsPage')
 );
-const AdminOAuthClientEditPage = React.lazy(
+const AdminOAuthClientEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthClientEditPage')
 );
-const AdminOAuthServerPage = React.lazy(
+const AdminOAuthServerPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOAuthServerPage')
 );
-const AdminUsersPage = React.lazy(() => import('./features/admin/pages/AdminUsersPage'));
-const AdminUserEditPage = React.lazy(() => import('./features/admin/pages/AdminUserEditPage'));
-const AdminUserViewPage = React.lazy(() => import('./features/admin/pages/AdminUserViewPage'));
-const AdminGroupsPage = React.lazy(() => import('./features/admin/pages/AdminGroupsPage'));
-const AdminGroupEditPage = React.lazy(() => import('./features/admin/pages/AdminGroupEditPage'));
-const AdminUICustomization = React.lazy(
+const AdminUsersPage = lazyWithRetry(() => import('./features/admin/pages/AdminUsersPage'));
+const AdminUserEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminUserEditPage'));
+const AdminUserViewPage = lazyWithRetry(() => import('./features/admin/pages/AdminUserViewPage'));
+const AdminGroupsPage = lazyWithRetry(() => import('./features/admin/pages/AdminGroupsPage'));
+const AdminGroupEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminGroupEditPage'));
+const AdminUICustomization = lazyWithRetry(
   () => import('./features/admin/pages/AdminUICustomization')
 );
-const AdminLoggingPage = React.lazy(() => import('./features/admin/pages/AdminLoggingPage'));
-const AdminFeaturesPage = React.lazy(() => import('./features/admin/pages/AdminFeaturesPage'));
-const AdminMarketplacePage = React.lazy(
+const AdminLoggingPage = lazyWithRetry(() => import('./features/admin/pages/AdminLoggingPage'));
+const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
+const AdminMarketplacePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplacePage')
 );
-const AdminMarketplaceRegistriesPage = React.lazy(
+const AdminMarketplaceRegistriesPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplaceRegistriesPage')
 );
-const IntegrationsPage = React.lazy(() => import('./features/settings/pages/IntegrationsPage'));
-const OcrPage = React.lazy(() => import('./features/tools/pages/OcrPage'));
-const JobListPage = React.lazy(() => import('./features/tools/pages/JobListPage'));
+const IntegrationsPage = lazyWithRetry(() => import('./features/settings/pages/IntegrationsPage'));
+const OcrPage = lazyWithRetry(() => import('./features/tools/pages/OcrPage'));
+const JobListPage = lazyWithRetry(() => import('./features/tools/pages/JobListPage'));
 import AppProviders from './features/apps/components/AppProviders';
 import { withSafeRoute } from './shared/components/SafeRoute';
 import useSessionManagement from './shared/hooks/useSessionManagement';
@@ -97,9 +102,9 @@ import { AuthProvider } from './shared/contexts/AuthContext';
 import MarkdownRenderer from './shared/components/MarkdownRenderer';
 import useFeatureFlags from './shared/hooks/useFeatureFlags';
 // Lazy load Teams features (only needed in Microsoft Teams environment)
-const TeamsWrapper = React.lazy(() => import('./features/teams/TeamsWrapper'));
-const TeamsAuthStart = React.lazy(() => import('./features/teams/TeamsAuthStart'));
-const TeamsAuthEnd = React.lazy(() => import('./features/teams/TeamsAuthEnd'));
+const TeamsWrapper = lazyWithRetry(() => import('./features/teams/TeamsWrapper'));
+const TeamsAuthStart = lazyWithRetry(() => import('./features/teams/TeamsAuthStart'));
+const TeamsAuthEnd = lazyWithRetry(() => import('./features/teams/TeamsAuthEnd'));
 
 // Create safe versions of components that need error boundaries
 const SafeAppsList = withSafeRoute(AppsList);
