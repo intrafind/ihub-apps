@@ -1,4 +1,12 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo
+} from 'react';
 import { buildApiUrl } from '../../utils/runtimeBasePath';
 
 const NetworkStatusContext = createContext({ isOnline: true, isChecking: false, retryCount: 0 });
@@ -122,9 +130,7 @@ export function NetworkStatusProvider({ children }) {
   );
 
   return (
-    <NetworkStatusContext.Provider value={contextValue}>
-      {children}
-    </NetworkStatusContext.Provider>
+    <NetworkStatusContext.Provider value={contextValue}>{children}</NetworkStatusContext.Provider>
   );
 }
 
