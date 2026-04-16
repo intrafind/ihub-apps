@@ -1036,8 +1036,8 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
         </div>
       )}
 
-      {/* LDAP Configuration */}
-      {config.ldapAuth?.enabled && (
+      {/* LDAP Configuration - shown when LDAP or NTLM is enabled (NTLM can use LDAP for group lookup) */}
+      {(config.ldapAuth?.enabled || config.ntlmAuth?.enabled) && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
           <div className="flex justify-between items-center mb-4">
             <div>
@@ -1490,6 +1490,36 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                 Generate JWT tokens for API access after NTLM authentication
               </p>
             </div>
+          </div>
+
+          {/* LDAP Group Lookup Provider */}
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              LDAP Group Lookup Provider
+            </label>
+            <select
+              value={config.ntlmAuth?.ldapGroupLookupProvider || ''}
+              onChange={e =>
+                updateNestedConfig(
+                  'ntlmAuth',
+                  'ldapGroupLookupProvider',
+                  e.target.value || undefined
+                )
+              }
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm dark:bg-gray-700 dark:text-gray-200"
+            >
+              <option value="">None (use NTLM built-in groups)</option>
+              {(config.ldapAuth?.providers || []).map(p => (
+                <option key={p.name} value={p.name}>
+                  {p.displayName || p.name}
+                </option>
+              ))}
+            </select>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Use an LDAP provider to look up user groups during login instead of relying on the
+              domain controller. The LDAP provider must have admin credentials and group search
+              configured.
+            </p>
           </div>
         </div>
       )}

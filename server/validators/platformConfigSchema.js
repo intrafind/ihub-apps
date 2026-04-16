@@ -150,6 +150,7 @@ export const platformConfigSchema = z
         debug: z.boolean().default(false),
         getUserInfo: z.boolean().default(true),
         getGroups: z.boolean().default(true),
+        ldapGroupLookupProvider: z.string().optional(),
         defaultGroups: z.array(z.string()).default([]),
         sessionTimeoutMinutes: z.number().min(1).default(480),
         generateJwtToken: z.boolean().default(true),

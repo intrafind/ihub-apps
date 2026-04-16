@@ -10,6 +10,79 @@ import logger from '../utils/logger.js';
  */
 
 /**
+ * Escape special characters in a string for use in LDAP search filters (RFC 4515).
+ * Prevents LDAP filter injection when user-supplied values are used in queries.
+ * @param {string} str - Raw string to escape
+ * @returns {string} Escaped string safe for LDAP filter use
+ */
+function escapeLdapFilterValue(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[\\*()\x00]/g, c => '\\' + c.charCodeAt(0).toString(16).padStart(2, '0'));
+}
+
+/**
+ * Extract a group name from an LDAP group entry.
+ * Handles string values, objects with cn/name/displayName, and DN parsing.
+ * @param {string|Object} group - LDAP group entry
+ * @returns {string|null} Group name or null if not extractable
+ */
+function extractGroupName(group) {
+  if (typeof group === 'string') {
+    return group;
+  }
+
+  if (typeof group === 'object' && group !== null) {
+    if (group.cn) {
+      return Array.isArray(group.cn) ? group.cn[0] : group.cn;
+    }
+    if (group.name) {
+      return Array.isArray(group.name) ? group.name[0] : group.name;
+    }
+    if (group.displayName) {
+      return Array.isArray(group.displayName) ? group.displayName[0] : group.displayName;
+    }
+    if (group.dn) {
+      const dnString = Array.isArray(group.dn) ? group.dn[0] : group.dn;
+      const cnMatch = dnString.match(/^CN=([^,]+)/i);
+      if (cnMatch) {
+        return cnMatch[1];
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Extract group names from an LDAP groups response.
+ * Handles both array and object formats.
+ * @param {Array|Object} groups - Raw groups from LDAP response
+ * @returns {string[]} Array of group name strings
+ */
+function extractGroupNames(groups) {
+  if (!groups) {
+    return [];
+  }
+
+  const groupsArray = Array.isArray(groups)
+    ? groups
+    : Object.values(groups).filter(g => g && typeof g === 'object');
+
+  return groupsArray
+    .map(group => {
+      const name = extractGroupName(group);
+      if (name === null && group != null) {
+        logger.warn('LDAP: could not extract group name from group object', {
+          component: 'LdapAuth',
+          group
+        });
+      }
+      return name;
+    })
+    .filter(g => g !== null);
+}
+
+/**
  * Authenticate user against LDAP server
  * @param {string} username - Username
  * @param {string} password - Password
@@ -90,52 +163,7 @@ async function authenticateLdapUser(username, password, ldapConfig) {
     });
 
     // Extract groups from LDAP response
-    let groups = [];
-    if (user.groups) {
-      // Handle both array and object formats
-      const groupsArray = Array.isArray(user.groups)
-        ? user.groups
-        : Object.values(user.groups).filter(g => g && typeof g === 'object');
-
-      groups = groupsArray
-        .map(group => {
-          // Handle string groups directly
-          if (typeof group === 'string') {
-            return group;
-          }
-
-          // Handle object groups - extract group name
-          if (typeof group === 'object' && group !== null) {
-            // Try different common LDAP group name attributes
-            if (group.cn) {
-              return Array.isArray(group.cn) ? group.cn[0] : group.cn;
-            }
-            if (group.name) {
-              return Array.isArray(group.name) ? group.name[0] : group.name;
-            }
-            if (group.displayName) {
-              return Array.isArray(group.displayName) ? group.displayName[0] : group.displayName;
-            }
-            // Try to extract from DN (e.g., "CN=Developers,OU=..." -> "Developers")
-            if (group.dn) {
-              const dnString = Array.isArray(group.dn) ? group.dn[0] : group.dn;
-              const cnMatch = dnString.match(/^CN=([^,]+)/i);
-              if (cnMatch) {
-                return cnMatch[1];
-              }
-            }
-          }
-
-          // If we can't extract a meaningful name, skip this entry
-          logger.warn('LDAP Auth: could not extract group name from group object', {
-            component: 'LdapAuth',
-            username,
-            group
-          });
-          return null;
-        })
-        .filter(g => g !== null); // Remove null entries
-    }
+    const groups = extractGroupNames(user.groups);
 
     // Log extracted LDAP groups for troubleshooting
     if (groups.length > 0) {
@@ -323,4 +351,99 @@ export function getConfiguredLdapProviders() {
     displayName: provider.displayName || provider.name,
     url: provider.url
   }));
+}
+
+/**
+ * Get LDAP provider by name regardless of whether ldapAuth is enabled.
+ * Used for NTLM LDAP group lookup where LDAP auth itself may be disabled
+ * but providers are configured for group queries.
+ * @param {string} providerName - LDAP provider name
+ * @returns {Object|null} LDAP provider configuration
+ */
+export function getLdapProviderByName(providerName) {
+  const platform = configCache.getPlatform() || {};
+  const ldapAuth = platform.ldapAuth || {};
+
+  if (!ldapAuth.providers || !Array.isArray(ldapAuth.providers)) {
+    return null;
+  }
+
+  return ldapAuth.providers.find(provider => provider.name === providerName) || null;
+}
+
+/**
+ * Look up a user's LDAP group memberships without authenticating them.
+ * Uses admin bind credentials and verifyUserExists mode to search for the user
+ * and retrieve their group memberships. Designed for use with NTLM auth where
+ * the user's password is not available.
+ * @param {string} username - Username to look up
+ * @param {Object} ldapProviderConfig - LDAP provider configuration with admin credentials
+ * @returns {Promise<string[]>} Array of LDAP group name strings
+ */
+export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
+  if (!username || typeof username !== 'string') {
+    throw new Error('Username is required for LDAP group lookup');
+  }
+
+  if (!ldapProviderConfig.adminDn || !ldapProviderConfig.adminPassword) {
+    throw new Error(
+      'LDAP provider must have adminDn and adminPassword configured for group lookup'
+    );
+  }
+
+  if (!ldapProviderConfig.url || !ldapProviderConfig.userSearchBase) {
+    throw new Error('LDAP provider must have url and userSearchBase configured');
+  }
+
+  // Escape username for safe use in LDAP search filters (RFC 4515)
+  const safeUsername = escapeLdapFilterValue(username);
+
+  const options = {
+    ldapOpts: {
+      url: ldapProviderConfig.url,
+      ...(ldapProviderConfig.tlsOptions && { tlsOptions: ldapProviderConfig.tlsOptions }),
+      ...(ldapProviderConfig.timeout && { timeout: ldapProviderConfig.timeout }),
+      ...(ldapProviderConfig.reconnect && { reconnect: ldapProviderConfig.reconnect })
+    },
+    adminDn: ldapProviderConfig.adminDn,
+    adminPassword: ldapProviderConfig.adminPassword,
+    userSearchBase: ldapProviderConfig.userSearchBase,
+    usernameAttribute: ldapProviderConfig.usernameAttribute || 'uid',
+    username: safeUsername,
+    verifyUserExists: true,
+    ...(ldapProviderConfig.groupSearchBase && {
+      groupsSearchBase: ldapProviderConfig.groupSearchBase,
+      groupClass: ldapProviderConfig.groupClass || 'groupOfNames',
+      groupMemberAttribute: ldapProviderConfig.groupMemberAttribute || 'member',
+      groupMemberUserAttribute: ldapProviderConfig.groupMemberUserAttribute || 'dn'
+    })
+  };
+
+  logger.info('LDAP Group Lookup: searching groups for user', {
+    component: 'LdapGroupLookup',
+    username,
+    url: ldapProviderConfig.url,
+    groupSearchBase: ldapProviderConfig.groupSearchBase || 'NOT CONFIGURED'
+  });
+
+  const user = await authenticate(options);
+
+  if (!user) {
+    logger.warn('LDAP Group Lookup: user not found in LDAP', {
+      component: 'LdapGroupLookup',
+      username
+    });
+    return [];
+  }
+
+  const groups = extractGroupNames(user.groups);
+
+  logger.info('LDAP Group Lookup: found groups for user', {
+    component: 'LdapGroupLookup',
+    username,
+    groupCount: groups.length,
+    groups: groups.join(', ')
+  });
+
+  return groups;
 }
