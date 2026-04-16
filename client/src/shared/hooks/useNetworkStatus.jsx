@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { buildApiUrl } from '../../utils/runtimeBasePath';
 
 const NetworkStatusContext = createContext({ isOnline: true, isChecking: false, retryCount: 0 });
@@ -31,6 +31,7 @@ export function NetworkStatusProvider({ children }) {
   const [retryCount, setRetryCount] = useState(0);
   const pollRef = useRef(null);
   const pollIntervalRef = useRef(INITIAL_POLL_INTERVAL);
+  const isOnlineRef = useRef(true);
 
   const stopPolling = useCallback(() => {
     if (pollRef.current) {
@@ -41,6 +42,7 @@ export function NetworkStatusProvider({ children }) {
 
   const markOnline = useCallback(() => {
     stopPolling();
+    isOnlineRef.current = true;
     setIsOnline(true);
     setRetryCount(0);
     pollIntervalRef.current = INITIAL_POLL_INTERVAL;
@@ -65,13 +67,11 @@ export function NetworkStatusProvider({ children }) {
   }, [stopPolling, markOnline]);
 
   const markOffline = useCallback(() => {
-    setIsOnline(prev => {
-      if (prev) {
-        // Transition from online → offline: start recovery polling
-        startPolling();
-      }
-      return false;
-    });
+    if (isOnlineRef.current) {
+      isOnlineRef.current = false;
+      setIsOnline(false);
+      startPolling();
+    }
   }, [startPolling]);
 
   // Verify connectivity on mount and after visibility change (laptop wake)
@@ -104,6 +104,9 @@ export function NetworkStatusProvider({ children }) {
     document.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('serverUnreachable', handleServerUnreachable);
 
+    // Verify on mount — if app starts while server/VPN is already unreachable
+    verifyConnectivity();
+
     return () => {
       stopPolling();
       window.removeEventListener('online', handleOnline);
@@ -113,8 +116,13 @@ export function NetworkStatusProvider({ children }) {
     };
   }, [verifyConnectivity, markOffline, stopPolling]);
 
+  const contextValue = useMemo(
+    () => ({ isOnline, isChecking, retryCount }),
+    [isOnline, isChecking, retryCount]
+  );
+
   return (
-    <NetworkStatusContext.Provider value={{ isOnline, isChecking, retryCount }}>
+    <NetworkStatusContext.Provider value={contextValue}>
       {children}
     </NetworkStatusContext.Provider>
   );

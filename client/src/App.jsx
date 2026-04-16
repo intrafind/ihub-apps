@@ -1,4 +1,4 @@
-import React, { useEffect, useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import './App.css';
 import { initializeBasePath, getBasePath } from './utils/runtimeBasePath';
