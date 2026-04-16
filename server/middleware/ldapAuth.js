@@ -10,6 +10,17 @@ import logger from '../utils/logger.js';
  */
 
 /**
+ * Escape special characters in a string for use in LDAP search filters (RFC 4515).
+ * Prevents LDAP filter injection when user-supplied values are used in queries.
+ * @param {string} str - Raw string to escape
+ * @returns {string} Escaped string safe for LDAP filter use
+ */
+function escapeLdapFilterValue(str) {
+  if (typeof str !== 'string') return str;
+  return str.replace(/[\\*()\x00]/g, c => '\\' + c.charCodeAt(0).toString(16).padStart(2, '0'));
+}
+
+/**
  * Extract a group name from an LDAP group entry.
  * Handles string values, objects with cn/name/displayName, and DN parsing.
  * @param {string|Object} group - LDAP group entry
@@ -57,7 +68,18 @@ function extractGroupNames(groups) {
     ? groups
     : Object.values(groups).filter(g => g && typeof g === 'object');
 
-  return groupsArray.map(extractGroupName).filter(g => g !== null);
+  return groupsArray
+    .map(group => {
+      const name = extractGroupName(group);
+      if (name === null && group != null) {
+        logger.warn('LDAP: could not extract group name from group object', {
+          component: 'LdapAuth',
+          group
+        });
+      }
+      return name;
+    })
+    .filter(g => g !== null);
 }
 
 /**
@@ -359,6 +381,10 @@ export function getLdapProviderByName(providerName) {
  * @returns {Promise<string[]>} Array of LDAP group name strings
  */
 export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
+  if (!username || typeof username !== 'string') {
+    throw new Error('Username is required for LDAP group lookup');
+  }
+
   if (!ldapProviderConfig.adminDn || !ldapProviderConfig.adminPassword) {
     throw new Error(
       'LDAP provider must have adminDn and adminPassword configured for group lookup'
@@ -368,6 +394,9 @@ export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
   if (!ldapProviderConfig.url || !ldapProviderConfig.userSearchBase) {
     throw new Error('LDAP provider must have url and userSearchBase configured');
   }
+
+  // Escape username for safe use in LDAP search filters (RFC 4515)
+  const safeUsername = escapeLdapFilterValue(username);
 
   const options = {
     ldapOpts: {
@@ -380,7 +409,7 @@ export async function lookupLdapGroupsForUser(username, ldapProviderConfig) {
     adminPassword: ldapProviderConfig.adminPassword,
     userSearchBase: ldapProviderConfig.userSearchBase,
     usernameAttribute: ldapProviderConfig.usernameAttribute || 'uid',
-    username: username,
+    username: safeUsername,
     verifyUserExists: true,
     ...(ldapProviderConfig.groupSearchBase && {
       groupsSearchBase: ldapProviderConfig.groupSearchBase,

@@ -495,9 +495,13 @@ export function ntlmAuthMiddleware(req, res, next) {
         const authConfig = platform.auth || {};
         user = enhanceUserGroups(user, authConfig, ntlmAuth);
 
-        // LDAP group lookup - only when generating JWT (session start)
+        // LDAP group lookup - only when generating JWT (session start).
+        // When generateJwtToken is false, NTLM re-authenticates every request
+        // and LDAP lookup would be too expensive.
         if (ntlmAuth.ldapGroupLookupProvider && ntlmAuth.generateJwtToken) {
           user = await enhanceUserWithLdapGroups(user, ntlmAuth);
+          // Re-apply: enhanceUserWithLdapGroups replaces user.groups with freshly
+          // mapped groups, so we need to re-add authenticated/provider default groups.
           user = enhanceUserGroups(user, authConfig, ntlmAuth);
         }
 
@@ -609,6 +613,8 @@ export async function processNtlmLogin(req, ntlmConfig) {
   // LDAP group lookup (only during login/session start)
   if (ntlmConfig.ldapGroupLookupProvider) {
     user = await enhanceUserWithLdapGroups(user, ntlmConfig);
+    // Re-apply: enhanceUserWithLdapGroups replaces user.groups with freshly
+    // mapped groups, so we need to re-add authenticated/provider default groups.
     user = enhanceUserGroups(user, authConfig, ntlmConfig);
   }
 
