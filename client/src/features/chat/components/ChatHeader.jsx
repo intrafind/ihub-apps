@@ -61,25 +61,32 @@ function ChatHeader({
   }, [isMobile, showDescription]);
 
   const handleBack = () => {
-    console.log('Start custom back button handler');
-    localStorage.setItem('CAIIframSrc', "")
-    console.log('CAIIframSrc set to ""');
-    try {
-      console.log('obtaining href from top window');
-      const href = window.top.location.href;
-      console.log('href', href);
-      window.open(href, '_self', 'noopener,noreferrer');
-    } catch (error) {
-      console.log('Error getting href from top window:', error);
-    }
-    
+    const href_url = 'https://intranet2019.rochus.local/cai-hub?tool=Startseite';
     if (window.self !== window.top) {
-      window.parent.postMessage({ type: 'IHUB_APP_RETURN' }, '*');
-      console.log('sent postMessage "{type: "IHUB_APP_RETURN"}');
+      window.open(href_url, '_top');
     } else {
-      console.log('no iframe, default behavior, navigating to /')
       navigate('/');
     }
+    // // old custom approach
+    // console.log('Start custom back button handler');
+    // localStorage.setItem('CAIIframSrc', "")
+    // console.log('CAIIframSrc set to ""');
+    // try {
+    //   console.log('obtaining href from top window');
+    //   const href = window.top.location.href;
+    //   console.log('href', href);
+    //   window.open(href, '_self', 'noopener,noreferrer');
+    // } catch (error) {
+    //   console.log('Error getting href from top window:', error);
+    // }
+    
+    // if (window.self !== window.top) {
+    //   window.parent.postMessage({ type: 'IHUB_APP_RETURN' }, '*');
+    //   console.log('sent postMessage "{type: "IHUB_APP_RETURN"}');
+    // } else {
+    //   console.log('no iframe, default behavior, navigating to /')
+    //   navigate('/');
+    // }
   };
 
   return (
