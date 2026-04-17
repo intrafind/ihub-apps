@@ -151,8 +151,10 @@ export function generateIFinderJWT(user, options = {}) {
   const iFinderConfig = getIFinderConfig();
   const privateKey = getIFinderPrivateKey(iFinderConfig);
 
-  const { scope = iFinderConfig.defaultScope, expiresIn = iFinderConfig.tokenExpirationSeconds || 3600 } =
-    options;
+  const {
+    scope = iFinderConfig.defaultScope,
+    expiresIn = iFinderConfig.tokenExpirationSeconds || 3600
+  } = options;
 
   // Create JWT payload matching iFinder expected format
   const payload = {
@@ -162,7 +164,7 @@ export function generateIFinderJWT(user, options = {}) {
     scope: scope
   };
 
-  const algorithm = iFinderConfig.useOidcKeyPair ? 'RS256' : (iFinderConfig.algorithm || 'RS256');
+  const algorithm = iFinderConfig.useOidcKeyPair ? 'RS256' : iFinderConfig.algorithm || 'RS256';
   const issuer = getEffectiveIssuer(iFinderConfig);
 
   logger.info(
@@ -206,7 +208,7 @@ export function validateIFinderJWT(token) {
 
   try {
     const decoded = jwt.verify(token, verificationKey, {
-      algorithms: [iFinderConfig.useOidcKeyPair ? 'RS256' : (iFinderConfig.algorithm || 'RS256')],
+      algorithms: [iFinderConfig.useOidcKeyPair ? 'RS256' : iFinderConfig.algorithm || 'RS256'],
       issuer: getEffectiveIssuer(iFinderConfig),
       audience: iFinderConfig.audience || 'ifinder-api'
     });
