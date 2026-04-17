@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 import config from '../config.js';
 import configCache from '../configCache.js';
+import tokenStorageService from '../services/TokenStorageService.js';
 import logger from './logger.js';
 
 /**
@@ -17,10 +19,66 @@ import logger from './logger.js';
  */
 
 /**
- * Get iFinder private key from configuration or environment
+ * Get iFinder configuration from platform config
+ * @returns {Object} iFinder configuration
+ */
+function getIFinderConfig() {
+  const platform = configCache.getPlatform() || {};
+  return platform.iFinder || {};
+}
+
+/**
+ * Compute the kid (Key ID) matching /.well-known/jwks.json
+ * @returns {string|undefined} Key ID or undefined if OIDC key pair not available
+ */
+function computeOidcKid() {
+  const publicKey = tokenStorageService.getRSAPublicKey();
+  if (!publicKey) return undefined;
+  return crypto.createHash('sha256').update(publicKey).digest('hex').substring(0, 16);
+}
+
+/**
+ * Get the effective issuer for iFinder JWTs.
+ * When useOidcKeyPair is true, uses the OIDC server issuer (platform.oauth.issuer)
+ * so that iFinder can validate via JWKS Discovery.
+ * @param {Object} iFinderConfig - iFinder configuration
+ * @returns {string} Issuer string
+ */
+function getEffectiveIssuer(iFinderConfig) {
+  if (iFinderConfig.useOidcKeyPair) {
+    const platform = configCache.getPlatform() || {};
+    const oauthIssuer = platform.oauth?.issuer;
+    if (oauthIssuer && oauthIssuer.startsWith('http')) {
+      return oauthIssuer;
+    }
+    logger.warn(
+      'iFinder useOidcKeyPair is enabled but platform.oauth.issuer is not a URL. ' +
+        'iFinder JWT issuer will not match OIDC Discovery. ' +
+        'Configure the OAuth Issuer URL in Admin > Authentication > OAuth Server.',
+      { component: 'iFinderJwt' }
+    );
+    return iFinderConfig.issuer || 'ihub-apps';
+  }
+  return iFinderConfig.issuer || 'ihub-apps';
+}
+
+/**
+ * Get iFinder private key from configuration or environment.
+ * When useOidcKeyPair is true, uses the iHub OIDC RSA key pair directly.
+ * @param {Object} iFinderConfig - iFinder configuration
  * @returns {string} Private key for JWT signing
  */
-function getIFinderPrivateKey() {
+function getIFinderPrivateKey(iFinderConfig) {
+  if (iFinderConfig.useOidcKeyPair) {
+    const keyPair = tokenStorageService.getRSAKeyPair();
+    if (!keyPair?.privateKey) {
+      throw new Error(
+        'iHub OIDC RSA key pair not initialized. Cannot sign iFinder JWT with OIDC key pair.'
+      );
+    }
+    return keyPair.privateKey;
+  }
+
   let privateKey;
 
   // Try environment variable first
@@ -53,15 +111,6 @@ function getIFinderPrivateKey() {
   }
 
   return privateKey;
-}
-
-/**
- * Get iFinder configuration from platform config
- * @returns {Object} iFinder configuration
- */
-function getIFinderConfig() {
-  const platform = configCache.getPlatform() || {};
-  return platform.iFinder || {};
 }
 
 /**
@@ -99,33 +148,42 @@ export function generateIFinderJWT(user, options = {}) {
     throw new Error('iFinder JWT requires authenticated user');
   }
 
-  const privateKey = getIFinderPrivateKey();
-  const config = getIFinderConfig();
+  const iFinderConfig = getIFinderConfig();
+  const privateKey = getIFinderPrivateKey(iFinderConfig);
 
-  const { scope = config.defaultScope, expiresIn = config.tokenExpirationSeconds || 3600 } =
+  const { scope = iFinderConfig.defaultScope, expiresIn = iFinderConfig.tokenExpirationSeconds || 3600 } =
     options;
 
   // Create JWT payload matching iFinder expected format
   const payload = {
-    sub: resolveJwtSubject(user, config),
+    sub: resolveJwtSubject(user, iFinderConfig),
     name: user.name || user.displayName || user.username || user.id,
     iat: Math.floor(Date.now() / 1000),
     scope: scope
   };
 
+  const algorithm = iFinderConfig.useOidcKeyPair ? 'RS256' : (iFinderConfig.algorithm || 'RS256');
+  const issuer = getEffectiveIssuer(iFinderConfig);
+
   logger.info(
-    `Generating iFinder JWT for user ${payload.sub} with scope '${scope}' and expiresIn ${expiresIn} seconds`
+    `Generating iFinder JWT for user ${payload.sub} with scope '${scope}', issuer '${issuer}', expiresIn ${expiresIn}s`,
+    { component: 'iFinderJwt', useOidcKeyPair: iFinderConfig.useOidcKeyPair }
   );
 
-  // Sign the JWT token with the private key
-  const token = jwt.sign(payload, privateKey, {
-    algorithm: config.algorithm || 'RS256', // Default to RS256 for private key signing
+  const signOptions = {
+    algorithm,
     expiresIn: expiresIn,
-    issuer: config.issuer || 'ihub-apps',
-    audience: config.audience || 'ifinder-api'
-  });
+    issuer,
+    audience: iFinderConfig.audience || 'ifinder-api'
+  };
 
-  return token;
+  // When using the OIDC key pair, include the kid so iFinder can match against JWKS
+  if (iFinderConfig.useOidcKeyPair) {
+    const kid = computeOidcKid();
+    if (kid) signOptions.keyid = kid;
+  }
+
+  return jwt.sign(payload, privateKey, signOptions);
 }
 
 /**
@@ -134,14 +192,23 @@ export function generateIFinderJWT(user, options = {}) {
  * @returns {Object} Decoded token payload
  */
 export function validateIFinderJWT(token) {
-  const privateKey = getIFinderPrivateKey();
-  const config = getIFinderConfig();
+  const iFinderConfig = getIFinderConfig();
+
+  let verificationKey;
+  if (iFinderConfig.useOidcKeyPair) {
+    verificationKey = tokenStorageService.getRSAPublicKey();
+    if (!verificationKey) {
+      throw new Error('iHub OIDC RSA public key not available for iFinder JWT validation');
+    }
+  } else {
+    verificationKey = getIFinderPrivateKey(iFinderConfig);
+  }
 
   try {
-    const decoded = jwt.verify(token, privateKey, {
-      algorithms: [config.algorithm || 'RS256'],
-      issuer: config.issuer || 'ihub-apps',
-      audience: config.audience || 'ifinder-api'
+    const decoded = jwt.verify(token, verificationKey, {
+      algorithms: [iFinderConfig.useOidcKeyPair ? 'RS256' : (iFinderConfig.algorithm || 'RS256')],
+      issuer: getEffectiveIssuer(iFinderConfig),
+      audience: iFinderConfig.audience || 'ifinder-api'
     });
 
     return decoded;
