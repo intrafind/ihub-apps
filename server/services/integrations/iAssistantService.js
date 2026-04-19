@@ -30,11 +30,7 @@ class IAssistantService {
       const iAssistantConfig = this.platform.iAssistant || {};
 
       this.config = {
-        baseUrl:
-          config.IASSISTANT_API_URL ||
-          process.env.IASSISTANT_API_URL ||
-          iAssistantConfig.baseUrl ||
-          this.platform.iFinder?.baseUrl,
+        baseUrl: this.platform.iFinder?.baseUrl,
         defaultProfileId:
           iAssistantConfig.defaultProfileId || process.env.IASSISTANT_PROFILE_ID || '',
         defaultFilter: iAssistantConfig.defaultFilter || [],

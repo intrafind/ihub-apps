@@ -131,6 +131,7 @@
   "iFinder": {
     "enabled": false,
     "baseUrl": "",
+    "useOidcKeyPair": false,
     "privateKey": "",
     "algorithm": "RS256",
     "issuer": "ihub-apps",
@@ -140,7 +141,6 @@
     "jwtSubjectField": "email"
   },
   "iAssistant": {
-    "baseUrl": "",
     "defaultProfileId": "",
     "timeout": 60000
   }
