@@ -19,7 +19,7 @@
     "ajv-formats": "^3.0.1",
     "axios": "^1.15.0",
     "docx": "^9.5.3",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.0",
     "file-saver": "^2.0.5",
     "fuse.js": "^6.6.2",
     "html-to-image": "^1.11.13",
@@ -48,7 +48,7 @@
     "write-excel-file": "^2.3.10"
   },
   "overrides": {
-    "dompurify": "^3.3.3"
+    "dompurify": "^3.4.0"
   },
   "devDependencies": {
     "@types/react": "^18.0.28",
