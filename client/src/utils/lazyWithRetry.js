@@ -31,7 +31,9 @@ export default function lazyWithRetry(importFn, retries = 3, baseDelay = 1000) {
 async function retryImport(importFn, retries, baseDelay) {
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await importFn();
+      const module = await importFn();
+      sessionStorage.removeItem(RELOAD_GUARD_KEY);
+      return module;
     } catch (error) {
       if (!isChunkLoadError(error) || attempt === retries) {
         // Not a chunk error, or we exhausted retries — try a one-time reload

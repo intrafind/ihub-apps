@@ -1,7 +1,7 @@
 import configCache from '../configCache.js';
 import { enhanceUserWithPermissions, isAnonymousAccessAllowed } from '../utils/authorization.js';
 import { authRequired, appAccessRequired } from '../middleware/authRequired.js';
-import { buildServerPath } from '../utils/basePath.js';
+import { buildServerPath, getRelativeRequestPath } from '../utils/basePath.js';
 import {
   sendInternalError,
   sendFailedOperationError,
@@ -318,7 +318,7 @@ export default function registerGeneralRoutes(app, { getLocalizedError }) {
         basePathConfig: basePathInfo,
         requestPath: req.path,
         requestUrl: req.url,
-        relativePath: req.path.replace(basePath, '') || '/',
+        relativePath: getRelativeRequestPath(req.path),
         environment: process.env.NODE_ENV || 'development'
       });
     } catch (error) {

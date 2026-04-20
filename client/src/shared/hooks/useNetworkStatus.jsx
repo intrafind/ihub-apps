@@ -11,7 +11,6 @@ import { buildApiUrl } from '../../utils/runtimeBasePath';
 
 const NetworkStatusContext = createContext({ isOnline: true, isChecking: false, retryCount: 0 });
 
-const HEALTH_URL = buildApiUrl('/health');
 const HEALTH_TIMEOUT_MS = 5000;
 const INITIAL_POLL_INTERVAL = 5000;
 const MAX_POLL_INTERVAL = 30000;
@@ -20,7 +19,7 @@ async function checkHealth() {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), HEALTH_TIMEOUT_MS);
   try {
-    const res = await fetch(HEALTH_URL, {
+    const res = await fetch(buildApiUrl('/health'), {
       method: 'GET',
       cache: 'no-store',
       signal: controller.signal
