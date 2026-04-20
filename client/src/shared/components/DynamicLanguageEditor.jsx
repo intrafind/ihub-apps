@@ -12,7 +12,8 @@ const DynamicLanguageEditor = ({
   placeholder = {},
   className = '',
   fieldType = null, // For nested objects like greeting.title, greeting.subtitle
-  error = null // Error message to display
+  error = null, // Error message to display
+  name = null // Field name used for aria-describedby linkage to error messages
 }) => {
   const { t } = useTranslation();
   const [showAddLanguage, setShowAddLanguage] = useState(false);
@@ -331,6 +332,8 @@ const DynamicLanguageEditor = ({
                       : 'border-gray-300 dark:border-gray-600'
                   }`}
                   required={required && lang === 'en'}
+                  aria-invalid={!!error || undefined}
+                  aria-describedby={error && name ? `${name}-error` : undefined}
                 />
               ) : (
                 <input
@@ -344,6 +347,8 @@ const DynamicLanguageEditor = ({
                       : 'border-gray-300 dark:border-gray-600'
                   }`}
                   required={required && lang === 'en'}
+                  aria-invalid={!!error || undefined}
+                  aria-describedby={error && name ? `${name}-error` : undefined}
                 />
               )}
             </div>
@@ -378,7 +383,15 @@ const DynamicLanguageEditor = ({
         </div>
       )}
 
-      {error && <div className="mt-1 text-sm text-red-600 dark:text-red-400">{error}</div>}
+      {error && (
+        <div
+          id={name ? `${name}-error` : undefined}
+          role="alert"
+          className="mt-1 text-sm text-red-600 dark:text-red-400"
+        >
+          {error}
+        </div>
+      )}
     </div>
   );
 };

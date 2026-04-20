@@ -623,6 +623,13 @@ function ChatMessage({
       className={`flex flex-col ${isUser ? 'items-end' : 'items-start'} chat-widget-message ${isUser ? 'user' : 'assistant'}`}
       onMouseEnter={() => setShowActions(true)}
       onMouseLeave={() => setShowActions(false)}
+      onFocus={() => setShowActions(true)}
+      onBlur={e => {
+        // Only hide actions if focus is leaving the entire message container
+        if (!e.currentTarget.contains(e.relatedTarget)) {
+          setShowActions(false);
+        }
+      }}
     >
       <div
         className={

@@ -348,6 +348,33 @@ export function setupMiddleware(app, platformConfig = {}) {
   };
 
   app.use(cors(corsOptions));
+
+  // Content-Language header for accessibility (WCAG 3.1.1)
+  // Validate against a strict allowlist to prevent header injection from
+  // attacker-controlled Accept-Language values.
+  app.use((req, res, next) => {
+    const SUPPORTED_LANGS = new Set([
+      'en',
+      'de',
+      'fr',
+      'es',
+      'it',
+      'pt',
+      'nl',
+      'pl',
+      'ru',
+      'zh',
+      'ja',
+      'ko',
+      'ar'
+    ]);
+    const acceptLang = req.headers['accept-language'];
+    const raw = acceptLang ? acceptLang.split(',')[0].split('-')[0].trim().toLowerCase() : 'en';
+    const lang = /^[a-z]{2,3}$/.test(raw) && SUPPORTED_LANGS.has(raw) ? raw : 'en';
+    res.setHeader('Content-Language', lang);
+    next();
+  });
+
   // Reject requests with a Content-Length exceeding the configured limit
   app.use(checkContentLength(limit));
   app.use(express.json({ limit: `${limitMb}mb` }));

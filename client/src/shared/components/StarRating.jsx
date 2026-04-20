@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline';
 
@@ -12,6 +13,7 @@ const StarRating = ({
   showTooltip = true,
   className = ''
 }) => {
+  const { t } = useTranslation();
   const [hoverRating, setHoverRating] = useState(0);
 
   const handleStarClick = useCallback(
@@ -20,8 +22,8 @@ const StarRating = ({
 
       let newRating = starIndex + 1;
 
-      if (allowHalfStars) {
-        // Calculate position within star for half-star support
+      if (allowHalfStars && event.clientX) {
+        // Calculate position within star for half-star support (only for mouse events)
         const rect = event.currentTarget.getBoundingClientRect();
         const x = event.clientX - rect.left;
         const starWidth = rect.width;
@@ -33,6 +35,20 @@ const StarRating = ({
       onRatingChange?.(newRating);
     },
     [readonly, onRatingChange, allowHalfStars]
+  );
+
+  const handleStarKeyDown = useCallback(
+    (starIndex, event) => {
+      if (readonly) return;
+
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        // For keyboard, always select the full star
+        const newRating = starIndex + 1;
+        onRatingChange?.(newRating);
+      }
+    },
+    [readonly, onRatingChange]
   );
 
   const handleStarHover = useCallback(
@@ -79,11 +95,11 @@ const StarRating = ({
 
     const starValue = starIndex + 1;
     const ratingLabels = {
-      1: 'Poor',
-      2: 'Fair',
-      3: 'Good',
-      4: 'Very Good',
-      5: 'Excellent'
+      1: t('starRating.poor', 'Poor'),
+      2: t('starRating.fair', 'Fair'),
+      3: t('starRating.good', 'Good'),
+      4: t('starRating.veryGood', 'Very Good'),
+      5: t('starRating.excellent', 'Excellent')
     };
 
     return ratingLabels[starValue] || `${starValue} stars`;
@@ -94,19 +110,24 @@ const StarRating = ({
     const isHovering = !readonly && hoverRating > 0;
 
     return (
-      <div
+      <button
         key={starIndex}
-        className={`relative cursor-pointer ${readonly ? 'cursor-default' : ''}`}
+        type="button"
+        className={`relative ${readonly ? 'cursor-default' : 'cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 rounded'}`}
         onClick={e => handleStarClick(starIndex, e)}
+        onKeyDown={e => handleStarKeyDown(starIndex, e)}
         onMouseMove={e => handleStarHover(starIndex, e)}
         title={getTooltipText(starIndex)}
+        tabIndex={readonly ? -1 : 0}
+        disabled={readonly}
+        aria-label={t('starRating.rate', 'Rate {{count}} star', { count: starIndex + 1 })}
       >
         {/* Base star (outline) */}
         <StarOutlineIcon className={`${size} text-gray-300 transition-colors duration-150`} />
 
         {/* Filled star overlay */}
         <div
-          className="absolute top-0 left-0 overflow-hidden transition-all duration-150"
+          className="absolute top-0 left-0 overflow-hidden transition-all duration-150 pointer-events-none"
           style={{
             width: fillType === 'half' ? '50%' : fillType === 'full' ? '100%' : '0%'
           }}
@@ -117,7 +138,7 @@ const StarRating = ({
             }`}
           />
         </div>
-      </div>
+      </button>
     );
   };
 

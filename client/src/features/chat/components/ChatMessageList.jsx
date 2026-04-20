@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import ChatMessage from './ChatMessage';
 import Icon from '../../../shared/components/Icon';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
@@ -34,6 +35,7 @@ function ChatMessageList({
   // Citation document action handlers
   onDocumentAction = null
 }) {
+  const { t } = useTranslation();
   const chatContainerRef = useRef(null);
   const { uiConfig } = useUIConfig();
   const [shouldAutoScroll, setShouldAutoScroll] = useState(true);
@@ -117,7 +119,13 @@ function ChatMessageList({
   }
 
   return (
-    <div ref={chatContainerRef} className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg">
+    <div
+      ref={chatContainerRef}
+      className="flex-1 mb-4 p-4 overflow-y-auto space-y-4 rounded-lg"
+      role="log"
+      aria-live="polite"
+      aria-label={t('chat.messageList', 'Chat messages')}
+    >
       {displayedMessages.map((message, index) => (
         <div key={message.id}>
           <div

@@ -327,3 +327,37 @@
   color: var(--ag-text-muted);
   margin-left: 6px;
 }
+
+/* ============================================
+   Accessibility: Motion & Contrast Preferences
+   ============================================ */
+
+/* WCAG 2.3.3: Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  .ag-spinner,
+  .ag-loading-spinner {
+    animation: none;
+  }
+
+  #auth-gate-root,
+  #auth-gate-root.ag-fade-out {
+    transition: none;
+  }
+}
+
+/* Windows High Contrast Mode / Forced Colors */
+@media (forced-colors: active) {
+  .ag-btn {
+    border: 1px solid ButtonText;
+  }
+
+  .ag-input,
+  .ag-select {
+    border: 1px solid ButtonText;
+  }
+
+  .ag-input:focus,
+  .ag-select:focus {
+    outline: 2px solid Highlight;
+  }
+}

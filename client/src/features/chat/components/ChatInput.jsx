@@ -396,6 +396,7 @@ function ChatInput({
               className="w-full px-3 py-2 pr-10 bg-transparent border-0 focus:ring-0 focus:outline-none resize-none dark:text-gray-100 rounded-t-2xl"
               placeholder={defaultPlaceholder}
               ref={actualInputRef}
+              aria-label={t('chat.inputLabel', 'Type your message')}
               style={{
                 minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
                 maxHeight: multilineMode ? `calc(11 * 1.5em + 1.5rem)` : undefined,
@@ -413,6 +414,7 @@ function ChatInput({
                 type="button"
                 className="absolute right-3 top-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                 onClick={handleClearInput}
+                aria-label={t('chat.clearInput', 'Clear input')}
                 title={t('common.clear', 'Clear')}
               >
                 <Icon name="clearCircle" size="sm" />
@@ -526,6 +528,7 @@ function ChatInput({
                     ? 'bg-red-500 text-white hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700'
                     : 'bg-indigo-500 text-white hover:bg-indigo-600 dark:bg-indigo-600 dark:hover:bg-indigo-700'
               }`}
+              aria-label={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
               title={isProcessing ? t('common.cancel', 'Cancel') : t('common.send', 'Send')}
             >
               {isProcessing ? <Icon name="close" size="md" /> : <Icon name="arrow-up" size="md" />}

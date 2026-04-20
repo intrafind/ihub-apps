@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "Skip to main content"
+  },
   "attachedFiles": {
     "removeAll": "Remove All",
     "filesCount": "{{count}} file(s) attached",
@@ -100,6 +103,9 @@
     "downloadPNG": "Download PNG",
     "downloadPDF": "Download PDF",
     "viewFullscreen": "View Fullscreen",
+    "mainNavigation": "Main navigation",
+    "mobileNavigation": "Mobile navigation",
+    "selectLanguage": "Select language",
     "export": "Export"
   },
   "chatActions": {
@@ -302,7 +308,10 @@
         "acknowledge": "I Understand",
         "alertTitle": "Important Notice"
       }
-    }
+    },
+    "messageList": "Chat messages",
+    "inputLabel": "Type your message",
+    "clearInput": "Clear input"
   },
   "auth": {
     "login": {
@@ -330,7 +339,8 @@
       "profile": "Profile",
       "adminPanel": "Admin Panel",
       "signOut": "Sign Out",
-      "signIn": "Sign In"
+      "signIn": "Sign In",
+      "closeLogin": "Close login dialog"
     }
   },
   "widget": {
@@ -1690,5 +1700,22 @@
       "goToApps": "Go to Apps",
       "goToAdmin": "Open Admin"
     }
+  },
+  "apps": {
+    "searchApps": "Search apps",
+    "sortBy": "Sort by"
+  },
+  "search": {
+    "dialogLabel": "Search applications",
+    "resultsList": "Search results"
+  },
+  "starRating": {
+    "rate": "Rate {{count}} star",
+    "rate_plural": "Rate {{count}} stars",
+    "poor": "Poor",
+    "fair": "Fair",
+    "good": "Good",
+    "veryGood": "Very Good",
+    "excellent": "Excellent"
   }
 }

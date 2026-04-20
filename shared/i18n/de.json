@@ -1,4 +1,7 @@
 {
+  "accessibility": {
+    "skipToContent": "Zum Hauptinhalt springen"
+  },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
     "filesCount": "{{count}} Datei(en) angehängt",
@@ -102,12 +105,20 @@
     "downloadPNG": "PNG herunterladen",
     "downloadPDF": "PDF herunterladen",
     "viewFullscreen": "Vollbild anzeigen",
+    "mainNavigation": "Hauptnavigation",
+    "mobileNavigation": "Mobile Navigation",
+    "selectLanguage": "Sprache auswählen",
     "export": "Exportieren"
   },
   "chatActions": {
     "menu": "Aktionsmenü",
     "quickActions": "Schnellaktionen",
     "attachFile": "Datei anhängen"
+  },
+  "chat": {
+    "messageList": "Chat-Nachrichten",
+    "inputLabel": "Nachricht eingeben",
+    "clearInput": "Eingabe löschen"
   },
   "websearch": {
     "title": "Websuche",
@@ -1395,7 +1406,8 @@
       "profile": "Profil",
       "adminPanel": "Admin-Panel",
       "signOut": "Abmelden",
-      "signIn": "Anmelden"
+      "signIn": "Anmelden",
+      "closeLogin": "Anmeldedialog schließen"
     }
   },
   "widget": {
@@ -1653,5 +1665,22 @@
       "goToApps": "Zu den Apps",
       "goToAdmin": "Admin öffnen"
     }
+  },
+  "apps": {
+    "searchApps": "Apps durchsuchen",
+    "sortBy": "Sortieren nach"
+  },
+  "search": {
+    "dialogLabel": "Anwendungen suchen",
+    "resultsList": "Suchergebnisse"
+  },
+  "starRating": {
+    "rate": "{{count}} Stern bewerten",
+    "rate_plural": "{{count}} Sterne bewerten",
+    "poor": "Schlecht",
+    "fair": "Ausreichend",
+    "good": "Gut",
+    "veryGood": "Sehr gut",
+    "excellent": "Ausgezeichnet"
   }
 }

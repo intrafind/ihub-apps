@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchToolsBasic } from '../../../api/api';
@@ -9,6 +9,7 @@ import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
 /**
  * ChatInputActionsMenu component - unified menu for all chat input actions
@@ -53,6 +54,15 @@ function ChatInputActionsMenu({
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
   const dropdownRef = useRef(null);
+  const actionsMenuRef = useRef(null);
+
+  /** Closes the actions menu dropdown */
+  const handleActionsMenuClose = useCallback(() => setIsOpen(false), []);
+
+  const { activeIndex: menuActiveIndex } = useKeyboardNavigation(actionsMenuRef, {
+    isActive: isOpen,
+    onClose: handleActionsMenuClose
+  });
 
   // Get enabled cloud storage providers
   const cloudStorage = platformConfig?.cloudStorage || { enabled: false, providers: [] };
@@ -271,6 +281,21 @@ function ChatInputActionsMenu({
     }
   }
 
+  // Compute the ordered list of navigable menu items matching the DOM order that
+  // getNavigableElements discovers, so React-controlled tabIndex agrees with the
+  // hook's activeIndex (prevents roving tabindex from being overwritten on re-render).
+  const menuNavItems = [];
+  if (uploadConfig?.enabled === true && !(disabled || isProcessing)) menuNavItems.push('upload');
+  if (magicPromptEnabled && !showUndoMagicPrompt && !(disabled || isProcessing))
+    menuNavItems.push('magic');
+  if (showUndoMagicPrompt && !(disabled || isProcessing)) menuNavItems.push('undo');
+  enabledCloudProviders.forEach(p => {
+    if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
+  });
+  grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
+  individual.forEach(id => menuNavItems.push(`tool-${id}`));
+  const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -289,7 +314,12 @@ function ChatInputActionsMenu({
       </button>
 
       {isOpen && (
-        <div className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto">
+        <div
+          ref={actionsMenuRef}
+          role="menu"
+          aria-label={t('chatActions.menu', 'Actions menu')}
+          className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
+        >
           {/* Quick Actions Section */}
           <div className="p-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
@@ -299,13 +329,15 @@ function ChatInputActionsMenu({
               {uploadConfig?.enabled === true && (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={navTabIndex('upload')}
                   onClick={() => {
                     onToggleUploader?.();
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
                   title={t('chatActions.attachFile', 'Attach File')}
-                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:bg-gray-200 dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   <Icon name="paper-clip" size="sm" />
                 </button>
@@ -314,13 +346,15 @@ function ChatInputActionsMenu({
               {magicPromptEnabled && !showUndoMagicPrompt && (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={navTabIndex('magic')}
                   onClick={() => {
                     onMagicPrompt?.();
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
                   title={t('common.magicPrompt', 'Magic Prompt')}
-                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 transition-colors"
+                  className="w-10 h-10 flex items-center justify-center bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:bg-gray-200 dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 rounded-lg disabled:opacity-50 transition-colors"
                 >
                   {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="sm" />}
                 </button>
@@ -329,12 +363,14 @@ function ChatInputActionsMenu({
               {showUndoMagicPrompt && (
                 <button
                   type="button"
+                  role="menuitem"
+                  tabIndex={navTabIndex('undo')}
                   onClick={() => {
                     onUndoMagicPrompt?.();
                     setIsOpen(false);
                   }}
                   disabled={disabled || isProcessing}
-                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg text-sm disabled:opacity-50 transition-colors"
+                  className="flex items-center gap-2 px-3 py-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 focus:bg-gray-200 dark:focus:bg-gray-600 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-800 rounded-lg text-sm disabled:opacity-50 transition-colors"
                 >
                   <Icon name="arrowLeft" size="sm" />
                   <span>{t('common.undo', 'Undo')}</span>
@@ -383,12 +419,14 @@ function ChatInputActionsMenu({
                   <button
                     key={provider.id}
                     type="button"
+                    role="menuitem"
+                    tabIndex={navTabIndex(`cloud-${provider.id}`)}
                     onClick={() => {
                       onCloudProviderSelect?.(provider);
                       setIsOpen(false);
                     }}
                     disabled={disabled || isProcessing}
-                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg disabled:opacity-50 transition-colors text-left"
+                    className="w-full flex items-center p-3 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg disabled:opacity-50 transition-colors text-left"
                   >
                     <div className="flex-shrink-0 w-10 h-10 flex items-center justify-center bg-blue-100 dark:bg-blue-900 rounded-lg">
                       <Icon name="cloud" size="md" className="text-blue-600 dark:text-blue-300" />
@@ -473,7 +511,17 @@ function ChatInputActionsMenu({
                     return (
                       <div
                         key={group.id}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        role="menuitemcheckbox"
+                        aria-checked={allEnabled ? 'true' : someEnabled ? 'mixed' : 'false'}
+                        tabIndex={navTabIndex(`group-${group.id}`)}
+                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg"
+                        onClick={() => toggleTool(group.id, true, group.matchedTools)}
+                        onKeyDown={e => {
+                          if (e.key === ' ') {
+                            e.preventDefault();
+                            toggleTool(group.id, true, group.matchedTools);
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
@@ -514,7 +562,17 @@ function ChatInputActionsMenu({
                     return (
                       <div
                         key={toolId}
-                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                        role="menuitemcheckbox"
+                        aria-checked={isEnabled}
+                        tabIndex={navTabIndex(`tool-${toolId}`)}
+                        className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg"
+                        onClick={() => toggleTool(toolId)}
+                        onKeyDown={e => {
+                          if (e.key === ' ') {
+                            e.preventDefault();
+                            toggleTool(toolId);
+                          }
+                        }}
                       >
                         <div className="flex-1 min-w-0 mr-3">
                           <div className="text-sm font-medium text-gray-900 dark:text-gray-100">

@@ -79,6 +79,7 @@ class I18nService {
 
       // Load full translations for the current language
       const currentLanguage = i18n.language || this.defaultLanguage;
+      document.documentElement.lang = currentLanguage;
       await this.loadFullTranslations(currentLanguage);
     } catch (error) {
       console.error('Failed to initialize i18n service asynchronously:', error);
@@ -214,6 +215,7 @@ class I18nService {
 
       // Change language and load translations
       await i18n.changeLanguage(language);
+      document.documentElement.lang = language;
       await this.loadFullTranslations(language);
 
       return language;
