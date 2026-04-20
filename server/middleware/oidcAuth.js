@@ -7,6 +7,7 @@ import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { generateJwt } from '../utils/tokenService.js';
 import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
+import { buildServerPath } from '../utils/basePath.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -415,8 +416,9 @@ export function getConfiguredProviders() {
   return Array.from(configuredProviders.values()).map(provider => ({
     name: provider.name,
     displayName: provider.displayName || provider.name,
-    authURL: `/api/auth/oidc/${provider.name}`,
-    callbackURL: provider.callbackURL || `/api/auth/oidc/${provider.name}/callback`,
+    authURL: buildServerPath(`/api/auth/oidc/${provider.name}`),
+    callbackURL:
+      provider.callbackURL || buildServerPath(`/api/auth/oidc/${provider.name}/callback`),
     autoRedirect: provider.autoRedirect || false,
     enabled: provider.enabled
   }));
@@ -442,8 +444,13 @@ export function createOidcAuthHandler(providerName) {
       }
     }
 
+    // Pass callbackURL at request time so buildServerPath() can detect the base path
+    // from X-Forwarded-Prefix header for subpath deployments
+    const callbackURL =
+      provider.callbackURL || buildServerPath(`/api/auth/oidc/${providerName}/callback`);
     passport.authenticate(provider.strategyName, {
-      scope: provider.scope || ['openid', 'profile', 'email']
+      scope: provider.scope || ['openid', 'profile', 'email'],
+      callbackURL
     })(req, res, next);
   };
 }
@@ -484,10 +491,13 @@ export function createOidcCallbackHandler(providerName) {
 
       // Redirect to app with error instead of returning JSON
       const errorMessage = encodeURIComponent(`OIDC provider '${providerName}' not found`);
-      return res.redirect(`/?auth=error&message=${errorMessage}`);
+      return res.redirect(`${buildServerPath('/')}?auth=error&message=${errorMessage}`);
     }
 
-    passport.authenticate(provider.strategyName, (err, user, info) => {
+    // Pass callbackURL at request time for subpath deployment support
+    const callbackURL =
+      provider.callbackURL || buildServerPath(`/api/auth/oidc/${providerName}/callback`);
+    passport.authenticate(provider.strategyName, { callbackURL }, (err, user, info) => {
       if (err) {
         authDebugService.log(
           'oidc',
@@ -535,7 +545,7 @@ export function createOidcCallbackHandler(providerName) {
         const errorMessage = encodeURIComponent(
           err.message || 'Unable to verify authorization request state.'
         );
-        return res.redirect(`/?auth=error&message=${errorMessage}`);
+        return res.redirect(`${buildServerPath('/')}?auth=error&message=${errorMessage}`);
       }
 
       if (!user) {
@@ -559,7 +569,7 @@ export function createOidcCallbackHandler(providerName) {
 
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent(info?.message || 'Authentication failed');
-        return res.redirect(`/?auth=error&message=${errorMessage}`);
+        return res.redirect(`${buildServerPath('/')}?auth=error&message=${errorMessage}`);
       }
 
       authDebugService.log(
@@ -602,8 +612,8 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
-        // Get return URL
-        let returnUrl = req.session?.returnUrl || '/';
+        // Get return URL - use base path for default
+        let returnUrl = req.session?.returnUrl || buildServerPath('/');
         if (req.session) {
           delete req.session.returnUrl;
         }
@@ -706,7 +716,7 @@ export function createOidcCallbackHandler(providerName) {
 
         // Redirect back to the app with error message
         const errorMessage = encodeURIComponent('Token generation failed: ' + tokenError.message);
-        return res.redirect(`/?auth=error&message=${errorMessage}`);
+        return res.redirect(`${buildServerPath('/')}?auth=error&message=${errorMessage}`);
       }
     })(req, res, next);
   };

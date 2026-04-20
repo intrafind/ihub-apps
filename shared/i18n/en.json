@@ -113,6 +113,11 @@
     "quickActions": "Quick Actions",
     "attachFile": "Attach File"
   },
+  "websearch": {
+    "title": "Web Search",
+    "toggleLabel": "Web Search",
+    "toggleDescription": "Search the web for up-to-date information"
+  },
   "pages": {
     "home": {
       "title": "iHub Apps",
@@ -532,6 +537,10 @@
       "keycloakDescription": "Open source identity management",
       "customProvider": "Custom Provider",
       "customProviderDescription": "Configure a custom OIDC provider with your own settings",
+      "callbackURL": "Callback URL",
+      "callbackURLOptional": "(Optional - Auto-generated if empty)",
+      "callbackURLPlaceholder": "/api/auth/oidc/{{providerName}}/callback",
+      "callbackURLHelp": "Leave empty to auto-generate. Override for custom domains or subpath deployments.",
       "oauth": {
         "title": "OAuth Clients",
         "subtitle": "Manage OAuth 2.0 clients for external API access",
@@ -1060,7 +1069,23 @@
     "apps": {
       "edit": {
         "autoStart": "Auto-start conversation",
-        "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset"
+        "autoStartHelp": "When enabled, the app will automatically start the conversation when the chat is opened or reset",
+        "websearch": "Web Search",
+        "websearchDesc": "Configure web search capabilities for this app",
+        "websearchEnabled": "Enable Web Search",
+        "websearchProvider": "Provider",
+        "websearchProviderAuto": "Auto",
+        "websearchProviderBrave": "Brave",
+        "websearchProviderTavily": "Tavily",
+        "websearchUseNative": "Use Native Search",
+        "websearchUseNativeDesc": "Use the model's built-in search when available (e.g. Google, OpenAI)",
+        "websearchMaxResults": "Max Results",
+        "websearchExtractContent": "Extract Content",
+        "websearchExtractContentDesc": "Fetch and extract full page content from search results",
+        "websearchContentMaxLength": "Content Max Length",
+        "websearchContentMaxLengthDesc": "Maximum characters extracted per page (500–50000)",
+        "websearchEnabledByDefault": "Enabled by Default",
+        "websearchEnabledByDefaultDesc": "Whether web search is turned on by default for users"
       }
     },
     "features": {
@@ -1097,7 +1122,19 @@
       "defaultProfileId": "Default Profile ID",
       "timeout": "Request Timeout (ms)",
       "saving": "Saving...",
-      "save": "Save iFinder Configuration"
+      "save": "Save iFinder Configuration",
+      "testConnection": "Test Connection",
+      "testing": "Testing...",
+      "testSuccess": "Connection test successful",
+      "testFailed": "Connection test failed",
+      "testIFinder": "Test iFinder",
+      "testIAssistant": "Test iAssistant",
+      "testResults": {
+        "title": "Test Results",
+        "success": "Success",
+        "failed": "Failed",
+        "details": "Details"
+      }
     }
   },
   "components": {
@@ -1297,7 +1334,16 @@
     "linkCopied": "Link copied!",
     "downloadMessage": "Download message",
     "downloadOptions": "Download Options",
-    "deleteMessage": "Delete message"
+    "deleteMessage": "Delete message",
+    "answerSource": {
+      "llmOnly": "Based on AI knowledge",
+      "websearch": "Based on web search",
+      "sources": "Based on configured sources",
+      "iassistant": "Based on iAssistant knowledge base",
+      "grounding": "Based on search grounding",
+      "mixed": "Based on external knowledge",
+      "tooltip": "This answer was generated using:"
+    }
   },
   "serverErrors": {
     "appNotFound": "Application not found",

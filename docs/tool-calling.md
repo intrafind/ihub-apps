@@ -38,7 +38,12 @@ Add a `tools` property to your app configuration:
     "de": "Du bist ein hilfreicher Recherche-Assistent. Nutze die Websuche, um aktuelle Informationen zu finden."
   },
   "tokenLimit": 8000,
-  "tools": ["webSearch"]
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
+    "enabledByDefault": false
+  }
 }
 ```
 
@@ -969,31 +974,134 @@ iHub Apps ships with a set of pre-configured built-in tools that cover the most 
 - **Description**: Grounds Gemini responses with real-time information from Google Search, providing verifiable and up-to-date answers with citations
 - **Type**: Provider-handled (`isSpecialTool: true`)
 - **Parameters**: None — automatically enabled when listed in an app's `tools` array
-- **Authentication**: Uses the configured Gemini API key; no additional setup required
+- **Authentication**: Uses the configured Google Gemini API key; no additional setup required
 - **Response**: Returns grounding metadata with search queries, sources, and citations
+- **How it works**: When enabled in an app's tools array, Gemini models automatically invoke Google Search when they detect queries requiring current information. The search is performed directly by Google's infrastructure and results are incorporated into the response with citations.
+- **Use Cases**: Current events, fact-checking with authoritative sources, questions requiring real-time information
 
 ### `braveSearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Brave Search API
+- **Description**: Web search powered by the Brave Search API for privacy-focused search results, with optional content extraction
 - **Type**: Server-side execution
-- **Authentication**: Requires `BRAVE_API_KEY` environment variable
-- **Use Cases**: Privacy-focused web search alternative
+- **Parameters**:
+  - `query` (string, required): The search query or search terms
+  - `extractContent` (boolean, optional): Extract full content from top results (default: configured by app's `websearch.extractContent`)
+  - `maxResults` (number, optional): Maximum results to return (default: configured by app's `websearch.maxResults`, max: 10)
+  - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
+- **Authentication**: Configure via **Admin Panel → Providers → Brave Search** or set `BRAVE_SEARCH_API_KEY` environment variable
+- **Configuration**:
+  - **Admin Panel Method** (Recommended):
+    1. Navigate to Admin → Providers
+    2. Find "Brave Search" under "Web Search Providers"
+    3. Click "Configure" and enter your API key
+    4. Save changes — no server restart required
+  - **Environment Variable Method**:
+    - Add `BRAVE_SEARCH_API_KEY=your_api_key` to your `config.env` file
+    - Restart the server for changes to take effect
+  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
+- **Returns**: Array of search results with:
+  - `title`: Page title
+  - `url`: Page URL
+  - `description`: Brief excerpt from the page
+  - `language`: Detected language of the result
+  - `content`: Extracted page content (when `extractContent` is enabled)
+- **Use Cases**: Privacy-focused web search, general information lookup, comprehensive research with content extraction
+
+**Example Tool Call**:
+```json
+{
+  "tool": "braveSearch",
+  "parameters": {
+    "query": "latest AI developments 2024"
+  }
+}
+```
 
 ### `tavilySearch`
 
 - **Provider**: Any model supporting function calling
-- **Description**: Web search powered by the Tavily Search API, optimized for AI agents
+- **Description**: Web search powered by the Tavily Search API, optimized for AI agents with configurable search depth and optional content extraction
 - **Type**: Server-side execution
-- **Authentication**: Requires `TAVILY_API_KEY` environment variable
-- **Use Cases**: Research-oriented search with rich result summaries
+- **Parameters**:
+  - `query` (string, required): The search query or search terms
+  - `search_depth` (string, optional): Search depth level — `"basic"` (default) or `"advanced"`
+  - `max_results` (integer, optional): Maximum number of results to return (default: configured by app's `websearch.maxResults`, min: `1`, max: `10`)
+  - `extractContent` (boolean, optional): Extract full content from results (default: configured by app's `websearch.extractContent`)
+  - `contentMaxLength` (number, optional): Maximum content length per page (default: configured by app's `websearch.contentMaxLength`)
+- **Authentication**: Configure via **Admin Panel → Providers → Tavily Search** or set `TAVILY_SEARCH_API_KEY` environment variable
+- **Configuration**:
+  - **Admin Panel Method** (Recommended):
+    1. Navigate to Admin → Providers
+    2. Find "Tavily Search" under "Web Search Providers"
+    3. Click "Configure" and enter your API key
+    4. Save changes — no server restart required
+  - **Environment Variable Method**:
+    - Add `TAVILY_SEARCH_API_KEY=your_api_key` to your `config.env` file
+    - Restart the server for changes to take effect
+  - **Fallback**: System first checks admin panel configuration, then falls back to environment variable
+- **Returns**: Array of search results with:
+  - `title`: Page title
+  - `url`: Page URL
+  - `description`: Content snippet from the page
+  - `score`: Relevance score (when available)
+  - `content`: Extracted page content (when `extractContent` is enabled)
+- **Defaults**:
+  - `search_depth`: `"basic"`
+  - `max_results`: `5`
+- **Use Cases**: Research-oriented search, AI agent information gathering, comprehensive research with content extraction
 
-### `enhancedWebSearch`
+**Example Tool Call**:
+```json
+{
+  "tool": "tavilySearch",
+  "parameters": {
+    "query": "quantum computing breakthroughs",
+    "search_depth": "advanced",
+    "max_results": 8
+  }
+}
+```
 
-- **Provider**: Any model supporting function calling
-- **Description**: Web content extraction combining multiple sources for comprehensive results
-- **Type**: Server-side execution
-- **Use Cases**: Deep-dive research, multi-source fact gathering
+### Unified Web Search Configuration
+
+> **Changed in v5.2.11**: Web search is no longer configured by adding tool IDs to the `tools` array. Instead, use the `websearch` configuration object on each app. The server automatically resolves the best search tool at runtime based on the model's provider. See [Web Tools](web-tools.md) for full details.
+
+**Example App Configuration**:
+```json
+{
+  "id": "research-assistant",
+  "websearch": {
+    "enabled": true,
+    "provider": "auto",
+    "useNativeSearch": true,
+    "maxResults": 5,
+    "extractContent": true,
+    "contentMaxLength": 3000,
+    "enabledByDefault": false
+  }
+}
+```
+
+**How provider resolution works**:
+- **Gemini models** + `useNativeSearch: true` → Google Search grounding
+- **OpenAI Responses models** + `useNativeSearch: true` → OpenAI Web Search
+- **`provider: "tavily"`** → Tavily Search
+- **Otherwise** → Brave Search
+
+**Key properties**:
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `enabled` | Boolean | `false` | Enable web search for this app |
+| `provider` | String | `"auto"` | Provider: `"auto"`, `"brave"`, or `"tavily"` |
+| `useNativeSearch` | Boolean | `true` | Prefer native search for Gemini/OpenAI models |
+| `maxResults` | Number | `5` | Maximum search results (1-20) |
+| `extractContent` | Boolean | `true` | Extract full page content from results |
+| `contentMaxLength` | Number | `3000` | Max extracted content per page (500-50,000) |
+| `enabledByDefault` | Boolean | `false` | Whether search is active by default for users |
+
+**Migration**: Existing apps with websearch tool IDs (`braveSearch`, `enhancedWebSearch`, `tavilySearch`, etc.) in their `tools` array are automatically migrated to the new format on server startup.
 
 ### `iFinder`
 

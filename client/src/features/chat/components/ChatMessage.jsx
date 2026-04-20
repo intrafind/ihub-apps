@@ -18,6 +18,7 @@ import ClarificationCard from './ClarificationCard';
 import CitationPanel from './CitationPanel';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
+import AnswerSourceBadge from './AnswerSourceBadge';
 import './ChatMessage.css';
 
 function ChatMessage({
@@ -827,6 +828,13 @@ function ChatMessage({
         )}
 
         {/* Workflow result attribution — handled by unified WorkflowStepIndicator above */}
+
+        {/* Answer source indicator - show for completed assistant messages inside bubble */}
+        {!isUser && !isError && !message.loading && (
+          <div className="flex justify-end">
+            <AnswerSourceBadge answerSource={message.answerSource} />
+          </div>
+        )}
       </div>
 
       {/* Info about finish reason and retry options */}

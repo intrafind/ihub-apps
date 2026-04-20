@@ -13,6 +13,8 @@
   "provider": "google",
   "tokenLimit": 32768,
   "supportsTools": true,
+  "supportsVision": true,
+  "supportsAudio": true,
   "supportsImages": true,
   "supportsImageGeneration": true,
   "imageGeneration": {

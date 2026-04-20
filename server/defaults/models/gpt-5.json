@@ -13,6 +13,7 @@
   "provider": "openai-responses",
   "tokenLimit": 128000,
   "supportsTools": true,
+  "supportsAudio": true,
   "enabled": false,
   "default": false
 }

@@ -14,6 +14,7 @@ import {
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
  * Add strict mode requirements to a schema for OpenAI Responses API
@@ -289,13 +290,13 @@ export function convertOpenaiResponsesToolCallsToGeneric(responsesToolCalls = []
  * @param {string} streamId - Stream identifier
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
  */
-export function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'default') {
+export async function convertOpenaiResponsesResponseToGeneric(data, _streamId = 'default') {
   if (!data || data === '[DONE]') {
     return createGenericStreamingResponse([], [], [], true, false, null, 'stop');
   }
 
   try {
-    const parsed = JSON.parse(data);
+    const parsed = await parseJsonAsync(data);
 
     const content = [];
     const thinking = [];

@@ -167,6 +167,66 @@ Add NTLM configuration to your `contents/config/platform.json`:
 | `defaultGroups`         | Default groups for authenticated users                         | No       | `[]`    |
 | `sessionTimeoutMinutes` | JWT token timeout                                              | No       | `480`   |
 | `generateJwtToken`      | Generate JWT for API access                                    | No       | `true`  |
+| `ldapGroupLookupProvider` | Name of an LDAP provider to use for group lookup (see below) | No       | -       |
+
+### LDAP Group Lookup for NTLM Users
+
+NTLM authentication may not always return group memberships from the domain controller. As an alternative, you can configure NTLM to use an LDAP provider for group lookup. This allows NTLM to handle identity verification while LDAP provides group memberships.
+
+#### How It Works
+
+1. User authenticates via NTLM (identity verification)
+2. During login, the system queries the configured LDAP provider for the user's group memberships using admin bind credentials (no user password needed)
+3. LDAP groups are merged with any groups from NTLM and mapped to internal groups via `groups.json`
+
+The LDAP group lookup only happens during login (session start), not on every request.
+
+#### Configuration
+
+1. Configure an LDAP provider in `ldapAuth.providers` with admin credentials and group search settings. Note: `ldapAuth.enabled` does not need to be `true` — the providers are accessible for group lookup regardless.
+
+2. Set `ldapGroupLookupProvider` in your `ntlmAuth` config to the LDAP provider's `name`:
+
+```json
+{
+  "ldapAuth": {
+    "enabled": false,
+    "providers": [
+      {
+        "name": "corporate-ad",
+        "displayName": "Corporate Active Directory",
+        "url": "ldap://ad.example.com:389",
+        "adminDn": "${AD_BIND_USER}@example.com",
+        "adminPassword": "${AD_BIND_PASSWORD}",
+        "userSearchBase": "dc=example,dc=com",
+        "usernameAttribute": "sAMAccountName",
+        "groupSearchBase": "dc=example,dc=com",
+        "groupClass": "group",
+        "groupMemberAttribute": "member",
+        "groupMemberUserAttribute": "dn"
+      }
+    ]
+  },
+  "ntlmAuth": {
+    "enabled": true,
+    "domain": "EXAMPLE",
+    "domainController": "ldap://dc.example.com:389",
+    "ldapGroupLookupProvider": "corporate-ad",
+    "defaultGroups": ["ntlm-users"],
+    "generateJwtToken": true
+  }
+}
+```
+
+#### Requirements
+
+- The LDAP provider **must** have `adminDn` and `adminPassword` configured (admin bind is used since the user's password is not available during NTLM auth)
+- The LDAP provider **should** have `groupSearchBase` configured for group membership queries
+- The `usernameAttribute` on the LDAP provider should match the NTLM username format (e.g., `sAMAccountName` for Active Directory)
+
+#### Graceful Fallback
+
+If the LDAP group lookup fails for any reason (connection error, user not found, misconfiguration), NTLM authentication still succeeds. The user will be assigned groups from NTLM (if any) plus the configured `defaultGroups`.
 
 ### Platform Requirements
 
@@ -456,6 +516,7 @@ async function makeAuthenticatedRequest(url) {
    - Enable `getGroups` option
    - Check domain permissions
    - Review user account settings
+   - Consider using `ldapGroupLookupProvider` to retrieve groups from an LDAP provider instead of the domain controller
 
 ### Common Issues
 

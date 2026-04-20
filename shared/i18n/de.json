@@ -119,6 +119,11 @@
     "messageList": "Chat-Nachrichten",
     "inputLabel": "Nachricht eingeben"
   },
+  "websearch": {
+    "title": "Websuche",
+    "toggleLabel": "Websuche",
+    "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
+  },
   "pages": {
     "home": {
       "title": "iHub Apps",
@@ -396,7 +401,16 @@
     "linkCopied": "Link kopiert!",
     "downloadMessage": "Nachricht herunterladen",
     "downloadOptions": "Download-Optionen",
-    "deleteMessage": "Nachricht löschen"
+    "deleteMessage": "Nachricht löschen",
+    "answerSource": {
+      "llmOnly": "Basierend auf KI-Wissen",
+      "websearch": "Basierend auf Websuche",
+      "sources": "Basierend auf konfigurierten Quellen",
+      "iassistant": "Basierend auf iAssistant-Wissensbasis",
+      "grounding": "Basierend auf Such-Grounding",
+      "mixed": "Basierend auf externem Wissen",
+      "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
+    }
   },
   "errors": {
     "componentError": "Komponenten-Fehler",
@@ -747,6 +761,10 @@
       "keycloakDescription": "Open-Source-Identitätsverwaltung",
       "customProvider": "Benutzerdefinierter Anbieter",
       "customProviderDescription": "Konfigurieren Sie einen benutzerdefinierten OIDC-Anbieter mit Ihren eigenen Einstellungen",
+      "callbackURL": "Callback-URL",
+      "callbackURLOptional": "(Optional - Wird automatisch generiert, wenn leer)",
+      "callbackURLPlaceholder": "/api/auth/oidc/{{providerName}}/callback",
+      "callbackURLHelp": "Leer lassen für automatische Generierung. Überschreiben für benutzerdefinierte Domains oder Subpfad-Deployments.",
       "oauth": {
         "title": "OAuth-Clients",
         "subtitle": "OAuth 2.0-Clients für externen API-Zugriff verwalten",
@@ -1275,7 +1293,23 @@
     "apps": {
       "edit": {
         "autoStart": "Konversation automatisch starten",
-        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird"
+        "autoStartHelp": "Wenn aktiviert, startet die App automatisch die Konversation, wenn der Chat geöffnet oder zurückgesetzt wird",
+        "websearch": "Websuche",
+        "websearchDesc": "Websuch-Funktionen für diese App konfigurieren",
+        "websearchEnabled": "Websuche aktivieren",
+        "websearchProvider": "Anbieter",
+        "websearchProviderAuto": "Automatisch",
+        "websearchProviderBrave": "Brave",
+        "websearchProviderTavily": "Tavily",
+        "websearchUseNative": "Native Suche verwenden",
+        "websearchUseNativeDesc": "Die integrierte Suche des Modells verwenden, wenn verfügbar (z. B. Google, OpenAI)",
+        "websearchMaxResults": "Max. Ergebnisse",
+        "websearchExtractContent": "Inhalt extrahieren",
+        "websearchExtractContentDesc": "Vollständigen Seiteninhalt aus Suchergebnissen abrufen und extrahieren",
+        "websearchContentMaxLength": "Max. Inhaltslänge",
+        "websearchContentMaxLengthDesc": "Maximale Zeichen pro extrahierter Seite (500–50000)",
+        "websearchEnabledByDefault": "Standardmäßig aktiviert",
+        "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist"
       }
     },
     "features": {
@@ -1312,7 +1346,19 @@
       "defaultProfileId": "Standard-Profil-ID",
       "timeout": "Anfrage-Timeout (ms)",
       "saving": "Wird gespeichert...",
-      "save": "iFinder-Konfiguration speichern"
+      "save": "iFinder-Konfiguration speichern",
+      "testConnection": "Verbindung testen",
+      "testing": "Wird getestet...",
+      "testSuccess": "Verbindungstest erfolgreich",
+      "testFailed": "Verbindungstest fehlgeschlagen",
+      "testIFinder": "iFinder testen",
+      "testIAssistant": "iAssistant testen",
+      "testResults": {
+        "title": "Testergebnisse",
+        "success": "Erfolgreich",
+        "failed": "Fehlgeschlagen",
+        "details": "Details"
+      }
     }
   },
   "components": {

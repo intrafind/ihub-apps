@@ -324,7 +324,11 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
 
               try {
                 // Use generic tool calling system to normalize response
-                const genericResult = convertResponseToGeneric(data, model.provider, streamId);
+                const genericResult = await convertResponseToGeneric(
+                  data,
+                  model.provider,
+                  streamId
+                );
 
                 // Handle first chunk with tool calls - need to send separate chunks for OpenAI compatibility
                 const hasToolCalls =
@@ -426,7 +430,11 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
               // Process if it's not empty or a special marker
               if (data && data !== '[DONE]') {
                 try {
-                  const genericResult = convertResponseToGeneric(data, model.provider, streamId);
+                  const genericResult = await convertResponseToGeneric(
+                    data,
+                    model.provider,
+                    streamId
+                  );
 
                   const openAIChunk = convertResponseFromGeneric(genericResult, 'openai', {
                     completionId,
@@ -463,7 +471,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         // Use generic tool calling system for all providers
         try {
           // Convert provider response to generic format, then to OpenAI format
-          const genericResult = convertResponseToGeneric(data, model.provider);
+          const genericResult = await convertResponseToGeneric(data, model.provider);
           logger.info('[OpenAI Proxy] Generic result', {
             component: 'OpenAIProxy',
             result: JSON.stringify(genericResult, null, 2)

@@ -6,7 +6,7 @@
  * used the old values.
  */
 
-export const version = '021';
+export const version = '023';
 export const description = 'migrate_microphone_mode';
 
 export async function up(ctx) {

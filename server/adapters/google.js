@@ -4,6 +4,7 @@
 import { convertToolsFromGeneric, normalizeToolName } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
+import { parseJsonAsync } from '../utils/asyncJson.js';
 
 /**
  * Aspect ratio and resolution mapping table for Google Gemini image generation
@@ -435,7 +436,7 @@ class GoogleAdapterClass extends BaseAdapter {
   /**
    * Process streaming response from Gemini
    */
-  processResponseBuffer(data) {
+  async processResponseBuffer(data) {
     try {
       const result = {
         content: [],
@@ -454,7 +455,9 @@ class GoogleAdapterClass extends BaseAdapter {
       if (!data) return result;
 
       try {
-        const parsed = JSON.parse(data);
+        // Use async JSON parsing to avoid blocking the event loop
+        // This is critical for large responses containing base64-encoded images
+        const parsed = await parseJsonAsync(data);
 
         // Debug: Log the full parsed response to see what metadata we receive
         logger.info('Full Gemini response structure', {
@@ -511,6 +514,12 @@ class GoogleAdapterClass extends BaseAdapter {
             }
           }
           result.complete = true;
+
+          // Extract grounding metadata for non-streaming responses
+          if (parsed.candidates[0].groundingMetadata) {
+            result.groundingMetadata = parsed.candidates[0].groundingMetadata;
+          }
+
           const fr = parsed.candidates[0].finishReason;
           // Only set finishReason from Gemini if we don't already have tool_calls
           // Check both the finishReason flag AND the actual tool_calls array
@@ -564,8 +573,10 @@ class GoogleAdapterClass extends BaseAdapter {
         }
 
         // Extract grounding metadata if present (for Google Search grounding)
-        if (parsed.groundingMetadata) {
-          result.groundingMetadata = parsed.groundingMetadata;
+        // Grounding metadata is located in candidates[0].groundingMetadata
+        // Reference: https://ai.google.dev/gemini-api/docs/google-search#javascript_1
+        if (parsed.candidates && parsed.candidates[0]?.groundingMetadata) {
+          result.groundingMetadata = parsed.candidates[0].groundingMetadata;
         }
 
         // TODO we should make use of the candidate metadata

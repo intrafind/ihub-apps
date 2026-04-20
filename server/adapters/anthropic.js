@@ -4,6 +4,7 @@
 import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
+import { parseJsonAsync } from '../utils/asyncJson.js';
 
 class AnthropicAdapterClass extends BaseAdapter {
   /**
@@ -222,7 +223,7 @@ class AnthropicAdapterClass extends BaseAdapter {
   /**
    * Process streaming response from Anthropic
    */
-  processResponseBuffer(data) {
+  async processResponseBuffer(data) {
     const result = {
       content: [],
       tool_calls: [],
@@ -235,7 +236,7 @@ class AnthropicAdapterClass extends BaseAdapter {
 
     if (!data) return result;
     try {
-      const parsed = JSON.parse(data);
+      const parsed = await parseJsonAsync(data);
 
       // Extract usage from message_start (input tokens)
       if (parsed.type === 'message_start' && parsed.message?.usage) {

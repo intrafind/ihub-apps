@@ -17,6 +17,7 @@ function IFinderConfig() {
   const [iFinderConfig, setIFinderConfig] = useState({
     enabled: false,
     baseUrl: '',
+    useOidcKeyPair: false,
     privateKey: '',
     algorithm: 'RS256',
     issuer: 'ihub-apps',
@@ -26,12 +27,14 @@ function IFinderConfig() {
     jwtSubjectField: 'email'
   });
   const [iAssistantConfig, setIAssistantConfig] = useState({
-    baseUrl: '',
     defaultProfileId: '',
     timeout: 60000
   });
+  const [oauthIssuer, setOauthIssuer] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState({ iFinder: false, iAssistant: false });
+  const [testResults, setTestResults] = useState({ iFinder: null, iAssistant: null });
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -43,6 +46,7 @@ function IFinderConfig() {
         const iFinder = response.data.iFinder || {
           enabled: false,
           baseUrl: '',
+          useOidcKeyPair: false,
           privateKey: '',
           algorithm: 'RS256',
           issuer: 'ihub-apps',
@@ -52,12 +56,12 @@ function IFinderConfig() {
           jwtSubjectField: 'email'
         };
         const iAssistant = response.data.iAssistant || {
-          baseUrl: '',
           defaultProfileId: '',
           timeout: 60000
         };
         setIFinderConfig(iFinder);
         setIAssistantConfig(iAssistant);
+        setOauthIssuer(response.data.oauth?.issuer || '');
         setMessage('');
       } catch (error) {
         setMessage({
@@ -80,6 +84,13 @@ function IFinderConfig() {
     }));
   };
 
+  const handleToggleOidcKeyPair = e => {
+    setIFinderConfig(prev => ({
+      ...prev,
+      useOidcKeyPair: e.target.checked
+    }));
+  };
+
   const handleIFinderChange = (field, value) => {
     setIFinderConfig(prev => ({
       ...prev,
@@ -95,6 +106,17 @@ function IFinderConfig() {
   };
 
   const handleSave = async () => {
+    if (iFinderConfig.useOidcKeyPair && (!oauthIssuer || !oauthIssuer.startsWith('http'))) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.iFinder.oidcKeyPairNeedsIssuer',
+          'OIDC Keypair mode requires an OAuth Issuer URL. Configure it in Admin > Authentication > OAuth Server.'
+        )
+      });
+      return;
+    }
+
     setSaving(true);
     setMessage('');
 
@@ -125,6 +147,80 @@ function IFinderConfig() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleTestIFinder = async () => {
+    setTesting(prev => ({ ...prev, iFinder: true }));
+    setTestResults(prev => ({ ...prev, iFinder: null }));
+    setMessage('');
+
+    try {
+      const response = await makeAdminApiCall('/admin/integrations/ifinder/_test', {
+        method: 'POST'
+      });
+
+      setTestResults(prev => ({ ...prev, iFinder: response.data }));
+
+      if (response.data.success) {
+        setMessage({
+          type: 'success',
+          text: t('admin.iFinder.testSuccess', 'Connection test successful')
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: response.data.message || t('admin.iFinder.testFailed', 'Connection test failed')
+        });
+      }
+    } catch (error) {
+      setTestResults(prev => ({
+        ...prev,
+        iFinder: { success: false, message: error.message }
+      }));
+      setMessage({
+        type: 'error',
+        text: error.message || t('admin.iFinder.testFailed', 'Connection test failed')
+      });
+    } finally {
+      setTesting(prev => ({ ...prev, iFinder: false }));
+    }
+  };
+
+  const handleTestIAssistant = async () => {
+    setTesting(prev => ({ ...prev, iAssistant: true }));
+    setTestResults(prev => ({ ...prev, iAssistant: null }));
+    setMessage('');
+
+    try {
+      const response = await makeAdminApiCall('/admin/integrations/iassistant/_test', {
+        method: 'POST'
+      });
+
+      setTestResults(prev => ({ ...prev, iAssistant: response.data }));
+
+      if (response.data.success) {
+        setMessage({
+          type: 'success',
+          text: t('admin.iFinder.testSuccess', 'Connection test successful')
+        });
+      } else {
+        setMessage({
+          type: 'error',
+          text: response.data.message || t('admin.iFinder.testFailed', 'Connection test failed')
+        });
+      }
+    } catch (error) {
+      setTestResults(prev => ({
+        ...prev,
+        iAssistant: { success: false, message: error.message }
+      }));
+      setMessage({
+        type: 'error',
+        text: error.message || t('admin.iFinder.testFailed', 'Connection test failed')
+      });
+    } finally {
+      setTesting(prev => ({ ...prev, iAssistant: false }));
     }
   };
 
@@ -214,94 +310,213 @@ function IFinderConfig() {
                     placeholder="https://dama.dev.intrafind.io"
                   />
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t('admin.iFinder.baseUrlHelp', 'Your iFinder instance URL')}
+                    {t('admin.iFinder.baseUrlHelp', 'Your iFinder / iAssistant instance URL')}
                   </p>
                 </div>
 
+                {/* JWT Signing Mode */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('admin.iFinder.privateKey', 'Private Key (PEM)')} *
-                  </label>
-                  <textarea
-                    value={iFinderConfig.privateKey}
-                    onChange={e => handleIFinderChange('privateKey', e.target.value)}
-                    rows={4}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
-                    placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  <div className="flex items-start">
+                    <input
+                      type="checkbox"
+                      id="iFinderUseOidcKeyPair"
+                      checked={iFinderConfig.useOidcKeyPair}
+                      onChange={handleToggleOidcKeyPair}
+                      className="h-4 w-4 mt-0.5 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label
+                      htmlFor="iFinderUseOidcKeyPair"
+                      className="ml-2 block text-sm text-gray-900 dark:text-gray-100"
+                    >
+                      {t('admin.iFinder.useOidcKeyPair', 'Use iHub OIDC Keypair for JWT signing')}
+                    </label>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 ml-6">
                     {t(
-                      'admin.iFinder.privateKeyHelp',
-                      'RSA/EC private key in PEM format for signing JWT tokens'
+                      'admin.iFinder.useOidcKeyPairHelp',
+                      'When enabled, tokens are signed with the same RSA key as the iHub OIDC server. iFinder can then validate tokens via JWKS Discovery (/.well-known/jwks.json) — no manual key distribution needed.'
                     )}
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.algorithm', 'JWT Algorithm')}
-                    </label>
-                    <select
-                      value={iFinderConfig.algorithm}
-                      onChange={e => handleIFinderChange('algorithm', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                    >
-                      {ALGORITHM_OPTIONS.map(alg => (
-                        <option key={alg} value={alg}>
-                          {alg}
-                        </option>
-                      ))}
-                    </select>
+                {/* OIDC Keypair info box */}
+                {iFinderConfig.useOidcKeyPair && (
+                  <div
+                    className={`border rounded-md p-4 ${
+                      oauthIssuer && oauthIssuer.startsWith('http')
+                        ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
+                        : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+                    }`}
+                  >
+                    <div className="flex">
+                      <Icon
+                        name={oauthIssuer && oauthIssuer.startsWith('http') ? 'check' : 'warning'}
+                        size="md"
+                        className={`mt-0.5 mr-3 flex-shrink-0 ${
+                          oauthIssuer && oauthIssuer.startsWith('http')
+                            ? 'text-green-500'
+                            : 'text-amber-500'
+                        }`}
+                      />
+                      <div className="text-sm">
+                        {oauthIssuer && oauthIssuer.startsWith('http') ? (
+                          <>
+                            <p className="font-medium text-green-800 dark:text-green-200">
+                              {t('admin.iFinder.oidcKeyPairReady', 'OIDC Keypair ready')}
+                            </p>
+                            <p className="mt-1 text-green-700 dark:text-green-300">
+                              {t('admin.iFinder.oidcKeyPairReadyHelp', 'Configure iFinder with:')}
+                            </p>
+                            <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
+                              {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
+                            </pre>
+                          </>
+                        ) : (
+                          <>
+                            <p className="font-medium text-amber-800 dark:text-amber-200">
+                              {t(
+                                'admin.iFinder.oidcKeyPairMissingIssuer',
+                                'OAuth Issuer URL required'
+                              )}
+                            </p>
+                            <p className="mt-1 text-amber-700 dark:text-amber-300">
+                              {t(
+                                'admin.iFinder.oidcKeyPairMissingIssuerHelp',
+                                'Set the OAuth Issuer URL in Admin > Authentication > OAuth Server before saving.'
+                              )}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
+                )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
-                    </label>
-                    <input
-                      type="number"
-                      value={iFinderConfig.tokenExpirationSeconds}
-                      onChange={e =>
-                        handleIFinderChange(
-                          'tokenExpirationSeconds',
-                          parseInt(e.target.value, 10) || 3600
-                        )
-                      }
-                      min={60}
-                      max={86400}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                    />
-                  </div>
-                </div>
+                {/* Private key and algorithm: only shown when NOT using OIDC keypair */}
+                {!iFinderConfig.useOidcKeyPair && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.privateKey', 'Private Key (PEM)')} *
+                      </label>
+                      <textarea
+                        value={iFinderConfig.privateKey}
+                        onChange={e => handleIFinderChange('privateKey', e.target.value)}
+                        rows={4}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-sm"
+                        placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;...&#10;-----END RSA PRIVATE KEY-----"
+                      />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.iFinder.privateKeyHelp',
+                          'RSA/EC private key in PEM format for signing JWT tokens'
+                        )}
+                      </p>
+                    </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.issuer', 'JWT Issuer')}
-                    </label>
-                    <input
-                      type="text"
-                      value={iFinderConfig.issuer}
-                      onChange={e => handleIFinderChange('issuer', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                      placeholder="ihub-apps"
-                    />
-                  </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('admin.iFinder.algorithm', 'JWT Algorithm')}
+                        </label>
+                        <select
+                          value={iFinderConfig.algorithm}
+                          onChange={e => handleIFinderChange('algorithm', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        >
+                          {ALGORITHM_OPTIONS.map(alg => (
+                            <option key={alg} value={alg}>
+                              {alg}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.iFinder.audience', 'JWT Audience')}
-                    </label>
-                    <input
-                      type="text"
-                      value={iFinderConfig.audience}
-                      onChange={e => handleIFinderChange('audience', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                      placeholder="ifinder-api"
-                    />
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
+                        </label>
+                        <input
+                          type="number"
+                          value={iFinderConfig.tokenExpirationSeconds}
+                          onChange={e =>
+                            handleIFinderChange(
+                              'tokenExpirationSeconds',
+                              parseInt(e.target.value, 10) || 3600
+                            )
+                          }
+                          min={60}
+                          max={86400}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('admin.iFinder.issuer', 'JWT Issuer')}
+                        </label>
+                        <input
+                          type="text"
+                          value={iFinderConfig.issuer}
+                          onChange={e => handleIFinderChange('issuer', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          placeholder="ihub-apps"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                          {t('admin.iFinder.audience', 'JWT Audience')}
+                        </label>
+                        <input
+                          type="text"
+                          value={iFinderConfig.audience}
+                          onChange={e => handleIFinderChange('audience', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                          placeholder="ifinder-api"
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+
+                {/* Token expiration also shown when using OIDC keypair */}
+                {iFinderConfig.useOidcKeyPair && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.audience', 'JWT Audience')}
+                      </label>
+                      <input
+                        type="text"
+                        value={iFinderConfig.audience}
+                        onChange={e => handleIFinderChange('audience', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                        placeholder="ifinder-api"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.iFinder.tokenExpiration', 'Token Expiration (seconds)')}
+                      </label>
+                      <input
+                        type="number"
+                        value={iFinderConfig.tokenExpirationSeconds}
+                        onChange={e =>
+                          handleIFinderChange(
+                            'tokenExpirationSeconds',
+                            parseInt(e.target.value, 10) || 3600
+                          )
+                        }
+                        min={60}
+                        max={86400}
+                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                      />
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -377,25 +592,6 @@ function IFinderConfig() {
                 {t('admin.iFinder.iAssistantSection', 'iAssistant Settings')}
               </h4>
               <div className="space-y-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('admin.iFinder.iAssistantBaseUrl', 'iAssistant Base URL')}
-                  </label>
-                  <input
-                    type="url"
-                    value={iAssistantConfig.baseUrl}
-                    onChange={e => handleIAssistantChange('baseUrl', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-                    placeholder="https://dama.dev.intrafind.io"
-                  />
-                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.iFinder.iAssistantBaseUrlHelp',
-                      'Override if iAssistant runs on a different URL than iFinder'
-                    )}
-                  </p>
-                </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -436,6 +632,71 @@ function IFinderConfig() {
             </>
           )}
 
+          {/* Test Results Display */}
+          {(testResults.iFinder || testResults.iAssistant) && (
+            <div className="mb-4 p-4 rounded-md border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+              <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+                {t('admin.iFinder.testResults.title', 'Test Results')}
+              </h4>
+              {testResults.iFinder && (
+                <div className="mb-2">
+                  <div className="flex items-center mb-1">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                      iFinder:
+                    </span>
+                    <span
+                      className={`text-sm font-medium ${
+                        testResults.iFinder.success
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {testResults.iFinder.success
+                        ? t('admin.iFinder.testResults.success', 'Success')
+                        : t('admin.iFinder.testResults.failed', 'Failed')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {testResults.iFinder.message}
+                  </p>
+                  {testResults.iFinder.details && (
+                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 overflow-x-auto">
+                      {JSON.stringify(testResults.iFinder.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+              {testResults.iAssistant && (
+                <div>
+                  <div className="flex items-center mb-1">
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300 mr-2">
+                      iAssistant:
+                    </span>
+                    <span
+                      className={`text-sm font-medium ${
+                        testResults.iAssistant.success
+                          ? 'text-green-600 dark:text-green-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {testResults.iAssistant.success
+                        ? t('admin.iFinder.testResults.success', 'Success')
+                        : t('admin.iFinder.testResults.failed', 'Failed')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400">
+                    {testResults.iAssistant.message}
+                  </p>
+                  {testResults.iAssistant.details && (
+                    <pre className="mt-2 text-xs text-gray-600 dark:text-gray-400 overflow-x-auto">
+                      {JSON.stringify(testResults.iAssistant.details, null, 2)}
+                    </pre>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Messages */}
           {message && (
             <div
@@ -466,51 +727,150 @@ function IFinderConfig() {
             </div>
           )}
 
-          {/* Save Button */}
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className={`
-              inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium
-              rounded-md shadow-sm text-white
-              ${
-                saving
-                  ? 'bg-gray-400 cursor-not-allowed'
-                  : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-              }
-            `}
-          >
-            {saving ? (
-              <>
-                <svg
-                  className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {t('admin.iFinder.saving', 'Saving...')}
-              </>
-            ) : (
-              <>
-                <Icon name="save" size="md" className="mr-2" />
-                {t('admin.iFinder.save', 'Save iFinder Configuration')}
-              </>
+          {/* Action Buttons */}
+          <div className="flex flex-wrap gap-3">
+            {/* Save Button */}
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className={`
+                inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium
+                rounded-md shadow-sm text-white
+                ${
+                  saving
+                    ? 'bg-gray-400 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                }
+              `}
+            >
+              {saving ? (
+                <>
+                  <svg
+                    className="animate-spin -ml-1 mr-3 h-4 w-4 text-white"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    ></circle>
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    ></path>
+                  </svg>
+                  {t('admin.iFinder.saving', 'Saving...')}
+                </>
+              ) : (
+                <>
+                  <Icon name="save" size="md" className="mr-2" />
+                  {t('admin.iFinder.save', 'Save iFinder Configuration')}
+                </>
+              )}
+            </button>
+
+            {/* Test iFinder Button */}
+            {iFinderConfig.enabled && (
+              <button
+                onClick={handleTestIFinder}
+                disabled={testing.iFinder}
+                className={`
+                  inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600
+                  text-sm font-medium rounded-md shadow-sm
+                  ${
+                    testing.iFinder
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  }
+                `}
+              >
+                {testing.iFinder ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {t('admin.iFinder.testing', 'Testing...')}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check" size="md" className="mr-2" />
+                    {t('admin.iFinder.testIFinder', 'Test iFinder')}
+                  </>
+                )}
+              </button>
             )}
-          </button>
+
+            {/* Test iAssistant Button */}
+            {iFinderConfig.enabled && (
+              <button
+                onClick={handleTestIAssistant}
+                disabled={testing.iAssistant}
+                className={`
+                  inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600
+                  text-sm font-medium rounded-md shadow-sm
+                  ${
+                    testing.iAssistant
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                  }
+                `}
+              >
+                {testing.iAssistant ? (
+                  <>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    {t('admin.iFinder.testing', 'Testing...')}
+                  </>
+                ) : (
+                  <>
+                    <Icon name="check" size="md" className="mr-2" />
+                    {t('admin.iFinder.testIAssistant', 'Test iAssistant')}
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

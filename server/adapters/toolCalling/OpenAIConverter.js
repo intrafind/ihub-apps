@@ -13,6 +13,7 @@ import {
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
  * Convert generic tools to OpenAI format
@@ -230,7 +231,7 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
  */
 const streamingState = new Map();
 
-export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
+export async function convertOpenAIResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   if (!streamingState.has(streamId)) {
@@ -249,7 +250,7 @@ export function convertOpenAIResponseToGeneric(data, streamId = 'default') {
   }
 
   try {
-    const parsed = JSON.parse(data);
+    const parsed = await parseJsonAsync(data);
 
     // Extract usage data from streaming chunks (requires stream_options.include_usage)
     if (parsed.usage) {

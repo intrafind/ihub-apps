@@ -301,7 +301,7 @@ async function extractTextFromPageImage(base64Image, model, apiKey, pageNum, pro
 
   // Use the adapter converter to extract text — handles provider-specific
   // formats and filters out thinking/reasoning content automatically
-  const genericResponse = convertResponseToGeneric(JSON.stringify(data), model.provider);
+  const genericResponse = await convertResponseToGeneric(JSON.stringify(data), model.provider);
 
   if (genericResponse.content && genericResponse.content.length > 0) {
     return genericResponse.content.join('');

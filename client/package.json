@@ -17,7 +17,7 @@
     "@tailwindcss/typography": "^0.5.16",
     "ajv": "^8.18.0",
     "ajv-formats": "^3.0.1",
-    "axios": "^1.13.5",
+    "axios": "^1.15.0",
     "docx": "^9.5.3",
     "dompurify": "^3.3.3",
     "file-saver": "^2.0.5",
@@ -56,6 +56,6 @@
     "@vitejs/plugin-react": "^4.7.0",
     "autoprefixer": "^10.4.14",
     "postcss": "^8.4.23",
-    "vite": "^6.4.1"
+    "vite": "^6.4.2"
   }
 }

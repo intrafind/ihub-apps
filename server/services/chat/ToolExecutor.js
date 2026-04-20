@@ -9,6 +9,7 @@ import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import StreamingHandler from './StreamingHandler.js';
+import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import { MAX_CLARIFICATIONS_PER_CONVERSATION, validateAskUserParams } from '../../tools/askUser.js';
 
@@ -27,6 +28,11 @@ class ToolExecutor {
      * @type {Map<string, number>}
      */
     this.clarificationCounts = new Map();
+    /**
+     * Map to track knowledge sources used per conversation
+     * @type {Map<string, Set<string>>}
+     */
+    this.knowledgeSources = new Map();
   }
 
   /**
@@ -57,6 +63,44 @@ class ToolExecutor {
    */
   resetClarificationCount(chatId) {
     this.clarificationCounts.delete(chatId);
+  }
+
+  /**
+   * Add a knowledge source for tracking
+   * @param {string} chatId - The conversation/chat ID
+   * @param {string} source - Source type ('websearch', 'source', 'iassistant', 'grounding')
+   */
+  addKnowledgeSource(chatId, source) {
+    if (!this.knowledgeSources.has(chatId)) {
+      this.knowledgeSources.set(chatId, new Set());
+    }
+    this.knowledgeSources.get(chatId).add(source);
+  }
+
+  /**
+   * Get knowledge sources for a conversation
+   * Combines sources from both tool execution and prompt-based sources
+   * @param {string} chatId - The conversation/chat ID
+   * @returns {Array<string>} Array of source types
+   */
+  getKnowledgeSources(chatId) {
+    const toolSources = this.knowledgeSources.get(chatId);
+    const promptSources = PromptService.getPromptSources(chatId);
+
+    // Combine both sources, using a Set to avoid duplicates
+    const combined = new Set([...(toolSources ? Array.from(toolSources) : []), ...promptSources]);
+
+    return Array.from(combined);
+  }
+
+  /**
+   * Reset knowledge sources for a conversation
+   * Resets both tool-based and prompt-based sources
+   * @param {string} chatId - The conversation/chat ID
+   */
+  resetKnowledgeSources(chatId) {
+    this.knowledgeSources.delete(chatId);
+    PromptService.resetPromptSources(chatId);
   }
 
   /**
@@ -348,6 +392,27 @@ class ToolExecutor {
 
     actionTracker.trackToolCallStart(chatId, { toolName: toolId, toolInput: args });
 
+    // Track knowledge sources based on tool type
+    // Use case-insensitive matching for search tools (braveSearch, tavilySearch, googleSearch, webSearch, etc.)
+    const lowerToolId = toolId.toLowerCase();
+    if (
+      lowerToolId === 'web-search' ||
+      lowerToolId === 'websearch' ||
+      lowerToolId.includes('search')
+    ) {
+      // Exclude internal/non-web search tools like entraPeopleSearch, researchPlanner, deepResearch
+      const isInternalSearch =
+        lowerToolId.includes('people') ||
+        lowerToolId.includes('planner') ||
+        lowerToolId === 'deepresearch' ||
+        lowerToolId === 'researchplanner';
+      if (!isInternalSearch) {
+        this.addKnowledgeSource(chatId, 'websearch');
+      }
+    } else if (toolId.startsWith('source_') || toolId.includes('retrieval')) {
+      this.addKnowledgeSource(chatId, 'sources');
+    }
+
     try {
       // Check if this is the ask_user clarification tool
       if (this.isAskUserTool(toolId, tools)) {
@@ -374,6 +439,20 @@ class ToolExecutor {
           app,
           userFileData
         );
+      }
+
+      // Apply per-request tool parameter defaults (may differ from global schema defaults,
+      // e.g. when resolveWebsearchTool overrides maxResults/extractContent from app.websearch).
+      // This ensures admin-configured values are enforced even when the LLM omits optional params.
+      const requestToolDef = tools.find(
+        t => normalizeToolName(t.id) === toolCall.function.name || t.id === toolId
+      );
+      if (requestToolDef?.parameters?.properties) {
+        for (const [key, prop] of Object.entries(requestToolDef.parameters.properties)) {
+          if (args[key] === undefined && prop.default !== undefined) {
+            args[key] = prop.default;
+          }
+        }
       }
 
       // Regular tool execution
@@ -787,7 +866,7 @@ class ToolExecutor {
 
         while (events.length > 0) {
           const evt = events.shift();
-          const result = convertResponseToGeneric(evt.data, model.provider);
+          const result = await convertResponseToGeneric(evt.data, model.provider);
 
           if (result.error) {
             throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
@@ -1188,7 +1267,7 @@ class ToolExecutor {
 
           while (events.length > 0) {
             const evt = events.shift();
-            const result = convertResponseToGeneric(evt.data, model.provider);
+            const result = await convertResponseToGeneric(evt.data, model.provider);
 
             if (result.error) {
               throw Object.assign(new Error(result.errorMessage || 'Error processing response'), {
@@ -1259,6 +1338,13 @@ class ToolExecutor {
         // If no tool calls, this is the final response - stream it back to client
         if (finishReason !== 'tool_calls' && collectedToolCalls.length === 0) {
           clearTimeout(timeoutId);
+
+          // Emit answer source information before done event
+          const sources = this.getKnowledgeSources(chatId);
+          if (sources.length > 0) {
+            actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
+          }
+
           actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
           await logInteraction(
             'chat_response',
@@ -1270,6 +1356,10 @@ class ToolExecutor {
           if (activeRequests.get(chatId) === controller) {
             activeRequests.delete(chatId);
           }
+
+          // Reset knowledge sources after emitting
+          this.resetKnowledgeSources(chatId);
+
           return; // Exit the loop, we have the final response
         }
 

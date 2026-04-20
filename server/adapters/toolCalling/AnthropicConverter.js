@@ -13,6 +13,7 @@ import {
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
 import logger from '../../utils/logger.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 
 /**
  * Convert generic tools to Anthropic format
@@ -151,7 +152,7 @@ export function convertAnthropicToolResultToGeneric(anthropicResult) {
 // Store state across streaming chunks for proper handling
 const streamingState = new Map();
 
-export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
+export async function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   const result = createGenericStreamingResponse();
 
   // Get or create state for this stream
@@ -167,7 +168,7 @@ export function convertAnthropicResponseToGeneric(data, streamId = 'default') {
   if (!data) return result;
 
   try {
-    const parsed = JSON.parse(data);
+    const parsed = await parseJsonAsync(data);
 
     // Extract usage from message_start (input tokens)
     if (parsed.type === 'message_start' && parsed.message?.usage) {
