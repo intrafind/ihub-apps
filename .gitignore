@@ -79,3 +79,7 @@ contents/.jwt-secret
 # Git worktrees
 .worktrees/
 .worktrees/
+
+*.pem
+contents*/
+.env*
