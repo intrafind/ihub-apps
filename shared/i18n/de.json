@@ -325,7 +325,21 @@
     "streamingError": "Ein Fehler ist beim Streaming aufgetreten",
     "failedToGenerateResponse": "Fehler beim Generieren der Antwort. Bitte versuchen Sie es erneut oder wählen Sie ein anderes Modell.",
     "sessionExpired": "Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an, um fortzufahren.",
-    "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt..."
+    "sessionExpiredReconnecting": "Sitzung abgelaufen. Verbindung zum Authentifizierungsanbieter wird wiederhergestellt...",
+    "chunkLoadTitle": "Seite konnte nicht geladen werden",
+    "chunkLoadDescription": "Eine benötigte Ressource konnte nicht geladen werden. Dies kann an einem Netzwerkproblem oder einem Anwendungsupdate liegen.",
+    "reloadPage": "Seite neu laden",
+    "tryAgain": "Erneut versuchen",
+    "backToHome": "Zurück zur Startseite"
+  },
+  "network": {
+    "offline": {
+      "title": "Server nicht erreichbar",
+      "description": "Die Verbindung zum Server wurde unterbrochen. Dies passiert normalerweise, wenn die VPN-Verbindung getrennt wird. Verbindung wird wiederhergestellt...",
+      "reconnecting": "Verbindung wird wiederhergestellt... (Versuch {{count}})",
+      "reloadPage": "Seite neu laden"
+    },
+    "reconnected": "Verbindung wiederhergestellt"
   },
   "message": {
     "generationCancelled": " [Generierung abgebrochen]"

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Navigate } from 'react-router-dom';
 import Icon from './Icon';
 import { buildPath } from '../../utils/runtimeBasePath';
+import { isChunkLoadError } from '../../utils/lazyWithRetry';
 
 // Error boundary wrapper component
 class ErrorBoundaryComponent extends Component {
@@ -52,6 +53,7 @@ class ErrorBoundaryComponent extends Component {
 // Error fallback display component with reset capability and translation
 function ErrorFallback({ error, resetErrorBoundary }) {
   const { t } = useTranslation();
+  const chunkError = isChunkLoadError(error);
 
   if (error?.status === 401) {
     return <Navigate to="/unauthorized" replace />;
@@ -63,35 +65,57 @@ function ErrorFallback({ error, resetErrorBoundary }) {
     return <Navigate to="/server-error" replace />;
   }
 
+  const title = chunkError
+    ? t('error.chunkLoadTitle', 'Page failed to load')
+    : t('error.title', 'Something went wrong');
+
+  const description = chunkError
+    ? t(
+        'error.chunkLoadDescription',
+        'A required resource could not be loaded. This may be due to a network issue or an application update.'
+      )
+    : t(
+        'error.description',
+        'An unexpected error occurred in the application. The development team has been notified.'
+      );
+
   return (
     <div role="alert" className="p-4 m-4 bg-red-50 border border-red-200 rounded-md">
       <div className="flex items-center mb-4">
         <Icon name="exclamation-triangle" size="lg" className="text-red-500 mr-2" />
-        <h2 className="text-xl font-bold text-red-700">
-          {t('error.title', 'Something went wrong')}
-        </h2>
+        <h2 className="text-xl font-bold text-red-700">{title}</h2>
       </div>
 
       <div className="mb-4">
-        <p className="text-gray-700 mb-2">
-          {t(
-            'error.description',
-            'An unexpected error occurred in the application. The development team has been notified.'
-          )}
-        </p>
-        <p className="text-gray-500 text-sm mb-1">{t('error.errorMessage', 'Error details:')}</p>
-        <div className="bg-gray-100 p-2 rounded overflow-auto max-h-32 text-xs font-mono text-gray-800">
-          {error && error.toString()}
-        </div>
+        <p className="text-gray-700 mb-2">{description}</p>
+        {!chunkError && (
+          <>
+            <p className="text-gray-500 text-sm mb-1">
+              {t('error.errorMessage', 'Error details:')}
+            </p>
+            <div className="bg-gray-100 p-2 rounded overflow-auto max-h-32 text-xs font-mono text-gray-800">
+              {error && error.toString()}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="flex flex-col space-y-2">
-        <button
-          onClick={resetErrorBoundary}
-          className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition-colors"
-        >
-          {t('error.tryAgain', 'Try Again')}
-        </button>
+        {chunkError ? (
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition-colors"
+          >
+            {t('error.reloadPage', 'Reload Page')}
+          </button>
+        ) : (
+          <button
+            onClick={resetErrorBoundary}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded transition-colors"
+          >
+            {t('error.tryAgain', 'Try Again')}
+          </button>
+        )}
 
         <button
           onClick={() => (window.location.href = buildPath('/'))}
