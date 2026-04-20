@@ -59,7 +59,7 @@ function ChatInputActionsMenu({
   /** Closes the actions menu dropdown */
   const handleActionsMenuClose = useCallback(() => setIsOpen(false), []);
 
-  useKeyboardNavigation(actionsMenuRef, {
+  const { activeIndex: menuActiveIndex } = useKeyboardNavigation(actionsMenuRef, {
     isActive: isOpen,
     onClose: handleActionsMenuClose
   });
@@ -281,6 +281,21 @@ function ChatInputActionsMenu({
     }
   }
 
+  // Compute the ordered list of navigable menu items matching the DOM order that
+  // getNavigableElements discovers, so React-controlled tabIndex agrees with the
+  // hook's activeIndex (prevents roving tabindex from being overwritten on re-render).
+  const menuNavItems = [];
+  if (uploadConfig?.enabled === true && !(disabled || isProcessing)) menuNavItems.push('upload');
+  if (magicPromptEnabled && !showUndoMagicPrompt && !(disabled || isProcessing))
+    menuNavItems.push('magic');
+  if (showUndoMagicPrompt && !(disabled || isProcessing)) menuNavItems.push('undo');
+  enabledCloudProviders.forEach(p => {
+    if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
+  });
+  grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
+  individual.forEach(id => menuNavItems.push(`tool-${id}`));
+  const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -315,7 +330,7 @@ function ChatInputActionsMenu({
                 <button
                   type="button"
                   role="menuitem"
-                  tabIndex={-1}
+                  tabIndex={navTabIndex('upload')}
                   onClick={() => {
                     onToggleUploader?.();
                     setIsOpen(false);
@@ -332,7 +347,7 @@ function ChatInputActionsMenu({
                 <button
                   type="button"
                   role="menuitem"
-                  tabIndex={-1}
+                  tabIndex={navTabIndex('magic')}
                   onClick={() => {
                     onMagicPrompt?.();
                     setIsOpen(false);
@@ -349,7 +364,7 @@ function ChatInputActionsMenu({
                 <button
                   type="button"
                   role="menuitem"
-                  tabIndex={-1}
+                  tabIndex={navTabIndex('undo')}
                   onClick={() => {
                     onUndoMagicPrompt?.();
                     setIsOpen(false);
@@ -405,7 +420,7 @@ function ChatInputActionsMenu({
                     key={provider.id}
                     type="button"
                     role="menuitem"
-                    tabIndex={-1}
+                    tabIndex={navTabIndex(`cloud-${provider.id}`)}
                     onClick={() => {
                       onCloudProviderSelect?.(provider);
                       setIsOpen(false);
@@ -498,7 +513,7 @@ function ChatInputActionsMenu({
                         key={group.id}
                         role="menuitemcheckbox"
                         aria-checked={allEnabled ? 'true' : someEnabled ? 'mixed' : 'false'}
-                        tabIndex={-1}
+                        tabIndex={navTabIndex(`group-${group.id}`)}
                         className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg"
                         onClick={() => toggleTool(group.id, true, group.matchedTools)}
                         onKeyDown={e => {
@@ -549,7 +564,7 @@ function ChatInputActionsMenu({
                         key={toolId}
                         role="menuitemcheckbox"
                         aria-checked={isEnabled}
-                        tabIndex={-1}
+                        tabIndex={navTabIndex(`tool-${toolId}`)}
                         className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg"
                         onClick={() => toggleTool(toolId)}
                         onKeyDown={e => {

@@ -37,8 +37,7 @@ function getNavigableElements(container) {
  *
  * Implements arrow-key navigation (vertical or horizontal), Home/End jumps,
  * Enter/Space selection, and Escape dismissal. The currently active item
- * receives `tabIndex=0` while all other items receive `tabIndex=-1`, and
- * `.focus()` is called on the active item so that screen readers announce it.
+ * receives `tabIndex=0` while all other items receive `tabIndex=-1`.
  *
  * The list of navigable items is re-queried on every key press, so
  * dynamically added or removed items are handled gracefully.
@@ -88,6 +87,14 @@ export function useKeyboardNavigation(
 ) {
   const [activeIndex, setActiveIndex] = useState(0);
 
+  // Mutable ref that always holds the current activeIndex value.
+  // The keydown handler reads from this ref so it never captures a stale
+  // closure value and does not need to be recreated on every state change.
+  const activeIndexRef = useRef(0);
+  useEffect(() => {
+    activeIndexRef.current = activeIndex;
+  }, [activeIndex]);
+
   /**
    * Keeps a mutable ref of the latest callbacks so the keydown handler
    * always calls the current versions without needing to be recreated.
@@ -97,29 +104,42 @@ export function useKeyboardNavigation(
     callbacksRef.current = { onSelect, onClose };
   }, [onSelect, onClose]);
 
-  /**
-   * Applies the roving tabindex pattern: sets `tabIndex=0` on the item at
-   * `index` and `tabIndex=-1` on all other navigable items in the container,
-   * then calls `.focus()` on the active item.
-   *
-   * @param {HTMLElement[]} items - Array of navigable elements
-   * @param {number} index - Index of the item to activate
-   */
-  const focusItem = useCallback((items, index) => {
-    items.forEach((item, i) => {
-      item.setAttribute('tabindex', i === index ? '0' : '-1');
-    });
-    if (items[index]) {
-      items[index].focus();
+  // Reset activeIndex to 0 when the hook is activated
+  useEffect(() => {
+    if (isActive) {
+      setActiveIndex(0);
+      activeIndexRef.current = 0;
     }
-  }, []);
+  }, [isActive]);
+
+  // After activeIndex changes (or on initial activation), apply the roving
+  // tabindex and move focus. Running this in an effect (rather than inside
+  // the keydown handler) ensures React has already committed the new tabIndex
+  // props to the DOM before we call .focus(), preventing the race between
+  // imperative DOM mutations and React reconciliation.
+  useEffect(() => {
+    if (!isActive) return;
+    const container = containerRef.current;
+    if (!container) return;
+    const items = getNavigableElements(container);
+    if (items.length === 0) return;
+    const clamped = Math.min(activeIndex, items.length - 1);
+    items.forEach((item, i) => {
+      item.setAttribute('tabindex', i === clamped ? '0' : '-1');
+    });
+    if (items[clamped]) {
+      items[clamped].focus();
+    }
+  }, [isActive, activeIndex, containerRef]);
 
   /**
    * Handles all keyboard events for navigation, selection, and dismissal.
-   * The list of navigable items is queried fresh each time to account for
-   * dynamic additions/removals.
    *
-   * @param {KeyboardEvent} event - The keydown event
+   * This callback is intentionally stable (deps: containerRef, orientation,
+   * loop — all refs/primitives that never change while the menu is open).
+   * Stability prevents the listener-attachment effect from running on every
+   * keypress, which was the root cause of arrow keys scrolling the container
+   * instead of moving focus.
    */
   const handleKeyDown = useCallback(
     event => {
@@ -137,13 +157,11 @@ export function useKeyboardNavigation(
         case nextKey: {
           event.preventDefault();
           setActiveIndex(current => {
-            // Clamp current index in case items were removed since last keypress
             const clamped = Math.min(current, items.length - 1);
             let next = clamped + 1;
             if (next >= items.length) {
               next = loop ? 0 : items.length - 1;
             }
-            focusItem(items, next);
             return next;
           });
           break;
@@ -157,7 +175,6 @@ export function useKeyboardNavigation(
             if (prev < 0) {
               prev = loop ? items.length - 1 : 0;
             }
-            focusItem(items, prev);
             return prev;
           });
           break;
@@ -166,31 +183,27 @@ export function useKeyboardNavigation(
         case 'Home': {
           event.preventDefault();
           setActiveIndex(0);
-          focusItem(items, 0);
           break;
         }
 
         case 'End': {
           event.preventDefault();
-          const lastIndex = items.length - 1;
-          setActiveIndex(lastIndex);
-          focusItem(items, lastIndex);
+          setActiveIndex(items.length - 1);
           break;
         }
 
         case 'Enter': {
           event.preventDefault();
           if (callbacksRef.current.onSelect) {
-            callbacksRef.current.onSelect(activeIndex);
+            callbacksRef.current.onSelect(activeIndexRef.current);
           }
           break;
         }
 
         case ' ': {
-          // Space — prevent default to avoid page scroll
           event.preventDefault();
           if (callbacksRef.current.onSelect) {
-            callbacksRef.current.onSelect(activeIndex);
+            callbacksRef.current.onSelect(activeIndexRef.current);
           }
           break;
         }
@@ -204,32 +217,20 @@ export function useKeyboardNavigation(
         }
 
         default:
-          // Let unhandled keys propagate normally
           break;
       }
     },
-    [containerRef, orientation, loop, focusItem, activeIndex]
+    [containerRef, orientation, loop]
   );
 
-  // Reset activeIndex to 0 when the hook is activated
-  useEffect(() => {
-    if (isActive) {
-      setActiveIndex(0);
-    }
-  }, [isActive]);
-
-  // Attach / detach the keydown listener and apply initial roving tabindex
+  // Attach / detach the keydown listener once when the menu opens/closes.
+  // handleKeyDown is stable for the lifetime of the open menu, so this
+  // effect only re-runs when isActive changes — not on every keypress.
   useEffect(() => {
     if (!isActive) return;
 
     const container = containerRef.current;
     if (!container) return;
-
-    // Apply initial roving tabindex so the first item is tabbable
-    const items = getNavigableElements(container);
-    if (items.length > 0) {
-      focusItem(items, 0);
-    }
 
     // Use capture phase to ensure we intercept arrow keys before they cause scrolling
     container.addEventListener('keydown', handleKeyDown, true);
@@ -237,7 +238,7 @@ export function useKeyboardNavigation(
     return () => {
       container.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isActive, containerRef, handleKeyDown, focusItem]);
+  }, [isActive, containerRef, handleKeyDown]);
 
   return { activeIndex, setActiveIndex };
 }

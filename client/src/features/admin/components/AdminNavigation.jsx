@@ -6,7 +6,7 @@ import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContex
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
-function TabItem({ item, isDropdownItem = false, setShowMoreMenu }) {
+function TabItem({ item, isDropdownItem = false, setShowMoreMenu, dropdownTabIndex = -1 }) {
   const content = (
     <>
       <Icon name={item.icon} className="w-4 h-4 mr-2" />
@@ -26,8 +26,9 @@ function TabItem({ item, isDropdownItem = false, setShowMoreMenu }) {
           : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
       }`;
 
-  // ARIA attributes for dropdown menu items (roving tabindex managed by useKeyboardNavigation)
-  const ariaProps = isDropdownItem ? { role: 'menuitem', tabIndex: -1 } : {};
+  // ARIA attributes for dropdown menu items — tabIndex driven by parent so React
+  // controls it (prevents roving tabindex from being overwritten on re-render)
+  const ariaProps = isDropdownItem ? { role: 'menuitem', tabIndex: dropdownTabIndex } : {};
 
   if (item.external) {
     return (
@@ -91,12 +92,12 @@ function AdminNavigation() {
   /** Closes the "More" dropdown menu */
   const handleMoreMenuClose = useCallback(() => setShowMoreMenu(false), []);
 
-  useKeyboardNavigation(desktopDropdownRef, {
+  const { activeIndex: desktopActiveIndex } = useKeyboardNavigation(desktopDropdownRef, {
     isActive: showMoreMenu,
     onClose: handleMoreMenuClose
   });
 
-  useKeyboardNavigation(mobileDropdownRef, {
+  const { activeIndex: mobileActiveIndex } = useKeyboardNavigation(mobileDropdownRef, {
     isActive: showMoreMenu,
     onClose: handleMoreMenuClose
   });
@@ -362,6 +363,20 @@ function AdminNavigation() {
       };
     }, [navGroups, isEnabled]);
 
+  // Compute ordered item lists for desktop and mobile dropdowns in DOM render order.
+  // This lets us drive tabIndex from React state (matching the hook's activeIndex)
+  // instead of hardcoding -1, which gets overwritten on re-render.
+  const desktopDropdownItemOrder = navGroups.flatMap(group =>
+    group.items.filter(
+      item => isEnabled(item.key) && desktopHiddenItems.some(h => h.key === item.key)
+    )
+  );
+  const mobileDropdownItemOrder = navGroups.flatMap(group =>
+    group.items.filter(
+      item => isEnabled(item.key) && mobileHiddenItems.some(h => h.key === item.key)
+    )
+  );
+
   return (
     <nav className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -424,6 +439,12 @@ function AdminNavigation() {
                                 item={item}
                                 isDropdownItem
                                 setShowMoreMenu={setShowMoreMenu}
+                                dropdownTabIndex={
+                                  desktopDropdownItemOrder.findIndex(i => i.key === item.key) ===
+                                  desktopActiveIndex
+                                    ? 0
+                                    : -1
+                                }
                               />
                             ))}
                           </div>
@@ -492,6 +513,12 @@ function AdminNavigation() {
                                 item={item}
                                 isDropdownItem
                                 setShowMoreMenu={setShowMoreMenu}
+                                dropdownTabIndex={
+                                  mobileDropdownItemOrder.findIndex(i => i.key === item.key) ===
+                                  mobileActiveIndex
+                                    ? 0
+                                    : -1
+                                }
                               />
                             ))}
                           </div>

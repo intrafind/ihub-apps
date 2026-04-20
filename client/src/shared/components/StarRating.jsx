@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { StarIcon } from '@heroicons/react/24/solid';
 import { StarIcon as StarOutlineIcon } from '@heroicons/react/24/outline';
 
@@ -12,6 +13,7 @@ const StarRating = ({
   showTooltip = true,
   className = ''
 }) => {
+  const { t } = useTranslation();
   const [hoverRating, setHoverRating] = useState(0);
 
   const handleStarClick = useCallback(
@@ -93,11 +95,11 @@ const StarRating = ({
 
     const starValue = starIndex + 1;
     const ratingLabels = {
-      1: 'Poor',
-      2: 'Fair',
-      3: 'Good',
-      4: 'Very Good',
-      5: 'Excellent'
+      1: t('starRating.poor', 'Poor'),
+      2: t('starRating.fair', 'Fair'),
+      3: t('starRating.good', 'Good'),
+      4: t('starRating.veryGood', 'Very Good'),
+      5: t('starRating.excellent', 'Excellent')
     };
 
     return ratingLabels[starValue] || `${starValue} stars`;
@@ -118,7 +120,7 @@ const StarRating = ({
         title={getTooltipText(starIndex)}
         tabIndex={readonly ? -1 : 0}
         disabled={readonly}
-        aria-label={`Rate ${starIndex + 1} star${starIndex + 1 > 1 ? 's' : ''}`}
+        aria-label={t('starRating.rate', 'Rate {{count}} star', { count: starIndex + 1 })}
       >
         {/* Base star (outline) */}
         <StarOutlineIcon className={`${size} text-gray-300 transition-colors duration-150`} />

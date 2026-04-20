@@ -310,7 +310,8 @@
       }
     },
     "messageList": "Chat messages",
-    "inputLabel": "Type your message"
+    "inputLabel": "Type your message",
+    "clearInput": "Clear input"
   },
   "auth": {
     "login": {
@@ -338,7 +339,8 @@
       "profile": "Profile",
       "adminPanel": "Admin Panel",
       "signOut": "Sign Out",
-      "signIn": "Sign In"
+      "signIn": "Sign In",
+      "closeLogin": "Close login dialog"
     }
   },
   "widget": {
@@ -1704,6 +1706,16 @@
     "sortBy": "Sort by"
   },
   "search": {
-    "dialogLabel": "Search applications"
+    "dialogLabel": "Search applications",
+    "resultsList": "Search results"
+  },
+  "starRating": {
+    "rate": "Rate {{count}} star",
+    "rate_plural": "Rate {{count}} stars",
+    "poor": "Poor",
+    "fair": "Fair",
+    "good": "Good",
+    "veryGood": "Very Good",
+    "excellent": "Excellent"
   }
 }

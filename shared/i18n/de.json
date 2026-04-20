@@ -117,7 +117,8 @@
   },
   "chat": {
     "messageList": "Chat-Nachrichten",
-    "inputLabel": "Nachricht eingeben"
+    "inputLabel": "Nachricht eingeben",
+    "clearInput": "Eingabe löschen"
   },
   "websearch": {
     "title": "Websuche",
@@ -1405,7 +1406,8 @@
       "profile": "Profil",
       "adminPanel": "Admin-Panel",
       "signOut": "Abmelden",
-      "signIn": "Anmelden"
+      "signIn": "Anmelden",
+      "closeLogin": "Anmeldedialog schließen"
     }
   },
   "widget": {
@@ -1669,6 +1671,16 @@
     "sortBy": "Sortieren nach"
   },
   "search": {
-    "dialogLabel": "Anwendungen suchen"
+    "dialogLabel": "Anwendungen suchen",
+    "resultsList": "Suchergebnisse"
+  },
+  "starRating": {
+    "rate": "{{count}} Stern bewerten",
+    "rate_plural": "{{count}} Sterne bewerten",
+    "poor": "Schlecht",
+    "fair": "Ausreichend",
+    "good": "Gut",
+    "veryGood": "Sehr gut",
+    "excellent": "Ausgezeichnet"
   }
 }

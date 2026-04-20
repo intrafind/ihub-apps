@@ -136,12 +136,6 @@ function ModelSelector({
           tabIndex={-1}
           aria-label={t('appConfig.selectModel', 'Select Model')}
           className="absolute bottom-full left-0 mb-2 w-80 max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
-          onKeyDown={e => {
-            // Prevent default scrolling behavior for arrow keys
-            if (['ArrowUp', 'ArrowDown', 'Home', 'End'].includes(e.key)) {
-              e.preventDefault();
-            }
-          }}
         >
           <div className="p-2">
             <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">
