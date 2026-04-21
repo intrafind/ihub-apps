@@ -70,6 +70,7 @@ const ChatHeader = ({
             type="button"
             onClick={onWriteClick}
             aria-label="New chat"
+            title="New chat"
             className="rounded-full p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
           >
             <PencilSquareIcon className="h-5 w-5" aria-hidden />

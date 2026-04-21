@@ -33,7 +33,8 @@ function ChatMessageList({
   onClarificationSubmit = null, // Callback when a clarification response is submitted
   onClarificationSkip = null, // Callback when a clarification is skipped
   // Citation document action handlers
-  onDocumentAction = null
+  onDocumentAction = null,
+  showAvatars = true
 }) {
   const { t } = useTranslation();
   const chatContainerRef = useRef(null);
@@ -129,18 +130,20 @@ function ChatMessageList({
       {displayedMessages.map((message, index) => (
         <div key={message.id}>
           <div
-            className={`flex gap-3 ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
+            className={`flex ${showAvatars ? 'gap-3' : 'gap-1'} ${message.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >
             {/* Message sender icon */}
-            <div className="flex-shrink-0 mt-1">
-              {message.role === 'assistant' ? (
-                <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
-              ) : message.role === 'user' ? (
-                <Icon name={userIcon} size="xl" className="text-gray-500" />
-              ) : (
-                <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
-              )}
-            </div>
+            {showAvatars && (
+              <div className="flex-shrink-0 mt-1">
+                {message.role === 'assistant' ? (
+                  <Icon name={assistantIcon} size="2xl" className="text-blue-500" />
+                ) : message.role === 'user' ? (
+                  <Icon name={userIcon} size="xl" className="text-gray-500" />
+                ) : (
+                  <Icon name={errorIcon} size="2xl" className="text-yellow-500" />
+                )}
+              </div>
+            )}
 
             {/* Message content */}
             <div className={`max-w-[80%] ${message.role === 'user' ? '' : ''}`}>

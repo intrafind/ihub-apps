@@ -13,6 +13,8 @@ import VariablesDialog, {
 } from './variables-dialog';
 import SettingsDialog from './settings-dialog';
 import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
+import useAppSettings from '../../../shared/hooks/useAppSettings';
+import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
 import { buildPromptTemplate } from '../utilities/buildChatApiMessages';
 import { getLocalizedContent } from '../../../utils/localizeContent';
@@ -64,6 +66,11 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     chatId: chatIdRef.current
   });
 
+  const { models, selectedModel, setSelectedModel, enabledTools, setEnabledTools, websearchEnabled, setWebsearchEnabled } = useAppSettings(selectedApp?.id, selectedApp);
+  const fileUploadHandler = useFileUploadHandler();
+  const currentModel = models.find(m => m.id === selectedModel) || null;
+  const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
+
   const [inputValue, setInputValue] = useState('');
   const [appPromptVariables, setAppPromptVariables] = useState({});
   const [isSelectorOpen, setIsSelectorOpen] = useState(false);
@@ -112,6 +119,13 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
 
       const promptTemplate = buildPromptTemplate(selectedStarterPromptRef.current, selectedApp);
       const params = buildParamsFromApp(selectedApp);
+      if (selectedModel) params.modelId = selectedModel;
+      if (enabledTools?.length) params.enabledTools = enabledTools;
+      if (selectedApp?.websearch?.enabled) params.websearchEnabled = websearchEnabled;
+
+      const sf = fileUploadHandler.selectedFile;
+      const imageData = sf?.type === 'image' ? sf : null;
+      const fileData = sf?.type === 'file' ? sf : null;
 
       adapter.sendMessage({
         displayMessage: { content: text },
@@ -119,8 +133,8 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
           content: text,
           promptTemplate,
           variables: appPromptVariables,
-          imageData: null,
-          fileData: null
+          imageData,
+          fileData
         },
         params,
         sendChatHistory: selectedApp?.sendChatHistory !== false
@@ -128,8 +142,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
 
       setInputValue('');
       selectedStarterPromptRef.current = null;
+      fileUploadHandler.clearSelectedFile();
     },
-    [inputValue, selectedApp, appPromptVariables, adapter]
+    [inputValue, selectedApp, appPromptVariables, adapter, selectedModel, enabledTools, websearchEnabled, fileUploadHandler]
   );
 
   const handlePromptSelect = useCallback(
@@ -256,7 +271,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
             )}
 
             {/* Messages */}
-            <div className="flex-1 min-h-0 overflow-hidden">
+            <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
               <ChatMessageList
                 messages={adapter.messages}
                 outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
@@ -267,6 +282,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 appId={selectedApp?.id}
                 chatId={chatIdRef.current}
                 app={selectedApp}
+                showAvatars={false}
               />
             </div>
 
@@ -275,14 +291,25 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
               <ChatInput
                 app={selectedApp}
                 value={inputValue}
-                onChange={setInputValue}
+                onChange={e => setInputValue(e?.target?.value ?? e)}
                 onSubmit={handleSubmit}
                 isProcessing={adapter.processing}
                 onCancel={adapter.cancelGeneration}
                 allowEmptySubmit={!!selectedApp?.allowEmptyContent}
                 currentLanguage={officeLocale}
-                showModelSelector={false}
-                models={[]}
+                showModelSelector={selectedApp?.disallowModelSelection !== true && selectedApp?.settings?.model?.enabled !== false}
+                models={models}
+                selectedModel={selectedModel}
+                onModelChange={setSelectedModel}
+                uploadConfig={uploadConfig}
+                onFileSelect={fileUploadHandler.handleFileSelect}
+                selectedFile={fileUploadHandler.selectedFile}
+                showUploader={fileUploadHandler.showUploader}
+                onToggleUploader={fileUploadHandler.toggleUploader}
+                enabledTools={selectedApp?.tools?.length ? enabledTools : null}
+                onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
+                websearchEnabled={websearchEnabled}
+                onWebsearchEnabledChange={selectedApp?.websearch?.enabled ? setWebsearchEnabled : null}
                 clarificationPending={adapter.clarificationPending}
               />
             </div>
