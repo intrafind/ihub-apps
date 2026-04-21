@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { fetchApps } from '../../api/api';
 import { getLocalizedContent } from '../../utils/localizeContent';
 import AppCard from './AppCard';
@@ -15,6 +16,7 @@ import AppCard from './AppCard';
  * @param {React.ReactNode} [header] - Optional header node rendered above the list
  */
 function AppListPanel({ onSelect, language = 'en', showSearch = 'auto', header }) {
+  const { t } = useTranslation();
   const [apps, setApps] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -49,7 +51,7 @@ function AppListPanel({ onSelect, language = 'en', showSearch = 'auto', header }
             type="search"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Search apps..."
+            placeholder={t('pages.appsList.searchPlaceholder', 'Search apps...')}
             className="w-full px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-indigo-300"
           />
         </div>
@@ -66,14 +68,18 @@ function AppListPanel({ onSelect, language = 'en', showSearch = 'auto', header }
             />
           ))}
           {!isLoading && filteredApps.length === 0 && (
-            <p className="text-sm text-slate-400 text-center py-8">No apps available</p>
+            <p className="text-sm text-slate-400 text-center py-8">
+              {t('pages.appsList.noApps', 'No apps available')}
+            </p>
           )}
         </div>
         {isLoading && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/70">
             <div className="flex flex-col items-center gap-2">
               <div className="w-6 h-6 border-2 border-slate-300 border-t-slate-700 rounded-full animate-spin" />
-              <span className="text-sm text-slate-500">Loading your apps…</span>
+              <span className="text-sm text-slate-500">
+                {t('pages.appsList.loading', 'Loading…')}
+              </span>
             </div>
           </div>
         )}

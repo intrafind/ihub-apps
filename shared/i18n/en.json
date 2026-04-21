@@ -129,6 +129,7 @@
       "title": "AI Apps",
       "subtitle": "Choose an application to start a conversation",
       "noApps": "No applications found",
+      "loading": "Loading…",
       "searchPlaceholder": "Search apps...",
       "categories": "Categories",
       "allCategories": "All Categories",

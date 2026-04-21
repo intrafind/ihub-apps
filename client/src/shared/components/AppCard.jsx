@@ -33,8 +33,9 @@ function AppCard({
 
   if (variant === 'compact') {
     return (
-      <div
-        className="relative bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 w-full flex flex-row cursor-pointer"
+      <button
+        type="button"
+        className="relative bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 w-full flex flex-row cursor-pointer text-left"
         style={{ height: '75px', minHeight: '72px' }}
         role="listitem"
         onClick={() => onClick?.(app)}
@@ -55,7 +56,7 @@ function AppCard({
             {description}
           </p>
         </div>
-      </div>
+      </button>
     );
   }
 

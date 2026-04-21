@@ -95,7 +95,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
    */
   const getAuthHeaders = useCallback(() => {
     const token =
-      localStorage.getItem('authToken') || localStorage.getItem('office_ihubtoken') || null;
+      localStorage.getItem('office_ihubtoken') || localStorage.getItem('authToken') || null;
     return token ? { Authorization: `Bearer ${token}` } : {};
   }, []);
 

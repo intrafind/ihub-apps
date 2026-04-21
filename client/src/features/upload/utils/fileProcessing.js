@@ -159,8 +159,8 @@ export const loadJSZip = async () => {
 
 // Lazy load SheetJS (xlsx) only when needed for spreadsheet reading
 export const loadXlsx = async () => {
-  const XLSX = await import('xlsx');
-  return XLSX;
+  const mod = await import('xlsx');
+  return mod.default ?? mod;
 };
 
 // Lazy load UTIF only when needed for TIFF processing

@@ -41,9 +41,14 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
         authorizeUrl,
         async redirectUrl => {
           setLoadingMessage('Getting your token…');
-          const { code } = parseAuthCodeFromUrl(redirectUrl);
+          const { code, state: returnedState } = parseAuthCodeFromUrl(redirectUrl);
           if (!code) {
             setApiError('Authorization failed: no code returned.');
+            setIsLoading(false);
+            return;
+          }
+          if (!returnedState || returnedState !== state) {
+            setApiError('Authentication failed: state mismatch. Please try again.');
             setIsLoading(false);
             return;
           }

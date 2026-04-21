@@ -59,7 +59,7 @@ export function mergeStarterPromptVariablesIntoValues(
 function defaultValueLocalized(variable) {
   const d = variable?.defaultValue;
   if (d == null) return '';
-  if (typeof d === 'object' && d !== null) return String(getLocalizedContent(d, officeLocale));
+  if (typeof d === 'object') return String(getLocalizedContent(d, officeLocale));
   return String(d);
 }
 

@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Navigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
@@ -21,19 +21,33 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
 
-const DEFAULT_PROMPTS = [
-  { key: 'p1', label: 'Summarize this email', message: 'Summarize this email', raw: null },
+const DEFAULT_PROMPT_DEFINITIONS = [
+  {
+    key: 'p1',
+    label: { en: 'Summarize this email', de: 'Fasse diese E-Mail zusammen' },
+    message: { en: 'Summarize this email', de: 'Fasse diese E-Mail zusammen' }
+  },
   {
     key: 'p2',
-    label: 'Summarize and reply to this email',
-    message: 'Summarize and reply to this email',
-    raw: null
+    label: {
+      en: 'Summarize and reply to this email',
+      de: 'Fasse diese E-Mail zusammen und antworte darauf'
+    },
+    message: {
+      en: 'Summarize and reply to this email',
+      de: 'Fasse diese E-Mail zusammen und antworte darauf'
+    }
   },
   {
     key: 'p3',
-    label: 'What are the main takeaways from this email?',
-    message: 'What are the main takeaways from this email?',
-    raw: null
+    label: {
+      en: 'What are the main takeaways from this email?',
+      de: 'Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?'
+    },
+    message: {
+      en: 'What are the main takeaways from this email?',
+      de: 'Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?'
+    }
   }
 ];
 
@@ -211,10 +225,13 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   }, [adapter]);
 
   if (!authData) return null;
-  if (!selectedApp) {
-    navigate('/select', { replace: true });
-    return null;
-  }
+  if (!selectedApp) return <Navigate to="/select" replace />;
+
+  const defaultPrompts = DEFAULT_PROMPT_DEFINITIONS.map(p => ({
+    ...p,
+    label: getLocalizedContent(p.label, officeLocale),
+    message: getLocalizedContent(p.message, officeLocale)
+  }));
 
   const starterPrompts = selectedApp?.starterPrompts?.length
     ? selectedApp.starterPrompts.map((p, idx) => ({
@@ -224,7 +241,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
         message: getLocalizedContent(p?.message, officeLocale),
         raw: p
       }))
-    : DEFAULT_PROMPTS;
+    : defaultPrompts;
 
   const menuItems = [
     ...(getValidVariableDefinitions(selectedApp?.variables).length > 0

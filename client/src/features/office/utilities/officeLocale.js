@@ -4,24 +4,7 @@ const LOCALE_STORAGE_KEY = 'office_ihub_language';
 
 export const SUPPORTED_LANGUAGES = [
   { key: 'en', label: 'English' },
-  { key: 'de', label: 'Deutsch' },
-  { key: 'fr', label: 'Français' },
-  { key: 'es', label: 'Español' },
-  { key: 'it', label: 'Italiano' },
-  { key: 'pt', label: 'Português' },
-  { key: 'nl', label: 'Nederlands' },
-  { key: 'pl', label: 'Polski' },
-  { key: 'cs', label: 'Čeština' },
-  { key: 'sv', label: 'Svenska' },
-  { key: 'da', label: 'Dansk' },
-  { key: 'fi', label: 'Suomi' },
-  { key: 'no', label: 'Norsk' },
-  { key: 'tr', label: 'Türkçe' },
-  { key: 'ru', label: 'Русский' },
-  { key: 'ja', label: '日本語' },
-  { key: 'zh', label: '中文' },
-  { key: 'ko', label: '한국어' },
-  { key: 'ar', label: 'العربية' }
+  { key: 'de', label: 'Deutsch' }
 ];
 
 function detectLanguage() {
