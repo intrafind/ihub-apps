@@ -37,6 +37,8 @@ import jiraRoutes from './routes/integrations/jira.js';
 import office365Routes from './routes/integrations/office365.js';
 import googledriveRoutes from './routes/integrations/googledrive.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
+import officeAddinRoutes from './routes/integrations/officeAddin.js';
+import registerOfficeRoutes from './routes/office.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -334,12 +336,14 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/office365'), office365Routes);
   app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes);
   app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
+  app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 
   // PWA routes (manifest + SW) must be registered before static file serving
   // so the extension guard in staticRoutes does not 404 them
   registerPwaRoutes(app);
+  registerOfficeRoutes(app);
   registerThemeRoutes(app);
   registerToolsServiceRoutes(app);
 

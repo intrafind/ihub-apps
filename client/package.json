@@ -37,6 +37,7 @@
     "react-error-boundary": "^6.0.0",
     "react-i18next": "^15.4.1",
     "react-icons": "^5.5.0",
+    "react-markdown": "^10.1.0",
     "react-quill": "^2.0.0",
     "react-resizable-panels": "^3.0.4",
     "react-router-dom": "^6.30.3",
@@ -45,7 +46,8 @@
     "turndown": "^7.2.0",
     "utif2": "^4.1.0",
     "uuid": "^11.1.0",
-    "write-excel-file": "^2.3.10"
+    "write-excel-file": "^2.3.10",
+    "xlsx": "^0.18.5"
   },
   "overrides": {
     "dompurify": "^3.4.0"

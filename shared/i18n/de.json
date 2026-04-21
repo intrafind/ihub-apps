@@ -136,6 +136,7 @@
       "title": "KI-Anwendungen",
       "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
       "noApps": "Keine Anwendungen gefunden",
+      "loading": "Laden…",
       "searchPlaceholder": "Anwendungen durchsuchen...",
       "categories": "Kategorien",
       "allCategories": "Alle Kategorien",

@@ -127,7 +127,17 @@ function AdminHome() {
             color: 'bg-indigo-500'
           }
         ]
-      : [])
+      : []),
+    {
+      key: 'officeIntegration',
+      title: t('admin.nav.officeIntegration', 'Office Integration'),
+      description: t(
+        'admin.home.sections.officeIntegrationDesc',
+        'Configure the Outlook add-in and manage manifest deployment'
+      ),
+      href: '/admin/office-integration',
+      color: 'bg-blue-500'
+    }
   ];
 
   return (

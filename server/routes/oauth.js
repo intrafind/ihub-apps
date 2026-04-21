@@ -304,6 +304,7 @@ export default function registerOAuthRoutes(app) {
         // Build the user object to embed in the JWT payload
         const userForAuthCode = {
           id: codeData.userId,
+          username: codeData.userUsername || codeData.userId,
           name: codeData.userName || codeData.userId,
           email: codeData.userEmail || '',
           groups: codeData.userGroups || [],
@@ -360,6 +361,7 @@ export default function registerOAuthRoutes(app) {
               userId: codeData.userId,
               userEmail: codeData.userEmail || '',
               userName: codeData.userName || '',
+              userUsername: codeData.userUsername || '',
               userGroups: codeData.userGroups || [],
               scopes: codeData.scopes || []
             },
@@ -414,6 +416,7 @@ export default function registerOAuthRoutes(app) {
         // Build user object for the new access token
         const userForRefresh = {
           id: tokenData.userId,
+          username: tokenData.userUsername || tokenData.userId,
           name: tokenData.userName || tokenData.userId,
           email: tokenData.userEmail || '',
           groups: tokenData.userGroups || [],
@@ -441,6 +444,7 @@ export default function registerOAuthRoutes(app) {
             userId: tokenData.userId,
             userEmail: tokenData.userEmail || '',
             userName: tokenData.userName || '',
+            userUsername: tokenData.userUsername || '',
             userGroups: tokenData.userGroups || [],
             scopes: tokenData.scopes || []
           },
@@ -788,6 +792,7 @@ export default function registerOAuthRoutes(app) {
       const userInfo = {
         sub: user.id,
         name: user.name,
+        preferred_username: user.username,
         email: user.email,
         groups: user.groups || []
       };

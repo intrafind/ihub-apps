@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iHub Apps</title>
+
+    <!-- Cache history API before Office.js removes it -->
+    <script type="text/javascript">
+      window._historyCache = {
+        replaceState: window.history.replaceState,
+        pushState: window.history.pushState
+      };
+    </script>
+
+    <!-- Office JavaScript API -->
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+    ></script>
+
+    <!-- Restore history API that Office.js removes -->
+    <script type="text/javascript">
+      window.history.replaceState = window._historyCache.replaceState;
+      window.history.pushState = window._historyCache.pushState;
+    </script>
+  </head>
+
+  <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+    <div id="office-root"></div>
+
+    <!-- Warn users on legacy webviews that don't support modern JS -->
+    <div
+      id="tridentmessage"
+      style="display: none; padding: 10px; font-family: 'Segoe UI', sans-serif"
+    >
+      This add-in requires a modern browser. Please upgrade to Office 2021 or a Microsoft 365
+      subscription.
+    </div>
+    <script>
+      if (
+        navigator.userAgent.indexOf('Trident') !== -1 ||
+        navigator.userAgent.indexOf('Edge/') !== -1
+      ) {
+        document.getElementById('tridentmessage').style.display = 'block';
+        document.getElementById('office-root').style.display = 'none';
+      }
+    </script>
+    <script type="module" src="./taskpane-entry.jsx"></script>
+  </body>
+</html>

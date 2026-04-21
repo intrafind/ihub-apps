@@ -45,7 +45,8 @@ export const detectBasePath = () => {
     'workflows', // Workflow management and execution
     's', // Short links
     'setup', // First-run setup wizard
-    'tools' // Tool pages (AI OCR, etc.)
+    'tools', // Tool pages (AI OCR, etc.)
+    'office' // Office add-in pages
   ];
 
   // Split path into segments and find the first known route
@@ -118,7 +119,8 @@ export const getBasePath = () => {
       'workflows',
       's',
       'setup',
-      'tools'
+      'tools',
+      'office'
     ];
     const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
 

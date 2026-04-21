@@ -1,5 +1,4 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
 import { fetchApps } from '../../../api/api';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { useTranslation } from 'react-i18next';
@@ -9,6 +8,7 @@ import { getRecentAppIds } from '../../../utils/recentApps';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
+import AppCard from '../../../shared/components/AppCard';
 
 // Instead of fixed values, we'll calculate based on viewport
 function AppsList() {
@@ -593,96 +593,16 @@ function AppsList() {
               aria-label="Apps list"
             >
               {displayedApps.map(app => (
-                <div
+                <AppCard
                   key={app.id}
-                  className="relative bg-white dark:bg-gray-800 rounded-lg shadow-lg hover:shadow-xl transition-shadow duration-300 w-full max-w-md"
-                  role="listitem"
-                >
-                  <button
-                    onClick={e => handleToggleFavorite(e, app.id)}
-                    className="absolute top-2 right-2 z-10 p-1 bg-white dark:bg-gray-700 bg-opacity-70 rounded-full hover:bg-opacity-100 transition-all"
-                    title={
-                      favoriteApps.includes(app.id)
-                        ? t('pages.appsList.unfavorite')
-                        : t('pages.appsList.favorite')
-                    }
-                    aria-label={
-                      favoriteApps.includes(app.id)
-                        ? t('pages.appsList.unfavorite')
-                        : t('pages.appsList.favorite')
-                    }
-                  >
-                    <Icon
-                      name="star"
-                      className={
-                        favoriteApps.includes(app.id) ? 'text-yellow-500' : 'text-gray-400'
-                      }
-                      solid={favoriteApps.includes(app.id)}
-                    />
-                  </button>
-                  <Link
-                    to={`/apps/${app.id}`}
-                    className="block h-full"
-                    aria-label={`Open ${getLocalizedContent(app.name, currentLanguage) || app.id} app`}
-                  >
-                    <div className="flex flex-row sm:flex-col h-full">
-                      <div
-                        className="flex items-center justify-center w-20 h-full flex-shrink-0 rounded-l-lg sm:rounded-t-lg sm:rounded-l-none sm:w-full sm:h-24 relative"
-                        style={{ backgroundColor: app.color || '#4f46e5' }}
-                      >
-                        <div className="w-12 h-12 bg-white/30 rounded-full flex items-center justify-center">
-                          <Icon
-                            name={app.icon || 'lightning-bolt'}
-                            size="xl"
-                            className="text-white"
-                          />
-                        </div>
-                        {/* App type badge */}
-                        {app.type && app.type !== 'chat' && (
-                          <div className="absolute bottom-2 right-2 bg-white/90 dark:bg-gray-800/90 px-2 py-0.5 rounded-full text-xs font-medium text-gray-700 dark:text-gray-300 flex items-center gap-1">
-                            <Icon
-                              name={app.type === 'redirect' ? 'external-link' : 'window'}
-                              size="xs"
-                            />
-                            {t(`pages.appsList.appTypes.${app.type}`)}
-                          </div>
-                        )}
-                      </div>
-                      <div className="px-4 py-2 flex flex-col flex-1">
-                        <h3 className="font-bold text-lg mb-1 break-words">
-                          {getLocalizedContent(app.name, currentLanguage) || app.id}
-                          {favoriteApps.includes(app.id) && (
-                            <span className="ml-2 hidden sm:inline-block" aria-label="Favorite">
-                              <Icon
-                                name="star"
-                                size="sm"
-                                className="text-yellow-500"
-                                solid={true}
-                              />
-                            </span>
-                          )}
-                          {recentAppIds.includes(app.id) && (
-                            <span
-                              className="ml-1 inline-block"
-                              aria-label={t('pages.appsList.recent')}
-                              title={t('pages.appsList.recent')}
-                            >
-                              <Icon
-                                name="clock"
-                                size="sm"
-                                className="text-indigo-600"
-                                solid={true}
-                              />
-                            </span>
-                          )}
-                        </h3>
-                        <p className="text-gray-600 dark:text-gray-400 text-sm flex-grow">
-                          {getLocalizedContent(app.description, currentLanguage) || ''}
-                        </p>
-                      </div>
-                    </div>
-                  </Link>
-                </div>
+                  app={app}
+                  variant="full"
+                  href={`/apps/${app.id}`}
+                  language={currentLanguage}
+                  isFavorite={favoriteApps.includes(app.id)}
+                  isRecent={recentAppIds.includes(app.id)}
+                  onToggleFavorite={handleToggleFavorite}
+                />
               ))}
             </div>
           </div>
