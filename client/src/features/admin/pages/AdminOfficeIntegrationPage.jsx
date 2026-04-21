@@ -19,10 +19,24 @@ function AdminOfficeIntegrationPage() {
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
 
+  // Stable client-side ids are used as React keys while the prompt list is edited.
+  // They are stripped before persisting so the server never sees them.
   const emptyPrompt = () => ({
+    _id: crypto.randomUUID(),
     title: {},
     message: {}
   });
+
+  // Keep only `{ [lang]: string }` entries so corrupted server data can't break
+  // React rendering further down the tree.
+  const sanitizeLocalized = (value = {}) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out = {};
+    for (const [lang, val] of Object.entries(value)) {
+      if (typeof val === 'string') out[lang] = val;
+    }
+    return out;
+  };
 
   const loadStatus = async () => {
     try {
@@ -30,13 +44,14 @@ function AdminOfficeIntegrationPage() {
       const res = await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' });
       const data = res.data;
       setStatus(data);
-      setDisplayName(data.displayName || {});
-      setDescription(data.description || {});
+      setDisplayName(sanitizeLocalized(data.displayName));
+      setDescription(sanitizeLocalized(data.description));
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
           ? data.starterPrompts.map(p => ({
-              title: p?.title || {},
-              message: p?.message || {}
+              _id: crypto.randomUUID(),
+              title: sanitizeLocalized(p?.title),
+              message: sanitizeLocalized(p?.message)
             }))
           : []
       );
@@ -82,27 +97,36 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
+  // Drop empty/whitespace-only locales and ensure only string values are sent.
+  const trimLocalized = (value = {}) => {
+    const out = {};
+    for (const [lang, val] of Object.entries(value || {})) {
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed.length > 0) out[lang] = trimmed;
+      }
+    }
+    return out;
+  };
+
   const handleSaveConfig = async () => {
     try {
       setSaving(true);
       setMessage(null);
 
+      // Strip the client-only `_id` — the server must never see or persist it.
       const cleanedPrompts = starterPrompts
         .map(p => ({
-          title: p?.title || {},
-          message: p?.message || {}
+          title: trimLocalized(p?.title),
+          message: trimLocalized(p?.message)
         }))
-        .filter(p => {
-          const hasTitle = Object.values(p.title).some(v => (v || '').trim().length > 0);
-          const hasMessage = Object.values(p.message).some(v => (v || '').trim().length > 0);
-          return hasTitle && hasMessage;
-        });
+        .filter(p => Object.keys(p.title).length > 0 && Object.keys(p.message).length > 0);
 
       await makeAdminApiCall('/admin/office-integration/config', {
         method: 'PUT',
         data: {
-          displayName,
-          description,
+          displayName: trimLocalized(displayName),
+          description: trimLocalized(description),
           starterPrompts: cleanedPrompts
         }
       });
@@ -362,7 +386,7 @@ function AdminOfficeIntegrationPage() {
                   <div className="mt-4 space-y-4">
                     {starterPrompts.map((prompt, index) => (
                       <div
-                        key={index}
+                        key={prompt._id}
                         className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/60 dark:bg-gray-900/40"
                       >
                         <div className="flex items-center justify-between mb-3">

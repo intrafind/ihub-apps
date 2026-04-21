@@ -216,30 +216,46 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
       const { displayName, description, starterPrompts } = req.body;
       const platform = configCache.getPlatform();
 
+      // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
+      // is rejected to prevent garbage (or attacker-crafted) data from reaching the
+      // taskpane renderer, where React can't render objects/arrays as text.
+      const validateLocalizedObject = (fieldName, value, { maxLength, requireNonEmpty }) => {
+        if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+          return { error: `${fieldName} must be a localized object like { en: "...", de: "..." }` };
+        }
+        const sanitized = {};
+        for (const [lang, rawValue] of Object.entries(value)) {
+          if (typeof rawValue !== 'string') {
+            return { error: `${fieldName}.${lang} must be a string` };
+          }
+          if (rawValue.length > maxLength) {
+            return { error: `${fieldName}.${lang} must not exceed ${maxLength} characters` };
+          }
+          const trimmed = rawValue.trim();
+          if (trimmed.length > 0) sanitized[lang] = trimmed;
+        }
+        if (requireNonEmpty && Object.keys(sanitized).length === 0) {
+          return { error: `${fieldName} must have at least one non-empty locale value` };
+        }
+        return { value: sanitized };
+      };
+
       const allowed = {};
       if (displayName !== undefined) {
-        if (typeof displayName !== 'object' || Array.isArray(displayName)) {
-          return sendBadRequest(res, 'displayName must be a localized object { en, de }');
-        }
-        const hasDisplayName = Object.values(displayName).some(
-          v => typeof v === 'string' && v.trim().length > 0
-        );
-        if (!hasDisplayName) {
-          return sendBadRequest(res, 'displayName must have at least one non-empty locale value');
-        }
-        if (Object.values(displayName).some(v => typeof v === 'string' && v.length > 250)) {
-          return sendBadRequest(res, 'displayName values must not exceed 250 characters');
-        }
-        allowed.displayName = displayName;
+        const result = validateLocalizedObject('displayName', displayName, {
+          maxLength: 250,
+          requireNonEmpty: true
+        });
+        if (result.error) return sendBadRequest(res, result.error);
+        allowed.displayName = result.value;
       }
       if (description !== undefined) {
-        if (typeof description !== 'object' || Array.isArray(description)) {
-          return sendBadRequest(res, 'description must be a localized object { en, de }');
-        }
-        if (Object.values(description).some(v => typeof v === 'string' && v.length > 250)) {
-          return sendBadRequest(res, 'description values must not exceed 250 characters');
-        }
-        allowed.description = description;
+        const result = validateLocalizedObject('description', description, {
+          maxLength: 250,
+          requireNonEmpty: false
+        });
+        if (result.error) return sendBadRequest(res, result.error);
+        allowed.description = result.value;
       }
       if (starterPrompts !== undefined) {
         if (!Array.isArray(starterPrompts)) {
@@ -254,50 +270,18 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
           if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) {
             return sendBadRequest(res, `starterPrompts[${i}] must be an object`);
           }
-          const { title, message } = prompt;
-          if (!title || typeof title !== 'object' || Array.isArray(title)) {
-            return sendBadRequest(
-              res,
-              `starterPrompts[${i}].title must be a localized object { en, de }`
-            );
-          }
-          const hasTitle = Object.values(title).some(
-            v => typeof v === 'string' && v.trim().length > 0
+          const titleResult = validateLocalizedObject(`starterPrompts[${i}].title`, prompt.title, {
+            maxLength: 250,
+            requireNonEmpty: true
+          });
+          if (titleResult.error) return sendBadRequest(res, titleResult.error);
+          const messageResult = validateLocalizedObject(
+            `starterPrompts[${i}].message`,
+            prompt.message,
+            { maxLength: 4000, requireNonEmpty: true }
           );
-          if (!hasTitle) {
-            return sendBadRequest(
-              res,
-              `starterPrompts[${i}].title must have at least one non-empty locale value`
-            );
-          }
-          if (Object.values(title).some(v => typeof v === 'string' && v.length > 250)) {
-            return sendBadRequest(
-              res,
-              `starterPrompts[${i}].title values must not exceed 250 characters`
-            );
-          }
-          if (!message || typeof message !== 'object' || Array.isArray(message)) {
-            return sendBadRequest(
-              res,
-              `starterPrompts[${i}].message must be a localized object { en, de }`
-            );
-          }
-          const hasMessage = Object.values(message).some(
-            v => typeof v === 'string' && v.trim().length > 0
-          );
-          if (!hasMessage) {
-            return sendBadRequest(
-              res,
-              `starterPrompts[${i}].message must have at least one non-empty locale value`
-            );
-          }
-          if (Object.values(message).some(v => typeof v === 'string' && v.length > 4000)) {
-            return sendBadRequest(
-              res,
-              `starterPrompts[${i}].message values must not exceed 4000 characters`
-            );
-          }
-          sanitized.push({ title, message });
+          if (messageResult.error) return sendBadRequest(res, messageResult.error);
+          sanitized.push({ title: titleResult.value, message: messageResult.value });
         }
         allowed.starterPrompts = sanitized;
       }
