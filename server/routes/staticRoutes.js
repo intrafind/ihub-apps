@@ -69,6 +69,11 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
         return res.status(404).send('Documentation not found');
       }
 
+      // Don't serve SPA for office add-in routes — handled by registerOfficeRoutes
+      if (relativePath.startsWith('/office')) {
+        return next();
+      }
+
       // Don't serve SPA for requests that look like static assets (have file extensions)
       // If they weren't served by the static middleware above, they don't exist
       if (relativePath.match(/\.[a-z0-9]+$/i)) {

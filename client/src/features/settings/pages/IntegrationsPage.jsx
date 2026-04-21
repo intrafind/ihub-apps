@@ -4,9 +4,12 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../auth/hooks/useAuth';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Icon from '../../../shared/components/Icon';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 export default function IntegrationsPage() {
-  useTranslation(); // Hook called for future i18n, not currently used
+  const { i18n } = useTranslation();
+  const lang = i18n.language;
   const { user } = useAuth();
   const { platformConfig } = usePlatformConfig();
   const location = useLocation();
@@ -30,12 +33,14 @@ export default function IntegrationsPage() {
 
     // Handle JIRA callbacks
     if (jiraConnected === 'true') {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'success',
         text: 'JIRA account connected successfully! You can now use JIRA features in your apps.'
       });
       navigate('/settings/integrations', { replace: true });
     } else if (jiraError) {
+      // eslint-disable-next-line @eslint-react/set-state-in-effect
       setMessage({
         type: 'error',
         text: `JIRA connection failed: ${decodeURIComponent(jiraError)}`
@@ -66,6 +71,15 @@ export default function IntegrationsPage() {
 
   // Derive Jira enabled state from platform config
   const jiraEnabled = platformConfig?.jira?.enabled;
+
+  // Derive Office Integration state from platform config
+  const officeIntegration = platformConfig?.officeIntegration;
+  const officeEnabled = officeIntegration?.enabled;
+  const officeDisplayName =
+    getLocalizedContent(officeIntegration?.displayName, lang) || 'iHub Apps for Outlook';
+  const officeDescription =
+    getLocalizedContent(officeIntegration?.description, lang) || 'AI-powered assistant for Outlook';
+  const officeManifestUrl = buildApiUrl('integrations/office-addin/manifest.xml');
 
   // Load integration status
   useEffect(() => {
@@ -571,8 +585,67 @@ export default function IntegrationsPage() {
                   </div>
                 ))}
 
+                {/* Office Integration — shown when enabled by admin */}
+                {officeEnabled && (
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+                    <div className="flex items-start space-x-4">
+                      <div className="flex-shrink-0">
+                        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+                          <Icon name="envelope" className="w-7 h-7 text-white" />
+                        </div>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                              {officeDisplayName}
+                            </h3>
+                            <p className="text-gray-600 dark:text-gray-400 text-sm">
+                              {officeDescription}
+                            </p>
+                          </div>
+                          <span className="px-3 py-1 text-xs font-medium rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
+                            Available
+                          </span>
+                        </div>
+
+                        <div className="mt-4">
+                          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                            Deploy this manifest in Microsoft 365 Admin Center to make the add-in
+                            available to your organization.
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="text"
+                              readOnly
+                              value={officeManifestUrl}
+                              className="flex-1 rounded-md border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-1.5 text-xs font-mono text-gray-600 dark:text-gray-300 focus:outline-none min-w-0"
+                              onClick={e => e.target.select()}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => navigator.clipboard?.writeText(officeManifestUrl)}
+                              className="shrink-0 rounded-md border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                            >
+                              Copy
+                            </button>
+                            <a
+                              href={officeManifestUrl}
+                              download="manifest.xml"
+                              className="shrink-0 rounded-md bg-blue-600 text-white px-3 py-1.5 text-sm font-medium hover:bg-blue-700"
+                            >
+                              Download
+                            </a>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Empty state when no integrations are configured */}
-                {!jiraEnabled && cloudProviders.length === 0 && (
+                {!jiraEnabled && cloudProviders.length === 0 && !officeEnabled && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="link" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -585,7 +658,7 @@ export default function IntegrationsPage() {
                 )}
 
                 {/* Placeholder for future integrations */}
-                {(jiraEnabled || cloudProviders.length > 0) && (
+                {(jiraEnabled || cloudProviders.length > 0 || officeEnabled) && (
                   <div className="border border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 text-center">
                     <Icon name="plus" className="w-8 h-8 text-gray-400 mx-auto mb-2" />
                     <h3 className="text-lg font-medium text-gray-500 dark:text-gray-400 mb-1">

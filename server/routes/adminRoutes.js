@@ -23,6 +23,7 @@ import registerAdminFeaturesRoutes from './admin/features.js';
 import registerAdminUsageRoutes from './admin/usage.js';
 import registerAdminUpdateRoutes from './admin/update.js';
 import registerIntegrationTestRoutes from './admin/integrationTest.js';
+import registerAdminOfficeIntegrationRoutes from './admin/officeIntegration.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
@@ -50,4 +51,5 @@ export default async function registerAdminRoutes(app) {
   registerAdminUsageRoutes(app);
   registerAdminUpdateRoutes(app);
   registerIntegrationTestRoutes(app);
+  registerAdminOfficeIntegrationRoutes(app);
 }

@@ -300,6 +300,12 @@ function AdminNavigation() {
           current: location.pathname === '/admin/features'
         },
         {
+          key: 'officeIntegration',
+          name: t('admin.nav.officeIntegration', 'Office Integration'),
+          href: '/admin/office-integration',
+          current: location.pathname.startsWith('/admin/office-integration')
+        },
+        {
           key: 'logging',
           name: t('admin.nav.logging', 'Logging'),
           href: '/admin/logging',

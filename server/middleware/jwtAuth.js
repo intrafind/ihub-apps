@@ -13,20 +13,18 @@ export default function jwtAuthMiddleware(req, res, next) {
     return next();
   }
 
-  // Check for token in cookies first (preferred for SSE), then Authorization header
+  // Check for token in Authorization header first, then fall back to cookie.
+  // Explicit Bearer tokens (e.g. from the Office add-in OAuth flow) must take precedence
+  // over the main-app session cookie so that the correct auth mode is used.
+  // SSE connections cannot send custom headers and rely on the cookie, but they also
+  // never send an Authorization header, so this order is safe for both.
   let token = null;
 
-  // Check HTTP-only cookie first
-  if (req.cookies && req.cookies.authToken) {
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.substring(7);
+  } else if (req.cookies && req.cookies.authToken) {
     token = req.cookies.authToken;
-  }
-  // Fallback to Authorization header for API calls
-  else {
-    const authHeader = req.headers.authorization;
-
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      token = authHeader.substring(7);
-    }
   }
 
   if (!token) {

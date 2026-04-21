@@ -143,5 +143,14 @@
   "iAssistant": {
     "defaultProfileId": "",
     "timeout": 60000
+  },
+  "officeIntegration": {
+    "enabled": false,
+    "oauthClientId": "",
+    "displayName": { "en": "iHub Apps", "de": "iHub Apps" },
+    "description": {
+      "en": "AI-powered assistant for Outlook",
+      "de": "KI-gestützter Assistent für Outlook"
+    }
   }
 }

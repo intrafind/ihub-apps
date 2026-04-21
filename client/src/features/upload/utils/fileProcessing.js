@@ -157,6 +157,12 @@ export const loadJSZip = async () => {
   return JSZip.default;
 };
 
+// Lazy load SheetJS (xlsx) only when needed for spreadsheet reading
+export const loadXlsx = async () => {
+  const XLSX = await import('xlsx');
+  return XLSX;
+};
+
 // Lazy load UTIF only when needed for TIFF processing
 export const loadUTIF = async () => {
   const UTIF = await import('utif2');
@@ -490,6 +496,23 @@ export const processDocxFile = async file => {
   return tempDiv.textContent || tempDiv.innerText || '';
 };
 
+// Process XLSX / XLS file — converts all sheets to tab-separated text
+export const processXlsxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+  const XLSX = await loadXlsx();
+  const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+
+  const parts = [];
+  for (const sheetName of workbook.SheetNames) {
+    const sheet = workbook.Sheets[sheetName];
+    const csv = XLSX.utils.sheet_to_csv(sheet, { FS: '\t' });
+    if (csv.trim()) {
+      parts.push(`[Sheet: ${sheetName}]\n${csv}`);
+    }
+  }
+  return parts.join('\n\n').trim();
+};
+
 // Process MSG file
 export const processMsgFile = async file => {
   const arrayBuffer = await file.arrayBuffer();
@@ -590,6 +613,13 @@ export const processDocumentFile = async file => {
     fileExtension === '.docx'
   ) {
     content = await processDocxFile(file);
+  } else if (
+    file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+    file.type === 'application/vnd.ms-excel' ||
+    fileExtension === '.xlsx' ||
+    fileExtension === '.xls'
+  ) {
+    content = await processXlsxFile(file);
   } else if (
     file.type === 'application/vnd.ms-outlook' ||
     file.type === 'application/x-msg' ||

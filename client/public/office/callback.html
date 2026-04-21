@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Signing in…</title>
+    <script
+      type="text/javascript"
+      src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"
+    ></script>
+  </head>
+  <body>
+    <p
+      id="status"
+      style="font-family: 'Segoe UI', Tahoma, sans-serif; padding: 12px; margin: 0; color: #323130"
+    >
+      Signing in…
+    </p>
+    <script type="text/javascript">
+      Office.onReady(function () {
+        try {
+          Office.context.ui.messageParent(window.location.href);
+        } catch (e) {
+          document.getElementById('status').textContent =
+            'Could not return to the add-in. Close this window and try again.';
+        }
+      });
+    </script>
+  </body>
+</html>
