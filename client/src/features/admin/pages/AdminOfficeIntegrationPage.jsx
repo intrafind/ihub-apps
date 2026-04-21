@@ -113,7 +113,10 @@ function AdminOfficeIntegrationPage() {
       a.click();
       URL.revokeObjectURL(url);
     } catch (_err) {
-      setMessage({ type: 'error', text: t('admin.officeIntegration.downloadError', 'Failed to download manifest') });
+      setMessage({
+        type: 'error',
+        text: t('admin.officeIntegration.downloadError', 'Failed to download manifest')
+      });
     }
   };
 

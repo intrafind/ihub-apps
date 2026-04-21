@@ -213,7 +213,14 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
         }
       }
     },
-    [cleanupEventSource, onProcessingChange, onEvent, startHeartbeat, timeoutDuration, getAuthHeaders]
+    [
+      cleanupEventSource,
+      onProcessingChange,
+      onEvent,
+      startHeartbeat,
+      timeoutDuration,
+      getAuthHeaders
+    ]
   );
 
   // Cleanup on unmount

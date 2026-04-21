@@ -38,10 +38,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
         // Mail context unavailable (e.g. in compose mode without a selected item) — proceed without it
       }
 
-      const enrichedContent = combineUserTextWithEmailBody(
-        apiMessage.content,
-        mailCtx.bodyText
-      );
+      const enrichedContent = combineUserTextWithEmailBody(apiMessage.content, mailCtx.bodyText);
 
       // Only inject mail attachments if the caller didn't provide their own
       const mailImageData = buildImageDataFromMailAttachments(mailCtx.attachments || []);
