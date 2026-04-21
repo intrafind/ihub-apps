@@ -59,9 +59,78 @@ function ChatInputActionsMenu({
   /** Closes the actions menu dropdown */
   const handleActionsMenuClose = useCallback(() => setIsOpen(false), []);
 
+  /** Handle selection of menu items via keyboard (Enter/Space) */
+  const handleMenuItemSelect = useCallback(
+    index => {
+      const menuNavItems = [];
+      if (uploadConfig?.enabled === true && !(disabled || isProcessing))
+        menuNavItems.push('upload');
+      if (magicPromptEnabled && !showUndoMagicPrompt && !(disabled || isProcessing))
+        menuNavItems.push('magic');
+      if (showUndoMagicPrompt && !(disabled || isProcessing)) menuNavItems.push('undo');
+      enabledCloudProviders.forEach(p => {
+        if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
+      });
+      if (hasWebsearch) menuNavItems.push('websearch');
+      grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
+      individual.forEach(id => menuNavItems.push(`tool-${id}`));
+
+      const selectedKey = menuNavItems[index];
+      if (!selectedKey) return;
+
+      if (selectedKey === 'websearch') {
+        onWebsearchEnabledChange?.(!websearchEnabled);
+      } else if (selectedKey === 'upload') {
+        onToggleUploader?.();
+        setIsOpen(false);
+      } else if (selectedKey === 'magic') {
+        onMagicPrompt?.();
+        setIsOpen(false);
+      } else if (selectedKey === 'undo') {
+        onUndoMagicPrompt?.();
+        setIsOpen(false);
+      } else if (selectedKey.startsWith('cloud-')) {
+        const providerId = selectedKey.replace('cloud-', '');
+        const provider = enabledCloudProviders.find(p => p.id === providerId);
+        if (provider) {
+          onCloudProviderSelect?.(provider);
+          setIsOpen(false);
+        }
+      } else if (selectedKey.startsWith('group-')) {
+        const groupId = selectedKey.replace('group-', '');
+        const group = grouped.find(g => g.id === groupId);
+        if (group) {
+          toggleTool(group.id, true, group.matchedTools);
+        }
+      } else if (selectedKey.startsWith('tool-')) {
+        const toolId = selectedKey.replace('tool-', '');
+        toggleTool(toolId);
+      }
+    },
+    [
+      uploadConfig,
+      disabled,
+      isProcessing,
+      magicPromptEnabled,
+      showUndoMagicPrompt,
+      enabledCloudProviders,
+      hasWebsearch,
+      grouped,
+      individual,
+      websearchEnabled,
+      onWebsearchEnabledChange,
+      onToggleUploader,
+      onMagicPrompt,
+      onUndoMagicPrompt,
+      onCloudProviderSelect,
+      toggleTool
+    ]
+  );
+
   const { activeIndex: menuActiveIndex } = useKeyboardNavigation(actionsMenuRef, {
     isActive: isOpen,
-    onClose: handleActionsMenuClose
+    onClose: handleActionsMenuClose,
+    onSelect: handleMenuItemSelect
   });
 
   // Get enabled cloud storage providers
@@ -292,6 +361,7 @@ function ChatInputActionsMenu({
   enabledCloudProviders.forEach(p => {
     if (!(disabled || isProcessing)) menuNavItems.push(`cloud-${p.id}`);
   });
+  if (hasWebsearch) menuNavItems.push('websearch');
   grouped.forEach(g => menuNavItems.push(`group-${g.id}`));
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
@@ -460,7 +530,19 @@ function ChatInputActionsMenu({
               <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
                 {t('websearch.title', 'Web Search')}
               </h3>
-              <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
+              <div
+                role="menuitemcheckbox"
+                aria-checked={websearchEnabled}
+                tabIndex={navTabIndex('websearch')}
+                className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 focus:bg-gray-50 dark:focus:bg-gray-700 focus:ring-2 focus:ring-indigo-500 focus:ring-inset rounded-lg cursor-pointer"
+                onClick={() => onWebsearchEnabledChange?.(!websearchEnabled)}
+                onKeyDown={e => {
+                  if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    onWebsearchEnabledChange?.(!websearchEnabled);
+                  }
+                }}
+              >
                 <div className="flex-1 min-w-0 mr-3">
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                     {t('websearch.toggleLabel', 'Web Search')}
@@ -469,12 +551,13 @@ function ChatInputActionsMenu({
                     {t('websearch.toggleDescription', 'Search the web for up-to-date information')}
                   </div>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label className="relative inline-flex items-center cursor-pointer pointer-events-none">
                   <input
                     type="checkbox"
                     checked={websearchEnabled}
                     onChange={e => onWebsearchEnabledChange?.(e.target.checked)}
                     className="sr-only peer"
+                    tabIndex={-1}
                   />
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
                 </label>
