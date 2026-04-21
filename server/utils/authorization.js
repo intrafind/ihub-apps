@@ -563,15 +563,16 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   }
 
   // Get permissions for user
-  // For OAuth clients (client_credentials / static API keys), use their allowedApps/allowedModels
-  // directly instead of group permissions - the token represents the client itself.
+  // For OAuth clients (client_credentials / static API keys), use their allowedApps /
+  // allowedModels / allowedPrompts directly instead of group permissions — the token
+  // represents the client itself, so the listed resources are the full permission set.
   if (user.isOAuthClient) {
     logger.debug('OAuth client detected, using client-specific permissions', {
       component: 'Authorization'
     });
     user.permissions = {
       apps: new Set(user.allowedApps || []),
-      prompts: new Set(), // OAuth clients don't have prompt permissions
+      prompts: new Set(user.allowedPrompts || []),
       models: new Set(user.allowedModels || []),
       workflows: new Set(), // OAuth clients don't have workflow permissions
       skills: new Set(), // OAuth clients don't have skill permissions

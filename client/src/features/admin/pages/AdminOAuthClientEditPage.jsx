@@ -455,7 +455,7 @@ function AdminOAuthClientEditPage() {
                 placeholder={t('admin.auth.oauth.searchPrompts', 'Search prompts to add...')}
                 emptyMessage={t(
                   'admin.auth.oauth.noPromptsSelected',
-                  'No prompts selected — no client-level restriction (user keeps full group permissions)'
+                  'No prompts selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no prompts)'
                 )}
                 allowWildcard={true}
               />

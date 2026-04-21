@@ -166,6 +166,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || [],
             allowedApps: client.allowedApps || [],
             allowedModels: client.allowedModels || [],
+            allowedPrompts: client.allowedPrompts || [],
             staticKey: decoded.static_key || false
           };
         } catch (loadError) {
@@ -186,6 +187,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || [],
             allowedApps: [],
             allowedModels: [],
+            allowedPrompts: [],
             staticKey: decoded.static_key || false
           };
         }
@@ -238,6 +240,22 @@ export default function jwtAuthMiddleware(req, res, next) {
               const clientsFilePath =
                 oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
               const clientsConfig = loadOAuthClients(clientsFilePath);
+
+              // loadOAuthClients() catches internally and returns a safe empty config with
+              // `metadata.error` set. Treat that as a load failure so we fail closed with 503
+              // instead of falling through to a misleading "client not found" 401.
+              if (clientsConfig?.metadata?.error) {
+                logger.error('OAuth clients configuration unavailable for auth-code token', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id,
+                  loaderError: clientsConfig.metadata.error
+                });
+                return res.status(503).json({
+                  error: 'service_unavailable',
+                  error_description: 'Unable to validate OAuth client. Please try again later.'
+                });
+              }
+
               const client = findClientById(clientsConfig, decoded.client_id);
 
               if (!client) {

@@ -179,6 +179,10 @@ export default function registerAdminOAuthRoutes(app) {
    *                 type: array
    *                 items:
    *                   type: string
+   *               allowedPrompts:
+   *                 type: array
+   *                 items:
+   *                   type: string
    *               tokenExpirationMinutes:
    *                 type: number
    *     responses:
