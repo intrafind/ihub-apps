@@ -411,9 +411,6 @@ function ChatInputActionsMenu({
           {/* Cloud Storage Providers Section */}
           {enabledCloudProviders.length > 0 && (
             <div className="p-3 border-b border-gray-200 dark:border-gray-700">
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                {t('cloudStorage.providers', 'Cloud Storage')}
-              </h3>
               <div className="space-y-2">
                 {enabledCloudProviders.map(provider => (
                   <button
@@ -457,9 +454,6 @@ function ChatInputActionsMenu({
             <div
               className={`p-3 ${hasTools ? 'border-b border-gray-200 dark:border-gray-700' : ''}`}
             >
-              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                {t('websearch.title', 'Web Search')}
-              </h3>
               <div className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg">
                 <div className="flex-1 min-w-0 mr-3">
                   <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
