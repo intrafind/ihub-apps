@@ -598,7 +598,7 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   user.isAdmin =
     user.isOAuthClient || isOAuthDelegated
       ? false
-      : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
+      : hasAdminAccess(user.groups) || user.permissions.adminAccess;
 
   logger.debug('User enhancement complete', {
     component: 'Authorization',
