@@ -957,7 +957,7 @@ function ChatMessage({
             </button>
           )}
 
-          {!isUser && !isError && canvasEnabled && onInsert && (
+          {!isUser && !isError && onInsert && (
             <button
               onClick={() => onInsert(message.content)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"

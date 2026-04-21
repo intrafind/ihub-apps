@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { XMarkIcon } from '@heroicons/react/24/outline';
-import AppCard from '../AppCard';
+import AppCard from '../../../../shared/components/AppCard';
+import { officeLocale } from '../../utilities/officeLocale';
 
 export default function ItemSelectorDialog({ items, isOpen, onSelect, onClose }) {
   useEffect(() => {
@@ -36,7 +37,9 @@ export default function ItemSelectorDialog({ items, isOpen, onSelect, onClose })
         <div className="overflow-y-auto p-4">
           <div className="grid gap-3 grid-cols-1">
             {items && items.length ? (
-              items.map(item => <AppCard key={item.id} item={item} onClick={onSelect} />)
+              items.map(item => (
+                <AppCard key={item.id} app={item} variant="compact" onClick={onSelect} language={officeLocale} />
+              ))
             ) : (
               <p className="px-4 py-2 text-sm text-slate-400">No apps available</p>
             )}

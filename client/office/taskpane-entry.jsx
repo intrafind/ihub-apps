@@ -2,8 +2,12 @@
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 import './office.css';
+// Initialize i18next so main chat components (useTranslation) work in the taskpane.
+// This is a side-effect import — i18n initializes synchronously and loads translations async.
+import '../src/i18n/i18n';
 import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
 import OfficeApp from '../src/features/office/components/OfficeApp';
+import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -34,6 +38,9 @@ Office.onReady(async () => {
     }
     return;
   }
+
+  // Install Office Bearer token interceptor so apiClient works in the taskpane
+  installOfficeAuthInterceptor();
 
   // Register the ItemChanged event to reset chat when user switches emails
   if (Office.context?.mailbox?.addHandlerAsync) {

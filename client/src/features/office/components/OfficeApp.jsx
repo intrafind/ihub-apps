@@ -1,8 +1,11 @@
 import * as React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import OfficeLogin from './OfficeLogin';
-import OfficeChat from './OfficeChat';
-import OfficeAppSelection from './OfficeAppSelection';
+import OfficeChatPanel from './OfficeChatPanel';
+import ChatHeader from './chat/ChatHeader';
+import SettingsDialog from './settings-dialog';
+import AppListPanel from '../../../shared/components/AppListPanel';
+import { officeLocale } from '../utilities/officeLocale';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import {
   storeTokenResponse,
@@ -46,6 +49,34 @@ function storeSelectedApp(app) {
   } catch {
     // ignore
   }
+}
+
+function SelectPage({ user, onLogout, onSelect }) {
+  const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+
+  const menuItems = [
+    { key: 'settings', label: 'Settings', onClick: () => setIsSettingsOpen(true) },
+    { key: 'logout', label: 'Logout', onClick: onLogout }
+  ];
+
+  return (
+    <div className="h-screen w-full flex flex-col p-0 bg-slate-50">
+      <div className="flex-1 min-h-0 flex flex-col max-w-lg mx-auto w-full">
+        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden border border-[#e0e0e0] rounded-lg bg-white">
+          <AppListPanel
+            onSelect={onSelect}
+            language={officeLocale}
+            header={<ChatHeader title="Select App" showCheckmark={false} menuItems={menuItems} />}
+          />
+        </div>
+      </div>
+      <SettingsDialog
+        user={user}
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+      />
+    </div>
+  );
 }
 
 const OfficeApp = () => {
@@ -131,18 +162,13 @@ const OfficeApp = () => {
         path="/"
         element={
           authData && !selectedApp ? (
-            <OfficeAppSelection
-              user={authData.user}
-              onLogout={handleLogout}
-              onSelect={handleAppSelect}
-            />
+            <SelectPage user={authData.user} onLogout={handleLogout} onSelect={handleAppSelect} />
           ) : authData ? (
-            <OfficeChat
+            <OfficeChatPanel
               authData={authData}
               selectedApp={selectedApp}
               setSelectedApp={handleSetSelectedApp}
               onLogout={handleLogout}
-              sessionError={sessionError}
             />
           ) : (
             <OfficeLogin onSuccess={handleLoginSuccess} initialError={sessionError} />
@@ -153,11 +179,7 @@ const OfficeApp = () => {
         path="/select"
         element={
           authData ? (
-            <OfficeAppSelection
-              user={authData.user}
-              onLogout={handleLogout}
-              onSelect={handleAppSelect}
-            />
+            <SelectPage user={authData.user} onLogout={handleLogout} onSelect={handleAppSelect} />
           ) : (
             <Navigate to="/" replace />
           )
@@ -167,12 +189,11 @@ const OfficeApp = () => {
         path="/chat"
         element={
           authData && selectedApp ? (
-            <OfficeChat
+            <OfficeChatPanel
               authData={authData}
               selectedApp={selectedApp}
               setSelectedApp={handleSetSelectedApp}
               onLogout={handleLogout}
-              sessionError={sessionError}
             />
           ) : (
             <Navigate to="/" replace />
