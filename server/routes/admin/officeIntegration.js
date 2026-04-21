@@ -53,6 +53,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         en: 'AI-powered assistant for Outlook',
         de: 'KI-gestützter Assistent für Outlook'
       },
+      starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
       taskpaneUrl: `${baseUrl}/office/taskpane.html`
     });
@@ -212,7 +213,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    */
   app.put(buildServerPath('/api/admin/office-integration/config'), adminAuth, async (req, res) => {
     try {
-      const { displayName, description } = req.body;
+      const { displayName, description, starterPrompts } = req.body;
       const platform = configCache.getPlatform();
 
       const allowed = {};
@@ -239,6 +240,66 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
           return sendBadRequest(res, 'description values must not exceed 250 characters');
         }
         allowed.description = description;
+      }
+      if (starterPrompts !== undefined) {
+        if (!Array.isArray(starterPrompts)) {
+          return sendBadRequest(res, 'starterPrompts must be an array');
+        }
+        if (starterPrompts.length > 20) {
+          return sendBadRequest(res, 'starterPrompts must not contain more than 20 entries');
+        }
+        const sanitized = [];
+        for (let i = 0; i < starterPrompts.length; i++) {
+          const prompt = starterPrompts[i];
+          if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) {
+            return sendBadRequest(res, `starterPrompts[${i}] must be an object`);
+          }
+          const { title, message } = prompt;
+          if (!title || typeof title !== 'object' || Array.isArray(title)) {
+            return sendBadRequest(
+              res,
+              `starterPrompts[${i}].title must be a localized object { en, de }`
+            );
+          }
+          const hasTitle = Object.values(title).some(
+            v => typeof v === 'string' && v.trim().length > 0
+          );
+          if (!hasTitle) {
+            return sendBadRequest(
+              res,
+              `starterPrompts[${i}].title must have at least one non-empty locale value`
+            );
+          }
+          if (Object.values(title).some(v => typeof v === 'string' && v.length > 250)) {
+            return sendBadRequest(
+              res,
+              `starterPrompts[${i}].title values must not exceed 250 characters`
+            );
+          }
+          if (!message || typeof message !== 'object' || Array.isArray(message)) {
+            return sendBadRequest(
+              res,
+              `starterPrompts[${i}].message must be a localized object { en, de }`
+            );
+          }
+          const hasMessage = Object.values(message).some(
+            v => typeof v === 'string' && v.trim().length > 0
+          );
+          if (!hasMessage) {
+            return sendBadRequest(
+              res,
+              `starterPrompts[${i}].message must have at least one non-empty locale value`
+            );
+          }
+          if (Object.values(message).some(v => typeof v === 'string' && v.length > 4000)) {
+            return sendBadRequest(
+              res,
+              `starterPrompts[${i}].message values must not exceed 4000 characters`
+            );
+          }
+          sanitized.push({ title, message });
+        }
+        allowed.starterPrompts = sanitized;
       }
 
       await savePlatformConfig({

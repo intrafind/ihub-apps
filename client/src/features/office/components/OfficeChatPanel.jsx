@@ -20,36 +20,7 @@ import { buildPromptTemplate } from '../utilities/buildChatApiMessages';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
-
-const DEFAULT_PROMPT_DEFINITIONS = [
-  {
-    key: 'p1',
-    label: { en: 'Summarize this email', de: 'Fasse diese E-Mail zusammen' },
-    message: { en: 'Summarize this email', de: 'Fasse diese E-Mail zusammen' }
-  },
-  {
-    key: 'p2',
-    label: {
-      en: 'Summarize and reply to this email',
-      de: 'Fasse diese E-Mail zusammen und antworte darauf'
-    },
-    message: {
-      en: 'Summarize and reply to this email',
-      de: 'Fasse diese E-Mail zusammen und antworte darauf'
-    }
-  },
-  {
-    key: 'p3',
-    label: {
-      en: 'What are the main takeaways from this email?',
-      de: 'Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?'
-    },
-    message: {
-      en: 'What are the main takeaways from this email?',
-      de: 'Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?'
-    }
-  }
-];
+import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 
 function buildParamsFromApp(app) {
   const params = { language: officeLocale };
@@ -66,6 +37,7 @@ function buildParamsFromApp(app) {
 
 function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const navigate = useNavigate();
+  const officeConfig = useOfficeConfig();
 
   const appName = getLocalizedContent(selectedApp?.name, officeLocale);
   const greetingTitle = getLocalizedContent(selectedApp?.greeting?.title, officeLocale);
@@ -133,10 +105,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     displayReplyFormWithAssistantResponse(content);
   }, []);
 
-  const handleSubmit = useCallback(
-    e => {
-      e?.preventDefault?.();
-      const text = inputValue.trim();
+  const submitMessage = useCallback(
+    messageText => {
+      const text = (messageText ?? '').trim();
       if (!text && !selectedApp?.allowEmptyContent) return;
 
       const promptTemplate = buildPromptTemplate(selectedStarterPromptRef.current, selectedApp);
@@ -167,7 +138,6 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       fileUploadHandler.clearSelectedFile();
     },
     [
-      inputValue,
       selectedApp,
       appPromptVariables,
       adapter,
@@ -178,6 +148,14 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     ]
   );
 
+  const handleSubmit = useCallback(
+    e => {
+      e?.preventDefault?.();
+      submitMessage(inputValue);
+    },
+    [submitMessage, inputValue]
+  );
+
   const handlePromptSelect = useCallback(
     prompt => {
       if (prompt.raw != null) {
@@ -185,15 +163,23 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       } else {
         selectedStarterPromptRef.current = { system: selectedApp?.system };
       }
-      setInputValue(prompt.message);
       const pv = prompt.raw?.variables;
       if (pv && typeof pv === 'object' && selectedApp?.variables?.length) {
         setAppPromptVariables(prev =>
           mergeStarterPromptVariablesIntoValues(selectedApp.variables, pv, prev)
         );
       }
+
+      // If the selected prompt supports autoSend (or it's a default Outlook prompt which
+      // always auto-sends), fire it directly without requiring the user to press send.
+      if (prompt.autoSend) {
+        setInputValue(prompt.message);
+        submitMessage(prompt.message);
+      } else {
+        setInputValue(prompt.message);
+      }
     },
-    [selectedApp]
+    [selectedApp, submitMessage]
   );
 
   const handleOpenSelector = useCallback(() => {
@@ -227,10 +213,16 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   if (!authData) return null;
   if (!selectedApp) return <Navigate to="/select" replace />;
 
-  const defaultPrompts = DEFAULT_PROMPT_DEFINITIONS.map(p => ({
-    ...p,
-    label: getLocalizedContent(p.label, officeLocale),
-    message: getLocalizedContent(p.message, officeLocale)
+  const configuredDefaults = Array.isArray(officeConfig?.starterPrompts)
+    ? officeConfig.starterPrompts
+    : [];
+
+  const defaultPrompts = configuredDefaults.map((p, idx) => ({
+    key: `office-${idx}`,
+    label: getLocalizedContent(p?.title, officeLocale),
+    message: getLocalizedContent(p?.message, officeLocale),
+    // Default Outlook prompts should fire directly on click per product requirements.
+    autoSend: true
   }));
 
   const starterPrompts = selectedApp?.starterPrompts?.length
@@ -239,6 +231,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
         label: getLocalizedContent(p?.title, officeLocale),
         subtitle: getLocalizedContent(p?.description, officeLocale),
         message: getLocalizedContent(p?.message, officeLocale),
+        autoSend: p?.autoSend === true,
         raw: p
       }))
     : defaultPrompts;

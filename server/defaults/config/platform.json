@@ -151,6 +151,32 @@
     "description": {
       "en": "AI-powered assistant for Outlook",
       "de": "KI-gestützter Assistent für Outlook"
-    }
+    },
+    "starterPrompts": [
+      {
+        "title": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" },
+        "message": { "en": "Summarize this email", "de": "Fasse diese E-Mail zusammen" }
+      },
+      {
+        "title": {
+          "en": "Summarize and reply to this email",
+          "de": "Fasse diese E-Mail zusammen und antworte darauf"
+        },
+        "message": {
+          "en": "Summarize and reply to this email",
+          "de": "Fasse diese E-Mail zusammen und antworte darauf"
+        }
+      },
+      {
+        "title": {
+          "en": "What are the main takeaways from this email?",
+          "de": "Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?"
+        },
+        "message": {
+          "en": "What are the main takeaways from this email?",
+          "de": "Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?"
+        }
+      }
+    ]
   }
 }

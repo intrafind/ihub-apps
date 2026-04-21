@@ -51,7 +51,8 @@ router.get('/config', (req, res) => {
   res.json({
     baseUrl,
     clientId: officeConfig.oauthClientId || '',
-    redirectUri: `${baseUrl}/office/callback.html`
+    redirectUri: `${baseUrl}/office/callback.html`,
+    starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : []
   });
 });
 
