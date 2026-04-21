@@ -66,7 +66,15 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     chatId: chatIdRef.current
   });
 
-  const { models, selectedModel, setSelectedModel, enabledTools, setEnabledTools, websearchEnabled, setWebsearchEnabled } = useAppSettings(selectedApp?.id, selectedApp);
+  const {
+    models,
+    selectedModel,
+    setSelectedModel,
+    enabledTools,
+    setEnabledTools,
+    websearchEnabled,
+    setWebsearchEnabled
+  } = useAppSettings(selectedApp?.id, selectedApp);
   const fileUploadHandler = useFileUploadHandler();
   const currentModel = models.find(m => m.id === selectedModel) || null;
   const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
@@ -144,7 +152,16 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       selectedStarterPromptRef.current = null;
       fileUploadHandler.clearSelectedFile();
     },
-    [inputValue, selectedApp, appPromptVariables, adapter, selectedModel, enabledTools, websearchEnabled, fileUploadHandler]
+    [
+      inputValue,
+      selectedApp,
+      appPromptVariables,
+      adapter,
+      selectedModel,
+      enabledTools,
+      websearchEnabled,
+      fileUploadHandler
+    ]
   );
 
   const handlePromptSelect = useCallback(
@@ -297,7 +314,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 onCancel={adapter.cancelGeneration}
                 allowEmptySubmit={!!selectedApp?.allowEmptyContent}
                 currentLanguage={officeLocale}
-                showModelSelector={selectedApp?.disallowModelSelection !== true && selectedApp?.settings?.model?.enabled !== false}
+                showModelSelector={
+                  selectedApp?.disallowModelSelection !== true &&
+                  selectedApp?.settings?.model?.enabled !== false
+                }
                 models={models}
                 selectedModel={selectedModel}
                 onModelChange={setSelectedModel}
@@ -309,7 +329,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 enabledTools={selectedApp?.tools?.length ? enabledTools : null}
                 onEnabledToolsChange={selectedApp?.tools?.length ? setEnabledTools : null}
                 websearchEnabled={websearchEnabled}
-                onWebsearchEnabledChange={selectedApp?.websearch?.enabled ? setWebsearchEnabled : null}
+                onWebsearchEnabledChange={
+                  selectedApp?.websearch?.enabled ? setWebsearchEnabled : null
+                }
                 clarificationPending={adapter.clarificationPending}
               />
             </div>
