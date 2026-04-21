@@ -22,6 +22,7 @@ function AdminOAuthClientEditPage() {
   const [showSecretModal, setShowSecretModal] = useState(false);
   const [availableApps, setAvailableApps] = useState([]);
   const [availableModels, setAvailableModels] = useState([]);
+  const [availablePrompts, setAvailablePrompts] = useState([]);
   const [redirectUriInput, setRedirectUriInput] = useState('');
   const [postLogoutUriInput, setPostLogoutUriInput] = useState('');
 
@@ -30,6 +31,7 @@ function AdminOAuthClientEditPage() {
     description: '',
     allowedApps: [],
     allowedModels: [],
+    allowedPrompts: [],
     tokenExpirationMinutes: 60,
     active: true,
     clientType: 'confidential',
@@ -63,6 +65,18 @@ function AdminOAuthClientEditPage() {
         ? modelsData
         : Object.values(modelsData.models || {});
       setAvailableModels(modelsList);
+
+      // Load available prompts
+      try {
+        const promptsResponse = await makeAdminApiCall('/admin/prompts');
+        const promptsData = promptsResponse.data;
+        const promptsList = Array.isArray(promptsData)
+          ? promptsData
+          : Object.values(promptsData.prompts || {});
+        setAvailablePrompts(promptsList);
+      } catch (promptsError) {
+        console.error('Failed to load prompts:', promptsError);
+      }
     } catch (error) {
       console.error('Failed to load apps/models:', error);
     }
@@ -78,6 +92,7 @@ function AdminOAuthClientEditPage() {
         description: data.client.description || '',
         allowedApps: data.client.allowedApps || [],
         allowedModels: data.client.allowedModels || [],
+        allowedPrompts: data.client.allowedPrompts || [],
         tokenExpirationMinutes: data.client.tokenExpirationMinutes || 60,
         active: data.client.active !== false,
         clientType: data.client.clientType || 'confidential',
@@ -159,6 +174,13 @@ function AdminOAuthClientEditPage() {
     setFormData(prev => ({
       ...prev,
       allowedModels: selectedModels
+    }));
+  };
+
+  const handlePromptsChange = selectedPrompts => {
+    setFormData(prev => ({
+      ...prev,
+      allowedPrompts: selectedPrompts
     }));
   };
 
@@ -374,6 +396,14 @@ function AdminOAuthClientEditPage() {
               </div>
             </div>
 
+            {/* Permissions hint */}
+            <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 p-4 text-sm text-blue-900 dark:text-blue-200">
+              {t(
+                'admin.auth.oauth.permissionsHint',
+                'Allow-lists act as a filter on the signed-in user’s group permissions for authorization_code (user-delegated) tokens: leaving a list empty or adding "*" applies no client-level restriction, while a non-empty list narrows the user’s permissions by intersection. For client_credentials (machine-to-machine) tokens, only the listed resources are accessible.'
+              )}
+            </div>
+
             {/* Allowed Apps */}
             <div>
               <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
@@ -387,7 +417,7 @@ function AdminOAuthClientEditPage() {
                 placeholder={t('admin.auth.oauth.searchApps', 'Search apps to add...')}
                 emptyMessage={t(
                   'admin.auth.oauth.noAppsSelected',
-                  'No apps selected - client can access all apps'
+                  'No apps selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no apps)'
                 )}
                 allowWildcard={true}
               />
@@ -406,7 +436,26 @@ function AdminOAuthClientEditPage() {
                 placeholder={t('admin.auth.oauth.searchModels', 'Search models to add...')}
                 emptyMessage={t(
                   'admin.auth.oauth.noModelsSelected',
-                  'No models selected - client can access all models'
+                  'No models selected — no client-level restriction (user keeps full group permissions; machine-to-machine tokens get no models)'
+                )}
+                allowWildcard={true}
+              />
+            </div>
+
+            {/* Allowed Prompts */}
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
+                {t('admin.auth.oauth.allowedPrompts', 'Allowed Prompts')}
+              </h3>
+              <ResourceSelector
+                label={t('admin.auth.oauth.allowedPrompts', 'Allowed Prompts')}
+                resources={availablePrompts}
+                selectedResources={formData.allowedPrompts}
+                onSelectionChange={handlePromptsChange}
+                placeholder={t('admin.auth.oauth.searchPrompts', 'Search prompts to add...')}
+                emptyMessage={t(
+                  'admin.auth.oauth.noPromptsSelected',
+                  'No prompts selected — no client-level restriction (user keeps full group permissions)'
                 )}
                 allowWildcard={true}
               />

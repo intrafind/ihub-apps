@@ -380,6 +380,62 @@ export function getPermissionsForUser(userGroups, groupPermissions = null) {
 }
 
 /**
+ * Intersect a set of user-permitted IDs with a client-level allow-list.
+ *
+ * Semantics (matches issue #1299):
+ *   - An empty/undefined clientAllowed list means "no client-level restriction" → return userAllowed unchanged.
+ *   - A list containing '*' has the same effect (wildcard, no restriction).
+ *   - Otherwise, return the intersection of userAllowed ∩ clientAllowed.
+ *   - If the user has wildcard access ('*'), the result is the client's list.
+ *
+ * @param {Set<string>} userAllowed - Set of IDs the user may access (may contain '*').
+ * @param {Array<string>|undefined} clientAllowed - OAuth client's allow-list.
+ * @returns {Set<string>} Intersected set of allowed IDs.
+ */
+export function intersectWithClientAllowList(userAllowed, clientAllowed) {
+  if (!Array.isArray(clientAllowed) || clientAllowed.length === 0 || clientAllowed.includes('*')) {
+    // No client-level restriction configured → user keeps their full permissions
+    return userAllowed;
+  }
+
+  // User has wildcard → collapse to the client's explicit list
+  if (userAllowed && userAllowed.has && userAllowed.has('*')) {
+    return new Set(clientAllowed);
+  }
+
+  // Intersection
+  const result = new Set();
+  const clientSet = new Set(clientAllowed);
+  for (const id of userAllowed || []) {
+    if (clientSet.has(id)) {
+      result.add(id);
+    }
+  }
+  return result;
+}
+
+/**
+ * Apply an OAuth client's allow-list as a filter on top of the user's group permissions.
+ *
+ * Used for `oauth_authorization_code` (user-delegated) tokens: the token carries the
+ * user's identity/groups, and the OAuth client (e.g. the Outlook add-in) may define
+ * additional restrictions. If the client configures no restrictions, the user keeps
+ * their full group-granted permissions.
+ *
+ * @param {Object} permissions - User permissions object with apps/models/prompts Sets.
+ * @param {Object} user - User object carrying clientAllowedApps/clientAllowedModels/clientAllowedPrompts.
+ * @returns {Object} Filtered permissions object.
+ */
+export function applyOAuthClientFilter(permissions, user) {
+  return {
+    ...permissions,
+    apps: intersectWithClientAllowList(permissions.apps, user.clientAllowedApps),
+    models: intersectWithClientAllowList(permissions.models, user.clientAllowedModels),
+    prompts: intersectWithClientAllowList(permissions.prompts, user.clientAllowedPrompts)
+  };
+}
+
+/**
  * Filter resources based on user permissions
  * @param {Array} resources - Array of resources to filter
  * @param {Set} allowedResources - Set of allowed resource IDs
@@ -507,7 +563,8 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
   }
 
   // Get permissions for user
-  // For OAuth clients, use their allowedApps/allowedModels directly instead of group permissions
+  // For OAuth clients (client_credentials / static API keys), use their allowedApps/allowedModels
+  // directly instead of group permissions - the token represents the client itself.
   if (user.isOAuthClient) {
     logger.debug('OAuth client detected, using client-specific permissions', {
       component: 'Authorization'
@@ -522,12 +579,26 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
     };
   } else {
     user.permissions = getPermissionsForUser(user.groups);
+
+    // For OAuth authorization_code (user-delegated) tokens, the client's allowedApps/
+    // allowedModels/allowedPrompts act as an additional filter on top of the user's group
+    // permissions. An empty or undefined list means "no client-level restriction" so the
+    // user keeps their full group-granted permissions. A list containing '*' has the same
+    // effect. Any non-wildcard list narrows the user's permissions by intersection.
+    if (user.authMode === 'oauth_authorization_code') {
+      user.permissions = applyOAuthClientFilter(user.permissions, user);
+      // OAuth-delegated tokens must never grant admin access regardless of the user's groups
+      user.permissions.adminAccess = false;
+    }
   }
 
-  // Check admin access (OAuth clients never have admin access)
-  user.isAdmin = user.isOAuthClient
-    ? false
-    : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
+  // Check admin access. Both OAuth client-credentials and OAuth authorization-code tokens
+  // are denied admin access regardless of the underlying user's groups.
+  const isOAuthDelegated = user.authMode === 'oauth_authorization_code';
+  user.isAdmin =
+    user.isOAuthClient || isOAuthDelegated
+      ? false
+      : hasAdminAccess(user.groups, authConfig) || user.permissions.adminAccess;
 
   logger.debug('User enhancement complete', {
     component: 'Authorization',
