@@ -704,6 +704,8 @@
         "concurrency": "Gleichzeitigkeit",
         "requestDelay": "Anfrageverzögerung (ms)",
         "supportsTools": "Unterstützt Tools",
+        "supportsVision": "Unterstützt Bilderkennung",
+        "supportsAudio": "Unterstützt Audio",
         "enabled": "Aktiviert",
         "defaultModel": "Standardmodell",
         "supportsImageGeneration": "Unterstützt Bilderzeugung",
@@ -717,6 +719,8 @@
         "apiKey": "API-Schlüssel für dieses Modell. Wenn nicht angegeben, verwendet das System die Umgebungsvariable für den Anbieter. Schlüssel werden verschlüsselt gespeichert.",
         "apiKeySet": "✓ API-Schlüssel ist für dieses Modell konfiguriert",
         "apiKeyEnvVars": "Umgebungsvariablen (in Prioritätsreihenfolge):\n{{envVars}}",
+        "supportsVision": "Aktivieren, wenn dieses Modell Bildeingaben verarbeiten kann",
+        "supportsAudio": "Aktivieren, wenn dieses Modell Audioeingaben verarbeiten kann",
         "supportsImageGeneration": "Aktivieren, wenn dieses Modell Bilder erzeugen kann (z.B. Gemini Bildmodelle)",
         "maxReferenceImages": "Maximale Anzahl von Referenzbildern (1-14)"
       },

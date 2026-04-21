@@ -493,6 +493,8 @@
         "concurrency": "Concurrency",
         "requestDelay": "Request Delay (ms)",
         "supportsTools": "Supports Tools",
+        "supportsVision": "Supports Vision",
+        "supportsAudio": "Supports Audio",
         "enabled": "Enabled",
         "defaultModel": "Default Model",
         "supportsImageGeneration": "Supports Image Generation",
@@ -506,6 +508,8 @@
         "apiKey": "API key for this model. If not provided, the system will use the environment variable for the provider. Keys are stored encrypted.",
         "apiKeySet": "✓ API key is configured for this model",
         "apiKeyEnvVars": "Environment variables (in priority order):\n{{envVars}}",
+        "supportsVision": "Enable if this model can process image inputs",
+        "supportsAudio": "Enable if this model can process audio inputs",
         "supportsImageGeneration": "Enable if this model can generate images (e.g., Gemini Image models)",
         "maxReferenceImages": "Maximum number of reference images (1-14)"
       },
