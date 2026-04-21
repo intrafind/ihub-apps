@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
@@ -14,15 +15,13 @@ function AdminOfficeIntegrationPage() {
   const [message, setMessage] = useState(null);
   const [status, setStatus] = useState(null);
 
-  const [displayNameEn, setDisplayNameEn] = useState('');
-  const [displayNameDe, setDisplayNameDe] = useState('');
-  const [descriptionEn, setDescriptionEn] = useState('');
-  const [descriptionDe, setDescriptionDe] = useState('');
+  const [displayName, setDisplayName] = useState({});
+  const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
 
   const emptyPrompt = () => ({
-    title: { en: '', de: '' },
-    message: { en: '', de: '' }
+    title: {},
+    message: {}
   });
 
   const loadStatus = async () => {
@@ -31,15 +30,13 @@ function AdminOfficeIntegrationPage() {
       const res = await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' });
       const data = res.data;
       setStatus(data);
-      setDisplayNameEn(data.displayName?.en ?? '');
-      setDisplayNameDe(data.displayName?.de ?? '');
-      setDescriptionEn(data.description?.en ?? '');
-      setDescriptionDe(data.description?.de ?? '');
+      setDisplayName(data.displayName || {});
+      setDescription(data.description || {});
       setStarterPrompts(
         Array.isArray(data.starterPrompts)
           ? data.starterPrompts.map(p => ({
-              title: { en: p?.title?.en ?? '', de: p?.title?.de ?? '' },
-              message: { en: p?.message?.en ?? '', de: p?.message?.de ?? '' }
+              title: p?.title || {},
+              message: p?.message || {}
             }))
           : []
       );
@@ -92,26 +89,20 @@ function AdminOfficeIntegrationPage() {
 
       const cleanedPrompts = starterPrompts
         .map(p => ({
-          title: {
-            en: (p?.title?.en ?? '').trim(),
-            de: (p?.title?.de ?? '').trim()
-          },
-          message: {
-            en: (p?.message?.en ?? '').trim(),
-            de: (p?.message?.de ?? '').trim()
-          }
+          title: p?.title || {},
+          message: p?.message || {}
         }))
         .filter(p => {
-          const hasTitle = p.title.en.length > 0 || p.title.de.length > 0;
-          const hasMessage = p.message.en.length > 0 || p.message.de.length > 0;
+          const hasTitle = Object.values(p.title).some(v => (v || '').trim().length > 0);
+          const hasMessage = Object.values(p.message).some(v => (v || '').trim().length > 0);
           return hasTitle && hasMessage;
         });
 
       await makeAdminApiCall('/admin/office-integration/config', {
         method: 'PUT',
         data: {
-          displayName: { en: displayNameEn, de: displayNameDe },
-          description: { en: descriptionEn, de: descriptionDe },
+          displayName,
+          description,
           starterPrompts: cleanedPrompts
         }
       });
@@ -131,13 +122,13 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
-  const handlePromptChange = (index, field, locale, value) => {
+  const handlePromptChange = (index, field, value) => {
     setStarterPrompts(prev => {
       const next = [...prev];
       const current = next[index] || emptyPrompt();
       next[index] = {
         ...current,
-        [field]: { ...current[field], [locale]: value }
+        [field]: value
       };
       return next;
     });
@@ -321,55 +312,19 @@ function AdminOfficeIntegrationPage() {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   {t('admin.officeIntegration.displayTitle', 'Display Settings')}
                 </h2>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.displayNameEn', 'Display Name (EN)')}
-                      </label>
-                      <input
-                        type="text"
-                        value={displayNameEn}
-                        onChange={e => setDisplayNameEn(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.displayNameDe', 'Display Name (DE)')}
-                      </label>
-                      <input
-                        type="text"
-                        value={displayNameDe}
-                        onChange={e => setDisplayNameDe(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.descriptionEn', 'Description (EN)')}
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={descriptionEn}
-                        onChange={e => setDescriptionEn(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.descriptionDe', 'Description (DE)')}
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={descriptionDe}
-                        onChange={e => setDescriptionDe(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-4">
+                  <DynamicLanguageEditor
+                    label={t('admin.officeIntegration.displayName', 'Display Name')}
+                    value={displayName}
+                    onChange={setDisplayName}
+                    type="text"
+                  />
+                  <DynamicLanguageEditor
+                    label={t('admin.officeIntegration.description', 'Description')}
+                    value={description}
+                    onChange={setDescription}
+                    type="textarea"
+                  />
                 </div>
               </div>
 
@@ -444,61 +399,19 @@ function AdminOfficeIntegrationPage() {
                             </button>
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-3 mb-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              {t('admin.officeIntegration.promptTitleEn', 'Title (EN)')}
-                            </label>
-                            <input
-                              type="text"
-                              value={prompt?.title?.en ?? ''}
-                              onChange={e =>
-                                handlePromptChange(index, 'title', 'en', e.target.value)
-                              }
-                              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              {t('admin.officeIntegration.promptTitleDe', 'Title (DE)')}
-                            </label>
-                            <input
-                              type="text"
-                              value={prompt?.title?.de ?? ''}
-                              onChange={e =>
-                                handlePromptChange(index, 'title', 'de', e.target.value)
-                              }
-                              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              {t('admin.officeIntegration.promptMessageEn', 'Message (EN)')}
-                            </label>
-                            <textarea
-                              rows={2}
-                              value={prompt?.message?.en ?? ''}
-                              onChange={e =>
-                                handlePromptChange(index, 'message', 'en', e.target.value)
-                              }
-                              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
-                              {t('admin.officeIntegration.promptMessageDe', 'Message (DE)')}
-                            </label>
-                            <textarea
-                              rows={2}
-                              value={prompt?.message?.de ?? ''}
-                              onChange={e =>
-                                handlePromptChange(index, 'message', 'de', e.target.value)
-                              }
-                              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                            />
-                          </div>
+                        <div className="space-y-3">
+                          <DynamicLanguageEditor
+                            label={t('admin.officeIntegration.promptTitle', 'Title')}
+                            value={prompt?.title || {}}
+                            onChange={value => handlePromptChange(index, 'title', value)}
+                            type="text"
+                          />
+                          <DynamicLanguageEditor
+                            label={t('admin.officeIntegration.promptMessage', 'Message')}
+                            value={prompt?.message || {}}
+                            onChange={value => handlePromptChange(index, 'message', value)}
+                            type="textarea"
+                          />
                         </div>
                       </div>
                     ))}
