@@ -117,10 +117,7 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
       id: 'pdf',
       name: t('pages.appChat.export.formats.pdf', 'PDF Document'),
       icon: 'file-text',
-      description: t(
-        'pages.appChat.export.descriptions.pdf',
-        'Formatted PDF with styling options'
-      )
+      description: t('pages.appChat.export.descriptions.pdf', 'Formatted PDF with styling options')
     },
     {
       id: 'docx',

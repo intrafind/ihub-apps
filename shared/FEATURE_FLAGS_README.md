@@ -215,21 +215,14 @@ function ChatHeader({ app }) {
   // Check if export is enabled at both platform AND app levels
   const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
-  return (
-    <div>
-      {exportEnabled && (
-        <button onClick={handleExport}>
-          Export Conversation
-        </button>
-      )}
-    </div>
-  );
+  return <div>{exportEnabled && <button onClick={handleExport}>Export Conversation</button>}</div>;
 }
 ```
 
 **Configuration scenarios:**
 
 1. **Disable all exports globally:**
+
    ```json
    {
      "features": {
@@ -237,9 +230,11 @@ function ChatHeader({ app }) {
      }
    }
    ```
+
    Result: No app can export, regardless of app-level settings
 
 2. **Enable globally, disable for specific app:**
+
    ```json
    // Platform config
    { "features": { "export": true } }
@@ -252,6 +247,7 @@ function ChatHeader({ app }) {
      }
    }
    ```
+
    Result: All apps can export except "secure-chat"
 
 3. **Enable for all apps (default):**
