@@ -1861,6 +1861,49 @@ function AppFormEditor({
             </div>
           </div>
 
+          {/* Export Configuration */}
+          <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
+            <div className="md:grid md:grid-cols-3 md:gap-6">
+              <div className="md:col-span-1">
+                <h3 className="text-lg font-medium leading-6 text-gray-900 dark:text-gray-100">
+                  {t('admin.apps.edit.export', 'Export')}
+                </h3>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  {t(
+                    'admin.apps.edit.exportDesc',
+                    'Control whether users can export conversations from this app'
+                  )}
+                </p>
+              </div>
+              <div className="mt-5 md:col-span-2 md:mt-0">
+                <div className="space-y-4">
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={app.features?.export !== false}
+                      onChange={e =>
+                        handleInputChange('features', {
+                          ...app.features,
+                          export: e.target.checked
+                        })
+                      }
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                    />
+                    <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                      {t('admin.apps.edit.enableExport', 'Enable Export')}
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.apps.edit.exportNote',
+                      'When disabled, users cannot export conversations in any format (JSON, Markdown, PDF, etc.). The platform-level export setting must also be enabled for export to work.'
+                    )}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Input Mode & Microphone Configuration */}
           <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
             <div className="md:grid md:grid-cols-3 md:gap-6">
