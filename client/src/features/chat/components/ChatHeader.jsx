@@ -12,6 +12,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * A reusable header component for chat interfaces
  */
 function ChatHeader({
+  app,
   title,
   description,
   color,
@@ -41,8 +42,8 @@ function ChatHeader({
   const { user } = useAuth();
   const featureFlags = useFeatureFlags();
 
-  // Check if export is enabled at platform level
-  const exportEnabled = featureFlags.isEnabled('export', true);
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
@@ -202,6 +203,7 @@ function ChatHeader({
           {/* Mobile burger menu - shown on mobile/tablet */}
           <div className="md:hidden">
             <ChatActionsMenu
+              app={app}
               onClearChat={onClearChat}
               onToggleConfig={onToggleConfig}
               onShare={onShare}

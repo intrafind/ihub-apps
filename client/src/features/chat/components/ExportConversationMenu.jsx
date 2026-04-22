@@ -6,16 +6,21 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-function ExportConversationMenu({ messages = [], settings = {}, onClose, appId, chatId }) {
+function ExportConversationMenu({
+  app,
+  messages = [],
+  settings = {},
+  onClose,
+  appId,
+  chatId
+}) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
 
-  // Check if export is enabled at platform level
-  const exportEnabled = featureFlags.isEnabled('export', true);
-  // Check if PDF export specifically is enabled (only matters if general export is enabled)
-  const pdfExportEnabled = exportEnabled && featureFlags.isEnabled('pdfExport', true);
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   const [showPdfOptions, setShowPdfOptions] = useState(false);
   const [pdfConfig, setPdfConfig] = useState({
@@ -82,27 +87,26 @@ function ExportConversationMenu({ messages = [], settings = {}, onClose, appId, 
 
   return (
     <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg z-20">
-      {/* PDF Export with Options - only shown when pdfExport feature is enabled */}
-      {pdfExportEnabled && (
-        <>
-          <div className="relative">
-            <button
-              onClick={() => setShowPdfOptions(!showPdfOptions)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center justify-between gap-2 whitespace-nowrap"
-              disabled={isExporting}
-            >
-              <div className="flex items-center gap-2">
-                <Icon name="file-text" size="sm" />
-                {isExporting
-                  ? t('pages.appChat.export.exportingPDF', 'Exporting PDF...')
-                  : t('pages.appChat.export.toPDF', 'as PDF')}
-              </div>
-              <Icon
-                name="chevron-right"
-                size="sm"
-                className={`transition-transform ${showPdfOptions ? 'rotate-90' : ''}`}
-              />
-            </button>
+      {/* PDF Export with Options */}
+      <>
+        <div className="relative">
+          <button
+            onClick={() => setShowPdfOptions(!showPdfOptions)}
+            className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 flex items-center justify-between gap-2 whitespace-nowrap"
+            disabled={isExporting}
+          >
+            <div className="flex items-center gap-2">
+              <Icon name="file-text" size="sm" />
+              {isExporting
+                ? t('pages.appChat.export.exportingPDF', 'Exporting PDF...')
+                : t('pages.appChat.export.toPDF', 'as PDF')}
+            </div>
+            <Icon
+              name="chevron-right"
+              size="sm"
+              className={`transition-transform ${showPdfOptions ? 'rotate-90' : ''}`}
+            />
+          </button>
 
             {showPdfOptions && (
               <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg min-w-[300px] p-3 z-30">
@@ -211,7 +215,6 @@ function ExportConversationMenu({ messages = [], settings = {}, onClose, appId, 
 
           <div className="border-t border-gray-200"></div>
         </>
-      )}
 
       <button
         onClick={() => handleExport('json')}

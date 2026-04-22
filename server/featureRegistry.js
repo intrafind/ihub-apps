@@ -114,16 +114,6 @@ export const featureRegistry = [
     default: true
   },
   {
-    id: 'pdfExport',
-    name: { en: 'PDF Export', de: 'PDF-Export' },
-    description: {
-      en: 'Export chat conversations as formatted PDF documents',
-      de: 'Chat-Unterhaltungen als formatierte PDF-Dokumente exportieren'
-    },
-    category: 'content',
-    default: true
-  },
-  {
     id: 'toolsService',
     name: { en: 'Tools Service', de: 'Tools-Dienst' },
     description: {

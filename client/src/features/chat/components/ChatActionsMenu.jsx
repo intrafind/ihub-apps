@@ -7,6 +7,7 @@ import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 function ChatActionsMenu({
+  app,
   onClearChat,
   onToggleConfig,
   onShare,
@@ -31,8 +32,8 @@ function ChatActionsMenu({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const menuRef = useRef(null);
 
-  // Check if export is enabled at platform level
-  const exportEnabled = featureFlags.isEnabled('export', true);
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   useEffect(() => {
     const handleClick = e => {

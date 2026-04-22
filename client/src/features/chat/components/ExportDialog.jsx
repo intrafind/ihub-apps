@@ -18,7 +18,6 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
-  const pdfExportEnabled = featureFlags.isEnabled('pdfExport', true);
 
   const [selectedFormat, setSelectedFormat] = useState('pdf');
   const [isExporting, setIsExporting] = useState(false);
@@ -114,19 +113,15 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
   };
 
   const exportFormats = [
-    ...(pdfExportEnabled
-      ? [
-          {
-            id: 'pdf',
-            name: t('pages.appChat.export.formats.pdf', 'PDF Document'),
-            icon: 'file-text',
-            description: t(
-              'pages.appChat.export.descriptions.pdf',
-              'Formatted PDF with styling options'
-            )
-          }
-        ]
-      : []),
+    {
+      id: 'pdf',
+      name: t('pages.appChat.export.formats.pdf', 'PDF Document'),
+      icon: 'file-text',
+      description: t(
+        'pages.appChat.export.descriptions.pdf',
+        'Formatted PDF with styling options'
+      )
+    },
     {
       id: 'docx',
       name: t('pages.appChat.export.formats.docx', 'Word Document'),
@@ -261,7 +256,7 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
           </div>
 
           {/* PDF Options */}
-          {selectedFormat === 'pdf' && pdfExportEnabled && (
+          {selectedFormat === 'pdf' && (
             <div className="space-y-4 p-4 bg-gray-50 dark:bg-gray-900/50 rounded-lg">
               <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100">
                 {t('pages.appChat.export.pdfOptions', 'PDF Options')}

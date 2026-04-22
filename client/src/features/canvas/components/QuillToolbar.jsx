@@ -21,8 +21,8 @@ const QuillToolbar = ({
   const [canRedo, setCanRedo] = useState(false);
   const [currentFormat, setCurrentFormat] = useState({});
 
-  // Check if export is enabled at platform level
-  const exportEnabled = featureFlags.isEnabled('export', true);
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   const characterCount = content.replace(/<[^>]*>/g, '').length;
 
@@ -360,7 +360,11 @@ const QuillToolbar = ({
                   <span>{t('canvas.export.export', 'Export')}</span>
                 </button>
                 {showExportMenu && (
-                  <ExportMenu content={content} onClose={() => onToggleExportMenu(false)} />
+                  <ExportMenu
+                    app={app}
+                    content={content}
+                    onClose={() => onToggleExportMenu(false)}
+                  />
                 )}
               </div>
             )}

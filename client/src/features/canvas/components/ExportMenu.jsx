@@ -3,13 +3,13 @@ import Icon from '../../../shared/components/Icon';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
-export default function ExportMenu({ content, onClose }) {
+export default function ExportMenu({ app, content, onClose }) {
   const { t } = useTranslation();
   const { copyText, copyMarkdown, copyHTML } = useClipboard();
   const featureFlags = useFeatureFlags();
 
-  // Check if export is enabled at platform level
-  const exportEnabled = featureFlags.isEnabled('export', true);
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   const handleCopyText = async () => {
     await copyText(content);
