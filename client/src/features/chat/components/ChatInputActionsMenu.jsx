@@ -296,14 +296,20 @@ function ChatInputActionsMenu({
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
 
+  // On desktop (md:), check if menu would be empty
+  // Quick Actions and Image Generation are hidden on desktop with md:hidden
+  // So only Cloud Storage, Web Search, and Tools remain visible on desktop
+  const hasDesktopMenuContent = enabledCloudProviders.length > 0 || hasWebsearch || hasTools;
+
   return (
     <div className="relative" ref={dropdownRef}>
+      {/* Show + button on mobile always, on desktop only if menu has content */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
           isOpen ? 'bg-gray-100 dark:bg-gray-700' : ''
-        }`}
+        } md:${hasDesktopMenuContent ? 'block' : 'hidden'}`}
         title={t('chatActions.menu', 'Actions menu')}
         aria-label={t('chatActions.menu', 'Actions menu')}
       >
@@ -320,8 +326,8 @@ function ChatInputActionsMenu({
           aria-label={t('chatActions.menu', 'Actions menu')}
           className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
         >
-          {/* Quick Actions Section */}
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+          {/* Quick Actions Section - Hidden on desktop (md:) since actions are shown inline */}
+          <div className="md:hidden p-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
               {t('chatActions.quickActions', 'Quick Actions')}
             </h3>
