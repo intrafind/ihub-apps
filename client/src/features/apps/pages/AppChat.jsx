@@ -346,8 +346,11 @@ function AppChat({ preloadedApp = null }) {
     content => {
       if (!content || !app) return;
 
-      const encodedContent = encodeURIComponent(content);
-      navigate(`/apps/${appId}/canvas?content=${encodedContent}`);
+      // Store content in sessionStorage to avoid URL length limits on large documents
+      sessionStorage.setItem(`canvas_initial_content_${appId}`, content);
+      // Also carry the current chatId so canvas can continue the same conversation
+      sessionStorage.setItem(`ai_hub_canvas_id_${appId}`, chatId.current);
+      navigate(`/apps/${appId}/canvas?hasContent=1`);
     },
     [navigate, appId, app]
   );

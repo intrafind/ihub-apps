@@ -1,0 +1,123 @@
+{
+  "id": "dictation-writer",
+  "order": 2,
+  "name": {
+    "en": "Dictation Writer",
+    "de": "Diktat-Schreiber"
+  },
+  "description": {
+    "en": "Dictate your ideas and let AI create the document. Refine with your voice.",
+    "de": "Diktiere deine Ideen und lass die KI das Dokument erstellen. Mit deiner Stimme verfeinern."
+  },
+  "color": "#6366F1",
+  "icon": "microphone",
+  "tokenLimit": 16000,
+  "preferredOutputFormat": "markdown",
+  "preferredTemperature": 0.5,
+  "sendChatHistory": true,
+  "features": {
+    "canvas": true,
+    "canvasAutoApply": true
+  },
+  "inputMode": {
+    "type": "multiline",
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "system": {
+    "en": "You are a professional writing assistant. Your job is to create and refine documents based on the user's voice instructions.\n\n## How you work:\n\n1. **First message**: The user describes what they want to create (e.g., 'Write an email to my boss about a project delay'). Generate a complete, well-formatted document in Markdown.\n\n2. **Follow-up messages**: The user provides instructions to modify the document (e.g., 'make the tone more formal', 'add a section about next steps', 'make it shorter'). Always return the COMPLETE updated document in Markdown — never just the changed section.\n\n## Important rules:\n- Always output the full document, never partial updates\n- Format output in clean Markdown with proper headings, paragraphs, and lists\n- Keep the document focused on what was requested\n- If the current document is provided as context, use it as the base for modifications\n- Do not add meta-commentary or explanations — just return the document content",
+    "de": "Du bist ein professioneller Schreibassistent. Deine Aufgabe ist es, Dokumente auf Basis von Sprach-Anweisungen des Nutzers zu erstellen und zu verfeinern.\n\n## Wie du arbeitest:\n\n1. **Erste Nachricht**: Der Nutzer beschreibt, was er erstellen möchte (z.B. 'Schreibe eine E-Mail an meinen Chef wegen einer Projektverzögerung'). Erstelle ein vollständiges, gut formatiertes Dokument in Markdown.\n\n2. **Folgenachrichten**: Der Nutzer gibt Anweisungen zur Modifikation (z.B. 'mache den Ton formeller', 'füge einen Abschnitt über nächste Schritte hinzu'). Gib immer das VOLLSTÄNDIGE aktualisierte Dokument in Markdown zurück — niemals nur den geänderten Abschnitt.\n\n## Wichtige Regeln:\n- Immer das vollständige Dokument ausgeben, niemals nur Teile\n- In sauberem Markdown mit korrekten Überschriften, Absätzen und Listen formatieren\n- Das Dokument auf das Gewünschte fokussieren\n- Falls das aktuelle Dokument als Kontext angegeben ist, dieses als Basis für Änderungen verwenden\n- Kein Meta-Kommentar oder Erklärungen — nur den Dokumentinhalt zurückgeben"
+  },
+  "greeting": {
+    "en": {
+      "title": "Dictation Writer",
+      "subtitle": "Click the **microphone** and describe what you want to create — an email, blog post, report, or anything else. I'll generate the document and you can keep refining it with your voice."
+    },
+    "de": {
+      "title": "Diktat-Schreiber",
+      "subtitle": "Klicke auf das **Mikrofon** und beschreibe, was du erstellen möchtest — eine E-Mail, einen Blogbeitrag, einen Bericht oder irgendetwas anderes. Ich generiere das Dokument und du kannst es mit deiner Stimme weiter verfeinern."
+    }
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Email",
+        "de": "E-Mail"
+      },
+      "message": {
+        "en": "Write an email to ",
+        "de": "Schreibe eine E-Mail an "
+      },
+      "description": {
+        "en": "Start an email draft",
+        "de": "E-Mail-Entwurf beginnen"
+      },
+      "autoSend": false
+    },
+    {
+      "title": {
+        "en": "Blog Post",
+        "de": "Blogbeitrag"
+      },
+      "message": {
+        "en": "Write a blog post about ",
+        "de": "Schreibe einen Blogbeitrag über "
+      },
+      "description": {
+        "en": "Create a blog post",
+        "de": "Blogbeitrag erstellen"
+      },
+      "autoSend": false
+    },
+    {
+      "title": {
+        "en": "Meeting Notes",
+        "de": "Besprechungsprotokoll"
+      },
+      "message": {
+        "en": "Create meeting notes for ",
+        "de": "Erstelle ein Besprechungsprotokoll für "
+      },
+      "description": {
+        "en": "Structure meeting notes",
+        "de": "Besprechungsnotizen strukturieren"
+      },
+      "autoSend": false
+    },
+    {
+      "title": {
+        "en": "Report",
+        "de": "Bericht"
+      },
+      "message": {
+        "en": "Write a report about ",
+        "de": "Schreibe einen Bericht über "
+      },
+      "description": {
+        "en": "Create a structured report",
+        "de": "Strukturierten Bericht erstellen"
+      },
+      "autoSend": false
+    }
+  ],
+  "messagePlaceholder": {
+    "en": "Describe what you want to create, or how to modify the document...",
+    "de": "Beschreibe, was du erstellen möchtest, oder wie das Dokument geändert werden soll..."
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": true
+    },
+    "outputFormat": {
+      "enabled": false
+    }
+  },
+  "enabled": true
+}
