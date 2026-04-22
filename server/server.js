@@ -8,6 +8,7 @@ import { loadJson } from './configLoader.js';
 import { getRootDir } from './pathUtils.js';
 import configCache from './configCache.js';
 import logger from './utils/logger.js';
+import { startStickyPrimary, attachStickyWorker } from './clusterSticky.js';
 
 // Import adapters and utilities
 import registerChatRoutes from './routes/chat/index.js';
@@ -75,20 +76,85 @@ if (cluster.isPrimary && workerCount > 1) {
     pid: process.pid,
     workerCount
   });
+
+  // Track live workers so the sticky router can pick a healthy one on each
+  // incoming connection. Dead entries are replaced in the `exit` handler.
+  const workers = [];
   for (let workerIndex = 0; workerIndex < workerCount; workerIndex++) {
-    cluster.fork();
+    workers[workerIndex] = cluster.fork({ WORKER_INDEX: String(workerIndex) });
   }
 
   cluster.on('exit', (worker, code, signal) => {
+    const slot = workers.findIndex(w => w === worker);
     logger.warn({
       component: 'Server',
-      message: `Worker ${worker.process.pid} exited (${code || signal})`,
+      message: `Worker ${worker.process.pid} exited (${code || signal}), respawning`,
       workerPid: worker.process.pid,
       code,
-      signal
+      signal,
+      slot
     });
-    cluster.fork();
+    const replacement = cluster.fork({ WORKER_INDEX: String(slot >= 0 ? slot : workers.length) });
+    if (slot >= 0) {
+      workers[slot] = replacement;
+    } else {
+      workers.push(replacement);
+    }
   });
+
+  // Primary owns the public listening socket and hands each connection to a
+  // worker by hashing the client's remote address. This keeps every chat
+  // session pinned to one worker so in-memory SSE state stays consistent.
+  startStickyPrimary({
+    getWorkers: () => workers,
+    port: config.PORT,
+    host: config.HOST,
+    onListening: () => {
+      logger.info({
+        component: 'Server',
+        message: 'Sticky cluster primary listening',
+        host: config.HOST,
+        port: config.PORT,
+        workerCount
+      });
+      if (config.HOST === '0.0.0.0' || config.HOST === '::') {
+        logger.info({
+          component: 'Server',
+          message: 'Access the application at one of these URLs:',
+          urls: [
+            `http://localhost:${config.PORT}`,
+            `http://127.0.0.1:${config.PORT}`,
+            "(or use your machine's hostname/IP address)"
+          ]
+        });
+      } else {
+        logger.info({
+          component: 'Server',
+          message: 'Access the application at',
+          url: `http://${config.HOST}:${config.PORT}`
+        });
+      }
+    }
+  });
+
+  const handlePrimaryShutdown = signal => {
+    logger.info({
+      component: 'Server',
+      message: `Primary received ${signal}, shutting down workers`,
+      workerCount: workers.length
+    });
+    for (const w of workers) {
+      try {
+        w.kill(signal);
+      } catch {
+        // worker may already be dead
+      }
+    }
+    // Give workers a moment to exit cleanly, then force-exit the primary.
+    setTimeout(() => process.exit(0), 5000).unref();
+  };
+  process.on('SIGTERM', () => handlePrimaryShutdown('SIGTERM'));
+  process.on('SIGINT', () => handlePrimaryShutdown('SIGINT'));
 } else {
   // Determine if we're running from a packaged binary
   // Either via process.pkg (when using pkg directly) or APP_ROOT_DIR env var (our shell script approach)
@@ -408,46 +474,54 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
-  // Start server
-  server.listen(PORT, HOST, () => {
-    const protocol = server instanceof https.Server ? 'https' : 'http';
-
-    // Log bind address
+  if (cluster.isWorker) {
+    // Inside a sticky cluster the primary owns the public port; this worker
+    // only receives already-accepted connections via IPC.
+    attachStickyWorker(server);
     logger.info({
       component: 'Server',
-      message: 'Server is listening on all interfaces',
-      protocol,
-      bindAddress: HOST,
-      port: PORT
+      message: 'Worker ready for sticky connections',
+      pid: process.pid,
+      workerIndex: process.env.WORKER_INDEX ?? 'unknown'
     });
+  } else {
+    // Single-process mode (WORKERS=1): bind the port directly.
+    server.listen(PORT, HOST, () => {
+      const protocol = server instanceof https.Server ? 'https' : 'http';
 
-    // Provide access URLs based on bind address
-    if (HOST === '0.0.0.0' || HOST === '::') {
-      // Server is bound to all interfaces - provide recommended access URLs
       logger.info({
         component: 'Server',
-        message: 'Access the application at one of these URLs:',
-        urls: [
-          `${protocol}://localhost:${PORT}`,
-          `${protocol}://127.0.0.1:${PORT}`,
-          "(or use your machine's hostname/IP address)"
-        ]
+        message: 'Server is listening on all interfaces',
+        protocol,
+        bindAddress: HOST,
+        port: PORT
       });
-      logger.warn({
-        component: 'Server',
-        message: '⚠️  IMPORTANT: Do not access via http://0.0.0.0:* in your browser',
-        reason: 'Browsers will reject cookies from 0.0.0.0, causing authentication to fail',
-        recommendation: 'Always use localhost, 127.0.0.1, or your actual hostname'
-      });
-    } else {
-      // Server is bound to specific interface
-      logger.info({
-        component: 'Server',
-        message: 'Access the application at',
-        url: `${protocol}://${HOST}:${PORT}`
-      });
-    }
-  });
+
+      if (HOST === '0.0.0.0' || HOST === '::') {
+        logger.info({
+          component: 'Server',
+          message: 'Access the application at one of these URLs:',
+          urls: [
+            `${protocol}://localhost:${PORT}`,
+            `${protocol}://127.0.0.1:${PORT}`,
+            "(or use your machine's hostname/IP address)"
+          ]
+        });
+        logger.warn({
+          component: 'Server',
+          message: '⚠️  IMPORTANT: Do not access via http://0.0.0.0:* in your browser',
+          reason: 'Browsers will reject cookies from 0.0.0.0, causing authentication to fail',
+          recommendation: 'Always use localhost, 127.0.0.1, or your actual hostname'
+        });
+      } else {
+        logger.info({
+          component: 'Server',
+          message: 'Access the application at',
+          url: `${protocol}://${HOST}:${PORT}`
+        });
+      }
+    });
+  }
 
   const handleShutdownSignal = async () => {
     await shutdownTelemetry();

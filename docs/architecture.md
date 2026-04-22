@@ -233,21 +233,32 @@ server/
 
 ### Clustering and Process Management
 
-The server supports horizontal scaling through Node.js clustering:
+The server scales across CPU cores with a sticky-session Node.js cluster
+(default: 4 workers; dev scripts pin `WORKERS=1`). The primary process owns
+the public TCP socket, hashes each connection's source address to a worker,
+and forwards the paused handle over IPC. This keeps every chat session
+pinned to a single worker so the per-process SSE state in
+`server/sse.js` and `server/actionTracker.js` stays consistent without any
+cross-worker coordination.
 
 ```javascript
-const workerCount = config.WORKERS; // Configurable worker count
+const workerCount = config.WORKERS; // default 4; set WORKERS=1 to disable
 
 if (cluster.isPrimary && workerCount > 1) {
-  // Primary process manages workers
-  for (let i = 0; i < workerCount; i++) {
-    cluster.fork();
-  }
+  const workers = [];
+  for (let i = 0; i < workerCount; i++) workers.push(cluster.fork());
+
+  // Sticky router: sha256(remoteAddress) % workerCount
+  startStickyPrimary({ getWorkers: () => workers, port, host });
+} else if (cluster.isWorker) {
+  attachStickyWorker(httpServer); // receives connections via IPC, no listen()
 } else {
-  // Worker processes handle requests
-  startServer();
+  httpServer.listen(port, host); // single-process mode
 }
 ```
+
+See [Scaling with Multiple Workers](scaling.md) for tuning guidance and the
+limitations (NAT-pinning, session failover).
 
 ### Request Processing Pipeline
 

@@ -57,7 +57,7 @@ const config = Object.freeze({
   PORT: env.PORT,
   HOST: env.HOST,
   REQUEST_TIMEOUT: env.REQUEST_TIMEOUT,
-  WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 1,
+  WORKERS: env.WORKERS ?? env.NUM_WORKERS ?? 4,
   SSL_KEY: env.SSL_KEY,
   SSL_CERT: env.SSL_CERT,
   SSL_CA: env.SSL_CA,
