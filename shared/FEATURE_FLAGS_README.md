@@ -127,7 +127,7 @@ const maxTokens = featureFlags.getAppFeatureValue(app, 'tokenLimit', 4096);
 
 ## Available Platform Features
 
-Current platform-level features (as of 2026-02-19):
+Current platform-level features (as of 2026-04-22):
 
 - `workflows` - Agentic workflow automation (default: false) **[Preview]**
 - `integrations` - External service integrations (Jira, Cloud Storage) (default: true) **[Preview]**
@@ -136,7 +136,8 @@ Current platform-level features (as of 2026-02-19):
 - `tools` - Allow AI models to call external tools and functions (default: true)
 - `sources` - Add custom knowledge sources to prompts (default: true)
 - `shortLinks` - Create short URLs for apps (default: true)
-- `pdfExport` - Export chat conversations as PDF (default: true)
+- `export` - Export chat conversations and canvas content in various formats (default: true)
+- `pdfExport` - Export chat conversations as PDF (requires `export` to be enabled) (default: true)
 
 ## Common App Features
 
