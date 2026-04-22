@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 function ChatActionsMenu({
   onClearChat,
@@ -25,9 +26,13 @@ function ChatActionsMenu({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const featureFlags = useFeatureFlags();
   const [open, setOpen] = useState(false);
   const [showExportDialog, setShowExportDialog] = useState(false);
   const menuRef = useRef(null);
+
+  // Check if export is enabled at platform level
+  const exportEnabled = featureFlags.isEnabled('export', true);
 
   useEffect(() => {
     const handleClick = e => {
@@ -120,7 +125,7 @@ function ChatActionsMenu({
               <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
             </button>
           )}
-          {messages && messages.length > 0 && exportSettings && (
+          {exportEnabled && messages && messages.length > 0 && exportSettings && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 my-1"></div>
               <button
@@ -137,15 +142,17 @@ function ChatActionsMenu({
         </div>
       )}
 
-      {/* Export Dialog */}
-      <ExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        messages={messages}
-        settings={exportSettings}
-        appId={appId}
-        chatId={chatId}
-      />
+      {/* Export Dialog - only render if export is enabled */}
+      {exportEnabled && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          messages={messages}
+          settings={exportSettings}
+          appId={appId}
+          chatId={chatId}
+        />
+      )}
     </div>
   );
 }

@@ -11,7 +11,12 @@ function ExportConversationMenu({ messages = [], settings = {}, onClose, appId, 
   const { uiConfig } = useUIConfig();
   const featureFlags = useFeatureFlags();
   const currentLanguage = i18n.language || 'en';
-  const pdfExportEnabled = featureFlags.isEnabled('pdfExport', true);
+
+  // Check if export is enabled at platform level
+  const exportEnabled = featureFlags.isEnabled('export', true);
+  // Check if PDF export specifically is enabled (only matters if general export is enabled)
+  const pdfExportEnabled = exportEnabled && featureFlags.isEnabled('pdfExport', true);
+
   const [showPdfOptions, setShowPdfOptions] = useState(false);
   const [pdfConfig, setPdfConfig] = useState({
     template: 'default',
@@ -69,6 +74,11 @@ function ExportConversationMenu({ messages = [], settings = {}, onClose, appId, 
       }
     }
   };
+
+  // If export is disabled, don't render anything
+  if (!exportEnabled) {
+    return null;
+  }
 
   return (
     <div className="absolute right-full top-0 mr-2 bg-white border border-gray-200 rounded shadow-lg z-20">

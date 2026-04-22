@@ -1,10 +1,15 @@
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 export default function ExportMenu({ content, onClose }) {
   const { t } = useTranslation();
   const { copyText, copyMarkdown, copyHTML } = useClipboard();
+  const featureFlags = useFeatureFlags();
+
+  // Check if export is enabled at platform level
+  const exportEnabled = featureFlags.isEnabled('export', true);
 
   const handleCopyText = async () => {
     await copyText(content);
@@ -47,6 +52,11 @@ export default function ExportMenu({ content, onClose }) {
     printWindow.print();
     onClose();
   };
+
+  // If export is disabled, don't render anything
+  if (!exportEnabled) {
+    return null;
+  }
 
   return (
     <div className="absolute top-full right-0 mt-2 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-56">
