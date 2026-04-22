@@ -612,6 +612,58 @@ export function createOidcCallbackHandler(providerName) {
           sessionId
         );
 
+        // Check if there's an OAuth authorization flow in progress
+        // If so, redirect back to the OAuth authorize endpoint to complete the flow
+        const oauthParams = req.session?.oauthParams;
+        if (oauthParams) {
+          // Build the OAuth authorize URL with original parameters
+          const oauthUrl = new URL(buildServerPath('/api/oauth/authorize'), 'http://dummy');
+          oauthUrl.searchParams.set('response_type', 'code');
+          oauthUrl.searchParams.set('client_id', oauthParams.client_id);
+          oauthUrl.searchParams.set('redirect_uri', oauthParams.redirect_uri);
+          if (oauthParams.scope) oauthUrl.searchParams.set('scope', oauthParams.scope);
+          if (oauthParams.state) oauthUrl.searchParams.set('state', oauthParams.state);
+          if (oauthParams.code_challenge) {
+            oauthUrl.searchParams.set('code_challenge', oauthParams.code_challenge);
+          }
+          if (oauthParams.code_challenge_method) {
+            oauthUrl.searchParams.set('code_challenge_method', oauthParams.code_challenge_method);
+          }
+          if (oauthParams.nonce) oauthUrl.searchParams.set('nonce', oauthParams.nonce);
+
+          const oauthRedirectPath = oauthUrl.pathname + oauthUrl.search;
+
+          authDebugService.log(
+            'oidc',
+            'info',
+            'oauth_flow_resume',
+            {
+              provider: providerName,
+              userId: user.id,
+              oauthClientId: oauthParams.client_id,
+              oauthRedirectUri: oauthParams.redirect_uri
+            },
+            sessionId
+          );
+
+          logger.info('[OIDC] Resuming OAuth authorization flow after OIDC authentication', {
+            component: 'OidcAuth',
+            provider: providerName,
+            userId: user.id,
+            oauthClientId: oauthParams.client_id
+          });
+
+          // Set HTTP-only cookie for authentication (needed for OAuth authorize endpoint)
+          res.cookie('authToken', token, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: expiresIn * 1000
+          });
+
+          return res.redirect(oauthRedirectPath);
+        }
+
         // Get return URL - use base path for default
         let returnUrl = req.session?.returnUrl || buildServerPath('/');
         if (req.session) {
