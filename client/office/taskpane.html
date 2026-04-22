@@ -47,6 +47,128 @@
         document.getElementById('office-root').style.display = 'none';
       }
     </script>
+
+    <!-- Register the Office add-in service worker for offline resilience. -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        try {
+          var _m = location.pathname.match(/^(\/.*?)\/office(?:\/.*)?$/);
+          var _base = _m ? _m[1] : '';
+          navigator.serviceWorker.register(_base + '/office/office-sw.js', {
+            scope: _base + '/office/'
+          });
+        } catch (e) {
+          // SW registration failure is non-fatal — the add-in still works when online.
+        }
+      }
+    </script>
+
+    <!-- Offline fallback: shown if the JS bundle fails to load (e.g. browser cache cleared
+         while server is unreachable). The timer is cancelled by taskpane-entry.jsx. -->
+    <div
+      id="office-offline-fallback"
+      style="
+        display: none;
+        height: 100vh;
+        width: 100%;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        padding: 24px;
+        font-family: 'Segoe UI', system-ui, sans-serif;
+      "
+    >
+      <div
+        style="
+          background: #fff;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          padding: 32px 24px;
+          max-width: 320px;
+          width: 100%;
+          text-align: center;
+        "
+      >
+        <div style="color: #94a3b8; margin-bottom: 16px">
+          <svg
+            width="48"
+            height="48"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            style="display: inline-block"
+          >
+            <line x1="1" y1="1" x2="23" y2="23" />
+            <path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" />
+            <path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" />
+            <path d="M10.71 5.05A16 16 0 0 1 22.56 9" />
+            <path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" />
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0" />
+            <line x1="12" y1="20" x2="12.01" y2="20" />
+          </svg>
+        </div>
+        <h2
+          id="offline-heading"
+          style="font-size: 1.05rem; font-weight: 600; color: #1e293b; margin-bottom: 8px"
+        >
+          Server Not Reachable
+        </h2>
+        <p
+          id="offline-body"
+          style="font-size: 0.875rem; color: #64748b; line-height: 1.5; margin-bottom: 24px"
+        >
+          Please check your network connection and try again.
+        </p>
+        <button
+          id="offline-retry-btn"
+          onclick="location.reload()"
+          style="
+            background: #3b82f6;
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 10px 24px;
+            font-size: 0.875rem;
+            font-family: inherit;
+            cursor: pointer;
+            width: 100%;
+          "
+        >
+          Retry
+        </button>
+      </div>
+    </div>
+    <script>
+      // Apply German strings if the user's language is German.
+      (function () {
+        var lang = (navigator.language || 'en').split('-')[0].toLowerCase();
+        if (lang === 'de') {
+          var h = document.getElementById('offline-heading');
+          var p = document.getElementById('offline-body');
+          var b = document.getElementById('offline-retry-btn');
+          if (h) h.textContent = 'Server nicht erreichbar';
+          if (p)
+            p.textContent =
+              'Bitte überprüfen Sie Ihre Netzwerkverbindung und versuchen Sie es erneut.';
+          if (b) b.textContent = 'Erneut versuchen';
+        }
+      })();
+
+      // Show the offline fallback if the JS app hasn't initialised within 8 seconds.
+      // taskpane-entry.jsx sets window.__appInitialized = true on load and cancels this timer.
+      window.__offlineTimer = setTimeout(function () {
+        if (!window.__appInitialized) {
+          var root = document.getElementById('office-root');
+          var fallback = document.getElementById('office-offline-fallback');
+          if (root) root.style.display = 'none';
+          if (fallback) fallback.style.display = 'flex';
+        }
+      }, 8000);
+    </script>
+
     <script type="module" src="./taskpane-entry.jsx"></script>
   </body>
 </html>
