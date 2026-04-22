@@ -1,6 +1,7 @@
 import { useRef, useCallback, useEffect } from 'react';
 import { checkAppChatStatus, stopAppChatStream } from '../../api/api';
 import { parseSseStream } from '../utils/parseSseStream';
+import { refreshTokenOrExpireSession } from '../../features/office/api/officeAuth';
 
 /**
  * Hook for handling Server Sent Events via fetch + ReadableStream.
@@ -136,7 +137,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
       }, timeoutDuration);
 
       try {
-        const res = await fetch(url, {
+        let res = await fetch(url, {
           method: 'GET',
           headers: {
             Accept: 'text/event-stream',
@@ -145,6 +146,22 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
           credentials: 'include',
           signal: ac.signal
         });
+
+        // For the Office add-in: attempt a silent token refresh on 401 and retry once.
+        // refreshTokenOrExpireSession() uses the config stored at startup and invokes
+        // the session-expired callback (navigates to login) if the refresh fails.
+        if (res.status === 401 && localStorage.getItem('office_ihubtoken')) {
+          await refreshTokenOrExpireSession();
+          res = await fetch(url, {
+            method: 'GET',
+            headers: {
+              Accept: 'text/event-stream',
+              ...getAuthHeaders()
+            },
+            credentials: 'include',
+            signal: ac.signal
+          });
+        }
 
         if (!res.ok) {
           let body = null;

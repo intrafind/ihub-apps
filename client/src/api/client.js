@@ -79,6 +79,14 @@ const addResponseInterceptor = client => {
 
       // Handle authentication errors
       if (error.response?.status === 401) {
+        // Office add-in requests are tagged with _isOfficeRequest and handled
+        // by the Office interceptor in officeAuthBridge.js (which does a silent
+        // token refresh + retry). Skip all main-app 401 logic for them to avoid
+        // clearing the wrong localStorage key and dispatching stale events.
+        if (originalRequest?._isOfficeRequest) {
+          return Promise.reject(error);
+        }
+
         // Token expired or invalid - clear localStorage token for backward compatibility
         const currentToken = localStorage.getItem('authToken');
         if (currentToken) {
