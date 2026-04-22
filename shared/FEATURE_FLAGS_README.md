@@ -136,8 +136,7 @@ Current platform-level features (as of 2026-04-22):
 - `tools` - Allow AI models to call external tools and functions (default: true)
 - `sources` - Add custom knowledge sources to prompts (default: true)
 - `shortLinks` - Create short URLs for apps (default: true)
-- `export` - Export chat conversations and canvas content in various formats (default: true)
-- `pdfExport` - Export chat conversations as PDF (requires `export` to be enabled) (default: true)
+- `export` - Export chat conversations and canvas content in various formats including PDF, JSON, JSONL, Markdown, HTML, and Office formats (default: true, can be overridden at app level)
 
 ## Common App Features
 
@@ -148,6 +147,7 @@ Common app-level features:
 - `magicPrompt.prompt` - System prompt for magic prompt generation
 - `shortLinks` - Allow creating short links to this app
 - `canvas` - Enable canvas mode for this app
+- `export` - Allow exporting conversations from this app (inherits from platform level by default)
 
 ## Default Value Strategy
 
@@ -195,12 +195,74 @@ const AppChat = ({ app }) => {
 
   // Clean, readable checks
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
   const toolsFeatureEnabled = featureFlags.isEnabled('tools', true);
   const magicPromptEnabled = featureFlags.isAppFeatureEnabled(app, 'magicPrompt.enabled', false);
   const magicModel = featureFlags.getAppFeatureValue(app, 'magicPrompt.model', null);
   const magicPrompt = featureFlags.getAppFeatureValue(app, 'magicPrompt.prompt', '');
 };
 ```
+
+### Export Feature Usage Example
+
+The `export` feature can be controlled at both platform and app levels:
+
+```javascript
+// In a chat component
+function ChatHeader({ app }) {
+  const featureFlags = useFeatureFlags();
+
+  // Check if export is enabled at both platform AND app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
+
+  return (
+    <div>
+      {exportEnabled && (
+        <button onClick={handleExport}>
+          Export Conversation
+        </button>
+      )}
+    </div>
+  );
+}
+```
+
+**Configuration scenarios:**
+
+1. **Disable all exports globally:**
+   ```json
+   {
+     "features": {
+       "export": false
+     }
+   }
+   ```
+   Result: No app can export, regardless of app-level settings
+
+2. **Enable globally, disable for specific app:**
+   ```json
+   // Platform config
+   { "features": { "export": true } }
+
+   // App config
+   {
+     "id": "secure-chat",
+     "features": {
+       "export": false
+     }
+   }
+   ```
+   Result: All apps can export except "secure-chat"
+
+3. **Enable for all apps (default):**
+   ```json
+   {
+     "features": {
+       "export": true
+     }
+   }
+   ```
+   Result: All apps can export unless disabled at app level
 
 ## Benefits
 
