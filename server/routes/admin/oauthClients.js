@@ -179,6 +179,10 @@ export default function registerAdminOAuthRoutes(app) {
    *                 type: array
    *                 items:
    *                   type: string
+   *               allowedPrompts:
+   *                 type: array
+   *                 items:
+   *                   type: string
    *               tokenExpirationMinutes:
    *                 type: number
    *     responses:
@@ -205,6 +209,7 @@ export default function registerAdminOAuthRoutes(app) {
         scopes,
         allowedApps,
         allowedModels,
+        allowedPrompts,
         tokenExpirationMinutes,
         metadata,
         clientType,
@@ -238,6 +243,7 @@ export default function registerAdminOAuthRoutes(app) {
         scopes: Array.isArray(scopes) ? scopes : [],
         allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
         allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
+        allowedPrompts: Array.isArray(allowedPrompts) ? allowedPrompts : [],
         tokenExpirationMinutes:
           tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
         metadata: metadata || {},
@@ -267,6 +273,7 @@ export default function registerAdminOAuthRoutes(app) {
           scopes: newClient.scopes,
           allowedApps: newClient.allowedApps,
           allowedModels: newClient.allowedModels,
+          allowedPrompts: newClient.allowedPrompts,
           tokenExpirationMinutes: newClient.tokenExpirationMinutes,
           active: newClient.active,
           createdAt: newClient.createdAt,

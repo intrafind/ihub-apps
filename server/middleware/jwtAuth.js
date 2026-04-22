@@ -166,6 +166,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || [],
             allowedApps: client.allowedApps || [],
             allowedModels: client.allowedModels || [],
+            allowedPrompts: client.allowedPrompts || [],
             staticKey: decoded.static_key || false
           };
         } catch (loadError) {
@@ -186,6 +187,7 @@ export default function jwtAuthMiddleware(req, res, next) {
             scopes: decoded.scopes || [],
             allowedApps: [],
             allowedModels: [],
+            allowedPrompts: [],
             staticKey: decoded.static_key || false
           };
         }
@@ -227,6 +229,75 @@ export default function jwtAuthMiddleware(req, res, next) {
             });
           }
 
+          // Load OAuth client to apply current per-client permission restrictions.
+          // Client restrictions are looked up fresh on every request so that admin
+          // changes take effect immediately without waiting for token refresh.
+          let clientAllowedApps = [];
+          let clientAllowedModels = [];
+          let clientAllowedPrompts = [];
+          if (decoded.client_id) {
+            try {
+              const clientsFilePath =
+                oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+              const clientsConfig = loadOAuthClients(clientsFilePath);
+
+              // loadOAuthClients() catches internally and returns a safe empty config with
+              // `metadata.error` set. Treat that as a load failure so we fail closed with 503
+              // instead of falling through to a misleading "client not found" 401.
+              if (clientsConfig?.metadata?.error) {
+                logger.error('OAuth clients configuration unavailable for auth-code token', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id,
+                  loaderError: clientsConfig.metadata.error
+                });
+                return res.status(503).json({
+                  error: 'service_unavailable',
+                  error_description: 'Unable to validate OAuth client. Please try again later.'
+                });
+              }
+
+              const client = findClientById(clientsConfig, decoded.client_id);
+
+              if (!client) {
+                logger.warn('OAuth auth-code token rejected: client no longer exists', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id
+                });
+                return res.status(401).json({
+                  error: 'invalid_token',
+                  error_description: 'OAuth client no longer exists'
+                });
+              }
+
+              if (!client.active) {
+                logger.warn('OAuth auth-code token rejected: client suspended', {
+                  component: 'JwtAuth',
+                  clientId: decoded.client_id
+                });
+                return res.status(403).json({
+                  error: 'access_denied',
+                  error_description: 'OAuth client has been suspended'
+                });
+              }
+
+              clientAllowedApps = Array.isArray(client.allowedApps) ? client.allowedApps : [];
+              clientAllowedModels = Array.isArray(client.allowedModels) ? client.allowedModels : [];
+              clientAllowedPrompts = Array.isArray(client.allowedPrompts)
+                ? client.allowedPrompts
+                : [];
+            } catch (clientLoadError) {
+              logger.error('OAuth failed to load client for auth-code token', {
+                component: 'JwtAuth',
+                error: clientLoadError
+              });
+              // Fail closed: if we cannot verify client restrictions, reject the request
+              return res.status(503).json({
+                error: 'service_unavailable',
+                error_description: 'Unable to validate OAuth client. Please try again later.'
+              });
+            }
+          }
+
           user = {
             id: userId,
             username: decoded.username || decoded.preferred_username || userId,
@@ -237,7 +308,12 @@ export default function jwtAuthMiddleware(req, res, next) {
             timestamp: Date.now(),
             isOAuthAuthCode: true,
             clientId: decoded.client_id || null,
-            scopes: decoded.scopes || []
+            scopes: decoded.scopes || [],
+            // Per-client restrictions applied as a filter on top of the user's
+            // group permissions (see enhanceUserWithPermissions).
+            clientAllowedApps,
+            clientAllowedModels,
+            clientAllowedPrompts
           };
         } catch (loadError) {
           logger.error('OAuth failed to validate user for auth code token', {
