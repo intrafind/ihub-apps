@@ -110,6 +110,7 @@ function SharedAppHeader({
       {/* Header */}
       <div className="flex-shrink-0">
         <ChatHeader
+          app={app}
           title={app?.name}
           description={app?.description}
           color={app?.color}

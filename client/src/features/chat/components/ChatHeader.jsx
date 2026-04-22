@@ -6,11 +6,13 @@ import { useNavigate } from 'react-router-dom';
 import ChatActionsMenu from './ChatActionsMenu';
 import ExportDialog from './ExportDialog';
 import { useAuth } from '../../../shared/contexts/AuthContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 /**
  * A reusable header component for chat interfaces
  */
 function ChatHeader({
+  app,
   title,
   description,
   color,
@@ -38,6 +40,10 @@ function ChatHeader({
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const featureFlags = useFeatureFlags();
+
+  // Check if export is enabled at both platform and app levels
+  const exportEnabled = featureFlags.isBothEnabled(app, 'export', true);
 
   // Default icon if none provided
   const defaultIcon = <Icon name="chat" className="text-white" />;
@@ -152,7 +158,7 @@ function ChatHeader({
                 <Icon name="trash" size="sm" />
               </button>
             )}
-            {messages && messages.length > 0 && exportSettings && (
+            {exportEnabled && messages && messages.length > 0 && exportSettings && (
               <button
                 onClick={() => setShowExportDialog(true)}
                 className="bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200 p-2 rounded-full flex items-center justify-center h-10 w-10"
@@ -197,6 +203,7 @@ function ChatHeader({
           {/* Mobile burger menu - shown on mobile/tablet */}
           <div className="md:hidden">
             <ChatActionsMenu
+              app={app}
               onClearChat={onClearChat}
               onToggleConfig={onToggleConfig}
               onShare={onShare}
@@ -217,15 +224,17 @@ function ChatHeader({
         </div>
       </div>
 
-      {/* Export Dialog */}
-      <ExportDialog
-        isOpen={showExportDialog}
-        onClose={() => setShowExportDialog(false)}
-        messages={messages}
-        settings={exportSettings}
-        appId={appId}
-        chatId={chatId}
-      />
+      {/* Export Dialog - only render if export is enabled */}
+      {exportEnabled && (
+        <ExportDialog
+          isOpen={showExportDialog}
+          onClose={() => setShowExportDialog(false)}
+          messages={messages}
+          settings={exportSettings}
+          appId={appId}
+          chatId={chatId}
+        />
+      )}
     </div>
   );
 }

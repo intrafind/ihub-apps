@@ -104,11 +104,11 @@ export const featureRegistry = [
     default: true
   },
   {
-    id: 'pdfExport',
-    name: { en: 'PDF Export', de: 'PDF-Export' },
+    id: 'export',
+    name: { en: 'Export', de: 'Export' },
     description: {
-      en: 'Export chat conversations as formatted PDF documents',
-      de: 'Chat-Unterhaltungen als formatierte PDF-Dokumente exportieren'
+      en: 'Enable exporting chat conversations and canvas content in various formats (JSON, JSONL, Markdown, HTML, PDF)',
+      de: 'Exportieren von Chat-Unterhaltungen und Canvas-Inhalten in verschiedenen Formaten (JSON, JSONL, Markdown, HTML, PDF) aktivieren'
     },
     category: 'content',
     default: true
