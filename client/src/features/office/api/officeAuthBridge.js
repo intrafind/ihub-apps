@@ -33,7 +33,7 @@ import {
  *
  * Response interceptor:
  *   - Catches 401 errors for Office requests.
- *   - Attempts a silent token refresh via refreshTokenOrExpireSession().
+ *   - Attempts a silent token refresh via refreshTokenOrExpireSession(config).
  *   - Retries the original request once with the new token (_officeRetry flag
  *     prevents infinite loops).
  *   - If the refresh fails, the session-expired callback fires (navigates to
@@ -78,7 +78,7 @@ export function installOfficeAuthInterceptor(config) {
           originalRequest._officeRetry = true;
 
           try {
-            await refreshTokenOrExpireSession();
+            await refreshTokenOrExpireSession(config);
           } catch {
             // Refresh failed — session-expired callback already invoked.
             return Promise.reject(error);
