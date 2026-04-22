@@ -46,6 +46,7 @@
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)
     - [Auto-Send Query Parameter](auto-send-feature.md)
+    - [Feedback Feature](feedback-feature.md)
     - [iFinder Integration](iFinder-Integration.md)
     - [iFinder Quick Reference](iFinder-Quick-Reference.md)
     - [iFinder iAssistant Admin Guide](ifinder-iassistant-admin-guide.md)
