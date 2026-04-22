@@ -8,6 +8,7 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
+import { copyText } from '../../../utils/clipboardUtils';
 
 function AdminOAuthServerPage() {
   const { t } = useTranslation();
@@ -78,7 +79,7 @@ function AdminOAuthServerPage() {
 
   const copyToClipboard = useCallback(
     text => {
-      navigator.clipboard.writeText(text);
+      copyText(text);
       setMessage({
         type: 'success',
         text: t('common.copiedToClipboard', 'Copied to clipboard')

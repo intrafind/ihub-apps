@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { getFileExtension } from '../utils/markdownHelpers';
+import { copyText } from '../utils/clipboardUtils';
 
 // Helper to provide temporary feedback on a button
 const showButtonFeedback = (button, message, isSuccess = true) => {
@@ -26,7 +27,7 @@ const showButtonFeedback = (button, message, isSuccess = true) => {
 
 export const useCodeBlockInteractions = () => {
   useEffect(() => {
-    const handleInteraction = e => {
+    const handleInteraction = async e => {
       const button = e.target.closest('button');
       if (!button) return;
 
@@ -54,13 +55,17 @@ export const useCodeBlockInteractions = () => {
       codeContent = codeContent.trim();
 
       if (isCopyBtn) {
-        navigator.clipboard
-          .writeText(codeContent)
-          .then(() => showButtonFeedback(button, 'Copied!', true))
-          .catch(err => {
-            console.error('Failed to copy code block:', err);
+        try {
+          const result = await copyText(codeContent);
+          if (result.success) {
+            showButtonFeedback(button, 'Copied!', true);
+          } else {
             showButtonFeedback(button, 'Error', false);
-          });
+          }
+        } catch (err) {
+          console.error('Failed to copy code block:', err);
+          showButtonFeedback(button, 'Error', false);
+        }
       }
 
       if (isDownloadBtn) {

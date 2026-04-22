@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { createShortLink, getShortLink } from '../../../api/api';
+import { copyText } from '../../../utils/clipboardUtils';
 
 function generateCode(length = 6) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -85,7 +86,7 @@ function AppShareModal({ appId, path, params, onClose }) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(createdUrl);
+      await copyText(createdUrl);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {

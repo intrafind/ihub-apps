@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import TurndownService from 'turndown';
+import * as clipboardUtils from '../../utils/clipboardUtils.js';
 
 const turndownService = new TurndownService();
 
 /**
  * Custom hook for clipboard operations with multiple format support.
  * Supports copying content as plain text, markdown, HTML, or JSON.
+ * Includes iframe support via postMessage fallback.
  * @returns {Object} Clipboard utilities
  * @returns {Function} returns.copyText - Copy content as plain text
  * @returns {Function} returns.copyMarkdown - Copy HTML content as markdown
@@ -26,10 +28,12 @@ export function useClipboard() {
       tempDiv.innerHTML = content;
       const plainText = tempDiv.textContent || tempDiv.innerText || '';
 
-      await navigator.clipboard.writeText(plainText);
-      setLastCopied('text');
-      console.log('✅ Text copied to clipboard');
-      return { success: true, type: 'text' };
+      const result = await clipboardUtils.copyText(plainText);
+      if (result.success) {
+        setLastCopied('text');
+        console.log('✅ Text copied to clipboard');
+      }
+      return { success: result.success, type: 'text', ...result };
     } catch (error) {
       console.error('Failed to copy text:', error);
       return { success: false, error };
@@ -42,10 +46,12 @@ export function useClipboard() {
     setIsLoading(true);
     try {
       const markdown = turndownService.turndown(content);
-      await navigator.clipboard.writeText(markdown);
-      setLastCopied('markdown');
-      console.log('✅ Markdown copied to clipboard');
-      return { success: true, type: 'markdown' };
+      const result = await clipboardUtils.copyMarkdown(markdown);
+      if (result.success) {
+        setLastCopied('markdown');
+        console.log('✅ Markdown copied to clipboard');
+      }
+      return { success: result.success, type: 'markdown', ...result };
     } catch (error) {
       console.error('Failed to copy markdown:', error);
       return { success: false, error };
@@ -60,21 +66,13 @@ export function useClipboard() {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = content;
       const plain = tempDiv.textContent || tempDiv.innerText || '';
-      const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;
 
-      if (hasClipboardWrite) {
-        const item = new ClipboardItem({
-          'text/html': new Blob([content], { type: 'text/html' }),
-          'text/plain': new Blob([plain], { type: 'text/plain' })
-        });
-        await navigator.clipboard.write([item]);
-      } else {
-        await navigator.clipboard.writeText(content);
+      const result = await clipboardUtils.copyHTML(content, plain);
+      if (result.success) {
+        setLastCopied('html');
+        console.log('✅ HTML copied to clipboard');
       }
-
-      setLastCopied('html');
-      console.log('✅ HTML copied to clipboard');
-      return { success: true, type: 'html' };
+      return { success: result.success, type: 'html', ...result };
     } catch (error) {
       console.error('Failed to copy HTML:', error);
       return { success: false, error };
@@ -86,11 +84,12 @@ export function useClipboard() {
   const copyJSON = async data => {
     setIsLoading(true);
     try {
-      const jsonString = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-      await navigator.clipboard.writeText(jsonString);
-      setLastCopied('json');
-      console.log('✅ JSON copied to clipboard');
-      return { success: true, type: 'json' };
+      const result = await clipboardUtils.copyJSON(data);
+      if (result.success) {
+        setLastCopied('json');
+        console.log('✅ JSON copied to clipboard');
+      }
+      return { success: result.success, type: 'json', ...result };
     } catch (error) {
       console.error('Failed to copy JSON:', error);
       return { success: false, error };

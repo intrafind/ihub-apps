@@ -13,6 +13,7 @@ import {
   isMarkdown,
   cleanHtmlForExport
 } from '../../../utils/markdownUtils';
+import { copyHTML, copyText } from '../../../utils/clipboardUtils';
 import CustomResponseRenderer from '../../../shared/components/CustomResponseRenderer';
 import ClarificationCard from './ClarificationCard';
 import CitationPanel from './CitationPanel';
@@ -138,7 +139,7 @@ function ChatMessage({
     }
   }, [outputFormat, isUser, isEditing, message.content]);
 
-  const handleCopy = (format = 'text') => {
+  const handleCopy = async (format = 'text') => {
     // Use the original streamed content directly
     const raw = typeof message.content === 'string' ? message.content : message.content || '';
 
@@ -158,28 +159,19 @@ function ChatMessage({
         data = raw;
     }
 
-    const hasClipboardWrite = navigator.clipboard && navigator.clipboard.write;
-    let copyPromise;
+    try {
+      if (format === 'html') {
+        await copyHTML(data, raw);
+      } else {
+        await copyText(data);
+      }
 
-    if (format === 'html' && hasClipboardWrite) {
-      const item = new ClipboardItem({
-        'text/html': new Blob([data], { type: 'text/html' }),
-        'text/plain': new Blob([raw], { type: 'text/plain' })
-      });
-      copyPromise = navigator.clipboard.write([item]);
-    } else {
-      copyPromise = navigator.clipboard.writeText(data);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+      setShowCopyMenu(false);
+    } catch (err) {
+      console.error('Failed to copy content: ', err);
     }
-
-    copyPromise
-      .then(() => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
-        setShowCopyMenu(false);
-      })
-      .catch(err => {
-        console.error('Failed to copy content: ', err);
-      });
   };
 
   const handleDownload = (format = 'text') => {

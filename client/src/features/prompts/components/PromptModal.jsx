@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
 import { highlightVariables } from '../../../utils/highlightVariables';
+import { copyText } from '../../../utils/clipboardUtils';
 
 function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
   const [copyStatus, setCopyStatus] = useState('idle');
@@ -22,7 +23,7 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
   const handleShare = async () => {
     const url = `${window.location.origin}/prompts?id=${encodeURIComponent(prompt.id)}`;
     try {
-      await navigator.clipboard.writeText(url);
+      await copyText(url);
       setShareStatus('success');
     } catch (err) {
       console.error('Failed to copy share link:', err);
@@ -33,7 +34,7 @@ function PromptModal({ prompt, onClose, isFavorite, onToggleFavorite, t }) {
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(prompt.prompt.replace('[content]', ''));
+      await copyText(prompt.prompt.replace('[content]', ''));
       setCopyStatus('success');
     } catch (err) {
       console.error('Failed to copy prompt:', err);

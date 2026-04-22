@@ -6,6 +6,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { copyText } from '../../../utils/clipboardUtils';
 
 function AdminOAuthClientsPage() {
   const { t } = useTranslation();
@@ -622,7 +623,7 @@ function AdminOAuthClientsPage() {
                         </div>
                         <button
                           onClick={() => {
-                            navigator.clipboard.writeText(generatedToken.token);
+                            copyText(generatedToken.token);
                             setMessage({
                               type: 'success',
                               text: t('common.copiedToClipboard', 'Copied to clipboard')

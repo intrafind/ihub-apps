@@ -8,6 +8,7 @@ import PromptModal from '../components/PromptModal';
 import { createFavoriteItemHelpers } from '../../../utils/favoriteItems';
 import { getRecentPromptIds, recordPromptUsage } from '../../../utils/recentPrompts';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import { copyText } from '../../../utils/clipboardUtils';
 import { highlightVariables } from '../../../utils/highlightVariables';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
@@ -393,7 +394,7 @@ function PromptsList() {
                       onClick={async e => {
                         e.stopPropagation();
                         try {
-                          await navigator.clipboard.writeText(p.prompt.replace('[content]', ''));
+                          await copyText(p.prompt.replace('[content]', ''));
                           setCopyStatus(s => ({ ...s, [p.id]: 'success' }));
                           recordPromptUsage(p.id);
                         } catch (err) {

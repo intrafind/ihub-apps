@@ -7,6 +7,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import { copyText } from '../../../utils/clipboardUtils';
 
 function AdminOAuthClientEditPage() {
   const { t } = useTranslation();
@@ -235,7 +236,7 @@ function AdminOAuthClientEditPage() {
   };
 
   const copyToClipboard = text => {
-    navigator.clipboard.writeText(text);
+    copyText(text);
   };
 
   const handleModalClose = () => {

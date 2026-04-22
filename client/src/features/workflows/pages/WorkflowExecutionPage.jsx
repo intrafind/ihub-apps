@@ -156,7 +156,8 @@ function WorkflowExecutionPage() {
   const copyToClipboard = async (fieldKey, value) => {
     const text = typeof value === 'string' ? value : JSON.stringify(value, null, 2);
     try {
-      await navigator.clipboard.writeText(text);
+      const { copyText } = await import('../../../utils/clipboardUtils');
+      await copyText(text);
       setCopiedFields(prev => new Set(prev).add(fieldKey));
       setTimeout(() => {
         setCopiedFields(prev => {

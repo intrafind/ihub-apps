@@ -6,6 +6,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import SSLConfig from '../components/SSLConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { copyText } from '../../../utils/clipboardUtils';
 
 function AdminSystemPage() {
   const { t } = useTranslation();
@@ -433,7 +434,7 @@ function AdminSystemPage() {
     if (!encryptedResult) return;
 
     try {
-      await navigator.clipboard.writeText(encryptedResult);
+      await copyText(encryptedResult);
       setEncryptMessage({
         type: 'success',
         text: t('admin.system.copiedToClipboard', 'Copied to clipboard!')
