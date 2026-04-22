@@ -31,7 +31,12 @@ export default function authGatePlugin() {
 
     transformIndexHtml: {
       order: 'post',
-      handler(html) {
+      handler(html, ctx) {
+        // Skip office add-in pages — they have their own auth flow (PKCE OAuth)
+        if (ctx.filename && !ctx.filename.endsWith('/index.html')) {
+          return html;
+        }
+
         if (!isBuild && !isDevGateEnabled) {
           return html;
         }
