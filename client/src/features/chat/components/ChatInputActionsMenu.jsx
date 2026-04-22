@@ -320,8 +320,8 @@ function ChatInputActionsMenu({
           aria-label={t('chatActions.menu', 'Actions menu')}
           className="absolute bottom-full left-0 mb-2 w-80 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 max-h-96 overflow-y-auto"
         >
-          {/* Quick Actions Section */}
-          <div className="p-3 border-b border-gray-200 dark:border-gray-700">
+          {/* Quick Actions Section - Hidden on desktop (md:) since actions are shown inline */}
+          <div className="md:hidden p-3 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
               {t('chatActions.quickActions', 'Quick Actions')}
             </h3>

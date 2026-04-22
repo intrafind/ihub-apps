@@ -10,6 +10,7 @@ import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 
 /**
  * Chat input component following Claude's design
@@ -462,6 +463,32 @@ function ChatInput({
                 className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
               >
                 <Icon name="paper-clip" size="md" />
+              </button>
+            )}
+
+            {/* Magic Prompt button - show directly on desktop if enabled and NOT in single-action mode */}
+            {magicPromptEnabled && !showUndoMagicPrompt && !isSingleActionOptimization && (
+              <button
+                type="button"
+                onClick={onMagicPrompt}
+                disabled={isInputDisabled || isProcessing}
+                title={t('common.magicPrompt', 'Magic Prompt')}
+                className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                {magicPromptLoading ? <MagicPromptLoader /> : <Icon name="sparkles" size="md" />}
+              </button>
+            )}
+
+            {/* Undo Magic Prompt button - show directly on desktop if enabled and NOT in single-action mode */}
+            {showUndoMagicPrompt && !isSingleActionOptimization && (
+              <button
+                type="button"
+                onClick={onUndoMagicPrompt}
+                disabled={isInputDisabled || isProcessing}
+                title={t('common.undo', 'Undo')}
+                className="hidden md:flex p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+              >
+                <Icon name="arrowLeft" size="md" />
               </button>
             )}
 
