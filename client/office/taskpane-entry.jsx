@@ -39,8 +39,10 @@ Office.onReady(async () => {
     return;
   }
 
-  // Install Office Bearer token interceptor so apiClient works in the taskpane
-  installOfficeAuthInterceptor();
+  // Install Office Bearer token interceptor so apiClient works in the taskpane.
+  // Passing config stores it in officeAuth so the SSE hook and Axios interceptor
+  // can call refreshTokenOrExpireSession() without threading config everywhere.
+  installOfficeAuthInterceptor(config);
 
   // Register the ItemChanged event to reset chat when user switches emails
   if (Office.context?.mailbox?.addHandlerAsync) {

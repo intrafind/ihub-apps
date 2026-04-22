@@ -199,17 +199,44 @@ export const refreshAccessToken = async config => {
 let onSessionExpiredCallback = null;
 let refreshPromise = null;
 
+// Stored at startup via setOfficeConfig — allows modules (Axios interceptor,
+// SSE hook) to call refreshTokenOrExpireSession() without threading config
+// through every call site.
+let officeConfig = null;
+
 export function setOnSessionExpired(callback) {
   onSessionExpiredCallback = callback;
 }
 
+export function setOfficeConfig(config) {
+  officeConfig = config;
+}
+
 function ensureTokenRefreshed(config) {
+  const cfg = config ?? officeConfig;
+  if (!cfg) throw new Error('Office config not initialized');
   if (!refreshPromise) {
-    refreshPromise = refreshAccessToken(config).finally(() => {
+    refreshPromise = refreshAccessToken(cfg).finally(() => {
       refreshPromise = null;
     });
   }
   return refreshPromise;
+}
+
+/**
+ * Attempt a silent token refresh, invoking the session-expired callback and
+ * re-throwing if the refresh fails.
+ *
+ * @param {object} [config] - Office config ({ baseUrl, clientId }). Falls back
+ *   to the config stored via setOfficeConfig() when omitted.
+ */
+export async function refreshTokenOrExpireSession(config) {
+  try {
+    await ensureTokenRefreshed(config);
+  } catch (err) {
+    onSessionExpiredCallback?.();
+    throw err;
+  }
 }
 
 export async function authenticatedFetch(config, url, options = {}) {
@@ -223,9 +250,10 @@ export async function authenticatedFetch(config, url, options = {}) {
 
   if (response.status === 401) {
     try {
-      await ensureTokenRefreshed(config);
+      // Pass config explicitly so the caller's config is honoured even if
+      // setOfficeConfig() was not called (e.g. in isolated unit tests).
+      await refreshTokenOrExpireSession(config);
     } catch {
-      onSessionExpiredCallback?.();
       throw new Error('Session expired');
     }
 
