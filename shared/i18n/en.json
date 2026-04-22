@@ -1524,7 +1524,12 @@
       "downloadMarkdown": "as Markdown",
       "downloadHTML": "as HTML"
     },
-    "insertIntoDocument": "Insert into document"
+    "insertIntoDocument": "Insert into document",
+    "voiceInput": {
+      "tooltipManual": "Dictate to editor (Ctrl+M) - manual",
+      "tooltipAutomatic": "Dictate to editor (Ctrl+M) - automatic",
+      "ariaLabel": "Dictate text to editor"
+    }
   },
   "teams": {
     "status": {
@@ -1780,5 +1785,29 @@
     "good": "Good",
     "veryGood": "Very Good",
     "excellent": "Excellent"
+  },
+  "voiceInput": {
+    "listening": "Listening...",
+    "modeManual": "Manual mode - click close when finished",
+    "modeAutomatic": "Automatic mode - stops when you stop speaking",
+    "instructions": "Speak clearly and naturally",
+    "tooltipManual": "Voice input (Ctrl+M) - manual",
+    "tooltipAutomatic": "Voice input (Ctrl+M) - automatic",
+    "ariaLabel": "Toggle voice input",
+    "error": {
+      "notSupported": "Speech recognition not supported in this browser",
+      "permissionDenied": "Please allow microphone access and try again.",
+      "noSpeech": "No speech detected. Please try again.",
+      "noMicrophone": "No microphone found. Please check your device settings.",
+      "network": "Network error. Please check your connection.",
+      "general": "Voice input error. Please try again.",
+      "startError": "Error starting voice input. Please try again."
+    }
+  },
+  "voiceCommands": {
+    "clearChat": "clear chat",
+    "clearChat_de": "chat löschen",
+    "sendMessage": "send message",
+    "sendMessage_de": "nachricht senden"
   }
 }
