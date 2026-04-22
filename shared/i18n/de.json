@@ -560,7 +560,12 @@
       "downloadMarkdown": "als Markdown",
       "downloadHTML": "als HTML"
     },
-    "insertIntoDocument": "In Dokument einfügen"
+    "insertIntoDocument": "In Dokument einfügen",
+    "voiceInput": {
+      "tooltipManual": "In Editor diktieren (Strg+M) - manuell",
+      "tooltipAutomatic": "In Editor diktieren (Strg+M) - automatisch",
+      "ariaLabel": "Text in Editor diktieren"
+    }
   },
   "admin": {
     "providers": {
@@ -1745,5 +1750,29 @@
     "good": "Gut",
     "veryGood": "Sehr gut",
     "excellent": "Ausgezeichnet"
+  },
+  "voiceInput": {
+    "listening": "Höre zu...",
+    "modeManual": "Manueller Modus - zum Beenden auf Schließen klicken",
+    "modeAutomatic": "Automatischer Modus - stoppt, wenn Sie aufhören zu sprechen",
+    "instructions": "Sprechen Sie klar und natürlich",
+    "tooltipManual": "Spracheingabe (Strg+M) - manuell",
+    "tooltipAutomatic": "Spracheingabe (Strg+M) - automatisch",
+    "ariaLabel": "Spracheingabe umschalten",
+    "error": {
+      "notSupported": "Spracherkennung wird in diesem Browser nicht unterstützt",
+      "permissionDenied": "Bitte erlauben Sie den Mikrofonzugriff und versuchen Sie es erneut.",
+      "noSpeech": "Keine Sprache erkannt. Bitte versuchen Sie es erneut.",
+      "noMicrophone": "Kein Mikrofon gefunden. Bitte überprüfen Sie Ihre Geräteeinstellungen.",
+      "network": "Netzwerkfehler. Bitte überprüfen Sie Ihre Verbindung.",
+      "general": "Fehler bei der Spracheingabe. Bitte versuchen Sie es erneut.",
+      "startError": "Fehler beim Starten der Spracheingabe. Bitte versuchen Sie es erneut."
+    }
+  },
+  "voiceCommands": {
+    "clearChat": "clear chat",
+    "clearChat_de": "chat löschen",
+    "sendMessage": "send message",
+    "sendMessage_de": "nachricht senden"
   }
 }
