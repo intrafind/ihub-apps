@@ -34,32 +34,37 @@ export default function jwtAuthMiddleware(req, res, next) {
   const platform = configCache.getPlatform() || {};
 
   try {
-    let decoded = verifyJwt(token);
+    // Peek at the token first to determine the correct audience for verification.
+    // OAuth authorization_code tokens use the client ID as audience instead of 'ihub-apps'.
+    // Checking this upfront avoids a spurious verification failure (and log warning)
+    // for every Outlook add-in request.
+    let decoded = null;
+    const peeked = decodeJwt(token);
 
-    // If standard verification failed, check if it's an OAuth authorization code token
-    // with a client-specific audience (aud: clientId instead of 'ihub-apps')
-    if (!decoded) {
-      const peeked = decodeJwt(token);
-      if (
-        peeked?.payload?.authMode === 'oauth_authorization_code' &&
-        peeked?.payload?.aud &&
-        peeked.payload.aud !== 'ihub-apps'
-      ) {
-        // Verify the audience against registered OAuth clients before using it
-        // This prevents an attacker from using an arbitrary audience claim to influence verification
-        const oauthConfig = platform.oauth || {};
-        if (oauthConfig.enabled?.clients) {
-          try {
-            const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-            const clientsConfig = loadOAuthClients(clientsFilePath);
-            if (clientsConfig.clients[peeked.payload.aud]) {
-              decoded = verifyJwt(token, { audience: peeked.payload.aud });
-            }
-          } catch {
-            // If we can't load clients, don't allow the alternative audience
+    if (
+      peeked?.payload?.authMode === 'oauth_authorization_code' &&
+      peeked?.payload?.aud &&
+      peeked.payload.aud !== 'ihub-apps'
+    ) {
+      // Verify the audience against registered OAuth clients before trusting it.
+      // This prevents an attacker from using an arbitrary audience claim to influence verification.
+      const oauthConfig = platform.oauth || {};
+      if (oauthConfig.enabled?.clients) {
+        try {
+          const clientsFilePath = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          const clientsConfig = loadOAuthClients(clientsFilePath);
+          if (clientsConfig.clients[peeked.payload.aud]) {
+            decoded = verifyJwt(token, { audience: peeked.payload.aud });
           }
+        } catch {
+          // If we can't load clients, fall through to standard verification
         }
       }
+    }
+
+    // Standard verification for all other tokens (or if client-audience path didn't match)
+    if (!decoded) {
+      decoded = verifyJwt(token);
     }
 
     if (!decoded) {
