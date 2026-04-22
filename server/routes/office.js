@@ -27,16 +27,6 @@ export default function registerOfficeRoutes(app) {
   // browser can cache icon files even when the integration is toggled.
   app.use(buildServerPath('/office/assets'), express.static(path.join(officePath, 'assets')));
 
-  // Serve the Office add-in service worker without the requireOfficeEnabled guard so
-  // that it can be fetched for unregistration even after the integration is disabled.
-  // Cache-Control: no-cache forces the browser to revalidate on every load so SW updates
-  // are picked up promptly.
-  app.get(buildServerPath('/office/office-sw.js'), (req, res) => {
-    res.set('Content-Type', 'application/javascript');
-    res.set('Cache-Control', 'no-cache');
-    res.sendFile(path.join(officePath, 'office-sw.js'));
-  });
-
   // Guard middleware: return 404 when the integration is not enabled
   function requireOfficeEnabled(req, res, next) {
     const enabled = configCache.getPlatform()?.officeIntegration?.enabled;

@@ -2,7 +2,6 @@ import * as React from 'react';
 import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import OfficeLogin from './OfficeLogin';
 import OfficeChatPanel from './OfficeChatPanel';
-import OfficeOfflineScreen from './OfficeOfflineScreen';
 import ChatHeader from './chat/ChatHeader';
 import SettingsDialog from './settings-dialog';
 import AppListPanel from '../../../shared/components/AppListPanel';
@@ -80,10 +79,9 @@ function SelectPage({ user, onLogout, onSelect }) {
   );
 }
 
-const OfficeApp = ({ offline = false }) => {
+const OfficeApp = () => {
   const config = useOfficeConfig();
   const navigate = useNavigate();
-  const [isOffline, setIsOffline] = React.useState(offline);
   const [authData, setAuthData] = React.useState(getStoredAuth);
   const [selectedApp, setSelectedApp] = React.useState(getStoredSelectedApp);
   const [sessionError, setSessionError] = React.useState(null);
@@ -102,28 +100,6 @@ const OfficeApp = ({ offline = false }) => {
     setOnSessionExpired(handleSessionExpired);
     return () => setOnSessionExpired(null);
   }, [handleSessionExpired]);
-
-  // Retry handler called by OfficeOfflineScreen when connectivity is restored.
-  const handleRetry = React.useCallback(() => {
-    setIsOffline(false);
-  }, []);
-
-  // Listen for the browser 'offline' event and verify with a real fetch before
-  // switching to offline mode (navigator.onLine can be unreliable in managed environments).
-  React.useEffect(() => {
-    const handleOfflineEvent = async () => {
-      try {
-        const res = await fetch(`${config.baseUrl}/api/integrations/office-addin/config`, {
-          signal: AbortSignal.timeout(3000)
-        });
-        if (!res.ok) setIsOffline(true);
-      } catch {
-        setIsOffline(true);
-      }
-    };
-    window.addEventListener('offline', handleOfflineEvent);
-    return () => window.removeEventListener('offline', handleOfflineEvent);
-  }, [config.baseUrl]);
 
   const handleLoginSuccess = React.useCallback(
     async data => {
@@ -179,10 +155,6 @@ const OfficeApp = ({ offline = false }) => {
     const id = window.setTimeout(() => setSessionError(null), 5000);
     return () => window.clearTimeout(id);
   }, [sessionError]);
-
-  if (isOffline) {
-    return <OfficeOfflineScreen onRetry={handleRetry} />;
-  }
 
   return (
     <Routes>
