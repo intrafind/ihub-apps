@@ -161,7 +161,40 @@ export default function AppCanvas() {
     addSystemMessage
   } = useAppChat({ appId, chatId: chatId.current });
 
-  // Handle general prompt submission - simplified to match AppChat
+  // Ref-based forwarder so useCanvas can call handlePromptSubmit without a circular dependency.
+  // useCanvas needs handlePromptSubmit (for FloatingToolbox actions), but handlePromptSubmit needs
+  // selectedText/editorContent from useCanvas — breaking the cycle with a ref avoids the TDZ.
+  const handlePromptSubmitRef = useRef(null);
+  const stableSubmitForwarder = useCallback(
+    (...args) => handlePromptSubmitRef.current?.(...args),
+    []
+  );
+
+  // Initialize unified canvas hook BEFORE handlePromptSubmit so selectedText/editorContent
+  // are declared before handlePromptSubmit's dependency array is evaluated.
+  const canvasHook = useCanvas(appId, null, { quillRef, chatInputRef }, stableSubmitForwarder);
+
+  // Extract all canvas functionality from the unified hook
+  const {
+    // Content management
+    content: editorContent,
+    setContent: setEditorContent,
+    setContentWithConfirmation,
+    clearContent: clearCanvasContent,
+
+    // Selection and editing state
+    selection,
+    selectedText,
+    cursorPosition,
+    setSelection,
+    setSelectedText,
+
+    // Editing functions
+    handleSelectionChange,
+    handleEditAction
+  } = canvasHook;
+
+  // Handle general prompt submission
   const handlePromptSubmit = useCallback(
     async (e, options = {}) => {
       // If called with a string as first parameter (for edit actions), treat it as inputText
@@ -258,6 +291,9 @@ export default function AppCanvas() {
     ]
   );
 
+  // Keep the ref in sync so stableSubmitForwarder always calls the latest version
+  handlePromptSubmitRef.current = handlePromptSubmit;
+
   // Voice commands setup
   useVoiceCommands({
     messages,
@@ -267,11 +303,11 @@ export default function AppCanvas() {
       chatId.current = resetChatId(appId, 'canvas');
     },
     sendMessage: text => {
-      handlePromptSubmit(text); // This will be treated as a string input
+      handlePromptSubmit(text);
     },
     isProcessing: processing,
-    currentText: '', // Not used in canvas mode
-    setInput: () => {} // Not used in canvas mode
+    currentText: '',
+    setInput: () => {}
   });
 
   // Resend message functionality for ChatInput
@@ -286,29 +322,6 @@ export default function AppCanvas() {
     },
     [prepareResend, handlePromptSubmit, app?.allowEmptyContent]
   );
-
-  // Initialize unified canvas hook after handlePromptSubmit is defined
-  const canvasHook = useCanvas(appId, null, { quillRef, chatInputRef }, handlePromptSubmit);
-
-  // Extract all canvas functionality from the unified hook
-  const {
-    // Content management
-    content: editorContent,
-    setContent: setEditorContent,
-    setContentWithConfirmation,
-    clearContent: clearCanvasContent,
-
-    // Selection and editing state
-    selection,
-    selectedText,
-    cursorPosition,
-    setSelection,
-    setSelectedText,
-
-    // Editing functions
-    handleSelectionChange,
-    handleEditAction
-  } = canvasHook;
 
   // Load app data
   useEffect(() => {
