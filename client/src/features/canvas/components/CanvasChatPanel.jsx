@@ -23,7 +23,8 @@ const CanvasChatPanel = ({
   inputRef,
   onInsertAnswer,
   modelId,
-  models = []
+  models = [],
+  onVoiceInput
 }) => {
   const { t } = useTranslation();
 
@@ -80,7 +81,7 @@ const CanvasChatPanel = ({
           onSubmit={onSubmit}
           isProcessing={isProcessing}
           onCancel={onCancel}
-          onVoiceInput={() => {}} // Voice input can be added later if needed
+          onVoiceInput={onVoiceInput}
           selectedImage={null}
           selectedFile={null}
           imageUploadConfig={{}}

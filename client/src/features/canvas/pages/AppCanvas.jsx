@@ -18,6 +18,8 @@ import useAppChat from '../../chat/hooks/useAppChat';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useCanvas from '../hooks/useCanvas';
+import VoiceFeedback from '../../voice/components/VoiceFeedback';
+import useVoiceRecognition from '../../voice/hooks/useVoiceRecognition';
 import { fetchAppDetails } from '../../../api/api';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 import { getOrCreateChatId, resetChatId } from '../../../utils/chatId';
@@ -189,7 +191,13 @@ export default function AppCanvas() {
         contextualInput += `\n\nSelected text: "${selectedText}"`;
       }
       if (editorContent.trim()) {
-        contextualInput += `\n\nCurrent document context: ${editorContent.replace(/<[^>]*>/g, '').substring(0, 500)}...`;
+        const docText = editorContent.replace(/<[^>]*>/g, '').trim();
+        // For autoApply apps, send the full document so the LLM can produce accurate replacements
+        if (app?.features?.canvasAutoApply === true) {
+          contextualInput += `\n\nCurrent document:\n${docText}`;
+        } else {
+          contextualInput += `\n\nCurrent document context: ${docText.substring(0, 500)}...`;
+        }
       }
 
       try {
@@ -213,7 +221,7 @@ export default function AppCanvas() {
             temperature,
             outputFormat: selectedOutputFormat,
             language: currentLanguage,
-            bypassAppPrompts: true,
+            bypassAppPrompts: !!options?.editAction,
             ...(enabledTools && enabledTools.length > 0 ? { enabledTools } : {})
           },
           sendChatHistory
@@ -480,6 +488,50 @@ export default function AppCanvas() {
     }
   }, [setEditorContent]);
 
+  // Voice recognition for the canvas chat panel (dictate instructions to the LLM)
+  const {
+    isListening: isChatVoiceListening,
+    transcript: chatVoiceTranscript,
+    toggleListening: toggleChatVoice,
+    stopListening: stopChatVoice,
+    microphoneMode: chatMicrophoneMode
+  } = useVoiceRecognition({
+    app,
+    inputRef: chatInputRef,
+    onSpeechResult: text => {
+      setInputValue(prev => (prev ? `${prev} ${text}` : text));
+    },
+    disabled: processing
+  });
+
+  // Track which message IDs have already been auto-applied to avoid re-applying on re-render
+  const lastAutoAppliedMsgIdRef = useRef(null);
+
+  // Auto-apply: when canvasAutoApply is enabled, automatically update the editor with LLM responses
+  useEffect(() => {
+    if (!app?.features?.canvasAutoApply) return;
+    if (!messages || messages.length === 0) return;
+
+    const lastMsg = messages[messages.length - 1];
+    // Only act on completed assistant messages — skip FloatingToolbox edit actions (they handle
+    // content themselves via applyEditResult) and skip while still streaming
+    if (
+      lastMsg?.role !== 'assistant' ||
+      lastMsg?.meta?.editAction ||
+      lastMsg?.isStreaming ||
+      lastMsg?.id === lastAutoAppliedMsgIdRef.current
+    ) {
+      return;
+    }
+
+    const msgContent = lastMsg?.content;
+    if (!msgContent) return;
+
+    const html = isMarkdown(msgContent) ? markdownToHtml(msgContent) : msgContent;
+    setEditorContent(html);
+    lastAutoAppliedMsgIdRef.current = lastMsg.id;
+  }, [messages, app?.features?.canvasAutoApply, setEditorContent]);
+
   // Save canvas-specific settings when they change
   useEffect(() => {
     if (appId) {
@@ -507,39 +559,41 @@ export default function AppCanvas() {
     loadSettings();
   }, [appId]);
 
-  // Handle initial content from URL params (for auto-redirect from chat)
+  // Handle initial content when redirected from chat (content stored in sessionStorage)
   useEffect(() => {
-    const initialContent = searchParams.get('content');
-    if (initialContent) {
-      // Convert markdown to HTML if needed
-      const contentToSet = isMarkdown(initialContent)
-        ? markdownToHtml(initialContent)
-        : initialContent;
+    const hasContent = searchParams.get('hasContent');
+    if (!hasContent) return;
 
-      // Use confirmation modal if there's existing content
-      const loadInitialContent = async () => {
-        try {
-          const result = await setContentWithConfirmation(contentToSet, modalData => {
-            setContentModalData({
-              ...modalData,
-              title: t('canvas.confirmReplaceWithNewContentTitle', 'Content from Chat')
-            });
-            setShowContentModal(true);
+    const storageKey = `canvas_initial_content_${appId}`;
+    const initialContent = sessionStorage.getItem(storageKey);
+
+    // Always clear the URL flag and sessionStorage entry regardless of outcome
+    const newSearchParams = new URLSearchParams(searchParams);
+    newSearchParams.delete('hasContent');
+    navigate(`/apps/${appId}/canvas?${newSearchParams.toString()}`, { replace: true });
+    sessionStorage.removeItem(storageKey);
+
+    if (!initialContent) return;
+
+    const contentToSet = isMarkdown(initialContent)
+      ? markdownToHtml(initialContent)
+      : initialContent;
+
+    const loadInitialContent = async () => {
+      try {
+        await setContentWithConfirmation(contentToSet, modalData => {
+          setContentModalData({
+            ...modalData,
+            title: t('canvas.confirmReplaceWithNewContentTitle', 'Content from Chat')
           });
+          setShowContentModal(true);
+        });
+      } catch (error) {
+        console.error('Error loading initial content:', error);
+      }
+    };
 
-          console.log('Content loading result:', result);
-        } catch (error) {
-          console.error('Error loading initial content:', error);
-        } finally {
-          // Always clear the URL parameter regardless of user choice
-          const newSearchParams = new URLSearchParams(searchParams);
-          newSearchParams.delete('content');
-          navigate(`/apps/${appId}/canvas?${newSearchParams.toString()}`, { replace: true });
-        }
-      };
-
-      loadInitialContent();
-    }
+    loadInitialContent();
   }, [searchParams, appId, navigate, setContentWithConfirmation, t]);
 
   if (loading) {
@@ -596,6 +650,18 @@ export default function AppCanvas() {
 
       {/* Main Content Area */}
       <div className="flex flex-1 min-h-0 overflow-hidden gap-2 px-4 pb-4">
+        {/* Voice feedback overlay for chat panel dictation */}
+        <VoiceFeedback
+          isActive={isChatVoiceListening}
+          setIsActive={stopChatVoice}
+          transcript={
+            app?.inputMode?.microphone?.showTranscript || app?.microphone?.showTranscript
+              ? chatVoiceTranscript
+              : ''
+          }
+          mode={chatMicrophoneMode}
+        />
+
         {/* Chat Panel */}
         <CanvasChatPanel
           messages={messages}
@@ -617,6 +683,7 @@ export default function AppCanvas() {
           onInsertAnswer={handleInsertAnswer}
           modelId={selectedModel}
           models={models}
+          onVoiceInput={toggleChatVoice}
         />
 
         {/* Resize Handle */}
