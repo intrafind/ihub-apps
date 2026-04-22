@@ -8,13 +8,43 @@ import {
 } from '../utilities/buildChatApiMessages';
 
 /**
+ * Combines manual upload data with email attachment data.
+ * Both manual uploads and email attachments should be included together.
+ *
+ * @param {Object|Array|null} manualData - Data from manual file upload (single object)
+ * @param {Array|null} mailData - Data from email attachments (array)
+ * @returns {Object|Array|null} Combined data (single object or array)
+ */
+function combineUploadData(manualData, mailData) {
+  // If both are present, combine them into an array
+  if (manualData && mailData) {
+    // Ensure manualData is in array format for combination
+    const manualArray = Array.isArray(manualData) ? manualData : [manualData];
+    return [...manualArray, ...mailData];
+  }
+
+  // If only manual data exists, return it as-is
+  if (manualData) {
+    return manualData;
+  }
+
+  // If only mail data exists, return it
+  if (mailData) {
+    return mailData;
+  }
+
+  // Neither exists
+  return null;
+}
+
+/**
  * Wraps useAppChat with Outlook-specific message enrichment.
  *
  * Intercepts sendMessage to:
  * 1. Read the current Outlook mail context (body + attachments)
  * 2. Combine user text with the email body in apiMessage.content
- * 3. Inject mail attachment images into apiMessage.imageData
- * 4. Inject mail attachment documents into apiMessage.fileData
+ * 3. Combine manual uploads with mail attachment images in apiMessage.imageData
+ * 4. Combine manual uploads with mail attachment documents in apiMessage.fileData
  *
  * The displayMessage is left unchanged (shows what the user typed in the UI,
  * without the injected email body). Only the apiMessage sent to the server
@@ -40,17 +70,20 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
 
       const enrichedContent = combineUserTextWithEmailBody(apiMessage.content, mailCtx.bodyText);
 
-      // Only inject mail attachments if the caller didn't provide their own
+      // Combine manual uploads with email attachments
       const mailImageData = buildImageDataFromMailAttachments(mailCtx.attachments || []);
       const mailFileData = await buildFileDataFromMailAttachments(mailCtx.attachments || []);
+
+      const combinedImageData = combineUploadData(apiMessage.imageData, mailImageData);
+      const combinedFileData = combineUploadData(apiMessage.fileData, mailFileData);
 
       chat.sendMessage({
         displayMessage,
         apiMessage: {
           ...apiMessage,
           content: enrichedContent,
-          imageData: apiMessage.imageData ?? mailImageData,
-          fileData: apiMessage.fileData ?? mailFileData
+          imageData: combinedImageData,
+          fileData: combinedFileData
         },
         params,
         sendChatHistory,
