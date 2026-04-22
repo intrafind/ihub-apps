@@ -296,14 +296,20 @@ function ChatInputActionsMenu({
   individual.forEach(id => menuNavItems.push(`tool-${id}`));
   const navTabIndex = key => (menuNavItems.indexOf(key) === menuActiveIndex ? 0 : -1);
 
+  // On desktop (md:), check if menu would be empty
+  // Quick Actions and Image Generation are hidden on desktop with md:hidden
+  // So only Cloud Storage, Web Search, and Tools remain visible on desktop
+  const hasDesktopMenuContent = enabledCloudProviders.length > 0 || hasWebsearch || hasTools;
+
   return (
     <div className="relative" ref={dropdownRef}>
+      {/* Show + button on mobile always, on desktop only if menu has content */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={`p-2 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
           isOpen ? 'bg-gray-100 dark:bg-gray-700' : ''
-        }`}
+        } md:${hasDesktopMenuContent ? 'block' : 'hidden'}`}
         title={t('chatActions.menu', 'Actions menu')}
         aria-label={t('chatActions.menu', 'Actions menu')}
       >
