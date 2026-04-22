@@ -25,6 +25,33 @@ function buildPublicBaseUrl(req) {
 }
 
 /**
+ * Keep only `{ [lang: string]: string }` entries. Defensive sanitizer used on the
+ * public add-in config endpoint so a manually corrupted platform.json can't crash
+ * the taskpane during rendering.
+ */
+function sanitizeLocalizedObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out = {};
+  for (const [lang, val] of Object.entries(value)) {
+    if (typeof lang === 'string' && typeof val === 'string') out[lang] = val;
+  }
+  return out;
+}
+
+function sanitizeStarterPrompts(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    const title = sanitizeLocalizedObject(item.title);
+    const message = sanitizeLocalizedObject(item.message);
+    if (Object.keys(title).length === 0 || Object.keys(message).length === 0) continue;
+    out.push({ title, message });
+  }
+  return out;
+}
+
+/**
  * @swagger
  * /api/integrations/office-addin/config:
  *   get:
@@ -51,7 +78,8 @@ router.get('/config', (req, res) => {
   res.json({
     baseUrl,
     clientId: officeConfig.oauthClientId || '',
-    redirectUri: `${baseUrl}/office/callback.html`
+    redirectUri: `${baseUrl}/office/callback.html`,
+    starterPrompts: sanitizeStarterPrompts(officeConfig.starterPrompts)
   });
 });
 

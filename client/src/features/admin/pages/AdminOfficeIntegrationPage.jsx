@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
+import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
@@ -14,10 +15,28 @@ function AdminOfficeIntegrationPage() {
   const [message, setMessage] = useState(null);
   const [status, setStatus] = useState(null);
 
-  const [displayNameEn, setDisplayNameEn] = useState('');
-  const [displayNameDe, setDisplayNameDe] = useState('');
-  const [descriptionEn, setDescriptionEn] = useState('');
-  const [descriptionDe, setDescriptionDe] = useState('');
+  const [displayName, setDisplayName] = useState({});
+  const [description, setDescription] = useState({});
+  const [starterPrompts, setStarterPrompts] = useState([]);
+
+  // Stable client-side ids are used as React keys while the prompt list is edited.
+  // They are stripped before persisting so the server never sees them.
+  const emptyPrompt = () => ({
+    _id: crypto.randomUUID(),
+    title: {},
+    message: {}
+  });
+
+  // Keep only `{ [lang]: string }` entries so corrupted server data can't break
+  // React rendering further down the tree.
+  const sanitizeLocalized = (value = {}) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+    const out = {};
+    for (const [lang, val] of Object.entries(value)) {
+      if (typeof val === 'string') out[lang] = val;
+    }
+    return out;
+  };
 
   const loadStatus = async () => {
     try {
@@ -25,10 +44,17 @@ function AdminOfficeIntegrationPage() {
       const res = await makeAdminApiCall('/admin/office-integration/status', { method: 'GET' });
       const data = res.data;
       setStatus(data);
-      setDisplayNameEn(data.displayName?.en ?? '');
-      setDisplayNameDe(data.displayName?.de ?? '');
-      setDescriptionEn(data.description?.en ?? '');
-      setDescriptionDe(data.description?.de ?? '');
+      setDisplayName(sanitizeLocalized(data.displayName));
+      setDescription(sanitizeLocalized(data.description));
+      setStarterPrompts(
+        Array.isArray(data.starterPrompts)
+          ? data.starterPrompts.map(p => ({
+              _id: crypto.randomUUID(),
+              title: sanitizeLocalized(p?.title),
+              message: sanitizeLocalized(p?.message)
+            }))
+          : []
+      );
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -71,15 +97,37 @@ function AdminOfficeIntegrationPage() {
     }
   };
 
+  // Drop empty/whitespace-only locales and ensure only string values are sent.
+  const trimLocalized = (value = {}) => {
+    const out = {};
+    for (const [lang, val] of Object.entries(value || {})) {
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed.length > 0) out[lang] = trimmed;
+      }
+    }
+    return out;
+  };
+
   const handleSaveConfig = async () => {
     try {
       setSaving(true);
       setMessage(null);
+
+      // Strip the client-only `_id` — the server must never see or persist it.
+      const cleanedPrompts = starterPrompts
+        .map(p => ({
+          title: trimLocalized(p?.title),
+          message: trimLocalized(p?.message)
+        }))
+        .filter(p => Object.keys(p.title).length > 0 && Object.keys(p.message).length > 0);
+
       await makeAdminApiCall('/admin/office-integration/config', {
         method: 'PUT',
         data: {
-          displayName: { en: displayNameEn, de: displayNameDe },
-          description: { en: descriptionEn, de: descriptionDe }
+          displayName: trimLocalized(displayName),
+          description: trimLocalized(description),
+          starterPrompts: cleanedPrompts
         }
       });
       await loadStatus();
@@ -96,6 +144,36 @@ function AdminOfficeIntegrationPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handlePromptChange = (index, field, value) => {
+    setStarterPrompts(prev => {
+      const next = [...prev];
+      const current = next[index] || emptyPrompt();
+      next[index] = {
+        ...current,
+        [field]: value
+      };
+      return next;
+    });
+  };
+
+  const handleAddPrompt = () => {
+    setStarterPrompts(prev => [...prev, emptyPrompt()]);
+  };
+
+  const handleRemovePrompt = index => {
+    setStarterPrompts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMovePrompt = (index, direction) => {
+    setStarterPrompts(prev => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
   };
 
   const manifestUrl = status?.manifestUrl || buildApiUrl('integrations/office-addin/manifest.xml');
@@ -258,57 +336,113 @@ function AdminOfficeIntegrationPage() {
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                   {t('admin.officeIntegration.displayTitle', 'Display Settings')}
                 </h2>
-                <div className="grid grid-cols-1 gap-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.displayNameEn', 'Display Name (EN)')}
-                      </label>
-                      <input
-                        type="text"
-                        value={displayNameEn}
-                        onChange={e => setDisplayNameEn(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.displayNameDe', 'Display Name (DE)')}
-                      </label>
-                      <input
-                        type="text"
-                        value={displayNameDe}
-                        onChange={e => setDisplayNameDe(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.descriptionEn', 'Description (EN)')}
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={descriptionEn}
-                        onChange={e => setDescriptionEn(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                        {t('admin.officeIntegration.descriptionDe', 'Description (DE)')}
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={descriptionDe}
-                        onChange={e => setDescriptionDe(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
-                      />
-                    </div>
-                  </div>
+                <div className="space-y-4">
+                  <DynamicLanguageEditor
+                    label={t('admin.officeIntegration.displayName', 'Display Name')}
+                    value={displayName}
+                    onChange={setDisplayName}
+                    type="text"
+                  />
+                  <DynamicLanguageEditor
+                    label={t('admin.officeIntegration.description', 'Description')}
+                    value={description}
+                    onChange={setDescription}
+                    type="textarea"
+                  />
                 </div>
-                <div className="mt-4 flex justify-end">
+              </div>
+
+              {/* Starter Prompts */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {t('admin.officeIntegration.starterPromptsTitle', 'Default Starter Prompts')}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {t(
+                        'admin.officeIntegration.starterPromptsDesc',
+                        'These prompts are shown in the Outlook add-in when the selected app has no starter prompts defined. Clicking a prompt will send it immediately.'
+                      )}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAddPrompt}
+                    className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                  >
+                    {t('admin.officeIntegration.addPrompt', 'Add prompt')}
+                  </button>
+                </div>
+
+                {starterPrompts.length === 0 ? (
+                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                    {t(
+                      'admin.officeIntegration.noPrompts',
+                      'No default starter prompts configured. Add one to show suggestions in Outlook.'
+                    )}
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    {starterPrompts.map((prompt, index) => (
+                      <div
+                        key={prompt._id}
+                        className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/60 dark:bg-gray-900/40"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.officeIntegration.promptIndex', 'Prompt #{{n}}', {
+                              n: index + 1
+                            })}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMovePrompt(index, -1)}
+                              disabled={index === 0}
+                              className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                              aria-label={t('admin.officeIntegration.moveUp', 'Move up')}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMovePrompt(index, 1)}
+                              disabled={index === starterPrompts.length - 1}
+                              className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                              aria-label={t('admin.officeIntegration.moveDown', 'Move down')}
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemovePrompt(index)}
+                              className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                            >
+                              {t('admin.officeIntegration.remove', 'Remove')}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <DynamicLanguageEditor
+                            label={t('admin.officeIntegration.promptTitle', 'Title')}
+                            value={prompt?.title || {}}
+                            onChange={value => handlePromptChange(index, 'title', value)}
+                            type="text"
+                          />
+                          <DynamicLanguageEditor
+                            label={t('admin.officeIntegration.promptMessage', 'Message')}
+                            value={prompt?.message || {}}
+                            onChange={value => handlePromptChange(index, 'message', value)}
+                            type="textarea"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end">
                   <button
                     type="button"
                     onClick={handleSaveConfig}
