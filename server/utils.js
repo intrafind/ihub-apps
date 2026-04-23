@@ -562,7 +562,7 @@ export async function simpleCompletion(
   const responseData = await response.json();
 
   // Use the adapter to parse the response
-  const parsed = convertResponseToGeneric(JSON.stringify(responseData), modelConfig.provider);
+  const parsed = await convertResponseToGeneric(JSON.stringify(responseData), modelConfig.provider);
 
   // Return both content and usage data
   return {
