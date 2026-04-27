@@ -81,8 +81,7 @@ function AdminTelemetryPage() {
       setMessage({
         type: 'error',
         text:
-          error.message ||
-          t('admin.telemetry.loadError', 'Failed to load telemetry configuration')
+          error.message || t('admin.telemetry.loadError', 'Failed to load telemetry configuration')
       });
     } finally {
       setLoading(false);
@@ -108,8 +107,7 @@ function AdminTelemetryPage() {
       setMessage({
         type: 'error',
         text:
-          error.message ||
-          t('admin.telemetry.saveError', 'Failed to save telemetry configuration')
+          error.message || t('admin.telemetry.saveError', 'Failed to save telemetry configuration')
       });
     } finally {
       setSaving(false);
@@ -157,10 +155,7 @@ function AdminTelemetryPage() {
           {/* Header */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="flex items-start mb-2">
-              <Icon
-                name="ChartBarIcon"
-                className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0"
-              />
+              <Icon name="ChartBarIcon" className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {t('admin.telemetry.title', 'Telemetry & Observability')}
@@ -220,17 +215,26 @@ function AdminTelemetryPage() {
                   {
                     id: 'console',
                     label: 'Console',
-                    desc: t('admin.telemetry.providerConsole', 'Print spans/metrics to stdout (development only)')
+                    desc: t(
+                      'admin.telemetry.providerConsole',
+                      'Print spans/metrics to stdout (development only)'
+                    )
                   },
                   {
                     id: 'otlp',
                     label: 'OTLP',
-                    desc: t('admin.telemetry.providerOtlp', 'Push to an OTLP-compatible collector (Jaeger, Tempo, Grafana, OTel collector)')
+                    desc: t(
+                      'admin.telemetry.providerOtlp',
+                      'Push to an OTLP-compatible collector (Jaeger, Tempo, Grafana, OTel collector)'
+                    )
                   },
                   {
                     id: 'prometheus',
                     label: 'Prometheus',
-                    desc: t('admin.telemetry.providerPrometheus', 'Expose Prometheus metrics endpoint for scraping')
+                    desc: t(
+                      'admin.telemetry.providerPrometheus',
+                      'Expose Prometheus metrics endpoint for scraping'
+                    )
                   }
                 ].map(p => (
                   <button
@@ -243,9 +247,7 @@ function AdminTelemetryPage() {
                         : 'border-gray-200 dark:border-gray-600 hover:border-blue-300'
                     }`}
                   >
-                    <div className="font-semibold text-gray-900 dark:text-gray-100">
-                      {p.label}
-                    </div>
+                    <div className="font-semibold text-gray-900 dark:text-gray-100">{p.label}</div>
                     <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">{p.desc}</p>
                   </button>
                 ))}
@@ -347,7 +349,10 @@ function AdminTelemetryPage() {
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {t('admin.telemetry.metrics', 'Emit metrics (token usage, durations, app/conversation counters, active users/chats)')}
+                  {t(
+                    'admin.telemetry.metrics',
+                    'Emit metrics (token usage, durations, app/conversation counters, active users/chats)'
+                  )}
                 </span>
               </label>
               <label className="flex items-center">
@@ -358,7 +363,10 @@ function AdminTelemetryPage() {
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                  {t('admin.telemetry.events', 'Emit gen_ai events (prompts, completions, tool calls)')}
+                  {t(
+                    'admin.telemetry.events',
+                    'Emit gen_ai events (prompts, completions, tool calls)'
+                  )}
                 </span>
               </label>
             </div>
@@ -393,7 +401,10 @@ function AdminTelemetryPage() {
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                    {t('admin.telemetry.includeCompletions', 'Include completion content in events')}
+                    {t(
+                      'admin.telemetry.includeCompletions',
+                      'Include completion content in events'
+                    )}
                   </span>
                 </label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

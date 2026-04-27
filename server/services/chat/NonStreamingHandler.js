@@ -75,8 +75,7 @@ class NonStreamingHandler {
           // Build a normalized result that the instrumentation layer can read
           // so token usage / finish reasons make it onto the span.
           const promptTokens = data.usage?.prompt_tokens || data.usage?.input_tokens || 0;
-          const completionTokens =
-            data.usage?.completion_tokens || data.usage?.output_tokens || 0;
+          const completionTokens = data.usage?.completion_tokens || data.usage?.output_tokens || 0;
           return {
             ok: true,
             response,

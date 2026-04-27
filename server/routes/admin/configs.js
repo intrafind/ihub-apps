@@ -483,7 +483,8 @@ export default function registerAdminConfigRoutes(app) {
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
         iFinder: newConfig.iFinder || existingConfig.iFinder,
         iAssistant: newConfig.iAssistant || existingConfig.iAssistant,
-        telemetry: newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry
+        telemetry:
+          newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry
       };
 
       // Restore secrets that were redacted in the client

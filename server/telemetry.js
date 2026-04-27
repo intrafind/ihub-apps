@@ -15,7 +15,11 @@ import resourcesPkg from '@opentelemetry/resources';
 const { Resource } = resourcesPkg;
 import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
 import { initializeMetrics } from './telemetry/metrics.js';
-import { createTraceExporter, createMetricExporter, parseOTLPEnvVars } from './telemetry/exporters.js';
+import {
+  createTraceExporter,
+  createMetricExporter,
+  parseOTLPEnvVars
+} from './telemetry/exporters.js';
 
 let sdk = null;
 let tokenUsageCounter = null;
@@ -104,11 +108,9 @@ export async function initTelemetry(config = {}) {
     initializeMetrics(meterProvider);
 
     // Keep legacy token usage counter for backward compatibility
-    tokenUsageCounter = meterProvider
-      .getMeter('ihub-apps')
-      .createCounter('token_usage_total', {
-        description: 'Total number of tokens processed (legacy)'
-      });
+    tokenUsageCounter = meterProvider.getMeter('ihub-apps').createCounter('token_usage_total', {
+      description: 'Total number of tokens processed (legacy)'
+    });
   }
 
   // Initialize GenAI instrumentation now that SDK is up

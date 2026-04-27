@@ -86,7 +86,7 @@ export async function instrumentLLMCall(ctx, fn) {
         recordError(err.name || 'Error', 'llm_call', {
           'app.id': customContext.appId,
           'model.id': model?.id,
-          'provider': provider
+          provider: provider
         });
       }
       throw err;
@@ -109,7 +109,7 @@ export async function instrumentLLMCall(ctx, fn) {
       recordError(err.name || 'Error', 'llm_call', {
         'app.id': customContext.appId,
         'model.id': model?.id,
-        'provider': provider
+        provider: provider
       });
     }
     throw err;

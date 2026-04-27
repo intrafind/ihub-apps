@@ -14,7 +14,11 @@ export async function up(ctx) {
   ctx.setDefault(platform, 'telemetry.enabled', false);
   ctx.setDefault(platform, 'telemetry.provider', 'console');
 
-  ctx.setDefault(platform, 'telemetry.exporters.otlp.endpoint', '${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}');
+  ctx.setDefault(
+    platform,
+    'telemetry.exporters.otlp.endpoint',
+    '${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}'
+  );
   ctx.setDefault(platform, 'telemetry.exporters.otlp.protocol', 'http/protobuf');
   ctx.setDefault(platform, 'telemetry.exporters.otlp.headers', {});
   ctx.setDefault(platform, 'telemetry.exporters.prometheus.port', 9464);

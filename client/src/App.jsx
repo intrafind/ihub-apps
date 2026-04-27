@@ -81,9 +81,7 @@ const AdminUICustomization = lazyWithRetry(
   () => import('./features/admin/pages/AdminUICustomization')
 );
 const AdminLoggingPage = lazyWithRetry(() => import('./features/admin/pages/AdminLoggingPage'));
-const AdminTelemetryPage = lazyWithRetry(
-  () => import('./features/admin/pages/AdminTelemetryPage')
-);
+const AdminTelemetryPage = lazyWithRetry(() => import('./features/admin/pages/AdminTelemetryPage'));
 const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/AdminFeaturesPage'));
 const AdminOfficeIntegrationPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOfficeIntegrationPage')
