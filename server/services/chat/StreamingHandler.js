@@ -474,7 +474,7 @@ class StreamingHandler {
 
         // Process any remaining data in buffer after stream ends
         if (buffer.trim() && !doneEmitted && finishReason !== 'error') {
-          const result = adapter.processResponseBuffer(buffer);
+          const result = await adapter.processResponseBuffer(buffer);
 
           if (result?.usage) {
             accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
