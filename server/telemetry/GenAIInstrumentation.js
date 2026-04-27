@@ -144,13 +144,21 @@ export class GenAIInstrumentation {
 
     try {
       if (error) {
-        // Record exception and set error status
-        span.recordException(error);
-        span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
-
-        // Set error attributes
+        // Privacy: do NOT call span.recordException() (which copies error.message
+        // and the full stack onto the span) and do NOT include error.message in
+        // the status by default. Provider error payloads can contain prompts,
+        // request snippets or auth tokens. We only export a classified
+        // gen-ai/HTTP error.type. Operators who explicitly opt in via
+        // events.includeOptInAttributes can still capture full stacks.
         const errorAttrs = buildErrorAttributes(error);
         span.setAttributes(errorAttrs);
+
+        if (this.config.spans?.includeOptInAttributes === true) {
+          span.recordException(error);
+          span.setStatus({ code: SpanStatusCode.ERROR, message: error.message });
+        } else {
+          span.setStatus({ code: SpanStatusCode.ERROR });
+        }
 
         // Record duration with error
         if (this.config.metrics?.enabled && durationSeconds !== null) {
@@ -176,42 +184,33 @@ export class GenAIInstrumentation {
   }
 
   /**
-   * Wrap an async function with instrumentation
-   * @param {string} operation - Operation name
-   * @param {Object} model - Model configuration
-   * @param {string} provider - Provider name
-   * @param {Object} messages - Messages array
-   * @param {Object} options - Request options
-   * @param {Object} customContext - Custom context
-   * @param {Function} fn - Async function to wrap
-   * @returns {Promise} Result of wrapped function
+   * Wrap an async function with instrumentation. The actual chat call sites
+   * use server/telemetry/llmInstrumentation.js#instrumentLLMCall which keeps
+   * full control over the span lifecycle and the iHub-specific counters; this
+   * helper is kept for completeness when integrators want a one-shot wrap.
+   *
+   * @param {string} operation
+   * @param {Object} model
+   * @param {string} provider
+   * @param {Array} messages
+   * @param {Object} options
+   * @param {Object} customContext
+   * @param {Function} fn
+   * @returns {Promise<*>}
    */
   async instrumentOperation(operation, model, provider, messages, options, customContext, fn) {
     const span = this.createLLMSpan(operation, model, provider, customContext);
-
+    const startTime = Date.now();
     try {
-      // Record request
       this.recordRequest(span, model, messages, options);
-
-      // Execute operation
-      const startTime = Date.now();
       const result = await fn();
       const duration = (Date.now() - startTime) / 1000;
-
-      // Record response
-      this.recordResponse(span, result, result.usage);
-
-      // End span successfully
+      this.recordResponse(span, result, result?.usage);
       this.endSpan(span, null, duration);
-
       return result;
     } catch (error) {
-      // Calculate duration even on error
-      const duration = span ? (Date.now() - span.startTime.getTime()) / 1000 : 0;
-
-      // End span with error
+      const duration = (Date.now() - startTime) / 1000;
       this.endSpan(span, error, duration);
-
       throw error;
     }
   }

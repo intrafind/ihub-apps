@@ -1,36 +1,7 @@
 import { getGenAIInstrumentation } from '../telemetry.js';
 import { recordAppUsage, recordError, recordConversation } from './metrics.js';
 import activityTracker from './ActivityTracker.js';
-
-/**
- * Map provider IDs as known internally to gen-ai semantic-conventions provider names.
- */
-const PROVIDER_NAME_MAP = {
-  openai: 'openai',
-  'openai-responses': 'openai',
-  anthropic: 'anthropic',
-  google: 'google',
-  mistral: 'mistral_ai',
-  local: 'openai', // vLLM uses OpenAI-compatible API
-  vllm: 'openai',
-  'iassistant-conversation': 'iassistant'
-};
-
-/**
- * Map operation names to gen-ai operation values.
- */
-const OPERATION_MAP = {
-  google: 'generate_content',
-  default: 'chat'
-};
-
-function resolveOperation(provider) {
-  return OPERATION_MAP[provider] || OPERATION_MAP.default;
-}
-
-function resolveProviderName(provider) {
-  return PROVIDER_NAME_MAP[provider] || provider || 'unknown';
-}
+import { resolveProviderName, resolveOperation } from './providerMap.js';
 
 /**
  * Wraps an LLM HTTP call with OpenTelemetry instrumentation. Creates a span,

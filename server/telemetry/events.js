@@ -169,21 +169,34 @@ export function emitToolExecutionEvent(span, toolName, result, duration) {
 }
 
 /**
- * Emit error event
+ * Emit error event. Only attaches the classified error type and a coarse
+ * context by default; raw error.message / error.stack can leak provider
+ * payloads or auth details, so they are gated behind the same opt-in flag
+ * as other PII (`spans.includeOptInAttributes`). See the privacy section in
+ * docs/telemetry.md.
+ *
  * @param {Object} span - Active span
  * @param {Error} error - Error object
  * @param {string} context - Error context
+ * @param {Object} [config] - Telemetry configuration
  */
-export function emitErrorEvent(span, error, context = 'unknown') {
+export function emitErrorEvent(span, error, context = 'unknown', config = {}) {
   if (!span || !error) return;
 
   try {
-    span.addEvent('error', {
+    const attrs = {
       'error.type': error.name || 'Error',
-      'error.message': error.message,
-      'error.context': context,
-      'error.stack': error.stack ? error.stack.substring(0, 500) : undefined
-    });
+      'error.context': context
+    };
+
+    if (config.spans?.includeOptInAttributes === true) {
+      attrs['error.message'] = error.message;
+      if (error.stack) {
+        attrs['error.stack'] = error.stack.substring(0, 500);
+      }
+    }
+
+    span.addEvent('error', attrs);
   } catch (err) {
     console.warn('Failed to emit error event:', err.message);
   }

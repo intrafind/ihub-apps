@@ -271,10 +271,15 @@ scrape_configs:
 - No prompts or completions are captured unless `events.includePrompts` /
   `events.includeCompletions` is explicitly enabled.
 - `error.type` is always a generic classification (e.g. `rate_limit_exceeded`),
-  never a raw error message.
+  never a raw error message. The exception object's `.message` and `.stack`
+  are **not** attached to spans by default; set `spans.includeOptInAttributes:
+  true` to opt into capturing them for debugging.
 - Tool-call arguments are excluded from `gen_ai.choice` events by default.
 - Resource attributes can include service version and deployment environment to
   correlate signals across deployments.
+- The startup log line for telemetry redacts OTLP headers (which often contain
+  bearer tokens) and only logs header counts plus non-sensitive routing
+  metadata.
 
 ## Implementation notes
 

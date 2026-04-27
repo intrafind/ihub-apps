@@ -91,21 +91,27 @@ export function initializeMetrics(meterProvider) {
 /**
  * Register observable callbacks for the active-users / active-chats gauges.
  * The provider supplies functions that return the current count for the
- * configured rolling window.
+ * configured rolling window. Pass `getAttributes` (preferred) when the
+ * exported attributes need to reflect runtime config changes - the function
+ * is called every time the meter observes the gauge. `attributes` (static)
+ * is kept for backwards compatibility.
  *
  * @param {Object} provider
  * @param {() => number} provider.getActiveUsers
  * @param {() => number} provider.getActiveChats
- * @param {Object} [provider.attributes] - Static attributes to attach (e.g. windowMinutes)
+ * @param {() => Object} [provider.getAttributes] - Dynamic attributes (e.g. windowMinutes)
+ * @param {Object} [provider.attributes] - Static attributes (legacy)
  */
 export function registerActivityObservers(provider) {
   if (!activeUsersGauge || !activeChatsGauge || !provider) return;
 
-  const baseAttrs = provider.attributes || {};
+  const resolveAttrs = () =>
+    typeof provider.getAttributes === 'function' ? provider.getAttributes() : provider.attributes || {};
+
   activeUsersGauge.addCallback(observableResult => {
     try {
       const value = provider.getActiveUsers() || 0;
-      observableResult.observe(value, baseAttrs);
+      observableResult.observe(value, resolveAttrs());
     } catch (error) {
       console.warn('Failed to observe active users:', error.message);
     }
@@ -114,7 +120,7 @@ export function registerActivityObservers(provider) {
   activeChatsGauge.addCallback(observableResult => {
     try {
       const value = provider.getActiveChats() || 0;
-      observableResult.observe(value, baseAttrs);
+      observableResult.observe(value, resolveAttrs());
     } catch (error) {
       console.warn('Failed to observe active chats:', error.message);
     }
@@ -130,18 +136,17 @@ export function recordTokenUsage(attributes, usage) {
   if (!tokenUsageHistogram || !usage) return;
 
   try {
-    // Record input tokens
-    if (usage.inputTokens !== undefined || usage.prompt_tokens !== undefined) {
-      const inputTokens = usage.inputTokens || usage.prompt_tokens;
+    // Use nullish coalescing so a legitimate 0 is preserved
+    const inputTokens = usage.inputTokens ?? usage.prompt_tokens;
+    if (typeof inputTokens === 'number') {
       tokenUsageHistogram.record(inputTokens, {
         ...attributes,
         'gen_ai.token.type': 'input'
       });
     }
 
-    // Record output tokens
-    if (usage.outputTokens !== undefined || usage.completion_tokens !== undefined) {
-      const outputTokens = usage.outputTokens || usage.completion_tokens;
+    const outputTokens = usage.outputTokens ?? usage.completion_tokens;
+    if (typeof outputTokens === 'number') {
       tokenUsageHistogram.record(outputTokens, {
         ...attributes,
         'gen_ai.token.type': 'output'

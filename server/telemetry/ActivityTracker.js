@@ -49,11 +49,15 @@ class ActivityTracker {
       this.summaryTimer.unref?.();
     }
 
+    // Only register the observer pair once. Observable gauges expect to be
+    // attached to the meter at startup. To keep the exported `window.minutes`
+    // attribute in sync with admin hot-reloads we read it via `this.windowMs`
+    // at observation time, so the dashboards never see a stale window.
     if (!this.observersRegistered) {
       registerActivityObservers({
         getActiveUsers: () => this.getActiveUsers(),
         getActiveChats: () => this.getActiveChats(),
-        attributes: { 'window.minutes': windowMinutes }
+        getAttributes: () => ({ 'window.minutes': this.windowMs / 60000 })
       });
       this.observersRegistered = true;
     }

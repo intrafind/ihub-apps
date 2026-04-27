@@ -6,6 +6,7 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
+import { ConsoleMetricExporter } from '@opentelemetry/sdk-metrics';
 
 /**
  * Create trace exporter based on configuration
@@ -59,6 +60,11 @@ export function createMetricExporter(config) {
         });
       }
       break;
+
+    case 'console':
+    default:
+      // Console mode also exports metrics to stdout for parity with span output
+      return new ConsoleMetricExporter();
   }
 
   return null;
@@ -79,13 +85,18 @@ export function parseOTLPEnvVars() {
     headers: {}
   };
 
-  // Parse headers (format: key1=value1,key2=value2)
+  // Parse headers (format: key1=value1,key2=value2). We split on the FIRST `=`
+  // only - header values frequently contain `=` (e.g. base64-padded bearer
+  // tokens like "Authorization=Bearer Zm9vYmFy=") and the previous naive split
+  // silently dropped everything after the second segment.
   if (headers) {
     headers.split(',').forEach(pair => {
-      const [key, value] = pair.split('=');
-      if (key && value) {
-        config.headers[key.trim()] = decodeURIComponent(value.trim());
-      }
+      const eq = pair.indexOf('=');
+      if (eq <= 0) return;
+      const key = pair.slice(0, eq).trim();
+      const value = pair.slice(eq + 1).trim();
+      if (!key || !value) return;
+      config.headers[key] = decodeURIComponent(value);
     });
   }
 

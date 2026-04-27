@@ -14,6 +14,7 @@ import logger from '../../utils/logger.js';
 import { getGenAIInstrumentation } from '../../telemetry.js';
 import { recordAppUsage, recordConversation, recordError } from '../../telemetry/metrics.js';
 import activityTracker from '../../telemetry/ActivityTracker.js';
+import { resolveProviderName, resolveOperation } from '../../telemetry/providerMap.js';
 
 /**
  * Merge usage data from streaming chunks, preferring non-zero values from incoming data.
@@ -266,18 +267,8 @@ class StreamingHandler {
     let llmSpan = null;
     const spanStart = Date.now();
     if (instrumentation && instrumentation.isEnabled()) {
-      const providerNameMap = {
-        openai: 'openai',
-        'openai-responses': 'openai',
-        anthropic: 'anthropic',
-        google: 'google',
-        mistral: 'mistral_ai',
-        local: 'openai',
-        vllm: 'openai',
-        'iassistant-conversation': 'iassistant'
-      };
-      const operation = model.provider === 'google' ? 'generate_content' : 'chat';
-      const providerName = providerNameMap[model.provider] || model.provider || 'unknown';
+      const operation = resolveOperation(model.provider);
+      const providerName = resolveProviderName(model.provider);
       llmSpan = instrumentation.createLLMSpan(operation, model, providerName, {
         appId: baseLog.appId,
         userId: baseLog.user?.id || baseLog.userSessionId,

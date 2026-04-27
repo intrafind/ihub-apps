@@ -44,12 +44,48 @@ function interceptConsole() {
   });
 }
 
+/**
+ * Build a log-safe view of the telemetry config: drop OTLP headers entirely
+ * (they may contain Bearer tokens / API keys) and only surface non-sensitive
+ * routing metadata.
+ */
+function describeConfigForLog(config) {
+  return {
+    enabled: !!config.enabled,
+    provider: config.provider,
+    exporters: {
+      otlp: config.exporters?.otlp
+        ? {
+            endpoint: config.exporters.otlp.endpoint,
+            protocol: config.exporters.otlp.protocol,
+            // headers intentionally omitted
+            headerCount: Object.keys(config.exporters.otlp.headers || {}).length
+          }
+        : undefined,
+      prometheus: config.exporters?.prometheus
+    },
+    spans: config.spans,
+    metrics: config.metrics,
+    events: {
+      enabled: config.events?.enabled,
+      includePrompts: !!config.events?.includePrompts,
+      includeCompletions: !!config.events?.includeCompletions,
+      maxEventSize: config.events?.maxEventSize
+    },
+    activitySummary: config.activitySummary,
+    resource: config.resource
+  };
+}
+
 export async function initTelemetry(config = {}) {
   if (!config.enabled) {
     activeConfig = config;
     return;
   }
-  appLogger.info('Initializing telemetry', { component: 'Telemetry', config });
+  appLogger.info('Initializing telemetry', {
+    component: 'Telemetry',
+    config: describeConfigForLog(config)
+  });
 
   diag.setLogger(new DiagConsoleLogger(), DiagLogLevel.INFO);
 
@@ -179,6 +215,11 @@ export function reloadTelemetryConfig(newConfig = {}) {
   activeConfig = { ...(activeConfig || {}), ...newConfig };
   if (genAIInstrumentation) {
     genAIInstrumentation.config = activeConfig;
+    // Re-evaluate the enabled flag - the constructor derived it from
+    // config.enabled && config.spans.enabled, so mutating config alone won't
+    // pick up admin UI toggles for span emission.
+    genAIInstrumentation.enabled =
+      activeConfig?.enabled !== false && activeConfig?.spans?.enabled !== false;
   }
 }
 

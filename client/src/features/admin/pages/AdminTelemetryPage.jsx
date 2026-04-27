@@ -115,11 +115,10 @@ function AdminTelemetryPage() {
   };
 
   const updateField = (path, value) => {
-    // Guard against prototype-polluting path segments. updateField is only
-    // ever called with hard-coded paths in this file, but the dynamic key
-    // assignment pattern is still flagged by static analysis (CodeQL), so
-    // reject the dangerous keys explicitly and use Object.create(null) for
-    // newly created intermediate nodes.
+    // Two-layer defense against prototype pollution:
+    //   1. Reject any path that contains __proto__, constructor or prototype.
+    //   2. When we have to create intermediate objects, use Object.create(null)
+    //      so they have no prototype chain to pollute.
     const segments = path.split('.');
     if (segments.some(s => s === '__proto__' || s === 'constructor' || s === 'prototype')) {
       return;
@@ -134,7 +133,7 @@ function AdminTelemetryPage() {
           typeof cursor[key] !== 'object' ||
           cursor[key] === null
         ) {
-          cursor[key] = {};
+          cursor[key] = Object.create(null);
         }
         cursor = cursor[key];
       }
@@ -168,7 +167,7 @@ function AdminTelemetryPage() {
           {/* Header */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <div className="flex items-start mb-2">
-              <Icon name="ChartBarIcon" className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0" />
+              <Icon name="chart-bar" className="w-8 h-8 mr-3 text-blue-500 flex-shrink-0" />
               <div>
                 <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                   {t('admin.telemetry.title', 'Telemetry & Observability')}
@@ -204,7 +203,7 @@ function AdminTelemetryPage() {
           {/* Master switch */}
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
             <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
-              <Icon name="bolt" className="w-5 h-5 mr-2 text-blue-500" />
+              <Icon name="cog" className="w-5 h-5 mr-2 text-blue-500" />
               {t('admin.telemetry.general', 'General')}
             </h2>
             <label className="flex items-center mb-4">
