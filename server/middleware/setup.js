@@ -208,7 +208,11 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: oidcMaxAge,
           sameSite: 'lax',
-          path: '/api/auth/oidc'
+          // Cookie path must match the browser-facing URL, which includes the
+          // base path under subpath deployments. Without this, the oidc.session
+          // cookie is not sent on the OIDC callback (the OIDC handler then
+          // loses its returnUrl/state).
+          path: buildServerPath('/api/auth/oidc')
         }
       })
     );
@@ -241,7 +245,7 @@ function setupSessionMiddleware(app, platformConfig) {
         httpOnly: true,
         maxAge: integrationMaxAge,
         sameSite: 'lax',
-        path: '/api/integrations'
+        path: buildServerPath('/api/integrations')
       }
     })
   );
@@ -266,7 +270,7 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: oauthMaxAge,
           sameSite: 'lax',
-          path: '/api/oauth'
+          path: buildServerPath('/api/oauth')
         }
       })
     );
