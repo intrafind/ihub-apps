@@ -107,7 +107,7 @@
         if (data.autoRedirect && !isLogoutPage) {
           if (shouldAutoRedirect(data.autoRedirect.provider)) {
             markAutoRedirectAttempt(data.autoRedirect.provider);
-            var returnUrl = window.location.href.split('?')[0];
+            var returnUrl = getEffectiveReturnUrl();
             var sep = data.autoRedirect.url.indexOf('?') !== -1 ? '&' : '?';
             window.location.href =
               data.autoRedirect.url + sep + 'returnUrl=' + encodeURIComponent(returnUrl);
@@ -774,7 +774,7 @@
 
   function handleOidcLogin(providerName) {
     // Store return URL
-    var returnUrl = window.location.href.split('?')[0];
+    var returnUrl = getEffectiveReturnUrl();
     try {
       sessionStorage.setItem('authReturnUrl', returnUrl);
     } catch (e) {
@@ -791,7 +791,7 @@
   }
 
   function handleNtlmLogin() {
-    var returnUrl = window.location.href.split('?')[0];
+    var returnUrl = getEffectiveReturnUrl();
     var url = API_BASE + '/auth/ntlm/login?returnUrl=' + encodeURIComponent(returnUrl);
     window.location.href = url;
   }
@@ -818,6 +818,32 @@
     } catch (e) {
       /* ignore */
     }
+  }
+
+  // Resolve the returnUrl to forward to OIDC/NTLM. If the current URL already
+  // carries a returnUrl query parameter (e.g. from /api/oauth/authorize
+  // redirecting to /login?returnUrl=...), preserve it so the post-auth flow
+  // lands back on the original request. Falls back to the current URL minus
+  // its query string. Same-origin only to avoid open-redirect via the auth
+  // provider.
+  function getEffectiveReturnUrl() {
+    try {
+      var params = new URLSearchParams(window.location.search);
+      var existing = params.get('returnUrl');
+      if (existing) {
+        try {
+          var resolved = new URL(existing, window.location.origin);
+          if (resolved.origin === window.location.origin) {
+            return resolved.toString();
+          }
+        } catch (e) {
+          /* invalid URL — fall through */
+        }
+      }
+    } catch (e) {
+      /* ignore */
+    }
+    return window.location.href.split('?')[0];
   }
 
   // =========================================================================

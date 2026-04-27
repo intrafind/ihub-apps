@@ -425,6 +425,72 @@ export function getConfiguredProviders() {
 }
 
 /**
+ * Validate a returnUrl query parameter to prevent open-redirect attacks via
+ * the OIDC callback (which appends ?token=... to the value).
+ *
+ * Allows:
+ *  - Same-origin absolute URLs (host must match req.get('host'))
+ *  - Relative paths starting with a single '/'
+ *
+ * Rejects (returns null):
+ *  - Non-string values, including arrays from duplicate ?returnUrl= params
+ *  - Cross-origin absolute URLs
+ *  - Protocol-relative URLs ('//evil.com')
+ *  - Backslash bypass attempts ('\\evil.com')
+ *
+ * @param {*} rawReturnUrl - Untrusted value from req.query.returnUrl.
+ * @param {import('express').Request} req - Express request, used for host comparison.
+ * @returns {string|null} Sanitized returnUrl, or null if invalid.
+ */
+function sanitizeReturnUrl(rawReturnUrl, req) {
+  if (rawReturnUrl === null || rawReturnUrl === undefined) return null;
+  if (typeof rawReturnUrl !== 'string') {
+    logger.warn('[Security] OIDC returnUrl rejected: non-string value', {
+      component: 'OidcAuth',
+      type: typeof rawReturnUrl
+    });
+    return null;
+  }
+
+  // Normalize backslashes — '\evil.com' is parsed as '/evil.com' by some clients
+  let value = rawReturnUrl.replace(/\\/g, '/');
+
+  if (value.startsWith('//')) {
+    // Protocol-relative — '//evil.com' resolves to https://evil.com
+    logger.warn('[Security] OIDC returnUrl rejected: protocol-relative URL', {
+      component: 'OidcAuth',
+      returnUrl: rawReturnUrl
+    });
+    return null;
+  }
+
+  if (value.startsWith('http://') || value.startsWith('https://')) {
+    try {
+      const parsed = new URL(value);
+      if (parsed.host !== req.get('host')) {
+        logger.warn('[Security] OIDC returnUrl rejected: cross-origin', {
+          component: 'OidcAuth',
+          returnUrl: rawReturnUrl
+        });
+        return null;
+      }
+      return value;
+    } catch {
+      logger.warn('[Security] OIDC returnUrl rejected: invalid absolute URL', {
+        component: 'OidcAuth',
+        returnUrl: rawReturnUrl
+      });
+      return null;
+    }
+  }
+
+  if (!value.startsWith('/')) {
+    value = '/' + value;
+  }
+  return value;
+}
+
+/**
  * OIDC authentication route handler
  */
 export function createOidcAuthHandler(providerName) {
@@ -434,14 +500,11 @@ export function createOidcAuthHandler(providerName) {
       return res.status(404).json({ error: `OIDC provider '${providerName}' not found` });
     }
 
-    // Store return URL in session/state if provided
-    const returnUrl = req.query.returnUrl;
-    if (returnUrl) {
-      // Ensure session exists
-      if (!req.session) {
-      } else {
-        req.session.returnUrl = returnUrl;
-      }
+    // Store return URL in session/state if provided. Sanitize first to prevent
+    // open redirects through the callback's `${returnUrl}?token=...` redirect.
+    const sanitized = sanitizeReturnUrl(req.query.returnUrl, req);
+    if (sanitized && req.session) {
+      req.session.returnUrl = sanitized;
     }
 
     // Pass callbackURL at request time so buildServerPath() can detect the base path

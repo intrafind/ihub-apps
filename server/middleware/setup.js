@@ -208,7 +208,13 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: oidcMaxAge,
           sameSite: 'lax',
-          path: '/api/auth/oidc'
+          // Session middleware is configured at startup, but the base path is
+          // request-scoped (X-Forwarded-Prefix). A scoped cookie path like
+          // '/api/auth/oidc' would not match '/ihub/api/auth/oidc/...' under
+          // a subpath deployment, so the OIDC callback would lose its
+          // returnUrl/state. Use '/' to make the cookie reach the callback
+          // regardless of deployment layout. The cookie is httpOnly + signed.
+          path: '/'
         }
       })
     );
@@ -241,7 +247,7 @@ function setupSessionMiddleware(app, platformConfig) {
         httpOnly: true,
         maxAge: integrationMaxAge,
         sameSite: 'lax',
-        path: '/api/integrations'
+        path: '/'
       }
     })
   );
@@ -266,7 +272,7 @@ function setupSessionMiddleware(app, platformConfig) {
           httpOnly: true,
           maxAge: oauthMaxAge,
           sameSite: 'lax',
-          path: '/api/oauth'
+          path: '/'
         }
       })
     );
