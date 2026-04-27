@@ -106,7 +106,9 @@ export function registerActivityObservers(provider) {
   if (!activeUsersGauge || !activeChatsGauge || !provider) return;
 
   const resolveAttrs = () =>
-    typeof provider.getAttributes === 'function' ? provider.getAttributes() : provider.attributes || {};
+    typeof provider.getAttributes === 'function'
+      ? provider.getAttributes()
+      : provider.attributes || {};
 
   activeUsersGauge.addCallback(observableResult => {
     try {
