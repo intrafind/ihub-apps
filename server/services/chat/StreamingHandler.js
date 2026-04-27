@@ -11,6 +11,9 @@ import { getReadableStream } from '../../utils/streamUtils.js';
 import conversationStateManager from '../integrations/ConversationStateManager.js';
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
+import { getGenAIInstrumentation } from '../../telemetry.js';
+import { recordAppUsage, recordConversation, recordError } from '../../telemetry/metrics.js';
+import activityTracker from '../../telemetry/ActivityTracker.js';
 
 /**
  * Merge usage data from streaming chunks, preferring non-zero values from incoming data.
@@ -242,6 +245,55 @@ class StreamingHandler {
       user: baseLog.user
     });
 
+    // ---- OpenTelemetry instrumentation (streaming) ----
+    activityTracker.recordActivity({
+      userId: baseLog.user?.id || baseLog.userSessionId,
+      chatId
+    });
+    if (baseLog.appId) {
+      recordAppUsage(baseLog.appId, baseLog.user?.id || baseLog.userSessionId, {
+        'model.id': model.id,
+        'model.provider': model.provider
+      });
+      recordConversation(chatId, llmMessages.length > 2, {
+        'app.id': baseLog.appId,
+        'model.id': model.id,
+        'message.count': llmMessages.length
+      });
+    }
+
+    const instrumentation = getGenAIInstrumentation();
+    let llmSpan = null;
+    const spanStart = Date.now();
+    if (instrumentation && instrumentation.isEnabled()) {
+      const providerNameMap = {
+        openai: 'openai',
+        'openai-responses': 'openai',
+        anthropic: 'anthropic',
+        google: 'google',
+        mistral: 'mistral_ai',
+        local: 'openai',
+        vllm: 'openai',
+        'iassistant-conversation': 'iassistant'
+      };
+      const operation = model.provider === 'google' ? 'generate_content' : 'chat';
+      const providerName = providerNameMap[model.provider] || model.provider || 'unknown';
+      llmSpan = instrumentation.createLLMSpan(operation, model, providerName, {
+        appId: baseLog.appId,
+        userId: baseLog.user?.id || baseLog.userSessionId,
+        chatId,
+        messageCount: llmMessages.length,
+        isFollowUp: llmMessages.length > 2
+      });
+      const requestOptions = {
+        temperature: request.body?.temperature,
+        maxTokens: request.body?.max_tokens || request.body?.maxOutputTokens,
+        topP: request.body?.top_p,
+        stream: true
+      };
+      instrumentation.recordRequest(llmSpan, model, llmMessages, requestOptions);
+    }
+
     let timeoutId;
     const setupTimeout = () => {
       timeoutId = setTimeout(async () => {
@@ -261,6 +313,9 @@ class StreamingHandler {
 
     let doneEmitted = false;
     let finishReason = null;
+    // Declared up here so the finally block can read accumulated streaming usage
+    // for telemetry span/metric finalization.
+    let accumulatedUsage = null;
 
     try {
       const llmResponse = await throttledFetch(model.id, request.url, {
@@ -331,7 +386,6 @@ class StreamingHandler {
       const reader = readableStream.getReader();
       const decoder = new TextDecoder();
       let fullResponse = '';
-      let accumulatedUsage = null;
 
       // Check if the adapter needs custom SSE processing (iassistant-conversation uses custom format)
       const adapter = getAdapter(model.provider);
@@ -636,6 +690,20 @@ class StreamingHandler {
     } catch (error) {
       clearTimeout(timeoutId);
 
+      // End telemetry span with error
+      if (instrumentation && llmSpan) {
+        const duration = (Date.now() - spanStart) / 1000;
+        instrumentation.endSpan(llmSpan, error, duration);
+        llmSpan = null;
+      }
+      if (baseLog.appId) {
+        recordError(error.name || 'Error', 'llm_call_streaming', {
+          'app.id': baseLog.appId,
+          'model.id': model.id,
+          provider: model.provider
+        });
+      }
+
       logger.error('Caught error in executeStreamingResponse', {
         component: 'StreamingHandler',
         error
@@ -702,6 +770,25 @@ class StreamingHandler {
       }
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
+      }
+      // Ensure the telemetry span is always closed, even if no error path was taken
+      if (instrumentation && llmSpan) {
+        const duration = (Date.now() - spanStart) / 1000;
+        const usage = accumulatedUsage
+          ? {
+              inputTokens: accumulatedUsage.promptTokens,
+              outputTokens: accumulatedUsage.completionTokens
+            }
+          : undefined;
+        instrumentation.recordResponse(
+          llmSpan,
+          {
+            finishReasons: finishReason ? [finishReason] : undefined,
+            model: model.modelId
+          },
+          usage
+        );
+        instrumentation.endSpan(llmSpan, null, duration);
       }
     }
   }

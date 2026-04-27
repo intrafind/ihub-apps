@@ -228,6 +228,10 @@ if (cluster.isPrimary && workerCount > 1) {
       setDefaultLanguage(platformConfig.defaultLanguage);
     }
     await initTelemetry(platformConfig?.telemetry || {});
+    // Activity tracker drives the active-users / active-chats observable gauges
+    // and the periodic activity summary log line.
+    const { default: activityTracker } = await import('./telemetry/ActivityTracker.js');
+    activityTracker.configure(platformConfig?.telemetry?.activitySummary || {});
   } catch (error) {
     logger.error({
       component: 'Server',

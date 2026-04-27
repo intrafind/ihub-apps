@@ -1270,7 +1270,8 @@
     },
     "nav": {
       "logging": "Logging",
-      "marketplace": "Marktplatz"
+      "marketplace": "Marktplatz",
+      "telemetry": "Telemetrie"
     },
     "home": {
       "sections": {

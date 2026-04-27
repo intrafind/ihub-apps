@@ -15,6 +15,8 @@ import {
 import { buildServerPath } from '../utils/basePath.js';
 import { getStreamReader } from '../utils/streamUtils.js';
 import logger from '../utils/logger.js';
+import { recordAppUsage, recordError, recordConversation } from '../telemetry/metrics.js';
+import activityTracker from '../telemetry/ActivityTracker.js';
 
 export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
   const base = buildServerPath('/api/inference');
@@ -233,6 +235,22 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       }
     }
 
+    // Track inference API usage in iHub-specific metrics & activity
+    activityTracker.recordActivity({
+      userId: req.user?.id,
+      chatId: `inference-api:${req.user?.id || 'anonymous'}`
+    });
+    recordAppUsage('inference-api', req.user?.id, {
+      'model.id': modelId,
+      'api.endpoint': '/v1/chat/completions'
+    });
+    if (Array.isArray(messages)) {
+      recordConversation(`inference-api:${req.user?.id || 'anonymous'}`, messages.length > 2, {
+        'model.id': modelId,
+        'message.count': messages.length
+      });
+    }
+
     try {
       const request = createCompletionRequest(model, messages, apiKey, {
         stream,
@@ -266,6 +284,14 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
           statusText: llmResponse.statusText,
           errorText
         });
+
+        // Record error metric for observability
+        recordError(`http_${llmResponse.status}`, 'inference_api', {
+          'model.id': modelId,
+          provider: model.provider,
+          'user.id': req.user?.id
+        });
+
         const lang =
           req.headers['accept-language']?.split(',')[0] ||
           configCache.getPlatform()?.defaultLanguage ||

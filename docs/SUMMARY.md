@@ -74,6 +74,7 @@
     - [Production Reverse Proxy Guide](production-reverse-proxy-guide.md)
     - [Rate Limiting](rate-limiting.md)
     - [Scaling with Multiple Workers](scaling.md)
+    - [Telemetry & Observability](telemetry.md)
   - [Development & Deployment]()
     - [Developer Onboarding](developer-onboarding.md)
     - [Docker Quick Reference](DOCKER-QUICK-REFERENCE.md)

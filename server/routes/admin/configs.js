@@ -482,7 +482,8 @@ export default function registerAdminConfigRoutes(app) {
         jira: newConfig.jira || existingConfig.jira,
         cloudStorage: newConfig.cloudStorage || existingConfig.cloudStorage,
         iFinder: newConfig.iFinder || existingConfig.iFinder,
-        iAssistant: newConfig.iAssistant || existingConfig.iAssistant
+        iAssistant: newConfig.iAssistant || existingConfig.iAssistant,
+        telemetry: newConfig.telemetry !== undefined ? newConfig.telemetry : existingConfig.telemetry
       };
 
       // Restore secrets that were redacted in the client
@@ -591,6 +592,24 @@ export default function registerAdminConfigRoutes(app) {
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/platform.json');
+
+      // Apply runtime-mutable telemetry settings without server restart
+      try {
+        const telemetryChanged =
+          JSON.stringify(existingConfig.telemetry) !== JSON.stringify(newConfig.telemetry);
+        if (telemetryChanged && newConfig.telemetry) {
+          const { reloadTelemetryConfig } = await import('../../telemetry.js');
+          const { default: activityTracker } = await import('../../telemetry/ActivityTracker.js');
+          reloadTelemetryConfig(newConfig.telemetry);
+          activityTracker.configure(newConfig.telemetry.activitySummary || {});
+          logger.info('Telemetry runtime configuration updated', { component: 'AdminConfigs' });
+        }
+      } catch (telemetryError) {
+        logger.warn('Failed to apply runtime telemetry config update', {
+          component: 'AdminConfigs',
+          error: telemetryError.message
+        });
+      }
 
       // Reset iFinder/iAssistant service caches so they pick up new config
       const iFinderChanged =
