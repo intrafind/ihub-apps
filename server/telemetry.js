@@ -116,12 +116,14 @@ export async function initTelemetry(config = {}) {
     }
   }
 
-  // Optional log emission. NodeSDK in v0.202 takes the log record processor
-  // directly and registers the LoggerProvider globally - the v1
-  // `loggerProvider.register()` API was removed.
+  // Optional log emission. NodeSDK in v0.202 accepts an array of log record
+  // processors and registers the LoggerProvider globally - the v1
+  // `loggerProvider.register()` API was removed, and the singular
+  // `logRecordProcessor` option is now deprecated in favour of
+  // `logRecordProcessors`.
   const logsEnabled = config.logs?.enabled === true || config.logs === true;
-  const logRecordProcessor = logsEnabled
-    ? new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
+  const logRecordProcessors = logsEnabled
+    ? [new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())]
     : undefined;
 
   sdk = new NodeSDK({
@@ -129,7 +131,7 @@ export async function initTelemetry(config = {}) {
     traceExporter,
     instrumentations: config.autoInstrumentation === true ? [getNodeAutoInstrumentations()] : [],
     metricReader,
-    logRecordProcessor
+    logRecordProcessors
   });
 
   await sdk.start();
