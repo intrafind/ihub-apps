@@ -29,6 +29,50 @@ function isValidRedirectUri(redirectUri, allowedUris) {
 }
 
 /**
+ * Check whether the authenticated user is allowed to use a given OAuth client.
+ * When `client.allowedGroups` is empty/missing the client is unrestricted.
+ * Otherwise the user must be a member of at least one listed group.
+ *
+ * @param {Object} client - Loaded OAuth client.
+ * @param {Object} user - Decoded JWT payload (with `groups` array).
+ * @returns {boolean} True if the user passes the group check.
+ */
+function isUserAllowedByGroups(client, user) {
+  const allowed = Array.isArray(client?.allowedGroups) ? client.allowedGroups : [];
+  if (allowed.length === 0) return true;
+  const userGroups = Array.isArray(user?.groups) ? user.groups : [];
+  return userGroups.some(g => allowed.includes(g));
+}
+
+/**
+ * Render a minimal "access denied — group restriction" HTML page for users who
+ * are signed in but not in any of the client's allowed groups.
+ */
+function renderGroupDeniedPage({ client, lang = 'en' }) {
+  const name = escapeHtml(client?.name || 'application');
+  return `<!DOCTYPE html>
+<html lang="${lang}">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Access denied - iHub</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f3f4f6; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 16px; }
+    .card { background: white; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,0.12); max-width: 420px; width: 100%; padding: 32px; text-align: center; }
+    h1 { font-size: 20px; color: #111827; margin-bottom: 12px; }
+    p { font-size: 14px; color: #4b5563; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>This account is not enabled for ${name}</h1>
+    <p>Your iHub account does not belong to any of the groups required to use this application. Please contact your administrator to request access.</p>
+  </div>
+</body>
+</html>`;
+}
+
+/**
  * Generate a cryptographically random CSRF token for the consent form.
  * The token is single-use and stored in the session, then verified on POST.
  *
@@ -308,6 +352,21 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.redirect(loginUrl);
       }
 
+      // Enforce per-client group allowlist when configured
+      if (!isUserAllowedByGroups(client, currentUser)) {
+        logger.info('[OAuth Authorize] User denied by client group allowlist', {
+          component: 'OAuthAuthorize',
+          clientId: client_id,
+          userId: currentUser.sub
+        });
+        const acceptLang = req.headers['accept-language'];
+        const rawLang = acceptLang ? acceptLang.split(',')[0].split('-')[0].trim() : 'en';
+        const safeLang = /^[a-z]{2}$/.test(rawLang) ? rawLang : 'en';
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Cache-Control', 'no-store');
+        return res.status(403).send(renderGroupDeniedPage({ client, lang: safeLang }));
+      }
+
       // User is authenticated — skip consent for trusted clients
       if (client.trusted || !client.consentRequired) {
         const code = generateCode();
@@ -500,6 +559,18 @@ export default function registerOAuthAuthorizeRoutes(app) {
 
       if (!currentUser) {
         return res.status(401).send('login_required: Session expired during consent');
+      }
+
+      // Re-check group allowlist on the decision step in case membership changed
+      if (!isUserAllowedByGroups(client, currentUser)) {
+        const errorUrl = new URL(redirect_uri);
+        errorUrl.searchParams.set('error', 'access_denied');
+        errorUrl.searchParams.set(
+          'error_description',
+          'User is not in any of the groups required by this client'
+        );
+        if (state) errorUrl.searchParams.set('state', state);
+        return res.redirect(errorUrl.toString());
       }
 
       // Retrieve PKCE parameters stored in session during GET /authorize

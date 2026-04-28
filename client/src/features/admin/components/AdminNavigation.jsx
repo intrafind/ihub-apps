@@ -306,6 +306,12 @@ function AdminNavigation() {
           current: location.pathname.startsWith('/admin/office-integration')
         },
         {
+          key: 'extensionIntegration',
+          name: t('admin.nav.extensionIntegration', 'Browser Extension'),
+          href: '/admin/extension-integration',
+          current: location.pathname.startsWith('/admin/extension-integration')
+        },
+        {
           key: 'logging',
           name: t('admin.nav.logging', 'Logging'),
           href: '/admin/logging',

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iHub Apps</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body class="panel-body">
+    <header class="panel-header">
+      <div class="panel-title">
+        <img src="icons/icon-48.png" alt="" width="20" height="20" />
+        <span id="header-title">iHub Apps</span>
+      </div>
+      <div class="panel-header-actions">
+        <button id="open-options-btn" type="button" class="icon-btn" title="Settings">⚙︎</button>
+        <button id="signout-btn" type="button" class="icon-btn" title="Sign out">⎋</button>
+      </div>
+    </header>
+
+    <section id="setup-view" class="view" hidden>
+      <h2>Get started</h2>
+      <p>To use this extension you need to point it at your iHub instance and sign in.</p>
+      <button id="setup-open-options" type="button" class="btn btn-primary">Open settings</button>
+    </section>
+
+    <section id="signin-view" class="view" hidden>
+      <h2>Sign in</h2>
+      <p>Connected to <code id="signin-base-url"></code>. Sign in to load your apps.</p>
+      <button id="signin-btn" type="button" class="btn btn-primary">Sign in</button>
+      <p id="signin-error" class="status status-error" hidden></p>
+    </section>
+
+    <section id="main-view" class="view" hidden>
+      <div class="toolbar">
+        <label for="app-select" class="sr-only">App</label>
+        <select id="app-select" aria-label="App"></select>
+        <div class="page-context" id="page-context" hidden>
+          <span id="page-favicon"></span>
+          <span id="page-title-label" class="page-title-label"></span>
+        </div>
+      </div>
+
+      <div class="page-actions">
+        <button id="send-page-btn" type="button" class="chip">Send page</button>
+        <button id="send-selection-btn" type="button" class="chip">Send selection</button>
+      </div>
+
+      <div id="starter-prompts" class="starter-prompts"></div>
+
+      <div id="messages" class="messages" aria-live="polite"></div>
+
+      <form id="composer" class="composer">
+        <textarea
+          id="composer-input"
+          rows="2"
+          placeholder="Ask about this page…"
+          aria-label="Message"
+        ></textarea>
+        <div class="composer-actions">
+          <label class="checkbox">
+            <input id="include-page-toggle" type="checkbox" checked />
+            <span>Attach page content</span>
+          </label>
+          <button id="send-btn" type="submit" class="btn btn-primary">Send</button>
+        </div>
+      </form>
+    </section>
+
+    <script src="sidepanel.js"></script>
+  </body>
+</html>

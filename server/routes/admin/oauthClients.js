@@ -210,6 +210,7 @@ export default function registerAdminOAuthRoutes(app) {
         allowedApps,
         allowedModels,
         allowedPrompts,
+        allowedGroups,
         tokenExpirationMinutes,
         metadata,
         clientType,
@@ -244,6 +245,7 @@ export default function registerAdminOAuthRoutes(app) {
         allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
         allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
         allowedPrompts: Array.isArray(allowedPrompts) ? allowedPrompts : [],
+        allowedGroups: Array.isArray(allowedGroups) ? allowedGroups : [],
         tokenExpirationMinutes:
           tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
         metadata: metadata || {},
@@ -274,6 +276,7 @@ export default function registerAdminOAuthRoutes(app) {
           allowedApps: newClient.allowedApps,
           allowedModels: newClient.allowedModels,
           allowedPrompts: newClient.allowedPrompts,
+          allowedGroups: newClient.allowedGroups,
           tokenExpirationMinutes: newClient.tokenExpirationMinutes,
           active: newClient.active,
           createdAt: newClient.createdAt,

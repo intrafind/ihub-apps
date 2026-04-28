@@ -86,6 +86,9 @@ const AdminFeaturesPage = lazyWithRetry(() => import('./features/admin/pages/Adm
 const AdminOfficeIntegrationPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminOfficeIntegrationPage')
 );
+const AdminExtensionIntegrationPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminExtensionIntegrationPage')
+);
 const AdminMarketplacePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplacePage')
 );
@@ -504,6 +507,10 @@ function App() {
           <Route
             path="admin/office-integration"
             element={<LazyAdminRoute component={AdminOfficeIntegrationPage} />}
+          />
+          <Route
+            path="admin/extension-integration"
+            element={<LazyAdminRoute component={AdminExtensionIntegrationPage} />}
           />
           {featureFlags.isEnabled('marketplace', true) && (
             <Route
