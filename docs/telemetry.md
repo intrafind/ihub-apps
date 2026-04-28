@@ -147,16 +147,42 @@ Standard gen-ai histograms:
   direction, with `gen_ai.token.type=input|output`)
 - `gen_ai.client.operation.duration` - histogram of operation durations in seconds
 
-iHub counters & gauges:
+iHub product counters & gauges:
 
-- `ihub.app.usage` - per app/user request counter
-- `ihub.prompt.usage` - prompt template usage
+- `ihub.app.usage` - per app request counter
 - `ihub.errors` - errors by type and context (`llm_call`, `inference_api`, ...)
 - `ihub.conversations` - chat messages with the `conversation.is_follow_up` dimension
 - `ihub.active.users` - **observable gauge**, distinct users active in the rolling
   window (default 5 min)
 - `ihub.active.chats` - **observable gauge**, distinct chats active in the rolling
   window
+- `ihub.stream.outcome` - streaming chat outcomes (`completed`, `aborted`, `error`)
+- `ihub.ratelimit.hits` - throttler / rate-limit hits, labelled by `ratelimit.scope`
+  (`http`, `llm`) and `ratelimit.route`
+- `ihub.auth.events` - login / logout / token-validated / token-invalid /
+  token-expired counters labelled by `auth.provider`
+- `ihub.upload.requests` + `ihub.upload.size` - file upload counter and size
+  histogram, labelled by `upload.kind` and `upload.outcome`
+- `ihub.source.duration` + `ihub.source.errors` - source / RAG load duration
+  histogram and error counter, labelled by `source.type`
+- `ihub.config.reload` + `ihub.config.reload.duration` - configuration cache
+  reload counter and duration histogram, labelled by `config.file`
+- `ihub.magicprompt.usage` - magic-prompt invocation counter
+- `ihub.feedback` + `ihub.feedback.rating` - user feedback counter (per rating)
+  and 1-5 rating histogram
+
+Process / runtime gauges (registered automatically when telemetry is enabled):
+
+- `process.cpu.utilization` - 0-1 CPU utilisation (user + system, summed)
+- `process.runtime.nodejs.memory.usage` - rss / heap_used / heap_total / external
+- `process.runtime.nodejs.event_loop.delay` - mean event-loop delay in seconds
+- `ihub.workers.count` - number of cluster workers visible from this process
+
+Optional: enable `telemetry.autoInstrumentation: true` (admin UI / platform.json)
+to also load the Node auto-instrumentations: HTTP/Express/DNS/fs/net. That gives
+you `http.server.duration`, `http.server.active_requests`, request/response
+size histograms etc. for free, but every HTTP request becomes a span - turn it
+on intentionally.
 
 ### Useful PromQL examples
 

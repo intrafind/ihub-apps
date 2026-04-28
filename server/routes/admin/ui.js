@@ -11,6 +11,7 @@ import { authRequired } from '../../middleware/authRequired.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { recordUpload } from '../../telemetry/metrics.js';
 
 export default function registerAdminUIRoutes(app) {
   // Configure multer for file uploads
@@ -73,11 +74,13 @@ export default function registerAdminUIRoutes(app) {
     (req, res) => {
       try {
         if (!req.file) {
+          recordUpload('admin_asset', 'rejected_other');
           return res.status(400).json({
             success: false,
             message: 'No file uploaded'
           });
         }
+        recordUpload('admin_asset', 'accepted', req.file.size);
 
         const { assetType = 'general', description = '' } = req.body;
 

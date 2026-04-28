@@ -11,6 +11,7 @@ import { ConsoleLogRecordExporter, SimpleLogRecordProcessor } from '@opentelemet
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
 import { initializeMetrics } from './telemetry/metrics.js';
+import { initializeProcessMetrics } from './telemetry/ProcessMetrics.js';
 import {
   createTraceExporter,
   createMetricExporter,
@@ -175,6 +176,7 @@ export async function initTelemetry(rawConfig = {}) {
     // Once `sdk.start()` returns the SDK has registered its provider as the
     // global one, so we acquire meters via the @opentelemetry/api facade.
     initializeMetrics(metricsApi);
+    initializeProcessMetrics(metricsApi);
 
     // Keep legacy token usage counter for backward compatibility
     tokenUsageCounter = metricsApi.getMeter('ihub-apps').createCounter('token_usage_total', {

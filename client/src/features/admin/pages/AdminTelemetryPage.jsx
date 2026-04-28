@@ -42,7 +42,8 @@ const DEFAULT_TELEMETRY = {
     enabled: false,
     intervalSeconds: 300,
     windowMinutes: 5
-  }
+  },
+  autoInstrumentation: false
 };
 
 function deepMerge(base, overlay) {
@@ -378,6 +379,20 @@ function AdminTelemetryPage() {
                   {t(
                     'admin.telemetry.events',
                     'Emit gen_ai events (prompts, completions, tool calls)'
+                  )}
+                </span>
+              </label>
+              <label className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={config.autoInstrumentation === true}
+                  onChange={e => updateField('autoInstrumentation', e.target.checked)}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                  {t(
+                    'admin.telemetry.autoInstrumentation',
+                    'Auto-instrument HTTP/Express/DNS/fs/net (requires restart)'
                   )}
                 </span>
               </label>

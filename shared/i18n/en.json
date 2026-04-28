@@ -1053,6 +1053,7 @@
       "spans": "Emit spans (gen_ai.* attributes)",
       "metrics": "Emit metrics (token usage, durations, app/conversation counters, active users/chats)",
       "events": "Emit gen_ai events (prompts, completions, tool calls)",
+      "autoInstrumentation": "Auto-instrument HTTP/Express/DNS/fs/net (requires restart)",
       "privacy": "Content & Privacy",
       "privacyWarn": "Including prompts and completions may capture PII or sensitive data. Disabled by default.",
       "includePrompts": "Include prompt content in events",

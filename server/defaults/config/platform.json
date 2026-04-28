@@ -69,6 +69,7 @@
       "intervalSeconds": 300,
       "windowMinutes": 5
     },
+    "autoInstrumentation": false,
     "resource": {
       "service.name": "ihub-apps",
       "service.version": "auto",

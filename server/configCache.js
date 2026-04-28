@@ -530,6 +530,8 @@ class ConfigCache {
    * Refresh a single cache entry
    */
   async refreshCacheEntry(key) {
+    const reloadStart = Date.now();
+    let reloadError = null;
     try {
       // Special handling for apps.json - load from both sources
       if (key === 'config/apps.json') {
@@ -647,12 +649,22 @@ class ConfigCache {
         this.setCacheEntry(key, finalData);
       }
     } catch (error) {
+      reloadError = error;
       logger.error('Error refreshing cache entry', {
         component: 'ConfigCache',
         key,
         error
       });
       // Keep the old data in cache on refresh failure
+    } finally {
+      // Telemetry: emit reload counter + duration. Lazy-imported because
+      // configCache.js is itself imported very early in the boot sequence.
+      try {
+        const { recordConfigReload } = await import('./telemetry/metrics.js');
+        recordConfigReload(key, (Date.now() - reloadStart) / 1000, reloadError);
+      } catch {
+        // never break a reload because telemetry isn't ready yet
+      }
     }
   }
 

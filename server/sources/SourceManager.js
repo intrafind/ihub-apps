@@ -5,6 +5,7 @@ import PageHandler from './PageHandler.js';
 import logger from '../utils/logger.js';
 import { httpFetch } from '../utils/httpConfig.js';
 import { resolveAndValidatePath } from '../utils/pathSecurity.js';
+import { recordSourceLoad } from '../telemetry/metrics.js';
 
 // Global registry for source tool functions (persists across SourceManager instances)
 const globalSourceToolRegistry = new Map();
@@ -140,8 +141,16 @@ class SourceManager {
           ...context
         };
 
-        // Load content
-        const result = await handler.getCachedContent(sourceConfig);
+        // Load content (instrumented)
+        const sourceLoadStart = Date.now();
+        let result;
+        try {
+          result = await handler.getCachedContent(sourceConfig);
+          recordSourceLoad(source.type, (Date.now() - sourceLoadStart) / 1000);
+        } catch (err) {
+          recordSourceLoad(source.type, (Date.now() - sourceLoadStart) / 1000, err);
+          throw err;
+        }
 
         // Extract original link from source config for different source types
         let originalLink = result.metadata?.link || source.link || '';

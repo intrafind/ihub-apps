@@ -1296,6 +1296,7 @@
       "spans": "Spans senden (gen_ai.*-Attribute)",
       "metrics": "Metriken senden (Token-Nutzung, Laufzeiten, App-/Conversation-Counter, aktive Benutzer/Chats)",
       "events": "Gen-AI-Events senden (Prompts, Completions, Tool-Calls)",
+      "autoInstrumentation": "HTTP/Express/DNS/fs/net automatisch instrumentieren (Neustart erforderlich)",
       "privacy": "Inhalt & Datenschutz",
       "privacyWarn": "Das Aufnehmen von Prompts und Completions kann personenbezogene oder sensible Daten erfassen. Standardmäßig deaktiviert.",
       "includePrompts": "Prompt-Inhalt in Events aufnehmen",

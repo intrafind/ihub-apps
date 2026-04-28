@@ -5,6 +5,7 @@ import configCache from '../../configCache.js';
 import { createJob } from './jobStore.js';
 import { processOcrJob } from './processors/ocrProcessor.js';
 import { sendBadRequest, sendInternalError } from '../../utils/responseHelpers.js';
+import { recordUpload } from '../../telemetry/metrics.js';
 
 const router = express.Router();
 
@@ -54,6 +55,15 @@ router.post(
   (req, res, next) => {
     upload.array('files', MAX_FILES)(req, res, err => {
       if (err) {
+        // Map multer's failure code to a label so dashboards can split
+        // size-rejected from mime-rejected from generic.
+        const outcome =
+          err instanceof multer.MulterError
+            ? err.code === 'LIMIT_FILE_SIZE'
+              ? 'rejected_size'
+              : 'rejected_other'
+            : 'rejected_other';
+        recordUpload('ocr', outcome);
         if (err instanceof multer.MulterError) {
           return sendBadRequest(res, `Upload error: ${err.message}`);
         }
@@ -66,7 +76,11 @@ router.post(
     try {
       const files = req.files;
       if (!files || files.length === 0) {
+        recordUpload('ocr', 'rejected_other');
         return sendBadRequest(res, 'At least one file is required');
+      }
+      for (const f of files) {
+        recordUpload('ocr', 'accepted', f.size);
       }
 
       const { modelId, prompt, ocrMode = 'full', debugMode } = req.body;

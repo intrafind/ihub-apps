@@ -12,7 +12,12 @@ import conversationStateManager from '../integrations/ConversationStateManager.j
 import PromptService from '../PromptService.js';
 import logger from '../../utils/logger.js';
 import { getGenAIInstrumentation } from '../../telemetry.js';
-import { recordAppUsage, recordConversation, recordError } from '../../telemetry/metrics.js';
+import {
+  recordAppUsage,
+  recordConversation,
+  recordError,
+  recordStreamOutcome
+} from '../../telemetry/metrics.js';
 import activityTracker from '../../telemetry/ActivityTracker.js';
 import { resolveProviderName, resolveOperation } from '../../telemetry/providerMap.js';
 
@@ -765,6 +770,26 @@ class StreamingHandler {
       if (activeRequests.get(chatId) === controller) {
         activeRequests.delete(chatId);
       }
+
+      // Stream outcome metric. Aborts come from controller.abort() (client
+      // disconnect or our own timeout), normal completion from the model
+      // emitting a stop finish reason. Translate finishReason into one of
+      // {completed, aborted, error} so dashboards can distinguish "user
+      // closed the tab" from "model returned cleanly."
+      const streamOutcome =
+        finishReason === 'error'
+          ? 'error'
+          : doneEmitted
+            ? 'completed'
+            : 'aborted';
+      if (baseLog.appId) {
+        recordStreamOutcome(streamOutcome, {
+          'app.id': baseLog.appId,
+          'gen_ai.provider.name': resolveProviderName(model.provider),
+          'gen_ai.request.model': model.modelId
+        });
+      }
+
       // Ensure the telemetry span is always closed, even if no error path was taken
       if (instrumentation && llmSpan) {
         const duration = (Date.now() - spanStart) / 1000;
