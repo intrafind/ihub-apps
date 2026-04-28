@@ -1,4 +1,5 @@
 import appLogger from './utils/logger.js';
+import { resolveEnvVarsInObject } from './configCache.js';
 import { NodeSDK } from '@opentelemetry/sdk-node';
 import { getNodeAutoInstrumentations } from '@opentelemetry/auto-instrumentations-node';
 import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
@@ -72,11 +73,19 @@ function describeConfigForLog(config) {
   };
 }
 
-export async function initTelemetry(config = {}) {
-  if (!config.enabled) {
-    activeConfig = config;
+export async function initTelemetry(rawConfig = {}) {
+  if (!rawConfig.enabled) {
+    activeConfig = rawConfig;
     return;
   }
+
+  // Telemetry boots before configCache, so the raw platform.json we receive
+  // still has shell-style `${VAR}` and `${VAR:-default}` placeholders. Run
+  // the same resolver the rest of the platform uses so that resource
+  // attributes (deployment.environment, OTLP endpoint, headers, ...) come
+  // out as plain strings instead of literal placeholder text.
+  const config = resolveEnvVarsInObject(rawConfig) || {};
+
   appLogger.info('Initializing telemetry', {
     component: 'Telemetry',
     config: describeConfigForLog(config)
