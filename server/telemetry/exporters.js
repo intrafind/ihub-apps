@@ -9,9 +9,17 @@ import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { ConsoleMetricExporter } from '@opentelemetry/sdk-metrics';
 
 /**
- * Create trace exporter based on configuration
+ * Create trace exporter based on configuration.
+ *
+ * Returning `undefined` means "spans are still created and the in-process
+ * tracer remains active, but nothing exports them off-host." We use that for
+ * Prometheus mode because Prometheus is a metrics-only protocol - dumping
+ * spans to stdout there just spams the application logs (one ConsoleSpan
+ * record per LLM call). Operators who want traces too should run an OTLP
+ * collector alongside Prometheus.
+ *
  * @param {Object} config - Telemetry configuration
- * @returns {Object} Trace exporter
+ * @returns {Object|undefined} Trace exporter, or undefined when no export is wanted
  */
 export function createTraceExporter(config) {
   const provider = config.provider || 'console';
@@ -24,14 +32,20 @@ export function createTraceExporter(config) {
           headers: config.exporters.otlp.headers || {}
         });
       }
-      break;
+      return undefined;
+
+    case 'prometheus':
+      // Metrics-only mode - no span export path. Spans still flow through
+      // the SDK so duration metrics stay accurate, they just don't leak to
+      // stdout the way ConsoleSpanExporter would.
+      return undefined;
 
     case 'console':
-    default:
       return new ConsoleSpanExporter();
-  }
 
-  return new ConsoleSpanExporter();
+    default:
+      return undefined;
+  }
 }
 
 /**

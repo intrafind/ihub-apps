@@ -22,6 +22,24 @@ let genAIInstrumentation = null;
 let activeConfig = null;
 
 /**
+ * Flatten a nested object of resource attributes to dotted keys. Used so that
+ * config like `{ service: { name: 'x', version: 'y' } }` becomes
+ * `{ 'service.name': 'x', 'service.version': 'y' }` - which is what the
+ * OpenTelemetry semantic conventions expect.
+ */
+function flattenResourceAttributes(obj, prefix = '', acc = {}) {
+  for (const [key, value] of Object.entries(obj || {})) {
+    const flatKey = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+      flattenResourceAttributes(value, flatKey, acc);
+    } else {
+      acc[flatKey] = value;
+    }
+  }
+  return acc;
+}
+
+/**
  * Build a log-safe view of the telemetry config: drop OTLP headers entirely
  * (they may contain Bearer tokens / API keys) and only surface non-sensitive
  * routing metadata.
@@ -92,10 +110,17 @@ export async function initTelemetry(config = {}) {
   // @opentelemetry/resources v2.x removed the `new Resource(...)` class form.
   // Use the factory `resourceFromAttributes` so we work on the version range
   // declared in package.json (^2.0.1).
+  //
+  // The migration writes nested objects via setDefault on dotted paths:
+  //   `telemetry.resource.service.name` → { resource: { service: { name } } }
+  // If we spread that directly the nested `service` object also becomes an
+  // attribute named `service` next to the proper `service.name` key. Flatten
+  // the nested config first, then let our resolved service.name/version win.
+  const flatResource = flattenResourceAttributes(config.resource || {});
   const resource = resourceFromAttributes({
+    ...flatResource,
     'service.name': serviceName,
-    'service.version': serviceVersion,
-    ...(config.resource || {})
+    'service.version': serviceVersion
   });
 
   // Create exporters based on the configured provider
