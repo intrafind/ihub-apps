@@ -66,14 +66,14 @@ export default function registerFeedbackRoutes(app, { getLocalizedError }) {
    *                 description: Optional free-text comment
    *                 example: "Very helpful and concise!"
    *               conversationId:
-                 type: string
-                 description: iFinder conversation ID (for iAssistant messages)
-                 example: "conv-abc123"
-               ifinderMessageId:
-                 type: string
-                 description: iFinder message ID (for iAssistant messages)
-                 example: "msg-xyz789"
-               modelId:
+   *                 type: string
+   *                 description: iFinder conversation ID (for iAssistant messages)
+   *                 example: "conv-abc123"
+   *               ifinderMessageId:
+   *                 type: string
+   *                 description: iFinder message ID (for iAssistant messages)
+   *                 example: "msg-xyz789"
+   *               modelId:
    *                 type: string
    *                 description: ID of the model that generated the response
    *                 example: "gpt-4o"
