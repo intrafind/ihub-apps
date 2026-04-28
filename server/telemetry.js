@@ -11,8 +11,7 @@ import {
   ConsoleLogRecordExporter,
   SimpleLogRecordProcessor
 } from '@opentelemetry/sdk-logs';
-import resourcesPkg from '@opentelemetry/resources';
-const { Resource } = resourcesPkg;
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
 import { initializeMetrics } from './telemetry/metrics.js';
 import {
@@ -112,7 +111,10 @@ export async function initTelemetry(config = {}) {
   const serviceVersion =
     rawVersion === 'auto' || !rawVersion ? process.env.npm_package_version || '1.0.0' : rawVersion;
 
-  const resource = new Resource({
+  // @opentelemetry/resources v2.x removed the `new Resource(...)` class form.
+  // Use the factory `resourceFromAttributes` so we work on the version range
+  // declared in package.json (^2.0.1).
+  const resource = resourceFromAttributes({
     'service.name': serviceName,
     'service.version': serviceVersion,
     ...(config.resource || {})
