@@ -66,10 +66,18 @@ Visual pass:
 Touched files:
 
 - `client/src/features/office/components/OfficeChatPanel.jsx` — wire up the handlers, remove `editable={false}`.
-- The new `handleResend` calls `adapter.resendMessage(messageId, editedContent)` (already part of `useAppChat`) to truncate the conversation, then dispatches `submitMessage(content)` directly. Email context and uploads are picked up automatically, the same as a fresh send.
+- The new `handleResend` calls `adapter.resendMessage(messageId, editedContent)` (already part of `useAppChat`) to truncate the conversation, extracts manual uploads from the stored message, and dispatches `submitMessage(content, { selectedFile })`.
 - `editMessage` from the adapter is wired to `onEdit`. No extra logic needed — it's the same local-state mutation as the web app.
 
 Why we don't reuse `AppChat.handleResendMessage`'s pattern of dispatching a synthetic form `submit`: the Outlook panel orchestrates its own send flow through `submitMessage(text)` and doesn't need to round-trip through the DOM. A direct call is simpler and avoids the form lookup.
+
+#### Manual upload restoration on resend
+
+This is the subtle part. After PR #1326 merged, every Outlook send stores a *combined* `imageData`/`fileData` array on the user message — manual uploads first, then email attachments. So we cannot blindly re-attach the stored array on resend, because `useOfficeChatAdapter.sendMessage` will re-pull the email attachments fresh and we'd duplicate them.
+
+Manual uploads carry a `type: 'image' | 'file'` field (set by `UnifiedUploader` / `Uploader`); email attachments built by `buildImageDataFromMailAttachments` / `buildFileDataFromMailAttachments` do not. We use that as the discriminator: `pickManualUpload()` filters the stored array to manual entries only and returns the first one (the Outlook send path supports a single `selectedFile` at a time).
+
+To avoid the React-batching trap where `submitMessage` would still see the old `fileUploadHandler.selectedFile` after a `setSelectedFile` call, `submitMessage` accepts an optional `overrides.selectedFile`. `handleResend` passes the picked manual upload through this override and *also* mirrors it into the uploader UI (`setSelectedFile`) so the user sees the file pill before send for visual continuity. Email attachments are re-fetched by the adapter on the new send, so the latest mail context wins — matching the existing fresh-send behavior and avoiding duplication.
 
 Compact tuning:
 
