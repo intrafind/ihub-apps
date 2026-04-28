@@ -54,6 +54,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
         de: 'KI-gestützter Assistent für Outlook'
       },
       starterPrompts: Array.isArray(officeConfig.starterPrompts) ? officeConfig.starterPrompts : [],
+      quickActions: Array.isArray(officeConfig.quickActions) ? officeConfig.quickActions : [],
       manifestUrl: `${baseUrl}/api/integrations/office-addin/manifest.xml`,
       taskpaneUrl: `${baseUrl}/office/taskpane.html`
     });
@@ -213,7 +214,7 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
    */
   app.put(buildServerPath('/api/admin/office-integration/config'), adminAuth, async (req, res) => {
     try {
-      const { displayName, description, starterPrompts } = req.body;
+      const { displayName, description, starterPrompts, quickActions } = req.body;
       const platform = configCache.getPlatform();
 
       // Accept only `{ [lang: string]: string }` objects. Any non-string locale value
@@ -284,6 +285,53 @@ export default function registerAdminOfficeIntegrationRoutes(app) {
           sanitized.push({ title: titleResult.value, message: messageResult.value });
         }
         allowed.starterPrompts = sanitized;
+      }
+      if (quickActions !== undefined) {
+        if (!Array.isArray(quickActions)) {
+          return sendBadRequest(res, 'quickActions must be an array');
+        }
+        if (quickActions.length > 10) {
+          return sendBadRequest(res, 'quickActions must not contain more than 10 entries');
+        }
+        const apps = configCache.getApps?.() ?? [];
+        const sanitized = [];
+        for (let i = 0; i < quickActions.length; i++) {
+          const entry = quickActions[i];
+          if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+            return sendBadRequest(res, `quickActions[${i}] must be an object`);
+          }
+          if (!entry.appId || typeof entry.appId !== 'string' || entry.appId.trim() === '') {
+            return sendBadRequest(res, `quickActions[${i}].appId must be a non-empty string`);
+          }
+          if (entry.appId.trim().length > 50) {
+            return sendBadRequest(res, `quickActions[${i}].appId must not exceed 50 characters`);
+          }
+          if (!apps.some(a => a.id === entry.appId.trim())) {
+            return sendBadRequest(
+              res,
+              `quickActions[${i}].appId references unknown app "${entry.appId.trim()}"`
+            );
+          }
+          const labelResult = validateLocalizedObject(`quickActions[${i}].label`, entry.label, {
+            maxLength: 250,
+            requireNonEmpty: true
+          });
+          if (labelResult.error) return sendBadRequest(res, labelResult.error);
+          const sanitizedEntry = { appId: entry.appId.trim(), label: labelResult.value };
+          if (entry.prompt !== undefined) {
+            const promptResult = validateLocalizedObject(
+              `quickActions[${i}].prompt`,
+              entry.prompt,
+              { maxLength: 4000, requireNonEmpty: false }
+            );
+            if (promptResult.error) return sendBadRequest(res, promptResult.error);
+            if (Object.keys(promptResult.value).length > 0) {
+              sanitizedEntry.prompt = promptResult.value;
+            }
+          }
+          sanitized.push(sanitizedEntry);
+        }
+        allowed.quickActions = sanitized;
       }
 
       await savePlatformConfig({

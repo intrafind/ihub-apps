@@ -51,6 +51,22 @@ function sanitizeStarterPrompts(value) {
   return out;
 }
 
+function sanitizeQuickActions(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) continue;
+    if (!item.appId || typeof item.appId !== 'string' || item.appId.trim() === '') continue;
+    const label = sanitizeLocalizedObject(item.label);
+    if (Object.keys(label).length === 0) continue;
+    const entry = { appId: item.appId.trim(), label };
+    const prompt = sanitizeLocalizedObject(item.prompt);
+    if (Object.keys(prompt).length > 0) entry.prompt = prompt;
+    out.push(entry);
+  }
+  return out;
+}
+
 /**
  * @swagger
  * /api/integrations/office-addin/config:
@@ -79,7 +95,8 @@ router.get('/config', (req, res) => {
     baseUrl,
     clientId: officeConfig.oauthClientId || '',
     redirectUri: `${baseUrl}/office/callback.html`,
-    starterPrompts: sanitizeStarterPrompts(officeConfig.starterPrompts)
+    starterPrompts: sanitizeStarterPrompts(officeConfig.starterPrompts),
+    quickActions: sanitizeQuickActions(officeConfig.quickActions)
   });
 });
 
@@ -122,14 +139,154 @@ router.get('/manifest.xml', (req, res) => {
     displayName
   });
 
-  const manifest = generateManifest({ baseUrl, origin, displayName, description });
+  const quickActions = sanitizeQuickActions(officeConfig.quickActions);
+  const manifest = generateManifest({ baseUrl, origin, displayName, description, quickActions });
 
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="manifest.xml"');
   res.send(manifest);
 });
 
-function generateManifest({ baseUrl, origin, displayName, description }) {
+function generateManifest({ baseUrl, origin, displayName, description, quickActions = [] }) {
+  function generateMenuItems(qas, supportsPinning, context) {
+    const items = qas
+      .map(
+        (qa, i) => `\
+                  <Item id="QuickAction_${i}_${context}">
+                    <Label resid="QuickAction_${i}.Label"/>
+                    <Supertip>
+                      <Title resid="QuickAction_${i}.Label"/>
+                      <Description resid="QuickAction_${i}.Label"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="QuickAction_${i}.Url"/>${supportsPinning ? '\n                      <SupportsPinning>true</SupportsPinning>' : ''}
+                    </Action>
+                  </Item>`
+      )
+      .join('\n');
+    const openItem = `\
+                  <Item id="OpenChat_${context}">
+                    <Label resid="OpenChat.Label"/>
+                    <Supertip>
+                      <Title resid="OpenChat.Label"/>
+                      <Description resid="OpenChat.Label"/>
+                    </Supertip>
+                    <Icon>
+                      <bt:Image size="16" resid="Icon.16x16"/>
+                      <bt:Image size="32" resid="Icon.32x32"/>
+                      <bt:Image size="80" resid="Icon.80x80"/>
+                    </Icon>
+                    <Action xsi:type="ShowTaskpane">
+                      <SourceLocation resid="Taskpane.Url"/>${supportsPinning ? '\n                      <SupportsPinning>true</SupportsPinning>' : ''}
+                    </Action>
+                  </Item>`;
+    return `${items}\n${openItem}`;
+  }
+
+  function generateQuickActionResources(qas) {
+    const urls = qas
+      .map(
+        (_, i) =>
+          `        <bt:Url id="QuickAction_${i}.Url" DefaultValue="${baseUrl}/office/taskpane.html?qa=${i}"/>`
+      )
+      .join('\n');
+    const strings = qas
+      .map(
+        (qa, i) =>
+          `        <bt:String id="QuickAction_${i}.Label" DefaultValue="${escapeXml(qa.label?.en ?? '')}"/>`
+      )
+      .join('\n');
+    return { urls, strings };
+  }
+
+  const hasQuickActions = quickActions.length > 0;
+
+  function renderControl(id, groupSuffix, supportsPinning) {
+    if (!hasQuickActions) {
+      return `\
+                <Control xsi:type="Button" id="${id}">
+                  <Label resid="TaskpaneButton.Label"/>
+                  <Supertip>
+                    <Title resid="TaskpaneButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Action xsi:type="ShowTaskpane">
+                    <SourceLocation resid="Taskpane.Url"/>${supportsPinning ? '\n                    <SupportsPinning>true</SupportsPinning>' : ''}
+                  </Action>
+                </Control>`;
+    }
+    return `\
+                <Control xsi:type="Menu" id="${id}">
+                  <Label resid="MenuButton.Label"/>
+                  <Supertip>
+                    <Title resid="MenuButton.Label"/>
+                    <Description resid="TaskpaneButton.Tooltip"/>
+                  </Supertip>
+                  <Icon>
+                    <bt:Image size="16" resid="Icon.16x16"/>
+                    <bt:Image size="32" resid="Icon.32x32"/>
+                    <bt:Image size="80" resid="Icon.80x80"/>
+                  </Icon>
+                  <Items>
+${generateMenuItems(quickActions, supportsPinning, groupSuffix)}
+                  </Items>
+                </Control>`;
+  }
+
+  function renderResources(qas) {
+    if (!hasQuickActions) {
+      return `\
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="${baseUrl}/office/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="${baseUrl}/office/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="${baseUrl}/office/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url" DefaultValue="${baseUrl}/office/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
+      </bt:LongStrings>`;
+    }
+    const { urls, strings } = generateQuickActionResources(qas);
+    return `\
+      <bt:Images>
+        <bt:Image id="Icon.16x16" DefaultValue="${baseUrl}/office/assets/icon-16.png"/>
+        <bt:Image id="Icon.32x32" DefaultValue="${baseUrl}/office/assets/icon-32.png"/>
+        <bt:Image id="Icon.80x80" DefaultValue="${baseUrl}/office/assets/icon-80.png"/>
+      </bt:Images>
+      <bt:Urls>
+        <bt:Url id="Commands.Url" DefaultValue="${baseUrl}/office/commands.html"/>
+        <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
+${urls}
+      </bt:Urls>
+      <bt:ShortStrings>
+        <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
+        <bt:String id="MenuButton.Label" DefaultValue="${escapeXml(displayName)}"/>
+        <bt:String id="OpenChat.Label" DefaultValue="Open ${escapeXml(displayName)}"/>
+${strings}
+      </bt:ShortStrings>
+      <bt:LongStrings>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
+      </bt:LongStrings>`;
+  }
+
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -188,21 +345,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
             <OfficeTab id="TabDefault">
               <Group id="msgReadGroup">
                 <Label resid="GroupLabel"/>
-                <Control xsi:type="Button" id="msgReadOpenPaneButton">
-                  <Label resid="TaskpaneButton.Label"/>
-                  <Supertip>
-                    <Title resid="TaskpaneButton.Label"/>
-                    <Description resid="TaskpaneButton.Tooltip"/>
-                  </Supertip>
-                  <Icon>
-                    <bt:Image size="16" resid="Icon.16x16"/>
-                    <bt:Image size="32" resid="Icon.32x32"/>
-                    <bt:Image size="80" resid="Icon.80x80"/>
-                  </Icon>
-                  <Action xsi:type="ShowTaskpane">
-                    <SourceLocation resid="Taskpane.Url"/>
-                  </Action>
-                </Control>
+${renderControl('msgReadMenuButton', 'msgRead', false)}
               </Group>
             </OfficeTab>
           </ExtensionPoint>
@@ -210,21 +353,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
             <OfficeTab id="TabDefault">
               <Group id="msgComposeGroup">
                 <Label resid="GroupLabel"/>
-                <Control xsi:type="Button" id="msgComposeOpenPaneButton">
-                  <Label resid="TaskpaneButton.Label"/>
-                  <Supertip>
-                    <Title resid="TaskpaneButton.Label"/>
-                    <Description resid="TaskpaneButton.Tooltip"/>
-                  </Supertip>
-                  <Icon>
-                    <bt:Image size="16" resid="Icon.16x16"/>
-                    <bt:Image size="32" resid="Icon.32x32"/>
-                    <bt:Image size="80" resid="Icon.80x80"/>
-                  </Icon>
-                  <Action xsi:type="ShowTaskpane">
-                    <SourceLocation resid="Taskpane.Url"/>
-                  </Action>
-                </Control>
+${renderControl('msgComposeMenuButton', 'msgCompose', false)}
               </Group>
             </OfficeTab>
           </ExtensionPoint>
@@ -232,22 +361,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
       </Host>
     </Hosts>
     <Resources>
-      <bt:Images>
-        <bt:Image id="Icon.16x16" DefaultValue="${baseUrl}/office/assets/icon-16.png"/>
-        <bt:Image id="Icon.32x32" DefaultValue="${baseUrl}/office/assets/icon-32.png"/>
-        <bt:Image id="Icon.80x80" DefaultValue="${baseUrl}/office/assets/icon-80.png"/>
-      </bt:Images>
-      <bt:Urls>
-        <bt:Url id="Commands.Url" DefaultValue="${baseUrl}/office/commands.html"/>
-        <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
-      </bt:Urls>
-      <bt:ShortStrings>
-        <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
-      </bt:ShortStrings>
-      <bt:LongStrings>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
-      </bt:LongStrings>
+${renderResources(quickActions)}
     </Resources>
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
       <Requirements>
@@ -263,22 +377,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
               <OfficeTab id="TabDefault">
                 <Group id="msgReadGroupV1_1">
                   <Label resid="GroupLabel"/>
-                  <Control xsi:type="Button" id="msgReadOpenPaneButtonV1_1">
-                    <Label resid="TaskpaneButton.Label"/>
-                    <Supertip>
-                      <Title resid="TaskpaneButton.Label"/>
-                      <Description resid="TaskpaneButton.Tooltip"/>
-                    </Supertip>
-                    <Icon>
-                      <bt:Image size="16" resid="Icon.16x16"/>
-                      <bt:Image size="32" resid="Icon.32x32"/>
-                      <bt:Image size="80" resid="Icon.80x80"/>
-                    </Icon>
-                    <Action xsi:type="ShowTaskpane">
-                      <SourceLocation resid="Taskpane.Url"/>
-                      <SupportsPinning>true</SupportsPinning>
-                    </Action>
-                  </Control>
+${renderControl('msgReadMenuButtonV1_1', 'msgReadV1_1', true)}
                 </Group>
               </OfficeTab>
             </ExtensionPoint>
@@ -286,22 +385,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
               <OfficeTab id="TabDefault">
                 <Group id="msgComposeGroupV1_1">
                   <Label resid="GroupLabel"/>
-                  <Control xsi:type="Button" id="msgComposeOpenPaneButtonV1_1">
-                    <Label resid="TaskpaneButton.Label"/>
-                    <Supertip>
-                      <Title resid="TaskpaneButton.Label"/>
-                      <Description resid="TaskpaneButton.Tooltip"/>
-                    </Supertip>
-                    <Icon>
-                      <bt:Image size="16" resid="Icon.16x16"/>
-                      <bt:Image size="32" resid="Icon.32x32"/>
-                      <bt:Image size="80" resid="Icon.80x80"/>
-                    </Icon>
-                    <Action xsi:type="ShowTaskpane">
-                      <SourceLocation resid="Taskpane.Url"/>
-                      <SupportsPinning>true</SupportsPinning>
-                    </Action>
-                  </Control>
+${renderControl('msgComposeMenuButtonV1_1', 'msgComposeV1_1', true)}
                 </Group>
               </OfficeTab>
             </ExtensionPoint>
@@ -309,22 +393,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
         </Host>
       </Hosts>
       <Resources>
-        <bt:Images>
-          <bt:Image id="Icon.16x16" DefaultValue="${baseUrl}/office/assets/icon-16.png"/>
-          <bt:Image id="Icon.32x32" DefaultValue="${baseUrl}/office/assets/icon-32.png"/>
-          <bt:Image id="Icon.80x80" DefaultValue="${baseUrl}/office/assets/icon-80.png"/>
-        </bt:Images>
-        <bt:Urls>
-          <bt:Url id="Commands.Url" DefaultValue="${baseUrl}/office/commands.html"/>
-          <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
-        </bt:Urls>
-        <bt:ShortStrings>
-          <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
-          <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
-        </bt:ShortStrings>
-        <bt:LongStrings>
-          <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
-        </bt:LongStrings>
+${renderResources(quickActions)}
       </Resources>
     </VersionOverrides>
   </VersionOverrides>
