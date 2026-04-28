@@ -4,11 +4,13 @@ import { Link } from 'react-router-dom';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
-import { makeAdminApiCall } from '../../../api/adminApi';
+import { makeAdminApiCall, fetchAdminApps } from '../../../api/adminApi';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 
 function AdminOfficeIntegrationPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [toggling, setToggling] = useState(false);
@@ -18,6 +20,8 @@ function AdminOfficeIntegrationPage() {
   const [displayName, setDisplayName] = useState({});
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
+  const [quickActions, setQuickActions] = useState([]);
+  const [availableApps, setAvailableApps] = useState([]);
 
   // Stable client-side ids are used as React keys while the prompt list is edited.
   // They are stripped before persisting so the server never sees them.
@@ -38,6 +42,16 @@ function AdminOfficeIntegrationPage() {
     return out;
   };
 
+  const sanitizeAndKeyQuickActions = raw => {
+    if (!Array.isArray(raw)) return [];
+    return raw.map(item => ({
+      _id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+      appId: typeof item?.appId === 'string' ? item.appId : '',
+      label: sanitizeLocalized(item?.label ?? {}),
+      prompt: sanitizeLocalized(item?.prompt ?? {})
+    }));
+  };
+
   const loadStatus = async () => {
     try {
       setLoading(true);
@@ -55,6 +69,7 @@ function AdminOfficeIntegrationPage() {
             }))
           : []
       );
+      setQuickActions(sanitizeAndKeyQuickActions(data.quickActions));
     } catch (_err) {
       setMessage({
         type: 'error',
@@ -68,6 +83,12 @@ function AdminOfficeIntegrationPage() {
   useEffect(() => {
     loadStatus();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    fetchAdminApps()
+      .then(data => setAvailableApps(Array.isArray(data) ? data : []))
+      .catch(err => console.error('Failed to load apps', err));
   }, []);
 
   const handleToggle = async () => {
@@ -122,12 +143,22 @@ function AdminOfficeIntegrationPage() {
         }))
         .filter(p => Object.keys(p.title).length > 0 && Object.keys(p.message).length > 0);
 
+      const cleanedQuickActions = quickActions
+        .filter(qa => qa.appId && Object.values(trimLocalized(qa.label)).some(v => v))
+        .map(({ _id: _ignored, ...qa }) => {
+          const trimmedPrompt = trimLocalized(qa.prompt ?? {});
+          const entry = { appId: qa.appId, label: trimLocalized(qa.label) };
+          if (Object.values(trimmedPrompt).some(v => v)) entry.prompt = trimmedPrompt;
+          return entry;
+        });
+
       await makeAdminApiCall('/admin/office-integration/config', {
         method: 'PUT',
         data: {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
-          starterPrompts: cleanedPrompts
+          starterPrompts: cleanedPrompts,
+          quickActions: cleanedQuickActions
         }
       });
       await loadStatus();
@@ -168,6 +199,40 @@ function AdminOfficeIntegrationPage() {
 
   const handleMovePrompt = (index, direction) => {
     setStarterPrompts(prev => {
+      const target = index + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const handleQuickActionChange = (index, field, value) => {
+    setQuickActions(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], [field]: value };
+      return next;
+    });
+  };
+
+  const handleAddQuickAction = () => {
+    setQuickActions(prev => [
+      ...prev,
+      {
+        _id: crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2),
+        appId: '',
+        label: {},
+        prompt: {}
+      }
+    ]);
+  };
+
+  const handleRemoveQuickAction = index => {
+    setQuickActions(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleMoveQuickAction = (index, direction) => {
+    setQuickActions(prev => {
       const target = index + direction;
       if (target < 0 || target >= prev.length) return prev;
       const next = [...prev];
@@ -434,6 +499,138 @@ function AdminOfficeIntegrationPage() {
                             label={t('admin.officeIntegration.promptMessage', 'Message')}
                             value={prompt?.message || {}}
                             onChange={value => handlePromptChange(index, 'message', value)}
+                            type="textarea"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="mt-6 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleSaveConfig}
+                    disabled={saving}
+                    className="rounded-lg bg-indigo-600 text-white px-4 py-2 text-sm font-medium hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    {saving ? '…' : t('admin.officeIntegration.save', 'Save')}
+                  </button>
+                </div>
+              </div>
+
+              {/* Quick Actions */}
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {t('admin.officeIntegration.quickActionsTitle', 'Quick Actions')}
+                    </h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                      {t(
+                        'admin.officeIntegration.quickActionsDesc',
+                        'Quick actions appear as a dropdown menu in the Outlook ribbon. Each action opens the add-in with a specific app pre-selected. Changing quick actions requires re-downloading and re-deploying the manifest.'
+                      )}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="text-sm text-gray-500 dark:text-gray-400">
+                      {quickActions.length} / 10
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddQuickAction}
+                      disabled={quickActions.length >= 10}
+                      className="rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {t('admin.officeIntegration.addQuickAction', 'Add Quick Action')}
+                    </button>
+                  </div>
+                </div>
+
+                {quickActions.length === 0 ? (
+                  <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 italic">
+                    {t(
+                      'admin.officeIntegration.noQuickActions',
+                      'No quick actions configured. Add one to show actions in the Outlook ribbon.'
+                    )}
+                  </p>
+                ) : (
+                  <div className="mt-4 space-y-4">
+                    {quickActions.map((qa, index) => (
+                      <div
+                        key={qa._id}
+                        className="rounded-lg border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/60 dark:bg-gray-900/40"
+                      >
+                        <div className="flex items-center justify-between mb-3">
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('admin.officeIntegration.quickActionIndex', 'Quick Action #{{n}}', {
+                              n: index + 1
+                            })}
+                          </span>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => handleMoveQuickAction(index, -1)}
+                              disabled={index === 0}
+                              className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                              aria-label={t('admin.officeIntegration.moveUp', 'Move up')}
+                            >
+                              ↑
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveQuickAction(index, 1)}
+                              disabled={index === quickActions.length - 1}
+                              className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
+                              aria-label={t('admin.officeIntegration.moveDown', 'Move down')}
+                            >
+                              ↓
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveQuickAction(index)}
+                              className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                            >
+                              {t('admin.officeIntegration.remove', 'Remove')}
+                            </button>
+                          </div>
+                        </div>
+                        <div className="space-y-3">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              {t('admin.officeIntegration.quickActionApp', 'App')}
+                            </label>
+                            <select
+                              value={qa.appId}
+                              onChange={e =>
+                                handleQuickActionChange(index, 'appId', e.target.value)
+                              }
+                              className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                            >
+                              <option value="">
+                                {t('admin.officeIntegration.selectApp', 'Select app...')}
+                              </option>
+                              {availableApps.map(app => (
+                                <option key={app.id} value={app.id}>
+                                  {getLocalizedContent(app.name, currentLanguage) || app.id}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                          <DynamicLanguageEditor
+                            label={t('admin.officeIntegration.quickActionLabel', 'Label')}
+                            value={qa?.label || {}}
+                            onChange={value => handleQuickActionChange(index, 'label', value)}
+                            type="text"
+                          />
+                          <DynamicLanguageEditor
+                            label={t(
+                              'admin.officeIntegration.quickActionPrompt',
+                              'Prompt (optional)'
+                            )}
+                            value={qa?.prompt || {}}
+                            onChange={value => handleQuickActionChange(index, 'prompt', value)}
                             type="textarea"
                           />
                         </div>

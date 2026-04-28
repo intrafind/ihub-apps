@@ -51,6 +51,12 @@ Office.onReady(async () => {
     });
   }
 
+  const params = new URLSearchParams(window.location.search);
+  const qaParam = params.get('qa');
+  const qaIndex = qaParam != null ? Number(qaParam) : -1;
+  const quickAction =
+    qaIndex >= 0 && Number.isInteger(qaIndex) ? (config.quickActions?.[qaIndex] ?? null) : null;
+
   const rootEl = document.getElementById('office-root');
   if (!rootEl) return;
 
@@ -59,7 +65,7 @@ Office.onReady(async () => {
     // eslint-disable-next-line @eslint-react/no-context-provider
     <OfficeConfigContext.Provider value={config}>
       <MemoryRouter>
-        <OfficeApp />
+        <OfficeApp quickAction={quickAction} />
       </MemoryRouter>
     </OfficeConfigContext.Provider>
   );

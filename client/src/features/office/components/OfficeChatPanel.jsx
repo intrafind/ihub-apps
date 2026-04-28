@@ -35,7 +35,14 @@ function buildParamsFromApp(app) {
   return params;
 }
 
-function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
+function OfficeChatPanel({
+  authData,
+  selectedApp,
+  setSelectedApp,
+  onLogout,
+  initialPrompt,
+  onInitialPromptConsumed
+}) {
   const navigate = useNavigate();
   const officeConfig = useOfficeConfig();
 
@@ -46,6 +53,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // Chat ID: use a stable ref, reset on item change or new chat
   const chatIdRef = useRef(`office-${uuidv4()}`);
   const selectedStarterPromptRef = useRef(null);
+  const initialPromptFiredRef = useRef(false);
 
   const adapter = useOfficeChatAdapter({
     appId: selectedApp?.id,
@@ -147,6 +155,16 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       fileUploadHandler
     ]
   );
+
+  // Auto-fire the initial prompt from a quick action once on mount
+  useEffect(() => {
+    if (!initialPrompt || initialPromptFiredRef.current || adapter.messages.length > 0) return;
+    initialPromptFiredRef.current = true;
+    submitMessage(initialPrompt);
+    if (onInitialPromptConsumed) onInitialPromptConsumed();
+    // adapter.messages.length intentionally NOT in deps to avoid re-firing
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [initialPrompt, submitMessage, onInitialPromptConsumed]);
 
   const handleSubmit = useCallback(
     e => {

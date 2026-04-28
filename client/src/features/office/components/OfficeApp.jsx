@@ -6,7 +6,9 @@ import ChatHeader from './chat/ChatHeader';
 import SettingsDialog from './settings-dialog';
 import AppListPanel from '../../../shared/components/AppListPanel';
 import { officeLocale } from '../utilities/officeLocale';
+import { getLocalizedContent } from '../../../utils/localizeContent';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
+import { fetchApps } from '../../../api/api';
 import {
   storeTokenResponse,
   clearTokens,
@@ -79,12 +81,17 @@ function SelectPage({ user, onLogout, onSelect }) {
   );
 }
 
-const OfficeApp = () => {
+const OfficeApp = ({ quickAction = null }) => {
   const config = useOfficeConfig();
   const navigate = useNavigate();
   const [authData, setAuthData] = React.useState(getStoredAuth);
   const [selectedApp, setSelectedApp] = React.useState(getStoredSelectedApp);
   const [sessionError, setSessionError] = React.useState(null);
+
+  const pendingQuickActionRef = React.useRef(quickAction);
+  const [pendingPrompt, setPendingPrompt] = React.useState(() =>
+    quickAction ? getLocalizedContent(quickAction.prompt, officeLocale) || null : null
+  );
 
   const handleSessionExpired = React.useCallback(() => {
     clearTokens();
@@ -101,6 +108,26 @@ const OfficeApp = () => {
     return () => setOnSessionExpired(null);
   }, [handleSessionExpired]);
 
+  const applyPendingQuickAction = React.useCallback(async () => {
+    const qa = pendingQuickActionRef.current;
+    if (!qa?.appId) return false;
+    try {
+      const apps = await fetchApps();
+      const app = Array.isArray(apps) ? apps.find(a => a.id === qa.appId) : null;
+      if (app) {
+        setSelectedApp(app);
+        storeSelectedApp(app);
+        pendingQuickActionRef.current = null;
+        navigate('/chat', { replace: true });
+        return true;
+      }
+    } catch {
+      // ignore
+    }
+    pendingQuickActionRef.current = null;
+    return false;
+  }, [navigate]);
+
   const handleLoginSuccess = React.useCallback(
     async data => {
       storeTokenResponse(data);
@@ -115,9 +142,13 @@ const OfficeApp = () => {
 
       setAuthData({ user });
       setSessionError(null);
-      navigate('/select', { replace: true });
+
+      const applied = await applyPendingQuickAction();
+      if (!applied) {
+        navigate('/select', { replace: true });
+      }
     },
-    [config, navigate]
+    [config, navigate, applyPendingQuickAction]
   );
 
   const handleLogout = React.useCallback(() => {
@@ -145,10 +176,14 @@ const OfficeApp = () => {
   }, []);
 
   React.useEffect(() => {
-    if (authData && !selectedApp && window.location.pathname === '/') {
-      navigate('/select', { replace: true });
+    if (!authData) return;
+    if (!selectedApp) {
+      applyPendingQuickAction().then(applied => {
+        if (!applied) navigate('/select', { replace: true });
+      });
     }
-  }, [authData, selectedApp, navigate]);
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, []);
 
   React.useEffect(() => {
     if (!sessionError) return undefined;
@@ -169,6 +204,8 @@ const OfficeApp = () => {
               selectedApp={selectedApp}
               setSelectedApp={handleSetSelectedApp}
               onLogout={handleLogout}
+              initialPrompt={pendingPrompt}
+              onInitialPromptConsumed={() => setPendingPrompt(null)}
             />
           ) : (
             <OfficeLogin onSuccess={handleLoginSuccess} initialError={sessionError} />
@@ -194,6 +231,8 @@ const OfficeApp = () => {
               selectedApp={selectedApp}
               setSelectedApp={handleSetSelectedApp}
               onLogout={handleLogout}
+              initialPrompt={pendingPrompt}
+              onInitialPromptConsumed={() => setPendingPrompt(null)}
             />
           ) : (
             <Navigate to="/" replace />
