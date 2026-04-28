@@ -62,6 +62,7 @@ function ChatMessage({
   };
 
   const [editedContent, setEditedContent] = useState(getEditableContent());
+  const editTextareaRef = useRef(null);
   const [showActions, setShowActions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -110,6 +111,32 @@ function ChatMessage({
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, []);
+
+  // Auto-grow the edit textarea and clamp at a soft max-height (60vh, capped at 480px).
+  // Mirrors the autosize pattern used by ChatInput / ClarificationInput.
+  useEffect(() => {
+    if (!isEditing || !editTextareaRef.current) return;
+    const el = editTextareaRef.current;
+    el.style.height = 'auto';
+    const viewportCap = typeof window !== 'undefined' ? window.innerHeight * 0.6 : 480;
+    const maxHeight = Math.min(viewportCap, 480);
+    const next = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${next}px`;
+    el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [editedContent, isEditing]);
+
+  // When entering edit mode, focus the textarea and place the cursor at the end.
+  useEffect(() => {
+    if (!isEditing || !editTextareaRef.current) return;
+    const el = editTextareaRef.current;
+    el.focus();
+    const pos = el.value.length;
+    try {
+      el.setSelectionRange(pos, pos);
+    } catch {
+      // setSelectionRange can throw on some input types; ignore.
+    }
+  }, [isEditing]);
 
   // Post-process the rendered markdown to add target="_blank" to external links
   useEffect(() => {
@@ -337,6 +364,22 @@ function ChatMessage({
   };
 
   const handleSaveEdit = () => {
+    const original = getEditableContent();
+    const trimmed = editedContent.trim();
+
+    // Empty edit: no-op (cancel out of edit mode without touching the conversation).
+    if (trimmed === '') {
+      setIsEditing(false);
+      setEditedContent(original);
+      return;
+    }
+
+    // Unchanged content: just close the editor; don't truncate or re-run.
+    if (editedContent === original) {
+      setIsEditing(false);
+      return;
+    }
+
     if (onEdit) {
       onEdit(message.id, editedContent);
     }
@@ -347,7 +390,6 @@ function ChatMessage({
       // Use a slightly longer delay to ensure state updates are processed
       setTimeout(() => {
         // Directly pass the edited content to parent component for resending
-        console.log('Resending edited message with content:', editedContent);
         onResend(message.id, editedContent); // Pass the edited content as a second parameter
       }, 250); // Increased delay to ensure edit is processed first
     }
@@ -356,6 +398,16 @@ function ChatMessage({
   const handleCancelEdit = () => {
     setIsEditing(false);
     setEditedContent(getEditableContent());
+  };
+
+  const handleEditKeyDown = e => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      handleCancelEdit();
+    } else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      handleSaveEdit();
+    }
   };
 
   // Handle feedback submission
@@ -444,27 +496,51 @@ function ChatMessage({
     const hasHTMLContent = hasImageContent || hasFileContent || hasAudioContent;
 
     if (isEditing) {
+      const trimmed = editedContent.trim();
+      const sendDisabled = trimmed === '';
+      const isMac =
+        typeof navigator !== 'undefined' &&
+        /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+      const submitShortcut = isMac ? '⌘ + Enter' : 'Ctrl + Enter';
       return (
         <div className="w-full">
           <textarea
+            ref={editTextareaRef}
             value={editedContent}
             onChange={e => setEditedContent(e.target.value)}
-            className="w-full p-2 border rounded mb-2 text-gray-800 bg-white"
-            rows={Math.max(3, editedContent.split('\n').length)}
+            onKeyDown={handleEditKeyDown}
+            className="w-full px-3 py-2 text-sm text-slate-900 bg-white border border-slate-300 rounded-lg shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+            style={{ minHeight: compact ? '80px' : '96px' }}
+            aria-label={t('chatMessage.editMessage', 'Edit message')}
           />
-          <div className="flex space-x-2 justify-end">
-            <button
-              onClick={handleCancelEdit}
-              className="px-2 py-1 text-xs bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-            >
-              {t('common.cancel')}
-            </button>
-            <button
-              onClick={handleSaveEdit}
-              className="px-2 py-1 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700"
-            >
-              {t('common.save')}
-            </button>
+          <div
+            className={`mt-2 flex items-center ${compact ? 'justify-end' : 'justify-between'} gap-2 flex-wrap`}
+          >
+            {!compact && (
+              <p className="text-xs text-gray-500">
+                {t('chatMessage.editHint', '{{submit}} to send · Esc to cancel', {
+                  submit: submitShortcut
+                })}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="px-3 py-1.5 text-sm font-medium bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200 transition-colors"
+              >
+                {t('common.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveEdit}
+                disabled={sendDisabled}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors disabled:bg-indigo-300 disabled:cursor-not-allowed"
+              >
+                <Icon name="send" size="sm" className="text-white" />
+                <span>{t('common.send')}</span>
+              </button>
+            </div>
           </div>
         </div>
       );

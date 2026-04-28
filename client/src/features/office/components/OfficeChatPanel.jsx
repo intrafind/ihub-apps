@@ -106,7 +106,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   }, []);
 
   const submitMessage = useCallback(
-    messageText => {
+    (messageText, overrides = {}) => {
       const text = (messageText ?? '').trim();
       if (!text && !selectedApp?.allowEmptyContent) return;
 
@@ -116,7 +116,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       if (enabledTools?.length) params.enabledTools = enabledTools;
       if (selectedApp?.websearch?.enabled) params.websearchEnabled = websearchEnabled;
 
-      const sf = fileUploadHandler.selectedFile;
+      // Resend can pass a `selectedFile` override to bypass async state updates;
+      // otherwise we read whatever the user has staged in the uploader.
+      const sf =
+        'selectedFile' in overrides ? overrides.selectedFile : fileUploadHandler.selectedFile;
       const imageData = sf?.type === 'image' ? sf : null;
       const fileData = sf?.type === 'file' ? sf : null;
 
@@ -154,6 +157,40 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       submitMessage(inputValue);
     },
     [submitMessage, inputValue]
+  );
+
+  // Resend a previous message in the Outlook taskpane.
+  // adapter.resendMessage truncates the conversation at the original message
+  // and returns the content/files to re-run. The stored imageData/fileData is
+  // a *combined* array of manual uploads + email attachments (see #1326). We
+  // must only re-attach the manual uploads here — the email attachments will
+  // be re-pulled fresh by useOfficeChatAdapter so the user still sees the
+  // current message context, not a stale one. Manual uploads carry a
+  // `type: 'image' | 'file'` field; email attachments do not.
+  const pickManualUpload = data => {
+    if (!data) return null;
+    const arr = Array.isArray(data) ? data : [data];
+    const manuals = arr.filter(d => d && (d.type === 'image' || d.type === 'file'));
+    return manuals.length > 0 ? manuals[0] : null;
+  };
+
+  const handleResend = useCallback(
+    (messageId, editedContent) => {
+      const { content, imageData, fileData } = adapter.resendMessage(messageId, editedContent);
+      const manualUpload = pickManualUpload(imageData) || pickManualUpload(fileData);
+
+      if (!content && !manualUpload && !selectedApp?.allowEmptyContent) return;
+
+      // Mirror the manual upload back into the uploader UI so the user sees
+      // the file pill before submit, then send with an explicit override so
+      // submitMessage doesn't depend on the async state update.
+      fileUploadHandler.clearSelectedFile();
+      if (manualUpload) {
+        fileUploadHandler.setSelectedFile(manualUpload);
+      }
+      submitMessage(content || '', { selectedFile: manualUpload });
+    },
+    [adapter, selectedApp?.allowEmptyContent, submitMessage, fileUploadHandler]
   );
 
   const handlePromptSelect = useCallback(
@@ -303,7 +340,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 messages={adapter.messages}
                 outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
                 onDelete={adapter.deleteMessage}
-                editable={false}
+                onEdit={adapter.editMessage}
+                onResend={handleResend}
+                editable={true}
                 compact={true}
                 onInsert={handleInsert}
                 appId={selectedApp?.id}

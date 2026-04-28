@@ -1388,6 +1388,7 @@
     "edit": "Edit",
     "resend": "Resend",
     "editMessage": "Edit message",
+    "editHint": "{{submit}} to send · Esc to cancel",
     "resendMessage": "Resend message",
     "openInCanvas": "Open in Canvas",
     "generatedImage": "Generated image",
