@@ -127,7 +127,9 @@ export function initializeMetrics(meterSource) {
     unit: '{chat}'
   });
 
-  console.info('GenAI metrics initialized successfully');
+  console.info(
+    `GenAI metrics initialized - allowed labels: ${[...ALLOWED_METRIC_LABELS].join(', ')}`
+  );
 }
 
 /**
