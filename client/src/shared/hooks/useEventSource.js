@@ -14,11 +14,11 @@ import { getRefreshToken, refreshTokenOrExpireSession } from '../../features/off
  * @param {Object} options
  * @param {string} options.appId - App ID (used for heartbeat + cleanup)
  * @param {string} options.chatId - Chat session ID (used for heartbeat + cleanup)
- * @param {number} [options.timeoutDuration=30000] - Connection timeout in ms
+ * @param {number} [options.timeoutDuration=60000] - Connection timeout in ms
  * @param {Function} options.onEvent - Called for each SSE event: ({ type, data, fullContent })
  * @param {Function} [options.onProcessingChange] - Called with true/false as stream starts/stops
  */
-function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onProcessingChange }) {
+function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onProcessingChange }) {
   // Stores the AbortController for the active fetch stream — non-null == connected
   const abortControllerRef = useRef(null);
   // Exposed as eventSourceRef for backward-compatible isConnected check by callers
@@ -85,7 +85,7 @@ function useEventSource({ appId, chatId, timeoutDuration = 30000, onEvent, onPro
       } catch (err) {
         console.warn('Error checking chat status:', err);
       }
-    }, 30000);
+    }, 60000);
   }, [appId, chatId, cleanupEventSource, onProcessingChange]);
 
   /**
