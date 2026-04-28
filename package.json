@@ -124,7 +124,7 @@
     "http-proxy-agent": "^9.0.0",
     "https-proxy-agent": "^9.0.0",
     "react-icons": "^5.5.0",
-    "react-resizable-panels": "^4.8.0"
+    "react-resizable-panels": "^4.10.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.2",
