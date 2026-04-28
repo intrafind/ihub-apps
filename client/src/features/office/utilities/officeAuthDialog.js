@@ -14,12 +14,20 @@ export const openOfficeAuthDialog = (authorizeUrl, onRedirectUrl, onError) => {
     return;
   }
 
+  // Per Microsoft guidance, the dialog must open in a separate webview (not an
+  // iframe) for sign-in scenarios. With displayInIframe:true, Outlook on the web
+  // renders the dialog as a third-party iframe inside outlook.office.com — that
+  // breaks SameSite=Lax session cookies and modern browser third-party cookie
+  // policies, so the OIDC state cookie set during /api/oauth/authorize is not
+  // returned on the IDP callback and Passport rejects it with
+  // "Failed to verify request state". Desktop Outlook ignores the flag, which is
+  // why the same flow works there.
+  // https://learn.microsoft.com/en-us/office/dev/add-ins/develop/auth-with-office-dialog-api
   Office.context.ui.displayDialogAsync(
     authorizeUrl,
     {
       height: 65,
-      width: 40,
-      displayInIframe: true
+      width: 40
     },
     asyncResult => {
       if (asyncResult.status !== Office.AsyncResultStatus.Succeeded) {
