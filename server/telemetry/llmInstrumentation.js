@@ -33,18 +33,21 @@ export async function instrumentLLMCall(ctx, fn) {
     chatId: customContext.chatId
   });
 
-  // Update iHub counters when available
+  // Update iHub counters when available. Use the standard gen_ai.* attribute
+  // names so they survive metrics.js' label allow-list - high-cardinality
+  // dimensions (user.id, conversation.id, chatId) are intentionally NOT
+  // forwarded to metrics; they live on the span where you can drill down.
+  const sharedMetricLabels = {
+    'gen_ai.provider.name': providerName,
+    'gen_ai.request.model': model?.modelId
+  };
   if (customContext.appId) {
-    recordAppUsage(customContext.appId, customContext.userId, {
-      'model.id': model?.id,
-      'model.provider': provider
-    });
+    recordAppUsage(customContext.appId, customContext.userId, sharedMetricLabels);
   }
   if (customContext.chatId !== undefined && customContext.isFollowUp !== undefined) {
     recordConversation(customContext.chatId, customContext.isFollowUp, {
       'app.id': customContext.appId,
-      'model.id': model?.id,
-      'message.count': customContext.messageCount
+      ...sharedMetricLabels
     });
   }
 
@@ -56,8 +59,7 @@ export async function instrumentLLMCall(ctx, fn) {
       if (customContext.appId) {
         recordError(err.name || 'Error', 'llm_call', {
           'app.id': customContext.appId,
-          'model.id': model?.id,
-          provider: provider
+          ...sharedMetricLabels
         });
       }
       throw err;
@@ -79,8 +81,7 @@ export async function instrumentLLMCall(ctx, fn) {
     if (customContext.appId) {
       recordError(err.name || 'Error', 'llm_call', {
         'app.id': customContext.appId,
-        'model.id': model?.id,
-        provider: provider
+        ...sharedMetricLabels
       });
     }
     throw err;

@@ -241,13 +241,12 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       chatId: `inference-api:${req.user?.id || 'anonymous'}`
     });
     recordAppUsage('inference-api', req.user?.id, {
-      'model.id': modelId,
-      'api.endpoint': '/v1/chat/completions'
+      'gen_ai.request.model': modelId
     });
     if (Array.isArray(messages)) {
       recordConversation(`inference-api:${req.user?.id || 'anonymous'}`, messages.length > 2, {
-        'model.id': modelId,
-        'message.count': messages.length
+        'app.id': 'inference-api',
+        'gen_ai.request.model': modelId
       });
     }
 
@@ -287,9 +286,9 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
 
         // Record error metric for observability
         recordError(`http_${llmResponse.status}`, 'inference_api', {
-          'model.id': modelId,
-          provider: model.provider,
-          'user.id': req.user?.id
+          'app.id': 'inference-api',
+          'gen_ai.request.model': modelId,
+          'gen_ai.provider.name': model.provider
         });
 
         const lang =

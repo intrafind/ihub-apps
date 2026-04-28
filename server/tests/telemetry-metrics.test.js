@@ -43,6 +43,31 @@ describe('recordTokenUsage', () => {
     ]);
   });
 
+  test('drops high-cardinality attributes that are not in the metrics allow-list', () => {
+    // Token counts, conversation id, response id and message count would
+    // explode Prometheus cardinality - they live on spans, not metrics.
+    recordTokenUsage(
+      {
+        'gen_ai.request.model': 'gpt-4',
+        'gen_ai.conversation.id': 'chat-abc-123',
+        'gen_ai.response.id': 'resp-xyz',
+        'gen_ai.usage.input_tokens': '12',
+        'gen_ai.usage.output_tokens': '7',
+        'conversation.message_count': '14',
+        'user.id': 'alice',
+        'server.address': 'api.openai.com'
+      },
+      { inputTokens: 12 }
+    );
+
+    expect(fake.recorded).toEqual([
+      {
+        value: 12,
+        attrs: { 'gen_ai.request.model': 'gpt-4', 'gen_ai.token.type': 'input' }
+      }
+    ]);
+  });
+
   test('preserves 0 input tokens (regression: previous || drop)', () => {
     recordTokenUsage({}, { inputTokens: 0, outputTokens: 5 });
 

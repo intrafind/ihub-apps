@@ -252,14 +252,17 @@ class StreamingHandler {
       chatId
     });
     if (baseLog.appId) {
-      recordAppUsage(baseLog.appId, baseLog.user?.id || baseLog.userSessionId, {
-        'model.id': model.id,
-        'model.provider': model.provider
-      });
+      // Standard gen_ai.* keys so the metrics.js allow-list passes them
+      // through as labels. Per-user / per-chat / per-message dimensions
+      // are intentionally span-only.
+      const sharedMetricLabels = {
+        'gen_ai.provider.name': resolveProviderName(model.provider),
+        'gen_ai.request.model': model.modelId
+      };
+      recordAppUsage(baseLog.appId, baseLog.user?.id || baseLog.userSessionId, sharedMetricLabels);
       recordConversation(chatId, llmMessages.length > 2, {
         'app.id': baseLog.appId,
-        'model.id': model.id,
-        'message.count': llmMessages.length
+        ...sharedMetricLabels
       });
     }
 
@@ -690,8 +693,8 @@ class StreamingHandler {
       if (baseLog.appId) {
         recordError(error.name || 'Error', 'llm_call_streaming', {
           'app.id': baseLog.appId,
-          'model.id': model.id,
-          provider: model.provider
+          'gen_ai.provider.name': resolveProviderName(model.provider),
+          'gen_ai.request.model': model.modelId
         });
       }
 
