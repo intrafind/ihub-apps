@@ -5,12 +5,8 @@ import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import apiPkg from '@opentelemetry/api';
-const { diag, DiagConsoleLogger, DiagLogLevel, logs, metrics: metricsApi } = apiPkg;
-import {
-  LoggerProvider,
-  ConsoleLogRecordExporter,
-  SimpleLogRecordProcessor
-} from '@opentelemetry/sdk-logs';
+const { diag, DiagConsoleLogger, DiagLogLevel, metrics: metricsApi } = apiPkg;
+import { ConsoleLogRecordExporter, SimpleLogRecordProcessor } from '@opentelemetry/sdk-logs';
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import { GenAIInstrumentation } from './telemetry/GenAIInstrumentation.js';
 import { initializeMetrics } from './telemetry/metrics.js';
@@ -22,26 +18,8 @@ import {
 
 let sdk = null;
 let tokenUsageCounter = null;
-let logger = null;
 let genAIInstrumentation = null;
 let activeConfig = null;
-
-function interceptConsole() {
-  if (!logger) return;
-  const levels = {
-    log: 'INFO',
-    info: 'INFO',
-    warn: 'WARN',
-    error: 'ERROR'
-  };
-  Object.keys(levels).forEach(level => {
-    const original = console[level].bind(console);
-    console[level] = (...args) => {
-      logger.emit({ body: args.join(' '), severityText: levels[level] });
-      original(...args);
-    };
-  });
-}
 
 /**
  * Build a log-safe view of the telemetry config: drop OTLP headers entirely
@@ -138,11 +116,20 @@ export async function initTelemetry(config = {}) {
     }
   }
 
+  // Optional log emission. NodeSDK in v0.202 takes the log record processor
+  // directly and registers the LoggerProvider globally - the v1
+  // `loggerProvider.register()` API was removed.
+  const logsEnabled = config.logs?.enabled === true || config.logs === true;
+  const logRecordProcessor = logsEnabled
+    ? new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
+    : undefined;
+
   sdk = new NodeSDK({
     resource,
     traceExporter,
     instrumentations: config.autoInstrumentation === true ? [getNodeAutoInstrumentations()] : [],
-    metricReader
+    metricReader,
+    logRecordProcessor
   });
 
   await sdk.start();
@@ -162,29 +149,11 @@ export async function initTelemetry(config = {}) {
   // Initialize GenAI instrumentation now that SDK is up
   genAIInstrumentation = new GenAIInstrumentation(config);
 
-  if (config.logs?.enabled === true) {
-    const loggerProvider = new LoggerProvider({ resource });
-    loggerProvider.addLogRecordProcessor(
-      new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
-    );
-    loggerProvider.register();
-    logger = logs.getLogger('ihub-apps');
-    interceptConsole();
-  } else if (config.logs === true) {
-    // Backwards compat with old `logs: true` shorthand
-    const loggerProvider = new LoggerProvider({ resource });
-    loggerProvider.addLogRecordProcessor(
-      new SimpleLogRecordProcessor(new ConsoleLogRecordExporter())
-    );
-    loggerProvider.register();
-    logger = logs.getLogger('ihub-apps');
-    interceptConsole();
-  }
-
   activeConfig = config;
   appLogger.info('Telemetry initialization complete', {
     component: 'Telemetry',
-    provider: config.provider
+    provider: config.provider,
+    logsEnabled
   });
 }
 

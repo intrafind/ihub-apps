@@ -3,7 +3,7 @@
  * Main class for instrumenting GenAI operations
  */
 
-import { trace, SpanStatusCode } from '@opentelemetry/api';
+import { trace, SpanStatusCode, SpanKind } from '@opentelemetry/api';
 import {
   buildProviderAttributes,
   buildOperationAttributes,
@@ -50,7 +50,7 @@ export class GenAIInstrumentation {
       );
 
       return this.tracer.startSpan(spanName, {
-        kind: 1, // SpanKind.CLIENT
+        kind: SpanKind.CLIENT,
         attributes: spanAttributes
       });
     } catch (error) {
