@@ -102,7 +102,9 @@ export function initializeProcessMetrics(meterSource) {
         // From the primary's POV: workers are in cluster.workers; from a
         // worker's POV: it sees only itself.
         const count = cluster.isPrimary ? Object.keys(cluster.workers || {}).length : 1;
-        observableResult.observe(count, { 'cluster.role': cluster.isPrimary ? 'primary' : 'worker' });
+        observableResult.observe(count, {
+          'cluster.role': cluster.isPrimary ? 'primary' : 'worker'
+        });
       } catch (error) {
         logger.warn('Failed to observe ihub.workers.count', {
           component: 'ProcessMetrics',

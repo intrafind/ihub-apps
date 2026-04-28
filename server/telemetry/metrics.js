@@ -482,10 +482,7 @@ export function recordConversation(conversationId, isFollowUp = false, additiona
 export function recordAuthEvent(provider, event) {
   if (!authEventCounter) return;
   try {
-    authEventCounter.add(
-      1,
-      filterMetricLabels({ 'auth.provider': provider, 'auth.event': event })
-    );
+    authEventCounter.add(1, filterMetricLabels({ 'auth.provider': provider, 'auth.event': event }));
   } catch (error) {
     console.warn('Failed to record auth event:', error.message);
   }

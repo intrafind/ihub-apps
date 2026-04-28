@@ -777,11 +777,7 @@ class StreamingHandler {
       // {completed, aborted, error} so dashboards can distinguish "user
       // closed the tab" from "model returned cleanly."
       const streamOutcome =
-        finishReason === 'error'
-          ? 'error'
-          : doneEmitted
-            ? 'completed'
-            : 'aborted';
+        finishReason === 'error' ? 'error' : doneEmitted ? 'completed' : 'aborted';
       if (baseLog.appId) {
         recordStreamOutcome(streamOutcome, {
           'app.id': baseLog.appId,

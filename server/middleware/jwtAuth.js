@@ -644,10 +644,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     logger.warn('JWT Auth token validation failed', { component: 'JwtAuth', error });
-    recordAuthEvent(
-      'jwt',
-      error?.name === 'TokenExpiredError' ? 'token_expired' : 'token_invalid'
-    );
+    recordAuthEvent('jwt', error?.name === 'TokenExpiredError' ? 'token_expired' : 'token_invalid');
     return next();
   }
 }
