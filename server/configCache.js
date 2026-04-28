@@ -26,21 +26,24 @@ function resolveEnvVars(value) {
   // Support both ${VAR} and the shell-style ${VAR:-default}. The default form
   // is what migrations like V031 write (`${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}`)
   // so without :-default support those placeholders pass through verbatim.
-  return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g, (match, varName, fallback) => {
-    const envValue = process.env[varName];
-    if (envValue !== undefined && envValue !== '') {
-      return envValue;
+  return value.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
+    (match, varName, fallback) => {
+      const envValue = process.env[varName];
+      if (envValue !== undefined && envValue !== '') {
+        return envValue;
+      }
+      if (fallback !== undefined) {
+        return fallback;
+      }
+      logger.warn('Environment variable not defined, keeping placeholder', {
+        component: 'ConfigCache',
+        varName,
+        placeholder: match
+      });
+      return match;
     }
-    if (fallback !== undefined) {
-      return fallback;
-    }
-    logger.warn('Environment variable not defined, keeping placeholder', {
-      component: 'ConfigCache',
-      varName,
-      placeholder: match
-    });
-    return match;
-  });
+  );
 }
 
 /**
