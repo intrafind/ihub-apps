@@ -23,13 +23,15 @@ let activeUsersGauge = null;
 let activeChatsGauge = null;
 
 /**
- * Initialize metrics with meter provider
- * @param {Object} meterProvider - OpenTelemetry meter provider
+ * Initialize metrics from a meter source. Accepts anything with a
+ * `getMeter(name, version)` method - either the global metrics API
+ * (@opentelemetry/api `metrics`) or a MeterProvider instance.
+ * @param {Object} meterSource - Meter source with `getMeter(name, version)`
  */
-export function initializeMetrics(meterProvider) {
-  if (!meterProvider) return;
+export function initializeMetrics(meterSource) {
+  if (!meterSource || typeof meterSource.getMeter !== 'function') return;
 
-  const meter = meterProvider.getMeter('ihub-apps-genai', '1.0.0');
+  const meter = meterSource.getMeter('ihub-apps-genai', '1.0.0');
 
   // Create token usage histogram
   tokenUsageHistogram = meter.createHistogram('gen_ai.client.token.usage', {

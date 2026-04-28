@@ -5,7 +5,7 @@ import { PrometheusExporter } from '@opentelemetry/exporter-prometheus';
 import { ConsoleSpanExporter } from '@opentelemetry/sdk-trace-node';
 import { PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 import apiPkg from '@opentelemetry/api';
-const { diag, DiagConsoleLogger, DiagLogLevel, logs } = apiPkg;
+const { diag, DiagConsoleLogger, DiagLogLevel, logs, metrics: metricsApi } = apiPkg;
 import {
   LoggerProvider,
   ConsoleLogRecordExporter,
@@ -148,11 +148,13 @@ export async function initTelemetry(config = {}) {
   await sdk.start();
 
   if (config.metrics?.enabled !== false) {
-    const meterProvider = sdk.getMeterProvider();
-    initializeMetrics(meterProvider);
+    // sdk-node v0.202 / sdk-metrics v2.x removed `sdk.getMeterProvider()`.
+    // Once `sdk.start()` returns the SDK has registered its provider as the
+    // global one, so we acquire meters via the @opentelemetry/api facade.
+    initializeMetrics(metricsApi);
 
     // Keep legacy token usage counter for backward compatibility
-    tokenUsageCounter = meterProvider.getMeter('ihub-apps').createCounter('token_usage_total', {
+    tokenUsageCounter = metricsApi.getMeter('ihub-apps').createCounter('token_usage_total', {
       description: 'Total number of tokens processed (legacy)'
     });
   }
