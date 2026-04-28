@@ -78,7 +78,9 @@ export default function jwtAuthMiddleware(req, res, next) {
         component: 'JwtAuth',
         userId: decoded.sub || decoded.username || decoded.id,
         name: decoded.name,
-        authMode: decoded.authMode
+        authMode: decoded.authMode,
+        method: req.method,
+        path: req.path
       });
     }
 
