@@ -156,6 +156,19 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     [submitMessage, inputValue]
   );
 
+  // Resend a previous message in the Outlook taskpane.
+  // adapter.resendMessage truncates the conversation at the original message
+  // and returns the content/files to re-run; we then dispatch the regular send
+  // path so the Outlook mail context is freshly attached.
+  const handleResend = useCallback(
+    (messageId, editedContent) => {
+      const { content } = adapter.resendMessage(messageId, editedContent);
+      if (!content && !selectedApp?.allowEmptyContent) return;
+      submitMessage(content || '');
+    },
+    [adapter, selectedApp?.allowEmptyContent, submitMessage]
+  );
+
   const handlePromptSelect = useCallback(
     prompt => {
       if (prompt.raw != null) {
@@ -303,7 +316,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 messages={adapter.messages}
                 outputFormat={selectedApp?.preferredOutputFormat || 'markdown'}
                 onDelete={adapter.deleteMessage}
-                editable={false}
+                onEdit={adapter.editMessage}
+                onResend={handleResend}
+                editable={true}
                 compact={true}
                 onInsert={handleInsert}
                 appId={selectedApp?.id}

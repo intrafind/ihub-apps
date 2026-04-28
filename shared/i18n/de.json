@@ -406,6 +406,7 @@
     "edit": "Bearbeiten",
     "resend": "Erneut senden",
     "editMessage": "Nachricht bearbeiten",
+    "editHint": "{{submit}} zum Senden · Esc zum Abbrechen",
     "resendMessage": "Nachricht erneut senden",
     "openInCanvas": "In Canvas öffnen",
     "generatedImage": "Generiertes Bild",
