@@ -47,6 +47,14 @@ class ActivityTracker {
       this.summaryTimer = setInterval(() => this.logSummary(), this.summaryIntervalMs);
       // The Node event loop should not be held open by this housekeeping timer
       this.summaryTimer.unref?.();
+      logger.info('Activity summary scheduled', {
+        component: 'ActivityTracker',
+        intervalSeconds,
+        windowMinutes,
+        nextLogIn: `${intervalSeconds}s`
+      });
+    } else {
+      logger.info('Activity summary disabled', { component: 'ActivityTracker' });
     }
 
     // Only register the observer pair once. Observable gauges expect to be

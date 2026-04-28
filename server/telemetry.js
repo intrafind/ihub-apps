@@ -99,12 +99,18 @@ export async function initTelemetry(config = {}) {
     }
   }
 
-  const serviceName =
-    config.resource?.['service.name'] || process.env.OTEL_SERVICE_NAME || 'ihub-apps';
+  // Accept both shapes: the dotted form `'service.name'` (the OpenTelemetry
+  // attribute key) and the nested form `service: { name: ... }` (which is what
+  // ctx.setDefault produces when the migration walks the dotted path).
+  const flatService = config.resource?.['service.name'];
+  const nestedService = config.resource?.service?.name;
+  const serviceName = flatService || nestedService || process.env.OTEL_SERVICE_NAME || 'ihub-apps';
+
+  const flatVersion = config.resource?.['service.version'];
+  const nestedVersion = config.resource?.service?.version;
+  const rawVersion = flatVersion ?? nestedVersion;
   const serviceVersion =
-    config.resource?.['service.version'] === 'auto' || !config.resource?.['service.version']
-      ? process.env.npm_package_version || '1.0.0'
-      : config.resource['service.version'];
+    rawVersion === 'auto' || !rawVersion ? process.env.npm_package_version || '1.0.0' : rawVersion;
 
   const resource = new Resource({
     'service.name': serviceName,
