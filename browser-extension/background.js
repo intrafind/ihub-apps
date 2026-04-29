@@ -209,17 +209,35 @@ async function startSignIn() {
     throw new Error('Authorization response is invalid');
   }
 
-  const tokenRes = await fetch(`${baseUrl.replace(/\/$/, '')}/api/oauth/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      grant_type: 'authorization_code',
-      code,
-      redirect_uri: redirectUri,
-      client_id: cfg.clientId,
-      code_verifier: codeVerifier
-    })
-  });
+  // Visible in the SW console (chrome://extensions → "Inspect views: service
+  // worker"). Helps diagnose which step fails when the user reports a CORS
+  // error: the URL we're POSTing to, the eventual fetch outcome, and any
+  // network-level error message that doesn't propagate to the side panel.
+  const tokenUrl = `${baseUrl.replace(/\/$/, '')}/api/oauth/token`;
+  console.info('[iHub] Exchanging authorization code at', tokenUrl);
+
+  let tokenRes;
+  try {
+    tokenRes = await fetch(tokenUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        grant_type: 'authorization_code',
+        code,
+        redirect_uri: redirectUri,
+        client_id: cfg.clientId,
+        code_verifier: codeVerifier
+      })
+    });
+  } catch (err) {
+    console.error('[iHub] Token fetch failed before response received:', err);
+    throw new Error(
+      `Token exchange request did not complete: ${err?.message || err}. ` +
+        `If the message mentions CORS, check the iHub admin "CORS" page allows your extension's ` +
+        `chrome-extension://<id> origin (no trailing slash, no path), and verify any reverse proxy ` +
+        `or tunnel (ngrok, Cloudflare, etc.) forwards the OPTIONS preflight to the iHub server.`
+    );
+  }
 
   if (!tokenRes.ok) {
     let detail = '';
