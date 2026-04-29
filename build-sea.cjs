@@ -17,6 +17,7 @@ const appName = 'ihub-apps';
 const outputDir = path.join(__dirname, 'dist-bin');
 const defaultConfigDir = path.join(__dirname, 'server', 'defaults');
 const clientPublicDir = path.join(__dirname, 'client/dist');
+const browserExtensionDir = path.join(__dirname, 'browser-extension');
 const docsBookDir = path.join(__dirname, 'docs/book');
 const serverDir = path.join(__dirname, 'server');
 const configEnvPath = path.join(__dirname, 'config.env');
@@ -456,6 +457,20 @@ try {
 
   // Copy client public files
   fs.cpSync(clientPublicDir, path.join(outputDir, 'public'), { recursive: true });
+
+  // Copy browser-extension source files (manifest.json, background.js, icons/).
+  // The admin /api/admin/browser-extension/download.{zip,crx} endpoints assemble
+  // these alongside the Vite-built extension/ + assets/ chunks under public/.
+  if (fs.existsSync(browserExtensionDir)) {
+    fs.cpSync(browserExtensionDir, path.join(outputDir, 'browser-extension'), {
+      recursive: true,
+      filter: src => {
+        // Skip developer-only artifacts produced by `npm run extension:build`
+        const rel = path.relative(browserExtensionDir, src);
+        return !rel.startsWith('extension') && !rel.startsWith('assets');
+      }
+    });
+  }
 
   // Copy generated documentation
   if (fs.existsSync(docsBookDir)) {
