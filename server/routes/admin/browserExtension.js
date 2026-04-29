@@ -89,30 +89,6 @@ async function readSigningPrivateKey() {
 }
 
 /**
- * Lazily ensure a signing keypair exists on disk + in platform config.
- *
- * Idempotent: when both the on-disk PEM and the public key in config are
- * present, it returns them as-is. Otherwise it generates a fresh keypair,
- * writes the private PEM with mode 0o600, and returns the public half.
- *
- * @param {Object|undefined} currentSigningKey - Existing signingKey from platform config
- * @returns {Promise<{ publicKey: string, extensionId: string, createdAt: string }>}
- */
-async function ensureSigningKey(currentSigningKey) {
-  const existingPem = await readSigningPrivateKey();
-  if (existingPem && currentSigningKey?.publicKey && currentSigningKey?.extensionId) {
-    return currentSigningKey;
-  }
-  const { privateKeyPem, publicKeySpkiBase64, extensionId } = generateExtensionSigningKey();
-  await fs.writeFile(signingKeyPath(), privateKeyPem, { mode: 0o600 });
-  return {
-    publicKey: publicKeySpkiBase64,
-    extensionId,
-    createdAt: new Date().toISOString()
-  };
-}
-
-/**
  * Generate a fresh signing keypair, replacing any existing one. Moves the
  * previous extensionId into `previousExtensionId` so users on the old build
  * keep working until their next refresh / install.
