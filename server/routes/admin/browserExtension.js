@@ -1,6 +1,7 @@
 import { join } from 'path';
 import { promises as fs } from 'fs';
 import archiver from 'archiver';
+import config from '../../config.js';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
@@ -599,10 +600,25 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    */
   async function buildExtensionZipBuffer({ req, cfg }) {
     const baseUrl = buildPublicBaseUrl(req);
-    const extDir = join(getRootDir(), 'browser-extension');
-    const distDir = join(getRootDir(), 'client', 'dist');
-    const distExtensionDir = join(distDir, 'extension');
-    const distAssetsDir = join(distDir, 'assets');
+    const rootDir = getRootDir();
+    const isPackaged = process.pkg !== undefined || config.APP_ROOT_DIR !== undefined;
+    const isProd = isPackaged || config.NODE_ENV === 'production';
+
+    // In production / packaged builds, the layout under rootDir is:
+    //   rootDir/browser-extension/   — manifest.json, background.js, icons/
+    //   rootDir/public/extension/    — Vite-built sidepanel.html / options.html
+    //   rootDir/public/assets/       — Vite-built JS/CSS chunks referenced by HTML
+    // In development, the source layout is:
+    //   rootDir/browser-extension/   — same source files
+    //   rootDir/client/dist/extension/ and rootDir/client/dist/assets/
+    //                                — produced by `cd client && npx vite build`
+    const extDir = join(rootDir, 'browser-extension');
+    const distExtensionDir = isProd
+      ? join(rootDir, 'public', 'extension')
+      : join(rootDir, 'client', 'dist', 'extension');
+    const distAssetsDir = isProd
+      ? join(rootDir, 'public', 'assets')
+      : join(rootDir, 'client', 'dist', 'assets');
 
     // The packaged extension layout combines:
     //   * `manifest.json`   — rewritten here with the signing-key `key` field
@@ -621,8 +637,17 @@ export default function registerAdminBrowserExtensionRoutes(app) {
     try {
       await fs.access(distSidepanel);
     } catch {
+      const hint = isProd
+        ? 'rebuild the deployment with `npm run prod:build`'
+        : 'run `cd client && npx vite build` (or `npm run build`)';
+      throw new Error(`Built extension assets not found at ${distSidepanel}. Please ${hint}.`);
+    }
+
+    try {
+      await fs.access(join(extDir, 'manifest.json'));
+    } catch {
       throw new Error(
-        `Built extension assets not found at ${distSidepanel}. Run \`npm run build\` (or \`cd client && npx vite build\`) first.`
+        `Browser extension source files not found at ${extDir}. The deployment is missing the browser-extension/ directory — rebuild with the latest \`npm run prod:build\`.`
       );
     }
 
