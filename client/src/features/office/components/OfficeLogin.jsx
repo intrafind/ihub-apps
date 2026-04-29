@@ -6,7 +6,7 @@ import {
   ShieldCheckIcon
 } from '@heroicons/react/24/outline';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
-import { openOfficeAuthDialog } from '../utilities/officeAuthDialog';
+import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import {
   createPkceParams,
   getStoredPkceVerifier,
@@ -16,8 +16,31 @@ import {
 } from '../api/officeAuth';
 import { buildAssetUrl } from '../../../utils/runtimeBasePath';
 
+// Default bullet copy — used when the host adapter does not override it.
+// Mirrors the original Outlook taskpane wording so the existing UX is
+// preserved when no provider is in scope.
+const DEFAULT_OUTLOOK_BULLETS = [
+  {
+    icon: SparklesIcon,
+    text: 'Use iHub AI apps—chat, translation, email tools, and more—directly inside Outlook.'
+  },
+  {
+    icon: EnvelopeIcon,
+    text: 'Work with your mailbox context when an app needs the current email or attachments.'
+  },
+  {
+    icon: ChatBubbleLeftRightIcon,
+    text: 'Choose an app after you connect, then chat and iterate in the task pane.'
+  },
+  {
+    icon: ShieldCheckIcon,
+    text: 'Sign in with your iHub account securely via the authentication popup.'
+  }
+];
+
 const OfficeLogin = ({ onSuccess, initialError = null }) => {
   const config = useOfficeConfig();
+  const host = useEmbeddedHost();
   const [isLoading, setIsLoading] = useState(false);
   const [loadingMessage, setLoadingMessage] = useState('Authenticating…');
   const [sessionBanner, setSessionBanner] = useState(initialError);
@@ -37,7 +60,7 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
       const { codeVerifier, codeChallenge, state } = await createPkceParams();
       const authorizeUrl = getAuthorizeUrl(config, { codeChallenge, state });
 
-      openOfficeAuthDialog(
+      host.runAuthDialog(
         authorizeUrl,
         async redirectUrl => {
           setLoadingMessage('Getting your token…');
@@ -112,7 +135,7 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
               />
             </div>
             <h1 className="text-lg font-semibold text-slate-900">Welcome</h1>
-            <p className="text-sm text-slate-500 mt-1">iHub Apps for Outlook</p>
+            <p className="text-sm text-slate-500 mt-1">{host.loginSubtitle}</p>
           </div>
 
           <div className="px-6 pt-4 pb-6 flex flex-col gap-4">
@@ -128,33 +151,15 @@ const OfficeLogin = ({ onSuccess, initialError = null }) => {
             )}
 
             <ul className="flex flex-col gap-3 text-left list-none m-0 p-0">
-              <li className="flex gap-3 items-start">
-                <SparklesIcon className="h-5 w-5 shrink-0 text-slate-600 mt-0.5" aria-hidden />
-                <span className="text-sm text-slate-700 leading-snug">
-                  Use iHub AI apps—chat, translation, email tools, and more—directly inside Outlook.
-                </span>
-              </li>
-              <li className="flex gap-3 items-start">
-                <EnvelopeIcon className="h-5 w-5 shrink-0 text-slate-600 mt-0.5" aria-hidden />
-                <span className="text-sm text-slate-700 leading-snug">
-                  Work with your mailbox context when an app needs the current email or attachments.
-                </span>
-              </li>
-              <li className="flex gap-3 items-start">
-                <ChatBubbleLeftRightIcon
-                  className="h-5 w-5 shrink-0 text-slate-600 mt-0.5"
-                  aria-hidden
-                />
-                <span className="text-sm text-slate-700 leading-snug">
-                  Choose an app after you connect, then chat and iterate in the task pane.
-                </span>
-              </li>
-              <li className="flex gap-3 items-start">
-                <ShieldCheckIcon className="h-5 w-5 shrink-0 text-slate-600 mt-0.5" aria-hidden />
-                <span className="text-sm text-slate-700 leading-snug">
-                  Sign in with your iHub account securely via the authentication popup.
-                </span>
-              </li>
+              {(host.loginBullets || DEFAULT_OUTLOOK_BULLETS).map((b, i) => {
+                const Icon = b.icon || SparklesIcon;
+                return (
+                  <li key={i} className="flex gap-3 items-start">
+                    <Icon className="h-5 w-5 shrink-0 text-slate-600 mt-0.5" aria-hidden />
+                    <span className="text-sm text-slate-700 leading-snug">{b.text}</span>
+                  </li>
+                );
+              })}
             </ul>
 
             <button
