@@ -359,6 +359,108 @@ underlying iHub session cookie or the OAuth client's grants. To fully
 revoke a user, disable their iHub account or remove them from the
 allowed group — the next refresh attempt will fail.
 
+### Chrome rejects the iHub HTTPS certificate during sign-in
+
+`chrome.identity.launchWebAuthFlow` requires HTTPS in production and
+will refuse to load a URL whose certificate Chrome considers invalid.
+Self-signed dev certificates trigger this immediately — the extension's
+sign-in window opens, briefly shows the Chrome interstitial, and closes
+with `Authorization page could not be loaded`.
+
+Pick **one** of the following for development; production deployments
+should always use a real CA-issued certificate.
+
+#### Option A — Use mkcert to issue a locally-trusted certificate (recommended)
+
+[mkcert](https://github.com/FiloSottile/mkcert) installs a local CA into
+your operating system's trust store and Chrome's NSS DB, then issues
+certificates signed by that CA. Chrome accepts them without warnings.
+
+```bash
+# One-time setup
+brew install mkcert nss          # macOS; Linux: see mkcert README
+mkcert -install                  # installs the local CA into OS + browsers
+
+# Issue a cert for your iHub dev hostname
+cd /path/to/ihub-apps
+mkcert -cert-file ./certs/ihub.local.pem \
+       -key-file ./certs/ihub.local-key.pem \
+       ihub.local 127.0.0.1 ::1
+
+# Point iHub at the new cert (in .env or environment)
+SSL_CERT=./certs/ihub.local.pem
+SSL_KEY=./certs/ihub.local-key.pem
+```
+
+Add `127.0.0.1 ihub.local` to `/etc/hosts`, restart iHub, and reload
+the extension. Sign-in now works against `https://ihub.local:3000`.
+
+#### Option B — Trust your existing self-signed certificate
+
+If you already have a self-signed cert and don't want to switch to
+mkcert, install the cert into the OS trust store so Chrome accepts it:
+
+- **macOS**: open the `.pem` / `.crt` in **Keychain Access** → drag it
+  into the **System** keychain → double-click → **Trust** → *Always
+  Trust* for SSL. Restart Chrome.
+- **Linux**: copy the cert to `/usr/local/share/ca-certificates/` and
+  run `sudo update-ca-certificates`. Chromium / Chrome on Linux uses
+  the NSS DB, so also import via `certutil -d sql:$HOME/.pki/nssdb -A
+  -t "C,," -n ihub-dev -i ihub.crt`. Restart Chrome.
+- **Windows**: double-click the `.cer` → **Install Certificate** →
+  *Local Machine* → *Trusted Root Certification Authorities*. Restart
+  Chrome.
+
+#### Option C — Whitelist just the cert by SPKI fingerprint (no system trust changes)
+
+Compute the SPKI hash and launch Chrome with a flag that ignores cert
+errors only for that exact public key — safer than the blanket
+`--ignore-certificate-errors`:
+
+```bash
+# Compute SPKI hash from your cert
+openssl x509 -in ihub.crt -pubkey -noout \
+  | openssl rsa -pubin -outform der 2>/dev/null \
+  | openssl dgst -sha256 -binary \
+  | openssl enc -base64
+
+# Launch a fresh Chrome profile with that hash whitelisted
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --user-data-dir=/tmp/chrome-ihub-dev \
+  --ignore-certificate-errors-spki-list=YOUR_BASE64_HASH_HERE
+```
+
+This is per-launch and per-profile — fine for a dev loop, **not**
+suitable for shipping to users.
+
+#### Option D — Tunnel through a public HTTPS endpoint
+
+If you can't trust certs locally (corporate device, etc.), expose your
+local iHub through a tunnel that terminates a real cert for you:
+
+- [`cloudflared`](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/)
+  — `cloudflared tunnel --url http://localhost:3000` gives you a
+  `*.trycloudflare.com` URL with a valid cert.
+- [`ngrok`](https://ngrok.com/) — `ngrok http https://localhost:3000`
+  works similarly.
+
+Set the tunnel URL as the iHub base URL in the extension options, and
+make sure the tunnel host is forwarded into Chrome's WebAuth window
+correctly. **Ensure the iHub server sees the right
+`X-Forwarded-Proto` / `X-Forwarded-Host`** so generated redirect URIs
+match the tunnel hostname (the extension's redirect URI is fixed —
+`https://<extension-id>.chromiumapp.org/cb` — but iHub still derives
+its own absolute base URL from request headers in some places).
+
+#### What does **not** work
+
+- Bypassing the warning by clicking "Advanced → Proceed to site"
+  affects only normal browser tabs, **not** `launchWebAuthFlow`. The
+  WebAuth flow uses an isolated network stack that does not honour
+  Chrome's per-site cert exceptions.
+- `--ignore-certificate-errors` (without `-spki-list`) is broadly
+  ignored by recent Chrome builds and shows a security warning banner.
+
 ---
 
 ## Roadmap

@@ -30,8 +30,8 @@ function isValidRedirectUri(redirectUri, allowedUris) {
 
 /**
  * Check whether the authenticated user is allowed to use a given OAuth client.
- * When `client.allowedGroups` is empty/missing the client is unrestricted.
- * Otherwise the user must be a member of at least one listed group.
+ * Empty/missing allowlist or `['*']` (the wildcard) means unrestricted; otherwise
+ * the user must be a member of at least one listed group.
  *
  * @param {Object} client - Loaded OAuth client.
  * @param {Object} user - Decoded JWT payload (with `groups` array).
@@ -39,7 +39,7 @@ function isValidRedirectUri(redirectUri, allowedUris) {
  */
 function isUserAllowedByGroups(client, user) {
   const allowed = Array.isArray(client?.allowedGroups) ? client.allowedGroups : [];
-  if (allowed.length === 0) return true;
+  if (allowed.length === 0 || allowed.includes('*')) return true;
   const userGroups = Array.isArray(user?.groups) ? user.groups : [];
   return userGroups.some(g => allowed.includes(g));
 }

@@ -1,4 +1,4 @@
-export const version = '031';
+export const version = '033';
 export const description = 'add_browser_extension_config';
 
 const DEFAULT_STARTER_PROMPTS = [

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 function AdminBrowserExtensionPage() {
@@ -18,7 +19,8 @@ function AdminBrowserExtensionPage() {
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
   const [extensionIdsText, setExtensionIdsText] = useState('');
-  const [allowedGroupsText, setAllowedGroupsText] = useState('');
+  const [allowedGroups, setAllowedGroups] = useState(['browser-extension']);
+  const [availableGroups, setAvailableGroups] = useState([]);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -53,8 +55,10 @@ function AdminBrowserExtensionPage() {
           : []
       );
       setExtensionIdsText(Array.isArray(data.extensionIds) ? data.extensionIds.join('\n') : '');
-      setAllowedGroupsText(
-        Array.isArray(data.allowedGroups) ? data.allowedGroups.join(', ') : 'browser-extension'
+      setAllowedGroups(
+        Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
+          ? data.allowedGroups
+          : ['browser-extension']
       );
     } catch (_err) {
       setMessage({
@@ -66,8 +70,27 @@ function AdminBrowserExtensionPage() {
     }
   };
 
+  const loadGroups = async () => {
+    try {
+      const res = await makeAdminApiCall('/admin/groups');
+      const groupsObj = res?.data?.groups || {};
+      // Convert { id: groupObj } -> [{ id, name }] for ResourceSelector
+      const list = Object.values(groupsObj).map(g => ({
+        id: g.id,
+        name: g.name || g.id,
+        description: g.description
+      }));
+      list.sort((a, b) => String(a.name).localeCompare(String(b.name)));
+      setAvailableGroups(list);
+    } catch {
+      // Non-fatal — admin can still type the group ID via the search field;
+      // ResourceSelector will simply have an empty dropdown.
+    }
+  };
+
   useEffect(() => {
     loadStatus();
+    loadGroups();
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
@@ -129,10 +152,11 @@ function AdminBrowserExtensionPage() {
         .map(s => s.trim())
         .filter(Boolean);
 
-      const allowedGroups = allowedGroupsText
-        .split(/[\s,]+/)
-        .map(s => s.trim())
-        .filter(Boolean);
+      // ResourceSelector emits ['*'] for "all"; the server treats that and
+      // an empty array as "no group restriction".
+      const cleanedAllowedGroups = Array.isArray(allowedGroups)
+        ? Array.from(new Set(allowedGroups.filter(Boolean)))
+        : [];
 
       await makeAdminApiCall('/admin/browser-extension/config', {
         method: 'PUT',
@@ -141,7 +165,7 @@ function AdminBrowserExtensionPage() {
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,
           extensionIds,
-          allowedGroups
+          allowedGroups: cleanedAllowedGroups
         }
       });
       await loadStatus();
@@ -311,15 +335,20 @@ function AdminBrowserExtensionPage() {
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   {t(
                     'admin.browserExtension.groupsDesc',
-                    'Comma-separated list of internal group IDs whose members may use the extension. Defaults to the "browser-extension" group. Users not in any of these groups will see an access-denied page during sign-in.'
+                    'Pick which internal groups can sign in via the extension. Defaults to the "browser-extension" group. Pick "All (*)" to skip the group check entirely. Users not in any allowed group see an access-denied page during sign-in.'
                   )}
                 </p>
-                <input
-                  type="text"
-                  value={allowedGroupsText}
-                  onChange={e => setAllowedGroupsText(e.target.value)}
-                  placeholder="browser-extension"
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                <ResourceSelector
+                  label={t('admin.browserExtension.groupsTitle', 'Allowed Groups')}
+                  resources={availableGroups}
+                  selectedResources={allowedGroups}
+                  onSelectionChange={setAllowedGroups}
+                  placeholder={t('admin.browserExtension.groupsSearch', 'Search groups to add...')}
+                  emptyMessage={t(
+                    'admin.browserExtension.groupsEmpty',
+                    'No groups selected — sign-in is unrestricted (any authenticated user can use the extension)'
+                  )}
+                  allowWildcard={true}
                 />
               </div>
 
