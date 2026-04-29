@@ -36,6 +36,8 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     // LDAP bind credentials (required for group queries)
     domaincontrolleruser: ldapUser,
     domaincontrollerpassword: ldapPassword,
+    // TLS options for ldaps:// connections with self-signed/internal CA certs
+    ...(ntlmConfig.tlsOptions && { tlsOptions: ntlmConfig.tlsOptions }),
     ...ntlmConfig.options
   };
 
