@@ -162,6 +162,71 @@ function processCorsOrigins(origins) {
 }
 
 /**
+ * Strip a trailing slash and any path component from an origin string so the
+ * comparison is "scheme + host (+ port)" — the form the browser actually sends
+ * in the Origin header. Idempotent on already-clean origins.
+ *
+ *   "chrome-extension://abc/options.html"  -> "chrome-extension://abc"
+ *   "chrome-extension://abc/"              -> "chrome-extension://abc"
+ *   "https://app.example.com/"             -> "https://app.example.com"
+ *   "https://app.example.com:8080"         -> "https://app.example.com:8080"
+ */
+function normalizeOriginForMatch(origin) {
+  if (typeof origin !== 'string') return origin;
+  const trimmed = origin.trim();
+  // Find the start of the path: the first "/" *after* the "://"
+  const schemeEnd = trimmed.indexOf('://');
+  if (schemeEnd === -1) return trimmed.replace(/\/+$/, '');
+  const pathStart = trimmed.indexOf('/', schemeEnd + 3);
+  return pathStart === -1 ? trimmed : trimmed.slice(0, pathStart);
+}
+
+/**
+ * Build the cors() `origin` callback used per-request. Performs forgiving
+ * matching (normalizes trailing slash + path) and logs a structured debug
+ * line on every mismatch so admins can see the exact comparison that failed.
+ *
+ * Returns either:
+ *   - a (origin, callback) function that decides allow/deny per origin, or
+ *   - the original `false` / `[]` value when nothing is configured (cors()
+ *     will skip setting Access-Control-Allow-Origin entirely).
+ */
+function makeForgivingOriginMatcher(resolvedOrigin, req) {
+  // Empty / disallowed config — preserve cors()'s default behaviour
+  if (!resolvedOrigin) return false;
+
+  const list = Array.isArray(resolvedOrigin) ? resolvedOrigin : [resolvedOrigin];
+  const normalized = list.map(normalizeOriginForMatch).filter(Boolean);
+  if (normalized.length === 0) return false;
+
+  return (requestOrigin, callback) => {
+    if (!requestOrigin) {
+      // Same-origin / non-browser caller — allow.
+      return callback(null, true);
+    }
+    const normalizedRequest = normalizeOriginForMatch(requestOrigin);
+    if (normalized.includes(normalizedRequest)) {
+      return callback(null, true);
+    }
+    // Don't log on every health-probe / static asset miss in production —
+    // only log when this looks like an extension or unexpected origin so
+    // admins notice configuration mistakes.
+    logger.debug(
+      'CORS: request origin not in allowlist; response will omit Access-Control-Allow-Origin',
+      {
+        component: 'CORS',
+        requestOrigin,
+        normalizedRequest,
+        configuredOrigins: normalized,
+        method: req?.method,
+        url: req?.url
+      }
+    );
+    return callback(null, false);
+  };
+}
+
+/**
  * Setup session middleware for different authentication flows
  * @param {import('express').Application} app - Express application
  * @param {Object} platformConfig - Platform configuration
@@ -375,6 +440,16 @@ export function setupMiddleware(app, platformConfig = {}) {
         );
       }
       resolvedOrigin = true; // cors() echoes req.headers.origin
+    } else {
+      // Match the request's Origin against the configured allowlist with
+      // forgiving normalization (strip trailing slash + path component).
+      // The cors() package does strict `===` matching, which silently fails
+      // when the admin has pasted "chrome-extension://<id>/" (with trailing
+      // slash) or a full URL like "chrome-extension://<id>/options.html"
+      // — the browser only sends "chrome-extension://<id>" as the Origin
+      // header. We expand the allowlist into a custom function that handles
+      // these common admin mistakes and emits a debug log on miss.
+      resolvedOrigin = makeForgivingOriginMatcher(resolvedOrigin, req);
     }
 
     callback(null, {
