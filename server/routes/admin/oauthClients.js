@@ -242,9 +242,12 @@ export default function registerAdminOAuthRoutes(app) {
         name: name.trim(),
         description: description?.trim() || '',
         scopes: Array.isArray(scopes) ? scopes : [],
-        allowedApps: Array.isArray(allowedApps) ? allowedApps : [],
-        allowedModels: Array.isArray(allowedModels) ? allowedModels : [],
-        allowedPrompts: Array.isArray(allowedPrompts) ? allowedPrompts : [],
+        // Default to ["*"] (allow all) if not specified, making it clear to admins
+        allowedApps: Array.isArray(allowedApps) && allowedApps.length > 0 ? allowedApps : ['*'],
+        allowedModels:
+          Array.isArray(allowedModels) && allowedModels.length > 0 ? allowedModels : ['*'],
+        allowedPrompts:
+          Array.isArray(allowedPrompts) && allowedPrompts.length > 0 ? allowedPrompts : ['*'],
         allowedGroups: Array.isArray(allowedGroups) ? allowedGroups : [],
         tokenExpirationMinutes:
           tokenExpirationMinutes || oauthConfig.defaultTokenExpirationMinutes || 60,
