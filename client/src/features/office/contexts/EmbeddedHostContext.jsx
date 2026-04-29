@@ -29,11 +29,27 @@ import * as React from 'react';
  * @property {string|null} bodyText
  * @property {Array<{ name: string, contentType?: string, [k: string]: any }>} attachments
  *
+ * @typedef {Object} HostContextToggle
+ * @property {string} key             Stable identifier — also the persistence key.
+ * @property {string} label           User-visible toggle label.
+ * @property {boolean} defaultEnabled Initial state when the user has no saved preference.
+ * @property {Array<'bodyText'|'attachments'>} controls
+ *                                    Which fields of the HostMailContext this
+ *                                    toggle gates. When the toggle is OFF, every
+ *                                    listed field is cleared from the context the
+ *                                    chat hook merges into the outgoing message.
+ *
  * @typedef {Object} EmbeddedHostAdapter
  * @property {string} kind                                'office' | 'extension'
  * @property {string} loginSubtitle                       e.g. "iHub Apps for Outlook"
  * @property {(authorizeUrl: string, onSuccess: (callbackUrl: string) => void, onError: (err: any) => void) => void} runAuthDialog
  * @property {() => Promise<HostMailContext>} readMessageContext  Returns mail/page context appended to chat messages.
+ * @property {Array<HostContextToggle>} [contextToggles]
+ *                                                        Optional list of "include this in
+ *                                                        the message?" toggles surfaced under
+ *                                                        the chat input's `+` menu. Empty /
+ *                                                        omitted means no toggles render and
+ *                                                        all available context is always sent.
  */
 
 /** @type {React.Context<EmbeddedHostAdapter|null>} */
@@ -70,5 +86,41 @@ const DEFAULT_OFFICE_ADAPTER = {
   readMessageContext: async () => {
     const { fetchCurrentMailContext } = await import('../utilities/outlookMailContext');
     return fetchCurrentMailContext();
-  }
+  },
+  contextToggles: []
 };
+
+/**
+ * Apply the user's per-message host-context toggles to a HostMailContext.
+ * Returns a shallow copy of `ctx` with every field listed under a
+ * disabled toggle's `controls` cleared (`bodyText` → `null`,
+ * `attachments` → `[]`).
+ *
+ * Defaults to "include everything" when:
+ *   - the adapter declares no toggles,
+ *   - the flags map is undefined,
+ *   - or a specific toggle's flag is undefined (i.e. the user has never
+ *     opened the menu).
+ *
+ * Used by `useOfficeChatAdapter` right before merging context into the
+ * outgoing chat message.
+ *
+ * @param {HostMailContext} ctx
+ * @param {Array<HostContextToggle>|undefined} toggles
+ * @param {Object<string, boolean>|undefined} flags
+ * @returns {HostMailContext}
+ */
+export function applyHostContextFlags(ctx, toggles, flags) {
+  if (!ctx || !Array.isArray(toggles) || toggles.length === 0) return ctx;
+  const f = flags || {};
+  const filtered = { ...ctx };
+  for (const toggle of toggles) {
+    if (f[toggle.key] === false) {
+      for (const field of toggle.controls || []) {
+        if (field === 'bodyText') filtered.bodyText = null;
+        else if (field === 'attachments') filtered.attachments = [];
+      }
+    }
+  }
+  return filtered;
+}

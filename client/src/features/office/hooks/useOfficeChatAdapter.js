@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
-import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
+import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
   combineUserTextWithEmailBody,
   buildImageDataFromMailAttachments,
@@ -74,6 +74,12 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
         // chrome:// page, etc.) — proceed without it.
       }
 
+      // Apply the user's per-message opt-out flags from the chat input's
+      // `+` menu. `applyHostContextFlags` clears `bodyText` / `attachments`
+      // for every toggle the host adapter declared whose flag is `false`.
+      // No-op when the host has no toggles or the user hasn't touched any.
+      ctx = applyHostContextFlags(ctx, host.contextToggles, params?.hostContextFlags);
+
       const enrichedContent = combineUserTextWithEmailBody(apiMessage.content, ctx.bodyText);
 
       // Combine manual uploads with attachments harvested from the host
@@ -85,6 +91,12 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       const combinedImageData = combineUploadData(apiMessage.imageData, hostImageData);
       const combinedFileData = combineUploadData(apiMessage.fileData, hostFileData);
 
+      // hostContextFlags is a client-only opt-out signal — strip it before
+      // forwarding so it doesn't show up in the outgoing chat-completion
+      // request body.
+      // eslint-disable-next-line no-unused-vars
+      const { hostContextFlags: _hostContextFlags, ...paramsForServer } = params || {};
+
       chat.sendMessage({
         displayMessage,
         apiMessage: {
@@ -93,7 +105,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
           imageData: combinedImageData,
           fileData: combinedFileData
         },
-        params,
+        params: paramsForServer,
         sendChatHistory,
         messageMetadata
       });

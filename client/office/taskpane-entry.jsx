@@ -62,7 +62,24 @@ Office.onReady(async () => {
     kind: 'office',
     loginSubtitle: 'iHub Apps for Outlook',
     runAuthDialog: openOfficeAuthDialog,
-    readMessageContext: fetchCurrentMailContext
+    readMessageContext: fetchCurrentMailContext,
+    // Per-message opt-out toggles surfaced under the chat input's `+` menu.
+    // Both default to ON to preserve the long-standing Outlook behaviour
+    // (every message attaches the email body + attachments).
+    contextToggles: [
+      {
+        key: 'emailBody',
+        label: 'Include email body',
+        defaultEnabled: true,
+        controls: ['bodyText']
+      },
+      {
+        key: 'attachments',
+        label: 'Include attachments',
+        defaultEnabled: true,
+        controls: ['attachments']
+      }
+    ]
   };
 
   const root = createRoot(rootEl);

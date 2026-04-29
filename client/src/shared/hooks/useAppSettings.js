@@ -21,6 +21,11 @@ function useAppSettings(appId, app) {
   const [thinkingThoughts, setThinkingThoughts] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
   const [websearchEnabled, setWebsearchEnabled] = useState(false);
+  // Per-message host-context toggles. The Outlook taskpane and the
+  // browser extension declare which toggles to surface via
+  // EmbeddedHostAdapter.contextToggles; this is the user-visible state
+  // map. Empty object in the main web app — no toggles render there.
+  const [hostContextFlags, setHostContextFlags] = useState({});
   const [imageAspectRatio, setImageAspectRatio] = useState('1:1');
   const [imageQuality, setImageQuality] = useState('Medium');
 
@@ -120,6 +125,8 @@ function useAppSettings(appId, app) {
       if (savedSettings.enabledTools !== undefined) setEnabledTools(savedSettings.enabledTools);
       if (savedSettings.websearchEnabled !== undefined)
         setWebsearchEnabled(savedSettings.websearchEnabled);
+      if (savedSettings.hostContextFlags && typeof savedSettings.hostContextFlags === 'object')
+        setHostContextFlags(savedSettings.hostContextFlags);
       if (savedSettings.imageAspectRatio !== undefined)
         setImageAspectRatio(savedSettings.imageAspectRatio);
       if (savedSettings.imageQuality !== undefined) setImageQuality(savedSettings.imageQuality);
@@ -140,6 +147,7 @@ function useAppSettings(appId, app) {
         thinkingThoughts,
         enabledTools,
         websearchEnabled,
+        hostContextFlags,
         imageAspectRatio,
         imageQuality
       });
@@ -157,6 +165,7 @@ function useAppSettings(appId, app) {
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
+    hostContextFlags,
     imageAspectRatio,
     imageQuality
   ]);
@@ -173,6 +182,7 @@ function useAppSettings(appId, app) {
     thinkingThoughts,
     enabledTools,
     websearchEnabled,
+    hostContextFlags,
     imageAspectRatio,
     imageQuality
   };
@@ -189,6 +199,7 @@ function useAppSettings(appId, app) {
     setThinkingThoughts,
     setEnabledTools,
     setWebsearchEnabled,
+    setHostContextFlags,
     setImageAspectRatio,
     setImageQuality
   };

@@ -45,6 +45,12 @@ function ChatInput({
   onEnabledToolsChange = null,
   websearchEnabled = false,
   onWebsearchEnabledChange = null,
+  // Per-message host-context toggles. Surfaced under the `+` menu when
+  // the embedded host (Outlook taskpane / browser extension side panel)
+  // declares any in its EmbeddedHostAdapter.contextToggles. Empty in the
+  // main web app — no toggles render and the props are inert.
+  hostContextFlags = null,
+  onHostContextFlagChange = null,
   // Model selection props
   models = [],
   selectedModel = null,
@@ -450,6 +456,8 @@ function ChatInput({
               onImageQualityChange={onImageQualityChange}
               websearchEnabled={websearchEnabled}
               onWebsearchEnabledChange={onWebsearchEnabledChange}
+              hostContextFlags={hostContextFlags}
+              onHostContextFlagChange={onHostContextFlagChange}
             />
 
             {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}

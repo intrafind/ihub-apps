@@ -106,6 +106,19 @@ function renderError(rootEl, message) {
     loginSubtitle: 'iHub Apps for the browser',
     runAuthDialog: runChromeIdentityAuth,
     readMessageContext: readActiveTabContext,
+    // Single per-message toggle — "Include page" — surfaced under the
+    // chat input's `+` menu. Defaults to ON since attaching the page
+    // is the whole point of the extension; users can turn it off when
+    // they want to ask the AI a generic question without the active
+    // tab leaking into the prompt.
+    contextToggles: [
+      {
+        key: 'pageText',
+        label: 'Include page',
+        defaultEnabled: true,
+        controls: ['bodyText']
+      }
+    ],
     // Override the default Outlook-flavoured login bullets with copy that
     // describes the page-context flow.
     loginBullets: [
