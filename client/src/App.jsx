@@ -89,6 +89,18 @@ const AdminOfficeIntegrationPage = lazyWithRetry(
 const AdminBrowserExtensionPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminBrowserExtensionPage')
 );
+const AdminIntegrationsPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationsPage')
+);
+const AdminIntegrationsJiraPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationsJiraPage')
+);
+const AdminIntegrationsOffice365Page = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationsOffice365Page')
+);
+const AdminIntegrationsGoogleDrivePage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationsGoogleDrivePage')
+);
 const AdminMarketplacePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplacePage')
 );
@@ -504,6 +516,22 @@ function App() {
               element={<LazyAdminRoute component={AdminFeaturesPage} />}
             />
           )}
+          <Route
+            path="admin/integrations"
+            element={<LazyAdminRoute component={AdminIntegrationsPage} />}
+          />
+          <Route
+            path="admin/integrations/jira"
+            element={<LazyAdminRoute component={AdminIntegrationsJiraPage} />}
+          />
+          <Route
+            path="admin/integrations/office365"
+            element={<LazyAdminRoute component={AdminIntegrationsOffice365Page} />}
+          />
+          <Route
+            path="admin/integrations/google-drive"
+            element={<LazyAdminRoute component={AdminIntegrationsGoogleDrivePage} />}
+          />
           <Route
             path="admin/office-integration"
             element={<LazyAdminRoute component={AdminOfficeIntegrationPage} />}

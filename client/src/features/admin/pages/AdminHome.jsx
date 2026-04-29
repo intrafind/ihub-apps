@@ -129,24 +129,14 @@ function AdminHome() {
         ]
       : []),
     {
-      key: 'officeIntegration',
-      title: t('admin.nav.officeIntegration', 'Office Integration'),
+      key: 'integrations',
+      title: t('admin.nav.integrations', 'Integrations'),
       description: t(
-        'admin.home.sections.officeIntegrationDesc',
-        'Configure the Outlook add-in and manage manifest deployment'
+        'admin.home.sections.integrationsDesc',
+        'Outlook add-in, browser extension, OneDrive / SharePoint, Google Drive, Jira — connect iHub to the systems your users already work with.'
       ),
-      href: '/admin/office-integration',
+      href: '/admin/integrations',
       color: 'bg-blue-500'
-    },
-    {
-      key: 'browserExtension',
-      title: t('admin.nav.browserExtension', 'Browser Extension'),
-      description: t(
-        'admin.home.sections.browserExtensionDesc',
-        'Configure the iHub browser extension and manage its OAuth client'
-      ),
-      href: '/admin/browser-extension',
-      color: 'bg-emerald-500'
     }
   ];
 
