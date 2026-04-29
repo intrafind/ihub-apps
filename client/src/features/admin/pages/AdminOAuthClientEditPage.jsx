@@ -29,9 +29,10 @@ function AdminOAuthClientEditPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    allowedApps: [],
-    allowedModels: [],
-    allowedPrompts: [],
+    // Default to ["*"] (allow all) for new clients to make it clear to admins
+    allowedApps: isNew ? ['*'] : [],
+    allowedModels: isNew ? ['*'] : [],
+    allowedPrompts: isNew ? ['*'] : [],
     tokenExpirationMinutes: 60,
     active: true,
     clientType: 'confidential',
@@ -398,10 +399,20 @@ function AdminOAuthClientEditPage() {
 
             {/* Permissions hint */}
             <div className="rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 p-4 text-sm text-blue-900 dark:text-blue-200">
-              {t(
-                'admin.auth.oauth.permissionsHint',
-                'Allow-lists act as a filter on the signed-in user’s group permissions for authorization_code (user-delegated) tokens: leaving a list empty or adding "*" applies no client-level restriction, while a non-empty list narrows the user’s permissions by intersection. For client_credentials (machine-to-machine) tokens, only the listed resources are accessible.'
-              )}
+              <div className="flex items-start">
+                <Icon name="info" size="sm" className="mr-2 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium mb-1">
+                    {t('admin.auth.oauth.permissionsHintTitle', 'How Resource Restrictions Work')}
+                  </p>
+                  <p>
+                    {t(
+                      'admin.auth.oauth.permissionsHint',
+                      'By default, "All (*)" is selected, meaning this OAuth client can access all resources the user has permission for. Selecting specific apps, models, or prompts narrows down access. For example, if a user has 5 apps but you only select 3 here, this OAuth client can only access those 3 apps - acting as a filter on top of the user\'s existing permissions.'
+                    )}
+                  </p>
+                </div>
+              </div>
             </div>
 
             {/* Allowed Apps */}
