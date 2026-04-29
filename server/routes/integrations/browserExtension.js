@@ -3,20 +3,13 @@
 
 import express from 'express';
 import { requireFeature } from '../../featureRegistry.js';
-import { getBasePath } from '../../utils/basePath.js';
+import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 
 const router = express.Router();
 
 // Gate behind the integrations feature flag (consistent with the Office add-in)
 router.use(requireFeature('integrations'));
-
-function buildPublicBaseUrl(req) {
-  const proto = req.get('X-Forwarded-Proto') || req.protocol || 'https';
-  const host = req.get('X-Forwarded-Host') || req.get('host');
-  const basePath = getBasePath();
-  return `${proto}://${host}${basePath}`;
-}
 
 function sanitizeLocalizedObject(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return {};

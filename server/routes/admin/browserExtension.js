@@ -5,7 +5,8 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { buildServerPath, getBasePath } from '../../utils/basePath.js';
+import { buildServerPath } from '../../utils/basePath.js';
+import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient, updateOAuthClient } from '../../utils/oauthClientManager.js';
 import {
   generateExtensionSigningKey,
@@ -29,13 +30,6 @@ const SIGNING_KEY_FILE = '.browser-extension-key.pem';
 
 function signingKeyPath() {
   return join(getRootDir(), 'contents', SIGNING_KEY_FILE);
-}
-
-function buildPublicBaseUrl(req) {
-  const proto = req.get('X-Forwarded-Proto') || req.protocol || 'https';
-  const host = req.get('X-Forwarded-Host') || req.get('host');
-  const basePath = getBasePath();
-  return `${proto}://${host}${basePath}`;
 }
 
 async function savePlatformConfig(updates) {

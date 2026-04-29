@@ -223,6 +223,16 @@ export const buildApiUrl = endpoint => {
  * @returns {string} Complete asset URL
  */
 export const buildAssetUrl = asset => {
+  // When the host has set an absolute API base URL (e.g. the browser
+  // extension's side panel running from chrome-extension://<id>), assets
+  // such as `/icons/<app-icon>.svg` live on the iHub server, NOT on the
+  // current origin. Return a fully-qualified URL so <img src> etc. fetch
+  // them from the right place.
+  if (apiBaseUrlOverride) {
+    const cleanAsset = asset.startsWith('/') ? asset.substring(1) : asset;
+    return apiBaseUrlOverride + '/' + cleanAsset;
+  }
+
   // For Vite dev server, use root paths
   if (import.meta.env.DEV) {
     return asset.startsWith('/') ? asset : '/' + asset;
@@ -239,6 +249,9 @@ export const buildAssetUrl = asset => {
  */
 export const buildUploadUrl = path => {
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  if (apiBaseUrlOverride) {
+    return apiBaseUrlOverride + '/uploads/' + cleanPath;
+  }
   return buildPath('uploads/' + cleanPath);
 };
 

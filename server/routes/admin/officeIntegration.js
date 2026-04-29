@@ -3,17 +3,11 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
-import { buildServerPath, getBasePath } from '../../utils/basePath.js';
+import { buildServerPath } from '../../utils/basePath.js';
+import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
-
-function buildPublicBaseUrl(req) {
-  const proto = req.get('X-Forwarded-Proto') || req.protocol || 'https';
-  const host = req.get('X-Forwarded-Host') || req.get('host');
-  const basePath = getBasePath();
-  return `${proto}://${host}${basePath}`;
-}
 
 async function savePlatformConfig(updates) {
   const rootDir = getRootDir();
