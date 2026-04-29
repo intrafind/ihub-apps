@@ -1,8 +1,6 @@
 /* global chrome */
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
-// i18next side-effect import so chat components' useTranslation() works.
-import '../src/i18n/i18n';
 import './extension.css';
 import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
 import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
@@ -13,6 +11,12 @@ import {
   getExtensionRedirectUri,
   readActiveTabContext
 } from '../src/features/extension/extensionHost';
+// NB: i18next is loaded *dynamically* below (after installExtensionAuth).
+// `client/src/i18n/i18n.js` fires a module-init `loadPlatformConfig()` that
+// hits `/configs/ui` via apiClient. If we imported it statically at the top
+// of this file, that fetch would happen *before* installExtensionAuth has a
+// chance to set apiClient.defaults.baseURL — so the request resolves
+// against chrome-extension://<id>/ instead of the iHub server.
 
 /**
  * Resolve the iHub runtime config the side panel needs to bootstrap:
@@ -89,6 +93,13 @@ function renderError(rootEl, message) {
   // origin obviously doesn't host the API), then attach the Bearer-token
   // and 401-refresh interceptors the office bridge already provides.
   installExtensionAuth(config);
+
+  // i18next must be loaded *after* installExtensionAuth — the module
+  // kicks off `loadPlatformConfig()` (apiClient.get('/configs/ui')) at
+  // import time. Loading it dynamically here means the apiClient
+  // baseURL is already pointing at the iHub server when that fetch
+  // fires.
+  await import('../src/i18n/i18n');
 
   const extensionHost = {
     kind: 'extension',

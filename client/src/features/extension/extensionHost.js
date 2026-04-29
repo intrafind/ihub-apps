@@ -61,10 +61,18 @@ export async function readActiveTabContext() {
   const empty = { available: false, bodyText: null, attachments: [] };
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
   const tab = tabs[0];
-  if (!tab?.id || !tab.url) return empty;
+  if (!tab?.id || !tab.url) {
+    console.info('[iHub] readActiveTabContext: no active tab found in current window');
+    return empty;
+  }
 
   const blockedSchemes = ['chrome:', 'edge:', 'about:', 'chrome-extension:', 'moz-extension:'];
-  if (blockedSchemes.some(s => tab.url.startsWith(s))) return empty;
+  if (blockedSchemes.some(s => tab.url.startsWith(s))) {
+    console.info(
+      `[iHub] readActiveTabContext: skipping unsupported URL scheme (${tab.url.split(':')[0]}:)`
+    );
+    return empty;
+  }
 
   try {
     const [{ result }] = await chrome.scripting.executeScript({
@@ -107,14 +115,22 @@ export async function readActiveTabContext() {
         };
       }
     });
-    if (!result?.text) return empty;
+    if (!result?.text) {
+      console.info('[iHub] readActiveTabContext: extractor returned empty text', tab.url);
+      return empty;
+    }
     const header = `# ${result.title || result.url}\n\nSource: ${result.url}\n\n`;
     return {
       available: true,
       bodyText: header + result.text,
       attachments: []
     };
-  } catch {
+  } catch (err) {
+    // Most common cause: the iHub extension lacks host permission for this
+    // tab's origin (chrome://, file://, or a site the user hasn't granted).
+    // host_permissions in manifest.json defaults to <all_urls>, so this only
+    // fires for browser-internal URLs and tabs like the new-tab page.
+    console.warn('[iHub] readActiveTabContext failed:', err?.message || err, tab.url);
     return empty;
   }
 }

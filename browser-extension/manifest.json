@@ -5,8 +5,7 @@
   "version": "0.1.0",
   "description": "Run any iHub Apps prompt against the current page — summarize, translate, ask, draft a reply.",
   "permissions": ["activeTab", "storage", "identity", "scripting", "sidePanel"],
-  "host_permissions": [],
-  "optional_host_permissions": ["<all_urls>"],
+  "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js",
     "type": "module"
