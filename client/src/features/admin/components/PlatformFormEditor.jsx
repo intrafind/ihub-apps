@@ -1357,7 +1357,8 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                 placeholder="ldap://dc.example.com:389"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                LDAP URL of domain controller (e.g., ldap://dc.example.com:389 or ldaps://dc.example.com:636)
+                LDAP URL of domain controller (e.g., ldap://dc.example.com:389 or
+                ldaps://dc.example.com:636)
               </p>
             </div>
             <div>
