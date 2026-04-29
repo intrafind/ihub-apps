@@ -376,17 +376,17 @@ function AdminBrowserExtensionPage() {
               </div>
 
               {status?.enabled && !status?.signingKey?.extensionId && (
-                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6">
-                  <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200 mb-2">
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                     {t(
                       'admin.browserExtension.signingKeyMissingTitle',
-                      'Signing key not generated yet'
+                      'Set up packaged downloads (optional)'
                     )}
                   </h2>
-                  <p className="text-sm text-amber-800 dark:text-amber-300 mb-4">
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                     {t(
                       'admin.browserExtension.signingKeyMissingDesc',
-                      'This integration was enabled before signing-key support shipped, so the packaged-download flow is unavailable until a key is generated. Click below to create one — the resulting extension ID is registered as a redirect URI on the OAuth client automatically.'
+                      'Generate an RSA signing key to unlock the packaged ZIP / CRX download flow. The key fixes the extension ID so a single build works for everyone in your organisation. You only need this for end-user distribution — for unpacked dev installs use the "Additional unpacked extension IDs" textarea below to register each developer\'s Chrome-assigned ID.'
                     )}
                   </p>
                   <button

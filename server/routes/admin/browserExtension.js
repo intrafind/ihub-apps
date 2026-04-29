@@ -225,7 +225,10 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         ? cfg.allowedGroups
         : ['browser-extension'];
       const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
-      const signingKey = await ensureSigningKey(cfg.signingKey);
+      // Signing-key generation is opt-in via /rotate-key. Unpacked dev
+      // installs only need the manual extensionIds → redirect URIs path; the
+      // signing key is only required for the packaged-download flow.
+      const signingKey = cfg.signingKey || null;
       const redirectUris = buildAllRedirectUris(extensionIds, signingKey);
 
       if (!oauthClientId) {

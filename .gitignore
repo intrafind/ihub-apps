@@ -24,6 +24,10 @@ dist/
 dist-ssr/
 dist-bin/
 build/
+
+# Browser-extension dev unpacked-load output (`npm run extension:build`)
+browser-extension/extension/
+browser-extension/assets/
 contents/data/*
 !contents/data/.gitkeep
 

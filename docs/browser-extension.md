@@ -247,20 +247,46 @@ Useful when you actively edit the extension source against a dev iHub
 instance. The packaged-download flow above is preferable in almost all
 other cases.
 
-1. Pull the iHub Apps repository.
-2. Visit `chrome://extensions` and toggle **Developer mode**.
-3. Click **Load unpacked** and select the `browser-extension/` folder.
-4. Copy the random extension ID Chrome assigns. Paste it into the
-   **Additional unpacked extension IDs** textarea on the admin page and
-   click **Save**. (This adds your dev ID to the OAuth client's redirect
-   URI list alongside the packaged ID.)
-5. Open the extension's options page, enter your iHub base URL, click
-   **Save**, then **Sign in**.
+The extension UI is now a React app built by Vite, so the source folder
+on its own is not loadable — Chrome needs the built JS / CSS chunks to
+sit alongside `manifest.json`. There's an npm script that does the
+build + copy in one step:
 
-When the extension is loaded unpacked it falls back to the user-supplied
-base URL because the `runtime-config.js` placeholder leaves
-`IHUB_RUNTIME_CONFIG` null. The packaged ZIP / CRX overwrite that file
-with the deployment's settings.
+1. Pull the iHub Apps repository and run `npm run install:all`.
+2. Build the extension once: `npm run extension:build`. This runs
+   `vite build` and copies the output into
+   `browser-extension/extension/` and `browser-extension/assets/` (both
+   git-ignored).
+3. Visit `chrome://extensions`, toggle **Developer mode**, click
+   **Load unpacked**, and select the `browser-extension/` folder.
+4. Copy the random extension ID Chrome assigns. Paste it into
+   **Additional unpacked extension IDs** on the admin page (`/admin/browser-extension`)
+   and click **Save**. This adds your dev ID to the OAuth client's
+   redirect-URI allowlist alongside any packaged-build ID.
+5. Open the extension's options page, enter your iHub base URL, click
+   **Save**. The side panel now shows the Sign-in screen → click
+   **Sign in** and you're done.
+
+You **do not need to generate a signing key** for this workflow — the
+signing key is only required for the packaged ZIP / CRX downloads where
+we want a deterministic extension ID. Unpacked dev installs use the
+random ID Chrome assigns plus the manual `Additional unpacked extension
+IDs` textarea above.
+
+Whenever you change React code under `client/extension/` or
+`client/src/features/{office,extension}/`, re-run `npm run extension:build`
+and click the **Reload** icon on the extension card in
+`chrome://extensions`. The SW restarts automatically.
+
+To clean up: `npm run extension:clean` removes the copied dist
+artefacts; the source tree stays intact.
+
+When the extension is loaded unpacked, the placeholder
+`extension/runtime-config.js` ships `IHUB_RUNTIME_CONFIG = null`, so the
+React app falls back to the iHub base URL the user typed in the options
+page and fetches the runtime config from
+`/api/integrations/browser-extension/config` on startup. The packaged
+ZIP / CRX overwrite that file with the deployment's baked settings.
 
 ---
 
