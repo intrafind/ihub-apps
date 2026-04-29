@@ -1,4 +1,5 @@
 import rateLimit from 'express-rate-limit';
+import { recordRateLimitHit } from '../telemetry/metrics.js';
 
 /**
  * Rate limiting middleware configuration for API protection
@@ -27,7 +28,18 @@ function createRateLimiter(config = {}, defaults = {}, type = 'API') {
     skipSuccessfulRequests:
       finalConfig.skipSuccessfulRequests !== undefined ? finalConfig.skipSuccessfulRequests : false,
     skipFailedRequests:
-      finalConfig.skipFailedRequests !== undefined ? finalConfig.skipFailedRequests : false
+      finalConfig.skipFailedRequests !== undefined ? finalConfig.skipFailedRequests : false,
+    // Telemetry hook fires once per IP per window when the limit is exceeded.
+    // We label by the limiter's `type` (e.g. 'API', 'Admin API') because the
+    // express request path would explode label cardinality.
+    handler: (req, res, _next, options) => {
+      try {
+        recordRateLimitHit('http', String(type).toLowerCase());
+      } catch {
+        // never break the request because of a metrics failure
+      }
+      res.status(options.statusCode).send(options.message);
+    }
   });
 }
 

@@ -16,9 +16,12 @@
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
     "@opentelemetry/auto-instrumentations-node": "^0.60.1",
+    "@opentelemetry/exporter-metrics-otlp-http": "^0.202.0",
     "@opentelemetry/exporter-prometheus": "^0.202.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.202.0",
     "@opentelemetry/resources": "^2.0.1",
     "@opentelemetry/sdk-logs": "^0.202.0",
+    "@opentelemetry/sdk-metrics": "^2.0.1",
     "@opentelemetry/sdk-node": "^0.202.0",
     "@opentelemetry/sdk-trace-node": "^2.0.1",
     "@pdf-lib/fontkit": "^1.1.1",

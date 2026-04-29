@@ -4,6 +4,7 @@
  */
 import configCache from './configCache.js';
 import { httpFetch } from './utils/httpConfig.js';
+import { recordRateLimitHit } from './telemetry/metrics.js';
 
 const lastCompleted = new Map(); // id -> timestamp when last request finished
 
@@ -80,6 +81,10 @@ export function throttledFetch(id, url, options = {}) {
     if (actives.get(id) < getConcurrency(id)) {
       execute();
     } else {
+      // The request had to wait for a slot - that's a throttler hit. We use
+      // the "llm" scope because all current callers are LLM/tool calls.
+      // Pass id as the "route" so dashboards can group by model id.
+      recordRateLimitHit('llm', id);
       queue.push(execute);
     }
   });

@@ -16,6 +16,7 @@ import { buildApiPath, buildServerPath } from '../utils/basePath.js';
 import config from '../config.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
+import activityTracker from '../telemetry/ActivityTracker.js';
 
 /**
  * Middleware to verify the Content-Length header before parsing the body.
@@ -462,6 +463,19 @@ export function setupMiddleware(app, platformConfig = {}) {
       //   modelsCount: req.user.permissions?.models?.size || 0,
       //   isAdmin: req.user.isAdmin
       // });
+    }
+    next();
+  });
+
+  // Track every authenticated request for the activity-summary log line and
+  // the ihub.active.users observable gauge. Active *chats* are still only
+  // bumped from the chat / inference call sites because that is the only
+  // place we have a chatId. Anonymous traffic is excluded so dashboards
+  // measure real users; flip to track 'anonymous' if you want public-only
+  // load instead.
+  app.use((req, res, next) => {
+    if (req.user && req.user.id && req.user.id !== 'anonymous') {
+      activityTracker.recordActivity({ userId: req.user.id });
     }
     next();
   });

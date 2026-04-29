@@ -12,6 +12,7 @@ import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
+import { recordAuthEvent } from '../telemetry/metrics.js';
 
 /**
  * Sanitize and validate authentication input
@@ -121,8 +122,10 @@ export default function registerAuthRoutes(app) {
         logger.info('[Auth] Attempting local authentication (explicit)', { component: 'Auth' });
         result = await loginUser(sanitizedUsername, sanitizedPassword, localAuthConfig);
         logger.info('[Auth] Local authentication succeeded', { component: 'Auth' });
+        recordAuthEvent('local', 'login_success');
       } catch (error) {
         logger.warn('Local authentication failed', { component: 'Auth', error });
+        recordAuthEvent('local', 'login_failure');
         return sendErrorResponse(res, 401, 'Invalid credentials');
       }
 
@@ -230,12 +233,14 @@ export default function registerAuthRoutes(app) {
           });
           result = await loginLdapUser(sanitizedUsername, sanitizedPassword, ldapProvider);
           logger.info('[Auth] LDAP authentication succeeded', { component: 'Auth' });
+          recordAuthEvent('ldap', 'login_success');
         } catch (error) {
           logger.warn('[Auth] LDAP authentication failed', {
             component: 'Auth',
             provider: sanitizedProvider,
             error: error.message
           });
+          recordAuthEvent('ldap', 'login_failure');
           return sendErrorResponse(res, 401, 'Invalid credentials');
         }
       } else {
@@ -469,6 +474,7 @@ export default function registerAuthRoutes(app) {
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax'
     });
+    recordAuthEvent(req.user?.authMode || 'unknown', 'logout');
 
     // Clear NTLM session flag to prevent auto-relogin
     if (req.session) {

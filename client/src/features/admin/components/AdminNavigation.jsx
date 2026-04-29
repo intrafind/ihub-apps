@@ -313,6 +313,12 @@ function AdminNavigation() {
           current: location.pathname === '/admin/logging'
         },
         {
+          key: 'telemetry',
+          name: t('admin.nav.telemetry', 'Telemetry'),
+          href: '/admin/telemetry',
+          current: location.pathname === '/admin/telemetry'
+        },
+        {
           key: 'system',
           name: t('admin.nav.system', 'System'),
           href: '/admin/system',

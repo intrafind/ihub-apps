@@ -23,9 +23,19 @@ import logger from './utils/logger.js';
 function resolveEnvVars(value) {
   if (typeof value !== 'string') return value;
 
-  return value.replace(/\$\{([^}]+)\}/g, (match, varName) => {
-    const envValue = process.env[varName];
-    if (envValue === undefined) {
+  // Support both ${VAR} and the shell-style ${VAR:-default}. The default form
+  // is what migrations like V031 write (`${OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:4318}`)
+  // so without :-default support those placeholders pass through verbatim.
+  return value.replace(
+    /\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}/g,
+    (match, varName, fallback) => {
+      const envValue = process.env[varName];
+      if (envValue !== undefined && envValue !== '') {
+        return envValue;
+      }
+      if (fallback !== undefined) {
+        return fallback;
+      }
       logger.warn('Environment variable not defined, keeping placeholder', {
         component: 'ConfigCache',
         varName,
@@ -33,14 +43,16 @@ function resolveEnvVars(value) {
       });
       return match;
     }
-    return envValue;
-  });
+  );
 }
 
 /**
- * Recursively resolve environment variables in an object
+ * Recursively resolve environment variables in an object. Exported so other
+ * subsystems (e.g. server/telemetry.js) that read raw JSON before configCache
+ * is up can perform the same `${VAR}` / `${VAR:-default}` substitution the
+ * rest of the platform expects.
  */
-function resolveEnvVarsInObject(obj) {
+export function resolveEnvVarsInObject(obj) {
   if (!obj || typeof obj !== 'object') return obj;
 
   if (Array.isArray(obj)) {
@@ -518,6 +530,8 @@ class ConfigCache {
    * Refresh a single cache entry
    */
   async refreshCacheEntry(key) {
+    const reloadStart = Date.now();
+    let reloadError = null;
     try {
       // Special handling for apps.json - load from both sources
       if (key === 'config/apps.json') {
@@ -635,12 +649,22 @@ class ConfigCache {
         this.setCacheEntry(key, finalData);
       }
     } catch (error) {
+      reloadError = error;
       logger.error('Error refreshing cache entry', {
         component: 'ConfigCache',
         key,
         error
       });
       // Keep the old data in cache on refresh failure
+    } finally {
+      // Telemetry: emit reload counter + duration. Lazy-imported because
+      // configCache.js is itself imported very early in the boot sequence.
+      try {
+        const { recordConfigReload } = await import('./telemetry/metrics.js');
+        recordConfigReload(key, (Date.now() - reloadStart) / 1000, reloadError);
+      } catch {
+        // never break a reload because telemetry isn't ready yet
+      }
     }
   }
 

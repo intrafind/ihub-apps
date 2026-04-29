@@ -227,11 +227,41 @@ if (cluster.isPrimary && workerCount > 1) {
     if (platformConfig?.defaultLanguage) {
       setDefaultLanguage(platformConfig.defaultLanguage);
     }
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Failed to load platform configuration',
+      error: error.message,
+      stack: error.stack
+    });
+  }
+
+  // Initialize OpenTelemetry SDK. We do this in its own try/catch because a
+  // failure here (e.g. invalid OTLP endpoint, missing exporter package) must
+  // not stop the rest of the worker - including the activity tracker - from
+  // starting.
+  try {
     await initTelemetry(platformConfig?.telemetry || {});
   } catch (error) {
     logger.error({
       component: 'Server',
       message: 'Failed to initialize telemetry',
+      error: error.message,
+      stack: error.stack
+    });
+  }
+
+  // Activity tracker drives the active-users / active-chats observable gauges
+  // AND the periodic activity-summary log line. The log line works even when
+  // OTel itself is broken, so configure it unconditionally and in its own
+  // try/catch.
+  try {
+    const { default: activityTracker } = await import('./telemetry/ActivityTracker.js');
+    activityTracker.configure(platformConfig?.telemetry?.activitySummary || {});
+  } catch (error) {
+    logger.error({
+      component: 'Server',
+      message: 'Failed to configure activity tracker',
       error: error.message,
       stack: error.stack
     });

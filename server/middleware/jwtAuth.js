@@ -1,6 +1,7 @@
 import { loadOAuthClients, findClientById } from '../utils/oauthClientManager.js';
 import { loadUsers, isUserActive } from '../utils/userManager.js';
 import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
+import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -629,6 +630,7 @@ export default function jwtAuthMiddleware(req, res, next) {
     }
 
     req.user = user;
+    recordAuthEvent('jwt', 'token_validated');
     return next();
   } catch (error) {
     // For /api/auth/status endpoint, allow expired/invalid tokens to pass through
@@ -637,10 +639,12 @@ export default function jwtAuthMiddleware(req, res, next) {
       logger.info('JWT Auth: expired token on status endpoint, continuing', {
         component: 'JwtAuth'
       });
+      recordAuthEvent('jwt', 'token_expired');
       return next();
     }
 
     logger.warn('JWT Auth token validation failed', { component: 'JwtAuth', error });
+    recordAuthEvent('jwt', error?.name === 'TokenExpiredError' ? 'token_expired' : 'token_invalid');
     return next();
   }
 }
