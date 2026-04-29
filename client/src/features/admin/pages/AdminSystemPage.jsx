@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import SSLConfig from '../components/SSLConfig';
+import CorsConfig from '../components/CorsConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
@@ -1235,6 +1236,9 @@ function AdminSystemPage() {
 
             {/* SSL Configuration Section */}
             <SSLConfig />
+
+            {/* CORS Configuration Section */}
+            <CorsConfig />
           </div>
         </div>
       </div>
