@@ -127,8 +127,13 @@ export const SUPPORTED_TEXT_FORMATS = getMimeTypesByCategories(['documents']);
 // Legacy MIME_TO_EXTENSION for backward compatibility - empty for now, use getMimeTypeDetails
 export const MIME_TO_EXTENSION = {};
 
-// Initialize config on module load (non-blocking)
-loadMimetypesConfig();
+// NB: no module-init prefetch of mimetypes here. In the browser extension
+// the side panel imports this transitively from sidepanel-entry.jsx's
+// static imports — i.e. before `installExtensionAuth` has set the apiClient
+// baseURL — so a module-init fetch resolves against `chrome-extension://`
+// and fails with ERR_FILE_NOT_FOUND. `loadMimetypesConfig` is called
+// lazily by every consumer that needs it, so warm-up here was only ever a
+// minor optimisation.
 
 // Lazy load PDF.js only when needed
 export const loadPdfjs = async () => {

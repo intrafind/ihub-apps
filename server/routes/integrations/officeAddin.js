@@ -3,7 +3,7 @@
 
 import express from 'express';
 import { requireFeature } from '../../featureRegistry.js';
-import { getBasePath } from '../../utils/basePath.js';
+import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
 import logger from '../../utils/logger.js';
@@ -12,17 +12,6 @@ const router = express.Router();
 
 // Gate all Office add-in routes behind the integrations feature flag
 router.use(requireFeature('integrations'));
-
-/**
- * Build the public base URL from the incoming request, honouring
- * any X-Forwarded-* / X-Forwarded-Prefix headers set by a reverse proxy.
- */
-function buildPublicBaseUrl(req) {
-  const proto = req.get('X-Forwarded-Proto') || req.protocol || 'https';
-  const host = req.get('X-Forwarded-Host') || req.get('host');
-  const basePath = getBasePath();
-  return `${proto}://${host}${basePath}`;
-}
 
 /**
  * Keep only `{ [lang: string]: string }` entries. Defensive sanitizer used on the

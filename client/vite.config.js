@@ -39,7 +39,11 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         'office-taskpane': resolve(__dirname, 'office/taskpane.html'),
-        'office-commands': resolve(__dirname, 'office/commands.html')
+        'office-commands': resolve(__dirname, 'office/commands.html'),
+        // Browser-extension surfaces — built into client/dist/extension/
+        // and packaged by /api/admin/browser-extension/download.{zip,crx}.
+        'extension-sidepanel': resolve(__dirname, 'extension/sidepanel.html'),
+        'extension-options': resolve(__dirname, 'extension/options.html')
       },
       output: {
         manualChunks: {
@@ -64,6 +68,16 @@ export default defineConfig({
   },
   server: {
     https: loadOfficeDevCerts(),
+    // Disable Vite's built-in CORS middleware. Otherwise Vite intercepts
+    // every cross-origin OPTIONS preflight and answers it itself with a
+    // wildcard "Access-Control-Allow-Methods: GET,HEAD,PUT,PATCH,POST,DELETE"
+    // and no Access-Control-Allow-Credentials — which silently breaks any
+    // request whose preflight isn't covered by Vite's defaults (e.g. POST
+    // /api/oauth/token from a chrome-extension:// origin). With cors: false
+    // Vite forwards OPTIONS through the proxy to Express on :3000, where
+    // our configurable CORS middleware (driven by /api/admin/cors/config)
+    // is the single source of truth.
+    cors: false,
     proxy: (() => {
       const basePath = process.env.VITE_BASE_PATH || '';
       const proxyConfig = {};

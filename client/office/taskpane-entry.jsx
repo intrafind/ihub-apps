@@ -6,8 +6,11 @@ import './office.css';
 // This is a side-effect import — i18n initializes synchronously and loads translations async.
 import '../src/i18n/i18n';
 import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
+import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
 import OfficeApp from '../src/features/office/components/OfficeApp';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
+import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
+import { fetchCurrentMailContext } from '../src/features/office/utilities/outlookMailContext';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -54,13 +57,40 @@ Office.onReady(async () => {
   const rootEl = document.getElementById('office-root');
   if (!rootEl) return;
 
+  // Outlook host adapter: popup-window auth dialog + Outlook mailbox context.
+  const outlookHost = {
+    kind: 'office',
+    loginSubtitle: 'iHub Apps for Outlook',
+    runAuthDialog: openOfficeAuthDialog,
+    readMessageContext: fetchCurrentMailContext,
+    // Per-message opt-out toggles surfaced under the chat input's `+` menu.
+    // Both default to ON to preserve the long-standing Outlook behaviour
+    // (every message attaches the email body + attachments).
+    contextToggles: [
+      {
+        key: 'emailBody',
+        label: 'Include email body',
+        defaultEnabled: true,
+        controls: ['bodyText']
+      },
+      {
+        key: 'attachments',
+        label: 'Include attachments',
+        defaultEnabled: true,
+        controls: ['attachments']
+      }
+    ]
+  };
+
   const root = createRoot(rootEl);
   root.render(
     // eslint-disable-next-line @eslint-react/no-context-provider
     <OfficeConfigContext.Provider value={config}>
-      <MemoryRouter>
-        <OfficeApp />
-      </MemoryRouter>
+      <EmbeddedHostProvider value={outlookHost}>
+        <MemoryRouter>
+          <OfficeApp />
+        </MemoryRouter>
+      </EmbeddedHostProvider>
     </OfficeConfigContext.Provider>
   );
 });

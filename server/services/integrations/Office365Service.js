@@ -2,6 +2,7 @@ import 'dotenv/config';
 import crypto from 'crypto';
 import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
+import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
 
@@ -27,11 +28,11 @@ class Office365Service {
    * @returns {string} Full callback URL
    */
   _buildCallbackUrl(req, providerId) {
-    // Get protocol - consider X-Forwarded-Proto for reverse proxy setups
-    const protocol = req.get('x-forwarded-proto') || req.protocol || 'https';
-
-    // Get host - consider X-Forwarded-Host for reverse proxy setups
-    const host = req.get('x-forwarded-host') || req.get('host');
+    // Resolve protocol + host with proxy-chain awareness (multi-value
+    // X-Forwarded-* lists are reduced to the leftmost / most-trusted
+    // value in publicBaseUrl.js).
+    const protocol = getForwardedProto(req);
+    const host = getForwardedHost(req);
 
     if (!host) {
       throw new Error('Unable to determine host for callback URL');

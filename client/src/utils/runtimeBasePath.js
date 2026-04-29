@@ -160,6 +160,23 @@ export const getBasePath = () => {
 };
 
 /**
+ * Override the API origin used by `buildApiUrl()`.
+ *
+ * When the iHub UI runs from a non-iHub origin (e.g. a chrome-extension://
+ * side panel), relative `/api/...` URLs resolve against the wrong host.
+ * Hosts in that situation call `setApiBaseUrlOverride('https://ihub.example.com')`
+ * once at entry time so every subsequent `buildApiUrl(...)` returns an
+ * absolute URL pointing at the iHub server.
+ *
+ * Pass `null` to clear the override.
+ */
+let apiBaseUrlOverride = null;
+export const setApiBaseUrlOverride = baseUrl => {
+  apiBaseUrlOverride = baseUrl ? String(baseUrl).replace(/\/$/, '') : null;
+};
+export const getApiBaseUrlOverride = () => apiBaseUrlOverride;
+
+/**
  * Build a complete URL relative to the base path
  * @param {string} path - The path to append (e.g., "/api/health", "logo.svg")
  * @returns {string} The complete path
@@ -190,6 +207,13 @@ export const buildPath = path => {
  */
 export const buildApiUrl = endpoint => {
   const cleanEndpoint = endpoint.startsWith('/') ? endpoint.substring(1) : endpoint;
+  // When the host has set an absolute API base URL (e.g. the browser
+  // extension's side panel running from chrome-extension://<id>), return
+  // a fully-qualified URL so callers like `fetch()` and `new EventSource()`
+  // don't resolve relative paths against the wrong origin.
+  if (apiBaseUrlOverride) {
+    return apiBaseUrlOverride + '/api/' + cleanEndpoint;
+  }
   return buildPath('api/' + cleanEndpoint);
 };
 
@@ -199,6 +223,16 @@ export const buildApiUrl = endpoint => {
  * @returns {string} Complete asset URL
  */
 export const buildAssetUrl = asset => {
+  // When the host has set an absolute API base URL (e.g. the browser
+  // extension's side panel running from chrome-extension://<id>), assets
+  // such as `/icons/<app-icon>.svg` live on the iHub server, NOT on the
+  // current origin. Return a fully-qualified URL so <img src> etc. fetch
+  // them from the right place.
+  if (apiBaseUrlOverride) {
+    const cleanAsset = asset.startsWith('/') ? asset.substring(1) : asset;
+    return apiBaseUrlOverride + '/' + cleanAsset;
+  }
+
   // For Vite dev server, use root paths
   if (import.meta.env.DEV) {
     return asset.startsWith('/') ? asset : '/' + asset;
@@ -215,6 +249,9 @@ export const buildAssetUrl = asset => {
  */
 export const buildUploadUrl = path => {
   const cleanPath = path.startsWith('/') ? path.substring(1) : path;
+  if (apiBaseUrlOverride) {
+    return apiBaseUrlOverride + '/uploads/' + cleanPath;
+  }
   return buildPath('uploads/' + cleanPath);
 };
 

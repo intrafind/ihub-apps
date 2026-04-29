@@ -8,6 +8,7 @@ import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
@@ -45,11 +46,26 @@ function ChatInputActionsMenu({
   onCloudProviderSelect,
   // Websearch props
   websearchEnabled = false,
-  onWebsearchEnabledChange = null
+  onWebsearchEnabledChange = null,
+  // Host-context toggles (Outlook taskpane / browser-extension side panel).
+  // The host adapter declares which toggles to render via
+  // EmbeddedHostAdapter.contextToggles (read below via useEmbeddedHost).
+  // `hostContextFlags` is the user-visible state map keyed by toggle.key.
+  hostContextFlags = null,
+  onHostContextFlagChange = null
 }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
+  // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
+  // declares which "Include …" toggles to render under the `+` menu via
+  // its `contextToggles` array. Empty in the main web app — the section
+  // below renders nothing.
+  const embeddedHost = useEmbeddedHost();
+  const hostContextToggles =
+    onHostContextFlagChange && Array.isArray(embeddedHost?.contextToggles)
+      ? embeddedHost.contextToggles
+      : [];
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);
   const [toolsLoading, setToolsLoading] = useState(false);
@@ -214,13 +230,18 @@ function ChatInputActionsMenu({
     (onVoiceInput ? 1 : 0);
 
   // Check if we have any actions to show
-  const hasActions = hasTools || hasWebsearch || quickActionCount > 0;
+  const hasHostContextToggles = hostContextToggles.length > 0;
+  const hasActions = hasTools || hasWebsearch || hasHostContextToggles || quickActionCount > 0;
 
   if (!hasActions) return null;
 
   // Single action optimization: if we have exactly one action and no tools,
   // render that action directly without a menu
-  const totalActions = quickActionCount + (hasTools ? 1 : 0) + (hasWebsearch ? 1 : 0);
+  const totalActions =
+    quickActionCount +
+    (hasTools ? 1 : 0) +
+    (hasWebsearch ? 1 : 0) +
+    (hasHostContextToggles ? 1 : 0);
 
   if (totalActions === 1 && quickActionCount === 1 && !hasTools) {
     // Render the single action directly
@@ -299,7 +320,8 @@ function ChatInputActionsMenu({
   // On desktop (md:), check if menu would be empty
   // Quick Actions and Image Generation are hidden on desktop with md:hidden
   // So only Cloud Storage, Web Search, and Tools remain visible on desktop
-  const hasDesktopMenuContent = enabledCloudProviders.length > 0 || hasWebsearch || hasTools;
+  const hasDesktopMenuContent =
+    enabledCloudProviders.length > 0 || hasWebsearch || hasTools || hasHostContextToggles;
 
   return (
     <div className="relative" ref={dropdownRef}>
@@ -451,6 +473,50 @@ function ChatInputActionsMenu({
                     />
                   </button>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Host context section — Outlook taskpane / browser extension */}
+          {hostContextToggles.length > 0 && (
+            <div
+              className={`p-3 ${
+                hasTools || hasWebsearch ? 'border-b border-gray-200 dark:border-gray-700' : ''
+              }`}
+            >
+              <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                {t('chat.input.contextSection', 'Message context')}
+              </h3>
+              <div className="space-y-1">
+                {hostContextToggles.map(toggle => {
+                  const enabled = hostContextFlags?.[toggle.key] ?? toggle.defaultEnabled ?? true;
+                  return (
+                    <div
+                      key={toggle.key}
+                      className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg"
+                    >
+                      <div className="flex-1 min-w-0 mr-3">
+                        <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                          {toggle.label}
+                        </div>
+                        {toggle.description && (
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            {toggle.description}
+                          </div>
+                        )}
+                      </div>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={enabled}
+                          onChange={e => onHostContextFlagChange?.(toggle.key, e.target.checked)}
+                          className="sr-only peer"
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-indigo-300 dark:peer-focus:ring-indigo-800 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-gray-600 peer-checked:bg-indigo-600"></div>
+                      </label>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           )}

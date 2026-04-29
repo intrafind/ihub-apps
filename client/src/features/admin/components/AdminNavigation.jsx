@@ -300,10 +300,18 @@ function AdminNavigation() {
           current: location.pathname === '/admin/features'
         },
         {
-          key: 'officeIntegration',
-          name: t('admin.nav.officeIntegration', 'Office Integration'),
-          href: '/admin/office-integration',
-          current: location.pathname.startsWith('/admin/office-integration')
+          // Single entry hub for every external-system integration: Outlook,
+          // browser extension, Office 365 / Google Drive cloud storage, Jira.
+          // Each is reachable via /admin/integrations/<key>; the legacy
+          // /admin/office-integration and /admin/browser-extension routes
+          // still resolve for backward compatibility.
+          key: 'integrations',
+          name: t('admin.nav.integrations', 'Integrations'),
+          href: '/admin/integrations',
+          current:
+            location.pathname.startsWith('/admin/integrations') ||
+            location.pathname.startsWith('/admin/office-integration') ||
+            location.pathname.startsWith('/admin/browser-extension')
         },
         {
           key: 'logging',

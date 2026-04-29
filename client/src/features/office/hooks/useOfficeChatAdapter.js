@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
-import { useOutlookMailContextReader } from './useOutlookMailContext';
+import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
   combineUserTextWithEmailBody,
   buildImageDataFromMailAttachments,
@@ -57,25 +57,45 @@ function combineUploadData(manualData, mailData) {
  */
 function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
   const chat = useAppChat({ appId, chatId, onMessageComplete });
-  const readMailContext = useOutlookMailContextReader();
+  const host = useEmbeddedHost();
 
   const sendMessage = useCallback(
     async ({ displayMessage, apiMessage, params, sendChatHistory, messageMetadata }) => {
-      let mailCtx = { available: false, bodyText: null, attachments: [] };
+      // The host adapter returns either the current Outlook mail item
+      // (in the taskpane) or the active browser tab's text + selection
+      // (in the extension's side panel). Both shapes share
+      // { bodyText, attachments } so the rest of this function is
+      // host-agnostic.
+      let ctx = { available: false, bodyText: null, attachments: [] };
       try {
-        mailCtx = await readMailContext();
+        ctx = await host.readMessageContext();
       } catch {
-        // Mail context unavailable (e.g. in compose mode without a selected item) — proceed without it
+        // Context unavailable (compose mode without a selected item,
+        // chrome:// page, etc.) — proceed without it.
       }
 
-      const enrichedContent = combineUserTextWithEmailBody(apiMessage.content, mailCtx.bodyText);
+      // Apply the user's per-message opt-out flags from the chat input's
+      // `+` menu. `applyHostContextFlags` clears `bodyText` / `attachments`
+      // for every toggle the host adapter declared whose flag is `false`.
+      // No-op when the host has no toggles or the user hasn't touched any.
+      ctx = applyHostContextFlags(ctx, host.contextToggles, params?.hostContextFlags);
 
-      // Combine manual uploads with email attachments
-      const mailImageData = buildImageDataFromMailAttachments(mailCtx.attachments || []);
-      const mailFileData = await buildFileDataFromMailAttachments(mailCtx.attachments || []);
+      const enrichedContent = combineUserTextWithEmailBody(apiMessage.content, ctx.bodyText);
 
-      const combinedImageData = combineUploadData(apiMessage.imageData, mailImageData);
-      const combinedFileData = combineUploadData(apiMessage.fileData, mailFileData);
+      // Combine manual uploads with attachments harvested from the host
+      // (email attachments in Outlook, none today in the extension; this
+      // path stays untouched because attachments is just an empty array).
+      const hostImageData = buildImageDataFromMailAttachments(ctx.attachments || []);
+      const hostFileData = await buildFileDataFromMailAttachments(ctx.attachments || []);
+
+      const combinedImageData = combineUploadData(apiMessage.imageData, hostImageData);
+      const combinedFileData = combineUploadData(apiMessage.fileData, hostFileData);
+
+      // hostContextFlags is a client-only opt-out signal — strip it before
+      // forwarding so it doesn't show up in the outgoing chat-completion
+      // request body.
+
+      const { hostContextFlags: _hostContextFlags, ...paramsForServer } = params || {};
 
       chat.sendMessage({
         displayMessage,
@@ -85,12 +105,12 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
           imageData: combinedImageData,
           fileData: combinedFileData
         },
-        params,
+        params: paramsForServer,
         sendChatHistory,
         messageMetadata
       });
     },
-    [chat, readMailContext]
+    [chat, host]
   );
 
   return { ...chat, sendMessage };

@@ -56,6 +56,7 @@
     - [Google Drive Integration](google-drive-integration.md)
     - [Office 365 Integration](office365-integration.md)
     - [Outlook Add-in Rollout](outlook-add-in.md)
+    - [Browser Extension](browser-extension.md)
     - [Audio File Support](audio-file-support.md)
     - [Audio Extraction](audio-extraction.md)
     - [Audio UI Guide](AUDIO_UI_GUIDE.md)

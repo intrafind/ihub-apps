@@ -241,6 +241,12 @@ export async function createOAuthClient(clientData, clientsFilePath, createdBy) 
     allowedApps: clientData.allowedApps || [],
     allowedModels: clientData.allowedModels || [],
     allowedPrompts: clientData.allowedPrompts || [],
+    // allowedGroups: optional allowlist of internal iHub group IDs. When set
+    //   (non-empty array) the user authenticating via this client must be a
+    //   member of at least one of these groups; otherwise the authorize flow
+    //   rejects the request with access_denied. Empty array (default) means
+    //   any group is acceptable.
+    allowedGroups: clientData.allowedGroups || [],
     tokenExpirationMinutes: clientData.tokenExpirationMinutes || 60,
     active: true,
     createdAt: now,
@@ -317,6 +323,7 @@ export async function updateOAuthClient(clientId, updates, clientsFilePath, upda
     'allowedApps',
     'allowedModels',
     'allowedPrompts',
+    'allowedGroups',
     'tokenExpirationMinutes',
     'active',
     'metadata',

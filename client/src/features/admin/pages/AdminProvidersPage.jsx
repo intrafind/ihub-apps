@@ -5,9 +5,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
-import CloudStorageConfig from '../components/CloudStorageConfig';
 import IFinderConfig from '../components/IFinderConfig';
-import JiraConfig from '../components/JiraConfig';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
@@ -646,12 +644,15 @@ function AdminProvidersPage() {
             </div>
           </div>
 
-          {/* Integration Configuration Sections — gated by integrations feature flag */}
+          {/*
+            Cloud-storage and Jira integration configs moved to their own
+            pages under /admin/integrations/. iFinder stays here because
+            it's an LLM-side knowledge source, not an integration with an
+            external user-facing system.
+          */}
           {featureFlags.isEnabled('integrations', true) && (
             <div className="mt-8 space-y-6">
               <IFinderConfig />
-              <CloudStorageConfig />
-              <JiraConfig />
             </div>
           )}
         </div>

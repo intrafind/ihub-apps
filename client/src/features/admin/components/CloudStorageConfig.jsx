@@ -3,7 +3,15 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-function CloudStorageConfig() {
+/**
+ * @param {Object} props
+ * @param {'office365'|'googledrive'} [props.filterType] When set, the
+ *   component only lists / edits providers of this type and the
+ *   "Add provider" action seeds a provider of the same type. Used by
+ *   the dedicated `/admin/integrations/{office365,google-drive}`
+ *   subpages so each integration has its own admin home.
+ */
+function CloudStorageConfig({ filterType } = {}) {
   const { t } = useTranslation();
   const [config, setConfig] = useState({
     enabled: false,
@@ -50,7 +58,7 @@ function CloudStorageConfig() {
       id: '',
       name: '', // This will be same as id for cloud storage providers
       displayName: '',
-      type: 'office365',
+      type: filterType || 'office365',
       enabled: true,
       tenantId: '',
       clientId: '',
@@ -204,6 +212,13 @@ function CloudStorageConfig() {
     );
   }
 
+  // Scope the visible provider list when a host page passes filterType.
+  // Computed in the component body (not via an IIFE in the JSX) because the
+  // React Compiler does not optimise inline IIFEs and ESLint flags them.
+  const visibleProviders = filterType
+    ? config.providers.filter(p => p.type === filterType)
+    : config.providers;
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
       <div className="flex items-start space-x-4">
@@ -268,13 +283,13 @@ function CloudStorageConfig() {
                 </button>
               </div>
 
-              {config.providers.length === 0 ? (
+              {visibleProviders.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 italic">
                   {t('admin.cloudStorage.noProviders')}
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {config.providers.map(provider => (
+                  {visibleProviders.map(provider => (
                     <div
                       key={provider.id}
                       className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"

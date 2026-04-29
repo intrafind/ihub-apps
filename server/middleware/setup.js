@@ -14,6 +14,7 @@ import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import { buildApiPath, buildServerPath } from '../utils/basePath.js';
 import config from '../config.js';
+import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
@@ -158,6 +159,71 @@ function processCorsOrigins(origins) {
   }
 
   return origins;
+}
+
+/**
+ * Strip a trailing slash and any path component from an origin string so the
+ * comparison is "scheme + host (+ port)" — the form the browser actually sends
+ * in the Origin header. Idempotent on already-clean origins.
+ *
+ *   "chrome-extension://abc/options.html"  -> "chrome-extension://abc"
+ *   "chrome-extension://abc/"              -> "chrome-extension://abc"
+ *   "https://app.example.com/"             -> "https://app.example.com"
+ *   "https://app.example.com:8080"         -> "https://app.example.com:8080"
+ */
+function normalizeOriginForMatch(origin) {
+  if (typeof origin !== 'string') return origin;
+  const trimmed = origin.trim();
+  // Find the start of the path: the first "/" *after* the "://"
+  const schemeEnd = trimmed.indexOf('://');
+  if (schemeEnd === -1) return trimmed.replace(/\/+$/, '');
+  const pathStart = trimmed.indexOf('/', schemeEnd + 3);
+  return pathStart === -1 ? trimmed : trimmed.slice(0, pathStart);
+}
+
+/**
+ * Build the cors() `origin` callback used per-request. Performs forgiving
+ * matching (normalizes trailing slash + path) and logs a structured debug
+ * line on every mismatch so admins can see the exact comparison that failed.
+ *
+ * Returns either:
+ *   - a (origin, callback) function that decides allow/deny per origin, or
+ *   - the original `false` / `[]` value when nothing is configured (cors()
+ *     will skip setting Access-Control-Allow-Origin entirely).
+ */
+function makeForgivingOriginMatcher(resolvedOrigin, req) {
+  // Empty / disallowed config — preserve cors()'s default behaviour
+  if (!resolvedOrigin) return false;
+
+  const list = Array.isArray(resolvedOrigin) ? resolvedOrigin : [resolvedOrigin];
+  const normalized = list.map(normalizeOriginForMatch).filter(Boolean);
+  if (normalized.length === 0) return false;
+
+  return (requestOrigin, callback) => {
+    if (!requestOrigin) {
+      // Same-origin / non-browser caller — allow.
+      return callback(null, true);
+    }
+    const normalizedRequest = normalizeOriginForMatch(requestOrigin);
+    if (normalized.includes(normalizedRequest)) {
+      return callback(null, true);
+    }
+    // Don't log on every health-probe / static asset miss in production —
+    // only log when this looks like an extension or unexpected origin so
+    // admins notice configuration mistakes.
+    logger.debug(
+      'CORS: request origin not in allowlist; response will omit Access-Control-Allow-Origin',
+      {
+        component: 'CORS',
+        requestOrigin,
+        normalizedRequest,
+        configuredOrigins: normalized,
+        method: req?.method,
+        url: req?.url
+      }
+    );
+    return callback(null, false);
+  };
 }
 
 /**
@@ -332,29 +398,100 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Trust proxy for proper IP and protocol detection
   app.set('trust proxy', 1);
 
-  // Configure CORS with platform configuration
-  const corsConfig = platformConfig.cors || {};
-  const corsOptions = {
-    origin: processCorsOrigins(corsConfig.origin),
-    methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
-    allowedHeaders: corsConfig.allowedHeaders || [
+  // CORS options are resolved per-request from the live platform config so
+  // changes saved via /api/admin/cors/config take effect without a server
+  // restart. The cors() middleware accepts a (req, callback) -> options
+  // function for exactly this reason.
+  //
+  // Two behaviours we apply on top of the admin's saved config:
+  //
+  //   1. Spec fix for "*" + credentials: true
+  //      The CORS spec forbids Access-Control-Allow-Origin: * when the
+  //      response also carries Access-Control-Allow-Credentials: true.
+  //      Browsers detect the violation at preflight time. Symptom: simple
+  //      GETs work (no preflight) but anything that preflights (POST +
+  //      JSON body, custom headers like Authorization, etc.) fails with a
+  //      CORS error. When the admin saved cors.origin = "*" (or an array
+  //      containing "*") AND credentials are enabled, swap the literal
+  //      "*" for `true` so cors() echoes the request's Origin header —
+  //      the spec-compliant equivalent of "allow any origin with
+  //      credentials".
+  //
+  //   2. One-shot warning when (1) kicks in, so admins notice their
+  //      saved config got auto-upgraded.
+  let warnedAboutWildcard = false;
+  const dynamicCorsOptions = (req, callback) => {
+    const live = configCache.getPlatform() || platformConfig || {};
+    const corsConfig = live.cors || {};
+    const credentials = corsConfig.credentials !== undefined ? corsConfig.credentials : true;
+    let resolvedOrigin = processCorsOrigins(corsConfig.origin);
+
+    const isWildcard =
+      resolvedOrigin === '*' || (Array.isArray(resolvedOrigin) && resolvedOrigin.includes('*'));
+    if (isWildcard && credentials) {
+      if (!warnedAboutWildcard) {
+        warnedAboutWildcard = true;
+        logger.warn(
+          'CORS configured with origin: "*" and credentials: true — echoing ' +
+            'the request origin instead, because the browser blocks responses ' +
+            'with both headers at the same time. Set credentials: false to ' +
+            'keep the literal "*", or replace "*" with an explicit allowlist.',
+          { component: 'CORS' }
+        );
+      }
+      resolvedOrigin = true; // cors() echoes req.headers.origin
+    } else {
+      // Match the request's Origin against the configured allowlist with
+      // forgiving normalization (strip trailing slash + path component).
+      // The cors() package does strict `===` matching, which silently fails
+      // when the admin has pasted "chrome-extension://<id>/" (with trailing
+      // slash) or a full URL like "chrome-extension://<id>/options.html"
+      // — the browser only sends "chrome-extension://<id>" as the Origin
+      // header. We expand the allowlist into a custom function that handles
+      // these common admin mistakes and emits a debug log on miss.
+      resolvedOrigin = makeForgivingOriginMatcher(resolvedOrigin, req);
+    }
+
+    // Headers the iHub Axios client always sends. Unioned with the admin's
+    // saved allowedHeaders so that a config saved before a new client header
+    // landed (e.g. X-Session-ID) doesn't break cross-origin requests until
+    // an admin re-saves the page. Compared case-insensitively because that's
+    // how browsers compare Access-Control-Request-Headers entries.
+    const REQUIRED_ALLOWED_HEADERS = [
       'Content-Type',
       'Authorization',
       'X-Requested-With',
       'X-Forwarded-User',
       'X-Forwarded-Groups',
+      'X-Session-ID',
       'Accept',
       'Origin',
       'Cache-Control',
       'X-File-Name'
-    ],
-    credentials: corsConfig.credentials !== undefined ? corsConfig.credentials : true,
-    optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
-    maxAge: corsConfig.maxAge || 86400,
-    preflightContinue: corsConfig.preflightContinue || false
+    ];
+    let allowedHeaders;
+    if (Array.isArray(corsConfig.allowedHeaders) && corsConfig.allowedHeaders.length > 0) {
+      const seen = new Set(corsConfig.allowedHeaders.map(h => String(h).toLowerCase()));
+      allowedHeaders = [
+        ...corsConfig.allowedHeaders,
+        ...REQUIRED_ALLOWED_HEADERS.filter(h => !seen.has(h.toLowerCase()))
+      ];
+    } else {
+      allowedHeaders = REQUIRED_ALLOWED_HEADERS;
+    }
+
+    callback(null, {
+      origin: resolvedOrigin,
+      methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+      allowedHeaders,
+      credentials,
+      optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
+      maxAge: corsConfig.maxAge || 86400,
+      preflightContinue: corsConfig.preflightContinue || false
+    });
   };
 
-  app.use(cors(corsOptions));
+  app.use(cors(dynamicCorsOptions));
 
   // Content-Language header for accessibility (WCAG 3.1.1)
   // Validate against a strict allowlist to prevent header injection from

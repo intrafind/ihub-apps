@@ -59,7 +59,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     enabledTools,
     setEnabledTools,
     websearchEnabled,
-    setWebsearchEnabled
+    setWebsearchEnabled,
+    hostContextFlags,
+    setHostContextFlags
   } = useAppSettings(selectedApp?.id, selectedApp);
   const fileUploadHandler = useFileUploadHandler();
   const currentModel = models.find(m => m.id === selectedModel) || null;
@@ -115,6 +117,11 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       if (selectedModel) params.modelId = selectedModel;
       if (enabledTools?.length) params.enabledTools = enabledTools;
       if (selectedApp?.websearch?.enabled) params.websearchEnabled = websearchEnabled;
+      // Per-message host-context opt-out flags, e.g. { emailBody: false }.
+      // useOfficeChatAdapter consults these (alongside the host adapter's
+      // contextToggles declarations) to strip body / attachments from the
+      // outgoing apiMessage. Empty object in the main web app — no-op.
+      params.hostContextFlags = hostContextFlags;
 
       // Resend can pass a `selectedFile` override to bypass async state updates;
       // otherwise we read whatever the user has staged in the uploader.
@@ -147,6 +154,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       selectedModel,
       enabledTools,
       websearchEnabled,
+      hostContextFlags,
       fileUploadHandler
     ]
   );
@@ -380,6 +388,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 websearchEnabled={websearchEnabled}
                 onWebsearchEnabledChange={
                   selectedApp?.websearch?.enabled ? setWebsearchEnabled : null
+                }
+                hostContextFlags={hostContextFlags}
+                onHostContextFlagChange={(key, value) =>
+                  setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
                 }
                 clarificationPending={adapter.clarificationPending}
               />
