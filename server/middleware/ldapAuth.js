@@ -258,6 +258,7 @@ export async function loginLdapUser(username, password, ldapConfig) {
   // in authenticateLdapUser(). Passing externalGroups would cause duplicate mapping.
   const externalUser = {
     id: user.id,
+    username: username, // Original LDAP login (sAMAccountName), needed for the JWT username claim
     name: user.name,
     email: user.email,
     authMethod: 'ldap',

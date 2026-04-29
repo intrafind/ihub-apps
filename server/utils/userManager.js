@@ -452,9 +452,14 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
     await updateUserActivity(persistedUser.id, usersFilePath);
 
     // Merge groups: external groups (from auth provider) + internal groups (from users.json)
-    // Use externalGroups (raw from token) if available, otherwise fall back to processed groups
-    const externalGroupsToMap = externalUser.externalGroups || [];
-    const mappedExternalGroups = mapExternalGroups(externalGroupsToMap);
+    // Only call mapExternalGroups when raw external groups were actually supplied. Some
+    // auth providers (e.g. LDAP) pre-map their groups before reaching this point and
+    // intentionally omit externalGroups; calling mapExternalGroups([]) would otherwise
+    // taint the result with the anonymous fallback.
+    const mappedExternalGroups =
+      Array.isArray(externalUser.externalGroups) && externalUser.externalGroups.length > 0
+        ? mapExternalGroups(externalUser.externalGroups)
+        : [];
 
     // Include automatic internal groups (authenticated, provider defaults) + manual internal groups
     const automaticInternalGroups = externalUser.groups || []; // These include authenticated, provider defaults
@@ -503,9 +508,14 @@ export async function validateAndPersistExternalUser(externalUser, platformConfi
   const persistedUser = await createOrUpdateExternalUser(externalUser, usersFilePath);
 
   // Combine external groups from auth provider with internal groups from users.json
-  // Use externalGroups (raw from token) if available, otherwise fall back to processed groups
-  const externalGroupsToMap = externalUser.externalGroups || [];
-  const mappedExternalGroups = mapExternalGroups(externalGroupsToMap);
+  // Only call mapExternalGroups when raw external groups were actually supplied. Some
+  // auth providers (e.g. LDAP) pre-map their groups before reaching this point and
+  // intentionally omit externalGroups; calling mapExternalGroups([]) would otherwise
+  // taint the result with the anonymous fallback.
+  const mappedExternalGroups =
+    Array.isArray(externalUser.externalGroups) && externalUser.externalGroups.length > 0
+      ? mapExternalGroups(externalUser.externalGroups)
+      : [];
 
   // Include automatic internal groups (authenticated, provider defaults) + manual internal groups
   const automaticInternalGroups = externalUser.groups || []; // These include authenticated, provider defaults
