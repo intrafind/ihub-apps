@@ -89,6 +89,49 @@ async function readSigningPrivateKey() {
 }
 
 /**
+ * Build the chrome-extension:// + moz-extension:// origins for one or more
+ * extension IDs. The browser sends these as the `Origin` header when the
+ * side panel makes a cross-origin fetch, so they must be in the iHub
+ * `cors.origin` allowlist for the preflight to succeed.
+ */
+function buildExtensionOrigins(extensionIds = []) {
+  const out = [];
+  for (const id of extensionIds) {
+    if (typeof id !== 'string') continue;
+    const trimmed = id.trim().toLowerCase();
+    if (!/^[a-z0-9.-]{8,128}$/i.test(trimmed)) continue;
+    out.push(`chrome-extension://${trimmed}`);
+    out.push(`moz-extension://${trimmed}`);
+  }
+  return out;
+}
+
+/**
+ * Compute the next `cors.origin` allowlist by unioning the currently saved
+ * value with the extension origins derived from `extensionIds` +
+ * `signingKey`. If the saved value is the literal `"*"` string we leave it
+ * alone — admins explicitly chose wildcard semantics.
+ *
+ * @returns {Array<string> | string} updated origin list (or '*' unchanged)
+ */
+function unionCorsOriginsWithExtension(savedOrigin, extensionIds, signingKey) {
+  if (savedOrigin === '*') return '*';
+  const ids = Array.isArray(extensionIds) ? [...extensionIds] : [];
+  if (signingKey?.extensionId) ids.push(signingKey.extensionId);
+  if (signingKey?.previousExtensionId) ids.push(signingKey.previousExtensionId);
+  const wantedOrigins = buildExtensionOrigins(ids);
+  if (wantedOrigins.length === 0) {
+    return Array.isArray(savedOrigin) ? savedOrigin : savedOrigin ? [savedOrigin] : [];
+  }
+  const existing = Array.isArray(savedOrigin) ? [...savedOrigin] : savedOrigin ? [savedOrigin] : [];
+  const seen = new Set(existing.map(s => String(s).toLowerCase()));
+  for (const w of wantedOrigins) {
+    if (!seen.has(w.toLowerCase())) existing.push(w);
+  }
+  return existing;
+}
+
+/**
  * Generate a fresh signing keypair, replacing any existing one. Moves the
  * previous extensionId into `previousExtensionId` so users on the old build
  * keep working until their next refresh / install.
@@ -509,10 +552,28 @@ export default function registerAdminBrowserExtensionRoutes(app) {
           }
         }
 
+        // Auto-add chrome-extension:// + moz-extension:// origins for the new
+        // signing-key extension ID (and the previous one, for the rotation
+        // grace window) into cors.origin. Admins shouldn't need to know that
+        // a fresh extension ID also requires editing the CORS allowlist by
+        // hand — the side panel's first cross-origin fetch would otherwise
+        // be blocked with a misleading "Access-Control-Allow-Origin missing"
+        // error.
+        const corsConfig = platform?.cors || {};
+        const updatedCorsOrigin = unionCorsOriginsWithExtension(
+          corsConfig.origin,
+          extensionIds,
+          newSigningKey
+        );
+
         await savePlatformConfig({
           browserExtension: {
             ...cfg,
             signingKey: newSigningKey
+          },
+          cors: {
+            ...corsConfig,
+            origin: updatedCorsOrigin
           }
         });
 

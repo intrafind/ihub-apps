@@ -18,7 +18,8 @@ function AdminBrowserExtensionPage() {
   const [displayName, setDisplayName] = useState({});
   const [description, setDescription] = useState({});
   const [starterPrompts, setStarterPrompts] = useState([]);
-  const [extensionIdsText, setExtensionIdsText] = useState('');
+  const [extensionIds, setExtensionIds] = useState([]);
+  const [newExtensionId, setNewExtensionId] = useState('');
   const [allowedGroups, setAllowedGroups] = useState(['browser-extension']);
   const [availableGroups, setAvailableGroups] = useState([]);
 
@@ -54,7 +55,7 @@ function AdminBrowserExtensionPage() {
             }))
           : []
       );
-      setExtensionIdsText(Array.isArray(data.extensionIds) ? data.extensionIds.join('\n') : '');
+      setExtensionIds(Array.isArray(data.extensionIds) ? data.extensionIds : []);
       setAllowedGroups(
         Array.isArray(data.allowedGroups) && data.allowedGroups.length > 0
           ? data.allowedGroups
@@ -214,10 +215,9 @@ function AdminBrowserExtensionPage() {
         }))
         .filter(p => Object.keys(p.title).length > 0 && Object.keys(p.message).length > 0);
 
-      const extensionIds = extensionIdsText
-        .split(/[\s,]+/)
-        .map(s => s.trim())
-        .filter(Boolean);
+      const cleanedExtensionIds = Array.from(
+        new Set(extensionIds.map(s => String(s).trim()).filter(Boolean))
+      );
 
       // ResourceSelector emits ['*'] for "all"; the server treats that and
       // an empty array as "no group restriction".
@@ -231,7 +231,7 @@ function AdminBrowserExtensionPage() {
           displayName: trimLocalized(displayName),
           description: trimLocalized(description),
           starterPrompts: cleanedPrompts,
-          extensionIds,
+          extensionIds: cleanedExtensionIds,
           allowedGroups: cleanedAllowedGroups
         }
       });
@@ -249,6 +249,31 @@ function AdminBrowserExtensionPage() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAddExtensionId = () => {
+    const value = String(newExtensionId).trim().toLowerCase();
+    if (!value) return;
+    if (!/^[a-z0-9.-]{8,128}$/.test(value)) {
+      setMessage({
+        type: 'error',
+        text: t(
+          'admin.browserExtension.invalidExtensionId',
+          'Extension IDs must be 8–128 characters and contain only letters, digits, dots, dashes, or underscores.'
+        )
+      });
+      return;
+    }
+    if (extensionIds.includes(value)) {
+      setNewExtensionId('');
+      return;
+    }
+    setExtensionIds(prev => [...prev, value]);
+    setNewExtensionId('');
+  };
+
+  const handleRemoveExtensionId = id => {
+    setExtensionIds(prev => prev.filter(existing => existing !== id));
   };
 
   const handlePromptChange = (index, field, value) => {
@@ -480,25 +505,110 @@ function AdminBrowserExtensionPage() {
               )}
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                  {t(
-                    'admin.browserExtension.idsTitle',
-                    'Additional unpacked extension IDs (advanced)'
-                  )}
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                  {t('admin.browserExtension.idsTitle', 'Allowed extension IDs')}
                 </h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   {t(
                     'admin.browserExtension.idsDesc',
-                    'Optional. The packaged-download flow above auto-registers a fixed extension ID — you only need this list for developers side-loading their own unpacked builds (each with a different Chrome-assigned ID). The redirect URIs https://<id>.chromiumapp.org/cb and https://<id>.extensions.allizom.org/cb are registered automatically for every entry.'
+                    'Each entry registers https://<id>.chromiumapp.org/cb (Chrome / Edge) and https://<id>.extensions.allizom.org/cb (Firefox) on the OAuth client and adds chrome-extension://<id> + moz-extension://<id> to the CORS allowlist. The packaged-download ID, when a signing key is configured, is registered automatically and is shown below for reference — you only need entries here for developers side-loading their own unpacked builds (each gets a different Chrome-assigned ID).'
                   )}
                 </p>
-                <textarea
-                  value={extensionIdsText}
-                  onChange={e => setExtensionIdsText(e.target.value)}
-                  rows={4}
-                  placeholder="abcdefghijklmnopabcdefghijklmnop"
-                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                />
+
+                {status?.signingKey?.extensionId && (
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">
+                      {t(
+                        'admin.browserExtension.idsManagedByKey',
+                        'Managed by signing key (auto-registered)'
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20">
+                      <span aria-hidden className="text-emerald-700 dark:text-emerald-400">
+                        🔒
+                      </span>
+                      <code className="font-mono text-xs flex-1 break-all text-emerald-900 dark:text-emerald-200">
+                        {status.signingKey.extensionId}
+                      </code>
+                      <span className="text-xs text-emerald-700 dark:text-emerald-400 shrink-0">
+                        {t('admin.browserExtension.idsPackagedBuild', 'Packaged build')}
+                      </span>
+                    </div>
+                    {status.signingKey.previousExtensionId && (
+                      <div className="mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/40">
+                        <span aria-hidden className="text-gray-600 dark:text-gray-400">
+                          ⏳
+                        </span>
+                        <code className="font-mono text-xs flex-1 break-all text-gray-700 dark:text-gray-300">
+                          {status.signingKey.previousExtensionId}
+                        </code>
+                        <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
+                          {t('admin.browserExtension.idsPreviousBuild', 'Previous build (grace)')}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase mb-2">
+                  {t(
+                    'admin.browserExtension.idsManualHeading',
+                    'Additional unpacked extension IDs'
+                  )}
+                </div>
+                {extensionIds.length === 0 ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 italic mb-3">
+                    {t(
+                      'admin.browserExtension.idsEmpty',
+                      'No additional extension IDs registered.'
+                    )}
+                  </p>
+                ) : (
+                  <ul className="space-y-2 mb-3">
+                    {extensionIds.map(id => (
+                      <li
+                        key={id}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
+                      >
+                        <code className="font-mono text-xs flex-1 break-all text-gray-700 dark:text-gray-200">
+                          {id}
+                        </code>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveExtensionId(id)}
+                          className="shrink-0 rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
+                          aria-label={t('admin.browserExtension.idsRemove', 'Remove')}
+                        >
+                          {t('admin.browserExtension.idsRemove', 'Remove')}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={newExtensionId}
+                    onChange={e => setNewExtensionId(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddExtensionId();
+                      }
+                    }}
+                    placeholder="abcdefghijklmnopabcdefghijklmnop"
+                    className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddExtensionId}
+                    disabled={!newExtensionId.trim()}
+                    className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {t('admin.browserExtension.idsAdd', 'Add')}
+                  </button>
+                </div>
               </div>
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
