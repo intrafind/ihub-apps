@@ -354,10 +354,13 @@ async function listApps() {
   return res.json();
 }
 
-async function streamChat({ appId, modelId, messages, fileData, port }) {
+async function streamChat({ appId, chatId, modelId, messages, fileData, port }) {
   const baseUrl = await getBaseUrl();
   if (!baseUrl) throw new Error('iHub base URL is not set');
-  const url = `${baseUrl.replace(/\/$/, '')}/api/chat/${encodeURIComponent(appId)}`;
+  // Matches the iHub web client (client/src/api/endpoints/apps.js:32 →
+  // streamingApiClient.post(`/apps/${appId}/chat/${chatId}`)) — POST + SSE
+  // response stream. Both appId and chatId are required path params.
+  const url = `${baseUrl.replace(/\/$/, '')}/api/apps/${encodeURIComponent(appId)}/chat/${encodeURIComponent(chatId)}`;
 
   const body = { messages };
   if (modelId) body.modelId = modelId;
@@ -411,7 +414,12 @@ async function streamChat({ appId, modelId, messages, fileData, port }) {
 // ---------------------------------------------------------------------------
 
 async function extractCurrentTab({ selectionOnly = false } = {}) {
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  // Use currentWindow rather than lastFocusedWindow: when the user opens the
+  // side panel, the side panel itself becomes the focused window in some
+  // builds, so lastFocusedWindow returns an empty list. currentWindow is
+  // tied to the window the side panel is attached to (the actual browser
+  // window the user is reading), which is what we want.
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab?.id || !tab.url) {
     throw new Error('No active tab to read');
   }

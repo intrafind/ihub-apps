@@ -20,6 +20,10 @@ const state = {
   uiLanguage: navigator.language?.split('-')[0] || 'en',
   apps: [],
   selectedAppId: null,
+  // chatId is reused for the lifetime of the side panel so the server can
+  // thread multi-turn context. We rotate it when the user picks a different
+  // app or signs out (matches the iHub web client's per-chat UUID pattern).
+  chatId: crypto.randomUUID(),
   starterPrompts: [],
   page: null,
   isStreaming: false,
@@ -53,7 +57,7 @@ function appendMessage(role, text, opts = {}) {
 
 async function refreshPageContext() {
   try {
-    const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
     const tab = tabs[0];
     if (!tab) return;
     state.page = { url: tab.url, title: tab.title, favIconUrl: tab.favIconUrl };
@@ -64,8 +68,39 @@ async function refreshPageContext() {
     } else {
       $('page-favicon').textContent = '🌐';
     }
+    await refreshSelectionState(tab);
   } catch {
     $('page-context').hidden = true;
+  }
+}
+
+/**
+ * Toggle the "Send selection" chip based on whether the active tab actually
+ * has a non-empty selection. Skips chrome:// / about: / extension URLs since
+ * scripting can't run there.
+ */
+async function refreshSelectionState(tab) {
+  const btn = $('send-selection-btn');
+  if (!btn) return;
+  const blockedSchemes = ['chrome:', 'edge:', 'about:', 'chrome-extension:', 'moz-extension:'];
+  if (!tab?.id || !tab.url || blockedSchemes.some(s => tab.url.startsWith(s))) {
+    btn.hidden = true;
+    return;
+  }
+  try {
+    const [{ result }] = await chrome.scripting.executeScript({
+      target: { tabId: tab.id },
+      func: () => {
+        try {
+          return Boolean(window.getSelection && window.getSelection().toString().trim());
+        } catch {
+          return false;
+        }
+      }
+    });
+    btn.hidden = !result;
+  } catch {
+    btn.hidden = true;
   }
 }
 
@@ -166,7 +201,16 @@ function buildMessages({ userText }) {
   return [{ role: 'user', content: userText }];
 }
 
-function streamChatRequest({ appId, modelId, messages, fileData, onEvent, onDone, onError }) {
+function streamChatRequest({
+  appId,
+  chatId,
+  modelId,
+  messages,
+  fileData,
+  onEvent,
+  onDone,
+  onError
+}) {
   const port = chrome.runtime.connect({ name: 'chat-stream' });
   state.port = port;
   port.onMessage.addListener(msg => {
@@ -177,7 +221,7 @@ function streamChatRequest({ appId, modelId, messages, fileData, onEvent, onDone
   port.onDisconnect.addListener(() => {
     if (state.port === port) state.port = null;
   });
-  port.postMessage({ type: 'start', appId, modelId, messages, fileData });
+  port.postMessage({ type: 'start', appId, chatId, modelId, messages, fileData });
   return port;
 }
 
@@ -206,6 +250,7 @@ async function submitMessage() {
 
   streamChatRequest({
     appId: state.selectedAppId,
+    chatId: state.chatId,
     modelId: undefined,
     messages: buildMessages({ userText: text }),
     fileData,
@@ -259,6 +304,14 @@ async function bootstrap() {
   chrome.tabs.onUpdated.addListener((_id, info) => {
     if (info.title || info.url || info.favIconUrl) refreshPageContext();
   });
+  // Selection isn't observable through chrome.tabs APIs, so we poll the
+  // active tab whenever the side panel regains focus and on a slow
+  // interval. Cheap because the script runs only when the panel is open.
+  window.addEventListener('focus', () => refreshPageContext());
+  setInterval(async () => {
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+    if (tabs[0]) await refreshSelectionState(tabs[0]);
+  }, 2000);
 
   const baseResp = await send({ type: 'get-base-url' });
   if (!baseResp.ok || !baseResp.baseUrl) {
@@ -312,6 +365,9 @@ function bindUi() {
 
   $('app-select').addEventListener('change', e => {
     state.selectedAppId = e.target.value;
+    // Switching apps starts a fresh conversation thread on the server.
+    state.chatId = crypto.randomUUID();
+    state.history = [];
     renderStarterPrompts();
   });
 
