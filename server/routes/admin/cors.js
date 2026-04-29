@@ -19,6 +19,8 @@ const DEFAULT_CORS_CONFIG = {
     'X-Requested-With',
     'X-Forwarded-User',
     'X-Forwarded-Groups',
+    // Sent on every request by the iHub Axios client for session tracking.
+    'X-Session-ID',
     'Accept',
     'Origin',
     'Cache-Control',

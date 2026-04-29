@@ -452,20 +452,38 @@ export function setupMiddleware(app, platformConfig = {}) {
       resolvedOrigin = makeForgivingOriginMatcher(resolvedOrigin, req);
     }
 
+    // Headers the iHub Axios client always sends. Unioned with the admin's
+    // saved allowedHeaders so that a config saved before a new client header
+    // landed (e.g. X-Session-ID) doesn't break cross-origin requests until
+    // an admin re-saves the page. Compared case-insensitively because that's
+    // how browsers compare Access-Control-Request-Headers entries.
+    const REQUIRED_ALLOWED_HEADERS = [
+      'Content-Type',
+      'Authorization',
+      'X-Requested-With',
+      'X-Forwarded-User',
+      'X-Forwarded-Groups',
+      'X-Session-ID',
+      'Accept',
+      'Origin',
+      'Cache-Control',
+      'X-File-Name'
+    ];
+    let allowedHeaders;
+    if (Array.isArray(corsConfig.allowedHeaders) && corsConfig.allowedHeaders.length > 0) {
+      const seen = new Set(corsConfig.allowedHeaders.map(h => String(h).toLowerCase()));
+      allowedHeaders = [
+        ...corsConfig.allowedHeaders,
+        ...REQUIRED_ALLOWED_HEADERS.filter(h => !seen.has(h.toLowerCase()))
+      ];
+    } else {
+      allowedHeaders = REQUIRED_ALLOWED_HEADERS;
+    }
+
     callback(null, {
       origin: resolvedOrigin,
       methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
-      allowedHeaders: corsConfig.allowedHeaders || [
-        'Content-Type',
-        'Authorization',
-        'X-Requested-With',
-        'X-Forwarded-User',
-        'X-Forwarded-Groups',
-        'Accept',
-        'Origin',
-        'Cache-Control',
-        'X-File-Name'
-      ],
+      allowedHeaders,
       credentials,
       optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
       maxAge: corsConfig.maxAge || 86400,
