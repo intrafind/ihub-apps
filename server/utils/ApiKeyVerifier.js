@@ -92,6 +92,7 @@ class ApiKeyVerifier {
 
   /**
    * Validate API keys for enabled models only
+   * Now checks model config, provider config, and environment variables
    * @param {Array} models - Array of model configurations
    * @returns {Object} Validation results with missing keys for enabled models
    */
@@ -103,6 +104,19 @@ class ApiKeyVerifier {
     const enabledModels = models.filter(model => model.enabled);
     const missingKeys = new Map();
     const validKeys = new Set();
+    const checkedProviders = new Set(); // Track which providers we've already validated
+
+    // Get provider configurations
+    let providers = [];
+    try {
+      const providersData = configCache.getProviders(true);
+      providers = providersData?.data || [];
+    } catch (error) {
+      logger.error('Error loading provider configurations', {
+        component: 'ApiKeyVerifier',
+        error
+      });
+    }
 
     for (const model of enabledModels) {
       if (!model.provider) continue;
@@ -115,20 +129,62 @@ class ApiKeyVerifier {
         continue;
       }
 
-      const envVar = `${provider.toUpperCase()}_API_KEY`;
-
-      // Skip if we already checked this provider
-      if (validKeys.has(provider) || missingKeys.has(provider)) continue;
-
-      // Check if API key exists
-      if (!process.env[envVar]) {
-        if (!missingKeys.has(provider)) {
-          missingKeys.set(provider, []);
-        }
-        missingKeys.get(provider).push(model.id);
-      } else {
+      // Check if this specific model has an API key configured
+      if (model.apiKey) {
         validKeys.add(provider);
+        continue;
       }
+
+      // Check if we've already validated this provider
+      if (checkedProviders.has(provider)) {
+        // Use cached result
+        if (!validKeys.has(provider) && !missingKeys.has(provider)) {
+          if (!missingKeys.has(provider)) {
+            missingKeys.set(provider, []);
+          }
+          missingKeys.get(provider).push(model.id);
+        }
+        continue;
+      }
+
+      // Mark this provider as checked
+      checkedProviders.add(provider);
+
+      // Check provider-level API key in providers.json
+      const providerConfig = providers.find(p => p.id === provider);
+      if (providerConfig && providerConfig.apiKey) {
+        validKeys.add(provider);
+        continue;
+      }
+
+      // Check for model-specific environment variable
+      const modelSpecificKeyName = `${model.id.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+      if (process.env[modelSpecificKeyName]) {
+        validKeys.add(provider);
+        continue;
+      }
+
+      // Check for provider-specific environment variable
+      const envVar = `${provider.toUpperCase()}_API_KEY`;
+      if (process.env[envVar]) {
+        validKeys.add(provider);
+        continue;
+      }
+
+      // Check if model has a custom URL (might be local provider that doesn't need API key)
+      if (model.url && provider === 'openai') {
+        // For OpenAI-compatible local providers with custom URLs,
+        // an API key might not be required or can be any value
+        // We'll still warn but with lower priority
+        validKeys.add(provider);
+        continue;
+      }
+
+      // No API key found through any method
+      if (!missingKeys.has(provider)) {
+        missingKeys.set(provider, []);
+      }
+      missingKeys.get(provider).push(model.id);
     }
 
     // Log results
@@ -142,9 +198,12 @@ class ApiKeyVerifier {
           modelIds
         });
       }
-      logger.warn('Please add missing API keys to your .env or config.env file', {
-        component: 'ApiKeyVerifier'
-      });
+      logger.warn(
+        'Please configure missing API keys via Admin → Providers, model configuration, or environment variables',
+        {
+          component: 'ApiKeyVerifier'
+        }
+      );
       return { valid: false, missing: Object.fromEntries(missingKeys) };
     } else if (enabledModels.length > 0) {
       logger.info('All API keys configured for enabled models', {
