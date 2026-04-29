@@ -39,13 +39,13 @@ the existing OAuth 2.0 Authorization Code + PKCE flow at
 `/api/oauth/authorize` and `/api/oauth/token`, plus three new server
 endpoints introduced alongside the extension:
 
-| Method | Path                                       | Purpose                                    |
-| ------ | ------------------------------------------ | ------------------------------------------ |
-| POST   | `/api/admin/browser-extension/enable`  | Auto-create the extension's OAuth client   |
-| POST   | `/api/admin/browser-extension/disable` | Disable the integration                    |
-| PUT    | `/api/admin/browser-extension/config`  | Update display + redirect + group settings |
-| GET    | `/api/admin/browser-extension/status`  | Read current configuration                 |
-| GET    | `/api/integrations/browser-extension/config`       | Public runtime config the extension reads  |
+| Method | Path                                         | Purpose                                    |
+| ------ | -------------------------------------------- | ------------------------------------------ |
+| POST   | `/api/admin/browser-extension/enable`        | Auto-create the extension's OAuth client   |
+| POST   | `/api/admin/browser-extension/disable`       | Disable the integration                    |
+| PUT    | `/api/admin/browser-extension/config`        | Update display + redirect + group settings |
+| GET    | `/api/admin/browser-extension/status`        | Read current configuration                 |
+| GET    | `/api/integrations/browser-extension/config` | Public runtime config the extension reads  |
 
 The OAuth client has a new optional `allowedGroups` field that pins
 authentication to a specific iHub group. The default migration adds an

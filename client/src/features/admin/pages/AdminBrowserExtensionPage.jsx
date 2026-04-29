@@ -347,10 +347,7 @@ function AdminBrowserExtensionPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      {t(
-                        'admin.browserExtension.starterPromptsTitle',
-                        'Default Starter Prompts'
-                      )}
+                      {t('admin.browserExtension.starterPromptsTitle', 'Default Starter Prompts')}
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                       {t(

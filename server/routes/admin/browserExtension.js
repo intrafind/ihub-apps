@@ -113,102 +113,100 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    *       - bearerAuth: []
    *       - sessionAuth: []
    */
-  app.post(
-    buildServerPath('/api/admin/browser-extension/enable'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform();
-        const cfg = platform?.browserExtension || {};
+  app.post(buildServerPath('/api/admin/browser-extension/enable'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform();
+      const cfg = platform?.browserExtension || {};
 
-        let oauthClientId = cfg.oauthClientId;
+      let oauthClientId = cfg.oauthClientId;
 
-        const allowedGroups = Array.isArray(cfg.allowedGroups) ? cfg.allowedGroups : ['browser-extension'];
-        const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
-        const redirectUris = buildRedirectUrisFromExtensionIds(extensionIds);
+      const allowedGroups = Array.isArray(cfg.allowedGroups)
+        ? cfg.allowedGroups
+        : ['browser-extension'];
+      const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
+      const redirectUris = buildRedirectUrisFromExtensionIds(extensionIds);
 
-        if (!oauthClientId) {
-          const oauthConfig = platform?.oauth || {};
-          const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+      if (!oauthClientId) {
+        const oauthConfig = platform?.oauth || {};
+        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
 
-          const newClient = await createOAuthClient(
-            {
-              name: 'Browser Extension',
-              description:
-                'Auto-generated client for the iHub browser extension (PKCE public client)',
-              clientType: 'public',
-              grantTypes: ['authorization_code', 'refresh_token'],
-              redirectUris,
-              trusted: true,
-              consentRequired: false,
-              scopes: ['openid', 'profile', 'email'],
-              allowedGroups
-            },
-            clientsFile,
-            req.user?.id || 'admin'
-          );
-
-          oauthClientId = newClient.clientId;
-
-          logger.info('Created OAuth client for browser extension', {
-            component: 'AdminBrowserExtension',
-            clientId: oauthClientId
-          });
-        } else {
-          // Re-sync redirectUris and allowedGroups onto the existing client so
-          // the admin can manage extension IDs without rotating the secret.
-          const oauthConfig = platform?.oauth || {};
-          const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          await updateOAuthClient(
-            oauthClientId,
-            { redirectUris, allowedGroups, active: true },
-            clientsFile,
-            req.user?.id || 'admin'
-          );
-        }
-
-        const oauthUpdates = {
-          oauth: {
-            ...(platform?.oauth || {}),
-            enabled: {
-              ...(platform?.oauth?.enabled || {}),
-              authz: true,
-              clients: true
-            },
-            authorizationCodeEnabled: true,
-            refreshTokenEnabled: true
-          }
-        };
-
-        const updates = {
-          ...oauthUpdates,
-          browserExtension: {
-            ...cfg,
-            enabled: true,
-            oauthClientId,
+        const newClient = await createOAuthClient(
+          {
+            name: 'Browser Extension',
+            description:
+              'Auto-generated client for the iHub browser extension (PKCE public client)',
+            clientType: 'public',
+            grantTypes: ['authorization_code', 'refresh_token'],
+            redirectUris,
+            trusted: true,
+            consentRequired: false,
+            scopes: ['openid', 'profile', 'email'],
             allowedGroups
-          }
-        };
+          },
+          clientsFile,
+          req.user?.id || 'admin'
+        );
 
-        await savePlatformConfig(updates);
+        oauthClientId = newClient.clientId;
 
-        const baseUrl = buildPublicBaseUrl(req);
-
-        logger.info('Browser extension integration enabled', {
+        logger.info('Created OAuth client for browser extension', {
           component: 'AdminBrowserExtension',
-          oauthClientId
+          clientId: oauthClientId
         });
-
-        res.json({
-          message: 'Browser extension integration enabled successfully',
+      } else {
+        // Re-sync redirectUris and allowedGroups onto the existing client so
+        // the admin can manage extension IDs without rotating the secret.
+        const oauthConfig = platform?.oauth || {};
+        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        await updateOAuthClient(
           oauthClientId,
-          configUrl: `${baseUrl}/api/integrations/browser-extension/config`
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'enable browser extension integration');
+          { redirectUris, allowedGroups, active: true },
+          clientsFile,
+          req.user?.id || 'admin'
+        );
       }
+
+      const oauthUpdates = {
+        oauth: {
+          ...(platform?.oauth || {}),
+          enabled: {
+            ...(platform?.oauth?.enabled || {}),
+            authz: true,
+            clients: true
+          },
+          authorizationCodeEnabled: true,
+          refreshTokenEnabled: true
+        }
+      };
+
+      const updates = {
+        ...oauthUpdates,
+        browserExtension: {
+          ...cfg,
+          enabled: true,
+          oauthClientId,
+          allowedGroups
+        }
+      };
+
+      await savePlatformConfig(updates);
+
+      const baseUrl = buildPublicBaseUrl(req);
+
+      logger.info('Browser extension integration enabled', {
+        component: 'AdminBrowserExtension',
+        oauthClientId
+      });
+
+      res.json({
+        message: 'Browser extension integration enabled successfully',
+        oauthClientId,
+        configUrl: `${baseUrl}/api/integrations/browser-extension/config`
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'enable browser extension integration');
     }
-  );
+  });
 
   /**
    * @swagger
@@ -218,30 +216,26 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    *     tags:
    *       - Admin - Browser Extension
    */
-  app.post(
-    buildServerPath('/api/admin/browser-extension/disable'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const platform = configCache.getPlatform();
+  app.post(buildServerPath('/api/admin/browser-extension/disable'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform();
 
-        await savePlatformConfig({
-          browserExtension: {
-            ...(platform?.browserExtension || {}),
-            enabled: false
-          }
-        });
+      await savePlatformConfig({
+        browserExtension: {
+          ...(platform?.browserExtension || {}),
+          enabled: false
+        }
+      });
 
-        logger.info('Browser extension integration disabled', {
-          component: 'AdminBrowserExtension'
-        });
+      logger.info('Browser extension integration disabled', {
+        component: 'AdminBrowserExtension'
+      });
 
-        res.json({ message: 'Browser extension integration disabled successfully' });
-      } catch (error) {
-        return sendInternalError(res, error, 'disable browser extension integration');
-      }
+      res.json({ message: 'Browser extension integration disabled successfully' });
+    } catch (error) {
+      return sendInternalError(res, error, 'disable browser extension integration');
     }
-  );
+  });
 
   /**
    * @swagger
@@ -251,139 +245,134 @@ export default function registerAdminBrowserExtensionRoutes(app) {
    *     tags:
    *       - Admin - Browser Extension
    */
-  app.put(
-    buildServerPath('/api/admin/browser-extension/config'),
-    adminAuth,
-    async (req, res) => {
-      try {
-        const { displayName, description, starterPrompts, extensionIds, allowedGroups } = req.body;
-        const platform = configCache.getPlatform();
-        const allowed = {};
+  app.put(buildServerPath('/api/admin/browser-extension/config'), adminAuth, async (req, res) => {
+    try {
+      const { displayName, description, starterPrompts, extensionIds, allowedGroups } = req.body;
+      const platform = configCache.getPlatform();
+      const allowed = {};
 
-        if (displayName !== undefined) {
-          const result = validateLocalizedObject('displayName', displayName, {
+      if (displayName !== undefined) {
+        const result = validateLocalizedObject('displayName', displayName, {
+          maxLength: 250,
+          requireNonEmpty: true
+        });
+        if (result.error) return sendBadRequest(res, result.error);
+        allowed.displayName = result.value;
+      }
+      if (description !== undefined) {
+        const result = validateLocalizedObject('description', description, {
+          maxLength: 250,
+          requireNonEmpty: false
+        });
+        if (result.error) return sendBadRequest(res, result.error);
+        allowed.description = result.value;
+      }
+      if (starterPrompts !== undefined) {
+        if (!Array.isArray(starterPrompts)) {
+          return sendBadRequest(res, 'starterPrompts must be an array');
+        }
+        if (starterPrompts.length > 20) {
+          return sendBadRequest(res, 'starterPrompts must not contain more than 20 entries');
+        }
+        const sanitized = [];
+        for (let i = 0; i < starterPrompts.length; i++) {
+          const prompt = starterPrompts[i];
+          if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) {
+            return sendBadRequest(res, `starterPrompts[${i}] must be an object`);
+          }
+          const titleResult = validateLocalizedObject(`starterPrompts[${i}].title`, prompt.title, {
             maxLength: 250,
             requireNonEmpty: true
           });
-          if (result.error) return sendBadRequest(res, result.error);
-          allowed.displayName = result.value;
+          if (titleResult.error) return sendBadRequest(res, titleResult.error);
+          const messageResult = validateLocalizedObject(
+            `starterPrompts[${i}].message`,
+            prompt.message,
+            { maxLength: 4000, requireNonEmpty: true }
+          );
+          if (messageResult.error) return sendBadRequest(res, messageResult.error);
+          sanitized.push({ title: titleResult.value, message: messageResult.value });
         }
-        if (description !== undefined) {
-          const result = validateLocalizedObject('description', description, {
-            maxLength: 250,
-            requireNonEmpty: false
-          });
-          if (result.error) return sendBadRequest(res, result.error);
-          allowed.description = result.value;
-        }
-        if (starterPrompts !== undefined) {
-          if (!Array.isArray(starterPrompts)) {
-            return sendBadRequest(res, 'starterPrompts must be an array');
-          }
-          if (starterPrompts.length > 20) {
-            return sendBadRequest(res, 'starterPrompts must not contain more than 20 entries');
-          }
-          const sanitized = [];
-          for (let i = 0; i < starterPrompts.length; i++) {
-            const prompt = starterPrompts[i];
-            if (!prompt || typeof prompt !== 'object' || Array.isArray(prompt)) {
-              return sendBadRequest(res, `starterPrompts[${i}] must be an object`);
-            }
-            const titleResult = validateLocalizedObject(
-              `starterPrompts[${i}].title`,
-              prompt.title,
-              { maxLength: 250, requireNonEmpty: true }
-            );
-            if (titleResult.error) return sendBadRequest(res, titleResult.error);
-            const messageResult = validateLocalizedObject(
-              `starterPrompts[${i}].message`,
-              prompt.message,
-              { maxLength: 4000, requireNonEmpty: true }
-            );
-            if (messageResult.error) return sendBadRequest(res, messageResult.error);
-            sanitized.push({ title: titleResult.value, message: messageResult.value });
-          }
-          allowed.starterPrompts = sanitized;
-        }
-        if (extensionIds !== undefined) {
-          if (!Array.isArray(extensionIds)) {
-            return sendBadRequest(res, 'extensionIds must be an array of strings');
-          }
-          const sanitized = [];
-          for (const id of extensionIds) {
-            if (typeof id !== 'string') {
-              return sendBadRequest(res, 'extensionIds entries must be strings');
-            }
-            const trimmed = id.trim();
-            if (!trimmed) continue;
-            if (!/^[a-zA-Z0-9._-]{8,128}$/.test(trimmed)) {
-              return sendBadRequest(
-                res,
-                `extensionIds entry "${trimmed}" must contain only alphanumeric, dot, dash or underscore characters (8-128 chars)`
-              );
-            }
-            sanitized.push(trimmed.toLowerCase());
-          }
-          allowed.extensionIds = Array.from(new Set(sanitized));
-        }
-        if (allowedGroups !== undefined) {
-          if (!Array.isArray(allowedGroups)) {
-            return sendBadRequest(res, 'allowedGroups must be an array of strings');
-          }
-          const sanitized = [];
-          for (const g of allowedGroups) {
-            if (typeof g !== 'string') {
-              return sendBadRequest(res, 'allowedGroups entries must be strings');
-            }
-            const trimmed = g.trim();
-            if (trimmed) sanitized.push(trimmed);
-          }
-          allowed.allowedGroups = Array.from(new Set(sanitized));
-        }
-
-        // If extensionIds or allowedGroups changed, re-sync the OAuth client.
-        const previous = platform?.browserExtension || {};
-        const merged = { ...previous, ...allowed };
-
-        if (
-          previous.oauthClientId &&
-          (allowed.extensionIds !== undefined || allowed.allowedGroups !== undefined)
-        ) {
-          const oauthConfig = platform?.oauth || {};
-          const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-          const newRedirectUris = buildRedirectUrisFromExtensionIds(merged.extensionIds || []);
-          const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
-          try {
-            await updateOAuthClient(
-              previous.oauthClientId,
-              { redirectUris: newRedirectUris, allowedGroups: newAllowedGroups },
-              clientsFile,
-              req.user?.id || 'admin'
-            );
-          } catch (err) {
-            logger.warn('Failed to sync OAuth client for extension integration', {
-              component: 'AdminBrowserExtension',
-              error: err
-            });
-          }
-        }
-
-        await savePlatformConfig({
-          browserExtension: merged
-        });
-
-        logger.info('Browser extension integration config updated', {
-          component: 'AdminBrowserExtension',
-          fields: Object.keys(allowed)
-        });
-
-        res.json({
-          message: 'Browser extension integration configuration updated',
-          browserExtension: configCache.getPlatform()?.browserExtension
-        });
-      } catch (error) {
-        return sendInternalError(res, error, 'update browser extension integration config');
+        allowed.starterPrompts = sanitized;
       }
+      if (extensionIds !== undefined) {
+        if (!Array.isArray(extensionIds)) {
+          return sendBadRequest(res, 'extensionIds must be an array of strings');
+        }
+        const sanitized = [];
+        for (const id of extensionIds) {
+          if (typeof id !== 'string') {
+            return sendBadRequest(res, 'extensionIds entries must be strings');
+          }
+          const trimmed = id.trim();
+          if (!trimmed) continue;
+          if (!/^[a-zA-Z0-9._-]{8,128}$/.test(trimmed)) {
+            return sendBadRequest(
+              res,
+              `extensionIds entry "${trimmed}" must contain only alphanumeric, dot, dash or underscore characters (8-128 chars)`
+            );
+          }
+          sanitized.push(trimmed.toLowerCase());
+        }
+        allowed.extensionIds = Array.from(new Set(sanitized));
+      }
+      if (allowedGroups !== undefined) {
+        if (!Array.isArray(allowedGroups)) {
+          return sendBadRequest(res, 'allowedGroups must be an array of strings');
+        }
+        const sanitized = [];
+        for (const g of allowedGroups) {
+          if (typeof g !== 'string') {
+            return sendBadRequest(res, 'allowedGroups entries must be strings');
+          }
+          const trimmed = g.trim();
+          if (trimmed) sanitized.push(trimmed);
+        }
+        allowed.allowedGroups = Array.from(new Set(sanitized));
+      }
+
+      // If extensionIds or allowedGroups changed, re-sync the OAuth client.
+      const previous = platform?.browserExtension || {};
+      const merged = { ...previous, ...allowed };
+
+      if (
+        previous.oauthClientId &&
+        (allowed.extensionIds !== undefined || allowed.allowedGroups !== undefined)
+      ) {
+        const oauthConfig = platform?.oauth || {};
+        const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+        const newRedirectUris = buildRedirectUrisFromExtensionIds(merged.extensionIds || []);
+        const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
+        try {
+          await updateOAuthClient(
+            previous.oauthClientId,
+            { redirectUris: newRedirectUris, allowedGroups: newAllowedGroups },
+            clientsFile,
+            req.user?.id || 'admin'
+          );
+        } catch (err) {
+          logger.warn('Failed to sync OAuth client for extension integration', {
+            component: 'AdminBrowserExtension',
+            error: err
+          });
+        }
+      }
+
+      await savePlatformConfig({
+        browserExtension: merged
+      });
+
+      logger.info('Browser extension integration config updated', {
+        component: 'AdminBrowserExtension',
+        fields: Object.keys(allowed)
+      });
+
+      res.json({
+        message: 'Browser extension integration configuration updated',
+        browserExtension: configCache.getPlatform()?.browserExtension
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'update browser extension integration config');
     }
-  );
+  });
 }
