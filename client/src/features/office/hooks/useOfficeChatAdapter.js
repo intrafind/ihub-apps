@@ -94,7 +94,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // hostContextFlags is a client-only opt-out signal — strip it before
       // forwarding so it doesn't show up in the outgoing chat-completion
       // request body.
-      // eslint-disable-next-line no-unused-vars
+
       const { hostContextFlags: _hostContextFlags, ...paramsForServer } = params || {};
 
       chat.sendMessage({
