@@ -1,19 +1,35 @@
 import { join } from 'path';
+import { promises as fs } from 'fs';
+import archiver from 'archiver';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath, getBasePath } from '../../utils/basePath.js';
 import { createOAuthClient, updateOAuthClient } from '../../utils/oauthClientManager.js';
+import {
+  generateExtensionSigningKey,
+  extensionIdFromPublicKeyBase64,
+  packCrx3
+} from '../../utils/chromeExtensionId.js';
 import logger from '../../utils/logger.js';
-import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { sendInternalError, sendBadRequest, sendNotFound } from '../../utils/responseHelpers.js';
 
 // The browser extension uses a fixed redirect URI scheme:
 //   https://<extension-id>.chromiumapp.org/cb     (Chrome / Edge)
 //   https://<extension-id>.extensions.allizom.org/cb  (Firefox)
-// We don't know the extension id until the admin has it loaded, so we let
-// admins register any number of extension IDs as part of the config and
-// derive redirectUris from them.
+// Two sources feed the OAuth client's redirect URI allowlist:
+//   1. browserExtension.signingKey.extensionId — the deterministic ID for the
+//      packaged build the iHub server hands out (one ID for everyone).
+//   2. browserExtension.extensionIds — manually-loaded unpacked dev builds
+//      (each developer's machine assigns its own ID).
+// They are unioned by buildAllRedirectUris() below.
+
+const SIGNING_KEY_FILE = '.browser-extension-key.pem';
+
+function signingKeyPath() {
+  return join(getRootDir(), 'contents', SIGNING_KEY_FILE);
+}
 
 function buildPublicBaseUrl(req) {
   const proto = req.get('X-Forwarded-Proto') || req.protocol || 'https';
@@ -44,6 +60,74 @@ function buildRedirectUrisFromExtensionIds(extensionIds = []) {
     out.push(`https://${trimmed}.extensions.allizom.org/cb`);
   }
   return out;
+}
+
+/**
+ * Build the full deduplicated redirect-URI allowlist from the manual
+ * `extensionIds` array plus the signing-key-derived extension ID(s).
+ * `signingKey.previousExtensionId` is honoured for one rotation cycle so
+ * users on the old build can still authenticate while they update.
+ */
+function buildAllRedirectUris(extensionIds, signingKey) {
+  const ids = Array.isArray(extensionIds) ? [...extensionIds] : [];
+  if (signingKey?.extensionId) ids.push(signingKey.extensionId);
+  if (signingKey?.previousExtensionId) ids.push(signingKey.previousExtensionId);
+  return Array.from(new Set(buildRedirectUrisFromExtensionIds(ids)));
+}
+
+/**
+ * Read the on-disk private key PEM. Returns null when no key has been
+ * generated yet (Enable hasn't been clicked, or the file was deleted).
+ */
+async function readSigningPrivateKey() {
+  try {
+    return await fs.readFile(signingKeyPath(), 'utf8');
+  } catch (err) {
+    if (err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+/**
+ * Lazily ensure a signing keypair exists on disk + in platform config.
+ *
+ * Idempotent: when both the on-disk PEM and the public key in config are
+ * present, it returns them as-is. Otherwise it generates a fresh keypair,
+ * writes the private PEM with mode 0o600, and returns the public half.
+ *
+ * @param {Object|undefined} currentSigningKey - Existing signingKey from platform config
+ * @returns {Promise<{ publicKey: string, extensionId: string, createdAt: string }>}
+ */
+async function ensureSigningKey(currentSigningKey) {
+  const existingPem = await readSigningPrivateKey();
+  if (existingPem && currentSigningKey?.publicKey && currentSigningKey?.extensionId) {
+    return currentSigningKey;
+  }
+  const { privateKeyPem, publicKeySpkiBase64, extensionId } = generateExtensionSigningKey();
+  await fs.writeFile(signingKeyPath(), privateKeyPem, { mode: 0o600 });
+  return {
+    publicKey: publicKeySpkiBase64,
+    extensionId,
+    createdAt: new Date().toISOString()
+  };
+}
+
+/**
+ * Generate a fresh signing keypair, replacing any existing one. Moves the
+ * previous extensionId into `previousExtensionId` so users on the old build
+ * keep working until their next refresh / install.
+ *
+ * @param {Object|undefined} currentSigningKey
+ */
+async function rotateSigningKey(currentSigningKey) {
+  const { privateKeyPem, publicKeySpkiBase64, extensionId } = generateExtensionSigningKey();
+  await fs.writeFile(signingKeyPath(), privateKeyPem, { mode: 0o600 });
+  return {
+    publicKey: publicKeySpkiBase64,
+    extensionId,
+    createdAt: new Date().toISOString(),
+    previousExtensionId: currentSigningKey?.extensionId || undefined
+  };
 }
 
 function validateLocalizedObject(fieldName, value, { maxLength, requireNonEmpty }) {
@@ -87,6 +171,19 @@ export default function registerAdminBrowserExtensionRoutes(app) {
     const cfg = platform?.browserExtension || {};
     const baseUrl = buildPublicBaseUrl(req);
 
+    // Re-derive extensionId on the fly in case the stored value drifted
+    // from the public key (e.g. someone hand-edited platform.json).
+    let signingKey = null;
+    if (cfg.signingKey?.publicKey) {
+      const derivedId = extensionIdFromPublicKeyBase64(cfg.signingKey.publicKey);
+      signingKey = {
+        publicKey: cfg.signingKey.publicKey,
+        extensionId: derivedId,
+        createdAt: cfg.signingKey.createdAt || null,
+        previousExtensionId: cfg.signingKey.previousExtensionId || null
+      };
+    }
+
     res.json({
       enabled: cfg.enabled || false,
       oauthClientId: cfg.oauthClientId || '',
@@ -98,6 +195,10 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       starterPrompts: Array.isArray(cfg.starterPrompts) ? cfg.starterPrompts : [],
       extensionIds: Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [],
       allowedGroups: Array.isArray(cfg.allowedGroups) ? cfg.allowedGroups : ['browser-extension'],
+      signingKey,
+      downloadAvailable: Boolean(cfg.enabled && signingKey?.extensionId),
+      downloadZipUrl: `${baseUrl}/api/admin/browser-extension/download.zip`,
+      downloadCrxUrl: `${baseUrl}/api/admin/browser-extension/download.crx`,
       configUrl: `${baseUrl}/api/integrations/browser-extension/config`
     });
   });
@@ -124,7 +225,8 @@ export default function registerAdminBrowserExtensionRoutes(app) {
         ? cfg.allowedGroups
         : ['browser-extension'];
       const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
-      const redirectUris = buildRedirectUrisFromExtensionIds(extensionIds);
+      const signingKey = await ensureSigningKey(cfg.signingKey);
+      const redirectUris = buildAllRedirectUris(extensionIds, signingKey);
 
       if (!oauthClientId) {
         const oauthConfig = platform?.oauth || {};
@@ -185,7 +287,8 @@ export default function registerAdminBrowserExtensionRoutes(app) {
           ...cfg,
           enabled: true,
           oauthClientId,
-          allowedGroups
+          allowedGroups,
+          signingKey
         }
       };
 
@@ -341,7 +444,7 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       ) {
         const oauthConfig = platform?.oauth || {};
         const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
-        const newRedirectUris = buildRedirectUrisFromExtensionIds(merged.extensionIds || []);
+        const newRedirectUris = buildAllRedirectUris(merged.extensionIds || [], merged.signingKey);
         const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
         try {
           await updateOAuthClient(
@@ -375,4 +478,241 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       return sendInternalError(res, error, 'update browser extension integration config');
     }
   });
+
+  /**
+   * @swagger
+   * /api/admin/browser-extension/rotate-key:
+   *   post:
+   *     summary: Rotate the browser extension signing key (changes the extension ID)
+   *     description: |
+   *       Generates a new RSA signing key. The derived extension ID changes, so
+   *       previously-installed packaged copies will need to be reinstalled (or
+   *       wait for a refresh). The previous extension ID is kept in the OAuth
+   *       client's redirect URI allowlist for one rotation cycle as a grace
+   *       period — rotate again to drop it.
+   *     tags:
+   *       - Admin - Browser Extension
+   */
+  app.post(
+    buildServerPath('/api/admin/browser-extension/rotate-key'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const platform = configCache.getPlatform();
+        const cfg = platform?.browserExtension || {};
+
+        const newSigningKey = await rotateSigningKey(cfg.signingKey);
+        const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
+        const allowedGroups = Array.isArray(cfg.allowedGroups)
+          ? cfg.allowedGroups
+          : ['browser-extension'];
+
+        // Resync the OAuth client redirect URIs to include the new ID + the
+        // previous ID (one-cycle grace period) + manual side-load IDs.
+        if (cfg.oauthClientId) {
+          const oauthConfig = platform?.oauth || {};
+          const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
+          try {
+            await updateOAuthClient(
+              cfg.oauthClientId,
+              {
+                redirectUris: buildAllRedirectUris(extensionIds, newSigningKey),
+                allowedGroups
+              },
+              clientsFile,
+              req.user?.id || 'admin'
+            );
+          } catch (err) {
+            logger.warn('Failed to resync OAuth client after extension key rotation', {
+              component: 'AdminBrowserExtension',
+              error: err
+            });
+          }
+        }
+
+        await savePlatformConfig({
+          browserExtension: {
+            ...cfg,
+            signingKey: newSigningKey
+          }
+        });
+
+        logger.warn('Browser extension signing key rotated', {
+          component: 'AdminBrowserExtension',
+          newExtensionId: newSigningKey.extensionId,
+          previousExtensionId: newSigningKey.previousExtensionId || null
+        });
+
+        res.json({
+          message: 'Browser extension signing key rotated',
+          signingKey: {
+            extensionId: newSigningKey.extensionId,
+            publicKey: newSigningKey.publicKey,
+            createdAt: newSigningKey.createdAt,
+            previousExtensionId: newSigningKey.previousExtensionId || null
+          }
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'rotate browser extension signing key');
+      }
+    }
+  );
+
+  /**
+   * Build the byte stream for a customised browser-extension package and
+   * return both the buffered ZIP and the manifest used. Shared between the
+   * .zip and .crx download endpoints.
+   */
+  async function buildExtensionZipBuffer({ req, cfg }) {
+    const baseUrl = buildPublicBaseUrl(req);
+    const extDir = join(getRootDir(), 'browser-extension');
+
+    // Bump the manifest version on each download so Chrome reloads the SW
+    // with the new runtime-config. We append a build-stamp segment derived
+    // from the current minute since epoch — fits Chrome's 4-dotted-int rule.
+    const sourceManifest = JSON.parse(await fs.readFile(join(extDir, 'manifest.json'), 'utf8'));
+    const buildStamp = Math.floor(Date.now() / 60000) % 100000;
+    const baseVersion = String(sourceManifest.version || '0.1.0').replace(/[^0-9.]/g, '');
+    const versionParts = baseVersion.split('.').filter(Boolean).slice(0, 3);
+    while (versionParts.length < 3) versionParts.push('0');
+    const downloadVersion = `${versionParts.join('.')}.${buildStamp}`;
+
+    const manifest = {
+      ...sourceManifest,
+      version: downloadVersion,
+      version_name: `${sourceManifest.version || '0.1.0'} (built ${new Date().toISOString()})`,
+      key: cfg.signingKey.publicKey
+    };
+
+    const runtimeConfig = {
+      baseUrl,
+      clientId: cfg.oauthClientId || '',
+      displayName: cfg.displayName || {},
+      description: cfg.description || {},
+      starterPrompts: Array.isArray(cfg.starterPrompts) ? cfg.starterPrompts : [],
+      bakedAt: new Date().toISOString()
+    };
+    const runtimeConfigJs =
+      '// Generated by /api/admin/browser-extension/download — do not edit by hand.\n' +
+      `globalThis.IHUB_RUNTIME_CONFIG = ${JSON.stringify(runtimeConfig, null, 2)};\n`;
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    const chunks = [];
+    archive.on('data', chunk => chunks.push(chunk));
+    archive.on('warning', err => {
+      if (err.code !== 'ENOENT') throw err;
+    });
+
+    archive.glob('**/*', {
+      cwd: extDir,
+      // The shipped placeholder runtime-config.js and manifest.json are
+      // overwritten with customised versions below; everything else
+      // (background.js, sidepanel.*, options.*, icons/*) is included verbatim.
+      ignore: ['manifest.json', 'runtime-config.js']
+    });
+    archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
+    archive.append(runtimeConfigJs, { name: 'runtime-config.js' });
+
+    await archive.finalize();
+    return Buffer.concat(chunks);
+  }
+
+  /**
+   * @swagger
+   * /api/admin/browser-extension/download.zip:
+   *   get:
+   *     summary: Download the customised browser extension as an unsigned ZIP
+   *     description: |
+   *       Returns a ZIP containing the browser-extension folder with the
+   *       deployment's iHub base URL, OAuth client ID and starter prompts
+   *       baked in. End users unzip the file, "Load unpacked" in Chrome /
+   *       Edge, and sign in. The extension ID is fixed by the manifest.key
+   *       field, so this same ZIP works for everyone in the organization
+   *       without per-user setup.
+   *     tags:
+   *       - Admin - Browser Extension
+   */
+  app.get(
+    buildServerPath('/api/admin/browser-extension/download.zip'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const platform = configCache.getPlatform();
+        const cfg = platform?.browserExtension || {};
+        if (!cfg.enabled || !cfg.signingKey?.publicKey) {
+          return sendNotFound(res, 'Browser extension is not enabled or has no signing key');
+        }
+
+        const zipBuffer = await buildExtensionZipBuffer({ req, cfg });
+        const filename = `ihub-extension-${cfg.signingKey.extensionId}.zip`;
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'no-store');
+        res.send(zipBuffer);
+
+        logger.info('Browser extension package downloaded', {
+          component: 'AdminBrowserExtension',
+          format: 'zip',
+          extensionId: cfg.signingKey.extensionId,
+          userId: req.user?.id || 'admin'
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'download browser extension package');
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/admin/browser-extension/download.crx:
+   *   get:
+   *     summary: Download the customised browser extension as a signed .crx3
+   *     description: |
+   *       Returns a CRX3-signed package suitable for hosting on an internal
+   *       URL and pushing to managed devices via Chrome / Edge enterprise
+   *       policy. End users can also drag-and-drop the file into
+   *       chrome://extensions for a single-click install. The CRX is signed
+   *       with the same RSA key whose public half lives in manifest.key.
+   *     tags:
+   *       - Admin - Browser Extension
+   */
+  app.get(
+    buildServerPath('/api/admin/browser-extension/download.crx'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const platform = configCache.getPlatform();
+        const cfg = platform?.browserExtension || {};
+        if (!cfg.enabled || !cfg.signingKey?.publicKey) {
+          return sendNotFound(res, 'Browser extension is not enabled or has no signing key');
+        }
+        const privateKeyPem = await readSigningPrivateKey();
+        if (!privateKeyPem) {
+          return sendNotFound(
+            res,
+            'Signing private key not found on disk. Re-enable the integration to regenerate it.'
+          );
+        }
+
+        const zipBuffer = await buildExtensionZipBuffer({ req, cfg });
+        const publicKeyDer = Buffer.from(cfg.signingKey.publicKey, 'base64');
+        const crxBuffer = packCrx3({ zipBuffer, publicKeyDer, privateKeyPem });
+
+        const filename = `ihub-extension-${cfg.signingKey.extensionId}.crx`;
+        res.setHeader('Content-Type', 'application/x-chrome-extension');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.setHeader('Cache-Control', 'no-store');
+        res.send(crxBuffer);
+
+        logger.info('Browser extension package downloaded', {
+          component: 'AdminBrowserExtension',
+          format: 'crx',
+          extensionId: cfg.signingKey.extensionId,
+          userId: req.user?.id || 'admin'
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'download browser extension package (crx)');
+      }
+    }
+  );
 }

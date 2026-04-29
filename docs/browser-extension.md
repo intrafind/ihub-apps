@@ -21,17 +21,22 @@ your deployment:
 | Endpoint                                            | Purpose                                                                        |
 | --------------------------------------------------- | ------------------------------------------------------------------------------ |
 | `GET  /api/integrations/browser-extension/config`   | Public runtime config (base URL, OAuth client ID, display name, starter prompts) the extension fetches before sign-in |
-| `GET  /api/admin/browser-extension/status`          | Admin: read current configuration                                              |
-| `POST /api/admin/browser-extension/enable`          | Admin: enable the integration and auto-create the OAuth client                  |
+| `GET  /api/admin/browser-extension/status`          | Admin: read current configuration including signing-key extension ID            |
+| `POST /api/admin/browser-extension/enable`          | Admin: enable the integration, auto-create the OAuth client, generate signing key |
 | `POST /api/admin/browser-extension/disable`         | Admin: disable                                                                 |
 | `PUT  /api/admin/browser-extension/config`          | Admin: update display name, description, starter prompts, extension IDs, allowed groups |
+| `POST /api/admin/browser-extension/rotate-key`      | Admin: rotate the RSA signing key (changes the extension ID)                    |
+| `GET  /api/admin/browser-extension/download.zip`    | Admin: download the customised extension as an unsigned ZIP                     |
+| `GET  /api/admin/browser-extension/download.crx`    | Admin: download the customised extension as a CRX3-signed package               |
 
 All public routes are gated behind the `integrations` feature flag and the
 `browserExtension.enabled` setting — both must be on.
 
-The extension itself ships in this repository under `browser-extension/`. It
-does **not** live on the iHub server — admins distribute it to users out of
-band (see [Step 5](#step-5--distribute-the-extension)).
+The extension source ships in this repository under `browser-extension/`,
+but admins **do not normally distribute the source folder**. The download
+endpoints above package a customised build (with the iHub base URL, OAuth
+client ID, starter prompts and a fixed extension-ID-deriving `manifest.key`
+all baked in) so end users just install and sign in — no manual setup.
 
 ---
 
@@ -136,33 +141,32 @@ After enabling, the page shows the OAuth client ID with a link to
 
 ---
 
-## Step 3 — Register the extension's redirect URIs
+## Step 3 — (Automatic) The signing key + extension ID
 
-Each browser instance assigns the extension a unique ID, and that ID is
-baked into the OAuth redirect URI:
+When you click **Enable** in Step 2, the server **also** generates an RSA
+signing keypair and stores the private half at
+`contents/.browser-extension-key.pem` (mode 0o600). The public half lives
+in `platform.json` under `browserExtension.signingKey.publicKey`.
 
-- Chrome / Edge: `https://<extension-id>.chromiumapp.org/cb`
-- Firefox: `https://<extension-id>.extensions.allizom.org/cb`
+The Chromium extension ID is a deterministic SHA-256-based fingerprint of
+the public key, so the same packaged build assigns the same extension ID
+to every user who installs it. The server writes that ID into the OAuth
+client's redirect URI allowlist automatically:
 
-You don't know the extension ID until you have loaded the extension at
-least once. The flow is:
+- `https://<extension-id>.chromiumapp.org/cb` (Chrome / Edge)
+- `https://<extension-id>.extensions.allizom.org/cb` (Firefox)
 
-1. Load the extension into your own browser following
-   [Step 5](#step-5--distribute-the-extension).
-2. Note the extension ID Chrome assigns (visible at `chrome://extensions`).
-3. Back in **Admin → Browser Extension**, paste the ID into the
-   **Extension IDs** box (one per line) and click **Save**.
-4. The server derives both redirect URIs and writes them onto the OAuth
-   client's allowlist. **No secret rotation is needed.**
+You **do not need to copy any extension IDs by hand for the standard
+deployment path**. The **Additional unpacked extension IDs** textarea on
+the admin page is only for developers side-loading their own dev build
+(see [Step 5, Option C](#option-c--developer-side-load-build)).
 
-You can register multiple extension IDs — useful if you ship a packaged
-production version and a dev-mode unpacked version, or if you maintain
-separate Firefox / Chrome builds.
-
-> **Why this matters.** OAuth requires an exact-match redirect URI. If the
-> extension ID is not registered, sign-in fails with
-> `invalid_request: redirect_uri not registered for this client`. Adding the
-> ID here is the single setup step most easily missed.
+**Rotating the key.** The admin page has a **Rotate signing key** button
+that issues a brand-new keypair. The previous extension ID is preserved
+in the OAuth client's redirect URIs as a one-cycle grace window so users
+on the old build can still authenticate while they update; rotate again
+to drop it. Rotating invalidates every previously-distributed packaged
+copy — use sparingly.
 
 ---
 
@@ -195,38 +199,68 @@ group IDs, e.g. `browser-extension, beta-testers, admins`.
 
 ## Step 5 — Distribute the extension
 
-The extension is unsigned and not in the public Chrome Web Store yet, so
-distribution is currently **side-loading** or **enterprise policy**.
+The iHub admin page packages a customised, signed copy of the extension
+on demand. Two formats are produced from the same signing key, so the
+extension ID is identical regardless of which one you ship.
 
-### Option A — Side-load for testing
+### Option A — Download ZIP (recommended for pilots)
 
-Each developer or pilot user does this once:
+Best for internal testers and small groups.
 
-1. Pull the iHub Apps repository (or copy the `browser-extension/` folder).
-2. Visit `chrome://extensions` (Edge: `edge://extensions`) and toggle
-   **Developer mode** on.
+1. On the **Browser Extension** admin page, click **Download ZIP**. You
+   receive `ihub-extension-<id>.zip`.
+2. Distribute the ZIP however you like (email, shared drive, internal
+   intranet).
+3. Each recipient unzips the file, opens `chrome://extensions` (Edge:
+   `edge://extensions`), toggles **Developer mode**, clicks **Load
+   unpacked**, and selects the unzipped folder.
+4. Done — they click the iHub icon, the side panel skips setup and goes
+   straight to **Sign in**.
+
+The `manifest.key` field in the bundled `manifest.json` is what gives
+every recipient the same extension ID. The base URL, OAuth client ID,
+display name, and starter prompts are baked into a generated
+`runtime-config.js` inside the ZIP.
+
+### Option B — Download CRX (recommended for production)
+
+Best for organization-wide rollout on managed devices.
+
+1. Click **Download CRX** to get `ihub-extension-<id>.crx`. The file is
+   a CRX3-signed package, signed by the same RSA key whose public half
+   lives in `manifest.key`.
+2. Host the `.crx` on an internal HTTPS URL.
+3. Push it to managed devices via Chrome / Edge enterprise policy
+   (`ExtensionInstallForcelist` with the URL of the CRX) or Firefox
+   policy (after re-signing for AMO; out of scope here).
+4. End users see the extension appear in their browser, click the iHub
+   icon, and sign in. They cannot accidentally uninstall it if your
+   policy forbids it.
+
+End users can also drag-and-drop the `.crx` onto `chrome://extensions`
+for an ad-hoc install — handy for support engineers but not recommended
+for at-scale rollout because it bypasses central policy.
+
+### Option C — Developer side-load build
+
+Useful when you actively edit the extension source against a dev iHub
+instance. The packaged-download flow above is preferable in almost all
+other cases.
+
+1. Pull the iHub Apps repository.
+2. Visit `chrome://extensions` and toggle **Developer mode**.
 3. Click **Load unpacked** and select the `browser-extension/` folder.
-4. Copy the **ID** Chrome assigns and add it to the iHub admin page (Step 3).
-5. Click the iHub icon in the toolbar to open the side panel; the gear
-   button opens **Settings** where the user enters their iHub base URL
-   and clicks **Sign in**.
+4. Copy the random extension ID Chrome assigns. Paste it into the
+   **Additional unpacked extension IDs** textarea on the admin page and
+   click **Save**. (This adds your dev ID to the OAuth client's redirect
+   URI list alongside the packaged ID.)
+5. Open the extension's options page, enter your iHub base URL, click
+   **Save**, then **Sign in**.
 
-### Option B — Enterprise policy
-
-For organization-wide rollout on managed devices:
-
-- Package the `browser-extension/` folder as a `.crx` (Chrome / Edge) or
-  signed `.xpi` (Firefox).
-- Host the package on an internal HTTPS URL.
-- Use Chrome / Edge / Firefox enterprise policy
-  (`ExtensionInstallForcelist` or equivalent) to push the extension to
-  managed devices.
-- Use a **single fixed extension ID** (set the `key` field in
-  `manifest.json` after packaging) so only one ID needs to be registered
-  on the iHub admin page.
-
-Detailed packaging steps are out of scope for this guide — see your
-browser vendor's enterprise documentation.
+When the extension is loaded unpacked it falls back to the user-supplied
+base URL because the `runtime-config.js` placeholder leaves
+`IHUB_RUNTIME_CONFIG` null. The packaged ZIP / CRX overwrite that file
+with the deployment's settings.
 
 ---
 
@@ -350,6 +384,22 @@ The current tab is a Chromium internal page (`chrome://`, `edge://`,
 `about:`, `chrome-extension:`). The extension intentionally refuses to
 inject into those for security reasons. Switch to a regular `https://`
 tab and retry.
+
+### `Download Extension` button is greyed out / 404
+
+`Download Extension` is enabled only when both the integration is enabled
+**and** a signing key has been generated. Click **Disable** then **Enable**
+on the admin page to regenerate the signing key (the **Enable** handler
+is idempotent — it only generates one if `contents/.browser-extension-key.pem`
+is missing).
+
+### Existing installed packaged copies stop signing in after `Rotate signing key`
+
+Rotating the key changes the derived extension ID. The previous ID is
+preserved on the OAuth client's redirect URI allowlist for one rotation
+cycle so users on the old build still authenticate. Distribute the
+freshly downloaded ZIP / CRX promptly; rotate again only once everyone
+is on the new build (the second rotation drops the old ID).
 
 ### Tokens persist after `Sign out`
 

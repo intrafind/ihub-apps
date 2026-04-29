@@ -27,29 +27,40 @@ async function init() {
   $('redirect-uri').textContent = redirect.endsWith('/') ? redirect + 'cb' : redirect + '/cb';
 
   const resp = await send({ type: 'get-base-url' });
-  if (resp?.ok && resp.baseUrl) {
-    $('base-url').value = resp.baseUrl;
-  }
+  const baked = Boolean(resp?.baked);
 
-  $('save-btn').addEventListener('click', async () => {
-    const value = $('base-url').value.trim();
-    setStatus('Saving…');
-    const r = await send({ type: 'set-base-url', baseUrl: value });
-    if (!r.ok) {
-      setStatus(r.error || 'Failed to save', 'error');
-      return;
+  if (baked && resp.baseUrl) {
+    // Packaged-download build: hide the URL editor and show the baked-in URL.
+    $('baked-section').hidden = false;
+    $('baked-base-url').textContent = resp.baseUrl;
+    $('unpacked-section').hidden = true;
+  } else {
+    // Unpacked dev build: let the user point at any iHub instance.
+    $('unpacked-section').hidden = false;
+    $('baked-section').hidden = true;
+    if (resp?.ok && resp.baseUrl) {
+      $('base-url').value = resp.baseUrl;
     }
-    // Try fetching runtime config to verify the URL points at an iHub instance
-    const cfg = await send({ type: 'get-runtime-config' });
-    if (!cfg.ok) {
-      setStatus(
-        'Saved, but could not load extension config: ' + (cfg.error || 'unknown error'),
-        'warn'
-      );
-      return;
-    }
-    setStatus('Saved. You can sign in now.', 'success');
-  });
+    $('save-btn').addEventListener('click', async () => {
+      const value = $('base-url').value.trim();
+      setStatus('Saving…');
+      const r = await send({ type: 'set-base-url', baseUrl: value });
+      if (!r.ok) {
+        setStatus(r.error || 'Failed to save', 'error');
+        return;
+      }
+      // Try fetching runtime config to verify the URL points at an iHub instance
+      const cfg = await send({ type: 'get-runtime-config' });
+      if (!cfg.ok) {
+        setStatus(
+          'Saved, but could not load extension config: ' + (cfg.error || 'unknown error'),
+          'warn'
+        );
+        return;
+      }
+      setStatus('Saved. You can sign in now.', 'success');
+    });
+  }
 
   $('signin-btn').addEventListener('click', async () => {
     setStatus('Opening sign-in window…');

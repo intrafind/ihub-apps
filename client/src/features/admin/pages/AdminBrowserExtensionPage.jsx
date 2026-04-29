@@ -135,6 +135,66 @@ function AdminBrowserExtensionPage() {
     return out;
   };
 
+  const downloadPackage = async format => {
+    const path = `/admin/browser-extension/download.${format}`;
+    setMessage(null);
+    try {
+      const response = await makeAdminApiCall(path, { method: 'GET', responseType: 'blob' });
+      const blob = response.data;
+      const contentDisposition = response.headers?.['content-disposition'] || '';
+      const match = contentDisposition.match(/filename="(.+)"/);
+      const filename = match ? match[1] : `ihub-extension.${format}`;
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text:
+          t('admin.browserExtension.downloadError', 'Failed to download {{format}} package: ', {
+            format: format.toUpperCase()
+          }) + (err?.message || 'unknown error')
+      });
+    }
+  };
+
+  const handleRotateKey = async () => {
+    if (
+      !window.confirm(
+        t(
+          'admin.browserExtension.rotateKeyConfirm',
+          'Generate a new signing key? The extension ID will change and existing installed copies will need to be reinstalled (or use the previous-ID grace window).'
+        )
+      )
+    ) {
+      return;
+    }
+    try {
+      setMessage(null);
+      await makeAdminApiCall('/admin/browser-extension/rotate-key', { method: 'POST' });
+      await loadStatus();
+      setMessage({
+        type: 'success',
+        text: t(
+          'admin.browserExtension.rotateKeyOk',
+          'Signing key rotated; new extension ID issued.'
+        )
+      });
+    } catch (err) {
+      setMessage({
+        type: 'error',
+        text:
+          t('admin.browserExtension.rotateKeyError', 'Failed to rotate key: ') +
+          (err?.message || 'unknown error')
+      });
+    }
+  };
+
   const handleSaveConfig = async () => {
     try {
       setSaving(true);
@@ -308,15 +368,97 @@ function AdminBrowserExtensionPage() {
                 )}
               </div>
 
+              {status?.enabled && status?.signingKey?.extensionId && (
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                    {t('admin.browserExtension.packageTitle', 'Packaged Extension')}
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    {t(
+                      'admin.browserExtension.packageDesc',
+                      'Download a customised extension build for this iHub deployment. The base URL, OAuth client ID and starter prompts are baked in, so end users just install and sign in — no setup required. The extension ID is fixed by the signing key, so the same package works for everyone.'
+                    )}
+                  </p>
+
+                  <dl className="text-sm grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+                    <div>
+                      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                        {t('admin.browserExtension.extensionId', 'Extension ID')}
+                      </dt>
+                      <dd className="mt-1">
+                        <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded break-all">
+                          {status.signingKey.extensionId}
+                        </code>
+                      </dd>
+                    </div>
+                    {status.signingKey.previousExtensionId && (
+                      <div>
+                        <dt className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                          {t('admin.browserExtension.previousExtensionId', 'Previous ID (grace)')}
+                        </dt>
+                        <dd className="mt-1">
+                          <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded break-all">
+                            {status.signingKey.previousExtensionId}
+                          </code>
+                        </dd>
+                      </div>
+                    )}
+                    {status.signingKey.createdAt && (
+                      <div>
+                        <dt className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                          {t('admin.browserExtension.keyCreated', 'Key created')}
+                        </dt>
+                        <dd className="mt-1 text-gray-700 dark:text-gray-300">
+                          {new Date(status.signingKey.createdAt).toLocaleString()}
+                        </dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => downloadPackage('zip')}
+                      className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+                    >
+                      {t('admin.browserExtension.downloadZip', 'Download ZIP')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => downloadPackage('crx')}
+                      className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+                    >
+                      {t('admin.browserExtension.downloadCrx', 'Download CRX')}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleRotateKey}
+                      className="rounded-lg border border-red-300 dark:border-red-700 text-red-700 dark:text-red-400 px-4 py-2 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20"
+                    >
+                      {t('admin.browserExtension.rotateKey', 'Rotate signing key')}
+                    </button>
+                  </div>
+
+                  <p className="mt-4 text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.browserExtension.packageHint',
+                      'ZIP: unzip and "Load unpacked" in chrome://extensions, or distribute via enterprise policy. CRX: drag-and-drop install or enterprise policy. Rotate the key only when you need to invalidate every installed copy.'
+                    )}
+                  </p>
+                </div>
+              )}
+
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                  {t('admin.browserExtension.idsTitle', 'Extension IDs')}
+                  {t(
+                    'admin.browserExtension.idsTitle',
+                    'Additional unpacked extension IDs (advanced)'
+                  )}
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   {t(
                     'admin.browserExtension.idsDesc',
-                    'Paste the Chrome / Edge / Firefox extension IDs that should be allowed to authenticate. The redirect URIs ' +
-                      'https://<id>.chromiumapp.org/cb and https://<id>.extensions.allizom.org/cb are registered automatically.'
+                    'Optional. The packaged-download flow above auto-registers a fixed extension ID — you only need this list for developers side-loading their own unpacked builds (each with a different Chrome-assigned ID). The redirect URIs https://<id>.chromiumapp.org/cb and https://<id>.extensions.allizom.org/cb are registered automatically for every entry.'
                   )}
                 </p>
                 <textarea

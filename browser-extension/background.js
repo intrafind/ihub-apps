@@ -14,6 +14,17 @@
 // Config / storage helpers
 // ---------------------------------------------------------------------------
 
+import './runtime-config.js';
+
+// When the extension is downloaded from /api/admin/browser-extension/download,
+// runtime-config.js is rewritten to populate IHUB_RUNTIME_CONFIG with the
+// admin's iHub base URL, OAuth client ID, display name and starter prompts.
+// The user just installs and signs in — no manual setup.
+//
+// In an unpacked dev build the placeholder leaves it null, and the extension
+// falls back to the iHub base URL the user enters in the options page.
+const BAKED_CONFIG = globalThis.IHUB_RUNTIME_CONFIG || null;
+
 const STORAGE_KEYS = {
   baseUrl: 'ihub_base_url',
   refreshToken: 'ihub_refresh_token',
@@ -24,6 +35,7 @@ const STORAGE_KEYS = {
 };
 
 async function getBaseUrl() {
+  if (BAKED_CONFIG?.baseUrl) return BAKED_CONFIG.baseUrl;
   const { [STORAGE_KEYS.baseUrl]: baseUrl } = await chrome.storage.local.get(STORAGE_KEYS.baseUrl);
   return baseUrl || '';
 }
@@ -138,6 +150,9 @@ async function fetchRuntimeConfig(baseUrl) {
 }
 
 async function ensureRuntimeConfig(baseUrl) {
+  if (BAKED_CONFIG?.clientId && (!baseUrl || BAKED_CONFIG.baseUrl === baseUrl)) {
+    return BAKED_CONFIG;
+  }
   const cfg = await getRuntimeConfig();
   if (cfg && cfg.baseUrl === baseUrl && cfg.clientId) return cfg;
   return await fetchRuntimeConfig(baseUrl);
@@ -488,9 +503,19 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     try {
       switch (msg?.type) {
         case 'get-base-url':
-          sendResponse({ ok: true, baseUrl: await getBaseUrl() });
+          sendResponse({
+            ok: true,
+            baseUrl: await getBaseUrl(),
+            baked: Boolean(BAKED_CONFIG?.baseUrl)
+          });
           break;
         case 'set-base-url': {
+          if (BAKED_CONFIG?.baseUrl) {
+            throw new Error(
+              'Base URL is baked into this packaged extension and cannot be changed. ' +
+                'Reinstall a build downloaded from the desired iHub instance instead.'
+            );
+          }
           const url = String(msg.baseUrl || '').trim();
           if (!url) throw new Error('Base URL is required');
           if (!/^https?:\/\//i.test(url)) throw new Error('Base URL must start with http(s)://');
