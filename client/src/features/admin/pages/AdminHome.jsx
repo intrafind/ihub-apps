@@ -139,13 +139,13 @@ function AdminHome() {
       color: 'bg-blue-500'
     },
     {
-      key: 'extensionIntegration',
-      title: t('admin.nav.extensionIntegration', 'Browser Extension'),
+      key: 'browserExtension',
+      title: t('admin.nav.browserExtension', 'Browser Extension'),
       description: t(
-        'admin.home.sections.extensionIntegrationDesc',
+        'admin.home.sections.browserExtensionDesc',
         'Configure the iHub browser extension and manage its OAuth client'
       ),
-      href: '/admin/extension-integration',
+      href: '/admin/browser-extension',
       color: 'bg-emerald-500'
     }
   ];

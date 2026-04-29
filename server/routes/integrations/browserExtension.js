@@ -42,7 +42,7 @@ function sanitizeStarterPrompts(value) {
 
 /**
  * @swagger
- * /api/integrations/extension/config:
+ * /api/integrations/browser-extension/config:
  *   get:
  *     summary: Get browser extension runtime configuration
  *     description: Returns runtime configuration the browser extension needs before it can authenticate. No authentication required.
@@ -56,7 +56,7 @@ function sanitizeStarterPrompts(value) {
  */
 router.get('/config', (req, res) => {
   const platform = configCache.getPlatform();
-  const cfg = platform?.extensionIntegration;
+  const cfg = platform?.browserExtension;
 
   if (!cfg?.enabled) {
     return res.status(404).json({ error: 'Browser extension integration is not enabled' });

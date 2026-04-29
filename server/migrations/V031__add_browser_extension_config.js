@@ -1,5 +1,5 @@
 export const version = '031';
-export const description = 'add_extension_integration_config';
+export const description = 'add_browser_extension_config';
 
 const DEFAULT_STARTER_PROMPTS = [
   {
@@ -32,26 +32,26 @@ export async function precondition(ctx) {
 export async function up(ctx) {
   const platform = await ctx.readJson('config/platform.json');
 
-  ctx.setDefault(platform, 'extensionIntegration.enabled', false);
-  ctx.setDefault(platform, 'extensionIntegration.oauthClientId', '');
-  ctx.setDefault(platform, 'extensionIntegration.displayName', {
+  ctx.setDefault(platform, 'browserExtension.enabled', false);
+  ctx.setDefault(platform, 'browserExtension.oauthClientId', '');
+  ctx.setDefault(platform, 'browserExtension.displayName', {
     en: 'iHub Apps',
     de: 'iHub Apps'
   });
-  ctx.setDefault(platform, 'extensionIntegration.description', {
+  ctx.setDefault(platform, 'browserExtension.description', {
     en: 'AI-powered assistant for the browser',
     de: 'KI-gestützter Assistent für den Browser'
   });
-  ctx.setDefault(platform, 'extensionIntegration.starterPrompts', DEFAULT_STARTER_PROMPTS);
+  ctx.setDefault(platform, 'browserExtension.starterPrompts', DEFAULT_STARTER_PROMPTS);
 
   await ctx.writeJson('config/platform.json', platform);
-  ctx.log('Added extensionIntegration config defaults');
+  ctx.log('Added browserExtension config defaults');
 
   if (await ctx.fileExists('config/groups.json')) {
     const groupsConfig = await ctx.readJson('config/groups.json');
-    if (groupsConfig?.groups && !groupsConfig.groups.extension) {
-      groupsConfig.groups.extension = {
-        id: 'extension',
+    if (groupsConfig?.groups && !groupsConfig.groups['browser-extension']) {
+      groupsConfig.groups['browser-extension'] = {
+        id: 'browser-extension',
         name: 'Browser Extension Users',
         description: 'Users allowed to use the iHub browser extension',
         inherits: ['users'],
@@ -65,7 +65,7 @@ export async function up(ctx) {
         mappings: []
       };
       await ctx.writeJson('config/groups.json', groupsConfig);
-      ctx.log('Added "extension" group to groups.json');
+      ctx.log('Added "browser-extension" group to groups.json');
     }
   }
 }

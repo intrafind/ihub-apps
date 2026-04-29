@@ -6,7 +6,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
-function AdminExtensionIntegrationPage() {
+function AdminBrowserExtensionPage() {
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -38,7 +38,7 @@ function AdminExtensionIntegrationPage() {
   const loadStatus = async () => {
     try {
       setLoading(true);
-      const res = await makeAdminApiCall('/admin/extension-integration/status', { method: 'GET' });
+      const res = await makeAdminApiCall('/admin/browser-extension/status', { method: 'GET' });
       const data = res.data;
       setStatus(data);
       setDisplayName(sanitizeLocalized(data.displayName));
@@ -54,12 +54,12 @@ function AdminExtensionIntegrationPage() {
       );
       setExtensionIdsText(Array.isArray(data.extensionIds) ? data.extensionIds.join('\n') : '');
       setAllowedGroupsText(
-        Array.isArray(data.allowedGroups) ? data.allowedGroups.join(', ') : 'extension'
+        Array.isArray(data.allowedGroups) ? data.allowedGroups.join(', ') : 'browser-extension'
       );
     } catch (_err) {
       setMessage({
         type: 'error',
-        text: t('admin.extensionIntegration.loadError', 'Failed to load Browser Extension status')
+        text: t('admin.browserExtension.loadError', 'Failed to load Browser Extension status')
       });
     } finally {
       setLoading(false);
@@ -77,14 +77,14 @@ function AdminExtensionIntegrationPage() {
     try {
       setToggling(true);
       setMessage(null);
-      await makeAdminApiCall(`/admin/extension-integration/${action}`, { method: 'POST' });
+      await makeAdminApiCall(`/admin/browser-extension/${action}`, { method: 'POST' });
       await loadStatus();
       setMessage({
         type: 'success',
         text: status.enabled
-          ? t('admin.extensionIntegration.disabled', 'Browser Extension integration disabled')
+          ? t('admin.browserExtension.disabled', 'Browser Extension integration disabled')
           : t(
-              'admin.extensionIntegration.enabled',
+              'admin.browserExtension.enabled',
               'Browser Extension integration enabled successfully. OAuth client has been created.'
             )
       });
@@ -92,7 +92,7 @@ function AdminExtensionIntegrationPage() {
       setMessage({
         type: 'error',
         text: t(
-          'admin.extensionIntegration.toggleError',
+          'admin.browserExtension.toggleError',
           'Failed to update Browser Extension integration'
         )
       });
@@ -134,7 +134,7 @@ function AdminExtensionIntegrationPage() {
         .map(s => s.trim())
         .filter(Boolean);
 
-      await makeAdminApiCall('/admin/extension-integration/config', {
+      await makeAdminApiCall('/admin/browser-extension/config', {
         method: 'PUT',
         data: {
           displayName: trimLocalized(displayName),
@@ -147,13 +147,13 @@ function AdminExtensionIntegrationPage() {
       await loadStatus();
       setMessage({
         type: 'success',
-        text: t('admin.extensionIntegration.saved', 'Configuration saved')
+        text: t('admin.browserExtension.saved', 'Configuration saved')
       });
       setTimeout(() => setMessage(null), 3000);
     } catch (_err) {
       setMessage({
         type: 'error',
-        text: t('admin.extensionIntegration.saveError', 'Failed to save configuration')
+        text: t('admin.browserExtension.saveError', 'Failed to save configuration')
       });
     } finally {
       setSaving(false);
@@ -188,11 +188,11 @@ function AdminExtensionIntegrationPage() {
         <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {t('admin.extensionIntegration.title', 'Browser Extension')}
+              {t('admin.browserExtension.title', 'Browser Extension')}
             </h1>
             <p className="text-gray-600 dark:text-gray-400 mt-2">
               {t(
-                'admin.extensionIntegration.description',
+                'admin.browserExtension.description',
                 'Configure the iHub browser extension, its OAuth client, and which users can install it.'
               )}
             </p>
@@ -222,16 +222,16 @@ function AdminExtensionIntegrationPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      {t('admin.extensionIntegration.statusTitle', 'Integration Status')}
+                      {t('admin.browserExtension.statusTitle', 'Integration Status')}
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                       {status?.enabled
                         ? t(
-                            'admin.extensionIntegration.statusEnabled',
+                            'admin.browserExtension.statusEnabled',
                             'The browser extension integration is enabled. Users can sign in via the extension.'
                           )
                         : t(
-                            'admin.extensionIntegration.statusDisabled',
+                            'admin.browserExtension.statusDisabled',
                             'Enable to auto-create the OAuth client and allow users to sign in from the extension.'
                           )}
                     </p>
@@ -249,8 +249,8 @@ function AdminExtensionIntegrationPage() {
                     {toggling
                       ? '…'
                       : status?.enabled
-                        ? t('admin.extensionIntegration.disable', 'Disable')
-                        : t('admin.extensionIntegration.enable', 'Enable')}
+                        ? t('admin.browserExtension.disable', 'Disable')
+                        : t('admin.browserExtension.enable', 'Enable')}
                   </button>
                 </div>
 
@@ -267,7 +267,7 @@ function AdminExtensionIntegrationPage() {
                       to={`/admin/oauth/clients/${status.oauthClientId}`}
                       className="text-emerald-600 hover:underline dark:text-emerald-400"
                     >
-                      {t('admin.extensionIntegration.viewClient', 'View OAuth Client')}
+                      {t('admin.browserExtension.viewClient', 'View OAuth Client')}
                     </Link>
                   </div>
                 )}
@@ -275,7 +275,7 @@ function AdminExtensionIntegrationPage() {
                 {status?.enabled && status?.configUrl && (
                   <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 text-sm text-gray-600 dark:text-gray-400">
                     <span className="font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.extensionIntegration.configUrl', 'Runtime config URL')}:
+                      {t('admin.browserExtension.configUrl', 'Runtime config URL')}:
                     </span>{' '}
                     <code className="font-mono text-xs bg-gray-100 dark:bg-gray-700 px-2 py-0.5 rounded break-all">
                       {status.configUrl}
@@ -286,11 +286,11 @@ function AdminExtensionIntegrationPage() {
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                  {t('admin.extensionIntegration.idsTitle', 'Extension IDs')}
+                  {t('admin.browserExtension.idsTitle', 'Extension IDs')}
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   {t(
-                    'admin.extensionIntegration.idsDesc',
+                    'admin.browserExtension.idsDesc',
                     'Paste the Chrome / Edge / Firefox extension IDs that should be allowed to authenticate. The redirect URIs ' +
                       'https://<id>.chromiumapp.org/cb and https://<id>.extensions.allizom.org/cb are registered automatically.'
                   )}
@@ -306,36 +306,36 @@ function AdminExtensionIntegrationPage() {
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                  {t('admin.extensionIntegration.groupsTitle', 'Allowed Groups')}
+                  {t('admin.browserExtension.groupsTitle', 'Allowed Groups')}
                 </h2>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
                   {t(
-                    'admin.extensionIntegration.groupsDesc',
-                    'Comma-separated list of internal group IDs whose members may use the extension. Defaults to the "extension" group. Users not in any of these groups will see an access-denied page during sign-in.'
+                    'admin.browserExtension.groupsDesc',
+                    'Comma-separated list of internal group IDs whose members may use the extension. Defaults to the "browser-extension" group. Users not in any of these groups will see an access-denied page during sign-in.'
                   )}
                 </p>
                 <input
                   type="text"
                   value={allowedGroupsText}
                   onChange={e => setAllowedGroupsText(e.target.value)}
-                  placeholder="extension"
+                  placeholder="browser-extension"
                   className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
 
               <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                  {t('admin.extensionIntegration.displayTitle', 'Display Settings')}
+                  {t('admin.browserExtension.displayTitle', 'Display Settings')}
                 </h2>
                 <div className="space-y-4">
                   <DynamicLanguageEditor
-                    label={t('admin.extensionIntegration.displayName', 'Display Name')}
+                    label={t('admin.browserExtension.displayName', 'Display Name')}
                     value={displayName}
                     onChange={setDisplayName}
                     type="text"
                   />
                   <DynamicLanguageEditor
-                    label={t('admin.extensionIntegration.descriptionLabel', 'Description')}
+                    label={t('admin.browserExtension.descriptionLabel', 'Description')}
                     value={description}
                     onChange={setDescription}
                     type="textarea"
@@ -348,13 +348,13 @@ function AdminExtensionIntegrationPage() {
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                       {t(
-                        'admin.extensionIntegration.starterPromptsTitle',
+                        'admin.browserExtension.starterPromptsTitle',
                         'Default Starter Prompts'
                       )}
                     </h2>
                     <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                       {t(
-                        'admin.extensionIntegration.starterPromptsDesc',
+                        'admin.browserExtension.starterPromptsDesc',
                         'Prompts shown in the extension side panel when the selected app has no starter prompts of its own.'
                       )}
                     </p>
@@ -364,14 +364,14 @@ function AdminExtensionIntegrationPage() {
                     onClick={handleAddPrompt}
                     className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
-                    {t('admin.extensionIntegration.addPrompt', 'Add prompt')}
+                    {t('admin.browserExtension.addPrompt', 'Add prompt')}
                   </button>
                 </div>
 
                 {starterPrompts.length === 0 ? (
                   <p className="mt-4 text-sm text-gray-500 dark:text-gray-400 italic">
                     {t(
-                      'admin.extensionIntegration.noPrompts',
+                      'admin.browserExtension.noPrompts',
                       'No default starter prompts configured.'
                     )}
                   </p>
@@ -384,7 +384,7 @@ function AdminExtensionIntegrationPage() {
                       >
                         <div className="flex items-center justify-between mb-3">
                           <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            {t('admin.extensionIntegration.promptIndex', 'Prompt #{{n}}', {
+                            {t('admin.browserExtension.promptIndex', 'Prompt #{{n}}', {
                               n: index + 1
                             })}
                           </span>
@@ -394,7 +394,7 @@ function AdminExtensionIntegrationPage() {
                               onClick={() => handleMovePrompt(index, -1)}
                               disabled={index === 0}
                               className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                              aria-label={t('admin.extensionIntegration.moveUp', 'Move up')}
+                              aria-label={t('admin.browserExtension.moveUp', 'Move up')}
                             >
                               ↑
                             </button>
@@ -403,7 +403,7 @@ function AdminExtensionIntegrationPage() {
                               onClick={() => handleMovePrompt(index, 1)}
                               disabled={index === starterPrompts.length - 1}
                               className="rounded px-2 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 disabled:opacity-40 disabled:hover:bg-transparent"
-                              aria-label={t('admin.extensionIntegration.moveDown', 'Move down')}
+                              aria-label={t('admin.browserExtension.moveDown', 'Move down')}
                             >
                               ↓
                             </button>
@@ -412,19 +412,19 @@ function AdminExtensionIntegrationPage() {
                               onClick={() => handleRemovePrompt(index)}
                               className="rounded px-2 py-1 text-xs text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30"
                             >
-                              {t('admin.extensionIntegration.remove', 'Remove')}
+                              {t('admin.browserExtension.remove', 'Remove')}
                             </button>
                           </div>
                         </div>
                         <div className="space-y-3">
                           <DynamicLanguageEditor
-                            label={t('admin.extensionIntegration.promptTitle', 'Title')}
+                            label={t('admin.browserExtension.promptTitle', 'Title')}
                             value={prompt?.title || {}}
                             onChange={value => handlePromptChange(index, 'title', value)}
                             type="text"
                           />
                           <DynamicLanguageEditor
-                            label={t('admin.extensionIntegration.promptMessage', 'Message')}
+                            label={t('admin.browserExtension.promptMessage', 'Message')}
                             value={prompt?.message || {}}
                             onChange={value => handlePromptChange(index, 'message', value)}
                             type="textarea"
@@ -442,7 +442,7 @@ function AdminExtensionIntegrationPage() {
                     disabled={saving}
                     className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700 disabled:opacity-60"
                   >
-                    {saving ? '…' : t('admin.extensionIntegration.save', 'Save')}
+                    {saving ? '…' : t('admin.browserExtension.save', 'Save')}
                   </button>
                 </div>
               </div>
@@ -450,31 +450,31 @@ function AdminExtensionIntegrationPage() {
               {status?.enabled && (
                 <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl border border-blue-200 dark:border-blue-800 p-6">
                   <h2 className="text-base font-semibold text-blue-900 dark:text-blue-300 mb-3">
-                    {t('admin.extensionIntegration.setupTitle', 'Distribution Instructions')}
+                    {t('admin.browserExtension.setupTitle', 'Distribution Instructions')}
                   </h2>
                   <ol className="text-sm text-blue-800 dark:text-blue-300 space-y-1.5 list-decimal list-inside">
                     <li>
                       {t(
-                        'admin.extensionIntegration.step1',
-                        'Load the extension folder under /extension into Chrome via chrome://extensions → Developer mode → Load unpacked, or package and distribute via the Chrome Web Store.'
+                        'admin.browserExtension.step1',
+                        'Load the extension folder under /browser-extension into Chrome via chrome://extensions → Developer mode → Load unpacked, or package and distribute via the Chrome Web Store.'
                       )}
                     </li>
                     <li>
                       {t(
-                        'admin.extensionIntegration.step2',
+                        'admin.browserExtension.step2',
                         'Copy the extension ID Chrome assigns and add it to the "Extension IDs" list above; save.'
                       )}
                     </li>
                     <li>
                       {t(
-                        'admin.extensionIntegration.step3',
+                        'admin.browserExtension.step3',
                         'In the extension options page, point the extension at this iHub instance and sign in with PKCE.'
                       )}
                     </li>
                     <li>
                       {t(
-                        'admin.extensionIntegration.step4',
-                        'Add eligible users to the "extension" group (or whichever group(s) you listed above) so they can sign in.'
+                        'admin.browserExtension.step4',
+                        'Add eligible users to the "browser-extension" group (or whichever group(s) you listed above) so they can sign in.'
                       )}
                     </li>
                   </ol>
@@ -488,4 +488,4 @@ function AdminExtensionIntegrationPage() {
   );
 }
 
-export default AdminExtensionIntegrationPage;
+export default AdminBrowserExtensionPage;

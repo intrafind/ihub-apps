@@ -67,10 +67,10 @@ function validateLocalizedObject(fieldName, value, { maxLength, requireNonEmpty 
   return { value: sanitized };
 }
 
-export default function registerAdminExtensionIntegrationRoutes(app) {
+export default function registerAdminBrowserExtensionRoutes(app) {
   /**
    * @swagger
-   * /api/admin/extension-integration/status:
+   * /api/admin/browser-extension/status:
    *   get:
    *     summary: Get browser extension integration status
    *     tags:
@@ -82,9 +82,9 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
    *       200:
    *         description: Browser extension integration status
    */
-  app.get(buildServerPath('/api/admin/extension-integration/status'), adminAuth, (req, res) => {
+  app.get(buildServerPath('/api/admin/browser-extension/status'), adminAuth, (req, res) => {
     const platform = configCache.getPlatform();
-    const cfg = platform?.extensionIntegration || {};
+    const cfg = platform?.browserExtension || {};
     const baseUrl = buildPublicBaseUrl(req);
 
     res.json({
@@ -97,14 +97,14 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
       },
       starterPrompts: Array.isArray(cfg.starterPrompts) ? cfg.starterPrompts : [],
       extensionIds: Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [],
-      allowedGroups: Array.isArray(cfg.allowedGroups) ? cfg.allowedGroups : ['extension'],
-      configUrl: `${baseUrl}/api/integrations/extension/config`
+      allowedGroups: Array.isArray(cfg.allowedGroups) ? cfg.allowedGroups : ['browser-extension'],
+      configUrl: `${baseUrl}/api/integrations/browser-extension/config`
     });
   });
 
   /**
    * @swagger
-   * /api/admin/extension-integration/enable:
+   * /api/admin/browser-extension/enable:
    *   post:
    *     summary: Enable browser extension integration and auto-create OAuth client
    *     tags:
@@ -114,16 +114,16 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
    *       - sessionAuth: []
    */
   app.post(
-    buildServerPath('/api/admin/extension-integration/enable'),
+    buildServerPath('/api/admin/browser-extension/enable'),
     adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform();
-        const cfg = platform?.extensionIntegration || {};
+        const cfg = platform?.browserExtension || {};
 
         let oauthClientId = cfg.oauthClientId;
 
-        const allowedGroups = Array.isArray(cfg.allowedGroups) ? cfg.allowedGroups : ['extension'];
+        const allowedGroups = Array.isArray(cfg.allowedGroups) ? cfg.allowedGroups : ['browser-extension'];
         const extensionIds = Array.isArray(cfg.extensionIds) ? cfg.extensionIds : [];
         const redirectUris = buildRedirectUrisFromExtensionIds(extensionIds);
 
@@ -151,7 +151,7 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
           oauthClientId = newClient.clientId;
 
           logger.info('Created OAuth client for browser extension', {
-            component: 'AdminExtensionIntegration',
+            component: 'AdminBrowserExtension',
             clientId: oauthClientId
           });
         } else {
@@ -182,7 +182,7 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
 
         const updates = {
           ...oauthUpdates,
-          extensionIntegration: {
+          browserExtension: {
             ...cfg,
             enabled: true,
             oauthClientId,
@@ -195,14 +195,14 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
         const baseUrl = buildPublicBaseUrl(req);
 
         logger.info('Browser extension integration enabled', {
-          component: 'AdminExtensionIntegration',
+          component: 'AdminBrowserExtension',
           oauthClientId
         });
 
         res.json({
           message: 'Browser extension integration enabled successfully',
           oauthClientId,
-          configUrl: `${baseUrl}/api/integrations/extension/config`
+          configUrl: `${baseUrl}/api/integrations/browser-extension/config`
         });
       } catch (error) {
         return sendInternalError(res, error, 'enable browser extension integration');
@@ -212,28 +212,28 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/extension-integration/disable:
+   * /api/admin/browser-extension/disable:
    *   post:
    *     summary: Disable browser extension integration
    *     tags:
    *       - Admin - Browser Extension
    */
   app.post(
-    buildServerPath('/api/admin/extension-integration/disable'),
+    buildServerPath('/api/admin/browser-extension/disable'),
     adminAuth,
     async (req, res) => {
       try {
         const platform = configCache.getPlatform();
 
         await savePlatformConfig({
-          extensionIntegration: {
-            ...(platform?.extensionIntegration || {}),
+          browserExtension: {
+            ...(platform?.browserExtension || {}),
             enabled: false
           }
         });
 
         logger.info('Browser extension integration disabled', {
-          component: 'AdminExtensionIntegration'
+          component: 'AdminBrowserExtension'
         });
 
         res.json({ message: 'Browser extension integration disabled successfully' });
@@ -245,14 +245,14 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
 
   /**
    * @swagger
-   * /api/admin/extension-integration/config:
+   * /api/admin/browser-extension/config:
    *   put:
    *     summary: Update browser extension integration display + redirect settings
    *     tags:
    *       - Admin - Browser Extension
    */
   app.put(
-    buildServerPath('/api/admin/extension-integration/config'),
+    buildServerPath('/api/admin/browser-extension/config'),
     adminAuth,
     async (req, res) => {
       try {
@@ -342,7 +342,7 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
         }
 
         // If extensionIds or allowedGroups changed, re-sync the OAuth client.
-        const previous = platform?.extensionIntegration || {};
+        const previous = platform?.browserExtension || {};
         const merged = { ...previous, ...allowed };
 
         if (
@@ -352,7 +352,7 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
           const oauthConfig = platform?.oauth || {};
           const clientsFile = oauthConfig.clientsFile || 'contents/config/oauth-clients.json';
           const newRedirectUris = buildRedirectUrisFromExtensionIds(merged.extensionIds || []);
-          const newAllowedGroups = merged.allowedGroups || ['extension'];
+          const newAllowedGroups = merged.allowedGroups || ['browser-extension'];
           try {
             await updateOAuthClient(
               previous.oauthClientId,
@@ -362,24 +362,24 @@ export default function registerAdminExtensionIntegrationRoutes(app) {
             );
           } catch (err) {
             logger.warn('Failed to sync OAuth client for extension integration', {
-              component: 'AdminExtensionIntegration',
+              component: 'AdminBrowserExtension',
               error: err
             });
           }
         }
 
         await savePlatformConfig({
-          extensionIntegration: merged
+          browserExtension: merged
         });
 
         logger.info('Browser extension integration config updated', {
-          component: 'AdminExtensionIntegration',
+          component: 'AdminBrowserExtension',
           fields: Object.keys(allowed)
         });
 
         res.json({
           message: 'Browser extension integration configuration updated',
-          extensionIntegration: configCache.getPlatform()?.extensionIntegration
+          browserExtension: configCache.getPlatform()?.browserExtension
         });
       } catch (error) {
         return sendInternalError(res, error, 'update browser extension integration config');

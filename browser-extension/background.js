@@ -18,7 +18,7 @@ const STORAGE_KEYS = {
   baseUrl: 'ihub_base_url',
   refreshToken: 'ihub_refresh_token',
   accessToken: 'ihub_access_token',
-  // Cached runtime config from /api/integrations/extension/config
+  // Cached runtime config from /api/integrations/browser-extension/config
   runtimeConfig: 'ihub_runtime_config',
   pkceVerifier: 'ihub_pkce_verifier'
 };
@@ -125,7 +125,7 @@ function getRedirectUri() {
 }
 
 async function fetchRuntimeConfig(baseUrl) {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/integrations/extension/config`;
+  const url = `${baseUrl.replace(/\/$/, '')}/api/integrations/browser-extension/config`;
   const res = await fetch(url, { method: 'GET', credentials: 'omit' });
   if (!res.ok) {
     throw new Error(

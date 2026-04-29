@@ -13,7 +13,7 @@ cross-tab orchestration.
 ## What's in the package
 
 ```
-extension/
+browser-extension/
 ├── manifest.json        Manifest V3 manifest
 ├── background.js        Service worker — OAuth, token storage, API forwarding
 ├── sidepanel.html       Side panel root
@@ -41,11 +41,11 @@ endpoints introduced alongside the extension:
 
 | Method | Path                                       | Purpose                                    |
 | ------ | ------------------------------------------ | ------------------------------------------ |
-| POST   | `/api/admin/extension-integration/enable`  | Auto-create the extension's OAuth client   |
-| POST   | `/api/admin/extension-integration/disable` | Disable the integration                    |
-| PUT    | `/api/admin/extension-integration/config`  | Update display + redirect + group settings |
-| GET    | `/api/admin/extension-integration/status`  | Read current configuration                 |
-| GET    | `/api/integrations/extension/config`       | Public runtime config the extension reads  |
+| POST   | `/api/admin/browser-extension/enable`  | Auto-create the extension's OAuth client   |
+| POST   | `/api/admin/browser-extension/disable` | Disable the integration                    |
+| PUT    | `/api/admin/browser-extension/config`  | Update display + redirect + group settings |
+| GET    | `/api/admin/browser-extension/status`  | Read current configuration                 |
+| GET    | `/api/integrations/browser-extension/config`       | Public runtime config the extension reads  |
 
 The OAuth client has a new optional `allowedGroups` field that pins
 authentication to a specific iHub group. The default migration adds an
@@ -56,7 +56,7 @@ of the listed groups sees a clear access-denied page during sign-in.
 
 1. Visit `chrome://extensions` (or `edge://extensions`) and enable
    **Developer mode**.
-2. Click **Load unpacked** and pick the `extension/` directory.
+2. Click **Load unpacked** and pick the `browser-extension/` directory.
 3. Note the **extension ID** Chrome assigns and copy it.
 4. In iHub admin, open **Browser Extension** and:
    - Click **Enable** if you haven't already (this auto-creates the
@@ -65,7 +65,7 @@ of the listed groups sees a clear access-denied page during sign-in.
      This registers the redirect URIs
      `https://<id>.chromiumapp.org/cb` and
      `https://<id>.extensions.allizom.org/cb` on the OAuth client.
-   - Add eligible users to the **extension** group (or whichever groups
+   - Add eligible users to the **browser-extension** group (or whichever groups
      you listed under **Allowed Groups**).
 5. Click the iHub icon in the toolbar to open the side panel, then
    click the gear in the side panel header to set the iHub base URL.

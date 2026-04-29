@@ -39,7 +39,7 @@ import office365Routes from './routes/integrations/office365.js';
 import googledriveRoutes from './routes/integrations/googledrive.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
 import officeAddinRoutes from './routes/integrations/officeAddin.js';
-import extensionIntegrationRoutes from './routes/integrations/extension.js';
+import browserExtensionRoutes from './routes/integrations/browserExtension.js';
 import registerOfficeRoutes from './routes/office.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
@@ -434,7 +434,7 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes);
   app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
   app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes);
-  app.use(buildApiPath('/integrations/extension'), extensionIntegrationRoutes);
+  app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 
