@@ -154,6 +154,7 @@ export const platformConfigSchema = z
         defaultGroups: z.array(z.string()).default([]),
         sessionTimeoutMinutes: z.number().min(1).default(480),
         generateJwtToken: z.boolean().default(true),
+        tlsOptions: z.record(z.any()).optional(),
         options: z.record(z.any()).optional()
       })
       .default({}),
