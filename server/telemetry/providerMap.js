@@ -9,12 +9,12 @@
 
 const PROVIDER_NAME_MAP = {
   openai: 'openai',
-  'openai-responses': 'openai',
+  'openai-responses': 'openai-responses',
   anthropic: 'anthropic',
   google: 'google',
   mistral: 'mistral_ai',
-  local: 'openai', // vLLM uses an OpenAI-compatible API
-  vllm: 'openai',
+  local: 'local', // vLLM uses an OpenAI-compatible API
+  vllm: 'vllm',
   'iassistant-conversation': 'iassistant'
 };
 
