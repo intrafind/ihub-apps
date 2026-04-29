@@ -1290,6 +1290,30 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                     Groups automatically assigned to LDAP users
                   </p>
                 </div>
+
+                <div className="md:col-span-2">
+                  <label className="flex items-center space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={provider.tlsOptions?.rejectUnauthorized === false}
+                      onChange={e =>
+                        updateLdapProvider(
+                          index,
+                          'tlsOptions',
+                          e.target.checked ? { rejectUnauthorized: false } : undefined
+                        )
+                      }
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Allow self-signed / internal CA certificates (ldaps://)
+                    </span>
+                  </label>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-7">
+                    Enable when the LDAP server uses a certificate from a private or internal CA.
+                    Required for most on-premise ldaps:// setups.
+                  </p>
+                </div>
               </div>
             </div>
           ))}
@@ -1333,7 +1357,8 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
                 placeholder="ldap://dc.example.com:389"
               />
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                LDAP URL of domain controller (e.g., ldap://dc.example.com:389)
+                LDAP URL of domain controller (e.g., ldap://dc.example.com:389 or
+                ldaps://dc.example.com:636)
               </p>
             </div>
             <div>
@@ -1488,6 +1513,29 @@ function PlatformFormEditor({ value: config, onChange, onValidationChange }) {
               </label>
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Generate JWT tokens for API access after NTLM authentication
+              </p>
+            </div>
+            <div className="md:col-span-2">
+              <label className="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={config.ntlmAuth?.tlsOptions?.rejectUnauthorized === false}
+                  onChange={e =>
+                    updateNestedConfig(
+                      'ntlmAuth',
+                      'tlsOptions',
+                      e.target.checked ? { rejectUnauthorized: false } : undefined
+                    )
+                  }
+                  className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Allow self-signed / internal CA certificates (ldaps://)
+                </span>
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 ml-7">
+                Enable when the domain controller uses a certificate from a private or internal CA.
+                Required for most on-premise ldaps:// setups.
               </p>
             </div>
           </div>
