@@ -94,17 +94,26 @@ export function initializeProcessMetrics(meterSource) {
 
   meter
     .createObservableGauge('ihub.workers.count', {
-      description: 'Number of cluster workers visible from this process',
+      description: 'Number of serving processes visible from this Node process',
       unit: '{worker}'
     })
     .addCallback(observableResult => {
       try {
-        // From the primary's POV: workers are in cluster.workers; from a
-        // worker's POV: it sees only itself.
-        const count = cluster.isPrimary ? Object.keys(cluster.workers || {}).length : 1;
-        observableResult.observe(count, {
-          'cluster.role': cluster.isPrimary ? 'primary' : 'worker'
-        });
+        // Three cases to disambiguate:
+        //   1. Sticky-cluster primary with forked workers: report the worker count.
+        //   2. Single-process mode (WORKERS=1): cluster.isPrimary is true but no
+        //      workers have been forked - this very process is the only serving
+        //      one, so report 1 (not 0, which is what cluster.workers gives).
+        //   3. Worker process: each worker reports 1 from its own /metrics.
+        let count = 1;
+        let role = 'primary';
+        if (cluster.isPrimary) {
+          const workerCount = cluster.workers ? Object.keys(cluster.workers).length : 0;
+          count = workerCount > 0 ? workerCount : 1;
+        } else {
+          role = 'worker';
+        }
+        observableResult.observe(count, { 'cluster.role': role });
       } catch (error) {
         logger.warn('Failed to observe ihub.workers.count', {
           component: 'ProcessMetrics',
