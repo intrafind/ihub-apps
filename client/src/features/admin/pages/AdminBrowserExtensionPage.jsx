@@ -164,7 +164,12 @@ function AdminBrowserExtensionPage() {
   };
 
   const handleRotateKey = async () => {
+    // The same endpoint handles first-time generation and rotation. Skip the
+    // "this will invalidate installed copies" confirmation when there's no
+    // existing key, because there are no installed copies to invalidate.
+    const isFirstTime = !status?.signingKey?.extensionId;
     if (
+      !isFirstTime &&
       !window.confirm(
         t(
           'admin.browserExtension.rotateKeyConfirm',
@@ -180,10 +185,12 @@ function AdminBrowserExtensionPage() {
       await loadStatus();
       setMessage({
         type: 'success',
-        text: t(
-          'admin.browserExtension.rotateKeyOk',
-          'Signing key rotated; new extension ID issued.'
-        )
+        text: isFirstTime
+          ? t(
+              'admin.browserExtension.signingKeyGenerated',
+              'Signing key generated. You can now download the packaged extension.'
+            )
+          : t('admin.browserExtension.rotateKeyOk', 'Signing key rotated; new extension ID issued.')
       });
     } catch (err) {
       setMessage({
@@ -367,6 +374,30 @@ function AdminBrowserExtensionPage() {
                   </div>
                 )}
               </div>
+
+              {status?.enabled && !status?.signingKey?.extensionId && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl p-6">
+                  <h2 className="text-lg font-semibold text-amber-900 dark:text-amber-200 mb-2">
+                    {t(
+                      'admin.browserExtension.signingKeyMissingTitle',
+                      'Signing key not generated yet'
+                    )}
+                  </h2>
+                  <p className="text-sm text-amber-800 dark:text-amber-300 mb-4">
+                    {t(
+                      'admin.browserExtension.signingKeyMissingDesc',
+                      'This integration was enabled before signing-key support shipped, so the packaged-download flow is unavailable until a key is generated. Click below to create one — the resulting extension ID is registered as a redirect URI on the OAuth client automatically.'
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={handleRotateKey}
+                    className="rounded-lg bg-emerald-600 text-white px-4 py-2 text-sm font-medium hover:bg-emerald-700"
+                  >
+                    {t('admin.browserExtension.generateSigningKey', 'Generate signing key')}
+                  </button>
+                </div>
+              )}
 
               {status?.enabled && status?.signingKey?.extensionId && (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
