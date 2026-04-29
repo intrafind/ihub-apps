@@ -479,13 +479,20 @@ export default function jwtAuthMiddleware(req, res, next) {
         const usersFilePath = platform.localAuth?.usersFile || 'contents/config/users.json';
         const usersConfig = loadUsers(usersFilePath);
 
-        const userId = decoded.username;
+        // users.json is keyed by the persisted UUID (decoded.sub). Fall back to
+        // username for legacy tokens minted before sub was the canonical id.
+        const userId = decoded.sub || decoded.username;
         let userRecord = usersConfig.users?.[userId];
 
-        // If not found by username, try to find by email
         if (!userRecord && decoded.email) {
           userRecord = Object.values(usersConfig.users || {}).find(
             u => u.email === decoded.email && u.authMethods?.includes('ldap')
+          );
+        }
+
+        if (!userRecord && decoded.username) {
+          userRecord = Object.values(usersConfig.users || {}).find(
+            u => u.ldapData?.username === decoded.username && u.authMethods?.includes('ldap')
           );
         }
 
@@ -501,8 +508,8 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
 
         user = {
-          id: decoded.username,
-          username: decoded.username,
+          id: decoded.sub || decoded.username,
+          username: decoded.username || decoded.sub,
           name: decoded.name || decoded.displayName || decoded.username,
           email: decoded.email || decoded.mail || '',
           groups: decoded.groups || [],
