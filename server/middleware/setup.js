@@ -14,6 +14,7 @@ import { enhanceUserWithPermissions } from '../utils/authorization.js';
 import { createRateLimiters } from './rateLimiting.js';
 import { buildApiPath, buildServerPath } from '../utils/basePath.js';
 import config from '../config.js';
+import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
@@ -332,29 +333,72 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Trust proxy for proper IP and protocol detection
   app.set('trust proxy', 1);
 
-  // Configure CORS with platform configuration
-  const corsConfig = platformConfig.cors || {};
-  const corsOptions = {
-    origin: processCorsOrigins(corsConfig.origin),
-    methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
-    allowedHeaders: corsConfig.allowedHeaders || [
-      'Content-Type',
-      'Authorization',
-      'X-Requested-With',
-      'X-Forwarded-User',
-      'X-Forwarded-Groups',
-      'Accept',
-      'Origin',
-      'Cache-Control',
-      'X-File-Name'
-    ],
-    credentials: corsConfig.credentials !== undefined ? corsConfig.credentials : true,
-    optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
-    maxAge: corsConfig.maxAge || 86400,
-    preflightContinue: corsConfig.preflightContinue || false
+  // CORS options are resolved per-request from the live platform config so
+  // changes saved via /api/admin/cors/config take effect without a server
+  // restart. The cors() middleware accepts a (req, callback) -> options
+  // function for exactly this reason.
+  //
+  // Two behaviours we apply on top of the admin's saved config:
+  //
+  //   1. Spec fix for "*" + credentials: true
+  //      The CORS spec forbids Access-Control-Allow-Origin: * when the
+  //      response also carries Access-Control-Allow-Credentials: true.
+  //      Browsers detect the violation at preflight time. Symptom: simple
+  //      GETs work (no preflight) but anything that preflights (POST +
+  //      JSON body, custom headers like Authorization, etc.) fails with a
+  //      CORS error. When the admin saved cors.origin = "*" (or an array
+  //      containing "*") AND credentials are enabled, swap the literal
+  //      "*" for `true` so cors() echoes the request's Origin header —
+  //      the spec-compliant equivalent of "allow any origin with
+  //      credentials".
+  //
+  //   2. One-shot warning when (1) kicks in, so admins notice their
+  //      saved config got auto-upgraded.
+  let warnedAboutWildcard = false;
+  const dynamicCorsOptions = (req, callback) => {
+    const live = configCache.getPlatform() || platformConfig || {};
+    const corsConfig = live.cors || {};
+    const credentials = corsConfig.credentials !== undefined ? corsConfig.credentials : true;
+    let resolvedOrigin = processCorsOrigins(corsConfig.origin);
+
+    const isWildcard =
+      resolvedOrigin === '*' || (Array.isArray(resolvedOrigin) && resolvedOrigin.includes('*'));
+    if (isWildcard && credentials) {
+      if (!warnedAboutWildcard) {
+        warnedAboutWildcard = true;
+        logger.warn(
+          'CORS configured with origin: "*" and credentials: true — echoing ' +
+            'the request origin instead, because the browser blocks responses ' +
+            'with both headers at the same time. Set credentials: false to ' +
+            'keep the literal "*", or replace "*" with an explicit allowlist.',
+          { component: 'CORS' }
+        );
+      }
+      resolvedOrigin = true; // cors() echoes req.headers.origin
+    }
+
+    callback(null, {
+      origin: resolvedOrigin,
+      methods: corsConfig.methods || ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'HEAD', 'PATCH'],
+      allowedHeaders: corsConfig.allowedHeaders || [
+        'Content-Type',
+        'Authorization',
+        'X-Requested-With',
+        'X-Forwarded-User',
+        'X-Forwarded-Groups',
+        'Accept',
+        'Origin',
+        'Cache-Control',
+        'X-File-Name'
+      ],
+      credentials,
+      optionsSuccessStatus: corsConfig.optionsSuccessStatus || 200,
+      maxAge: corsConfig.maxAge || 86400,
+      preflightContinue: corsConfig.preflightContinue || false
+    });
   };
 
-  app.use(cors(corsOptions));
+  app.use(cors(dynamicCorsOptions));
 
   // Content-Language header for accessibility (WCAG 3.1.1)
   // Validate against a strict allowlist to prevent header injection from
