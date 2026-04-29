@@ -12,7 +12,7 @@
     "type": "module"
   },
   "side_panel": {
-    "default_path": "sidepanel.html"
+    "default_path": "extension/sidepanel.html"
   },
   "action": {
     "default_title": "iHub Apps",
@@ -27,6 +27,6 @@
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
-  "options_page": "options.html",
+  "options_page": "extension/options.html",
   "web_accessible_resources": []
 }

@@ -566,10 +566,35 @@ export default function registerAdminBrowserExtensionRoutes(app) {
   async function buildExtensionZipBuffer({ req, cfg }) {
     const baseUrl = buildPublicBaseUrl(req);
     const extDir = join(getRootDir(), 'browser-extension');
+    const distDir = join(getRootDir(), 'client', 'dist');
+    const distExtensionDir = join(distDir, 'extension');
+    const distAssetsDir = join(distDir, 'assets');
+
+    // The packaged extension layout combines:
+    //   * `manifest.json`   — rewritten here with the signing-key `key` field
+    //   * `background.js`   — service-worker source, shipped verbatim
+    //   * `icons/`          — source icons
+    //   * `extension/sidepanel.html`, `extension/options.html`
+    //                       — built React entries from `client/dist/extension/`
+    //   * `extension/runtime-config.js`
+    //                       — generated below; baked iHub URL + OAuth client
+    //   * `assets/*`        — Vite-built JS/CSS chunks the HTML references
+    //
+    // The Vite build must have been run before this endpoint is hit. If
+    // `client/dist/extension/sidepanel.html` is missing the admin UI shows
+    // a clear "build the client first" error rather than a half-baked ZIP.
+    const distSidepanel = join(distExtensionDir, 'sidepanel.html');
+    try {
+      await fs.access(distSidepanel);
+    } catch {
+      throw new Error(
+        `Built extension assets not found at ${distSidepanel}. Run \`npm run build\` (or \`cd client && npx vite build\`) first.`
+      );
+    }
 
     // Bump the manifest version on each download so Chrome reloads the SW
-    // with the new runtime-config. We append a build-stamp segment derived
-    // from the current minute since epoch — fits Chrome's 4-dotted-int rule.
+    // with the new runtime-config. Append a build-stamp segment derived from
+    // the current minute since epoch — fits Chrome's 4-dotted-int rule.
     const sourceManifest = JSON.parse(await fs.readFile(join(extDir, 'manifest.json'), 'utf8'));
     const buildStamp = Math.floor(Date.now() / 60000) % 100000;
     const baseVersion = String(sourceManifest.version || '0.1.0').replace(/[^0-9.]/g, '');
@@ -603,15 +628,29 @@ export default function registerAdminBrowserExtensionRoutes(app) {
       if (err.code !== 'ENOENT') throw err;
     });
 
+    // 1. Source files from browser-extension/: SW + icons. Skip the manifest
+    //    (rewritten below) and the placeholder runtime-config.js (the React
+    //    side panel reads its config from extension/runtime-config.js).
     archive.glob('**/*', {
       cwd: extDir,
-      // The shipped placeholder runtime-config.js and manifest.json are
-      // overwritten with customised versions below; everything else
-      // (background.js, sidepanel.*, options.*, icons/*) is included verbatim.
       ignore: ['manifest.json', 'runtime-config.js']
     });
+
+    // 2. Built React entries — landed at client/dist/extension/. Skip the
+    //    placeholder runtime-config.js shipped by `client/public/extension/`;
+    //    we generate the customised version below.
+    archive.directory(distExtensionDir, 'extension', entry => {
+      if (entry.name === 'runtime-config.js') return false;
+      return entry;
+    });
+
+    // 3. Vite-built JS/CSS chunks — referenced by the entry HTML as ../assets/*.
+    archive.directory(distAssetsDir, 'assets');
+
+    // 4. Generated manifest.json (with `key` for fixed extension ID) +
+    //    generated runtime-config.js next to the side panel HTML.
     archive.append(JSON.stringify(manifest, null, 2), { name: 'manifest.json' });
-    archive.append(runtimeConfigJs, { name: 'runtime-config.js' });
+    archive.append(runtimeConfigJs, { name: 'extension/runtime-config.js' });
 
     await archive.finalize();
     return Buffer.concat(chunks);

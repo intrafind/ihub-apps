@@ -39,7 +39,11 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, 'index.html'),
         'office-taskpane': resolve(__dirname, 'office/taskpane.html'),
-        'office-commands': resolve(__dirname, 'office/commands.html')
+        'office-commands': resolve(__dirname, 'office/commands.html'),
+        // Browser-extension surfaces — built into client/dist/extension/
+        // and packaged by /api/admin/browser-extension/download.{zip,crx}.
+        'extension-sidepanel': resolve(__dirname, 'extension/sidepanel.html'),
+        'extension-options': resolve(__dirname, 'extension/options.html')
       },
       output: {
         manualChunks: {

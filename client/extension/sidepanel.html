@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iHub Apps</title>
+  </head>
+  <body>
+    <div id="extension-root"></div>
+    <!--
+      runtime-config.js sits next to this file in the packaged extension and
+      is rewritten at download time by /api/admin/browser-extension/download
+      to bake the iHub base URL, OAuth client ID and starter prompts into
+      this build. The placeholder ships globalThis.IHUB_RUNTIME_CONFIG = null
+      so unpacked dev builds fall back to fetching the runtime config from
+      /api/integrations/browser-extension/config at startup.
+    -->
+    <script src="runtime-config.js"></script>
+    <script type="module" src="./sidepanel-entry.jsx"></script>
+  </body>
+</html>
