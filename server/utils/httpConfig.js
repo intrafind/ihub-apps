@@ -12,6 +12,49 @@ import config from '../config.js';
 import logger from './logger.js';
 
 /**
+ * Workaround for `https-proxy-agent` >=7.0.0 (verified through 9.0.0).
+ *
+ * The upstream constructor in `https-proxy-agent/dist/index.js` does:
+ *
+ *   constructor(proxy, opts) {
+ *     super(opts);                        // http.Agent stores opts in this.options
+ *     this.options = { path: undefined }; // overwrites — rejectUnauthorized lost here
+ *     ...
+ *     this.connectOpts = { ALPNProtocols: ['http/1.1'], ...omit(opts,'headers'), host, port };
+ *   }
+ *
+ * `http.Agent.addRequest` merges `{...requestOptions, ...this.options}` before calling
+ * `createSocket`. Because `this.options` was clobbered to `{ path: undefined }`,
+ * `rejectUnauthorized: false` from the constructor never reaches the options that
+ * `agent-base.createSocket` forwards as `connectOpts` to `connect()`. The destination
+ * TLS upgrade (`tls.connect({...omit(opts, 'host','path','port'), socket})`) therefore
+ * runs with Node's default `rejectUnauthorized: true` and rejects self-signed certs.
+ *
+ * `this.connectOpts` does retain `rejectUnauthorized`, but it's used only for the socket to
+ * the proxy itself, which is irrelevant when the proxy is plain HTTP (the common case).
+ *
+ * This subclass re-injects `rejectUnauthorized` into the `opts` argument of `connect()`,
+ * which the parent then spreads into `tls.connect()` for the destination upgrade.
+ *
+ * Remove this subclass once upstream stops clobbering `this.options` in the constructor or
+ * exposes a TLS-options pass-through API. See `node_modules/https-proxy-agent/dist/index.js`
+ * to verify on dependency upgrades.
+ */
+export class TlsForwardingHttpsProxyAgent extends HttpsProxyAgent {
+  constructor(proxy, opts = {}) {
+    super(proxy, opts);
+    this._destinationTlsOptions = {};
+    if (typeof opts.rejectUnauthorized === 'boolean') {
+      this._destinationTlsOptions.rejectUnauthorized = opts.rejectUnauthorized;
+    }
+  }
+
+  async connect(req, opts) {
+    return super.connect(req, { ...opts, ...this._destinationTlsOptions });
+  }
+}
+
+/**
  * Get SSL configuration from platform config
  * @returns {Object} SSL configuration object with ignoreInvalidCertificates and domainWhitelist
  */
@@ -295,11 +338,12 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     }
 
     try {
-      // For HttpsProxyAgent v7+, rejectUnauthorized is passed as a top-level option
       const agentOptions = shouldIgnoreSSL ? { rejectUnauthorized: false } : {};
 
       if (isHttps) {
-        return new HttpsProxyAgent(proxyUrl, agentOptions);
+        // TlsForwardingHttpsProxyAgent ensures rejectUnauthorized propagates to the
+        // destination TLS handshake, not just the proxy connection.
+        return new TlsForwardingHttpsProxyAgent(proxyUrl, agentOptions);
       } else {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
