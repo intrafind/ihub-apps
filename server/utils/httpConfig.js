@@ -12,6 +12,30 @@ import config from '../config.js';
 import logger from './logger.js';
 
 /**
+ * HttpsProxyAgent v7+/v9 has a bug where its constructor sets `this.options = { path: undefined }`
+ * after `super(opts)`, which prevents constructor options like `rejectUnauthorized` from being
+ * merged into the request options used during the TLS upgrade to the destination server.
+ * As a result, `rejectUnauthorized: false` only applies to the proxy connection itself, not the
+ * destination TLS handshake — so self-signed certificates on the upstream LLM endpoint still fail.
+ *
+ * This subclass re-injects `rejectUnauthorized` into the connect options, which `connect()`
+ * spreads into `tls.connect()` for the destination upgrade.
+ */
+class TlsForwardingHttpsProxyAgent extends HttpsProxyAgent {
+  constructor(proxy, opts = {}) {
+    super(proxy, opts);
+    this._destinationTlsOptions = {};
+    if (typeof opts.rejectUnauthorized === 'boolean') {
+      this._destinationTlsOptions.rejectUnauthorized = opts.rejectUnauthorized;
+    }
+  }
+
+  async connect(req, opts) {
+    return super.connect(req, { ...opts, ...this._destinationTlsOptions });
+  }
+}
+
+/**
  * Get SSL configuration from platform config
  * @returns {Object} SSL configuration object with ignoreInvalidCertificates and domainWhitelist
  */
@@ -295,11 +319,12 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     }
 
     try {
-      // For HttpsProxyAgent v7+, rejectUnauthorized is passed as a top-level option
       const agentOptions = shouldIgnoreSSL ? { rejectUnauthorized: false } : {};
 
       if (isHttps) {
-        return new HttpsProxyAgent(proxyUrl, agentOptions);
+        // TlsForwardingHttpsProxyAgent ensures rejectUnauthorized propagates to the
+        // destination TLS handshake, not just the proxy connection.
+        return new TlsForwardingHttpsProxyAgent(proxyUrl, agentOptions);
       } else {
         return new HttpProxyAgent(proxyUrl, agentOptions);
       }
