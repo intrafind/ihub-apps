@@ -145,36 +145,54 @@ export function isDomainWhitelisted(hostname, whitelist) {
 export function shouldIgnoreSSLForURL(url, sslConfig = null) {
   const config = sslConfig || getSSLConfig();
 
+  let hostname = '';
+  try {
+    hostname = new URL(url).hostname;
+  } catch {
+    // hostname stays empty; we still log below so the operator sees why bypass didn't apply
+  }
+
   // If ignoreInvalidCertificates is false, always validate SSL
   if (!config.ignoreInvalidCertificates) {
+    logger.debug('SSL bypass not applied: ignoreInvalidCertificates is false', {
+      component: 'HttpConfig',
+      hostname
+    });
     return false;
   }
 
-  // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting)
+  // If whitelist is empty, do NOT ignore SSL (security: require explicit domain whitelisting).
+  // Operators upgrading from older versions used to rely on a global bypass when whitelist
+  // was empty — that behavior was removed for security. This warning makes the silent skip visible.
   if (!config.domainWhitelist || config.domainWhitelist.length === 0) {
+    logger.warn(
+      'SSL bypass not applied: ignoreInvalidCertificates is true but ssl.domainWhitelist is empty. Add the LLM hostname to ssl.domainWhitelist in platform.json.',
+      { component: 'HttpConfig', hostname }
+    );
     return false;
   }
 
-  // Extract hostname from URL
-  try {
-    const urlObj = new URL(url);
-    const hostname = urlObj.hostname;
-
-    // Check if hostname is in whitelist
-    const isWhitelisted = isDomainWhitelisted(hostname, config.domainWhitelist);
-
-    if (isWhitelisted) {
-      logger.debug('SSL validation will be ignored for whitelisted domain', {
-        component: 'HttpConfig',
-        hostname
-      });
-    }
-
-    return isWhitelisted;
-  } catch (error) {
-    logger.warn('Error parsing URL for SSL whitelist check', { component: 'HttpConfig', error });
+  if (!hostname) {
+    logger.warn('Error parsing URL for SSL whitelist check', { component: 'HttpConfig', url });
     return false;
   }
+
+  // Check if hostname is in whitelist
+  const isWhitelisted = isDomainWhitelisted(hostname, config.domainWhitelist);
+
+  if (isWhitelisted) {
+    logger.debug('SSL validation will be ignored for whitelisted domain', {
+      component: 'HttpConfig',
+      hostname
+    });
+  } else {
+    logger.warn(
+      'SSL bypass not applied: hostname is not in ssl.domainWhitelist. Self-signed certs will be rejected for this host.',
+      { component: 'HttpConfig', hostname, domainWhitelist: config.domainWhitelist }
+    );
+  }
+
+  return isWhitelisted;
 }
 
 /**
@@ -352,11 +370,24 @@ export function createAgent(url = '', forceIgnoreSSL = null) {
     }
   }
 
-  // Fallback to SSL-only configuration if needed
+  // No proxy path: optionally bypass SSL via plain https.Agent.
   if (isHttps && shouldIgnoreSSL) {
+    logger.info('SSL certificate verification disabled for direct HTTPS request', {
+      component: 'HttpConfig',
+      url
+    });
     return new https.Agent({ rejectUnauthorized: false });
   }
 
+  // No agent applied. If the request later fails with a TLS error, the operator can
+  // look at the preceding shouldIgnoreSSLForURL log to see why bypass was skipped.
+  if (isHttps) {
+    logger.debug('No SSL bypass agent applied for HTTPS request', {
+      component: 'HttpConfig',
+      url,
+      proxyConfigured: Boolean(proxyConfig.https)
+    });
+  }
   return undefined;
 }
 
