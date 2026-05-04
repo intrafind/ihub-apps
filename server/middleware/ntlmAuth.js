@@ -129,9 +129,7 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     const tls = ntlmConfig.tlsOptions;
     tlsOptionsSummary = {
       rejectUnauthorized:
-        typeof tls.rejectUnauthorized === 'boolean'
-          ? tls.rejectUnauthorized
-          : 'default(true)',
+        typeof tls.rejectUnauthorized === 'boolean' ? tls.rejectUnauthorized : 'default(true)',
       hasCa: !!tls.ca,
       hasCert: !!tls.cert,
       hasKey: !!tls.key,
