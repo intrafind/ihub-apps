@@ -25,6 +25,31 @@ function createNtlmMiddleware(ntlmConfig = {}) {
   const ldapUser = ntlmConfig.domainControllerUser || process.env.NTLM_LDAP_USER;
   const ldapPassword = ntlmConfig.domainControllerPassword || process.env.NTLM_LDAP_PASSWORD;
 
+  // express-ntlm calls this for every internal step (negotiate, bind, parse).
+  // When ntlmConfig.debug is true, forward each line to our logger so admins can
+  // see exactly where the handshake is failing — particularly important for
+  // diagnosing 403 responses from the AD SASL bind step.
+  const debugFn = ntlmConfig.debug
+    ? (...args) => {
+        // First arg is the prefix ("[express-ntlm]"); strip it so we don't double-tag.
+        const [, ...rest] = args;
+        const msg = rest
+          .map(a => {
+            if (a instanceof Error) return a.stack || a.message;
+            if (typeof a === 'object') {
+              try {
+                return JSON.stringify(a);
+              } catch {
+                return String(a);
+              }
+            }
+            return String(a);
+          })
+          .join(' ');
+        logger.info('[express-ntlm] ' + msg, { component: 'NtlmAuth' });
+      }
+    : () => {};
+
   const options = {
     domain: ntlmConfig.domain,
     domaincontroller: ntlmConfig.domainController,
@@ -39,6 +64,54 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     domaincontrollerpassword: ldapPassword,
     // TLS options for ldaps:// connections with self-signed/internal CA certs
     ...(ntlmConfig.tlsOptions && { tlsOptions: ntlmConfig.tlsOptions }),
+    // Pipe express-ntlm's internal debug output through our logger
+    debug: debugFn,
+    // Wrap the default response handlers so we see exactly which path fired and
+    // what the request looked like when express-ntlm gave up. The 403 path is
+    // the most useful: it means the AD SASL bind with the user's NTLM Type 3
+    // token returned a non-success LDAP result code (commonly: channel binding
+    // enforced, NTLM restricted at the DC, or invalid credentials).
+    forbidden: (request, response /* , next */) => {
+      const auth = request.headers.authorization || '';
+      logger.warn('NTLM Auth: 403 Forbidden from express-ntlm', {
+        component: 'NtlmAuth',
+        url: request.originalUrl,
+        ntlm: request.ntlm || null,
+        authHeaderType: auth.split(' ')[0] || 'none',
+        authHeaderLength: auth.length,
+        hint: 'AD rejected the SASL bind carrying the NTLM Type 3 token. Likely causes: channel binding enforced (LdapEnforceChannelBinding=2), NTLM restricted at DC, or the browser sent invalid/empty credentials.'
+      });
+      response.sendStatus(403);
+    },
+    internalservererror: (request, response /* , next */) => {
+      logger.error('NTLM Auth: 500 from express-ntlm', {
+        component: 'NtlmAuth',
+        url: request.originalUrl,
+        ntlm: request.ntlm || null,
+        hint: 'Usually means the connection cache lost the proxy between Type 1 and Type 3 (HTTP keep-alive broken by an intermediary), or the AD socket errored.'
+      });
+      response.sendStatus(500);
+    },
+    badrequest: (request, response /* , next */) => {
+      logger.warn('NTLM Auth: 400 Bad Request from express-ntlm', {
+        component: 'NtlmAuth',
+        url: request.originalUrl,
+        authHeader: request.headers.authorization ? 'present' : 'missing'
+      });
+      response.sendStatus(400);
+    },
+    unauthorized: (request, response /* , next */) => {
+      // Default behaviour: send the NTLM challenge. Logged at debug to avoid noise
+      // (this fires on every initial request before the handshake completes).
+      logger.debug('NTLM Auth: sending 401 NTLM challenge', {
+        component: 'NtlmAuth',
+        url: request.originalUrl,
+        hadAuthHeader: !!request.headers.authorization
+      });
+      response.statusCode = 401;
+      response.setHeader('WWW-Authenticate', 'NTLM');
+      response.end();
+    },
     ...ntlmConfig.options
   };
 
@@ -49,7 +122,8 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     getGroups: options.getGroups,
     ldapBindUserConfigured: !!options.domaincontrolleruser,
     ldapBindPasswordConfigured: !!options.domaincontrollerpassword,
-    debugMode: options.debug
+    debugMode: !!ntlmConfig.debug,
+    tlsOptions: ntlmConfig.tlsOptions ? Object.keys(ntlmConfig.tlsOptions) : 'none'
   });
 
   // Warn if getGroups is enabled but no domain controller is configured
