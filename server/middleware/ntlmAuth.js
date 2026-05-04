@@ -101,19 +101,59 @@ function createNtlmMiddleware(ntlmConfig = {}) {
       response.sendStatus(400);
     },
     unauthorized: (request, response /* , next */) => {
-      // Default behaviour: send the NTLM challenge. Logged at debug to avoid noise
-      // (this fires on every initial request before the handshake completes).
-      logger.debug('NTLM Auth: sending 401 NTLM challenge', {
+      // Send the NTLM/Negotiate challenge. Header scheme follows the configured
+      // `type` so Negotiate deployments advertise correctly to the browser
+      // (express-ntlm 2.7 itself hardcodes NTLM, but matching the config is the
+      // forward-compatible behaviour). Logged at debug to avoid noise — this
+      // fires on every initial request before the handshake completes.
+      const scheme = ntlmConfig.type === 'negotiate' ? 'Negotiate' : 'NTLM';
+      logger.debug('NTLM Auth: sending 401 challenge', {
         component: 'NtlmAuth',
+        scheme,
         url: request.originalUrl,
         hadAuthHeader: !!request.headers.authorization
       });
       response.statusCode = 401;
-      response.setHeader('WWW-Authenticate', 'NTLM');
+      response.setHeader('WWW-Authenticate', scheme);
       response.end();
     },
     ...ntlmConfig.options
   };
+
+  // Summarise tlsOptions so the log makes the *effective* TLS behaviour
+  // visible. Logging only the keys hides whether `rejectUnauthorized` is true
+  // or false — exactly the diagnostic we need for self-signed AD certs.
+  // Sensitive material (ca/cert/key/pfx) is reported as a presence flag only.
+  let tlsOptionsSummary = 'none';
+  if (ntlmConfig.tlsOptions) {
+    const tls = ntlmConfig.tlsOptions;
+    tlsOptionsSummary = {
+      rejectUnauthorized:
+        typeof tls.rejectUnauthorized === 'boolean'
+          ? tls.rejectUnauthorized
+          : 'default(true)',
+      hasCa: !!tls.ca,
+      hasCert: !!tls.cert,
+      hasKey: !!tls.key,
+      hasPfx: !!tls.pfx,
+      ...(tls.servername && { servername: tls.servername }),
+      ...(tls.minVersion && { minVersion: tls.minVersion }),
+      ...(tls.maxVersion && { maxVersion: tls.maxVersion }),
+      otherKeys: Object.keys(tls).filter(
+        k =>
+          ![
+            'rejectUnauthorized',
+            'ca',
+            'cert',
+            'key',
+            'pfx',
+            'servername',
+            'minVersion',
+            'maxVersion'
+          ].includes(k)
+      )
+    };
+  }
 
   logger.info('NTLM Auth: configuring NTLM middleware', {
     component: 'NtlmAuth',
@@ -123,7 +163,8 @@ function createNtlmMiddleware(ntlmConfig = {}) {
     ldapBindUserConfigured: !!options.domaincontrolleruser,
     ldapBindPasswordConfigured: !!options.domaincontrollerpassword,
     debugMode: !!ntlmConfig.debug,
-    tlsOptions: ntlmConfig.tlsOptions ? Object.keys(ntlmConfig.tlsOptions) : 'none'
+    challengeScheme: ntlmConfig.type === 'negotiate' ? 'Negotiate' : 'NTLM',
+    tlsOptions: tlsOptionsSummary
   });
 
   // Warn if getGroups is enabled but no domain controller is configured
