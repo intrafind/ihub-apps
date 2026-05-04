@@ -1123,6 +1123,19 @@
         "securityWarning": "Sicherheitswarnung",
         "securityWarningDesc": "Das Deaktivieren der SSL-Zertifikatvalidierung macht Ihre Anwendung anfällig für Man-in-the-Middle-Angriffe. Verwenden Sie diese Funktion nur in sicheren, vertrauenswürdigen Netzwerkumgebungen.",
         "globalWarning": "Derzeit sind keine Domains auf der Whitelist. Die SSL-Zertifikatvalidierung ist für ALLE externen Verbindungen aktiviert. Fügen Sie oben bestimmte Domains hinzu, um die SSL-Validierung nur für diese Domains zu umgehen."
+      },
+      "cookieSettings": {
+        "title": "Cookie-Sicherheitskonfiguration",
+        "description": "Konfigurieren Sie Cookie-Sicherheitseinstellungen für die Authentifizierung",
+        "disableSecure": "Secure-Cookie-Flag deaktivieren",
+        "disableSecureDesc": "Wenn aktiviert, wird das 'secure'-Flag von Authentifizierungs-Cookies entfernt. Dies ermöglicht die Verwendung von Cookies über HTTP-Verbindungen ohne SSL. Aktivieren Sie dies nur für interne Bereitstellungen ohne SSL.",
+        "saveConfig": "Konfiguration speichern",
+        "savingConfig": "Konfiguration wird gespeichert...",
+        "configSaved": "Cookie-Einstellungen erfolgreich gespeichert",
+        "configSaveError": "Fehler beim Speichern der Cookie-Einstellungen",
+        "securityWarning": "Sicherheitswarnung",
+        "securityWarningDesc": "Das Deaktivieren des Secure-Cookie-Flags ermöglicht die Übertragung von Cookies über unverschlüsselte HTTP-Verbindungen. Dies macht Ihre Authentifizierungs-Tokens anfällig für Abfangen. Verwenden Sie dies nur in sicheren, internen Netzwerkumgebungen ohne SSL.",
+        "defaultBehavior": "Standardmäßig werden Cookies in Produktionsumgebungen als sicher markiert, was bedeutet, dass sie nur über HTTPS-Verbindungen gesendet werden. Dies ist die empfohlene Sicherheitseinstellung."
       }
     },
     "tools": {
