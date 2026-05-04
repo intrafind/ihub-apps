@@ -13,6 +13,7 @@ import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
 import { sendBadRequest, sendAuthRequired, sendErrorResponse } from '../utils/responseHelpers.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
+import { getAuthCookieOptions, getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 
 /**
  * Sanitize and validate authentication input
@@ -130,12 +131,7 @@ export default function registerAuthRoutes(app) {
       }
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expiresIn * 1000
-      });
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
 
       res.json({
         success: true,
@@ -275,12 +271,7 @@ export default function registerAuthRoutes(app) {
       }
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expiresIn * 1000
-      });
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
 
       res.json({
         success: true,
@@ -327,12 +318,7 @@ export default function registerAuthRoutes(app) {
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expiresIn * 1000
-      });
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
 
       // Validate and sanitize return URL to prevent open redirect attacks
       const rawReturnUrl = req.query.returnUrl;
@@ -422,12 +408,7 @@ export default function registerAuthRoutes(app) {
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: result.expiresIn * 1000
-      });
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
 
       res.json({
         success: true,
@@ -469,11 +450,7 @@ export default function registerAuthRoutes(app) {
    */
   app.post(buildServerPath('/api/auth/logout'), (req, res) => {
     // Clear the authentication cookie
-    res.clearCookie('authToken', {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax'
-    });
+    res.clearCookie('authToken', getClearAuthCookieOptions());
     recordAuthEvent(req.user?.authMode || 'unknown', 'logout');
 
     // Clear NTLM session flag to prevent auto-relogin

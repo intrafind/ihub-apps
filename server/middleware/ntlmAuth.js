@@ -5,6 +5,7 @@ import { generateJwt } from '../utils/tokenService.js';
 import { validateAndPersistExternalUser } from '../utils/userManager.js';
 import { getLdapProviderByName, lookupLdapGroupsForUser } from './ldapAuth.js';
 import logger from '../utils/logger.js';
+import { getAuthCookieOptions } from '../utils/cookieSettings.js';
 
 /**
  * NTLM/Windows Authentication middleware and utilities
@@ -538,12 +539,7 @@ export function ntlmAuthMiddleware(req, res, next) {
             req.jwtExpiresIn = expiresIn;
 
             // Set HTTP-only cookie for authentication
-            res.cookie('authToken', token, {
-              httpOnly: true,
-              secure: process.env.NODE_ENV === 'production',
-              sameSite: 'lax',
-              maxAge: expiresIn * 1000
-            });
+            res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
           } catch (tokenError) {
             logger.error('NTLM Auth: JWT token generation failed', {
               component: 'NtlmAuth',

@@ -880,6 +880,19 @@
         "securityWarning": "Security Warning",
         "securityWarningDesc": "Disabling SSL certificate validation makes your application vulnerable to man-in-the-middle attacks. Only use this feature in secure, trusted network environments.",
         "globalWarning": "No domains are currently whitelisted. SSL certificate validation is enabled for ALL external connections. Add specific domains above to bypass SSL validation for those domains only."
+      },
+      "cookieSettings": {
+        "title": "Cookie Security Configuration",
+        "description": "Configure cookie security settings for authentication",
+        "disableSecure": "Disable Secure Cookie Flag",
+        "disableSecureDesc": "When enabled, removes the 'secure' flag from authentication cookies. This allows cookies to work over HTTP connections without SSL. Only enable this for internal deployments without SSL.",
+        "saveConfig": "Save Configuration",
+        "savingConfig": "Saving Configuration...",
+        "configSaved": "Cookie settings saved successfully",
+        "configSaveError": "Failed to save cookie settings",
+        "securityWarning": "Security Warning",
+        "securityWarningDesc": "Disabling the secure cookie flag allows cookies to be transmitted over unencrypted HTTP connections. This makes your authentication tokens vulnerable to interception. Only use this in secure, internal network environments without SSL.",
+        "defaultBehavior": "By default, cookies are marked as secure in production environments, which means they will only be sent over HTTPS connections. This is the recommended security setting."
       }
     },
     "tools": {

@@ -5,6 +5,7 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import SSLConfig from '../components/SSLConfig';
 import CorsConfig from '../components/CorsConfig';
+import CookieSettingsConfig from '../components/CookieSettingsConfig';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 
@@ -1236,6 +1237,9 @@ function AdminSystemPage() {
 
             {/* SSL Configuration Section */}
             <SSLConfig />
+
+            {/* Cookie Settings Configuration Section */}
+            <CookieSettingsConfig />
 
             {/* CORS Configuration Section */}
             <CorsConfig />

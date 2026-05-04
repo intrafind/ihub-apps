@@ -4,6 +4,7 @@ import { verifyJwt, decodeJwt } from '../utils/tokenService.js';
 import { recordAuthEvent } from '../telemetry/metrics.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
+import { getClearAuthCookieOptions } from '../utils/cookieSettings.js';
 
 /**
  * JWT authentication middleware
@@ -202,11 +203,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       } else {
         // OAuth clients not enabled, but token is OAuth type - reject
         logger.warn('OAuth token rejected: OAuth clients not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
+        res.clearCookie('authToken', getClearAuthCookieOptions());
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }
@@ -335,11 +332,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         logger.warn('OAuth auth code token rejected: OAuth not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
+        res.clearCookie('authToken', getClearAuthCookieOptions());
         if (req.path === '/api/auth/status') {
           return next();
         }
@@ -409,11 +402,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         logger.warn('JWT Auth token rejected: local authentication is not enabled', {
           component: 'JwtAuth'
         });
-        res.clearCookie('authToken', {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax'
-        });
+        res.clearCookie('authToken', getClearAuthCookieOptions());
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }

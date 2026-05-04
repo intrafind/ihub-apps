@@ -8,6 +8,7 @@ import { generateJwt } from '../utils/tokenService.js';
 import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
+import { getAuthCookieOptions } from '../utils/cookieSettings.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -717,12 +718,7 @@ export function createOidcCallbackHandler(providerName) {
           });
 
           // Set HTTP-only cookie for authentication (needed for OAuth authorize endpoint)
-          res.cookie('authToken', token, {
-            httpOnly: true,
-            secure: process.env.NODE_ENV === 'production',
-            sameSite: 'lax',
-            maxAge: expiresIn * 1000
-          });
+          res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
 
           return res.redirect(oauthRedirectPath);
         }
@@ -756,12 +752,7 @@ export function createOidcCallbackHandler(providerName) {
         );
 
         // Set HTTP-only cookie for authentication
-        res.cookie('authToken', token, {
-          httpOnly: true,
-          secure: process.env.NODE_ENV === 'production',
-          sameSite: 'lax',
-          maxAge: expiresIn * 1000
-        });
+        res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
 
         // For web flows, redirect with token in query (for backward compatibility)
         if (req.query.redirect !== 'false') {
