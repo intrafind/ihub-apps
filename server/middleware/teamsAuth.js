@@ -6,6 +6,7 @@ import { enhanceUserGroups, mapExternalGroups } from '../utils/authorization.js'
 import { generateJwt } from '../utils/tokenService.js';
 import ErrorHandler from '../utils/ErrorHandler.js';
 import logger from '../utils/logger.js';
+import { getAuthCookieOptions } from '../utils/cookieSettings.js';
 
 // JWKS client for Microsoft public keys
 const createJwksClient = tenantId => {
@@ -253,12 +254,7 @@ export async function teamsTokenExchange(req, res) {
     });
 
     // Set HTTP-only cookie for authentication
-    res.cookie('authToken', token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: expiresIn * 1000
-    });
+    res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
 
     res.json({
       success: true,

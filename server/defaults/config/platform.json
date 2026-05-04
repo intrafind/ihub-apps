@@ -186,6 +186,9 @@
   "jwt": {
     "algorithm": "RS256"
   },
+  "cookieSettings": {
+    "disableSecure": false
+  },
   "iFinder": {
     "enabled": false,
     "baseUrl": "",
