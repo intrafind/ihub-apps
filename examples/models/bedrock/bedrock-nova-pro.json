@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-nova-pro",
+  "modelId": "amazon.nova-pro-v1:0",
+  "name": {
+    "en": "Amazon Nova Pro (Bedrock)",
+    "de": "Amazon Nova Pro (Bedrock)"
+  },
+  "description": {
+    "en": "Amazon Nova Pro via AWS Bedrock — multimodal (text, image, video), documents, and tool calling. PDF/DOCX size cap waived.",
+    "de": "Amazon Nova Pro über AWS Bedrock — multimodal (Text, Bild, Video), Dokumente und Tool-Aufrufe. PDF/DOCX-Größenlimit aufgehoben."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 300000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

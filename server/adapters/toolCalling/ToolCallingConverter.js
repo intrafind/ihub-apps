@@ -12,6 +12,7 @@ import * as AnthropicConverter from './AnthropicConverter.js';
 import * as GoogleConverter from './GoogleConverter.js';
 import * as MistralConverter from './MistralConverter.js';
 import * as VLLMConverter from './VLLMConverter.js';
+import * as BedrockConverter from './BedrockConverter.js';
 
 // GenericToolCalling exports are re-exported from converters, not directly used here
 
@@ -24,7 +25,8 @@ const CONVERTERS = {
   anthropic: AnthropicConverter,
   google: GoogleConverter,
   mistral: MistralConverter,
-  local: VLLMConverter // vLLM uses dedicated converter with schema sanitization
+  local: VLLMConverter, // vLLM uses dedicated converter with schema sanitization
+  bedrock: BedrockConverter
 };
 
 /**

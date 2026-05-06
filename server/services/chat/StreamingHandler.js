@@ -1,9 +1,7 @@
-import { convertResponseToGeneric } from '../../adapters/toolCalling/index.js';
 import { logInteraction } from '../../utils.js';
 import { estimateTokens, recordChatRequest, recordChatResponse } from '../../usageTracker.js';
 import { activeRequests } from '../../sse.js';
 import { actionTracker } from '../../actionTracker.js';
-import { createParser } from 'eventsource-parser';
 import { throttledFetch } from '../../requestThrottler.js';
 import ErrorHandler from '../../utils/ErrorHandler.js';
 import { getAdapter } from '../../adapters/index.js';
@@ -381,309 +379,92 @@ class StreamingHandler {
         return;
       }
 
-      const readableStream = this.getReadableStream(llmResponse);
-      const reader = readableStream.getReader();
-      const decoder = new TextDecoder();
       let fullResponse = '';
-
-      // Check if the adapter needs custom SSE processing (iassistant-conversation uses custom format)
       const adapter = getAdapter(model.provider);
-      const hasCustomBufferProcessor = model.provider === 'iassistant-conversation';
 
-      if (hasCustomBufferProcessor) {
-        // For providers like iAssistant Conversation with custom SSE format
-        let buffer = '';
+      // Adapters expose parseResponseStream(response, ctx) which yields normalized
+      // result chunks. The default in BaseAdapter handles SSE; iAssistant uses the
+      // line-delimited SSE variant; Bedrock parses binary EventStream frames.
+      const stream = adapter.parseResponseStream(llmResponse, { model, chatId, request });
 
-        while (true) {
-          const { done, value } = await reader.read();
+      for await (const result of stream) {
+        if (!activeRequests.has(chatId)) {
+          break;
+        }
+        if (!result) continue;
 
-          if (!activeRequests.has(chatId)) {
-            reader.cancel();
-            break;
-          }
-          if (done) {
-            break;
-          }
+        // Usage may arrive either at the top level or under metadata.usage
+        // depending on which converter emitted it.
+        if (result.usage) {
+          accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
+        }
+        if (result.metadata?.usage) {
+          accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
+        }
 
-          const chunk = decoder.decode(value, { stream: true });
-          buffer += chunk;
-
-          // Process complete SSE events only
-          if (buffer.includes('\n\n')) {
-            // Find the position of the last complete event
-            const parts = buffer.split('\n\n');
-            const completeEvents = parts.slice(0, -1).join('\n\n');
-            const remainingData = parts[parts.length - 1];
-
-            let result = null;
-            if (completeEvents) {
-              // Add back the delimiter for processing
-              try {
-                // Await the adapter's async buffer processing before using the parsed result
-                result = await adapter.processResponseBuffer(completeEvents + '\n\n');
-              } catch (processingError) {
-                logger.error('Error processing buffer with adapter', {
-                  component: 'StreamingHandler',
-                  provider: model.provider,
-                  error: processingError
-                });
-                result = {
-                  content: [],
-                  complete: false,
-                  finishReason: 'error',
-                  error: true,
-                  errorMessage: `Processing error: ${processingError.message}`
-                };
-              }
-
-              // Keep the remaining incomplete data in buffer
-              buffer = remainingData;
-
-              // Accumulate usage data from adapter results
-              if (result?.usage) {
-                accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
-              }
-
-              if (result && result.content && result.content.length > 0) {
-                for (const textContent of result.content) {
-                  actionTracker.trackChunk(chatId, { content: textContent });
-                  fullResponse += textContent;
-                }
-              }
-
-              // Handle generated images
-              this.processImages(result, chatId);
-
-              // Handle thinking content
-              this.processThinking(result, chatId);
-
-              // Handle grounding metadata (for Google Search)
-              this.processGroundingMetadata(result, chatId);
-
-              // Handle conversation-specific events (iassistant-conversation)
-              this.processConversationEvents(result, chatId, request);
-
-              if (result && result.error) {
-                await logInteraction(
-                  'chat_error',
-                  buildLogData(true, {
-                    responseType: 'error',
-                    error: {
-                      message: result.errorMessage || 'Error processing response',
-                      code: 'PROCESSING_ERROR'
-                    },
-                    response: fullResponse
-                  })
-                );
-                actionTracker.trackError(chatId, {
-                  message: result.errorMessage || 'Error processing response'
-                });
-                finishReason = 'error';
-                break;
-              }
-
-              if (result && result.finishReason) {
-                finishReason = result.finishReason;
-              }
-
-              if (result && result.complete) {
-                // Emit answer source information before done event
-                const sources = this.getKnowledgeSources(chatId);
-                if (sources.length > 0) {
-                  actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
-                }
-
-                actionTracker.trackDone(chatId, { finishReason });
-                doneEmitted = true;
-
-                // Reset knowledge sources after emitting
-                this.resetKnowledgeSources(chatId);
-
-                await logInteraction(
-                  'chat_response',
-                  buildLogData(true, { responseType: 'success', response: fullResponse })
-                );
-
-                const completionTokens =
-                  accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
-                const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
-                await recordChatResponse({
-                  userId: baseLog.userSessionId,
-                  appId: baseLog.appId,
-                  modelId: model.id,
-                  tokens: completionTokens,
-                  tokenSource,
-                  user: baseLog.user
-                });
-                break;
-              }
-            }
-          }
-
-          if (finishReason === 'error' || doneEmitted) {
-            break;
+        if (result.content && result.content.length > 0) {
+          for (const textContent of result.content) {
+            actionTracker.trackChunk(chatId, { content: textContent });
+            fullResponse += textContent;
           }
         }
 
-        // Process any remaining data in buffer after stream ends
-        if (buffer.trim() && !doneEmitted && finishReason !== 'error') {
-          const result = await adapter.processResponseBuffer(buffer);
+        this.processImages(result, chatId);
+        this.processThinking(result, chatId);
+        this.processGroundingMetadata(result, chatId);
+        this.processConversationEvents(result, chatId, request);
 
-          if (result?.usage) {
-            accumulatedUsage = mergeUsage(accumulatedUsage, result.usage);
-          }
-
-          if (result && result.content && result.content.length > 0) {
-            for (const textContent of result.content) {
-              actionTracker.trackChunk(chatId, { content: textContent });
-              fullResponse += textContent;
-            }
-          }
-
-          // Handle generated images in remaining buffer
-          this.processImages(result, chatId);
-
-          // Handle conversation events in remaining buffer
-          this.processConversationEvents(result, chatId, request);
-
-          if (result && result.complete) {
-            // Emit answer source information before done event
-            const sources = this.getKnowledgeSources(chatId);
-            if (sources.length > 0) {
-              actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
-            }
-
-            actionTracker.trackDone(chatId, { finishReason: result.finishReason || 'stop' });
-            doneEmitted = true;
-
-            // Reset knowledge sources after emitting
-            this.resetKnowledgeSources(chatId);
-
-            await logInteraction(
-              'chat_response',
-              buildLogData(true, { responseType: 'success', response: fullResponse })
-            );
-
-            const completionTokens =
-              accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
-            const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
-            await recordChatResponse({
-              userId: baseLog.userSessionId,
-              appId: baseLog.appId,
-              modelId: model.id,
-              tokens: completionTokens,
-              tokenSource,
-              user: baseLog.user
-            });
-          }
+        if (result.error) {
+          await logInteraction(
+            'chat_error',
+            buildLogData(true, {
+              responseType: 'error',
+              error: {
+                message: result.errorMessage || 'Error processing response',
+                code: 'PROCESSING_ERROR'
+              },
+              response: fullResponse
+            })
+          );
+          actionTracker.trackError(chatId, {
+            message: result.errorMessage || 'Error processing response'
+          });
+          finishReason = 'error';
+          break;
         }
-      } else {
-        // Standard eventsource-parser approach for OpenAI-style providers
-        const events = [];
-        const parser = createParser({
-          onEvent: event => {
-            if (event.type === 'event' || !event.type) {
-              events.push(event);
-            }
-          }
-        });
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (!activeRequests.has(chatId)) {
-            reader.cancel();
-            break;
-          }
-          if (done) break;
+        if (result.finishReason) {
+          finishReason = result.finishReason;
+        }
 
-          const chunk = decoder.decode(value, { stream: true });
-          parser.feed(chunk);
-
-          while (events.length > 0) {
-            const evt = events.shift();
-            // Use await to handle async processResponseBuffer
-            const result = await convertResponseToGeneric(evt.data, model.provider);
-
-            // Accumulate usage data from converter results (via metadata.usage)
-            if (result?.metadata?.usage) {
-              accumulatedUsage = mergeUsage(accumulatedUsage, result.metadata.usage);
-            }
-
-            if (result && result.content && result.content.length > 0) {
-              for (const textContent of result.content) {
-                actionTracker.trackChunk(chatId, { content: textContent });
-                fullResponse += textContent;
-              }
-            }
-
-            // Handle generated images
-            this.processImages(result, chatId);
-
-            // Handle thinking
-            this.processThinking(result, chatId);
-
-            // Handle grounding metadata
-            this.processGroundingMetadata(result, chatId);
-
-            if (result && result.error) {
-              await logInteraction(
-                'chat_error',
-                buildLogData(true, {
-                  responseType: 'error',
-                  error: {
-                    message: result.errorMessage || 'Error processing response',
-                    code: 'PROCESSING_ERROR'
-                  },
-                  response: fullResponse
-                })
-              );
-              actionTracker.trackError(chatId, {
-                message: result.errorMessage || 'Error processing response'
-              });
-              finishReason = 'error';
-              break;
-            }
-
-            if (result && result.finishReason) {
-              finishReason = result.finishReason;
-            }
-
-            if (result && result.complete) {
-              // Emit answer source information before done event
-              const sources = this.getKnowledgeSources(chatId);
-              if (sources.length > 0) {
-                actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
-              }
-
-              actionTracker.trackDone(chatId, { finishReason });
-              doneEmitted = true;
-
-              // Reset knowledge sources after emitting
-              this.resetKnowledgeSources(chatId);
-
-              await logInteraction(
-                'chat_response',
-                buildLogData(true, { responseType: 'success', response: fullResponse })
-              );
-
-              const completionTokens =
-                accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
-              const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
-              await recordChatResponse({
-                userId: baseLog.userSessionId,
-                appId: baseLog.appId,
-                modelId: model.id,
-                tokens: completionTokens,
-                tokenSource,
-                user: baseLog.user
-              });
-              break;
-            }
+        if (result.complete) {
+          const sources = this.getKnowledgeSources(chatId);
+          if (sources.length > 0) {
+            actionTracker.trackAnswerSource(chatId, { sources, type: 'mixed' });
           }
 
-          if (finishReason === 'error' || doneEmitted) {
-            break;
-          }
+          actionTracker.trackDone(chatId, { finishReason: finishReason || 'stop' });
+          doneEmitted = true;
+
+          this.resetKnowledgeSources(chatId);
+
+          await logInteraction(
+            'chat_response',
+            buildLogData(true, { responseType: 'success', response: fullResponse })
+          );
+
+          const completionTokens =
+            accumulatedUsage?.completionTokens ?? estimateTokens(fullResponse);
+          const tokenSource = accumulatedUsage ? 'provider' : 'estimate';
+          await recordChatResponse({
+            userId: baseLog.userSessionId,
+            appId: baseLog.appId,
+            modelId: model.id,
+            tokens: completionTokens,
+            tokenSource,
+            user: baseLog.user
+          });
+          break;
         }
       }
     } catch (error) {

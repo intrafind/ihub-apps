@@ -8,6 +8,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import Icon from '../../../shared/components/Icon';
+import { makeAdminApiCall } from '../../../api/adminApi';
 
 /**
  * Generate list of environment variable names that can be used for a model's API key
@@ -116,8 +117,47 @@ function ModelFormEditor({
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [data, jsonSchema]);
 
+  // Adapter-declared provider config schema (e.g. AWS Bedrock region).
+  // Drives dynamic field rendering in the Configuration section.
+  const [providerSchema, setProviderSchema] = useState(null);
+  useEffect(() => {
+    let cancelled = false;
+    if (!data?.provider) {
+      setProviderSchema(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+    (async () => {
+      try {
+        const response = await makeAdminApiCall(
+          `/admin/providers/${encodeURIComponent(data.provider)}/schema`
+        );
+        if (cancelled) return;
+        if (response.ok) {
+          const schema = await response.json();
+          setProviderSchema(schema);
+        } else {
+          setProviderSchema(null);
+        }
+      } catch {
+        if (!cancelled) setProviderSchema(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.provider]);
+
   const handleChange = (field, value) => {
     onChange({ ...data, [field]: value });
+  };
+
+  const handleConfigChange = (key, value) => {
+    onChange({
+      ...data,
+      config: { ...(data.config || {}), [key]: value }
+    });
   };
 
   const handleInputChange = e => {
@@ -133,7 +173,8 @@ function ModelFormEditor({
     { value: 'mistral', label: 'Mistral' },
     { value: 'local', label: 'Local' },
     { value: 'iassistant', label: 'iAssistant' },
-    { value: 'iassistant-conversation', label: 'iAssistant Conversation' }
+    { value: 'iassistant-conversation', label: 'iAssistant Conversation' },
+    { value: 'bedrock', label: 'AWS Bedrock' }
   ];
 
   // Memoize environment variables tooltip text for API Key field
@@ -716,6 +757,102 @@ function ModelFormEditor({
                           )}
                         </p>
                       </div>
+                    </div>
+                  </fieldset>
+                </div>
+              )}
+
+              {/* Provider-specific configuration (adapter-declared schema). */}
+              {providerSchema?.fields?.length > 0 && (
+                <div className="col-span-6">
+                  <fieldset>
+                    <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
+                      {t('admin.models.sections.providerConfig', 'Provider Settings')}
+                    </legend>
+                    <div className="mt-4 grid grid-cols-6 gap-6">
+                      {providerSchema.fields.map(field => {
+                        const value =
+                          data.config?.[field.key] ??
+                          (field.default !== undefined ? field.default : '');
+                        const label =
+                          (field.label && (field.label[DEFAULT_LANGUAGE] || field.label.en)) ||
+                          field.key;
+                        const description =
+                          field.description &&
+                          (field.description[DEFAULT_LANGUAGE] || field.description.en);
+                        const inputId = `config.${field.key}`;
+                        return (
+                          <div key={field.key} className="col-span-6 sm:col-span-3">
+                            <label
+                              htmlFor={inputId}
+                              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                            >
+                              {label}
+                              {field.required && <span className="text-red-500"> *</span>}
+                            </label>
+                            {field.type === 'json' ? (
+                              <textarea
+                                id={inputId}
+                                rows={3}
+                                value={
+                                  value && typeof value === 'object'
+                                    ? JSON.stringify(value, null, 2)
+                                    : value || ''
+                                }
+                                onChange={e => {
+                                  const raw = e.target.value;
+                                  if (!raw.trim()) {
+                                    handleConfigChange(field.key, null);
+                                    return;
+                                  }
+                                  try {
+                                    handleConfigChange(field.key, JSON.parse(raw));
+                                  } catch {
+                                    handleConfigChange(field.key, raw);
+                                  }
+                                }}
+                                className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                              />
+                            ) : Array.isArray(field.enumHint) && field.enumHint.length > 0 ? (
+                              <input
+                                id={inputId}
+                                list={`${inputId}-options`}
+                                type="text"
+                                value={value}
+                                onChange={e => handleConfigChange(field.key, e.target.value)}
+                                className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                              />
+                            ) : (
+                              <input
+                                id={inputId}
+                                type={field.type === 'number' ? 'number' : 'text'}
+                                value={value}
+                                onChange={e =>
+                                  handleConfigChange(
+                                    field.key,
+                                    field.type === 'number'
+                                      ? Number(e.target.value)
+                                      : e.target.value
+                                  )
+                                }
+                                className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
+                              />
+                            )}
+                            {Array.isArray(field.enumHint) && field.enumHint.length > 0 && (
+                              <datalist id={`${inputId}-options`}>
+                                {field.enumHint.map(opt => (
+                                  <option key={opt} value={opt} />
+                                ))}
+                              </datalist>
+                            )}
+                            {description && (
+                              <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                                {description}
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
                   </fieldset>
                 </div>

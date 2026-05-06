@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-command-r-plus",
+  "modelId": "cohere.command-r-plus-v1:0",
+  "name": {
+    "en": "Cohere Command R+ (Bedrock)",
+    "de": "Cohere Command R+ (Bedrock)"
+  },
+  "description": {
+    "en": "Cohere Command R+ via AWS Bedrock — RAG-optimized with strong tool calling.",
+    "de": "Cohere Command R+ über AWS Bedrock — RAG-optimiert mit starken Tool-Aufrufen."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "supportsVision": false,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

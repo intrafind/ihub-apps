@@ -67,12 +67,13 @@ export const modelConfigSchema = z
         'google',
         'mistral',
         'local',
-        'iassistant-conversation'
+        'iassistant-conversation',
+        'bedrock'
       ],
       {
         errorMap: () => ({
           message:
-            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation'
+            'Provider must be one of: openai, openai-responses, anthropic, google, mistral, local, iassistant-conversation, bedrock'
         })
       }
     ),
