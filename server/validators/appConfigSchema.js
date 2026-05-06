@@ -277,8 +277,9 @@ const iAssistantConfigSchema = z
         /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
         'Profile ID must be URL-safe (lowercase, numbers, hyphens)'
       )
-      .optional(),
-    searchProfile: z.string().min(1, 'Search profile cannot be empty').optional(),
+      .optional()
+      .or(z.literal('')),
+    searchProfile: z.string().min(1, 'Search profile cannot be empty').optional().or(z.literal('')),
     extraContext: z.string().optional(),
     systemPromptPreamble: z.string().optional()
   })
