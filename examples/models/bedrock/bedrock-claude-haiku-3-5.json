@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-claude-haiku-3-5",
+  "modelId": "anthropic.claude-3-5-haiku-20241022-v1:0",
+  "name": {
+    "en": "Claude 3.5 Haiku (Bedrock)",
+    "de": "Claude 3.5 Haiku (Bedrock)"
+  },
+  "description": {
+    "en": "Anthropic Claude 3.5 Haiku via AWS Bedrock — fast, low-cost, with vision and tool calling.",
+    "de": "Anthropic Claude 3.5 Haiku über AWS Bedrock — schnell, kostengünstig, mit Vision und Tool-Aufrufen."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 200000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

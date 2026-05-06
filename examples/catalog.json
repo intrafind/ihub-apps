@@ -1,0 +1,188 @@
+{
+  "name": "iHub Examples",
+  "description": "In-repo example apps, models, prompts, and skills shipped with iHub Apps.",
+  "version": "1",
+  "categories": ["models"],
+  "items": [
+    {
+      "type": "model",
+      "name": "bedrock-claude-3-5-sonnet",
+      "displayName": {
+        "en": "Claude 3.5 Sonnet (Bedrock)",
+        "de": "Claude 3.5 Sonnet (Bedrock)"
+      },
+      "description": {
+        "en": "Anthropic Claude 3.5 Sonnet via AWS Bedrock — vision, documents, and tool calling.",
+        "de": "Anthropic Claude 3.5 Sonnet über AWS Bedrock — Vision, Dokumente und Tool-Aufrufe."
+      },
+      "category": "model",
+      "tags": ["bedrock", "anthropic", "claude", "vision", "tools"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-3-5-sonnet.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-claude-3-7-sonnet",
+      "displayName": {
+        "en": "Claude 3.7 Sonnet (Bedrock)",
+        "de": "Claude 3.7 Sonnet (Bedrock)"
+      },
+      "description": {
+        "en": "Anthropic Claude 3.7 Sonnet via AWS Bedrock — extended thinking, vision, documents, tool calling.",
+        "de": "Anthropic Claude 3.7 Sonnet über AWS Bedrock — erweitertes Denken, Vision, Dokumente, Tool-Aufrufe."
+      },
+      "category": "model",
+      "tags": ["bedrock", "anthropic", "claude", "vision", "tools", "thinking"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-3-7-sonnet.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-claude-sonnet-4-6",
+      "displayName": {
+        "en": "Claude Sonnet 4.6 (Bedrock)",
+        "de": "Claude Sonnet 4.6 (Bedrock)"
+      },
+      "description": {
+        "en": "Anthropic Claude Sonnet 4.6 via AWS Bedrock cross-region inference (global).",
+        "de": "Anthropic Claude Sonnet 4.6 über AWS Bedrock mit regionsübergreifender Inferenz (global)."
+      },
+      "category": "model",
+      "tags": ["bedrock", "anthropic", "claude", "vision", "tools", "global"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-sonnet-4-6.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-claude-haiku-3-5",
+      "displayName": {
+        "en": "Claude 3.5 Haiku (Bedrock)",
+        "de": "Claude 3.5 Haiku (Bedrock)"
+      },
+      "description": {
+        "en": "Anthropic Claude 3.5 Haiku via AWS Bedrock — fast, low-cost, with vision and tool calling.",
+        "de": "Anthropic Claude 3.5 Haiku über AWS Bedrock — schnell, kostengünstig, mit Vision und Tool-Aufrufen."
+      },
+      "category": "model",
+      "tags": ["bedrock", "anthropic", "claude", "vision", "tools", "fast"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-claude-haiku-3-5.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-nova-pro",
+      "displayName": {
+        "en": "Amazon Nova Pro (Bedrock)",
+        "de": "Amazon Nova Pro (Bedrock)"
+      },
+      "description": {
+        "en": "Amazon Nova Pro via AWS Bedrock — multimodal with vision, video, documents, and tools.",
+        "de": "Amazon Nova Pro über AWS Bedrock — multimodal mit Vision, Video, Dokumenten und Tools."
+      },
+      "category": "model",
+      "tags": ["bedrock", "amazon", "nova", "vision", "tools", "documents"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-nova-pro.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-nova-lite",
+      "displayName": {
+        "en": "Amazon Nova Lite (Bedrock)",
+        "de": "Amazon Nova Lite (Bedrock)"
+      },
+      "description": {
+        "en": "Amazon Nova Lite via AWS Bedrock — fast multimodal with vision and tool calling.",
+        "de": "Amazon Nova Lite über AWS Bedrock — schnelles multimodales Modell mit Vision und Tool-Aufrufen."
+      },
+      "category": "model",
+      "tags": ["bedrock", "amazon", "nova", "vision", "tools"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-nova-lite.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-nova-micro",
+      "displayName": {
+        "en": "Amazon Nova Micro (Bedrock)",
+        "de": "Amazon Nova Micro (Bedrock)"
+      },
+      "description": {
+        "en": "Amazon Nova Micro via AWS Bedrock — text-only, optimized for low-latency tool calling.",
+        "de": "Amazon Nova Micro über AWS Bedrock — nur Text, optimiert für latenzarme Tool-Aufrufe."
+      },
+      "category": "model",
+      "tags": ["bedrock", "amazon", "nova", "tools", "fast"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-nova-micro.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-llama-3-3-70b",
+      "displayName": {
+        "en": "Llama 3.3 70B Instruct (Bedrock)",
+        "de": "Llama 3.3 70B Instruct (Bedrock)"
+      },
+      "description": {
+        "en": "Meta Llama 3.3 70B via AWS Bedrock cross-region inference. Tool calling, no vision.",
+        "de": "Meta Llama 3.3 70B über AWS Bedrock mit regionsübergreifender Inferenz. Tool-Aufrufe, keine Vision."
+      },
+      "category": "model",
+      "tags": ["bedrock", "meta", "llama", "tools"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-llama-3-3-70b.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-llama-4-scout",
+      "displayName": {
+        "en": "Llama 4 Scout (Bedrock)",
+        "de": "Llama 4 Scout (Bedrock)"
+      },
+      "description": {
+        "en": "Meta Llama 4 Scout via AWS Bedrock — multimodal with vision and tool calling.",
+        "de": "Meta Llama 4 Scout über AWS Bedrock — multimodal mit Vision und Tool-Aufrufen."
+      },
+      "category": "model",
+      "tags": ["bedrock", "meta", "llama", "vision", "tools"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-llama-4-scout.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-mistral-large-2",
+      "displayName": {
+        "en": "Mistral Large 2 (Bedrock)",
+        "de": "Mistral Large 2 (Bedrock)"
+      },
+      "description": {
+        "en": "Mistral Large 2 via AWS Bedrock — strong reasoning and tool calling, text-only.",
+        "de": "Mistral Large 2 über AWS Bedrock — starkes Reasoning und Tool-Aufrufe, nur Text."
+      },
+      "category": "model",
+      "tags": ["bedrock", "mistral", "tools"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-mistral-large-2.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-pixtral-large",
+      "displayName": {
+        "en": "Pixtral Large (Bedrock)",
+        "de": "Pixtral Large (Bedrock)"
+      },
+      "description": {
+        "en": "Mistral Pixtral Large via AWS Bedrock — multimodal with vision and tool calling.",
+        "de": "Mistral Pixtral Large über AWS Bedrock — multimodal mit Vision und Tool-Aufrufen."
+      },
+      "category": "model",
+      "tags": ["bedrock", "mistral", "pixtral", "vision", "tools"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-pixtral-large.json" }
+    },
+    {
+      "type": "model",
+      "name": "bedrock-command-r-plus",
+      "displayName": {
+        "en": "Cohere Command R+ (Bedrock)",
+        "de": "Cohere Command R+ (Bedrock)"
+      },
+      "description": {
+        "en": "Cohere Command R+ via AWS Bedrock — RAG-optimized with strong tool calling.",
+        "de": "Cohere Command R+ über AWS Bedrock — RAG-optimiert mit starken Tool-Aufrufen."
+      },
+      "category": "model",
+      "tags": ["bedrock", "cohere", "command-r", "tools", "rag"],
+      "source": { "type": "relative", "path": "models/bedrock/bedrock-command-r-plus.json" }
+    }
+  ]
+}

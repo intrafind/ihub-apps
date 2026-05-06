@@ -61,6 +61,19 @@
       "enabled": true
     },
     {
+      "id": "bedrock",
+      "name": {
+        "en": "AWS Bedrock",
+        "de": "AWS Bedrock"
+      },
+      "description": {
+        "en": "AWS Bedrock foundation models via the Converse API",
+        "de": "AWS Bedrock Foundation Models über die Converse-API"
+      },
+      "enabled": true,
+      "category": "llm"
+    },
+    {
       "id": "tavily",
       "name": {
         "en": "Tavily Search",

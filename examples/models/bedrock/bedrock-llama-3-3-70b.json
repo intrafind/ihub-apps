@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-llama-3-3-70b",
+  "modelId": "meta.llama3-3-70b-instruct-v1:0",
+  "name": {
+    "en": "Llama 3.3 70B Instruct (Bedrock)",
+    "de": "Llama 3.3 70B Instruct (Bedrock)"
+  },
+  "description": {
+    "en": "Meta Llama 3.3 70B via AWS Bedrock cross-region inference. Tool calling, no vision.",
+    "de": "Meta Llama 3.3 70B über AWS Bedrock mit regionsübergreifender Inferenz. Tool-Aufrufe, keine Vision."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "supportsVision": false,
+  "enabled": false,
+  "config": {
+    "region": "us-east-1"
+  }
+}

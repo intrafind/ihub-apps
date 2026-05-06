@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-mistral-large-2",
+  "modelId": "mistral.mistral-large-2407-v1:0",
+  "name": {
+    "en": "Mistral Large 2 (Bedrock)",
+    "de": "Mistral Large 2 (Bedrock)"
+  },
+  "description": {
+    "en": "Mistral Large 2 via AWS Bedrock — strong reasoning and tool calling, text-only.",
+    "de": "Mistral Large 2 über AWS Bedrock — starkes Reasoning und Tool-Aufrufe, nur Text."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 128000,
+  "supportsTools": true,
+  "supportsVision": false,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

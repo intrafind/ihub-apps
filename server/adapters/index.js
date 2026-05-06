@@ -6,6 +6,7 @@ import GoogleAdapter from './google.js';
 import MistralAdapter from './mistral.js';
 import VLLMAdapter from './vllm.js';
 import IAssistantConversationAdapter from './iassistant-conversation.js';
+import BedrockAdapter from './bedrock.js';
 
 // Adapter registry
 const adapters = {
@@ -15,7 +16,8 @@ const adapters = {
   google: GoogleAdapter,
   mistral: MistralAdapter,
   local: VLLMAdapter, // vLLM uses dedicated adapter with schema sanitization
-  'iassistant-conversation': IAssistantConversationAdapter
+  'iassistant-conversation': IAssistantConversationAdapter,
+  bedrock: BedrockAdapter
 };
 
 /**
@@ -61,4 +63,24 @@ export async function processResponseBuffer(provider, buffer) {
 export function formatMessages(provider, messages) {
   const adapter = getAdapter(provider);
   return adapter.formatMessages(messages);
+}
+
+/**
+ * Get the provider-specific config schema declared by the adapter (if any).
+ * The schema describes fields that are written to `model.config[key]` and
+ * is consumed by the admin Model Form Editor for dynamic field rendering.
+ *
+ * @param {string} provider - The provider name
+ * @returns {Promise<object|null>}
+ */
+export async function getProviderConfigSchema(provider) {
+  if (!provider) return null;
+  switch (provider) {
+    case 'bedrock': {
+      const mod = await import('./bedrock.js');
+      return mod.providerConfigSchema || null;
+    }
+    default:
+      return null;
+  }
 }
