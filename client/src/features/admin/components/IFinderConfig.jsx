@@ -356,6 +356,40 @@ function IFinderConfig() {
                   </p>
                 </div>
 
+                {/* OIDC Keypair - Effective Issuer URL Display */}
+                {iFinderConfig.useOidcKeyPair && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.iFinder.effectiveIssuer', 'Effective OAuth Issuer URL')}
+                    </label>
+                    <div className="flex items-center">
+                      <div className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
+                        <code className="text-sm text-gray-900 dark:text-gray-100">
+                          {oauthIssuer && oauthIssuer.startsWith('http')
+                            ? oauthIssuer
+                            : autoDetectedIssuer || t('admin.iFinder.issuerNotAvailable', 'Not available')}
+                        </code>
+                      </div>
+                      {!oauthIssuer && autoDetectedIssuer && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+                          {t('admin.iFinder.autoDetected', 'Auto-detected')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {!oauthIssuer
+                        ? t(
+                            'admin.iFinder.effectiveIssuerAutoHelp',
+                            'This URL is automatically detected from your server. You can set a custom issuer in Admin > OAuth Server if needed.'
+                          )
+                        : t(
+                            'admin.iFinder.effectiveIssuerConfiguredHelp',
+                            'This URL is configured in Admin > OAuth Server.'
+                          )}
+                    </p>
+                  </div>
+                )}
+
                 {/* OIDC Keypair info box */}
                 {iFinderConfig.useOidcKeyPair && (
                   <div
@@ -391,14 +425,6 @@ function IFinderConfig() {
                             <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
                               {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
                             </pre>
-                            {!oauthIssuer && (
-                              <p className="mt-2 text-xs text-green-700 dark:text-green-300">
-                                {t(
-                                  'admin.iFinder.issuerAutoDetected',
-                                  'Note: Issuer URL is auto-detected from your server base URL.'
-                                )}
-                              </p>
-                            )}
                           </>
                         ) : (
                           <>
