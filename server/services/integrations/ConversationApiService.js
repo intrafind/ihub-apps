@@ -38,12 +38,21 @@ class ConversationApiService {
    * @param {Object} params.user - Authenticated user
    * @param {string} params.baseUrl - iFinder base URL
    * @param {string} [params.searchProfile] - iFinder search profile name (e.g. "searchprofile-standard")
-   * @param {Object} [params.labels] - Labels/tags for the conversation
+   * @param {Array} [params.labels] - Labels/tags for the conversation
    * @param {Object} [params.retrievalScope] - Document scope restrictions (merged into retrieval_scope)
    * @param {boolean} [params.ephemeral] - Whether the conversation is ephemeral
+   * @param {Object} [params.responseGeneration] - Response generation options (extra_context, system_prompt_preamble)
    * @returns {Promise<Object>} Created conversation object
    */
-  async createConversation({ user, baseUrl, searchProfile, labels, retrievalScope, ephemeral }) {
+  async createConversation({
+    user,
+    baseUrl,
+    searchProfile,
+    labels,
+    retrievalScope,
+    ephemeral,
+    responseGeneration
+  }) {
     const url = this.buildUrl(baseUrl, '/conversations');
     const headers = this.buildHeaders(user);
 
@@ -58,6 +67,7 @@ class ConversationApiService {
 
     const body = { conversation };
     if (Object.keys(retrieval_scope).length > 0) body.retrieval_scope = retrieval_scope;
+    if (responseGeneration) body.response_generation = responseGeneration;
 
     logger.info('Creating conversation', {
       component: 'ConversationApiService',

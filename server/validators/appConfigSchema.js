@@ -258,15 +258,29 @@ const iAssistantFilterSchema = z.object({
   isNegated: z.boolean().optional().default(false)
 });
 
-// iAssistant configuration schema for tool-specific settings
+// iAssistant configuration schema for app-level settings
 const iAssistantConfigSchema = z
   .object({
+    // Legacy fields (for backward compatibility)
     baseUrl: z.string().url('Base URL must be a valid URL').optional(),
-    profileId: z.string().min(1, 'Profile ID cannot be empty').optional(),
     filter: z.array(iAssistantFilterSchema).optional(),
     searchMode: z.string().optional(),
     searchDistance: z.string().optional(),
-    searchFields: z.record(z.any()).optional()
+    searchFields: z.record(z.any()).optional(),
+
+    // New dedicated configuration fields (similar to websearch)
+    profileId: z
+      .string()
+      .min(2, 'Profile ID must be at least 2 characters')
+      .max(64, 'Profile ID cannot exceed 64 characters')
+      .regex(
+        /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
+        'Profile ID must be URL-safe (lowercase, numbers, hyphens)'
+      )
+      .optional(),
+    searchProfile: z.string().min(1, 'Search profile cannot be empty').optional(),
+    extraContext: z.string().optional(),
+    systemPromptPreamble: z.string().optional()
   })
   .optional();
 
