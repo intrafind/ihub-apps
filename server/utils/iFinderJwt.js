@@ -122,17 +122,45 @@ function getIFinderPrivateKey(iFinderConfig) {
 function resolveJwtSubject(user, config) {
   const field = config.jwtSubjectField || 'email';
 
+  let resolved;
   switch (field) {
     case 'email':
-      return user.email || user.username || user.id;
+      resolved = user.email || user.username || user.id;
+      break;
     case 'username':
-      return user.username || user.email || user.id;
+      resolved = user.username || user.email || user.id;
+      break;
     case 'domain\\username':
-      return user.domain ? `${user.domain}\\${user.username || user.id}` : user.username || user.id;
+      resolved = user.domain
+        ? `${user.domain}\\${user.username || user.id}`
+        : user.username || user.id;
+      break;
     default:
-      // Custom template: replace ${field} placeholders
-      return field.replace(/\$\{(\w+)\}/g, (_, key) => user[key] || '');
+      // Custom template: replace ${field} placeholders. Warn on missing keys so
+      // misconfigurations surface in logs instead of producing an empty `sub`.
+      resolved = field.replace(/\$\{(\w+)\}/g, (_, key) => {
+        const value = user[key];
+        if (value === undefined || value === null || value === '') {
+          logger.warn(
+            `iFinder JWT subject template placeholder \${${key}} resolved to empty for user ${user.id || user.username || '<unknown>'}`,
+            { component: 'iFinderJwt', jwtSubjectField: field }
+          );
+          return '';
+        }
+        return value;
+      });
   }
+
+  if (typeof resolved !== 'string' || resolved.trim() === '') {
+    throw new Error(
+      `iFinder JWT subject could not be resolved (jwtSubjectField="${field}"). ` +
+        `User is missing the required field(s). ` +
+        `Check the "JWT Subject Field" setting in Admin > iFinder Integration and ensure ` +
+        `the authenticated user has a non-empty value for it.`
+    );
+  }
+
+  return resolved;
 }
 
 /**
@@ -184,6 +212,19 @@ export function generateIFinderJWT(user, options = {}) {
     const kid = computeOidcKid();
     if (kid) signOptions.keyid = kid;
   }
+
+  logger.debug('iFinder JWT payload and sign options', {
+    component: 'iFinderJwt',
+    payload,
+    signOptions: {
+      algorithm: signOptions.algorithm,
+      expiresIn: signOptions.expiresIn,
+      issuer: signOptions.issuer,
+      audience: signOptions.audience,
+      keyid: signOptions.keyid
+    },
+    jwtSubjectField: iFinderConfig.jwtSubjectField
+  });
 
   return jwt.sign(payload, privateKey, signOptions);
 }
