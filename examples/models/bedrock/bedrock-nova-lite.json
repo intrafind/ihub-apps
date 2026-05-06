@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-nova-lite",
+  "modelId": "amazon.nova-lite-v1:0",
+  "name": {
+    "en": "Amazon Nova Lite (Bedrock)",
+    "de": "Amazon Nova Lite (Bedrock)"
+  },
+  "description": {
+    "en": "Amazon Nova Lite via AWS Bedrock — fast multimodal model with vision, documents, and tool calling.",
+    "de": "Amazon Nova Lite über AWS Bedrock — schnelles multimodales Modell mit Vision, Dokumenten und Tool-Aufrufen."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 300000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

@@ -7,6 +7,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
+import { getProviderConfigSchema } from '../../adapters/index.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendNotFound, sendBadRequest } from '../../utils/responseHelpers.js';
 
@@ -55,6 +56,27 @@ export default function registerAdminProvidersRoutes(app) {
       return sendInternalError(res, error, 'fetch providers');
     }
   });
+
+  /**
+   * Adapter-declared provider config schema. Drives dynamic field rendering
+   * in the admin Model Form Editor for provider-specific knobs (e.g. AWS
+   * Bedrock region). Returns `{ fields: [] }` for providers that don't
+   * declare a schema, so callers can safely render an empty section.
+   */
+  app.get(
+    buildServerPath('/api/admin/providers/:providerId/schema'),
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { providerId } = req.params;
+        if (!validateIdForPath(providerId, 'provider', res)) return;
+        const schema = await getProviderConfigSchema(providerId);
+        res.json(schema || { fields: [] });
+      } catch (error) {
+        return sendInternalError(res, error, 'fetch provider schema');
+      }
+    }
+  );
 
   app.get(buildServerPath('/api/admin/providers/:providerId'), adminAuth, async (req, res) => {
     try {

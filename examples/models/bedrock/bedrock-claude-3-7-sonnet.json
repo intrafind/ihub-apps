@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-claude-3-7-sonnet",
+  "modelId": "anthropic.claude-3-7-sonnet-20250219-v1:0",
+  "name": {
+    "en": "Claude 3.7 Sonnet (Bedrock)",
+    "de": "Claude 3.7 Sonnet (Bedrock)"
+  },
+  "description": {
+    "en": "Anthropic Claude 3.7 Sonnet via AWS Bedrock — extended thinking, vision, documents, and tool calling.",
+    "de": "Anthropic Claude 3.7 Sonnet über AWS Bedrock — erweitertes Denken, Vision, Dokumente und Tool-Aufrufe."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 200000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "enabled": false,
+  "config": {
+    "region": "eu-central-1"
+  }
+}

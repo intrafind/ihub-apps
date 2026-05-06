@@ -105,6 +105,68 @@ The system currently supports the following providers:
    - Requires `iAssistant.baseUrl` configured in `platform.json`
    - Uses the iAssistant profile and search settings defined at the platform or app level
 
+8. **AWS Bedrock** (`provider: "bedrock"`)
+   - Calls the unified [Bedrock Converse / ConverseStream API](https://docs.aws.amazon.com/bedrock/latest/userguide/conversation-inference.html)
+   - Authentication uses a long-lived **Bedrock API key** as `Authorization: Bearer …` (no AWS SDK or SigV4 signing required)
+   - Region is configured per-model via `config.region` (default `eu-central-1`); the value `global` selects the cross-region inference profile prefix
+   - Model IDs accept either bare foundation IDs (`anthropic.claude-3-5-sonnet-20241022-v2:0`) or pre-prefixed inference profile IDs (`us.…`, `eu.…`, `apac.…`, `global.…`); the adapter auto-prepends the cluster prefix when the chosen region requires it
+   - Supports text, vision (`png/jpeg/gif/webp`), tool calling, parallel tool use, streaming, and reasoning (extended thinking)
+   - Bedrock service limits enforced client-side: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
+   - See [AWS Bedrock](#aws-bedrock) below for full setup instructions
+
+### AWS Bedrock
+
+#### Authentication
+
+The adapter uses Bedrock's long-lived API key feature. Mint a key in the AWS console (Bedrock → API keys → Create API key) and configure it via any of:
+
+- **Per-model:** encrypted `apiKey` field on the model JSON (set via Admin → Models → Edit)
+- **Per-provider:** encrypted `apiKey` field on the `bedrock` provider in `providers.json` (set via Admin → Providers)
+- **Environment:** `BEDROCK_API_KEY=<key>`
+
+Resolution order matches every other provider: model.apiKey → providers.json → env. Keys configured via the admin UI are encrypted at rest using AES-256-GCM.
+
+#### Region configuration
+
+Each model can override the AWS Region via `config.region`. The Admin Model Editor renders a "Region" field with autocomplete suggestions. Supported values:
+
+| Value | Behavior |
+| --- | --- |
+| `eu-central-1`, `eu-west-1`, `eu-west-3` | Frankfurt / Ireland / Paris. Auto-prepends `eu.` for inference-profile-required models. |
+| `us-east-1`, `us-west-2` | Auto-prepends `us.` for inference-profile-required models. |
+| `apac-northeast-1`, `ap-…` | Auto-prepends `apac.`. |
+| `global` | Auto-prepends `global.` and routes to a supported source region. Supported by the Anthropic Claude Sonnet 4 family. |
+
+If you write the modelId with an explicit prefix (e.g., `us.anthropic.claude-sonnet-4-6`) the adapter honors it as-is.
+
+Fallback order: `model.config.region` → `providers.json` `bedrock.config.region` → env `AWS_REGION` / `AWS_DEFAULT_REGION` → default `eu-central-1`.
+
+#### Supported models (Converse-compatible families)
+
+| Model family | Vision | Documents | Tools | Notes |
+| --- | --- | --- | --- | --- |
+| Anthropic Claude 3 / 3.5 / 3.7 / 4.x (Sonnet, Haiku, Opus) | yes | yes | yes | PDF size cap waived on Claude 4+ |
+| Amazon Nova Pro / Lite / Premier | yes | yes | yes | PDF/DOCX size cap waived |
+| Amazon Nova Micro | no | yes | yes | text-only |
+| Meta Llama 3.3 70B Instruct | no | yes | yes | requires inference profile |
+| Meta Llama 4 Scout / Maverick | yes | yes | yes | requires inference profile |
+| Mistral Large / Mistral Large 2 | no | yes | yes | text-only |
+| Mistral Pixtral Large | yes | yes | yes | |
+| Cohere Command R / R+ | no | yes | yes | RAG-optimized |
+| AI21 Jamba 1.5 Mini / Large | no | yes | partial | |
+| DeepSeek R1 / V3.x | no | yes | yes (V3.1+) | |
+
+#### Limits enforced by the adapter
+
+- **Documents per request:** Bedrock caps at 5; the adapter rejects requests with more.
+- **Document filename:** Bedrock requires `^[A-Za-z0-9\-()[\] ]{1,200}$` with no consecutive whitespace. The adapter sanitizes upstream filenames automatically (strips disallowed chars, removes extensions, collapses spaces).
+- **Image format:** restricted to `png`, `jpeg`, `gif`, `webp`. Other formats are dropped with a warning.
+- **Empty content blocks** (`{ text: '' }`) are stripped before sending — Bedrock rejects them.
+
+#### Ready-to-import example models
+
+Example configurations for the most common Bedrock models live in `examples/models/bedrock/` and are exposed through the **iHub Examples** marketplace registry. Open Admin → Marketplace → "iHub Examples" to browse and one-click install. All examples ship `enabled: false` so you can opt-in selectively.
+
 ### Image Generation Defaults
 
 For models with `supportsImageGeneration: true`, the `imageGeneration` object sets the default parameters:

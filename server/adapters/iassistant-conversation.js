@@ -14,6 +14,15 @@ import logger from '../utils/logger.js';
 
 class IAssistantConversationAdapterClass extends BaseAdapter {
   /**
+   * Use the line-delimited SSE parser from BaseAdapter.
+   * The conversation API emits multi-event blocks separated by `\n\n` and
+   * expects whole-block interpretation in processResponseBuffer.
+   */
+  async *parseResponseStream(response) {
+    yield* this.parseLineDelimitedSseStream(response);
+  }
+
+  /**
    * Format messages for the conversation API.
    * The conversation API handles history via parent_id, so we only extract the last user message.
    */

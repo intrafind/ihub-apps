@@ -1,0 +1,20 @@
+{
+  "id": "bedrock-claude-sonnet-4-6",
+  "modelId": "anthropic.claude-sonnet-4-6",
+  "name": {
+    "en": "Claude Sonnet 4.6 (Bedrock)",
+    "de": "Claude Sonnet 4.6 (Bedrock)"
+  },
+  "description": {
+    "en": "Anthropic Claude Sonnet 4.6 via AWS Bedrock cross-region inference (global). PDF size cap waived.",
+    "de": "Anthropic Claude Sonnet 4.6 über AWS Bedrock mit regionsübergreifender Inferenz (global). PDF-Größenlimit aufgehoben."
+  },
+  "provider": "bedrock",
+  "tokenLimit": 200000,
+  "supportsTools": true,
+  "supportsVision": true,
+  "enabled": false,
+  "config": {
+    "region": "global"
+  }
+}

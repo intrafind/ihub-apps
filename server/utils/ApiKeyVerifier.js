@@ -65,7 +65,7 @@ class ApiKeyVerifier {
   }
 
   async validateApiKeys() {
-    const providers = ['openai', 'anthropic', 'google', 'mistral'];
+    const providers = ['openai', 'anthropic', 'google', 'mistral', 'bedrock'];
     const missing = [];
 
     for (const provider of providers) {

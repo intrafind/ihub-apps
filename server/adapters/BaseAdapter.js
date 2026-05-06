@@ -1,4 +1,8 @@
 import logger from '../utils/logger.js';
+import { createParser } from 'eventsource-parser';
+import { getReadableStream } from '../utils/streamUtils.js';
+import { convertResponseToGeneric } from './toolCalling/index.js';
+
 /**
  * Base adapter class for LLM providers to reduce duplication
  */
@@ -125,5 +129,122 @@ export class BaseAdapter {
       name: message.name,
       is_error: message.is_error || false
     };
+  }
+
+  /**
+   * Default streaming-response parser. Subclasses may override to handle
+   * non-SSE wire formats (e.g. AWS Bedrock binary EventStream).
+   *
+   * @param {Response} response
+   * @param {{ model: object, chatId?: string, request?: object }} ctx
+   * @yields {object} Normalized result chunks consumed by StreamingHandler
+   */
+  async *parseResponseStream(response, ctx) {
+    yield* this.parseSseStream(response, ctx.model.provider);
+  }
+
+  /**
+   * Generic SSE parser used by OpenAI-compatible providers. Reads the
+   * response body, feeds chunks through eventsource-parser, and yields the
+   * normalized result of convertResponseToGeneric for each event.
+   *
+   * @param {Response} response
+   * @param {string} provider - Provider name passed to the converter registry
+   * @yields {object} Normalized result chunks
+   */
+  async *parseSseStream(response, provider) {
+    const readable = getReadableStream(response);
+    const reader = readable.getReader();
+    const decoder = new TextDecoder();
+    const queue = [];
+    const parser = createParser({
+      onEvent: event => {
+        if (event.type === 'event' || !event.type) {
+          queue.push(event);
+        }
+      }
+    });
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        parser.feed(decoder.decode(value, { stream: true }));
+        while (queue.length > 0) {
+          const evt = queue.shift();
+          const result = await convertResponseToGeneric(evt.data, provider);
+          if (!result) continue;
+          yield result;
+          if (result.error || result.complete) return;
+        }
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  /**
+   * Custom SSE parser for providers that emit multi-event blocks separated
+   * by `\n\n` and expect the adapter to interpret entire blocks at once
+   * (currently iAssistant Conversation).
+   *
+   * The adapter must implement `processResponseBuffer(buffer)` which returns
+   * a normalized result object.
+   *
+   * @param {Response} response
+   * @yields {object} Normalized result chunks
+   */
+  async *parseLineDelimitedSseStream(response) {
+    const readable = getReadableStream(response);
+    const reader = readable.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        if (buffer.includes('\n\n')) {
+          const parts = buffer.split('\n\n');
+          const completeEvents = parts.slice(0, -1).join('\n\n');
+          buffer = parts[parts.length - 1];
+          if (!completeEvents) continue;
+
+          let result;
+          try {
+            result = await this.processResponseBuffer(completeEvents + '\n\n');
+          } catch (err) {
+            yield {
+              content: [],
+              complete: false,
+              finishReason: 'error',
+              error: true,
+              errorMessage: `Processing error: ${err.message}`
+            };
+            return;
+          }
+          if (!result) continue;
+          yield result;
+          if (result.error || result.complete) return;
+        }
+      }
+
+      if (buffer.trim()) {
+        const result = await this.processResponseBuffer(buffer);
+        if (result) yield result;
+      }
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
