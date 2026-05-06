@@ -6,6 +6,7 @@ import { getIFinderAuthorizationHeader } from '../../utils/iFinderJwt.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import logger from '../../utils/logger.js';
 import { sendErrorResponse } from '../../utils/responseHelpers.js';
+import tokenStorageService from '../../services/TokenStorageService.js';
 
 /**
  * Admin routes for testing integrations (iFinder, iAssistant)
@@ -77,14 +78,33 @@ export default function registerIntegrationTestRoutes(app) {
           });
         }
 
-        if (!iFinderConfig.privateKey) {
-          return res.json({
-            success: false,
-            message: 'iFinder private key is not configured',
-            details: {
-              missingConfig: 'privateKey'
-            }
-          });
+        // Validate JWT signing configuration based on mode
+        if (iFinderConfig.useOidcKeyPair) {
+          // When using OIDC keypair mode, verify OIDC RSA keypair is available
+          const rsaKeyPair = tokenStorageService.getRSAKeyPair();
+          if (!rsaKeyPair || !rsaKeyPair.privateKey) {
+            return res.json({
+              success: false,
+              message:
+                'iHub OIDC RSA key pair is not initialized. Cannot sign iFinder JWT with OIDC keypair.',
+              details: {
+                missingConfig: 'oidcKeyPair',
+                useOidcKeyPair: true
+              }
+            });
+          }
+        } else {
+          // When using dedicated iFinder private key, verify it's configured
+          if (!iFinderConfig.privateKey) {
+            return res.json({
+              success: false,
+              message: 'iFinder private key is not configured',
+              details: {
+                missingConfig: 'privateKey',
+                useOidcKeyPair: false
+              }
+            });
+          }
         }
 
         // Create a test user for JWT generation
