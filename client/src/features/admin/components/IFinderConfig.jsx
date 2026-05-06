@@ -367,7 +367,8 @@ function IFinderConfig() {
                         <code className="text-sm text-gray-900 dark:text-gray-100">
                           {oauthIssuer && oauthIssuer.startsWith('http')
                             ? oauthIssuer
-                            : autoDetectedIssuer || t('admin.iFinder.issuerNotAvailable', 'Not available')}
+                            : autoDetectedIssuer ||
+                              t('admin.iFinder.issuerNotAvailable', 'Not available')}
                         </code>
                       </div>
                       {!oauthIssuer && autoDetectedIssuer && (
