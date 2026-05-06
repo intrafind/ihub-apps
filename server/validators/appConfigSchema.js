@@ -277,9 +277,8 @@ const iAssistantConfigSchema = z
         /^[a-z0-9][a-z0-9-]*[a-z0-9]$/,
         'Profile ID must be URL-safe (lowercase, numbers, hyphens)'
       )
-      .optional()
-      .or(z.literal('')),
-    searchProfile: z.string().min(1, 'Search profile cannot be empty').optional().or(z.literal('')),
+      .optional(),
+    searchProfile: z.string().min(1, 'Search profile cannot be empty').optional(),
     extraContext: z.string().optional(),
     systemPromptPreamble: z.string().optional()
   })
@@ -373,13 +372,18 @@ export const appConfigSchema = baseAppConfigSchema
   .refine(
     data => {
       // For chat type apps, system and tokenLimit are required
+      // Exception: iAssistant apps don't need system prompt (iAssistant provides it)
       if (data.type === 'chat' || !data.type) {
-        return data.system !== undefined && data.tokenLimit !== undefined;
+        const hasIAssistant = data.iassistant && Object.keys(data.iassistant).length > 0;
+        const systemRequired = !hasIAssistant && data.system === undefined;
+        const tokenLimitRequired = data.tokenLimit === undefined;
+
+        return !systemRequired && !tokenLimitRequired;
       }
       return true;
     },
     {
-      message: 'Chat type apps require system prompt and tokenLimit fields'
+      message: 'Chat type apps require system prompt and tokenLimit fields (unless using iAssistant)'
     }
   )
   .refine(
