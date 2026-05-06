@@ -1436,7 +1436,17 @@
         "websearchContentMaxLength": "Max. Inhaltslänge",
         "websearchContentMaxLengthDesc": "Maximale Zeichen pro extrahierter Seite (500–50000)",
         "websearchEnabledByDefault": "Standardmäßig aktiviert",
-        "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist"
+        "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist",
+        "iassistant": "iAssistant",
+        "iassistantDesc": "iAssistant-Integration für diese App konfigurieren",
+        "iassistantProfileId": "Profil-ID",
+        "iassistantProfileIdDesc": "Das iAssistant-Profil, das für diese App verwendet werden soll (z.B. iassistant-workspace)",
+        "iassistantSearchProfile": "Suchprofil",
+        "iassistantSearchProfileDesc": "Das Suchprofil, das für den Abruf mit iFinder verwendet werden soll (z.B. searchprofile-standard)",
+        "iassistantExtraContext": "Zusätzlicher Kontext",
+        "iassistantExtraContextDesc": "Zusätzlicher Kontext, der zum Response-State-Prompt hinzugefügt wird. Mit Vorsicht verwenden, da Änderungen die Antwortqualität beeinflussen können.",
+        "iassistantSystemPromptPreamble": "System-Prompt-Präambel",
+        "iassistantSystemPromptPreambleDesc": "Die Prompt-Präambel, die im Response-State-System-Prompt verwendet wird. Ideal zum Ändern der Identität des iAssistant. Mit Vorsicht verwenden."
       }
     },
     "features": {

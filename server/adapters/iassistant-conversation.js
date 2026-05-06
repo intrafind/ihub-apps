@@ -45,7 +45,9 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       tools: appConfig.tools || modelConfig.tools || [],
       scope: appConfig.scope || modelConfig.scope,
       labels: appConfig.labels || modelConfig.labels,
-      ephemeral: appConfig.ephemeral ?? modelConfig.ephemeral ?? false
+      ephemeral: appConfig.ephemeral ?? modelConfig.ephemeral ?? false,
+      extraContext: appConfig.extraContext || modelConfig.extraContext,
+      systemPromptPreamble: appConfig.systemPromptPreamble || modelConfig.systemPromptPreamble
     };
   }
 
@@ -78,11 +80,25 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
         profileId: config.profileId
       });
 
+      // Build labels array - include "ihub" and app ID
+      const labels = ['ihub'];
+      if (options.appConfig?.id) {
+        labels.push(options.appConfig.id);
+      }
+      // Add any additional labels from config
+      if (config.labels) {
+        if (Array.isArray(config.labels)) {
+          labels.push(...config.labels);
+        } else if (typeof config.labels === 'string') {
+          labels.push(config.labels);
+        }
+      }
+
       const createParams = {
         user,
         baseUrl: config.baseUrl,
         searchProfile: config.searchProfile,
-        labels: config.labels,
+        labels,
         ephemeral: config.ephemeral
       };
 
@@ -90,6 +106,17 @@ class IAssistantConversationAdapterClass extends BaseAdapter {
       const documentIds = options.appConfig?.documentIds;
       if (documentIds && documentIds.length > 0) {
         createParams.retrievalScope = { document_ids: documentIds };
+      }
+
+      // Add response_generation options if configured
+      if (config.extraContext || config.systemPromptPreamble) {
+        createParams.responseGeneration = {};
+        if (config.extraContext) {
+          createParams.responseGeneration.extra_context = config.extraContext;
+        }
+        if (config.systemPromptPreamble) {
+          createParams.responseGeneration.system_prompt_preamble = config.systemPromptPreamble;
+        }
       }
 
       const conversation = await conversationApiService.createConversation(createParams);
