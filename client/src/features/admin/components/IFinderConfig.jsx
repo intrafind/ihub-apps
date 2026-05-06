@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import { getBasePath } from '../../../utils/runtimeBasePath.js';
 
 const ALGORITHM_OPTIONS = ['RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512'];
 
@@ -31,6 +32,7 @@ function IFinderConfig() {
     timeout: 60000
   });
   const [oauthIssuer, setOauthIssuer] = useState('');
+  const [autoDetectedIssuer, setAutoDetectedIssuer] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState({ iFinder: false, iAssistant: false });
@@ -61,7 +63,17 @@ function IFinderConfig() {
         };
         setIFinderConfig(iFinder);
         setIAssistantConfig(iAssistant);
-        setOauthIssuer(response.data.oauth?.issuer || '');
+
+        const configuredOauthIssuer = response.data.oauth?.issuer || '';
+        setOauthIssuer(configuredOauthIssuer);
+
+        // Calculate auto-detected issuer URL (what the backend would use)
+        // This matches the logic in server/routes/wellKnown.js getBaseUrl()
+        const basePath = getBasePath();
+        const origin = window.location.origin;
+        const detectedBaseUrl = basePath ? `${origin}${basePath}` : origin;
+        setAutoDetectedIssuer(detectedBaseUrl);
+
         setMessage('');
       } catch (error) {
         setMessage({
@@ -106,12 +118,17 @@ function IFinderConfig() {
   };
 
   const handleSave = async () => {
-    if (iFinderConfig.useOidcKeyPair && (!oauthIssuer || !oauthIssuer.startsWith('http'))) {
+    // When using OIDC keypair, we need a valid issuer URL
+    // Use the configured issuer if set, otherwise fall back to auto-detected
+    const effectiveIssuer =
+      oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer;
+
+    if (iFinderConfig.useOidcKeyPair && (!effectiveIssuer || !effectiveIssuer.startsWith('http'))) {
       setMessage({
         type: 'error',
         text: t(
           'admin.iFinder.oidcKeyPairNeedsIssuer',
-          'OIDC Keypair mode requires an OAuth Issuer URL. Configure it in Admin > Authentication > OAuth Server.'
+          'OIDC Keypair mode requires an OAuth Issuer URL. The issuer will be auto-detected from your server URL, or you can configure it explicitly in Admin > Authentication > OAuth Server.'
         )
       });
       return;
@@ -339,27 +356,65 @@ function IFinderConfig() {
                   </p>
                 </div>
 
+                {/* OIDC Keypair - Effective Issuer URL Display */}
+                {iFinderConfig.useOidcKeyPair && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      {t('admin.iFinder.effectiveIssuer', 'Effective OAuth Issuer URL')}
+                    </label>
+                    <div className="flex items-center">
+                      <div className="flex-1 px-3 py-2 bg-gray-100 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md">
+                        <code className="text-sm text-gray-900 dark:text-gray-100">
+                          {oauthIssuer && oauthIssuer.startsWith('http')
+                            ? oauthIssuer
+                            : autoDetectedIssuer || t('admin.iFinder.issuerNotAvailable', 'Not available')}
+                        </code>
+                      </div>
+                      {!oauthIssuer && autoDetectedIssuer && (
+                        <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200">
+                          {t('admin.iFinder.autoDetected', 'Auto-detected')}
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {!oauthIssuer
+                        ? t(
+                            'admin.iFinder.effectiveIssuerAutoHelp',
+                            'This URL is automatically detected from your server. You can set a custom issuer in Admin > OAuth Server if needed.'
+                          )
+                        : t(
+                            'admin.iFinder.effectiveIssuerConfiguredHelp',
+                            'This URL is configured in Admin > OAuth Server.'
+                          )}
+                    </p>
+                  </div>
+                )}
+
                 {/* OIDC Keypair info box */}
                 {iFinderConfig.useOidcKeyPair && (
                   <div
                     className={`border rounded-md p-4 ${
-                      oauthIssuer && oauthIssuer.startsWith('http')
+                      (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
                         ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800'
                         : 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
                     }`}
                   >
                     <div className="flex">
                       <Icon
-                        name={oauthIssuer && oauthIssuer.startsWith('http') ? 'check' : 'warning'}
+                        name={
+                          (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
+                            ? 'check'
+                            : 'warning'
+                        }
                         size="md"
                         className={`mt-0.5 mr-3 flex-shrink-0 ${
-                          oauthIssuer && oauthIssuer.startsWith('http')
+                          (oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer
                             ? 'text-green-500'
                             : 'text-amber-500'
                         }`}
                       />
                       <div className="text-sm">
-                        {oauthIssuer && oauthIssuer.startsWith('http') ? (
+                        {(oauthIssuer && oauthIssuer.startsWith('http')) || autoDetectedIssuer ? (
                           <>
                             <p className="font-medium text-green-800 dark:text-green-200">
                               {t('admin.iFinder.oidcKeyPairReady', 'OIDC Keypair ready')}
@@ -368,7 +423,7 @@ function IFinderConfig() {
                               {t('admin.iFinder.oidcKeyPairReadyHelp', 'Configure iFinder with:')}
                             </p>
                             <pre className="mt-2 text-xs bg-green-100 dark:bg-green-900/40 rounded p-2 font-mono text-green-800 dark:text-green-200 whitespace-pre-wrap">
-                              {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
+                              {`spring.security.oauth2.resourceserver.jwt.issuer-uri: ${oauthIssuer && oauthIssuer.startsWith('http') ? oauthIssuer : autoDetectedIssuer}\nintrafind.security.auth.enable-oauth2-resource-server: true`}
                             </pre>
                           </>
                         ) : (
