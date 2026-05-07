@@ -45,6 +45,14 @@ function AdminHome() {
       color: 'bg-indigo-500'
     },
     {
+      key: 'prompt-variables',
+      title: t('admin.nav.promptVariables', 'Global Prompt Variables'),
+      description: t('admin.home.sections.promptVariablesDesc', 'Manage custom variables for use across all apps and prompts'),
+      href: '/admin/prompt-variables',
+      //icon: 'variable',
+      color: 'bg-violet-500'
+    },
+    {
       key: 'tools',
       title: t('admin.nav.tools', 'Tools Management'),
       description: t(

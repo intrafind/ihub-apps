@@ -126,6 +126,15 @@ class PromptService {
     // Add processed platform_context to global vars
     globalPromptVars.platform_context = platformContext;
 
+    // Add custom variables from platform config
+    const customVariables = platformConfig.globalPromptVariables?.variables || {};
+    for (const [key, value] of Object.entries(customVariables)) {
+      // Custom variables can override built-in ones if desired, but built-in takes precedence by default
+      if (!globalPromptVars.hasOwnProperty(key)) {
+        globalPromptVars[key] = value;
+      }
+    }
+
     // Filter out empty values to avoid replacing with empty strings unintentionally
     const filteredVars = {};
     for (const [key, value] of Object.entries(globalPromptVars)) {
