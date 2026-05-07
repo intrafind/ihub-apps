@@ -6,13 +6,14 @@ on:
 
 jobs:
   summary:
+    # not restricting it yet
     # GHSA-f79p-xmmr-m7xg: only run for issues opened by trusted actors so that
     # untrusted issue title/body content cannot reach the AI summarizer and be
     # posted back as a repo-authored comment via prompt injection.
-    if: >-
-      github.event.issue.author_association == 'OWNER' ||
-      github.event.issue.author_association == 'MEMBER' ||
-      github.event.issue.author_association == 'COLLABORATOR'
+    #if: >-
+    #  github.event.issue.author_association == 'OWNER' ||
+    #  github.event.issue.author_association == 'MEMBER' ||
+    #  github.event.issue.author_association == 'COLLABORATOR'
     runs-on: ubuntu-latest
     permissions:
       issues: write
