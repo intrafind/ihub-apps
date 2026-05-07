@@ -95,7 +95,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
   };
 
   const handleDeleteVariable = key => {
-    const { [key]: removed, ...rest } = variables;
+    const { [key]: _removed, ...rest } = variables;
     onChange({
       ...value,
       variables: rest
