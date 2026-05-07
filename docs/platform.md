@@ -80,7 +80,12 @@ Global prompt variables enable platform administrators to inject dynamic context
 ```json
 {
   "globalPromptVariables": {
-    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user."
+    "context": "Very important: The user's timezone is {{timezone}}. The current date is {{date}}. Any dates before this are in the past, and any dates after this are in the future. When dealing with modern entities/companies/people, and the user asks for the 'latest', 'most recent', 'today's', etc. don't assume your knowledge is up to date; You can and should speak any language the user asks you to speak or use the language of the user.",
+    "variables": {
+      "company": "IntraFind Software AG",
+      "department": "AI Solutions",
+      "support_email": "support@intrafind.de"
+    }
   }
 }
 ```
@@ -88,6 +93,8 @@ Global prompt variables enable platform administrators to inject dynamic context
 #### Properties
 
 - **context** (string) – Global context string that is automatically prepended to all system prompts across the platform. This string can include dynamic variable placeholders that are resolved at runtime. The processed context is available via the `{{platform_context}}` variable in app configurations.
+
+- **variables** (object) – Custom key-value pairs that define organization-specific variables (e.g., company name, department, contact information). These custom variables can be referenced anywhere built-in variables are supported, using the same `{{variable_name}}` syntax. Custom variables are managed through the Admin UI at `/admin/prompt-variables`.
 
 #### Available Built-in Variables
 
@@ -223,6 +230,98 @@ When the same variable name appears in multiple places:
   }
 }
 ```
+
+#### Custom Variables
+
+In addition to built-in variables, administrators can define custom variables through the Admin UI (`/admin/prompt-variables`). Custom variables are useful for:
+
+**Organization Information:**
+```json
+{
+  "globalPromptVariables": {
+    "context": "{{platform_context}}",
+    "variables": {
+      "company": "IntraFind Software AG",
+      "company_description": "A leading provider of enterprise search and AI solutions",
+      "support_email": "support@intrafind.de",
+      "support_hours": "Monday-Friday, 9 AM - 5 PM CET"
+    }
+  }
+}
+```
+
+**Department-Specific Information:**
+```json
+{
+  "globalPromptVariables": {
+    "variables": {
+      "department": "Customer Success",
+      "team_lead": "John Doe",
+      "escalation_process": "For urgent issues, contact the on-call engineer via Slack #oncall-support"
+    }
+  }
+}
+```
+
+**Product/Service Information:**
+```json
+{
+  "globalPromptVariables": {
+    "variables": {
+      "product_name": "iHub Apps",
+      "version": "2.0",
+      "documentation_url": "https://docs.example.com",
+      "pricing_tiers": "Starter ($99/mo), Professional ($299/mo), Enterprise (custom)"
+    }
+  }
+}
+```
+
+**Using Custom Variables:**
+
+Custom variables can be used anywhere built-in variables are supported:
+
+1. **In Global Context:**
+   ```json
+   {
+     "context": "You are an AI assistant for {{company}}. For support questions, direct users to {{support_email}}. Current time: {{time}}, {{timezone}}."
+   }
+   ```
+
+2. **In App System Prompts:**
+   ```json
+   {
+     "system": {
+       "en": "You are a helpful assistant for {{company}}'s {{department}}. When users ask for help, remind them they can contact {{support_email}} during {{support_hours}}."
+     }
+   }
+   ```
+
+3. **In the Global Context Reference:**
+   Apps can use `{{platform_context}}` which will already have all custom and built-in variables resolved.
+
+**Managing Custom Variables:**
+
+- Navigate to Admin → Global Prompt Variables (`/admin/prompt-variables`)
+- Add new variables with a unique key (alphanumeric and underscores only)
+- Edit existing variable values
+- Delete variables no longer needed
+- Copy variable syntax (`{{variable_name}}`) to clipboard for easy use
+
+**Variable Naming Rules:**
+- Must start with a letter or underscore
+- Can contain letters, numbers, and underscores
+- Cannot use names reserved for built-in variables
+- Case-sensitive (e.g., `{{Company}}` and `{{company}}` are different)
+
+**Priority:**
+- Built-in variables take precedence over custom variables
+- If a custom variable has the same name as a built-in variable, the built-in value will be used
+- This prevents accidental override of system-provided values
+
+#### Legacy Configuration Support
+
+For backward compatibility, configurations without the `variables` field will continue to work. The migration system automatically adds an empty `variables` object to existing configurations.
 
 #### Troubleshooting
 
