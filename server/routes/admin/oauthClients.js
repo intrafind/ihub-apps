@@ -701,4 +701,134 @@ export default function registerAdminOAuthRoutes(app) {
       }
     }
   );
+
+  /**
+   * @swagger
+   * /api/admin/oauth/public-key/pem:
+   *   get:
+   *     summary: Download public key in PEM format
+   *     description: Download the RSA public key used for JWT signature verification in PEM format
+   *     tags:
+   *       - Admin
+   *       - OAuth
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Public key in PEM format
+   *         content:
+   *           application/x-pem-file:
+   *             schema:
+   *               type: string
+   *       400:
+   *         description: OAuth not configured or wrong algorithm
+   *       404:
+   *         description: Public key not available
+   */
+  app.get(buildServerPath('/api/admin/oauth/public-key/pem'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
+
+      if (jwtAlgorithm !== 'RS256') {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+        });
+      }
+
+      const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
+      const keyPair = tokenStorageService.getRSAKeyPair();
+
+      if (!keyPair || !keyPair.publicKey) {
+        return res.status(404).json({
+          success: false,
+          error: 'RSA public key not available'
+        });
+      }
+
+      // Set headers for file download
+      res.setHeader('Content-Type', 'application/x-pem-file');
+      res.setHeader('Content-Disposition', 'attachment; filename="jwt-public-key.pem"');
+      res.send(keyPair.publicKey);
+    } catch (error) {
+      logger.error('[OAuth Admin] Download public key PEM error', {
+        component: 'OAuthAdmin',
+        error
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to download public key'
+      });
+    }
+  });
+
+  /**
+   * @swagger
+   * /api/admin/oauth/public-key/base64:
+   *   get:
+   *     summary: Download public key in base64 format
+   *     description: Download the RSA public key used for JWT signature verification in base64 format (for Spring Boot configs)
+   *     tags:
+   *       - Admin
+   *       - OAuth
+   *     security:
+   *       - BearerAuth: []
+   *     responses:
+   *       200:
+   *         description: Public key in base64 format
+   *         content:
+   *           text/plain:
+   *             schema:
+   *               type: string
+   *       400:
+   *         description: OAuth not configured or wrong algorithm
+   *       404:
+   *         description: Public key not available
+   */
+  app.get(buildServerPath('/api/admin/oauth/public-key/base64'), adminAuth, async (req, res) => {
+    try {
+      const platform = configCache.getPlatform() || {};
+      const jwtAlgorithm = platform.jwt?.algorithm || 'RS256';
+
+      if (jwtAlgorithm !== 'RS256') {
+        return res.status(400).json({
+          success: false,
+          error:
+            'Public key is only available for RS256 algorithm. Current algorithm: ' + jwtAlgorithm
+        });
+      }
+
+      const tokenStorageService = (await import('../../services/TokenStorageService.js')).default;
+      const keyPair = tokenStorageService.getRSAKeyPair();
+
+      if (!keyPair || !keyPair.publicKey) {
+        return res.status(404).json({
+          success: false,
+          error: 'RSA public key not available'
+        });
+      }
+
+      // Convert PEM to base64 (remove header, footer, and newlines)
+      const base64Key = keyPair.publicKey
+        .replace('-----BEGIN PUBLIC KEY-----', '')
+        .replace('-----END PUBLIC KEY-----', '')
+        .replace(/\s/g, '');
+
+      // Set headers for text download
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('Content-Disposition', 'attachment; filename="jwt-public-key-base64.txt"');
+      res.send(base64Key);
+    } catch (error) {
+      logger.error('[OAuth Admin] Download public key base64 error', {
+        component: 'OAuthAdmin',
+        error
+      });
+      res.status(500).json({
+        success: false,
+        error: 'Failed to download public key'
+      });
+    }
+  });
 }

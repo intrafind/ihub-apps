@@ -297,6 +297,66 @@ function AdminOAuthServerPage() {
 
           {oauthEnabled && (
             <>
+              {/* Public Key Downloads Card */}
+              {jwtAlgorithm === 'RS256' && (
+                <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
+                    <Icon name="key" size="md" className="mr-2" />
+                    {t('admin.auth.oauth.publicKey', 'Public Key Downloads')}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.auth.oauth.publicKeyDesc',
+                      'Download the RSA public key for JWT verification in external services that cannot access the JWKS endpoint.'
+                    )}
+                  </p>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-md px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                          {t('admin.auth.oauth.pemFormat', 'PEM Format')}
+                        </p>
+                        <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
+                          {t(
+                            'admin.auth.oauth.pemFormatDesc',
+                            'Standard PEM format for most applications'
+                          )}
+                        </p>
+                      </div>
+                      <a
+                        href={`${getServerBaseUrl()}/api/admin/oauth/public-key/pem`}
+                        download="jwt-public-key.pem"
+                        className="ml-3 flex-shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <Icon name="download" size="sm" className="mr-2" />
+                        {t('admin.auth.oauth.downloadPem', 'Download PEM')}
+                      </a>
+                    </div>
+                    <div className="flex items-center justify-between bg-gray-50 dark:bg-gray-700/50 rounded-md px-4 py-3">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">
+                          {t('admin.auth.oauth.base64Format', 'Base64 Format')}
+                        </p>
+                        <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
+                          {t(
+                            'admin.auth.oauth.base64FormatDesc',
+                            'Base64-encoded format for Spring Boot and similar configs'
+                          )}
+                        </p>
+                      </div>
+                      <a
+                        href={`${getServerBaseUrl()}/api/admin/oauth/public-key/base64`}
+                        download="jwt-public-key-base64.txt"
+                        className="ml-3 flex-shrink-0 inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        <Icon name="download" size="sm" className="mr-2" />
+                        {t('admin.auth.oauth.downloadBase64', 'Download Base64')}
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Endpoints & Discovery Card */}
               <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
                 <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center">
