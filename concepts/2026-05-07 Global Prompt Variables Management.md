@@ -1,8 +1,31 @@
 # Global Prompt Variables Management Feature
 
 **Date**: 2026-05-07
-**Status**: Implemented
+**Status**: Implemented (Updated based on PR feedback)
 **Related Issue**: #1137
+**PR**: [Link to PR]
+
+## Update (Post-PR Feedback)
+
+Based on feedback from @manzke, the implementation was refactored:
+
+1. **Integration with Prompts Database**: Prompt variables are now part of the AdminPromptsPage as a dedicated "Variables" tab, rather than a standalone page
+2. **Accessible Without Feature Flag**: The variables functionality works even when the `promptsLibrary` feature is disabled
+3. **Tab Navigation**: AdminPromptsPage now has two tabs:
+   - **Prompts Tab**: Requires `promptsLibrary` feature (hidden when disabled)
+   - **Variables Tab**: Always accessible regardless of feature flags
+4. **Smart Defaults**: When `promptsLibrary` is disabled, the page automatically shows the Variables tab as default
+5. **URL State Persistence**: Tab selection is preserved in URL query parameter (`?tab=prompts` or `?tab=variables`)
+
+**Files Changed in Refactor**:
+- **Removed**: `client/src/features/admin/pages/AdminPromptVariablesPage.jsx` (standalone page no longer needed)
+- **Modified**: `client/src/features/admin/pages/AdminPromptsPage.jsx` (added tab navigation and Variables tab)
+- **Modified**: `client/src/App.jsx` (removed standalone route, made prompts route always accessible)
+- **Modified**: `client/src/features/admin/pages/AdminHome.jsx` (updated to show "Prompts & Variables" as single entry)
+
+**Commits**:
+- Initial implementation: 8b0d696, 0e60480, 9592ef8
+- Integration refactor: 0e7edb2, bf5c3c5
 
 ## Overview
 
@@ -141,14 +164,16 @@ platform.json
 - `server/services/PromptService.js` - Enhanced variable resolution
 - `server/migrations/V034__add_global_prompt_variables_custom_variables.js` - Migration script
 
-### Frontend
-- `client/src/features/admin/components/GlobalPromptVariablesEditor.jsx` - New component
-- `client/src/features/admin/pages/AdminPromptVariablesPage.jsx` - New page
-- `client/src/features/admin/pages/AdminHome.jsx` - Added navigation link
-- `client/src/App.jsx` - Added route
+### Frontend (Initial Implementation)
+- `client/src/features/admin/components/GlobalPromptVariablesEditor.jsx` - New component for managing variables
+- ~~`client/src/features/admin/pages/AdminPromptVariablesPage.jsx`~~ - **Removed** (replaced by tab integration)
+- `client/src/features/admin/pages/AdminPromptsPage.jsx` - **Updated** with tab navigation and Variables tab
+- `client/src/features/admin/pages/AdminHome.jsx` - **Updated** navigation link
+- `client/src/App.jsx` - **Updated** routing (removed standalone route, made prompts route always accessible)
 
 ### Documentation
 - `docs/platform.md` - Comprehensive custom variables documentation
+- `concepts/2026-05-07 Global Prompt Variables Management.md` - This document
 
 ## Usage Examples
 
