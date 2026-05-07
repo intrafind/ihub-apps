@@ -40,7 +40,10 @@ function AdminHome() {
     {
       key: 'prompts',
       title: t('admin.nav.prompts', 'Prompts & Variables'),
-      description: t('admin.home.sections.promptsDesc', 'Manage prompt templates and global variables'),
+      description: t(
+        'admin.home.sections.promptsDesc',
+        'Manage prompt templates and global variables'
+      ),
       href: '/admin/prompts',
       //icon: 'clipboard-document-list',
       color: 'bg-indigo-500'

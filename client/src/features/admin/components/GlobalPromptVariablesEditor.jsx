@@ -65,7 +65,9 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
 
     // Validate key format (alphanumeric and underscores only)
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(newVariableKey)) {
-      setError('Variable key must start with a letter or underscore and contain only letters, numbers, and underscores');
+      setError(
+        'Variable key must start with a letter or underscore and contain only letters, numbers, and underscores'
+      );
       return;
     }
 
@@ -202,7 +204,10 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  {t('admin.platform.variableKeyHelp', 'Use lowercase letters, numbers, and underscores. Must start with a letter or underscore.')}
+                  {t(
+                    'admin.platform.variableKeyHelp',
+                    'Use lowercase letters, numbers, and underscores. Must start with a letter or underscore.'
+                  )}
                 </p>
               </div>
               <div>
@@ -217,9 +222,7 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
                   className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 />
               </div>
-              {error && (
-                <div className="text-sm text-red-600 dark:text-red-400">{error}</div>
-              )}
+              {error && <div className="text-sm text-red-600 dark:text-red-400">{error}</div>}
               <div className="flex gap-2">
                 <button
                   onClick={handleAddVariable}
@@ -246,7 +249,10 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
         {/* Custom Variables List */}
         {Object.keys(variables).length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-            {t('admin.platform.noCustomVariables', 'No custom variables defined yet. Click "Add Variable" to create one.')}
+            {t(
+              'admin.platform.noCustomVariables',
+              'No custom variables defined yet. Click "Add Variable" to create one.'
+            )}
           </div>
         ) : (
           <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 space-y-3">
@@ -293,7 +299,10 @@ function GlobalPromptVariablesEditor({ value, onChange }) {
       {/* Usage Example */}
       <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4">
         <div className="flex">
-          <Icon name="lightbulb" className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0 mt-0.5" />
+          <Icon
+            name="lightbulb"
+            className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-2 flex-shrink-0 mt-0.5"
+          />
           <div>
             <h4 className="font-medium text-gray-900 dark:text-white mb-1">
               {t('admin.platform.usageExample', 'Usage Example')}
