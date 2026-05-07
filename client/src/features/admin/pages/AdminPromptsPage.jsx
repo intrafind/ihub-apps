@@ -1,18 +1,28 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
+import GlobalPromptVariablesEditor from '../components/GlobalPromptVariablesEditor';
 import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
 function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const featureFlags = useFeatureFlags();
+
+  // Tab state - default to 'variables' if promptsLibrary is disabled, otherwise use URL param or 'prompts'
+  const promptsLibraryEnabled = featureFlags.isEnabled('promptsLibrary', true);
+  const defaultTab = promptsLibraryEnabled ? 'prompts' : 'variables';
+  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || defaultTab);
+
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -25,9 +35,23 @@ function AdminPromptsPage() {
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    loadPrompts();
+    // Only load prompts if promptsLibrary is enabled
+    if (promptsLibraryEnabled) {
+      loadPrompts();
+    } else {
+      setLoading(false);
+    }
     loadUIConfig();
-  }, []);
+  }, [promptsLibraryEnabled]);
+
+  // Update URL when tab changes
+  useEffect(() => {
+    setSearchParams({ tab: activeTab }, { replace: true });
+  }, [activeTab, setSearchParams]);
+
+  const handleTabChange = tab => {
+    setActiveTab(tab);
+  };
 
   const loadUIConfig = async () => {
     try {
@@ -264,14 +288,22 @@ function AdminPromptsPage() {
           <div className="sm:flex sm:items-center">
             <div className="sm:flex-auto">
               <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {t('admin.prompts.title', 'Prompt Management')}
+                {activeTab === 'variables'
+                  ? t('admin.promptVariables.title', 'Global Prompt Variables')
+                  : t('admin.prompts.title', 'Prompt Management')}
               </h1>
               <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                {t('admin.prompts.subtitle', 'Create, edit, and manage prompts for your iHub Apps')}
+                {activeTab === 'variables'
+                  ? t(
+                      'admin.promptVariables.subtitle',
+                      'Manage custom variables for use across all apps and prompts'
+                    )
+                  : t('admin.prompts.subtitle', 'Create, edit, and manage prompts for your iHub Apps')}
               </p>
             </div>
-            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-              <div className="flex flex-wrap gap-2">
+            {activeTab === 'prompts' && (
+              <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+                <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => navigate('/admin/prompts/new')}
                   className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
@@ -318,9 +350,43 @@ function AdminPromptsPage() {
                 </button>
               </div>
             </div>
+            )}
           </div>
 
-          {/* Search and Filter */}
+          {/* Tab Navigation */}
+          <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
+            <nav className="-mb-px flex space-x-8">
+              {promptsLibraryEnabled && (
+                <button
+                  onClick={() => handleTabChange('prompts')}
+                  className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                    activeTab === 'prompts'
+                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                  }`}
+                >
+                  <Icon name="clipboard" className="inline-block h-5 w-5 mr-2" />
+                  {t('admin.prompts.tabs.prompts', 'Prompts')}
+                </button>
+              )}
+              <button
+                onClick={() => handleTabChange('variables')}
+                className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                  activeTab === 'variables'
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+                }`}
+              >
+                <Icon name="variable" className="inline-block h-5 w-5 mr-2" />
+                {t('admin.prompts.tabs.variables', 'Variables')}
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab Content */}
+          {activeTab === 'prompts' ? (
+            <>
+              {/* Search and Filter */}
           <div className="mt-8 flex flex-col sm:flex-row gap-4">
             <div className="flex-1">
               <div className="relative">
@@ -606,9 +672,154 @@ function AdminPromptsPage() {
             isOpen={showPromptDetails}
             onClose={() => setShowPromptDetails(false)}
           />
+            </>
+          ) : (
+            // Variables Tab Content
+            <VariablesTabContent />
+          )}
         </div>
       </div>
     </AdminAuth>
+  );
+}
+
+/**
+ * Variables Tab Component - extracted to keep AdminPromptsPage clean
+ */
+function VariablesTabContent() {
+  const { t } = useTranslation();
+  const [platformConfig, setPlatformConfig] = useState(null);
+  const [globalPromptVariables, setGlobalPromptVariables] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+  const [hasChanges, setHasChanges] = useState(false);
+
+  useEffect(() => {
+    loadPlatformConfig();
+  }, []);
+
+  const loadPlatformConfig = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await makeAdminApiCall('/admin/configs/platform');
+      setPlatformConfig(response.data);
+      setGlobalPromptVariables(response.data.globalPromptVariables || { context: '', variables: {} });
+    } catch (err) {
+      console.error('Error loading platform config:', err);
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVariablesChange = updatedVariables => {
+    setGlobalPromptVariables(updatedVariables);
+    setHasChanges(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+
+      const updatedConfig = {
+        ...platformConfig,
+        globalPromptVariables
+      };
+
+      await makeAdminApiCall('/admin/configs/platform', {
+        method: 'PUT',
+        body: updatedConfig
+      });
+
+      setPlatformConfig(updatedConfig);
+      setHasChanges(false);
+      alert(t('admin.promptVariables.saveSuccess', 'Global prompt variables saved successfully'));
+    } catch (err) {
+      console.error('Error saving platform config:', err);
+      setError(err.message);
+      alert(err.message || 'Failed to save global prompt variables');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (platformConfig) {
+      setGlobalPromptVariables(platformConfig.globalPromptVariables || { context: '', variables: {} });
+      setHasChanges(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex justify-center items-center h-64 mt-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+      </div>
+    );
+  }
+
+  if (error && !globalPromptVariables) {
+    return (
+      <div className="mt-8 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+        <div className="flex">
+          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+          <div className="ml-3">
+            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+              {t('admin.promptVariables.loadError', 'Error loading configuration')}
+            </h3>
+            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
+            <button
+              onClick={loadPlatformConfig}
+              className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+            >
+              {t('common.retry', 'Retry')}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-8">
+      {error && (
+        <div className="mb-4 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+          <div className="flex">
+            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('admin.promptVariables.error', 'Error')}
+              </h3>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <GlobalPromptVariablesEditor value={globalPromptVariables} onChange={handleVariablesChange} />
+
+      {/* Save/Cancel Buttons */}
+      <div className="mt-6 flex justify-end gap-3">
+        <button
+          onClick={handleCancel}
+          disabled={!hasChanges || saving}
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {t('common.cancel', 'Cancel')}
+        </button>
+        <button
+          onClick={handleSave}
+          disabled={!hasChanges || saving}
+          className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed inline-flex items-center"
+        >
+          {saving && <Icon name="refresh" className="animate-spin h-4 w-4 mr-2" />}
+          {t('common.save', 'Save Changes')}
+        </button>
+      </div>
+    </div>
   );
 }
 

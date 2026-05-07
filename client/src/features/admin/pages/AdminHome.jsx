@@ -12,9 +12,10 @@ function AdminHome() {
   const featureFlags = useFeatureFlags();
   const pageConfig = platformConfig?.admin?.pages || {};
   const isEnabled = key => {
-    // Check if feature is disabled - prompts requires promptsLibrary feature
-    if (key === 'prompts' && !featureFlags.isEnabled('promptsLibrary', true)) {
-      return false;
+    // "prompts" page is always enabled now (contains both prompts and variables tabs)
+    // Variables tab is always accessible, prompts tab requires promptsLibrary feature
+    if (key === 'prompts') {
+      return pageConfig[key] !== false;
     }
     return pageConfig[key] !== false;
   };
@@ -38,19 +39,11 @@ function AdminHome() {
     },
     {
       key: 'prompts',
-      title: t('admin.nav.prompts', 'Prompts Management'),
-      description: t('admin.home.sections.promptsDesc', 'Create and manage prompt templates'),
+      title: t('admin.nav.prompts', 'Prompts & Variables'),
+      description: t('admin.home.sections.promptsDesc', 'Manage prompt templates and global variables'),
       href: '/admin/prompts',
       //icon: 'clipboard-document-list',
       color: 'bg-indigo-500'
-    },
-    {
-      key: 'prompt-variables',
-      title: t('admin.nav.promptVariables', 'Global Prompt Variables'),
-      description: t('admin.home.sections.promptVariablesDesc', 'Manage custom variables for use across all apps and prompts'),
-      href: '/admin/prompt-variables',
-      //icon: 'variable',
-      color: 'bg-violet-500'
     },
     {
       key: 'tools',
