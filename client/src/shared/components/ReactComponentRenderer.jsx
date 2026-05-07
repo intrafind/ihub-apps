@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { ErrorBoundary } from 'react-error-boundary';
 
 // Error fallback component
@@ -267,26 +267,20 @@ UserComponent;
     };
   }, [jsxCode]);
 
-  // Build a stable wrapper around the compiled function. Only gets a new
-  // identity when the compiled function itself changes (i.e. jsxCode changed).
-  // Props are always read from the ref so they are never stale.
-  const CompiledComponent = useMemo(() => {
-    if (!ComponentFunction) return null;
-    return props => {
-      const combinedProps = {
-        ...componentPropsRef.current,
-        ...props,
-        React,
-        useState: React.useState,
-        useEffect: React.useEffect,
-        useMemo: React.useMemo,
-        useCallback: React.useCallback,
-        useRef: React.useRef,
-        useId: React.useId
-      };
-      return React.createElement(ComponentFunction, combinedProps);
-    };
-  }, [ComponentFunction]);
+  // Build the props the compiled component should receive. Recomputed on
+  // every render so the user component always sees the latest external
+  // props; React's reconciliation keeps the compiled component's state
+  // stable as long as ComponentFunction's identity is unchanged.
+  const compiledChildProps = {
+    ...componentPropsRef.current,
+    React,
+    useState: React.useState,
+    useEffect: React.useEffect,
+    useMemo: React.useMemo,
+    useCallback: React.useCallback,
+    useRef: React.useRef,
+    useId: React.useId
+  };
 
   if (isLoading) {
     return <LoadingComponent t={t} />;
@@ -320,7 +314,7 @@ UserComponent;
     );
   }
 
-  if (!CompiledComponent) {
+  if (!ComponentFunction) {
     return (
       <div className="text-center py-8 text-gray-500">
         {t('errors.noComponentToRender', 'No component to render')}
@@ -331,14 +325,14 @@ UserComponent;
   return (
     <div className={`react-component-container ${className}`}>
       <ErrorBoundary
-        FallbackComponent={props => <ErrorFallback {...props} t={t} />}
+        fallbackRender={fallbackProps => <ErrorFallback {...fallbackProps} t={t} />}
         onReset={() => {
           // Force recompilation on reset
           setComponentFunction(null);
           setIsLoading(true);
         }}
       >
-        <CompiledComponent />
+        {React.createElement(ComponentFunction, compiledChildProps)}
       </ErrorBoundary>
     </div>
   );
