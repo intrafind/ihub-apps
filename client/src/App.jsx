@@ -407,9 +407,8 @@ function App() {
               element={<LazyAdminRoute component={AdminPageEditPage} />}
             />
           )}
-          {showAdminPage('prompts') && (
-            <Route path="admin/prompts" element={<LazyAdminRoute component={AdminPromptsPage} />} />
-          )}
+          {/* Prompts & Variables - Always accessible (variables always work, prompts require promptsLibrary) */}
+          <Route path="admin/prompts" element={<LazyAdminRoute component={AdminPromptsPage} />} />
           {showAdminPage('prompts') && (
             <Route
               path="admin/prompts/:promptId"
