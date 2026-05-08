@@ -1485,6 +1485,7 @@
         "websearchEnabledByDefaultDesc": "Ob die Websuche für Benutzer standardmäßig aktiviert ist",
         "iassistant": "iAssistant",
         "iassistantDesc": "iAssistant-Integration für diese App konfigurieren",
+        "iassistantEnabled": "iAssistant aktivieren",
         "iassistantProfileId": "Profil-ID",
         "iassistantProfileIdDesc": "Das iAssistant-Profil, das für diese App verwendet werden soll (z.B. iassistant-workspace)",
         "iassistantSearchProfile": "Suchprofil",
