@@ -310,6 +310,18 @@
         "alertTitle": "Important Notice"
       }
     },
+    "compareMode": {
+      "toggle": "Compare Mode",
+      "enabled": "Compare mode enabled",
+      "disabled": "Compare mode disabled",
+      "leftModel": "Left Model",
+      "rightModel": "Right Model",
+      "modelA": "Model A",
+      "modelB": "Model B",
+      "selectLeftModel": "Select left model",
+      "selectRightModel": "Select right model",
+      "tooltip": "Compare responses from two different models side-by-side"
+    },
     "messageList": "Chat messages",
     "inputLabel": "Type your message",
     "clearInput": "Clear input"
