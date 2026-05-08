@@ -261,6 +261,8 @@ const iAssistantFilterSchema = z.object({
 // iAssistant configuration schema for app-level settings
 const iAssistantConfigSchema = z
   .object({
+    enabled: z.boolean().optional().default(false),
+
     // Legacy fields (for backward compatibility)
     baseUrl: z.string().url('Base URL must be a valid URL').optional(),
     filter: z.array(iAssistantFilterSchema).optional(),

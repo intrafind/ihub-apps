@@ -1242,6 +1242,7 @@
         "websearchEnabledByDefaultDesc": "Whether web search is turned on by default for users",
         "iassistant": "iAssistant",
         "iassistantDesc": "Configure iAssistant integration for this app",
+        "iassistantEnabled": "Enable iAssistant",
         "iassistantProfileId": "Profile ID",
         "iassistantProfileIdDesc": "The iAssistant profile to use for this app (e.g., iassistant-workspace)",
         "iassistantSearchProfile": "Search Profile",

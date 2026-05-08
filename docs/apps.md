@@ -906,6 +906,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 
 ```json
 "iassistant": {
+  "enabled": true,
   "baseUrl": "https://iassistant.example.com",
   "profileId": "my-search-profile",
   "filter": [
@@ -926,6 +927,7 @@ The `iassistant` property configures app-specific overrides for the iAssistant s
 
 | Property                    | Type   | Description                                                                                      |
 | --------------------------- | ------ | ------------------------------------------------------------------------------------------------ |
+| `iassistant.enabled`        | Boolean | Enable or disable iAssistant integration for this app. Default: `false`                         |
 | `iassistant.baseUrl`        | String | Base URL of the iAssistant service, overriding the platform-level default                        |
 | `iassistant.profileId`      | String | iAssistant profile ID that determines the search index and configuration                         |
 | `iassistant.filter`         | Array  | Array of filter objects to restrict search results. Each filter has `key`, `values`, and optional `isNegated` |
