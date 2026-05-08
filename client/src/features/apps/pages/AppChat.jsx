@@ -17,6 +17,7 @@ import AppShareModal from '../components/AppShareModal';
 
 // Import our custom hooks and components
 import useAppChat from '../../chat/hooks/useAppChat';
+import useCompareMode from '../../chat/hooks/useCompareMode';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
@@ -25,6 +26,8 @@ import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
+import CompareModeToggle from '../../chat/components/CompareModeToggle';
+import CompareModeView from '../../chat/components/CompareModeView';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
 import NoMessagesView from '../../chat/components/NoMessagesView';
@@ -127,6 +130,10 @@ function AppChat({ preloadedApp = null }) {
   const [showShare, setShowShare] = useState(false);
   const [, setMaxTokens] = useState(4096);
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
+
+  // Compare mode state
+  const compareModeFeatureEnabled = featureFlags.isEnabled('compareMode', false);
+  const [compareModeActive, setCompareModeActive] = useState(false);
 
   // Shared app settings hook
   const {
@@ -394,6 +401,27 @@ function AppChat({ preloadedApp = null }) {
     chatId: chatId.current,
     onMessageComplete: handleMessageComplete
   });
+
+  // Compare mode hook - only initialize if feature is enabled and active
+  const compareMode = useCompareMode({
+    appId,
+    enabled: compareModeFeatureEnabled && compareModeActive,
+    onMessageComplete: handleMessageComplete
+  });
+
+  // Initialize compare mode models when compare mode is activated
+  useEffect(() => {
+    if (
+      compareModeActive &&
+      models.length >= 2 &&
+      !compareMode.leftModel &&
+      !compareMode.rightModel
+    ) {
+      // Set first two different models as defaults
+      compareMode.setLeftModel(models[0]?.id);
+      compareMode.setRightModel(models[1]?.id || models[0]?.id);
+    }
+  }, [compareModeActive, models, compareMode]);
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
@@ -1203,11 +1231,20 @@ function AppChat({ preloadedApp = null }) {
       )
     ) {
       cancelGeneration();
-      clearMessages();
-      resetConversationState();
-      chatId.current = resetChatId(appId);
-      clearConversationId(appId);
-      conversationResumed.current = false;
+
+      if (compareModeActive) {
+        // Clear both compare mode chats
+        compareMode.cancelBothGenerations();
+        compareMode.clearBothChats();
+        compareMode.resetCompareMode();
+      } else {
+        // Clear regular chat
+        clearMessages();
+        resetConversationState();
+        chatId.current = resetChatId(appId);
+        clearConversationId(appId);
+        conversationResumed.current = false;
+      }
 
       // Reset the chat input to empty
       setInput('');
@@ -1383,70 +1420,76 @@ function AppChat({ preloadedApp = null }) {
       });
     }
 
-    sendChatMessage({
-      displayMessage: {
-        content: messageContent,
-        meta: {
-          rawContent: input,
-          variables:
-            app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
-          ...messageData
+    // If compare mode is active, send to both models
+    if (compareModeActive && compareMode.leftModel && compareMode.rightModel) {
+      await compareMode.sendToCompare(input, params);
+    } else {
+      // Normal mode: send to regular chat
+      sendChatMessage({
+        displayMessage: {
+          content: messageContent,
+          meta: {
+            rawContent: input,
+            variables:
+              app?.variables && app.variables.length > 0 ? { ...validatedVariables } : undefined,
+            ...messageData
+          }
+        },
+        apiMessage: {
+          content: input,
+          promptTemplate: app?.prompt || null,
+          variables: { ...validatedVariables },
+          imageData: (() => {
+            // Handle image data: convert to object/array/null based on count
+            const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
+              ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
+              : fileUploadHandler.selectedFile?.type === 'image'
+                ? [fileUploadHandler.selectedFile]
+                : [];
+            // Return single object for 1 file, array for multiple, null for none
+            return imageFiles.length === 1
+              ? imageFiles[0]
+              : imageFiles.length > 1
+                ? imageFiles
+                : null;
+          })(),
+          audioData: (() => {
+            // Handle audio data: convert to object/array/null based on count
+            const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
+              ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
+              : fileUploadHandler.selectedFile?.type === 'audio'
+                ? [fileUploadHandler.selectedFile]
+                : [];
+            // Return single object for 1 file, array for multiple, null for none
+            return audioFiles.length === 1
+              ? audioFiles[0]
+              : audioFiles.length > 1
+                ? audioFiles
+                : null;
+          })(),
+          fileData: (() => {
+            // Handle file data: convert to object/array/null based on count
+            const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
+              ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
+              : fileUploadHandler.selectedFile?.type === 'document'
+                ? [fileUploadHandler.selectedFile]
+                : [];
+            // Return single object for 1 file, array for multiple, null for none
+            return documentFiles.length === 1
+              ? documentFiles[0]
+              : documentFiles.length > 1
+                ? documentFiles
+                : null;
+          })()
+        },
+        params,
+        sendChatHistory,
+        messageMetadata: {
+          customResponseRenderer: app?.customResponseRenderer,
+          outputFormat: selectedOutputFormat
         }
-      },
-      apiMessage: {
-        content: input,
-        promptTemplate: app?.prompt || null,
-        variables: { ...validatedVariables },
-        imageData: (() => {
-          // Handle image data: convert to object/array/null based on count
-          const imageFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'image')
-            : fileUploadHandler.selectedFile?.type === 'image'
-              ? [fileUploadHandler.selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return imageFiles.length === 1
-            ? imageFiles[0]
-            : imageFiles.length > 1
-              ? imageFiles
-              : null;
-        })(),
-        audioData: (() => {
-          // Handle audio data: convert to object/array/null based on count
-          const audioFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'audio')
-            : fileUploadHandler.selectedFile?.type === 'audio'
-              ? [fileUploadHandler.selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return audioFiles.length === 1
-            ? audioFiles[0]
-            : audioFiles.length > 1
-              ? audioFiles
-              : null;
-        })(),
-        fileData: (() => {
-          // Handle file data: convert to object/array/null based on count
-          const documentFiles = Array.isArray(fileUploadHandler.selectedFile)
-            ? fileUploadHandler.selectedFile.filter(f => f.type === 'document')
-            : fileUploadHandler.selectedFile?.type === 'document'
-              ? [fileUploadHandler.selectedFile]
-              : [];
-          // Return single object for 1 file, array for multiple, null for none
-          return documentFiles.length === 1
-            ? documentFiles[0]
-            : documentFiles.length > 1
-              ? documentFiles
-              : null;
-        })()
-      },
-      params,
-      sendChatHistory,
-      messageMetadata: {
-        customResponseRenderer: app?.customResponseRenderer,
-        outputFormat: selectedOutputFormat
-      }
-    });
+      });
+    }
 
     setInput('');
     setUseMaxTokens(false); // Reset to use app token limit for next message
@@ -1659,6 +1702,17 @@ function AppChat({ preloadedApp = null }) {
         conversationTitle={conversationTitle}
       />
 
+      {/* Compare Mode Toggle - only show if feature is enabled */}
+      {compareModeFeatureEnabled && models.length >= 2 && (
+        <div className="flex-shrink-0 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-4">
+          <CompareModeToggle
+            enabled={compareModeActive}
+            onChange={setCompareModeActive}
+            disabled={processing || compareMode.isProcessing}
+          />
+        </div>
+      )}
+
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div
           className="md:hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4"
@@ -1708,7 +1762,41 @@ function AppChat({ preloadedApp = null }) {
 
       <div className="flex flex-col md:flex-row flex-1 gap-4 overflow-hidden mx-auto w-full">
         <div className="flex flex-col max-w-6xl mx-auto w-full h-full">
-          {shouldCenterInput ? (
+          {compareModeActive ? (
+            /* Compare Mode View */
+            <>
+              <div className="flex-1 overflow-hidden">
+                <CompareModeView
+                  app={app}
+                  models={models}
+                  currentLanguage={currentLanguage}
+                  leftModel={compareMode.leftModel}
+                  rightModel={compareMode.rightModel}
+                  onLeftModelChange={compareMode.setLeftModel}
+                  onRightModelChange={compareMode.setRightModel}
+                  leftMessages={compareMode.leftChat.messages}
+                  rightMessages={compareMode.rightChat.messages}
+                  outputFormat={selectedOutputFormat}
+                  onDelete={handleDeleteMessage}
+                  onEdit={handleEditMessage}
+                  onResend={handleResendMessage}
+                  appId={appId}
+                  leftChatId={compareMode.leftChatId}
+                  rightChatId={compareMode.rightChatId}
+                  onOpenInCanvas={handleOpenInCanvas}
+                  canvasEnabled={app?.features?.canvas === true}
+                  requiredIntegrations={requiredIntegrations}
+                  onConnectIntegration={connectIntegration}
+                  onClarificationSubmit={handleClarificationSubmit}
+                  onClarificationSkip={handleClarificationSkip}
+                  onDocumentAction={handleDocumentAction}
+                />
+              </div>
+              <div className="flex-shrink-0 px-4 pt-2">
+                <div className="w-full max-w-4xl mx-auto">{renderChatInput()}</div>
+              </div>
+            </>
+          ) : shouldCenterInput ? (
             /* Centered layout for example prompts */
             <>
               {/* Mobile layout: content centers, input at bottom */}

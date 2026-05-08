@@ -104,6 +104,10 @@ function useCompareMode({ appId, enabled, onMessageComplete }) {
     leftChat,
     rightChat,
 
+    // Chat IDs for reference
+    leftChatId: leftChatId.current,
+    rightChatId: rightChatId.current,
+
     // Combined functions
     sendToCompare,
     clearBothChats,
