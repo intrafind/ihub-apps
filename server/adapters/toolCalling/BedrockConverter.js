@@ -9,8 +9,10 @@
 import {
   createGenericTool,
   createGenericToolCall,
+  createGenericStreamingResponse,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import { parseJsonAsync } from '../../utils/asyncJson.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -115,4 +117,108 @@ export function convertBedrockToolChoice(toolChoice) {
     if (toolChoice.auto || toolChoice.any || toolChoice.tool) return toolChoice;
   }
   return { auto: {} };
+}
+
+/**
+ * Map Bedrock Converse `stopReason` values to the generic finish-reason vocabulary.
+ */
+function mapBedrockStopReason(stopReason) {
+  switch (stopReason) {
+    case 'end_turn':
+    case 'stop_sequence':
+      return 'stop';
+    case 'tool_use':
+      return 'tool_calls';
+    case 'max_tokens':
+      return 'length';
+    case 'guardrail_intervened':
+    case 'content_filtered':
+      return 'content_filter';
+    default:
+      return stopReason || 'stop';
+  }
+}
+
+/**
+ * Convert a non-streaming Bedrock Converse response to the generic streaming-response
+ * shape. The streaming path is handled by `BedrockAdapter.parseResponseStream`; this
+ * function exists for the model-test endpoint and other call sites that issue
+ * `simpleCompletion` (i.e. `stream: false`) and parse the full JSON body.
+ *
+ * Bedrock Converse non-streaming response shape:
+ * {
+ *   output: { message: { role, content: [{ text }, { toolUse: { toolUseId, name, input } }] } },
+ *   stopReason: 'end_turn' | 'tool_use' | ...,
+ *   usage: { inputTokens, outputTokens, totalTokens }
+ * }
+ *
+ * @param {string} data - Raw JSON body from the Converse endpoint
+ * @returns {Promise<import('./GenericToolCalling.js').GenericStreamingResponse>} Generic response
+ */
+export async function convertBedrockResponseToGeneric(data) {
+  const result = createGenericStreamingResponse();
+
+  if (!data) return result;
+
+  try {
+    const parsed = typeof data === 'string' ? await parseJsonAsync(data) : data;
+
+    // Surface model-side error envelopes (e.g. ValidationException).
+    if (parsed?.message && !parsed?.output) {
+      result.error = true;
+      result.errorMessage = parsed.message;
+      result.complete = true;
+      result.finishReason = 'error';
+      return result;
+    }
+
+    const blocks = parsed?.output?.message?.content;
+    if (Array.isArray(blocks)) {
+      for (const block of blocks) {
+        if (!block || typeof block !== 'object') continue;
+        if (typeof block.text === 'string' && block.text.length > 0) {
+          result.content.push(block.text);
+          continue;
+        }
+        if (block.toolUse) {
+          const tu = block.toolUse;
+          result.tool_calls.push(
+            createGenericToolCall(tu.toolUseId, tu.name, tu.input || {}, result.tool_calls.length, {
+              originalFormat: 'bedrock',
+              type: 'tool_use'
+            })
+          );
+          continue;
+        }
+        if (block.reasoningContent?.reasoningText?.text) {
+          result.thinking.push(block.reasoningContent.reasoningText.text);
+        }
+      }
+    }
+
+    if (parsed?.usage) {
+      const u = parsed.usage;
+      result.metadata = result.metadata || {};
+      result.metadata.usage = {
+        promptTokens: u.inputTokens || 0,
+        completionTokens: u.outputTokens || 0,
+        totalTokens:
+          typeof u.totalTokens === 'number'
+            ? u.totalTokens
+            : (u.inputTokens || 0) + (u.outputTokens || 0)
+      };
+    }
+
+    result.complete = true;
+    result.finishReason = mapBedrockStopReason(parsed?.stopReason);
+  } catch (parseError) {
+    logger.error('Error parsing Bedrock response', {
+      component: 'BedrockConverter',
+      error: parseError
+    });
+    result.error = true;
+    result.errorMessage = `Error parsing Bedrock response: ${parseError.message}`;
+  }
+
+  return result;
 }

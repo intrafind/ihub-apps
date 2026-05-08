@@ -553,6 +553,21 @@ The system uses `anonymousAuth` structure instead of legacy `allowAnonymous`:
 }
 ```
 
+#### Default Local Admin (Dev/Testing)
+
+A fresh `contents/` (auto-populated by `performInitialSetup`) ships with a built-in
+local admin login:
+
+- **Username:** `admin`
+- **Password:** `password123`
+- **Endpoint:** `POST /api/auth/local/login` → returns a `Set-Cookie: authToken=…` JWT
+- **Groups:** `admins`, `authenticated` (full admin access)
+
+Use this account for any end-to-end test against a freshly booted dev server (e.g.
+hitting `/api/admin/...` endpoints). Anonymous users always go through `adminAuth`'s
+hard `req.user.id !== 'anonymous'` check, so granting `defaultGroups: ['admins']`
+to anonymous does NOT unlock admin endpoints — log in with the local admin instead.
+
 ### Security Considerations
 
 - **No hardcoded secrets**: API keys via environment variables only

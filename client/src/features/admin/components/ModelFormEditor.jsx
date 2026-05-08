@@ -130,16 +130,13 @@ function ModelFormEditor({
     }
     (async () => {
       try {
+        // makeAdminApiCall returns an axios response object: `{ data, status, ... }`,
+        // not a fetch Response. Read schema via `response.data`.
         const response = await makeAdminApiCall(
           `/admin/providers/${encodeURIComponent(data.provider)}/schema`
         );
         if (cancelled) return;
-        if (response.ok) {
-          const schema = await response.json();
-          setProviderSchema(schema);
-        } else {
-          setProviderSchema(null);
-        }
+        setProviderSchema(response?.data || null);
       } catch {
         if (!cancelled) setProviderSchema(null);
       }
@@ -315,29 +312,35 @@ function ModelFormEditor({
                 </p>
               </div>
 
-              <div className="col-span-6">
-                <label
-                  htmlFor="url"
-                  className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-                >
-                  {t('admin.models.fields.url')} <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="url"
-                  name="url"
-                  id="url"
-                  value={data.url || ''}
-                  onChange={handleInputChange}
-                  placeholder={t('admin.models.placeholders.apiUrl')}
-                  className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
-                    errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
-                  }`}
-                  required
-                />
-                {errors.url && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
-                )}
-              </div>
+              {/*
+                Bedrock builds its endpoint URL from `region` + `modelId` at request time, so
+                a URL field would only confuse admins. Hide the field entirely for Bedrock.
+              */}
+              {data.provider !== 'bedrock' && (
+                <div className="col-span-6">
+                  <label
+                    htmlFor="url"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
+                    {t('admin.models.fields.url')} <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="url"
+                    name="url"
+                    id="url"
+                    value={data.url || ''}
+                    onChange={handleInputChange}
+                    placeholder={t('admin.models.placeholders.apiUrl')}
+                    className={`mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md ${
+                      errors.url ? 'border-red-300 text-red-900 placeholder-red-300' : ''
+                    }`}
+                    required
+                  />
+                  {errors.url && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.url}</p>
+                  )}
+                </div>
+              )}
 
               <div className="col-span-6">
                 <div className="flex items-center gap-2">

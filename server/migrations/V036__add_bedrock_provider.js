@@ -1,5 +1,5 @@
 /**
- * Migration V034 — Add AWS Bedrock provider
+ * Migration V036 — Add AWS Bedrock provider
  *
  * Registers the `bedrock` provider in config/providers.json for existing
  * installations so the AWS Bedrock adapter can be selected when configuring
@@ -7,8 +7,8 @@
  * server/defaults/config/providers.json.
  */
 
-export const version = '034';
-export const description = 'Add AWS Bedrock provider';
+export const version = '036';
+export const description = 'add_bedrock_provider';
 
 export async function precondition(ctx) {
   return await ctx.fileExists('config/providers.json');
