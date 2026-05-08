@@ -838,6 +838,13 @@ export const fetchAdminUsageModels = async (range = '30d') => {
   return response.data;
 };
 
+export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
+  const response = await makeAdminApiCall(
+    `/admin/usage/feedback?limit=${limit}&offset=${offset}`
+  );
+  return response.data;
+};
+
 // Create an adminApi object that contains all the functions for compatibility
 export const adminApi = {
   // Existing functions
@@ -850,6 +857,7 @@ export const adminApi = {
   fetchAdminUsageUsers,
   fetchAdminUsageApps,
   fetchAdminUsageModels,
+  fetchAdminFeedbackEntries,
   fetchAdminCacheStats,
   fetchAdminApps,
   fetchAdminModels,
