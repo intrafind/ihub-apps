@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import {
   fetchAdminUsageData,
   fetchAdminUsageMeta,
-  updateAdminUsageTrackingMode
+  updateAdminUsageTrackingMode,
+  fetchAdminFeedbackEntries
 } from '../../../api/adminApi';
 import { useTranslation } from 'react-i18next';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -246,6 +247,147 @@ function FeedbackCard({ data }) {
       <div className="text-center text-sm text-gray-600 dark:text-gray-400 mt-4">
         Total feedback: {totalStarRatings} responses
       </div>
+    </div>
+  );
+}
+
+function FeedbackEntriesCard() {
+  const { t } = useTranslation();
+  const [feedbackData, setFeedbackData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(0);
+  const pageSize = 20;
+
+  useEffect(() => {
+    loadFeedback();
+  }, [page]);
+
+  const loadFeedback = async () => {
+    try {
+      setLoading(true);
+      const data = await fetchAdminFeedbackEntries(pageSize, page * pageSize);
+      setFeedbackData(data);
+    } catch (e) {
+      console.error('Failed to load feedback entries', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = timestamp => {
+    return new Date(timestamp).toLocaleString();
+  };
+
+  const renderStars = rating => {
+    return (
+      <div className="flex items-center">
+        {[1, 2, 3, 4, 5].map(star => (
+          <svg
+            key={star}
+            className={`w-4 h-4 ${
+              star <= Math.round(rating) ? 'text-yellow-400' : 'text-gray-300 dark:text-gray-600'
+            }`}
+            fill="currentColor"
+            viewBox="0 0 20 20"
+          >
+            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+          </svg>
+        ))}
+        <span className="ml-2 text-sm text-gray-600 dark:text-gray-400">{rating.toFixed(1)}</span>
+      </div>
+    );
+  };
+
+  if (loading && !feedbackData) {
+    return (
+      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+        <LoadingSpinner />
+      </div>
+    );
+  }
+
+  const { feedbackEntries = [], total = 0 } = feedbackData || {};
+  const totalPages = Math.ceil(total / pageSize);
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+      <div className="flex justify-between items-center mb-4">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {t('admin.usage.feedbackEntries', 'User Feedback Entries')}
+        </h3>
+        <span className="text-sm text-gray-600 dark:text-gray-400">
+          {total} {t('admin.usage.totalEntries', 'total entries')}
+        </span>
+      </div>
+
+      {feedbackEntries.length === 0 ? (
+        <div className="text-center p-8 text-gray-500 dark:text-gray-400">
+          <div className="text-lg font-medium mb-2">
+            {t('admin.usage.noFeedback', 'No feedback available')}
+          </div>
+          <div className="text-sm">
+            {t('admin.usage.noFeedbackDesc', 'No user feedback has been submitted yet.')}
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-4">
+            {feedbackEntries.map((entry, index) => (
+              <div
+                key={index}
+                className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-700"
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex-1">
+                    {renderStars(entry.rating)}
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {formatDate(entry.timestamp)}
+                    </div>
+                  </div>
+                  <div className="text-right text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                    {entry.userId && <div>User: {entry.userId}</div>}
+                    {entry.appId && <div>App: {entry.appId}</div>}
+                    {entry.modelId && <div>Model: {entry.modelId}</div>}
+                  </div>
+                </div>
+                {entry.comment && entry.comment.trim() && (
+                  <div className="mt-3 p-3 bg-white dark:bg-gray-600 rounded border border-gray-200 dark:border-gray-500">
+                    <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-1">
+                      {t('admin.usage.feedbackComment', 'Comment')}:
+                    </div>
+                    <div className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">
+                      {entry.comment}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex justify-center items-center space-x-2 mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={() => setPage(p => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {t('admin.usage.previous', 'Previous')}
+              </button>
+              <span className="text-sm text-gray-600 dark:text-gray-400">
+                {t('admin.usage.pageInfo', `Page ${page + 1} of ${totalPages}`)}
+              </span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="px-3 py-1 rounded border border-gray-300 dark:border-gray-600 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-100 dark:hover:bg-gray-700"
+              >
+                {t('admin.usage.next', 'Next')}
+              </button>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
@@ -864,6 +1006,9 @@ function AdminUsageReports() {
           </div>
         </div>
       </div>
+
+      {/* Individual Feedback Entries with Comments */}
+      <FeedbackEntriesCard />
     </div>
   );
 
