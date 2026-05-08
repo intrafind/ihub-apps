@@ -9,6 +9,7 @@ import authDebugService from '../utils/authDebugService.js';
 import logger from '../utils/logger.js';
 import { buildServerPath } from '../utils/basePath.js';
 import { getAuthCookieOptions } from '../utils/cookieSettings.js';
+import { decodeIdTokenClaims } from '../utils/oidcIdToken.js';
 
 // Store configured providers
 const configuredProviders = new Map();
@@ -69,7 +70,7 @@ export function configureOidcProviders() {
           customHeaders: {},
           skipUserProfile: false // We'll fetch user info manually
         },
-        async (accessToken, _refreshToken, _profile, done) => {
+        async (accessToken, _refreshToken, params, _profile, done) => {
           const sessionId = authDebugService.generateSessionId();
 
           try {
@@ -93,11 +94,49 @@ export function configureOidcProviders() {
                 provider: provider.name,
                 hasAccessToken: !!accessToken,
                 hasRefreshToken: !!_refreshToken,
+                hasIdToken: !!params?.id_token,
                 accessTokenLength: accessToken?.length || 0,
                 tokenType: 'Bearer'
               },
               sessionId
             );
+
+            // Decode ID token claims (if present). Some IdPs (notably
+            // Microsoft Entra) emit `groups` only in the ID token and not in
+            // the userinfo endpoint response, so we read it here and merge it
+            // into userInfo before normalization.
+            const idTokenClaims = decodeIdTokenClaims(params?.id_token);
+            if (idTokenClaims) {
+              const groupsAttr = provider.groupsAttribute || 'groups';
+              const overage = !!(
+                idTokenClaims._claim_names?.[groupsAttr] || idTokenClaims.hasgroups
+              );
+              authDebugService.log(
+                'oidc',
+                'debug',
+                'id_token_claims_decoded',
+                {
+                  provider: provider.name,
+                  claimKeys: Object.keys(idTokenClaims),
+                  hasGroupsClaim: Array.isArray(idTokenClaims[groupsAttr]),
+                  groupsCount: Array.isArray(idTokenClaims[groupsAttr])
+                    ? idTokenClaims[groupsAttr].length
+                    : 0,
+                  hasOverageIndicator: overage
+                },
+                sessionId
+              );
+              if (overage) {
+                logger.warn(
+                  'OIDC ID token signaled groups overage; the groups claim list is incomplete. ' +
+                    'Consider configuring a Microsoft Graph fallback or an Entra group filter.',
+                  {
+                    component: 'OidcAuth',
+                    providerName: provider.name
+                  }
+                );
+              }
+            }
 
             // Get user info from OIDC provider
             const userInfo = await fetchUserInfo(
@@ -106,6 +145,29 @@ export function configureOidcProviders() {
               provider.name,
               sessionId
             );
+
+            // If the userinfo response lacks the configured groups attribute
+            // but the ID token carries it, fill it in so downstream extraction
+            // picks the groups up unchanged.
+            const groupsAttr = provider.groupsAttribute || 'groups';
+            if (
+              idTokenClaims &&
+              userInfo[groupsAttr] === undefined &&
+              Array.isArray(idTokenClaims[groupsAttr])
+            ) {
+              userInfo[groupsAttr] = idTokenClaims[groupsAttr];
+              authDebugService.log(
+                'oidc',
+                'info',
+                'groups_merged_from_id_token',
+                {
+                  provider: provider.name,
+                  groupsAttribute: groupsAttr,
+                  groupsCount: idTokenClaims[groupsAttr].length
+                },
+                sessionId
+              );
+            }
 
             // Log user info if includeRawData is enabled
             authDebugService.log(
