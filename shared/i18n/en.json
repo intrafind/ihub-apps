@@ -529,7 +529,11 @@
         "apiKeySet": "API key is set (leave blank to keep current)"
       },
       "sections": {
-        "imageGeneration": "Image Generation Settings"
+        "imageGeneration": "Image Generation Settings",
+        "providerConfig": "Provider Settings"
+      },
+      "errors": {
+        "invalidJson": "Invalid JSON"
       }
     },
     "auth": {

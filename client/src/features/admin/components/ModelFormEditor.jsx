@@ -11,6 +11,72 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 
 /**
+ * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
+ * local state so admins can type intermediate (invalid) JSON without those characters
+ * being persisted into `model.config`. The parent only ever receives the parsed
+ * object/null when the input is valid; while invalid, `model.config[field.key]` keeps
+ * its previous value and an inline error is shown.
+ */
+function JsonConfigField({ id, value, onChange, className }) {
+  const { t } = useTranslation();
+  const initialDraft = useMemo(() => {
+    if (value === undefined || value === null) return '';
+    if (typeof value === 'string') return value;
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return '';
+    }
+  }, [value]);
+
+  const [draft, setDraft] = useState(initialDraft);
+  const [error, setError] = useState(null);
+
+  // Keep local draft in sync when the upstream value changes from elsewhere
+  // (model load, programmatic reset, switching providers).
+  useEffect(() => {
+    setDraft(initialDraft);
+    setError(null);
+  }, [initialDraft]);
+
+  const handleChange = e => {
+    const raw = e.target.value;
+    setDraft(raw);
+    if (!raw.trim()) {
+      setError(null);
+      onChange(null);
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      setError(null);
+      onChange(parsed);
+    } catch (err) {
+      setError(err.message);
+      // Intentionally do NOT call onChange — keep last valid value in model.config.
+    }
+  };
+
+  return (
+    <>
+      <textarea
+        id={id}
+        rows={3}
+        value={draft}
+        onChange={handleChange}
+        aria-invalid={!!error}
+        className={className}
+      />
+      {error && (
+        <p className="mt-1 text-xs text-red-600 dark:text-red-400">
+          {t('admin.models.errors.invalidJson', 'Invalid JSON')}: {error}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
  * Generate list of environment variable names that can be used for a model's API key
  * Based on the priority system in server/utils.js getApiKeyForModel()
  * @param {Object} model - The model configuration
@@ -770,7 +836,7 @@ function ModelFormEditor({
                 <div className="col-span-6">
                   <fieldset>
                     <legend className="text-base font-medium text-gray-900 dark:text-gray-100">
-                      {t('admin.models.sections.providerConfig', 'Provider Settings')}
+                      {t('admin.models.sections.providerConfig')}
                     </legend>
                     <div className="mt-4 grid grid-cols-6 gap-6">
                       {providerSchema.fields.map(field => {
@@ -794,26 +860,10 @@ function ModelFormEditor({
                               {field.required && <span className="text-red-500"> *</span>}
                             </label>
                             {field.type === 'json' ? (
-                              <textarea
+                              <JsonConfigField
                                 id={inputId}
-                                rows={3}
-                                value={
-                                  value && typeof value === 'object'
-                                    ? JSON.stringify(value, null, 2)
-                                    : value || ''
-                                }
-                                onChange={e => {
-                                  const raw = e.target.value;
-                                  if (!raw.trim()) {
-                                    handleConfigChange(field.key, null);
-                                    return;
-                                  }
-                                  try {
-                                    handleConfigChange(field.key, JSON.parse(raw));
-                                  } catch {
-                                    handleConfigChange(field.key, raw);
-                                  }
-                                }}
+                                value={data.config?.[field.key]}
+                                onChange={parsed => handleConfigChange(field.key, parsed)}
                                 className="mt-1 focus:ring-indigo-500 focus:border-indigo-500 block w-full font-mono text-xs shadow-sm sm:text-sm border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md"
                               />
                             ) : Array.isArray(field.enumHint) && field.enumHint.length > 0 ? (
