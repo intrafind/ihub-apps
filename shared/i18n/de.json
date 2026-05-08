@@ -118,7 +118,19 @@
   "chat": {
     "messageList": "Chat-Nachrichten",
     "inputLabel": "Nachricht eingeben",
-    "clearInput": "Eingabe löschen"
+    "clearInput": "Eingabe löschen",
+    "compareMode": {
+      "toggle": "Vergleichsmodus",
+      "enabled": "Vergleichsmodus aktiviert",
+      "disabled": "Vergleichsmodus deaktiviert",
+      "leftModel": "Linkes Modell",
+      "rightModel": "Rechtes Modell",
+      "modelA": "Modell A",
+      "modelB": "Modell B",
+      "selectLeftModel": "Linkes Modell auswählen",
+      "selectRightModel": "Rechtes Modell auswählen",
+      "tooltip": "Vergleichen Sie die Antworten von zwei verschiedenen Modellen nebeneinander"
+    }
   },
   "websearch": {
     "title": "Websuche",

@@ -94,6 +94,16 @@ export const featureRegistry = [
     default: true
   },
   {
+    id: 'compareMode',
+    name: { en: 'Compare Mode', de: 'Vergleichsmodus' },
+    description: {
+      en: 'Compare responses from two different AI models side-by-side',
+      de: 'Antworten von zwei verschiedenen KI-Modellen nebeneinander vergleichen'
+    },
+    category: 'ai',
+    default: false
+  },
+  {
     id: 'shortLinks',
     name: { en: 'Short Links', de: 'Kurzlinks' },
     description: {
