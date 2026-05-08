@@ -1058,8 +1058,19 @@ export default function registerAdminSourcesRoutes(app) {
         const startTime = Date.now();
 
         try {
+          // Inject runtime context required by handlers that need user identity.
+          // The IFinderHandler validates `user` and `chatId` before issuing any
+          // HTTP call and would otherwise abort with "requires authenticated user
+          // in sourceConfig". Other handlers (filesystem, url, page) ignore these
+          // extra fields, so adding them unconditionally is safe.
+          const testConfig = {
+            ...source.config,
+            user: req.user,
+            chatId: `admin-source-test-${id}-${Date.now()}`
+          };
+
           // Test source connection
-          const result = await manager.testSource(source.type, source.config);
+          const result = await manager.testSource(source.type, testConfig);
           const duration = Date.now() - startTime;
 
           res.json({
@@ -1172,7 +1183,15 @@ export default function registerAdminSourcesRoutes(app) {
         const manager = getSourceManager();
 
         try {
-          const content = await manager.loadContent(source.type, source.config);
+          // Same context injection as the test endpoint — handlers like
+          // IFinderHandler require `user` and `chatId` before any HTTP call.
+          const previewConfig = {
+            ...source.config,
+            user: req.user,
+            chatId: `admin-source-preview-${id}-${Date.now()}`
+          };
+
+          const content = await manager.loadContent(source.type, previewConfig);
           const preview = content.substring(0, parseInt(limit));
 
           res.json({
