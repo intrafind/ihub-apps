@@ -1,5 +1,5 @@
 /**
- * Migration V035 — Add iHub Examples marketplace registry
+ * Migration V037 — Add iHub Examples marketplace registry
  *
  * Adds the in-repo example marketplace to config/registries.json so admins
  * can browse and install example models, apps, and prompts shipped under
@@ -10,8 +10,8 @@
  * server/defaults/config/registries.json.
  */
 
-export const version = '035';
-export const description = 'Add iHub Examples marketplace registry';
+export const version = '037';
+export const description = 'add_examples_marketplace_registry';
 
 export async function precondition(ctx) {
   return await ctx.fileExists('config/registries.json');

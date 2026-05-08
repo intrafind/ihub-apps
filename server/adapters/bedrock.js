@@ -83,7 +83,9 @@ const REQUIRES_INFERENCE_PROFILE = [
   'anthropic.claude-opus-4',
   'anthropic.claude-haiku-4',
   'meta.llama4-',
-  'meta.llama3-3-'
+  'meta.llama3-3-',
+  'meta.llama3-2-',
+  'amazon.nova-'
 ];
 
 function regionToProfilePrefix(region) {
