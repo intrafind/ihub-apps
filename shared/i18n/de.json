@@ -747,7 +747,11 @@
         "apiKeySet": "API-Schlüssel ist gesetzt (leer lassen, um aktuellen zu behalten)"
       },
       "sections": {
-        "imageGeneration": "Bilderzeugungseinstellungen"
+        "imageGeneration": "Bilderzeugungseinstellungen",
+        "providerConfig": "Anbieter-Einstellungen"
+      },
+      "errors": {
+        "invalidJson": "Ungültiges JSON"
       }
     },
     "chat": {

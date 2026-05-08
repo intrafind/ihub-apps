@@ -111,7 +111,7 @@ The system currently supports the following providers:
    - Region is configured per-model via `config.region` (default `eu-central-1`); the value `global` selects the cross-region inference profile prefix
    - Model IDs accept either bare foundation IDs (`anthropic.claude-3-5-sonnet-20241022-v2:0`) or pre-prefixed inference profile IDs (`us.…`, `eu.…`, `apac.…`, `global.…`); the adapter auto-prepends the cluster prefix when the chosen region requires it
    - Supports text, vision (`png/jpeg/gif/webp`), tool calling, parallel tool use, streaming, and reasoning (extended thinking)
-   - Bedrock service limits enforced client-side: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
+   - Bedrock service limits are enforced by the server-side adapter before each request: max 5 documents per request and a strict filename character allowlist (alphanumerics, single spaces, `-`, `()`, `[]`)
    - See [AWS Bedrock](#aws-bedrock) below for full setup instructions
 
 ### AWS Bedrock

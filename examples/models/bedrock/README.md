@@ -28,7 +28,10 @@ browse and install them with one click.
 - An explicit `us.…` / `eu.…` / `apac.…` / `global.…` modelId is always
   honored as-is.
 
-## Limits enforced client-side
+## Limits enforced by the adapter
+
+The server-side Bedrock adapter applies these checks before the request leaves
+the iHub backend:
 
 - Max **5 documents** per request (Bedrock service limit).
 - Document filenames are sanitized to Bedrock's character allowlist
