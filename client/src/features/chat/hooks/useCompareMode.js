@@ -44,7 +44,7 @@ function useCompareMode({ appId, enabled, onMessageComplete }) {
 
       try {
         // Send to left model with its specific model selection
-        const leftParams = { ...messageStructure.params, selectedModel: leftModel };
+        const leftParams = { ...messageStructure.params, modelId: leftModel };
         const leftPromise = leftChat.sendMessage({
           displayMessage: messageStructure.displayMessage,
           apiMessage: messageStructure.apiMessage,
@@ -54,7 +54,7 @@ function useCompareMode({ appId, enabled, onMessageComplete }) {
         });
 
         // Send to right model with its specific model selection
-        const rightParams = { ...messageStructure.params, selectedModel: rightModel };
+        const rightParams = { ...messageStructure.params, modelId: rightModel };
         const rightPromise = rightChat.sendMessage({
           displayMessage: messageStructure.displayMessage,
           apiMessage: messageStructure.apiMessage,
