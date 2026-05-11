@@ -18,7 +18,8 @@ import ModelSelector from './ModelSelector';
  * @param {string} props.outputFormat - Output format (markdown, text, etc.)
  * @param {Function} props.onDelete - Message delete callback
  * @param {Function} props.onEdit - Message edit callback
- * @param {Function} props.onResend - Message resend callback
+ * @param {Function} props.onLeftResend - Message resend callback for left chat
+ * @param {Function} props.onRightResend - Message resend callback for right chat
  * @param {string} props.appId - App ID
  * @param {string} props.leftChatId - Left chat ID
  * @param {string} props.rightChatId - Right chat ID
@@ -36,7 +37,8 @@ function CompareModeView({
   outputFormat,
   onDelete,
   onEdit,
-  onResend,
+  onLeftResend,
+  onRightResend,
   appId,
   leftChatId,
   rightChatId,
@@ -55,28 +57,28 @@ function CompareModeView({
       {/* Left Panel */}
       <div className="flex-1 flex flex-col min-w-0 border-r border-gray-200 dark:border-gray-700 pr-4">
         <div className="flex-shrink-0 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500" />
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0" />
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
               {t('chat.compareMode.modelA')}
             </span>
+            <ModelSelector
+              app={app}
+              models={models}
+              selectedModel={leftModel}
+              onModelChange={onLeftModelChange}
+              currentLanguage={currentLanguage}
+              dropdownDirection="down"
+            />
           </div>
-          <ModelSelector
-            app={app}
-            models={models}
-            selectedModel={leftModel}
-            onModelChange={onLeftModelChange}
-            currentLanguage={currentLanguage}
-            dropdownDirection="down"
-          />
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           <ChatMessageList
             messages={leftMessages}
             outputFormat={outputFormat}
             onDelete={onDelete}
             onEdit={onEdit}
-            onResend={onResend}
+            onResend={onLeftResend}
             editable={true}
             appId={appId}
             chatId={leftChatId}
@@ -98,28 +100,28 @@ function CompareModeView({
       {/* Right Panel */}
       <div className="flex-1 flex flex-col min-w-0 pl-4">
         <div className="flex-shrink-0 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2 mb-2">
-            <div className="w-3 h-3 rounded-full bg-green-500" />
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0" />
+            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
               {t('chat.compareMode.modelB')}
             </span>
+            <ModelSelector
+              app={app}
+              models={models}
+              selectedModel={rightModel}
+              onModelChange={onRightModelChange}
+              currentLanguage={currentLanguage}
+              dropdownDirection="down"
+            />
           </div>
-          <ModelSelector
-            app={app}
-            models={models}
-            selectedModel={rightModel}
-            onModelChange={onRightModelChange}
-            currentLanguage={currentLanguage}
-            dropdownDirection="down"
-          />
         </div>
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-y-auto">
           <ChatMessageList
             messages={rightMessages}
             outputFormat={outputFormat}
             onDelete={onDelete}
             onEdit={onEdit}
-            onResend={onResend}
+            onResend={onRightResend}
             editable={true}
             appId={appId}
             chatId={rightChatId}
