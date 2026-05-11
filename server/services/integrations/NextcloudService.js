@@ -487,9 +487,7 @@ class NextcloudService {
     // Normalize so the prefix always has a single trailing slash; we
     // compare hrefs in their percent-encoded form (Nextcloud returns
     // them encoded) and only decode when extracting display names.
-    const normalizedRoot = userRootPrefix.endsWith('/')
-      ? userRootPrefix
-      : `${userRootPrefix}/`;
+    const normalizedRoot = userRootPrefix.endsWith('/') ? userRootPrefix : `${userRootPrefix}/`;
 
     for (const responseXml of responses) {
       const hrefMatch = responseXml.match(/<d:href>([^<]+)<\/d:href>/);
