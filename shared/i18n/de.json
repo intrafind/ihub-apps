@@ -979,6 +979,10 @@
       "office365": "Microsoft Office 365",
       "googledrive": "Google Drive",
       "googleDrive": "Google Drive",
+      "nextcloud": "Nextcloud",
+      "serverUrl": "Nextcloud-Server-URL",
+      "serverUrlHint": "Basis-URL Ihrer Nextcloud-Instanz (ohne abschließenden Schrägstrich).",
+      "personalFiles": "Persönliche Dateien",
       "editProvider": "Anbieter bearbeiten",
       "deleteProvider": "Anbieter löschen",
       "deleteConfirm": "Sind Sie sicher, dass Sie diesen Cloud-Speicher-Anbieter löschen möchten?",
@@ -1008,7 +1012,8 @@
         "tenantIdRequired": "Mandanten-ID ist erforderlich",
         "clientIdRequired": "Client-ID ist erforderlich",
         "clientSecretRequired": "Client-Secret ist erforderlich",
-        "googledriveRequired": "Client-ID und Client-Secret sind für Google Drive erforderlich"
+        "googledriveRequired": "Client-ID und Client-Secret sind für Google Drive erforderlich",
+        "nextcloudRequired": "Server-URL, Client-ID und Client-Secret sind für Nextcloud erforderlich"
       },
       "info": {
         "title": "Über Cloud-Speicher-Integration",
@@ -1029,6 +1034,14 @@
         "step2": "Google Drive-API aktivieren",
         "step3": "OAuth 2.0-Anmeldedaten erstellen",
         "step4": "Client-ID und Client-Secret hier kopieren"
+      },
+      "nextcloudInfo": {
+        "title": "Nextcloud-Konfiguration",
+        "description": "Um die Nextcloud-Integration zu konfigurieren, müssen Sie einen OAuth 2.0-Client in Ihren Nextcloud-Admin-Einstellungen registrieren.",
+        "step1": "Als Administrator bei Nextcloud anmelden",
+        "step2": "Zu Einstellungen → Verwaltung → Sicherheit gehen und einen OAuth 2.0-Client hinzufügen",
+        "step3": "Die Weiterleitungs-URI auf Ihre iHub-Callback-URL setzen (z. B. https://your-ihub.example.com/api/integrations/nextcloud/{providerId}/callback)",
+        "step4": "Client-Identifier, Client-Secret und Nextcloud-Server-URL hier kopieren"
       }
     },
     "system": {

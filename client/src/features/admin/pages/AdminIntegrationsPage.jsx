@@ -68,6 +68,17 @@ function AdminIntegrationsPage() {
       href: '/admin/integrations/google-drive'
     },
     integrationsEnabled && {
+      key: 'nextcloud',
+      title: t('admin.integrations.cards.nextcloud.title', 'Nextcloud'),
+      description: t(
+        'admin.integrations.cards.nextcloud.description',
+        'Let users browse and attach files from any Nextcloud instance during a chat. Same `cloudStorage` config surface as Office 365 and Google Drive.'
+      ),
+      icon: 'cloud',
+      color: 'bg-blue-600',
+      href: '/admin/integrations/nextcloud'
+    },
+    integrationsEnabled && {
       key: 'jira',
       title: t('admin.integrations.cards.jira.title', 'Atlassian Jira'),
       description: t(

@@ -101,6 +101,9 @@ const AdminIntegrationsOffice365Page = lazyWithRetry(
 const AdminIntegrationsGoogleDrivePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsGoogleDrivePage')
 );
+const AdminIntegrationsNextcloudPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminIntegrationsNextcloudPage')
+);
 const AdminMarketplacePage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplacePage')
 );
@@ -530,6 +533,10 @@ function App() {
           <Route
             path="admin/integrations/google-drive"
             element={<LazyAdminRoute component={AdminIntegrationsGoogleDrivePage} />}
+          />
+          <Route
+            path="admin/integrations/nextcloud"
+            element={<LazyAdminRoute component={AdminIntegrationsNextcloudPage} />}
           />
           <Route
             path="admin/office-integration"
