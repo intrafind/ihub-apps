@@ -87,3 +87,6 @@ contents/.jwt-secret
 *.pem
 contents*/
 .env*
+
+# Nextcloud plugin tarball built by `make -C nextcloud-app package`
+ihub_chat.tar.gz
