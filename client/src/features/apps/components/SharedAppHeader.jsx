@@ -56,7 +56,13 @@ function SharedAppHeader({
   showParameters,
   onShare,
   showShareButton = false,
-  conversationTitle = null
+  conversationTitle = null,
+
+  // Compare mode props
+  showCompareModeToggle = false,
+  compareModeActive = false,
+  onCompareModeChange,
+  compareModeDisabled = false
 }) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -134,6 +140,10 @@ function SharedAppHeader({
           appId={appId}
           chatId={chatId}
           conversationTitle={conversationTitle}
+          showCompareModeToggle={showCompareModeToggle}
+          compareModeActive={compareModeActive}
+          onCompareModeChange={onCompareModeChange}
+          compareModeDisabled={compareModeDisabled}
         />
       </div>
 
