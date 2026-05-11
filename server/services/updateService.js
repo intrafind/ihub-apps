@@ -126,6 +126,19 @@ export function isContainerInstallation() {
   return false;
 }
 
+/**
+ * Check if remote version checks against GitHub are disabled.
+ *
+ * Opt-in via `NO_VERSION_CHECK` (or `IHUB_NO_VERSION_CHECK`) for air-gapped
+ * deployments, environments where outbound traffic to api.github.com is
+ * blocked, or admins who simply don't want the Admin UI to phone home.
+ * Not set by default.
+ */
+export function isVersionCheckDisabled() {
+  const value = process.env.NO_VERSION_CHECK || process.env.IHUB_NO_VERSION_CHECK;
+  return !!value && /^(1|true|yes|on)$/i.test(value);
+}
+
 // In-memory update state
 let updateState = {
   status: 'idle', // idle | checking | downloading | extracting | staging | applying | restarting | error
@@ -169,12 +182,14 @@ export function getUpdateStatus() {
   const hasStaged = existsSync(join(rootDir, UPDATE_STAGING_DIR));
 
   const isContainer = isContainerInstallation();
+  const versionCheckDisabled = isVersionCheckDisabled();
 
   return {
     ...updateState,
     isBinary: isBinaryInstallation(),
     isContainer,
     updatesEnabled: !isContainer,
+    versionCheckEnabled: !versionCheckDisabled,
     hasBackup,
     backupVersion,
     hasStaged,
@@ -244,6 +259,15 @@ export function compareVersions(v1, v2) {
  */
 export async function checkForUpdate() {
   setState({ status: 'checking', error: null });
+
+  if (isVersionCheckDisabled()) {
+    setState({ status: 'idle' });
+    return {
+      updateAvailable: false,
+      currentVersion: getAppVersion(),
+      versionCheckDisabled: true
+    };
+  }
 
   try {
     const currentVersion = getAppVersion();

@@ -2,7 +2,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { getAppVersion } from '../../utils/versionHelper.js';
 import { httpFetch } from '../../utils/httpConfig.js';
-import { compareVersions } from '../../services/updateService.js';
+import { compareVersions, isVersionCheckDisabled } from '../../services/updateService.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError } from '../../utils/responseHelpers.js';
 
@@ -48,6 +48,14 @@ export default function registerAdminVersionRoutes(app) {
   app.get(buildServerPath('/api/admin/version/check-update'), adminAuth, async (req, res) => {
     try {
       const currentVersion = getAppVersion();
+
+      if (isVersionCheckDisabled()) {
+        return res.json({
+          updateAvailable: false,
+          currentVersion,
+          versionCheckDisabled: true
+        });
+      }
 
       // Fetch latest release from GitHub
       const response = await httpFetch(
