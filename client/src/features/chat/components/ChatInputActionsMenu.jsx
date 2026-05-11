@@ -469,8 +469,12 @@ function ChatInputActionsMenu({
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                         {provider.type === 'office365'
-                          ? t('cloudStorage.office365', 'Microsoft Office 365')
-                          : t('cloudStorage.googleDrive', 'Google Drive')}
+                          ? t('admin.cloudStorage.office365', 'Microsoft Office 365')
+                          : provider.type === 'googledrive'
+                            ? t('admin.cloudStorage.googledrive', 'Google Drive')
+                            : provider.type === 'nextcloud'
+                              ? t('admin.cloudStorage.nextcloud', 'Nextcloud')
+                              : provider.type}
                       </div>
                     </div>
                     <Icon
