@@ -26,7 +26,6 @@ import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
-import CompareModeToggle from '../../chat/components/CompareModeToggle';
 import CompareModeView from '../../chat/components/CompareModeView';
 import StarterPromptsView from '../../chat/components/StarterPromptsView';
 import GreetingView from '../../chat/components/GreetingView';
@@ -132,7 +131,9 @@ function AppChat({ preloadedApp = null }) {
   const shareEnabled = featureFlags.isBothEnabled(app, 'shortLinks', true);
 
   // Compare mode state
-  const compareModeFeatureEnabled = featureFlags.isEnabled('compareMode', false);
+  // Check both platform-wide feature flag AND app-level setting
+  const compareModeFeatureEnabled =
+    featureFlags.isEnabled('compareMode', false) && app?.features?.compareMode?.enabled !== false;
   const [compareModeActive, setCompareModeActive] = useState(false);
 
   // Shared app settings hook
@@ -1627,7 +1628,9 @@ function AppChat({ preloadedApp = null }) {
           onModelChange={setSelectedModel}
           currentLanguage={currentLanguage}
           showModelSelector={
-            app?.disallowModelSelection !== true && app?.settings?.model?.enabled !== false
+            !compareModeActive &&
+            app?.disallowModelSelection !== true &&
+            app?.settings?.model?.enabled !== false
           }
         />
         {/* Show AI disclaimer after user has submitted at least one message */}
@@ -1700,18 +1703,11 @@ function AppChat({ preloadedApp = null }) {
         onShare={() => setShowShare(true)}
         showShareButton={shareEnabled}
         conversationTitle={conversationTitle}
+        showCompareModeToggle={compareModeFeatureEnabled && models.length >= 2}
+        compareModeActive={compareModeActive}
+        onCompareModeChange={setCompareModeActive}
+        compareModeDisabled={processing || compareMode.isProcessing}
       />
-
-      {/* Compare Mode Toggle - only show if feature is enabled */}
-      {compareModeFeatureEnabled && models.length >= 2 && (
-        <div className="flex-shrink-0 px-4 py-2 bg-gray-50 dark:bg-gray-800/50 rounded-lg mb-4">
-          <CompareModeToggle
-            enabled={compareModeActive}
-            onChange={setCompareModeActive}
-            disabled={processing || compareMode.isProcessing}
-          />
-        </div>
-      )}
 
       {app?.variables && app.variables.length > 0 && showParameters && (
         <div

@@ -35,7 +35,12 @@ function ChatHeader({
   exportSettings = {},
   appId,
   chatId,
-  conversationTitle = null
+  conversationTitle = null,
+  // Compare mode props
+  showCompareModeToggle = false,
+  compareModeActive = false,
+  onCompareModeChange,
+  compareModeDisabled = false
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -176,6 +181,21 @@ function ChatHeader({
                 aria-label={t('pages.appChat.share', 'Share')}
               >
                 <Icon name="share" size="sm" />
+              </button>
+            )}
+            {showCompareModeToggle && (
+              <button
+                onClick={() => !compareModeDisabled && onCompareModeChange?.(!compareModeActive)}
+                disabled={compareModeDisabled}
+                className={`p-2 rounded-full flex items-center justify-center h-10 w-10 transition-colors ${
+                  compareModeActive
+                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                    : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
+                } ${compareModeDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                title={t('chat.compareMode.toggle', 'Compare Mode')}
+                aria-label={t('chat.compareMode.toggle', 'Compare Mode')}
+              >
+                <Icon name="document-duplicate" size="sm" />
               </button>
             )}
             {user?.isAdmin && appId && (
