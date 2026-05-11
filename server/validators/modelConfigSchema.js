@@ -116,7 +116,11 @@ export const modelConfigSchema = z
     hint: hintSchema.optional(),
 
     // API Key configuration - stored encrypted on server
-    apiKey: z.string().optional() // Encrypted API key for this model
+    apiKey: z.string().optional(), // Encrypted API key for this model
+
+    // Model auto-discovery - automatically detect model ID from /v1/models endpoint
+    // Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the active model can change
+    autoDiscovery: z.boolean().optional().default(false)
   })
   .strict(); // Use strict instead of passthrough for better validation
 

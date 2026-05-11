@@ -1528,6 +1528,7 @@
   "serverErrors": {
     "appNotFound": "Application not found",
     "modelNotFound": "Model not found",
+    "modelNotAvailable": "Model '{modelId}' is not available on {provider}. The configured model '{configuredModel}' could not be found. If you're using a local LLM provider (vLLM, LM Studio, Jan.ai), please check that the model is loaded and running. You can enable 'Auto Discovery' in the model settings to automatically detect the active model.",
     "missingRequiredFields": "Missing required fields",
     "messagesRequired": "Messages array is required",
     "missingSessionId": "Session ID is required",
