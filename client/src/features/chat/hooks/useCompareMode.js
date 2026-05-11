@@ -15,8 +15,17 @@ function useCompareMode({ appId, enabled, onMessageComplete }) {
   const [rightModel, setRightModel] = useState(null);
 
   // Create separate chat IDs for left and right comparisons
+  // Each chat ID must be unique to ensure proper isolation of message streams and thoughts
   const leftChatId = useRef(`compare-left-${uuidv4()}`);
   const rightChatId = useRef(`compare-right-${uuidv4()}`);
+
+  // Debug logging for chat isolation
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Compare mode chat IDs:', {
+      left: leftChatId.current,
+      right: rightChatId.current
+    });
+  }
 
   // Left chat state
   const leftChat = useAppChat({
@@ -100,8 +109,18 @@ function useCompareMode({ appId, enabled, onMessageComplete }) {
    * Reset compare mode (regenerate chat IDs)
    */
   const resetCompareMode = useCallback(() => {
-    leftChatId.current = `compare-left-${uuidv4()}`;
-    rightChatId.current = `compare-right-${uuidv4()}`;
+    const newLeftId = `compare-left-${uuidv4()}`;
+    const newRightId = `compare-right-${uuidv4()}`;
+
+    if (process.env.NODE_ENV === 'development') {
+      console.log('Resetting compare mode with new IDs:', {
+        left: newLeftId,
+        right: newRightId
+      });
+    }
+
+    leftChatId.current = newLeftId;
+    rightChatId.current = newRightId;
     leftChat.resetConversationState();
     rightChat.resetConversationState();
   }, [leftChat, rightChat]);

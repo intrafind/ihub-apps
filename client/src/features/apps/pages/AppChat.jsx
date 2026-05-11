@@ -1115,6 +1115,73 @@ function AppChat({ preloadedApp = null }) {
     }, 0);
   };
 
+  // Compare mode resend handlers - delegate to the appropriate chat instance
+  const handleLeftResendMessage = useCallback(
+    (messageId, editedContent, useMaxTokens = false) => {
+      if (compareModeActive && compareMode.leftChat?.resendMessage) {
+        const resendData = compareMode.leftChat.resendMessage(messageId, editedContent);
+        // Re-send through the left chat with the restored data
+        compareMode.leftChat.sendMessage({
+          displayMessage: {
+            content: resendData.content || '',
+            meta: {
+              rawContent: resendData.content || '',
+              variables: resendData.variables || {}
+            }
+          },
+          apiMessage: {
+            content: resendData.content || '',
+            promptTemplate: app?.prompt || null,
+            variables: resendData.variables || {},
+            imageData: resendData.imageData,
+            audioData: resendData.audioData,
+            fileData: resendData.fileData
+          },
+          params: { modelId: compareMode.leftModel },
+          sendChatHistory: sendChatHistory,
+          messageMetadata: {
+            customResponseRenderer: app?.customResponseRenderer,
+            outputFormat: selectedOutputFormat
+          }
+        });
+      }
+    },
+    [compareModeActive, compareMode, app, sendChatHistory, selectedOutputFormat]
+  );
+
+  const handleRightResendMessage = useCallback(
+    (messageId, editedContent, useMaxTokens = false) => {
+      if (compareModeActive && compareMode.rightChat?.resendMessage) {
+        const resendData = compareMode.rightChat.resendMessage(messageId, editedContent);
+        // Re-send through the right chat with the restored data
+        compareMode.rightChat.sendMessage({
+          displayMessage: {
+            content: resendData.content || '',
+            meta: {
+              rawContent: resendData.content || '',
+              variables: resendData.variables || {}
+            }
+          },
+          apiMessage: {
+            content: resendData.content || '',
+            promptTemplate: app?.prompt || null,
+            variables: resendData.variables || {},
+            imageData: resendData.imageData,
+            audioData: resendData.audioData,
+            fileData: resendData.fileData
+          },
+          params: { modelId: compareMode.rightModel },
+          sendChatHistory: sendChatHistory,
+          messageMetadata: {
+            customResponseRenderer: app?.customResponseRenderer,
+            outputFormat: selectedOutputFormat
+          }
+        });
+      }
+    },
+    [compareModeActive, compareMode, app, sendChatHistory, selectedOutputFormat]
+  );
+
   /**
    * Handle clarification response submission.
    * Formats the response and continues the conversation.
@@ -1778,7 +1845,8 @@ function AppChat({ preloadedApp = null }) {
                   outputFormat={selectedOutputFormat}
                   onDelete={handleDeleteMessage}
                   onEdit={handleEditMessage}
-                  onResend={handleResendMessage}
+                  onLeftResend={handleLeftResendMessage}
+                  onRightResend={handleRightResendMessage}
                   appId={appId}
                   leftChatId={compareMode.leftChatId}
                   rightChatId={compareMode.rightChatId}
