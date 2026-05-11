@@ -14,7 +14,8 @@ function ModelSelector({
   selectedModel,
   onModelChange,
   currentLanguage,
-  disabled = false
+  disabled = false,
+  dropdownDirection = 'up' // 'up' or 'down' - controls where the dropdown opens
 }) {
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
@@ -135,7 +136,11 @@ function ModelSelector({
           role="menu"
           tabIndex={-1}
           aria-label={t('appConfig.selectModel', 'Select Model')}
-          className="absolute top-full left-0 mt-2 w-80 max-w-[calc(100vw-2rem)] max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
+          className={`absolute ${
+            dropdownDirection === 'down'
+              ? 'top-full mt-2'
+              : 'bottom-full mb-2'
+          } left-0 w-80 max-w-[calc(100vw-2rem)] max-h-96 overflow-y-auto bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50`}
         >
           <div className="p-2">
             <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 px-3 py-2">

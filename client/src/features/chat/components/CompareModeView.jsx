@@ -67,6 +67,7 @@ function CompareModeView({
             selectedModel={leftModel}
             onModelChange={onLeftModelChange}
             currentLanguage={currentLanguage}
+            dropdownDirection="down"
           />
         </div>
         <div className="flex-1 overflow-hidden">
@@ -109,6 +110,7 @@ function CompareModeView({
             selectedModel={rightModel}
             onModelChange={onRightModelChange}
             currentLanguage={currentLanguage}
+            dropdownDirection="down"
           />
         </div>
         <div className="flex-1 overflow-hidden">
