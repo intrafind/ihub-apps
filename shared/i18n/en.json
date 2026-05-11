@@ -721,6 +721,53 @@
       "step4": "Assign the add-in to users or the entire organization.",
       "step5": "Users will find the add-in in Outlook under Get Add-ins or My Add-ins."
     },
+    "nextcloudEmbed": {
+      "title": "Nextcloud Embed",
+      "description": "Configure the embedded iHub experience that opens inside Nextcloud when a user picks a document and starts a chat.",
+      "statusTitle": "Integration Status",
+      "statusEnabled": "The Nextcloud embed is enabled. Add a Nextcloud origin below to allow it to iframe iHub.",
+      "statusDisabled": "Enable to auto-create an OAuth client and activate the embedded UI.",
+      "enable": "Enable",
+      "disable": "Disable",
+      "enabled": "Nextcloud embed enabled successfully. OAuth client has been created.",
+      "disabled": "Nextcloud embed disabled",
+      "viewClient": "View OAuth Client",
+      "embedUrlTitle": "Embed URL",
+      "embedUrlDesc": "Use this URL as the iframe src inside your Nextcloud app. Pass the file selection in the URL hash (see docs).",
+      "infoXmlTitle": "Nextcloud appinfo/info.xml",
+      "infoXmlDesc": "Drop this into your Nextcloud app under appinfo/info.xml. URLs are pinned to this deployment.",
+      "copy": "Copy",
+      "download": "Download",
+      "downloadError": "Failed to download info.xml",
+      "originsTitle": "Allowed Nextcloud Origins",
+      "originsDesc": "Only these Nextcloud origins may iframe iHub or postMessage selections to it. Used for both CSP frame-ancestors and the postMessage origin check.",
+      "addOrigin": "Add",
+      "originInvalid": "Enter a valid http(s) origin like https://cloud.example.com",
+      "noOrigins": "No origins added yet. iframing iHub from a Nextcloud instance will be blocked until you add its origin here.",
+      "displayTitle": "Display Settings",
+      "displayName": "Display Name",
+      "descriptionField": "Description",
+      "starterPromptsTitle": "Default Starter Prompts",
+      "starterPromptsDesc": "Shown in the embed when the selected app has no starter prompts of its own. Clicking a prompt sends it immediately against the current selection.",
+      "noPrompts": "No default starter prompts configured. Add one to show suggestions in the embed.",
+      "addPrompt": "Add prompt",
+      "promptIndex": "Prompt #{{n}}",
+      "promptTitle": "Title",
+      "promptMessage": "Message",
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "remove": "Remove",
+      "save": "Save",
+      "saved": "Configuration saved",
+      "saveError": "Failed to save configuration",
+      "loadError": "Failed to load Nextcloud embed status",
+      "toggleError": "Failed to update Nextcloud embed",
+      "setupTitle": "Deployment Instructions",
+      "step1": "Configure a Nextcloud cloud-storage provider under Admin → Integrations → Nextcloud (this powers the OAuth + WebDAV flow).",
+      "step2": "Add your Nextcloud origin (e.g. https://cloud.example.com) above so the embed page accepts iframe and postMessage from it.",
+      "step3": "Build & install the bundled Nextcloud app skeleton (see nextcloud-app/README.md in the iHub repo).",
+      "step4": "Users right-click any file in Nextcloud Files → \"Chat with iHub\" — the embed opens with the documents pre-attached."
+    },
     "cloudStorage": {
       "title": "Cloud Storage Integration",
       "subtitle": "Configure cloud storage providers for file uploads",
@@ -1327,6 +1374,10 @@
         "nextcloud": {
           "title": "Nextcloud",
           "description": "Let users browse and attach files from any Nextcloud instance during a chat. Same `cloudStorage` config surface as Office 365 and Google Drive."
+        },
+        "nextcloudEmbed": {
+          "title": "Nextcloud Embed",
+          "description": "Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in."
         }
       }
     }

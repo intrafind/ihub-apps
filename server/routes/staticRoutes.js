@@ -74,6 +74,11 @@ export default function registerStaticRoutes(app, { isPackaged, rootDir, basePat
         return next();
       }
 
+      // Don't serve SPA for nextcloud embed routes — handled by registerNextcloudEmbedPageRoutes
+      if (relativePath.startsWith('/nextcloud')) {
+        return next();
+      }
+
       // Don't serve SPA for requests that look like static assets (have file extensions)
       // If they weren't served by the static middleware above, they don't exist
       if (relativePath.match(/\.[a-z0-9]+$/i)) {

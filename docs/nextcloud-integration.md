@@ -138,3 +138,70 @@ The token is per-user and per-provider — switching Nextcloud instances require
 - **Single drive per user**: Nextcloud exposes the user's files as one drive — there's no concept of a "Shared with me" tree separate from the home directory the way Google Drive has. Shared folders show up inline in the listing.
 - **No PKCE**: Nextcloud's OAuth 2.0 app doesn't support PKCE; CSRF protection relies on the `state` parameter only.
 - **WebDAV search**: iHub uses client-side filtering of the current folder for search rather than a server-side DAV SEARCH query, because the response shape varies between Nextcloud versions. Search is therefore scoped to the folder you're currently viewing.
+
+---
+
+# Chat-from-Nextcloud (Embedded UI)
+
+The flow described above is the **picker** flow — the user is inside iHub and reaches into Nextcloud to attach files. iHub also ships a second, complementary surface: the **embedded** flow, where the user is inside Nextcloud and starts a chat in iHub with the currently selected document(s). This mirrors the Outlook add-in (chat about the current email) and the browser extension (chat about the active tab).
+
+Internally the embed reuses 100% of the picker's server-side machinery — same `NextcloudService`, same `/api/integrations/nextcloud/download` endpoint, same encrypted per-user OAuth tokens. The only new pieces are a thin admin/runtime config (`nextcloudEmbed` in `platform.json`), a dedicated `/nextcloud/taskpane.html` entry, and a small Nextcloud-side app that wires "Chat with iHub" into Files.
+
+## Architecture in 30 seconds
+
+1. The Nextcloud app shell adds a **Chat with iHub** action to the Nextcloud Files UI.
+2. On click, it opens iHub's embed page (`<ihub>/nextcloud/taskpane.html`) inside an iframe (or a new tab), with the selected file paths encoded in the URL hash.
+3. The embed boots, fetches `/api/integrations/nextcloud-embed/config` for branding + starter prompts + the allowlist of acceptable parent origins, and renders the standard iHub embedded shell (login → app picker → chat).
+4. When the user sends a message, iHub downloads each selected path through the existing per-user OAuth `/download` endpoint and folds the file content into the outgoing chat message, exactly like Outlook attachments.
+
+The embed does **not** receive any Nextcloud token. The user OAuth-links Nextcloud to iHub once (via the picker flow above) and the same grant powers both surfaces.
+
+## Step 1 — Enable in iHub Apps
+
+1. Sign in to iHub Apps as an administrator.
+2. Open **Admin → Integrations → Nextcloud Embed**.
+3. Click **Enable**. iHub auto-creates a public PKCE OAuth client used by the embed for the iHub login (this is the user's iHub identity, not their Nextcloud identity).
+4. Add at least one entry under **Allowed Nextcloud Origins** — for example `https://cloud.example.com`. The embed page refuses to be iframed by any origin not on this list (CSP `frame-ancestors`), and the in-iframe bridge ignores postMessages whose `event.origin` isn't on the list.
+5. Customise the **Display Name**, **Description**, and **Starter Prompts** as desired. These appear in the embed when the selected app has no starter prompts of its own.
+
+Copy the **Embed URL** and the **info.xml URL** from the page — both contain the values your Nextcloud app needs.
+
+## Step 2 — Install the Nextcloud app
+
+The iHub repo ships a Nextcloud app skeleton at `nextcloud-app/`. It is a minimum-viable shell intended as a starting point, not a polished App Store listing.
+
+```bash
+cd nextcloud-app
+make build
+cp -R . /var/www/nextcloud/apps/ihub_chat/
+sudo -u www-data php /var/www/nextcloud/occ app:enable ihub_chat
+```
+
+See `nextcloud-app/README.md` for the full instructions.
+
+## Step 3 — End-user flow
+
+1. The user opens **Files** in Nextcloud, selects one or more documents, and chooses **Chat with iHub** from the action menu.
+2. The Nextcloud app navigates to `<ihub>/nextcloud/taskpane.html#providerId=…&paths=…`.
+3. If the user is not signed in to iHub, the embed shows the standard iHub sign-in prompt.
+4. If the user has not yet linked their Nextcloud account to iHub, the embed shows **Connect Nextcloud**, which opens the existing OAuth flow against the configured cloud-storage Nextcloud provider. They complete it once and land back in the embed.
+5. The embed lists the selected documents as attachments and offers iHub apps the user has access to. Sending a message folds the document text into the outgoing prompt; image and PDF attachments are sent as binary payloads.
+6. A `+`-menu toggle ("Include documents") lets users send a generic message without the attached documents leaking into the prompt.
+
+## How embed auth differs from the picker
+
+| Aspect | Picker flow | Embed flow |
+|---|---|---|
+| Where the user starts | Inside an iHub app | Inside Nextcloud Files |
+| File selection | In the iHub cloud picker | In the Nextcloud Files UI |
+| iHub authentication | Existing iHub session | Embedded OAuth (auto-created PKCE client) |
+| Nextcloud authentication | OAuth-link via the picker | Same OAuth-link reused; first-time users link from the embed CTA |
+| Server-side code path | `/api/integrations/nextcloud/*` | **Same** `/api/integrations/nextcloud/*` |
+| New iHub config | `cloudStorage.providers[]` (existing) | `nextcloudEmbed` (this section) |
+
+## Security considerations specific to the embed
+
+- **CSP frame-ancestors**: the embed page is served with `Content-Security-Policy: frame-ancestors 'self' <allowedHostOrigins>`. A Nextcloud origin not on the admin allowlist cannot iframe iHub.
+- **postMessage origin check**: the in-iframe selection bridge rejects any `message` whose `event.origin` is not on the same allowlist. There is no fallback to `*`.
+- **Hash selection sanitisation**: the URL-hash form (`#paths=…`) is sanitised the same way as postMessage payloads — limited to 50 paths, no `..` segments, no NUL bytes, max 4 KiB per path.
+- **No host-injected token**: the embed never receives a Nextcloud token. File reads always go through iHub's encrypted per-user OAuth grant, the same one the picker uses.

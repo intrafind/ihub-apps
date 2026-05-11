@@ -43,7 +43,11 @@ export default defineConfig({
         // Browser-extension surfaces — built into client/dist/extension/
         // and packaged by /api/admin/browser-extension/download.{zip,crx}.
         'extension-sidepanel': resolve(__dirname, 'extension/sidepanel.html'),
-        'extension-options': resolve(__dirname, 'extension/options.html')
+        'extension-options': resolve(__dirname, 'extension/options.html'),
+        // Nextcloud embed — built into client/dist/nextcloud/ and served by
+        // server/routes/nextcloudEmbedPages.js with a frame-ancestors CSP
+        // derived from the admin-configured allowedHostOrigins.
+        'nextcloud-taskpane': resolve(__dirname, 'nextcloud/taskpane.html')
       },
       output: {
         manualChunks: {

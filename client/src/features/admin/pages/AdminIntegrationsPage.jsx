@@ -79,6 +79,17 @@ function AdminIntegrationsPage() {
       href: '/admin/integrations/nextcloud'
     },
     integrationsEnabled && {
+      key: 'nextcloudEmbed',
+      title: t('admin.integrations.cards.nextcloudEmbed.title', 'Nextcloud Embed'),
+      description: t(
+        'admin.integrations.cards.nextcloudEmbed.description',
+        'Embed iHub inside Nextcloud. Users start a chat from Nextcloud Files with documents pre-attached, similar to the Outlook add-in.'
+      ),
+      icon: 'cloud',
+      color: 'bg-sky-600',
+      href: '/admin/nextcloud-embed'
+    },
+    integrationsEnabled && {
       key: 'jira',
       title: t('admin.integrations.cards.jira.title', 'Atlassian Jira'),
       description: t(

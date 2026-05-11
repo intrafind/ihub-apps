@@ -89,6 +89,9 @@ const AdminOfficeIntegrationPage = lazyWithRetry(
 const AdminBrowserExtensionPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminBrowserExtensionPage')
 );
+const AdminNextcloudEmbedPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminNextcloudEmbedPage')
+);
 const AdminIntegrationsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminIntegrationsPage')
 );
@@ -545,6 +548,10 @@ function App() {
           <Route
             path="admin/browser-extension"
             element={<LazyAdminRoute component={AdminBrowserExtensionPage} />}
+          />
+          <Route
+            path="admin/nextcloud-embed"
+            element={<LazyAdminRoute component={AdminNextcloudEmbedPage} />}
           />
           {featureFlags.isEnabled('marketplace', true) && (
             <Route

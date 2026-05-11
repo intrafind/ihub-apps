@@ -46,7 +46,8 @@ export const detectBasePath = () => {
     's', // Short links
     'setup', // First-run setup wizard
     'tools', // Tool pages (AI OCR, etc.)
-    'office' // Office add-in pages
+    'office', // Office add-in pages
+    'nextcloud' // Nextcloud embed pages
   ];
 
   // Split path into segments and find the first known route
@@ -120,7 +121,8 @@ export const getBasePath = () => {
       's',
       'setup',
       'tools',
-      'office'
+      'office',
+      'nextcloud'
     ];
     const isKnownRoute = knownRoutes.some(route => basePath === '/' + route);
 
