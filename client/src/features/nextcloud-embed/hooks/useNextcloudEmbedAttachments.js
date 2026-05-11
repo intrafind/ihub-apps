@@ -133,7 +133,13 @@ export function useNextcloudEmbedAttachments(fileUploadHandler, app, currentMode
         const name = fileNameFromPath(path);
         const ct = contentTypeFromExtension(name);
         if (!isCloudFileSupported(ct) && ct !== 'application/octet-stream') {
-          console.warn(`[nextcloud-embed] Unsupported file type for "${path}" (${ct}); skipping`);
+          // Pass user-controlled values as separate args (not interpolated into the
+          // format string) so they can't influence `%s`/`%d` substitution.
+          console.warn(
+            '[nextcloud-embed] Unsupported file type; skipping. path=%s contentType=%s',
+            path,
+            ct
+          );
           return false;
         }
         if (
@@ -142,7 +148,11 @@ export function useNextcloudEmbedAttachments(fileUploadHandler, app, currentMode
           ct !== 'application/octet-stream' &&
           !supported.includes(ct)
         ) {
-          console.warn(`[nextcloud-embed] App does not allow "${ct}" (${path}); skipping`);
+          console.warn(
+            '[nextcloud-embed] App does not allow this content type; skipping. contentType=%s path=%s',
+            ct,
+            path
+          );
           return false;
         }
         return true;
@@ -185,7 +195,9 @@ export function useNextcloudEmbedAttachments(fileUploadHandler, app, currentMode
             }
             return;
           }
-          console.warn(`[nextcloud-embed] Failed to download "${path}":`, err);
+          // Pass user-controlled `path` as a separate arg (not interpolated into the
+          // format string) so it can't influence `%s`/`%d` substitution.
+          console.warn('[nextcloud-embed] Failed to download. path=%s error=', path, err);
           working[i] = { ...working[i], loading: false, error: true };
         }
 
