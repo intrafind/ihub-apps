@@ -34,21 +34,34 @@ function useCompareMode({ appId, enabled, onMessageComplete }) {
 
   /**
    * Send message to both models simultaneously
+   * @param {Object} messageStructure - The complete message structure with displayMessage, apiMessage, params, etc.
    */
   const sendToCompare = useCallback(
-    async (input, params = {}) => {
+    async messageStructure => {
       if (!enabled || !leftModel || !rightModel) {
         return { success: false, error: 'Compare mode not properly configured' };
       }
 
       try {
-        // Send to left model
-        const leftParams = { ...params, selectedModel: leftModel };
-        const leftPromise = leftChat.sendMessage(input, leftParams);
+        // Send to left model with its specific model selection
+        const leftParams = { ...messageStructure.params, selectedModel: leftModel };
+        const leftPromise = leftChat.sendMessage({
+          displayMessage: messageStructure.displayMessage,
+          apiMessage: messageStructure.apiMessage,
+          params: leftParams,
+          sendChatHistory: messageStructure.sendChatHistory,
+          messageMetadata: messageStructure.messageMetadata
+        });
 
-        // Send to right model
-        const rightParams = { ...params, selectedModel: rightModel };
-        const rightPromise = rightChat.sendMessage(input, rightParams);
+        // Send to right model with its specific model selection
+        const rightParams = { ...messageStructure.params, selectedModel: rightModel };
+        const rightPromise = rightChat.sendMessage({
+          displayMessage: messageStructure.displayMessage,
+          apiMessage: messageStructure.apiMessage,
+          params: rightParams,
+          sendChatHistory: messageStructure.sendChatHistory,
+          messageMetadata: messageStructure.messageMetadata
+        });
 
         // Wait for both to complete (they stream independently)
         await Promise.all([leftPromise, rightPromise]);
