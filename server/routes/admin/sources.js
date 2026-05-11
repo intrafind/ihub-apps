@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { join } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
@@ -1066,7 +1067,7 @@ export default function registerAdminSourcesRoutes(app) {
           const testConfig = {
             ...source.config,
             user: req.user,
-            chatId: `admin-source-test-${id}-${Date.now()}`
+            chatId: `admin-source-test-${id}-${crypto.randomUUID()}`
           };
 
           // Test source connection
@@ -1188,7 +1189,7 @@ export default function registerAdminSourcesRoutes(app) {
           const previewConfig = {
             ...source.config,
             user: req.user,
-            chatId: `admin-source-preview-${id}-${Date.now()}`
+            chatId: `admin-source-preview-${id}-${crypto.randomUUID()}`
           };
 
           const content = await manager.loadContent(source.type, previewConfig);
