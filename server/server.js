@@ -37,6 +37,7 @@ import registerToolsServiceRoutes from './routes/toolsService/index.js';
 import jiraRoutes from './routes/integrations/jira.js';
 import office365Routes from './routes/integrations/office365.js';
 import googledriveRoutes from './routes/integrations/googledrive.js';
+import nextcloudRoutes from './routes/integrations/nextcloud.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
 import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
@@ -432,6 +433,7 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/jira'), jiraRoutes);
   app.use(buildApiPath('/integrations/office365'), office365Routes);
   app.use(buildApiPath('/integrations/googledrive'), googledriveRoutes);
+  app.use(buildApiPath('/integrations/nextcloud'), nextcloudRoutes);
   app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
   app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes);
   app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes);

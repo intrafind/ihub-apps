@@ -52,10 +52,32 @@ export const googleDriveProviderSchema = z.object({
     .default({ myDrive: true, sharedDrives: true, sharedWithMe: true })
 });
 
+// Nextcloud provider configuration
+export const nextcloudProviderSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  displayName: z.string(),
+  type: z.literal('nextcloud'),
+  enabled: z.boolean().default(true),
+  // The Nextcloud instance URL (e.g. https://nextcloud.example.com).
+  // Used as the base for OAuth, OCS, and WebDAV endpoints.
+  serverUrl: z.string().url(),
+  clientId: z.string(),
+  clientSecret: z.string(),
+  redirectUri: optionalUrlField.optional(),
+  sources: z
+    .object({
+      personalFiles: z.boolean().default(true)
+    })
+    .optional()
+    .default({ personalFiles: true })
+});
+
 // Generic cloud storage provider (union of all provider types)
 export const cloudStorageProviderSchema = z.discriminatedUnion('type', [
   office365ProviderSchema,
-  googleDriveProviderSchema
+  googleDriveProviderSchema,
+  nextcloudProviderSchema
 ]);
 
 // Main cloud storage configuration

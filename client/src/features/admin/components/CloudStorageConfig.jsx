@@ -5,10 +5,10 @@ import { makeAdminApiCall } from '../../../api/adminApi';
 
 /**
  * @param {Object} props
- * @param {'office365'|'googledrive'} [props.filterType] When set, the
- *   component only lists / edits providers of this type and the
- *   "Add provider" action seeds a provider of the same type. Used by
- *   the dedicated `/admin/integrations/{office365,google-drive}`
+ * @param {'office365'|'googledrive'|'nextcloud'} [props.filterType] When
+ *   set, the component only lists / edits providers of this type and
+ *   the "Add provider" action seeds a provider of the same type. Used
+ *   by the dedicated `/admin/integrations/{office365,google-drive,nextcloud}`
  *   subpages so each integration has its own admin home.
  */
 function CloudStorageConfig({ filterType } = {}) {
@@ -54,23 +54,28 @@ function CloudStorageConfig({ filterType } = {}) {
   };
 
   const handleAddProvider = () => {
+    const type = filterType || 'office365';
+    const defaultSources =
+      type === 'googledrive'
+        ? { myDrive: true, sharedDrives: true, sharedWithMe: true }
+        : type === 'nextcloud'
+          ? { personalFiles: true }
+          : { personalDrive: true, followedSites: true, teams: true };
+
     setEditingProvider({
       id: '',
       name: '', // This will be same as id for cloud storage providers
       displayName: '',
-      type: filterType || 'office365',
+      type,
       enabled: true,
       tenantId: '',
       clientId: '',
       clientSecret: '',
       siteUrl: '',
       driveId: '',
+      serverUrl: '',
       redirectUri: '',
-      sources: {
-        personalDrive: true,
-        followedSites: true,
-        teams: true
-      }
+      sources: defaultSources
     });
     setShowAddProvider(true);
   };
@@ -128,6 +133,19 @@ function CloudStorageConfig({ filterType } = {}) {
           text: t(
             'admin.cloudStorage.validation.googledriveRequired',
             'Client ID and Client Secret are required for Google Drive'
+          )
+        });
+        return;
+      }
+    }
+
+    if (providerToSave.type === 'nextcloud') {
+      if (!providerToSave.serverUrl || !providerToSave.clientId || !providerToSave.clientSecret) {
+        setMessage({
+          type: 'error',
+          text: t(
+            'admin.cloudStorage.validation.nextcloudRequired',
+            'Server URL, Client ID, and Client Secret are required for Nextcloud'
           )
         });
         return;
@@ -295,11 +313,7 @@ function CloudStorageConfig({ filterType } = {}) {
                       className="flex items-center justify-between p-3 border border-gray-200 dark:border-gray-700 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
                     >
                       <div className="flex items-center space-x-3">
-                        <Icon
-                          name={provider.type === 'office365' ? 'cloud' : 'cloud'}
-                          size="md"
-                          className="text-gray-400"
-                        />
+                        <Icon name="cloud" size="md" className="text-gray-400" />
                         <div>
                           <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                             {provider.displayName}
@@ -307,7 +321,11 @@ function CloudStorageConfig({ filterType } = {}) {
                           <p className="text-xs text-gray-500 dark:text-gray-400">
                             {provider.type === 'office365'
                               ? t('admin.cloudStorage.office365')
-                              : t('admin.cloudStorage.googledrive')}
+                              : provider.type === 'googledrive'
+                                ? t('admin.cloudStorage.googledrive')
+                                : provider.type === 'nextcloud'
+                                  ? t('admin.cloudStorage.nextcloud', 'Nextcloud')
+                                  : provider.type}
                             {' • '}
                             {provider.enabled
                               ? t('admin.cloudStorage.providerEnabled')
@@ -407,6 +425,10 @@ function CloudStorageConfig({ filterType } = {}) {
                               followedSites: true,
                               teams: true
                             };
+                          } else if (newType === 'nextcloud') {
+                            newProvider.sources = {
+                              personalFiles: true
+                            };
                           }
                           setEditingProvider(newProvider);
                         }}
@@ -414,6 +436,9 @@ function CloudStorageConfig({ filterType } = {}) {
                       >
                         <option value="office365">{t('admin.cloudStorage.office365')}</option>
                         <option value="googledrive">{t('admin.cloudStorage.googledrive')}</option>
+                        <option value="nextcloud">
+                          {t('admin.cloudStorage.nextcloud', 'Nextcloud')}
+                        </option>
                       </select>
                     </div>
 
@@ -666,6 +691,96 @@ function CloudStorageConfig({ filterType } = {}) {
                               />
                               <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
                                 {t('admin.cloudStorage.sharedWithMe', 'Shared with Me')}
+                              </span>
+                            </label>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Nextcloud-specific fields */}
+                    {editingProvider.type === 'nextcloud' && (
+                      <>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.cloudStorage.serverUrl', 'Nextcloud Server URL')} *
+                          </label>
+                          <input
+                            type="url"
+                            value={editingProvider.serverUrl || ''}
+                            onChange={e =>
+                              setEditingProvider({
+                                ...editingProvider,
+                                serverUrl: e.target.value
+                              })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            placeholder="https://nextcloud.example.com"
+                          />
+                          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                            {t(
+                              'admin.cloudStorage.serverUrlHint',
+                              'Base URL of your Nextcloud instance (no trailing slash).'
+                            )}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.cloudStorage.clientId')} *
+                          </label>
+                          <input
+                            type="text"
+                            value={editingProvider.clientId}
+                            onChange={e =>
+                              setEditingProvider({ ...editingProvider, clientId: e.target.value })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            placeholder="your-client-id"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            {t('admin.cloudStorage.clientSecret')} *
+                          </label>
+                          <input
+                            type="password"
+                            value={editingProvider.clientSecret}
+                            onChange={e =>
+                              setEditingProvider({
+                                ...editingProvider,
+                                clientSecret: e.target.value
+                              })
+                            }
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
+                            placeholder="your-client-secret"
+                          />
+                        </div>
+
+                        {/* Nextcloud sources */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            {t('admin.cloudStorage.sources', 'Available Sources')}
+                          </label>
+                          <div className="space-y-2">
+                            <label className="flex items-center">
+                              <input
+                                type="checkbox"
+                                checked={editingProvider.sources?.personalFiles !== false}
+                                onChange={e =>
+                                  setEditingProvider({
+                                    ...editingProvider,
+                                    sources: {
+                                      ...editingProvider.sources,
+                                      personalFiles: e.target.checked
+                                    }
+                                  })
+                                }
+                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                              />
+                              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
+                                {t('admin.cloudStorage.personalFiles', 'Personal Files')}
                               </span>
                             </label>
                           </div>

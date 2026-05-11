@@ -4,6 +4,7 @@ import Icon from '../../../shared/components/Icon';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import Office365FileBrowser from './Office365FileBrowser';
 import GoogleDriveFileBrowser from './GoogleDriveFileBrowser';
+import NextcloudFileBrowser from './NextcloudFileBrowser';
 
 /**
  * Cloud Storage Picker component
@@ -107,17 +108,19 @@ const CloudStoragePicker = ({
                 onClick={() => handleProviderSelect(provider)}
                 className="w-full flex items-center p-4 border-2 border-gray-200 dark:border-gray-700 rounded-lg hover:border-indigo-500 dark:hover:border-indigo-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
-                <Icon
-                  name={provider.type === 'office365' ? 'cloud' : 'cloud'}
-                  size="xl"
-                  className="text-indigo-600 dark:text-indigo-400"
-                />
+                <Icon name="cloud" size="xl" className="text-indigo-600 dark:text-indigo-400" />
                 <div className="ml-4 text-left">
                   <p className="text-base font-medium text-gray-900 dark:text-gray-100">
                     {provider.displayName}
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
-                    {provider.type === 'office365' ? 'Microsoft Office 365' : 'Google Drive'}
+                    {provider.type === 'office365'
+                      ? 'Microsoft Office 365'
+                      : provider.type === 'googledrive'
+                        ? 'Google Drive'
+                        : provider.type === 'nextcloud'
+                          ? 'Nextcloud'
+                          : provider.type}
                   </p>
                 </div>
               </button>
@@ -151,6 +154,13 @@ const CloudStoragePicker = ({
               />
             ) : selectedProvider.type === 'googledrive' ? (
               <GoogleDriveFileBrowser
+                provider={selectedProvider}
+                onFilesProcessed={handleFilesProcessed}
+                onClose={onClose}
+                uploadConfig={uploadConfig}
+              />
+            ) : selectedProvider.type === 'nextcloud' ? (
+              <NextcloudFileBrowser
                 provider={selectedProvider}
                 onFilesProcessed={handleFilesProcessed}
                 onClose={onClose}
