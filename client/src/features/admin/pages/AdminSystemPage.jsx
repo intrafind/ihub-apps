@@ -1060,8 +1060,21 @@ function AdminSystemPage() {
                                 </span>
                               </div>
                             </div>
+                            {updateStatus?.isContainer && (
+                              <div className="mt-3 text-sm text-green-700 dark:text-green-300">
+                                <Icon
+                                  name="information-circle"
+                                  size="sm"
+                                  className="inline-block mr-1 -mt-0.5"
+                                />
+                                {t(
+                                  'admin.system.updateContainerNotice',
+                                  'In-place updates are disabled when running in a container. Pull a new container image and restart the container to update.'
+                                )}
+                              </div>
+                            )}
                             <div className="mt-3 flex items-center space-x-3">
-                              {updateStatus?.isBinary && (
+                              {updateStatus?.isBinary && !updateStatus?.isContainer && (
                                 <button
                                   onClick={handleUpdateNow}
                                   disabled={updateActionLoading}
@@ -1120,38 +1133,40 @@ function AdminSystemPage() {
                     )}
 
                   {/* Rollback Banner */}
-                  {updateStatus?.hasBackup && !updateActionLoading && (
-                    <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
-                      <div className="flex items-start">
-                        <div className="flex-shrink-0">
-                          <Icon name="warning" size="md" className="text-yellow-500 mt-0.5" />
-                        </div>
-                        <div className="ml-3 flex-1">
-                          <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                            {t('admin.system.rollbackAvailable', 'Rollback Available')}
-                          </h4>
-                          <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
-                            {t(
-                              'admin.system.rollbackDesc',
-                              'A backup of version {{version}} is available. You can rollback if the current version has issues.',
-                              { version: updateStatus.backupVersion || 'unknown' }
-                            )}
-                          </p>
-                          <div className="mt-2">
-                            <button
-                              onClick={handleRollback}
-                              className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-yellow-700 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
-                            >
-                              <Icon name="refresh" size="sm" className="mr-1.5" />
-                              {t('admin.system.rollbackButton', 'Rollback to {{version}}', {
-                                version: updateStatus.backupVersion || 'previous'
-                              })}
-                            </button>
+                  {updateStatus?.hasBackup &&
+                    !updateStatus?.isContainer &&
+                    !updateActionLoading && (
+                      <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-md p-4">
+                        <div className="flex items-start">
+                          <div className="flex-shrink-0">
+                            <Icon name="warning" size="md" className="text-yellow-500 mt-0.5" />
+                          </div>
+                          <div className="ml-3 flex-1">
+                            <h4 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                              {t('admin.system.rollbackAvailable', 'Rollback Available')}
+                            </h4>
+                            <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                              {t(
+                                'admin.system.rollbackDesc',
+                                'A backup of version {{version}} is available. You can rollback if the current version has issues.',
+                                { version: updateStatus.backupVersion || 'unknown' }
+                              )}
+                            </p>
+                            <div className="mt-2">
+                              <button
+                                onClick={handleRollback}
+                                className="inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-md text-yellow-700 dark:text-yellow-200 bg-yellow-100 dark:bg-yellow-800/50 hover:bg-yellow-200 dark:hover:bg-yellow-700/50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500"
+                              >
+                                <Icon name="refresh" size="sm" className="mr-1.5" />
+                                {t('admin.system.rollbackButton', 'Rollback to {{version}}', {
+                                  version: updateStatus.backupVersion || 'previous'
+                                })}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    )}
 
                   {versionLoading ? (
                     <div className="flex items-center text-gray-600 dark:text-gray-400">

@@ -716,8 +716,19 @@ For detailed configuration documentation, see the main README.md Configuration s
 - Write permissions on the installation directory
 - At least 500 MB free disk space
 - Only available for binary installations (not Docker or npm)
+- Disabled automatically when running in a container (Docker, Podman, Kubernetes)
 
 ### Docker Installation Updates
+
+> **Note:** In-place updates via the Admin UI or `--update` CLI flag are
+> automatically disabled inside containers. Updates would write to the
+> container's ephemeral filesystem and be lost on restart, while any
+> migrated configuration on mounted volumes would persist — leaving the
+> next container start running an older binary against migrated state.
+> Always update containerised installs by pulling a new image. Detection
+> uses the `IHUB_CONTAINER` environment variable (set by the official
+> Dockerfile), `KUBERNETES_SERVICE_HOST`, `/.dockerenv`,
+> `/run/.containerenv`, or `/proc/1/cgroup` membership.
 
 **Update with data preservation:**
 

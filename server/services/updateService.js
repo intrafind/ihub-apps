@@ -76,6 +76,56 @@ export function isBinaryInstallation() {
   return hasVersionFile && !hasPackageJson;
 }
 
+/**
+ * Check if running inside a container (Docker, Podman, Kubernetes, etc.).
+ *
+ * Auto-updates must be disabled in containers: a successful update writes to
+ * the container's ephemeral filesystem and is lost on restart, while any
+ * data-migration side effects (config, indexes, etc.) persist on volumes —
+ * leaving the next container start running an older binary against migrated
+ * state. Cached so the filesystem checks only run once per process.
+ */
+let containerDetectionCache = null;
+export function isContainerInstallation() {
+  if (containerDetectionCache !== null) return containerDetectionCache;
+
+  // Explicit override — set by our Dockerfile and useful for custom images
+  // or non-Docker container runtimes that we can't auto-detect.
+  const explicit = process.env.IHUB_CONTAINER || process.env.CONTAINER;
+  if (explicit && /^(1|true|yes|docker|podman|kubernetes|k8s)$/i.test(explicit)) {
+    containerDetectionCache = true;
+    return true;
+  }
+
+  // Kubernetes injects this into every pod
+  if (process.env.KUBERNETES_SERVICE_HOST) {
+    containerDetectionCache = true;
+    return true;
+  }
+
+  // Docker creates /.dockerenv; Podman creates /run/.containerenv
+  if (existsSync('/.dockerenv') || existsSync('/run/.containerenv')) {
+    containerDetectionCache = true;
+    return true;
+  }
+
+  // Inspect cgroup membership — works for most container runtimes on Linux
+  try {
+    if (existsSync('/proc/1/cgroup')) {
+      const cgroup = readFileSync('/proc/1/cgroup', 'utf8');
+      if (/docker|kubepods|containerd|libpod|lxc|garden/i.test(cgroup)) {
+        containerDetectionCache = true;
+        return true;
+      }
+    }
+  } catch {
+    // ignore — cgroup file may not be readable on non-Linux platforms
+  }
+
+  containerDetectionCache = false;
+  return false;
+}
+
 // In-memory update state
 let updateState = {
   status: 'idle', // idle | checking | downloading | extracting | staging | applying | restarting | error
@@ -118,9 +168,13 @@ export function getUpdateStatus() {
 
   const hasStaged = existsSync(join(rootDir, UPDATE_STAGING_DIR));
 
+  const isContainer = isContainerInstallation();
+
   return {
     ...updateState,
     isBinary: isBinaryInstallation(),
+    isContainer,
+    updatesEnabled: !isContainer,
     hasBackup,
     backupVersion,
     hasStaged,

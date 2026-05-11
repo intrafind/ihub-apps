@@ -1125,6 +1125,7 @@
       "rollbackButton": "Zurück zu {{version}}",
       "updateTimeout": "Das Update dauert länger als erwartet. Bitte überprüfen Sie den Serverstatus und versuchen Sie es erneut.",
       "rollbackTimeout": "Das Rollback dauert länger als erwartet. Bitte überprüfen Sie den Serverstatus und die Logs.",
+      "updateContainerNotice": "In-Place-Updates sind beim Betrieb in einem Container deaktiviert. Laden Sie ein neues Container-Image herunter und starten Sie den Container neu, um zu aktualisieren.",
       "logging": {
         "title": "Logging-Konfiguration",
         "description": "Konfigurieren Sie Anwendungs-Logging-Stufen und -Ausgabe",

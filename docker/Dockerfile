@@ -51,6 +51,9 @@ RUN npm run build:docker
 # -----------------------------------------------------------------------------
 FROM dependencies AS development
 
+# Mark this image as a container so the auto-updater stays disabled.
+ENV IHUB_CONTAINER=true
+
 # Copy source code for development
 COPY . .
 
@@ -72,6 +75,11 @@ FROM node:24-alpine AS production
 
 # Set production environment
 ENV NODE_ENV=production
+
+# Mark this image as a container so the auto-updater stays disabled.
+# Auto-updates in containers would be lost on restart and risk leaving the
+# running binary out of sync with already-migrated persistent state.
+ENV IHUB_CONTAINER=true
 
 # Install runtime dependencies
 RUN apk add --update --no-cache \

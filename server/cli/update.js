@@ -18,6 +18,7 @@ import {
   rollback,
   getUpdateStatus,
   isBinaryInstallation,
+  isContainerInstallation,
   checkDiskSpace,
   checkWritePermissions
 } from '../services/updateService.js';
@@ -149,6 +150,12 @@ async function handleRollback() {
 export async function runUpdateCLI(subcommand, force = false) {
   const currentVersion = getAppVersion();
   console.log(`\n${BOLD}iHub Apps Updater${NC} (current: v${currentVersion})\n`);
+
+  if (isContainerInstallation()) {
+    warn('In-place updates are disabled when running in a container.');
+    warn('Pull a new container image and restart the container to update.');
+    process.exit(1);
+  }
 
   if (!isBinaryInstallation()) {
     warn('In-place updates are only available for binary installations.');
