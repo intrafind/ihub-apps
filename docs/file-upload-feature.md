@@ -2,7 +2,7 @@
 
 ## Overview
 
-The file upload feature allows users to upload text files, PDF documents, Microsoft Office documents (.docx), OpenOffice/LibreOffice documents (.odt, .ods, .odp), and email files (.msg, .eml) to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
+The file upload feature allows users to upload text files, PDF documents, Microsoft Office documents (.docx, .xlsx, .pptx), OpenOffice/LibreOffice documents (.odt, .ods, .odp), and email files (.msg, .eml) to the iHub Apps chat interface. The uploaded content is automatically processed and included in the AI conversation.
 
 ## Supported File Types
 
@@ -24,6 +24,8 @@ The file upload feature allows users to upload text files, PDF documents, Micros
 ### Microsoft Office Documents
 
 - `.docx` - Microsoft Word documents (automatically converted to text)
+- `.xlsx` / `.xls` - Microsoft Excel spreadsheets (text content extracted from all sheets)
+- `.pptx` / `.ppt` - Microsoft PowerPoint presentations (text content extracted from all slides)
 
 ### OpenOffice/LibreOffice Documents
 
@@ -47,6 +49,8 @@ The file upload feature allows users to upload text files, PDF documents, Micros
    - Text files are read directly
    - PDF files are converted to text using `pdfjs-dist`
    - DOCX files are converted to text using `mammoth`
+   - XLSX/XLS files are converted to tab-separated text using `xlsx` library
+   - PPTX/PPT files have text extracted from all slides using `jszip` to parse the XML content
    - MSG files are parsed using `@kenjiuno/msgreader` to extract subject, sender, recipients, and body
    - EML files are read as text (RFC 822 format)
    - OpenOffice/LibreOffice files (ODT, ODS, ODP) are processed using `jszip` to extract text from the XML content
@@ -66,8 +70,9 @@ The file upload feature allows users to upload text files, PDF documents, Micros
 
 - `pdfjs-dist` - PDF text extraction
 - `mammoth` - DOCX to HTML/text conversion
+- `xlsx` - Excel spreadsheet processing (XLSX, XLS)
+- `jszip` - PowerPoint (PPTX, PPT) and OpenOffice/LibreOffice document processing (ODT, ODS, ODP)
 - `@kenjiuno/msgreader` - MSG file parsing
-- `jszip` - OpenOffice/LibreOffice document processing (ODT, ODS, ODP)
 
 ### Backend Processing
 
@@ -130,7 +135,7 @@ Enable file upload for an app by adding to the app configuration:
 **fileUpload.supportedFormats** (array)
 
 - List of supported MIME types for file uploads
-- Default: All supported formats including text, PDF, DOCX, and MSG files
+- Default: All supported formats including text, PDF, DOCX, XLSX, PPTX, and MSG files
 - The system automatically selects the appropriate processing tool based on the MIME type
 - Common values:
   - `"text/plain"` - .txt files
@@ -144,6 +149,10 @@ Enable file upload for an app by adding to the app configuration:
   - `"message/rfc822"` - .eml files (standard email format)
   - `"application/pdf"` - .pdf files (processed with PDF.js)
   - `"application/vnd.openxmlformats-officedocument.wordprocessingml.document"` - .docx files (processed with mammoth)
+  - `"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"` - .xlsx files (processed with xlsx)
+  - `"application/vnd.ms-excel"` - .xls files (processed with xlsx)
+  - `"application/vnd.openxmlformats-officedocument.presentationml.presentation"` - .pptx files (processed with jszip)
+  - `"application/vnd.ms-powerpoint"` - .ppt files (processed with jszip)
   - `"application/vnd.ms-outlook"` - .msg files (processed with msgreader)
   - `"application/vnd.oasis.opendocument.text"` - .odt files (processed with jszip)
   - `"application/vnd.oasis.opendocument.spreadsheet"` - .ods files (processed with jszip)
@@ -173,6 +182,8 @@ Enable file upload for an app by adding to the app configuration:
       "text/xml",
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "application/vnd.ms-outlook"
     ]
   }
@@ -195,6 +206,8 @@ Enable file upload for an app by adding to the app configuration:
       "text/html",
       "application/pdf",
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "application/vnd.openxmlformats-officedocument.presentationml.presentation",
       "application/vnd.ms-outlook"
     ]
   }

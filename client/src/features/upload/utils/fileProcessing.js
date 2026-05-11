@@ -587,6 +587,58 @@ export const processOpenOfficeFile = async file => {
   }
 };
 
+// Process PowerPoint (PPTX) file
+export const processPptxFile = async file => {
+  const arrayBuffer = await file.arrayBuffer();
+  const JSZip = await loadJSZip();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+
+  let allText = '';
+
+  // Find all slide files (ppt/slides/slide*.xml)
+  const slideFiles = Object.keys(zip.files)
+    .filter(filename => filename.match(/^ppt\/slides\/slide\d+\.xml$/))
+    .sort((a, b) => {
+      // Sort by slide number
+      const numA = parseInt(a.match(/slide(\d+)\.xml$/)[1]);
+      const numB = parseInt(b.match(/slide(\d+)\.xml$/)[1]);
+      return numA - numB;
+    });
+
+  // Extract text from each slide
+  for (const slideFile of slideFiles) {
+    const slideXml = await zip.file(slideFile)?.async('string');
+    if (slideXml) {
+      // Parse XML
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(slideXml, 'text/xml');
+
+      // Extract text from all <a:t> (text run) elements in the slide
+      const textElements = xmlDoc.getElementsByTagNameNS('*', 't');
+      const slideTexts = [];
+      for (let i = 0; i < textElements.length; i++) {
+        const text = textElements[i].textContent?.trim();
+        if (text) {
+          slideTexts.push(text);
+        }
+      }
+
+      // Add slide content with separator
+      if (slideTexts.length > 0) {
+        const slideNumber = parseInt(slideFile.match(/slide(\d+)\.xml$/)[1]);
+        allText += `\n--- Slide ${slideNumber} ---\n`;
+        allText += slideTexts.join('\n') + '\n';
+      }
+    }
+  }
+
+  if (!allText.trim()) {
+    throw new Error('No text content found in PowerPoint presentation');
+  }
+
+  return allText.trim();
+};
+
 // Main document processing function
 // Returns { content, pageImages } where pageImages is set for image-based PDFs
 export const processDocumentFile = async file => {
@@ -638,6 +690,13 @@ export const processDocumentFile = async file => {
     fileExtension === '.tiff'
   ) {
     content = await processTiffFile(file);
+  } else if (
+    file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    file.type === 'application/vnd.ms-powerpoint' ||
+    fileExtension === '.pptx' ||
+    fileExtension === '.ppt'
+  ) {
+    content = await processPptxFile(file);
   } else if (
     file.type === 'application/vnd.oasis.opendocument.text' ||
     file.type === 'application/vnd.oasis.opendocument.spreadsheet' ||
