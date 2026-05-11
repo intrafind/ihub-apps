@@ -142,6 +142,11 @@
     "appsList": {
       "title": "KI-Anwendungen",
       "subtitle": "Wähle eine Anwendung, um eine Unterhaltung zu beginnen",
+      "nextcloudSelection": {
+        "title_one": "{{count}} Dokument aus Nextcloud ausgewählt",
+        "title_other": "{{count}} Dokumente aus Nextcloud ausgewählt",
+        "description": "Wähle unten eine App, um den Chat zu starten — deine ausgewählten Dateien werden automatisch angehängt."
+      },
       "noApps": "Keine Anwendungen gefunden",
       "loading": "Laden…",
       "searchPlaceholder": "Anwendungen durchsuchen...",

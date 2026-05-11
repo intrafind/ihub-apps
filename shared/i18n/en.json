@@ -128,6 +128,11 @@
     "appsList": {
       "title": "AI Apps",
       "subtitle": "Choose an application to start a conversation",
+      "nextcloudSelection": {
+        "title_one": "{{count}} document selected from Nextcloud",
+        "title_other": "{{count}} documents selected from Nextcloud",
+        "description": "Pick an app below to start a chat — your selected files will be attached automatically."
+      },
       "noApps": "No applications found",
       "loading": "Loading…",
       "searchPlaceholder": "Search apps...",
