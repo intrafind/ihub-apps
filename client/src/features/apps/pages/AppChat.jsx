@@ -17,7 +17,6 @@ import AppShareModal from '../components/AppShareModal';
 
 // Import our custom hooks and components
 import useAppChat from '../../chat/hooks/useAppChat';
-import useCompareMode from '../../chat/hooks/useCompareMode';
 import useVoiceCommands from '../../voice/hooks/useVoiceCommands';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
@@ -135,6 +134,19 @@ function AppChat({ preloadedApp = null }) {
   const compareModeFeatureEnabled =
     featureFlags.isEnabled('compareMode', false) && app?.features?.compareMode?.enabled !== false;
   const [compareModeActive, setCompareModeActive] = useState(false);
+  // Imperative handle exposed by CompareModeView for sendMessage / clearAll / cancelAll.
+  const compareViewRef = useRef(null);
+  // Each panel reports its processing state; compare mode is "processing" if any are active.
+  const [panelProcessing, setPanelProcessing] = useState([false, false]);
+  const compareIsProcessing = panelProcessing.some(Boolean);
+  const handlePanelProcessingChange = useCallback((index, value) => {
+    setPanelProcessing(prev => {
+      if (prev[index] === value) return prev;
+      const next = prev.slice();
+      next[index] = value;
+      return next;
+    });
+  }, []);
 
   // Shared app settings hook
   const {
@@ -402,27 +414,6 @@ function AppChat({ preloadedApp = null }) {
     chatId: chatId.current,
     onMessageComplete: handleMessageComplete
   });
-
-  // Compare mode hook - only initialize if feature is enabled and active
-  const compareMode = useCompareMode({
-    appId,
-    enabled: compareModeFeatureEnabled && compareModeActive,
-    onMessageComplete: handleMessageComplete
-  });
-
-  // Initialize compare mode models when compare mode is activated
-  useEffect(() => {
-    if (
-      compareModeActive &&
-      models.length >= 2 &&
-      !compareMode.leftModel &&
-      !compareMode.rightModel
-    ) {
-      // Set first two different models as defaults
-      compareMode.setLeftModel(models[0]?.id);
-      compareMode.setRightModel(models[1]?.id || models[0]?.id);
-    }
-  }, [compareModeActive, models, compareMode]);
 
   // Resume conversation from conversation API on mount (iAssistant Conversation)
   const conversationResumed = useRef(false);
@@ -1115,73 +1106,6 @@ function AppChat({ preloadedApp = null }) {
     }, 0);
   };
 
-  // Compare mode resend handlers - delegate to the appropriate chat instance
-  const handleLeftResendMessage = useCallback(
-    (messageId, editedContent, useMaxTokens = false) => {
-      if (compareModeActive && compareMode.leftChat?.resendMessage) {
-        const resendData = compareMode.leftChat.resendMessage(messageId, editedContent);
-        // Re-send through the left chat with the restored data
-        compareMode.leftChat.sendMessage({
-          displayMessage: {
-            content: resendData.content || '',
-            meta: {
-              rawContent: resendData.content || '',
-              variables: resendData.variables || {}
-            }
-          },
-          apiMessage: {
-            content: resendData.content || '',
-            promptTemplate: app?.prompt || null,
-            variables: resendData.variables || {},
-            imageData: resendData.imageData,
-            audioData: resendData.audioData,
-            fileData: resendData.fileData
-          },
-          params: { modelId: compareMode.leftModel },
-          sendChatHistory: sendChatHistory,
-          messageMetadata: {
-            customResponseRenderer: app?.customResponseRenderer,
-            outputFormat: selectedOutputFormat
-          }
-        });
-      }
-    },
-    [compareModeActive, compareMode, app, sendChatHistory, selectedOutputFormat]
-  );
-
-  const handleRightResendMessage = useCallback(
-    (messageId, editedContent, useMaxTokens = false) => {
-      if (compareModeActive && compareMode.rightChat?.resendMessage) {
-        const resendData = compareMode.rightChat.resendMessage(messageId, editedContent);
-        // Re-send through the right chat with the restored data
-        compareMode.rightChat.sendMessage({
-          displayMessage: {
-            content: resendData.content || '',
-            meta: {
-              rawContent: resendData.content || '',
-              variables: resendData.variables || {}
-            }
-          },
-          apiMessage: {
-            content: resendData.content || '',
-            promptTemplate: app?.prompt || null,
-            variables: resendData.variables || {},
-            imageData: resendData.imageData,
-            audioData: resendData.audioData,
-            fileData: resendData.fileData
-          },
-          params: { modelId: compareMode.rightModel },
-          sendChatHistory: sendChatHistory,
-          messageMetadata: {
-            customResponseRenderer: app?.customResponseRenderer,
-            outputFormat: selectedOutputFormat
-          }
-        });
-      }
-    },
-    [compareModeActive, compareMode, app, sendChatHistory, selectedOutputFormat]
-  );
-
   /**
    * Handle clarification response submission.
    * Formats the response and continues the conversation.
@@ -1301,10 +1225,8 @@ function AppChat({ preloadedApp = null }) {
       cancelGeneration();
 
       if (compareModeActive) {
-        // Clear both compare mode chats
-        compareMode.cancelBothGenerations();
-        compareMode.clearBothChats();
-        compareMode.resetCompareMode();
+        // Clear every compare panel (regenerates their chatIds internally)
+        compareViewRef.current?.clearAll();
       } else {
         // Clear regular chat
         clearMessages();
@@ -1370,7 +1292,7 @@ function AppChat({ preloadedApp = null }) {
       }
     }
 
-    if (processing) return;
+    if (compareModeActive ? compareIsProcessing : processing) return;
 
     let finalInput = input.trim();
     let messageContent = finalInput;
@@ -1554,11 +1476,10 @@ function AppChat({ preloadedApp = null }) {
       }
     };
 
-    // If compare mode is active, send to both models
-    if (compareModeActive && compareMode.leftModel && compareMode.rightModel) {
-      await compareMode.sendToCompare(messageStructure);
+    // If compare mode is active, broadcast to every panel; otherwise send through the regular chat
+    if (compareModeActive) {
+      compareViewRef.current?.sendMessage(messageStructure);
     } else {
-      // Normal mode: send to regular chat
       sendChatMessage(messageStructure);
     }
 
@@ -1637,13 +1558,19 @@ function AppChat({ preloadedApp = null }) {
   const renderChatInput = () => {
     const currentModel = models.find(m => m.id === selectedModel);
 
+    // In compare mode, processing/cancel must reflect every panel — not the regular chat.
+    const effectiveProcessing = compareModeActive ? compareIsProcessing : processing;
+    const effectiveCancel = compareModeActive
+      ? () => compareViewRef.current?.cancelAll()
+      : cancelGeneration;
+
     const commonProps = {
       app,
       value: input,
       onChange: handleInputChange,
       onSubmit: handleSubmit,
-      isProcessing: processing,
-      onCancel: cancelGeneration,
+      isProcessing: effectiveProcessing,
+      onCancel: effectiveCancel,
       onVoiceInput:
         (app?.inputMode?.microphone?.enabled ?? app?.microphone?.enabled) !== false
           ? handleVoiceInput
@@ -1776,7 +1703,7 @@ function AppChat({ preloadedApp = null }) {
         showCompareModeToggle={compareModeFeatureEnabled && models.length >= 2}
         compareModeActive={compareModeActive}
         onCompareModeChange={setCompareModeActive}
-        compareModeDisabled={processing || compareMode.isProcessing}
+        compareModeDisabled={processing || compareIsProcessing}
       />
 
       {app?.variables && app.variables.length > 0 && showParameters && (
@@ -1831,25 +1758,17 @@ function AppChat({ preloadedApp = null }) {
           {compareModeActive ? (
             /* Compare Mode View */
             <>
-              <div className="flex-1 overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-hidden">
                 <CompareModeView
+                  ref={compareViewRef}
                   app={app}
+                  appId={appId}
                   models={models}
                   currentLanguage={currentLanguage}
-                  leftModel={compareMode.leftModel}
-                  rightModel={compareMode.rightModel}
-                  onLeftModelChange={compareMode.setLeftModel}
-                  onRightModelChange={compareMode.setRightModel}
-                  leftMessages={compareMode.leftChat.messages}
-                  rightMessages={compareMode.rightChat.messages}
                   outputFormat={selectedOutputFormat}
-                  onDelete={handleDeleteMessage}
-                  onEdit={handleEditMessage}
-                  onLeftResend={handleLeftResendMessage}
-                  onRightResend={handleRightResendMessage}
-                  appId={appId}
-                  leftChatId={compareMode.leftChatId}
-                  rightChatId={compareMode.rightChatId}
+                  sendChatHistory={sendChatHistory}
+                  onPanelProcessingChange={handlePanelProcessingChange}
+                  onMessageComplete={handleMessageComplete}
                   onOpenInCanvas={handleOpenInCanvas}
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}

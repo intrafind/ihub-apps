@@ -212,7 +212,9 @@ const featuresSchema = z
       .optional(),
     compareMode: z
       .object({
-        enabled: z.boolean().optional().default(false)
+        // Compare mode is opt-out at the app level: if the object exists but `enabled` is
+        // unset, treat it as enabled. The client uses `enabled !== false` for the same reason.
+        enabled: z.boolean().optional().default(true)
       })
       .optional()
   })
