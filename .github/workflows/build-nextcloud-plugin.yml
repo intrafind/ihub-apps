@@ -1,0 +1,77 @@
+name: Build Nextcloud Plugin
+
+# Produces the `ihub_chat.tar.gz` archive that Nextcloud admins install into
+# `custom_apps/`. Builds for:
+#   - every push to main / PR that touches the plugin source (uploaded as a
+#     workflow artifact, retained 30 days — useful for testing pre-release
+#     builds)
+#   - every published GitHub Release (attached to the release as a download
+#     asset — the canonical "production install" source)
+#   - manual workflow_dispatch (rebuild on demand against any branch)
+#
+# Install instructions for admins live in docs/nextcloud-embed.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'nextcloud-app/**'
+      - '.github/workflows/build-nextcloud-plugin.yml'
+  pull_request:
+    paths:
+      - 'nextcloud-app/**'
+      - '.github/workflows/build-nextcloud-plugin.yml'
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build & publish plugin
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write  # required for softprops/action-gh-release on release events
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+          cache-dependency-path: nextcloud-app/package-lock.json
+
+      - name: Install dependencies
+        working-directory: nextcloud-app
+        run: npm ci
+
+      - name: Build plugin tarball
+        working-directory: nextcloud-app
+        run: make package
+
+      - name: Show archive contents (sanity check)
+        run: |
+          ls -lh ihub_chat.tar.gz
+          tar -tzf ihub_chat.tar.gz | head -20
+          # Fail loudly if the archive doesn't have the expected top-level
+          # directory — Nextcloud would otherwise refuse to load it.
+          if ! tar -tzf ihub_chat.tar.gz | head -1 | grep -q '^ihub_chat/'; then
+            echo "::error::Tarball top-level entry must be ihub_chat/"
+            exit 1
+          fi
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ihub_chat-${{ github.sha }}
+          path: ihub_chat.tar.gz
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Attach to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ihub_chat.tar.gz
+          fail_on_unmatched_files: true
