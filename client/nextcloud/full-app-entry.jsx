@@ -6,7 +6,10 @@ import './nextcloud.css';
 // Side-effect import — i18n initializes synchronously and loads translations async.
 import '../src/i18n/i18n';
 import App from '../src/App';
-import { OfficeConfigContext } from '../src/features/office/contexts/OfficeConfigContext';
+import {
+  OfficeConfigContext,
+  useOfficeConfig
+} from '../src/features/office/contexts/OfficeConfigContext';
 import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHostContext';
 import OfficeLogin from '../src/features/office/components/OfficeLogin';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
@@ -14,7 +17,8 @@ import {
   getAccessToken,
   setOnSessionExpired,
   storeTokenResponse,
-  clearTokens
+  clearTokens,
+  fetchUserInfo
 } from '../src/features/office/api/officeAuth';
 import { openNextcloudAuthDialog } from '../src/features/nextcloud-embed/utilities/nextcloudAuthDialog';
 import {
@@ -40,32 +44,88 @@ function renderError(rootEl, message) {
 
 const SESSION_EXPIRED_EVENT = 'ihub:embed:session-expired';
 
-// Root component: shows the OAuth gate when no iHub access token is present,
-// otherwise mounts the full iHub <App />. Note `<App />` brings its own
-// BrowserRouter and AuthProvider — we just wrap it in the embedded-host
+// Root component: shows the OAuth gate when no valid iHub access token is
+// present, otherwise mounts the full iHub <App />. Note `<App />` brings its
+// own BrowserRouter and AuthProvider — we just wrap it in the embedded-host
 // contexts so OfficeLogin (and any embed-aware code) can resolve
 // useEmbeddedHost/useOfficeConfig.
+//
+// Why we probe the token instead of trusting localStorage:
+// `getAccessToken()` only checks for the presence of `office_ihubtoken` — it
+// does not validate expiry or the resource server's view of the token. When
+// iHub has `anonymousAuth.enabled: true` (the default for dev), the
+// AuthContext's `/auth/status` returns the anonymous user for an invalid
+// Bearer instead of 401, so the silent-refresh / session-expired path never
+// fires and the user is silently downgraded to the anonymous identity. We
+// gate on `/api/oauth/userinfo` instead — that endpoint is the OAuth
+// resource server and rejects invalid tokens with 401, so a stale token from
+// a previous OAuth dance reliably falls back to the login screen.
 function EmbedRoot({ initialError }) {
-  const [hasToken, setHasToken] = useState(() => !!getAccessToken());
+  const officeConfig = useOfficeConfig();
+  // 'validating' | 'authenticated' | 'unauthenticated'
+  const [authStatus, setAuthStatus] = useState(() =>
+    getAccessToken() ? 'validating' : 'unauthenticated'
+  );
   const [sessionError, setSessionError] = useState(initialError);
 
   useEffect(() => {
     function handleExpired() {
-      setHasToken(false);
+      setAuthStatus('unauthenticated');
       setSessionError('Your session has expired. Please sign in again.');
     }
     window.addEventListener(SESSION_EXPIRED_EVENT, handleExpired);
     return () => window.removeEventListener(SESSION_EXPIRED_EVENT, handleExpired);
   }, []);
 
-  if (!hasToken) {
+  useEffect(() => {
+    if (authStatus !== 'validating') return undefined;
+    let cancelled = false;
+    (async () => {
+      try {
+        // /api/oauth/userinfo is the OAuth resource server — it returns 401
+        // for invalid Bearer tokens (unlike /auth/status, which silently
+        // falls back to the anonymous user when anonymousAuth is enabled).
+        // A 401 triggers authenticatedFetch's silent refresh; if that
+        // also fails, the call throws.
+        await fetchUserInfo(officeConfig);
+        if (!cancelled) setAuthStatus('authenticated');
+      } catch (err) {
+        if (cancelled) return;
+        // Token is stale or unrecognized — wipe and surface the login gate.
+        clearTokens();
+        setSessionError('Please sign in to continue.');
+        setAuthStatus('unauthenticated');
+        console.warn('[nextcloud-embed] Stored token failed userinfo probe:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [authStatus, officeConfig]);
+
+  if (authStatus === 'validating') {
+    return (
+      <div
+        style={{
+          padding: 24,
+          fontFamily: 'sans-serif',
+          color: '#4b5563',
+          textAlign: 'center'
+        }}
+      >
+        Signing you in…
+      </div>
+    );
+  }
+
+  if (authStatus === 'unauthenticated') {
     return (
       <OfficeLogin
         initialError={sessionError}
         onSuccess={tokenData => {
           storeTokenResponse(tokenData);
           setSessionError(null);
-          setHasToken(true);
+          setAuthStatus('authenticated');
         }}
       />
     );
@@ -171,8 +231,11 @@ function EmbedRoot({ initialError }) {
     ]
   };
 
-  // Reset chat when the user picks a different document set. The full app's
-  // chat surface listens for `ihub:itemchanged` (introduced for the taskpane).
+  // Re-emit selection changes as a `ihub:itemchanged` DOM event. Originally
+  // introduced for the taskpane's `OfficeChatPanel`, the event is now also
+  // consumed by `useNextcloudEmbedAttachments` (mounted inside AppChat) to
+  // reset its per-selection dedup signature — without this, a fresh selection
+  // in Nextcloud would be skipped as a duplicate of the last attached one.
   onSelectionChange(() => {
     document.dispatchEvent(new CustomEvent('ihub:itemchanged'));
   });
