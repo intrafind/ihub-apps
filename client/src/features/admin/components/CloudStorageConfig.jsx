@@ -110,11 +110,32 @@ function CloudStorageConfig({ filterType } = {}) {
       return;
     }
 
-    // Set name to be same as id if not provided (for cloud storage providers)
-    const providerToSave = {
-      ...editingProvider,
-      name: editingProvider.name || editingProvider.id
+    // Set name to be same as id if not provided (for cloud storage providers).
+    // We also prune fields that belong to a different provider type — the
+    // edit form keeps stale values (e.g. tenantId left over after switching
+    // type from office365 to nextcloud) and those would otherwise be
+    // written to platform.json as empty strings, adding noise the
+    // discriminated-union schema flags as unknown fields.
+    const fieldsByType = {
+      office365: ['tenantId', 'clientId', 'clientSecret', 'siteUrl', 'driveId'],
+      googledrive: ['clientId', 'clientSecret'],
+      nextcloud: ['serverUrl', 'clientId', 'clientSecret']
     };
+    const allowed = new Set([
+      'id',
+      'name',
+      'displayName',
+      'type',
+      'enabled',
+      'redirectUri',
+      'sources',
+      ...(fieldsByType[editingProvider.type] || [])
+    ]);
+    const providerToSave = {};
+    for (const [key, value] of Object.entries(editingProvider)) {
+      if (allowed.has(key)) providerToSave[key] = value;
+    }
+    providerToSave.name = providerToSave.name || providerToSave.id;
 
     if (providerToSave.type === 'office365') {
       if (!providerToSave.tenantId || !providerToSave.clientId || !providerToSave.clientSecret) {

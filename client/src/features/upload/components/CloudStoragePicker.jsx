@@ -115,11 +115,11 @@ const CloudStoragePicker = ({
                   </p>
                   <p className="text-sm text-gray-500 dark:text-gray-400">
                     {provider.type === 'office365'
-                      ? 'Microsoft Office 365'
+                      ? t('admin.cloudStorage.office365', 'Microsoft Office 365')
                       : provider.type === 'googledrive'
-                        ? 'Google Drive'
+                        ? t('admin.cloudStorage.googledrive', 'Google Drive')
                         : provider.type === 'nextcloud'
-                          ? 'Nextcloud'
+                          ? t('admin.cloudStorage.nextcloud', 'Nextcloud')
                           : provider.type}
                   </p>
                 </div>

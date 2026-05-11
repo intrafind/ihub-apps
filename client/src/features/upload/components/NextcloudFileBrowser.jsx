@@ -352,10 +352,12 @@ const NextcloudFileBrowser = ({ provider, onFilesProcessed, onClose, uploadConfi
               />
               {t('cloudStorage.showSupportedOnly', 'Show supported files only')}
             </label>
-
-            <div className="text-xs text-gray-500 dark:text-gray-400">
-              {t('cloudStorage.sortedBy', 'Sorted by')}: {sortBy} ({sortDirection})
-            </div>
+            {/*
+              The "Sorted by" indicator from the other browsers was
+              dropped here: it showed raw internal values (`name`,
+              `asc`) that don't localise and the column headers already
+              show the active sort with an arrow icon.
+            */}
           </div>
         </div>
 

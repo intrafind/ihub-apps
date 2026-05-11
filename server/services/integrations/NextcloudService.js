@@ -471,22 +471,41 @@ class NextcloudService {
    * controls its dependency tree, so adding an XML parser purely for one
    * endpoint isn't worth it. The Nextcloud PROPFIND response is shallow
    * and predictable, so regex extraction is reliable here.
+   *
+   * @param {string} xml - The PROPFIND multistatus body
+   * @param {string} userRootPrefix - The encoded WebDAV prefix for the
+   *   user's storage root (e.g. `/remote.php/dav/files/alice/`). Returned
+   *   `path` values are relative to this prefix so each item is
+   *   self-contained — callers don't need to remember which folder was
+   *   listed to navigate into or download an item.
    */
-  _parsePropfindResponse(xml, basePath) {
+  _parsePropfindResponse(xml, userRootPrefix) {
     const items = [];
     const responseRegex = /<d:response[\s\S]*?<\/d:response>/g;
     const responses = xml.match(responseRegex) || [];
+
+    // Normalize so the prefix always has a single trailing slash; we
+    // compare hrefs in their percent-encoded form (Nextcloud returns
+    // them encoded) and only decode when extracting display names.
+    const normalizedRoot = userRootPrefix.endsWith('/')
+      ? userRootPrefix
+      : `${userRootPrefix}/`;
 
     for (const responseXml of responses) {
       const hrefMatch = responseXml.match(/<d:href>([^<]+)<\/d:href>/);
       if (!hrefMatch) continue;
 
-      const href = decodeURIComponent(hrefMatch[1]);
+      // Keep `href` percent-encoded for prefix comparison. Decoding it
+      // here would break the comparison for any segment containing
+      // escaped characters (spaces, `%`, etc.) and could double-decode
+      // filenames that happen to contain literal `%`.
+      const hrefEncoded = hrefMatch[1];
 
-      // Skip the directory itself — PROPFIND returns the parent as the
-      // first entry.
-      const normalizedBase = basePath.endsWith('/') ? basePath : `${basePath}/`;
-      if (href === basePath || href === normalizedBase) continue;
+      if (!hrefEncoded.startsWith(normalizedRoot)) {
+        // Skip the user-root entry itself, or anything outside the
+        // user's storage (shouldn't happen, but defense in depth).
+        continue;
+      }
 
       const isCollection = /<d:resourcetype>[\s\S]*?<d:collection\s*\/>/.test(responseXml);
       const sizeMatch = responseXml.match(/<d:getcontentlength>(\d+)<\/d:getcontentlength>/);
@@ -494,19 +513,30 @@ class NextcloudService {
       const modifiedMatch = responseXml.match(/<d:getlastmodified>([^<]+)<\/d:getlastmodified>/);
       const idMatch = responseXml.match(/<oc:fileid>([^<]+)<\/oc:fileid>/);
 
-      const segments = href.split('/').filter(Boolean);
-      const name = decodeURIComponent(segments[segments.length - 1] || '');
+      // Trim the user-root prefix and any trailing slash (PROPFIND
+      // appends `/` to collection hrefs). Then decode each segment
+      // exactly once so display names with `%` round-trip correctly.
+      const relativeEncoded = hrefEncoded.slice(normalizedRoot.length).replace(/\/$/, '');
+      if (relativeEncoded.length === 0) continue; // user-root entry
 
-      const relativePath = href.startsWith(normalizedBase)
-        ? href.slice(normalizedBase.length)
-        : href;
+      const segments = relativeEncoded.split('/').filter(Boolean);
+      let decodedSegments;
+      try {
+        decodedSegments = segments.map(seg => decodeURIComponent(seg));
+      } catch {
+        // Malformed encoding — fall back to the raw segments rather
+        // than throwing and aborting the entire listing.
+        decodedSegments = segments;
+      }
+      const path = decodedSegments.join('/');
+      const name = decodedSegments[decodedSegments.length - 1] || '';
 
       items.push({
-        // Prefer Nextcloud's stable file id when available; fall back to
-        // the path (which is unique within the user's storage).
-        id: idMatch ? idMatch[1] : relativePath,
+        // Prefer Nextcloud's stable file id when available; fall back
+        // to the path (which is unique within the user's storage).
+        id: idMatch ? idMatch[1] : path,
         name,
-        path: relativePath.replace(/\/$/, ''),
+        path,
         size: sizeMatch ? parseInt(sizeMatch[1], 10) : 0,
         mimeType: mimeMatch ? mimeMatch[1] : null,
         lastModifiedDateTime: modifiedMatch ? new Date(modifiedMatch[1]).toISOString() : null,
@@ -574,7 +604,19 @@ class NextcloudService {
     }
 
     const xml = await response.text();
-    return this._parsePropfindResponse(xml, webdavPath);
+    // Pass the *user-root* prefix (not the listed-folder path) so each
+    // returned item carries its full path relative to the user's
+    // storage root — that keeps `item.path` self-contained for the
+    // client and avoids surprises when navigating into nested folders.
+    const userRootPrefix = this._buildWebDavPath(username, '');
+    const items = this._parsePropfindResponse(xml, userRootPrefix);
+    // PROPFIND with Depth: 1 also returns the listed folder itself as
+    // the first response; strip it out so the client sees only the
+    // folder's contents.
+    const normalizedFolder = (folderPath || '').split('/').filter(Boolean).join('/');
+    return normalizedFolder.length > 0
+      ? items.filter(item => item.path !== normalizedFolder)
+      : items;
   }
 
   /**
