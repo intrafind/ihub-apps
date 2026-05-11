@@ -519,8 +519,14 @@ class NextcloudService {
   }
 
   _buildWebDavPath(username, relativePath = '') {
-    const trimmed = (relativePath || '').replace(/^\/+|\/+$/g, '');
-    const encoded = trimmed.split('/').filter(Boolean).map(encodeURIComponent).join('/');
+    // split('/') + filter(Boolean) handles leading/trailing/duplicate
+    // slashes without needing a backtracking replace — avoids the
+    // polynomial-regex CodeQL warning on user-supplied paths.
+    const encoded = (relativePath || '')
+      .split('/')
+      .filter(Boolean)
+      .map(encodeURIComponent)
+      .join('/');
     return `/remote.php/dav/files/${encodeURIComponent(username)}/${encoded}`;
   }
 
