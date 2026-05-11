@@ -222,16 +222,23 @@ function ChatInputActionsMenu({
   const enabledCount = hasTools ? app.tools.filter(t => enabledTools.includes(t)).length : 0;
   const hasWebsearch = app?.websearch?.enabled === true && onWebsearchEnabledChange !== null;
 
+  // Local upload covers the paper-clip / drop-zone affordance. Cloud storage
+  // providers are rendered separately so they must remain available even when
+  // local upload is disabled (issue #1426).
+  const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
+  const hasCloudProviders = enabledCloudProviders.length > 0;
+
   // Count quick actions (non-tools actions)
   const quickActionCount =
-    (uploadConfig?.enabled === true ? 1 : 0) +
+    (localUploadEnabled ? 1 : 0) +
     (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
 
   // Check if we have any actions to show
   const hasHostContextToggles = hostContextToggles.length > 0;
-  const hasActions = hasTools || hasWebsearch || hasHostContextToggles || quickActionCount > 0;
+  const hasActions =
+    hasTools || hasWebsearch || hasHostContextToggles || hasCloudProviders || quickActionCount > 0;
 
   if (!hasActions) return null;
 
@@ -243,9 +250,9 @@ function ChatInputActionsMenu({
     (hasWebsearch ? 1 : 0) +
     (hasHostContextToggles ? 1 : 0);
 
-  if (totalActions === 1 && quickActionCount === 1 && !hasTools) {
+  if (totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders) {
     // Render the single action directly
-    if (uploadConfig?.enabled === true) {
+    if (localUploadEnabled) {
       return (
         <button
           type="button"
@@ -306,7 +313,7 @@ function ChatInputActionsMenu({
   // getNavigableElements discovers, so React-controlled tabIndex agrees with the
   // hook's activeIndex (prevents roving tabindex from being overwritten on re-render).
   const menuNavItems = [];
-  if (uploadConfig?.enabled === true && !(disabled || isProcessing)) menuNavItems.push('upload');
+  if (localUploadEnabled && !(disabled || isProcessing)) menuNavItems.push('upload');
   if (magicPromptEnabled && !showUndoMagicPrompt && !(disabled || isProcessing))
     menuNavItems.push('magic');
   if (showUndoMagicPrompt && !(disabled || isProcessing)) menuNavItems.push('undo');
@@ -354,7 +361,7 @@ function ChatInputActionsMenu({
               {t('chatActions.quickActions', 'Quick Actions')}
             </h3>
             <div className="flex flex-wrap gap-2">
-              {uploadConfig?.enabled === true && (
+              {localUploadEnabled && (
                 <button
                   type="button"
                   role="menuitem"
