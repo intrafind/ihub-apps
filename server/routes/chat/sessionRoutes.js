@@ -347,27 +347,30 @@ export default function registerSessionRoutes(
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         clients.set(chatId, { response: res, lastActivity: new Date(), appId });
+        // Pin this registration so a stale close handler from a previous SSE on the
+        // same chatId can't delete a fresh entry (or abort a fresh active request)
+        // after the client reconnects.
+        const myEntry = clients.get(chatId);
         actionTracker.trackConnected(chatId);
 
         req.on('close', () => {
-          if (clients.has(chatId)) {
-            if (activeRequests.has(chatId)) {
-              try {
-                const controller = activeRequests.get(chatId);
-                controller.abort();
-                activeRequests.delete(chatId);
-                logger.info('Aborted request', { component: 'sessionRoutes', chatId });
-              } catch (error) {
-                logger.error('Error aborting request', {
-                  component: 'sessionRoutes',
-                  chatId,
-                  error: error.message
-                });
-              }
+          if (clients.get(chatId) !== myEntry) return;
+          if (activeRequests.has(chatId)) {
+            try {
+              const controller = activeRequests.get(chatId);
+              controller.abort();
+              activeRequests.delete(chatId);
+              logger.info('Aborted request', { component: 'sessionRoutes', chatId });
+            } catch (error) {
+              logger.error('Error aborting request', {
+                component: 'sessionRoutes',
+                chatId,
+                error: error.message
+              });
             }
-            clients.delete(chatId);
-            logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
           }
+          clients.delete(chatId);
+          logger.info('Client disconnected', { component: 'sessionRoutes', chatId });
         });
       } catch (error) {
         logger.error('Error establishing SSE connection', { component: 'sessionRoutes', error });
