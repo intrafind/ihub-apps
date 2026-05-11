@@ -97,10 +97,15 @@ async function processCloudAudio(file) {
  */
 async function processCloudDocument(file) {
   try {
-    const content = await processDocumentFile(file);
+    // processDocumentFile returns { content, pageImages } — destructure both
+    // so `content` is the extracted text string (not the wrapper object).
+    // Without this, the chat sends an object as content and the LLM gets
+    // nothing usable.
+    const { content, pageImages } = await processDocumentFile(file);
     return {
       type: 'document',
       content,
+      pageImages: pageImages || [],
       fileName: file.name,
       fileSize: file.size,
       fileType: file.type,
