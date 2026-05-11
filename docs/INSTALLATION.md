@@ -718,6 +718,20 @@ For detailed configuration documentation, see the main README.md Configuration s
 - Only available for binary installations (not Docker or npm)
 - Disabled automatically when running in a container (Docker, Podman, Kubernetes)
 
+**Disabling the version check entirely:**
+
+Set `NO_VERSION_CHECK=true` (or `IHUB_NO_VERSION_CHECK=true`) to prevent the
+server from contacting `api.github.com` to look for newer releases. Useful
+for air-gapped deployments or environments where outbound traffic is
+blocked. The variable is not set by default; both the Admin UI banner and
+the `--update=check` CLI command will report that version checks are
+disabled when it is set. Accepted truthy values: `1`, `true`, `yes`, `on`.
+
+```bash
+# Disable the periodic check for newer releases
+export NO_VERSION_CHECK=true
+```
+
 ### Docker Installation Updates
 
 > **Note:** In-place updates via the Admin UI or `--update` CLI flag are

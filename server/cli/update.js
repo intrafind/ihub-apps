@@ -61,6 +61,12 @@ async function handleCheck() {
 
   console.log(`\n  Current version: ${BOLD}${result.currentVersion}${NC}`);
 
+  if (result.versionCheckDisabled) {
+    warn('Version checks are disabled (NO_VERSION_CHECK is set).');
+    console.log('');
+    return null;
+  }
+
   if (result.updateAvailable) {
     console.log(`  Latest version:  ${BOLD}${GREEN}${result.latestVersion}${NC}`);
     console.log(`  Release:         ${result.releaseName || result.latestVersion}`);
