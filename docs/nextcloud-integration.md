@@ -22,11 +22,13 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 
 ## Step 1: Register an OAuth 2.0 Client in Nextcloud
 
+> **Tip:** The easiest workflow is to do **Step 2 first** so iHub Apps shows you the exact callback URL to register. Open **Admin → Integrations → Nextcloud → Add Provider** in iHub, type the **Name** (provider ID) you want to use, and copy the auto-generated **Callback URL** straight into the Redirection URI field below. Then come back and finish step 1.
+
 1. Sign in to your Nextcloud instance as an administrator.
 2. Go to **Settings → Administration → Security**.
 3. Scroll to the **OAuth 2.0 clients** section.
 4. Enter a **Name** for the client (e.g. `iHub Apps`).
-5. Enter the **Redirection URI**:
+5. Enter the **Redirection URI** — either paste the value from iHub's admin UI (recommended) or construct it manually:
 
    ```
    https://<your-ihub-host>/api/integrations/nextcloud/<providerId>/callback
@@ -35,7 +37,7 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
    - Replace `<your-ihub-host>` with your iHub Apps hostname.
    - Replace `<providerId>` with the provider ID you will create in iHub (e.g. `nextcloud-main`).
 
-   > The redirect URI must match exactly — including scheme, host, port (if any), path, and the provider ID segment.
+   > The redirect URI must match exactly — including scheme, host, port (if any), path, and the provider ID segment. The iHub admin UI displays the auto-detected callback URL live as you type the provider ID, with a copy button — using it avoids manual transcription mistakes.
 
 6. Click **Add**. Nextcloud will show you a **Client Identifier** and a **Secret**. Copy both — the secret is shown only once.
 
