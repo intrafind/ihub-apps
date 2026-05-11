@@ -14,5 +14,6 @@
   "tokenLimit": 8192,
   "supportsTools": false,
   "enabled": true,
-  "default": false
+  "default": false,
+  "autoDiscovery": true
 }
