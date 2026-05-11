@@ -22,6 +22,7 @@ import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import useMagicPrompt from '../../../shared/hooks/useMagicPrompt';
 import { useIntegrationAuth } from '../../chat/hooks/useIntegrationAuth';
+import useNextcloudEmbedAttachments from '../../nextcloud-embed/hooks/useNextcloudEmbedAttachments';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatMessageList from '../../chat/components/ChatMessageList';
@@ -269,6 +270,13 @@ function AppChat({ preloadedApp = null }) {
   // Custom hooks for complex functionality
   const fileUploadHandler = useFileUploadHandler();
   const magicPromptHandler = useMagicPrompt();
+
+  // Auto-attach files selected in Nextcloud (no-op outside the Nextcloud embed).
+  const currentModelObject = useMemo(
+    () => models?.find(m => m.id === selectedModel) || null,
+    [models, selectedModel]
+  );
+  useNextcloudEmbedAttachments(fileUploadHandler, app, currentModelObject);
 
   // Check document token size against model context window and warn user if needed
   useEffect(() => {

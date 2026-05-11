@@ -9,6 +9,7 @@ import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 import AppCard from '../../../shared/components/AppCard';
+import NextcloudSelectionBanner from '../../nextcloud-embed/components/NextcloudSelectionBanner';
 
 // Instead of fixed values, we'll calculate based on viewport
 function AppsList() {
@@ -471,6 +472,7 @@ function AppsList() {
 
   return (
     <div ref={containerRef} className="container mx-auto py-8 px-4 flex flex-col">
+      <NextcloudSelectionBanner />
       <div className="text-center mb-8">
         <h1 className="text-3xl font-bold mb-2 flex items-center justify-center">
           <Icon

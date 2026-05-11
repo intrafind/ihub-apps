@@ -1,5 +1,6 @@
 import { apiClient } from '../../../api/client';
 import { getCurrentSelection } from './nextcloudSelectionBridge';
+import { contentTypeFromExtension, fileNameFromPath } from './nextcloudFileMeta';
 
 /**
  * Build a `HostMailContext`-shaped object from the current Nextcloud
@@ -47,54 +48,6 @@ function blobToBase64(blob) {
     reader.onerror = () => reject(reader.error || new Error('FileReader error'));
     reader.readAsDataURL(blob);
   });
-}
-
-function fileNameFromPath(path) {
-  if (typeof path !== 'string') return 'document';
-  const trimmed = path.replace(/\/+$/, '');
-  const idx = trimmed.lastIndexOf('/');
-  return idx === -1 ? trimmed : trimmed.slice(idx + 1) || 'document';
-}
-
-function contentTypeFromExtension(name) {
-  const dot = name.lastIndexOf('.');
-  if (dot === -1) return 'application/octet-stream';
-  const ext = name.slice(dot + 1).toLowerCase();
-  // Minimal lookup — most document extraction goes through
-  // `processDocumentFile`, which sniffs the bytes anyway. We just need
-  // a sensible default so images and a few common documents are routed
-  // to the right downstream helper.
-  switch (ext) {
-    case 'png':
-      return 'image/png';
-    case 'jpg':
-    case 'jpeg':
-      return 'image/jpeg';
-    case 'gif':
-      return 'image/gif';
-    case 'webp':
-      return 'image/webp';
-    case 'pdf':
-      return 'application/pdf';
-    case 'txt':
-    case 'md':
-      return 'text/plain';
-    case 'csv':
-      return 'text/csv';
-    case 'docx':
-      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
-    case 'xlsx':
-      return 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-    case 'pptx':
-      return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
-    case 'json':
-      return 'application/json';
-    case 'html':
-    case 'htm':
-      return 'text/html';
-    default:
-      return 'application/octet-stream';
-  }
 }
 
 async function downloadOne(path) {
