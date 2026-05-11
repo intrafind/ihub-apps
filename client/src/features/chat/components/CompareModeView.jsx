@@ -1,146 +1,111 @@
+import { forwardRef, useImperativeHandle, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
-import { getLocalizedContent } from '../../../utils/localizeContent';
-import ChatMessageList from './ChatMessageList';
-import ModelSelector from './ModelSelector';
+import ComparePanel from './ComparePanel';
 
 /**
- * Side-by-side comparison view for two model outputs
- * @param {Object} props
- * @param {Object} props.app - App configuration
- * @param {Array} props.models - Available models
- * @param {string} props.currentLanguage - Current language
- * @param {string} props.leftModel - Selected left model ID
- * @param {string} props.rightModel - Selected right model ID
- * @param {Function} props.onLeftModelChange - Callback for left model change
- * @param {Function} props.onRightModelChange - Callback for right model change
- * @param {Array} props.leftMessages - Messages for left chat
- * @param {Array} props.rightMessages - Messages for right chat
- * @param {string} props.outputFormat - Output format (markdown, text, etc.)
- * @param {Function} props.onDelete - Message delete callback
- * @param {Function} props.onEdit - Message edit callback
- * @param {Function} props.onLeftResend - Message resend callback for left chat
- * @param {Function} props.onRightResend - Message resend callback for right chat
- * @param {string} props.appId - App ID
- * @param {string} props.leftChatId - Left chat ID
- * @param {string} props.rightChatId - Right chat ID
+ * Side-by-side comparison view.
+ *
+ * Renders N identical ComparePanel instances (currently two) and forwards an
+ * aggregate imperative API to the parent:
+ *   - sendMessage(messageStructure) — broadcast to every panel
+ *   - clearAll()                    — reset every panel
+ *   - cancelAll()                   — cancel any in-flight generation
+ *
+ * Per-panel state (model selection, chat instance, message handlers) lives
+ * inside each ComparePanel — this layout never thinks in "left/right" terms.
  */
-function CompareModeView({
-  app,
-  models,
-  currentLanguage,
-  leftModel,
-  rightModel,
-  onLeftModelChange,
-  onRightModelChange,
-  leftMessages,
-  rightMessages,
-  outputFormat,
-  onDelete,
-  onEdit,
-  onLeftResend,
-  onRightResend,
-  appId,
-  leftChatId,
-  rightChatId,
-  onOpenInCanvas,
-  canvasEnabled,
-  requiredIntegrations,
-  onConnectIntegration,
-  onClarificationSubmit,
-  onClarificationSkip,
-  onDocumentAction
-}) {
+const CompareModeView = forwardRef(function CompareModeView(
+  {
+    app,
+    appId,
+    models,
+    currentLanguage,
+    outputFormat,
+    sendChatHistory,
+    onPanelProcessingChange,
+    onMessageComplete,
+    onOpenInCanvas,
+    canvasEnabled,
+    requiredIntegrations,
+    onConnectIntegration,
+    onClarificationSubmit,
+    onClarificationSkip,
+    onDocumentAction
+  },
+  ref
+) {
   const { t } = useTranslation();
 
-  return (
-    <div className="flex flex-col md:flex-row gap-4 h-full overflow-hidden">
-      {/* Left Panel */}
-      <div className="flex-1 flex flex-col min-w-0 border-r border-gray-200 dark:border-gray-700 pr-4">
-        <div className="flex-shrink-0 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-blue-500 flex-shrink-0" />
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
-              {t('chat.compareMode.modelA')}
-            </span>
-            <ModelSelector
-              app={app}
-              models={models}
-              selectedModel={leftModel}
-              onModelChange={onLeftModelChange}
-              currentLanguage={currentLanguage}
-              dropdownDirection="down"
-            />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <ChatMessageList
-            messages={leftMessages}
-            outputFormat={outputFormat}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            onResend={onLeftResend}
-            editable={true}
-            appId={appId}
-            chatId={leftChatId}
-            modelId={leftModel}
-            onOpenInCanvas={onOpenInCanvas}
-            canvasEnabled={canvasEnabled}
-            requiredIntegrations={requiredIntegrations}
-            onConnectIntegration={onConnectIntegration}
-            app={app}
-            models={models}
-            onClarificationSubmit={onClarificationSubmit}
-            onClarificationSkip={onClarificationSkip}
-            onDocumentAction={onDocumentAction}
-            compact={true}
-          />
-        </div>
-      </div>
+  // Default each panel to a different model when possible.
+  const defaultModels = [models[0]?.id ?? null, models[1]?.id ?? models[0]?.id ?? null];
 
-      {/* Right Panel */}
-      <div className="flex-1 flex flex-col min-w-0 pl-4">
-        <div className="flex-shrink-0 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-green-500 flex-shrink-0" />
-            <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 flex-shrink-0">
-              {t('chat.compareMode.modelB')}
-            </span>
-            <ModelSelector
-              app={app}
-              models={models}
-              selectedModel={rightModel}
-              onModelChange={onRightModelChange}
-              currentLanguage={currentLanguage}
-              dropdownDirection="down"
-            />
-          </div>
-        </div>
-        <div className="flex-1 overflow-y-auto">
-          <ChatMessageList
-            messages={rightMessages}
-            outputFormat={outputFormat}
-            onDelete={onDelete}
-            onEdit={onEdit}
-            onResend={onRightResend}
-            editable={true}
-            appId={appId}
-            chatId={rightChatId}
-            modelId={rightModel}
-            onOpenInCanvas={onOpenInCanvas}
-            canvasEnabled={canvasEnabled}
-            requiredIntegrations={requiredIntegrations}
-            onConnectIntegration={onConnectIntegration}
-            app={app}
-            models={models}
-            onClarificationSubmit={onClarificationSubmit}
-            onClarificationSkip={onClarificationSkip}
-            onDocumentAction={onDocumentAction}
-            compact={true}
-          />
-        </div>
-      </div>
+  const panelConfigs = [
+    {
+      key: 'panel-a',
+      label: t('chat.compareMode.modelA', 'Model A'),
+      accentColorClass: 'bg-blue-500'
+    },
+    {
+      key: 'panel-b',
+      label: t('chat.compareMode.modelB', 'Model B'),
+      accentColorClass: 'bg-green-500'
+    }
+  ];
+
+  const panelHandlesRef = useRef(panelConfigs.map(() => null));
+
+  const forEachPanel = fn => {
+    panelHandlesRef.current.forEach(panel => {
+      if (panel) fn(panel);
+    });
+  };
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      sendMessage(messageStructure) {
+        forEachPanel(panel => panel.sendMessage(messageStructure));
+      },
+      clearAll() {
+        forEachPanel(panel => panel.clear());
+      },
+      cancelAll() {
+        forEachPanel(panel => panel.cancel());
+      }
+    }),
+    []
+  );
+
+  return (
+    <div className="flex flex-col md:flex-row gap-4 h-full min-h-0 overflow-hidden divide-y md:divide-y-0 md:divide-x divide-gray-200 dark:divide-gray-700">
+      {panelConfigs.map((config, index) => (
+        <ComparePanel
+          key={config.key}
+          ref={el => {
+            panelHandlesRef.current[index] = el;
+          }}
+          label={config.label}
+          accentColorClass={config.accentColorClass}
+          app={app}
+          appId={appId}
+          models={models}
+          defaultModelId={defaultModels[index]}
+          currentLanguage={currentLanguage}
+          outputFormat={outputFormat}
+          sendChatHistory={sendChatHistory}
+          onProcessingChange={value => onPanelProcessingChange?.(index, value)}
+          onMessageComplete={onMessageComplete}
+          onOpenInCanvas={onOpenInCanvas}
+          canvasEnabled={canvasEnabled}
+          requiredIntegrations={requiredIntegrations}
+          onConnectIntegration={onConnectIntegration}
+          onClarificationSubmit={onClarificationSubmit}
+          onClarificationSkip={onClarificationSkip}
+          onDocumentAction={onDocumentAction}
+        />
+      ))}
     </div>
   );
-}
+});
 
 export default CompareModeView;

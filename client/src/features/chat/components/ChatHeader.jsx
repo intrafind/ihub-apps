@@ -239,6 +239,10 @@ function ChatHeader({
               parametersVisible={parametersVisible}
               appId={appId}
               chatId={chatId}
+              showCompareModeToggle={showCompareModeToggle}
+              compareModeActive={compareModeActive}
+              onCompareModeChange={onCompareModeChange}
+              compareModeDisabled={compareModeDisabled}
             />
           </div>
         </div>

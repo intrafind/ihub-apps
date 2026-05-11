@@ -15,8 +15,16 @@ import { setConversationId } from '../../../utils/chatId';
  * @param {string} options.appId - The app ID
  * @param {string} options.chatId - The chat session ID
  * @param {Function} options.onMessageComplete - Callback fired when a message is completed (optional)
+ * @param {boolean} options.persistConversationId - Whether to persist iAssistant conversationId
+ *   to localStorage (keyed by appId). Disable for ephemeral chats (e.g. compare mode panels)
+ *   that share an appId so they don't race/overwrite each other. Defaults to true.
  */
-function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
+function useAppChat({
+  appId,
+  chatId: initialChatId,
+  onMessageComplete,
+  persistConversationId = true
+}) {
   const { t } = useTranslation();
   // Use the chatId directly instead of storing it in a ref
   // This allows the useChatMessages hook to properly react to chatId changes
@@ -256,7 +264,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
           }
           break;
         case 'conversation.id':
-          if (data?.conversationId && appId) {
+          if (data?.conversationId && appId && persistConversationId) {
             setConversationId(appId, data.conversationId);
           }
           break;
@@ -351,7 +359,7 @@ function useAppChat({ appId, chatId: initialChatId, onMessageComplete }) {
       onMessageComplete,
       t,
       messagesRef,
-      appId
+      persistConversationId
     ]
   );
 
