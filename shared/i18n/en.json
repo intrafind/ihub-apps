@@ -881,6 +881,7 @@
       "rollbackButton": "Rollback to {{version}}",
       "updateTimeout": "Update is taking longer than expected. Please check the server status and try again.",
       "rollbackTimeout": "Rollback is taking longer than expected. Please check the server status and logs.",
+      "updateContainerNotice": "In-place updates are disabled when running in a container. Pull a new container image and restart the container to update.",
       "logging": {
         "title": "Logging Configuration",
         "description": "Configure application logging levels and output",
