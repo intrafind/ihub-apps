@@ -22,7 +22,12 @@ function ChatActionsMenu({
   onToggleParameters,
   showCanvasButton = false,
   appId,
-  chatId
+  chatId,
+  // Compare mode toggle (parity with desktop header)
+  showCompareModeToggle = false,
+  compareModeActive = false,
+  onCompareModeChange,
+  compareModeDisabled = false
 }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -124,6 +129,30 @@ function ChatActionsMenu({
               className="w-full text-left px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
               <Icon name="share" size="sm" /> {t('pages.appChat.share', 'Share')}
+            </button>
+          )}
+          {showCompareModeToggle && (
+            <button
+              onClick={() => {
+                if (compareModeDisabled) return;
+                onCompareModeChange?.(!compareModeActive);
+                setOpen(false);
+              }}
+              disabled={compareModeDisabled}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 whitespace-nowrap ${
+                compareModeDisabled
+                  ? 'opacity-50 cursor-not-allowed text-gray-500 dark:text-gray-400'
+                  : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Icon
+                name="document-duplicate"
+                size="sm"
+                className={compareModeActive ? 'text-indigo-600 dark:text-indigo-400' : ''}
+              />
+              {compareModeActive
+                ? t('chat.compareMode.disable', 'Disable Compare Mode')
+                : t('chat.compareMode.toggle', 'Compare Mode')}
             </button>
           )}
           {exportEnabled && messages && messages.length > 0 && exportSettings && (
