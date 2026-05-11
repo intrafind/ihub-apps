@@ -839,9 +839,7 @@ export const fetchAdminUsageModels = async (range = '30d') => {
 };
 
 export const fetchAdminFeedbackEntries = async (limit = 100, offset = 0) => {
-  const response = await makeAdminApiCall(
-    `/admin/usage/feedback?limit=${limit}&offset=${offset}`
-  );
+  const response = await makeAdminApiCall(`/admin/usage/feedback?limit=${limit}&offset=${offset}`);
   return response.data;
 };
 
