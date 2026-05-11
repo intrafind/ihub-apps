@@ -22,6 +22,9 @@ function CloudStorageConfig({ filterType } = {}) {
   const [message, setMessage] = useState('');
   const [editingProvider, setEditingProvider] = useState(null);
   const [showAddProvider, setShowAddProvider] = useState(false);
+  // Briefly flip to true after the admin clicks "Copy" on the callback
+  // URL so we can swap the icon to a check and give visual confirmation.
+  const [callbackUrlCopied, setCallbackUrlCopied] = useState(false);
 
   // Fetch current cloud storage configuration on mount
   useEffect(() => {
@@ -257,6 +260,31 @@ function CloudStorageConfig({ filterType } = {}) {
   const visibleProviders = filterType
     ? config.providers.filter(p => p.type === filterType)
     : config.providers;
+
+  // Pre-compute the auto-detected OAuth callback URL for the provider
+  // currently being edited so we can render it as a copyable hint
+  // inside the modal. Same rationale as `visibleProviders`: computed in
+  // the component body to keep the JSX free of IIFEs.
+  const editingProviderId = (editingProvider?.id || '').trim();
+  const browserOrigin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://your-ihub-host';
+  const editingCallbackUrl =
+    editingProvider && editingProviderId
+      ? `${browserOrigin}/api/integrations/${editingProvider.type}/${encodeURIComponent(editingProviderId)}/callback`
+      : '';
+
+  const handleCopyCallbackUrl = async () => {
+    if (!editingCallbackUrl) return;
+    try {
+      await navigator.clipboard.writeText(editingCallbackUrl);
+      setCallbackUrlCopied(true);
+      setTimeout(() => setCallbackUrlCopied(false), 1500);
+    } catch (err) {
+      console.error('Failed to copy callback URL', err);
+    }
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
@@ -809,6 +837,52 @@ function CloudStorageConfig({ filterType } = {}) {
                       </>
                     )}
 
+                    {/* Calculated callback URL — mirrors `_buildCallbackUrl`
+                        in each provider's server-side service:
+                        `${origin}/api/integrations/${type}/${providerId}/callback`.
+                        Showing it live as the admin types the provider ID lets
+                        them copy-paste straight into the IdP's redirect-URI
+                        field without having to construct it by hand. */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                        {t('admin.cloudStorage.callbackUrl', 'Callback URL')}
+                      </label>
+                      <div className="flex">
+                        <input
+                          type="text"
+                          readOnly
+                          value={
+                            editingCallbackUrl ||
+                            t(
+                              'admin.cloudStorage.callbackUrlPlaceholder',
+                              'Enter a Name above to generate the callback URL'
+                            )
+                          }
+                          className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-l-md shadow-sm bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 font-mono text-xs focus:outline-none"
+                          onFocus={e => e.target.select()}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleCopyCallbackUrl}
+                          disabled={!editingCallbackUrl}
+                          className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          title={t('common.copy', 'Copy')}
+                        >
+                          <Icon
+                            name={callbackUrlCopied ? 'check' : 'clipboard'}
+                            size="sm"
+                            className={callbackUrlCopied ? 'text-green-600' : ''}
+                          />
+                        </button>
+                      </div>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.cloudStorage.callbackUrlHint',
+                          'Register this URL as the redirect URI in your provider (Azure AD / Google Cloud / Nextcloud OAuth admin). Leave the optional Redirect URI field below blank to use this auto-detected value.'
+                        )}
+                      </p>
+                    </div>
+
                     {/* Redirect URI (optional for all) */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -823,6 +897,12 @@ function CloudStorageConfig({ filterType } = {}) {
                         className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
                         placeholder="https://your-app.com/auth/callback"
                       />
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.cloudStorage.redirectUriHint',
+                          'Optional. Override the auto-detected callback URL above. Useful when iHub is behind a proxy whose external hostname differs from what the server sees.'
+                        )}
+                      </p>
                     </div>
 
                     {/* Enabled Toggle */}
