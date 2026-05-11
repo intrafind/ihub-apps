@@ -18,14 +18,23 @@ import {
 const router = express.Router();
 
 /**
- * Validate returnUrl to prevent open redirect attacks.
- * Allows relative paths and absolute URLs on the same hostname (any port).
+ * Validate returnUrl to prevent open-redirect and pseudo-XSS attacks.
+ *
+ * Allows:
+ *  - Relative paths (must start with a single `/`, never `//`).
+ *  - Absolute URLs on the same hostname that use the http(s) scheme.
+ *
+ * Crucially rejects `javascript:`, `data:`, `file:`, `gopher:`, and any
+ * other non-http(s) scheme — `url.hostname` is happy to parse
+ * `javascript://ihub.example.com/...` and `URL.hostname` will then
+ * match `req.hostname`, so a scheme check is mandatory.
  */
 function isValidReturnUrl(returnUrl, req) {
   if (!returnUrl) return false;
   if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return true;
   try {
     const url = new URL(returnUrl);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
     return url.hostname === req.hostname;
   } catch {
     return false;
@@ -73,6 +82,14 @@ router.get('/auth', authRequired, nextcloudAuthLimiter, async (req, res) => {
       return sendErrorResponse(res, 500, 'Session not available');
     }
 
+    // authRequired only rejects missing `req.user` or anonymous users;
+    // it does NOT guarantee req.user.id is truthy. Refuse to start an
+    // OAuth flow without a real user id — otherwise tokens would land
+    // under a shared sentinel key and could be read by another caller.
+    if (!req.user?.id) {
+      return sendAuthRequired(res);
+    }
+
     const state = crypto.randomBytes(32).toString('hex');
     const validatedReturnUrl = isValidReturnUrl(returnUrl, req)
       ? returnUrl
@@ -82,7 +99,7 @@ router.get('/auth', authRequired, nextcloudAuthLimiter, async (req, res) => {
     req.session[sessionKey] = {
       state,
       providerId,
-      userId: req.user?.id || 'fallback-user',
+      userId: req.user.id,
       returnUrl: validatedReturnUrl,
       timestamp: Date.now()
     };
@@ -117,6 +134,18 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
         providerId
       });
       return res.redirect('/settings/integrations?nextcloud_error=oauth_failed');
+    }
+
+    // Some IdP edge cases (consent denied without `error`, or a manual
+    // hit on the callback URL) can land here with no `code`. Surface a
+    // stable error code instead of throwing inside `exchangeCodeForTokens`
+    // and leaking the raw error into the redirect URL.
+    if (!code) {
+      logger.error('Nextcloud OAuth callback missing code', {
+        component: 'Nextcloud',
+        providerId
+      });
+      return res.redirect('/settings/integrations?nextcloud_error=missing_code');
     }
 
     if (!req.session) {
@@ -192,9 +221,10 @@ router.get('/:providerId/callback', authOptional, async (req, res) => {
       delete req.session[catchKey];
     }
     const catchSeparator = catchReturnUrl.includes('?') ? '&' : '?';
-    res.redirect(
-      `${catchReturnUrl}${catchSeparator}nextcloud_error=${encodeURIComponent(error.message)}`
-    );
+    // Use a stable error code rather than echoing `error.message` —
+    // some upstream errors interpolate user-influenced strings, and
+    // we don't want those landing in the redirect URL.
+    res.redirect(`${catchReturnUrl}${catchSeparator}nextcloud_error=callback_failed`);
   }
 });
 
@@ -447,9 +477,26 @@ router.get('/download', authRequired, async (req, res) => {
 
     const file = await NextcloudService.downloadFile(req.user.id, filePath);
 
-    res.setHeader('Content-Type', file.mimeType || 'application/octet-stream');
+    // Force `application/octet-stream` rather than reflecting the
+    // upstream Content-Type. The download is always served with
+    // `Content-Disposition: attachment` so even `text/html` would not
+    // render today, but reflecting upstream MIME types means any
+    // future refactor that drops the attachment disposition would
+    // open an XSS path. Keep the safer baseline.
+    res.setHeader('Content-Type', 'application/octet-stream');
     if (file.size) res.setHeader('Content-Length', file.size);
-    res.setHeader('Content-Disposition', `attachment; filename="${file.name}"`);
+    // Nextcloud allows quotes, backslashes, newlines, and Unicode in
+    // filenames. Send both an ASCII-safe `filename` (fallback for old
+    // clients) and an RFC 5987 `filename*` (UTF-8) so the value can't
+    // break out of the header or inject extra headers.
+    const asciiFallback = (file.name || 'download')
+      .replace(/[^\x20-\x7E]/g, '_')
+      .replace(/["\\\r\n]/g, '_');
+    const utf8Encoded = encodeURIComponent(file.name || 'download');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`
+    );
     res.send(file.content);
   } catch (error) {
     logger.error('Error downloading Nextcloud file', {

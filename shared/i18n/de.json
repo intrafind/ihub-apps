@@ -982,7 +982,6 @@
       "nextcloud": "Nextcloud",
       "serverUrl": "Nextcloud-Server-URL",
       "serverUrlHint": "Basis-URL Ihrer Nextcloud-Instanz (ohne abschließenden Schrägstrich).",
-      "personalFiles": "Persönliche Dateien",
       "editProvider": "Anbieter bearbeiten",
       "deleteProvider": "Anbieter löschen",
       "deleteConfirm": "Sind Sie sicher, dass Sie diesen Cloud-Speicher-Anbieter löschen möchten?",
@@ -1038,14 +1037,6 @@
         "step2": "Google Drive-API aktivieren",
         "step3": "OAuth 2.0-Anmeldedaten erstellen",
         "step4": "Client-ID und Client-Secret hier kopieren"
-      },
-      "nextcloudInfo": {
-        "title": "Nextcloud-Konfiguration",
-        "description": "Um die Nextcloud-Integration zu konfigurieren, müssen Sie einen OAuth 2.0-Client in Ihren Nextcloud-Admin-Einstellungen registrieren.",
-        "step1": "Als Administrator bei Nextcloud anmelden",
-        "step2": "Zu Einstellungen → Verwaltung → Sicherheit gehen und einen OAuth 2.0-Client hinzufügen",
-        "step3": "Die Weiterleitungs-URI auf Ihre iHub-Callback-URL setzen (z. B. https://your-ihub.example.com/api/integrations/nextcloud/{providerId}/callback)",
-        "step4": "Client-Identifier, Client-Secret und Nextcloud-Server-URL hier kopieren"
       }
     },
     "system": {
@@ -1585,6 +1576,36 @@
     }
   },
   "cloudStorage": {
+    "selectFiles": "Dateien aus Cloud-Speicher auswählen",
+    "selectProvider": "Anbieter auswählen",
+    "selectStorageLocation": "Speicherort auswählen",
+    "selectDrive": "Laufwerk auswählen",
+    "changeProvider": "Anbieter wechseln",
+    "backToStorageLocations": "Zurück zu Speicherorten",
+    "backToDrives": "Zurück zu Laufwerken",
+    "noDrivesFound": "Keine Laufwerke gefunden",
+    "noProviders": "Keine Cloud-Speicher-Anbieter konfiguriert",
+    "notEnabled": "Cloud-Speicher nicht aktiviert",
+    "noFilesSelected": "Keine Dateien ausgewählt",
+    "filesSelected": "{{count}} Datei(en) ausgewählt",
+    "attachFiles": "{{count}} Datei(en) anhängen",
+    "noSearchResults": "Keine Dateien gefunden",
+    "emptyFolder": "Dieser Ordner ist leer",
+    "searchFiles": "Dateien suchen...",
+    "showSupportedOnly": "Nur unterstützte Dateien anzeigen",
+    "sortedBy": "Sortiert nach",
+    "downloading": "Lade {{current}} von {{total}} herunter...",
+    "name": "Name",
+    "size": "Größe",
+    "modified": "Geändert",
+    "notConnected": "Office 365 nicht verbunden",
+    "connect": "Mit Office 365 verbinden",
+    "connectPrompt": "Verbinden Sie Ihr Microsoft-Konto, um Dateien aus OneDrive, SharePoint und Teams zu durchsuchen",
+    "googleDrive": {
+      "notConnected": "Google Drive nicht verbunden",
+      "connect": "Mit Google Drive verbinden",
+      "connectPrompt": "Verbinden Sie Ihr Google-Konto, um Dateien aus Google Drive, geteilten Ablagen und für Sie freigegebenen Dateien zu durchsuchen"
+    },
     "nextcloud": {
       "notConnected": "Nextcloud nicht verbunden",
       "connectPrompt": "Verbinden Sie Ihr Nextcloud-Konto, um Dateien aus Ihrer Nextcloud-Instanz zu durchsuchen und anzuhängen.",
