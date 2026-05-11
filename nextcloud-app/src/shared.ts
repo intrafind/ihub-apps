@@ -21,6 +21,14 @@ export function safeBaseUrl(raw: string): string | null {
   return u.origin
 }
 
+// Builds the URL the *file action* and the *nav entry* both iframe — the
+// full-app Nextcloud embed entry (see client/nextcloud/full-app-entry.jsx).
+// That entry runs the same OAuth-popup bootstrap as the legacy taskpane and
+// mounts the standard iHub <App />, so users get the wide experience.
+//
+// File selections are still passed through the URL hash so the selection
+// bridge can pick them up; the format is unchanged from the taskpane:
+//   #providerId=<id>&paths=<urlencoded-json>
 export function buildEmbedUrl(
   baseUrl: string,
   providerId: string,
@@ -39,7 +47,7 @@ export function buildEmbedUrl(
   const hash = new URLSearchParams()
   hash.set('providerId', providerId)
   hash.set('paths', JSON.stringify(safePaths))
-  return origin + '/nextcloud/taskpane.html#' + hash.toString()
+  return origin + '/nextcloud/full-embed.html#' + hash.toString()
 }
 
 export interface IhubConfig {

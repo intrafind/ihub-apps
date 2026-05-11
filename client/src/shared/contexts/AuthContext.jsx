@@ -164,7 +164,13 @@ export function AuthProvider({ children }) {
             console.log('📍 Stored return URL for post-authentication redirect:', returnUrl);
           }
 
-          if (data.autoRedirect && !data.authenticated && !isLogoutPage) {
+          // Skip the OIDC auto-redirect when the app is iframed (e.g. the
+          // Nextcloud embed). An iframe can't complete an IdP redirect —
+          // most IdPs serve X-Frame-Options: DENY — and our embed entries
+          // run their own OAuth-popup flow before mounting <App />.
+          const isIframed = typeof window !== 'undefined' && window.self !== window.top;
+
+          if (data.autoRedirect && !data.authenticated && !isLogoutPage && !isIframed) {
             // Prevent infinite redirect loops by checking if we've already attempted a redirect
             const redirectAttemptKey = `autoRedirect_${data.autoRedirect.provider}`;
             const lastRedirectAttempt = sessionStorage.getItem(redirectAttemptKey);

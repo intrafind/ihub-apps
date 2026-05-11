@@ -77,6 +77,15 @@ export default function registerNextcloudEmbedPageRoutes(app) {
     res.sendFile(path.join(htmlDir, 'taskpane.html'));
   });
 
+  // Full-app variant — same gating + CSP as the taskpane, just a different
+  // HTML entry that mounts the standard iHub <App /> instead of OfficeApp.
+  app.get(buildServerPath('/nextcloud/full-embed.html'), requireEmbedEnabled, (req, res) => {
+    const allowedHostOrigins = configCache.getPlatform()?.nextcloudEmbed?.allowedHostOrigins;
+    applyCsp(res, allowedHostOrigins);
+    const htmlDir = isDevMode ? nextcloudSourceHtmlPath : nextcloudPublicPath;
+    res.sendFile(path.join(htmlDir, 'full-embed.html'));
+  });
+
   app.get(buildServerPath('/nextcloud/callback.html'), requireEmbedEnabled, (req, res) => {
     // The OAuth callback is loaded inside the iHub popup window, not the
     // Nextcloud iframe, so it doesn't need the host-allowlist; keep
