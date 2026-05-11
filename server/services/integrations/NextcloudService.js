@@ -25,6 +25,46 @@ import configCache from '../../configCache.js';
  *   - Nextcloud rotates refresh tokens on every refresh, so callers must
  *     persist the new refresh token returned by `refreshAccessToken`.
  */
+// Server-side caps on payload sizes from Nextcloud responses. The client
+// already enforces an upload cap, but a malicious or misconfigured
+// Nextcloud could otherwise stream multi-GB bodies through iHub and OOM
+// the worker. These are deliberately generous defaults; tighten via the
+// constants below if a deployment needs more conservative limits.
+const MAX_PROPFIND_BYTES = 10 * 1024 * 1024; // 10 MiB
+const MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024; // 200 MiB
+
+/**
+ * Read a fetch Response body into a Buffer with a hard byte cap.
+ * Aborts mid-stream once the cap is exceeded so we never allocate
+ * more than `maxBytes + last_chunk_size` of memory.
+ */
+async function readBoundedBody(response, maxBytes, label) {
+  const contentLength = response.headers.get('content-length');
+  if (contentLength && Number(contentLength) > maxBytes) {
+    throw new Error(`${label} exceeds the ${maxBytes}-byte limit`);
+  }
+
+  const chunks = [];
+  let received = 0;
+  // node-fetch returns a Node Readable stream on response.body; iterate
+  // it directly so we can bail before allocating the full payload.
+  for await (const chunk of response.body) {
+    received += chunk.length;
+    if (received > maxBytes) {
+      // Best-effort: tell the upstream to stop sending, but the
+      // critical part is that we stop accumulating.
+      try {
+        response.body.destroy();
+      } catch {
+        /* ignore */
+      }
+      throw new Error(`${label} exceeds the ${maxBytes}-byte limit`);
+    }
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks);
+}
+
 class NextcloudService {
   constructor() {
     this.serviceName = 'nextcloud';
@@ -537,7 +577,15 @@ class NextcloudService {
         path,
         size: sizeMatch ? parseInt(sizeMatch[1], 10) : 0,
         mimeType: mimeMatch ? mimeMatch[1] : null,
-        lastModifiedDateTime: modifiedMatch ? new Date(modifiedMatch[1]).toISOString() : null,
+        // Guard against non-RFC-1123 timestamps from third-party
+        // Nextcloud plugins: `new Date('bogus').toISOString()` throws
+        // `RangeError: Invalid time value`, which would abort the
+        // whole listing for one bad entry. Fall back to null instead.
+        lastModifiedDateTime: (() => {
+          if (!modifiedMatch) return null;
+          const d = new Date(modifiedMatch[1]);
+          return Number.isNaN(d.getTime()) ? null : d.toISOString();
+        })(),
         isFolder: isCollection,
         isFile: !isCollection
       });
@@ -601,7 +649,11 @@ class NextcloudService {
       throw new Error(`Failed to list Nextcloud items: ${response.statusText}`);
     }
 
-    const xml = await response.text();
+    // Cap the PROPFIND body so a runaway folder (or malicious server)
+    // can't OOM the worker; 10 MiB comfortably handles realistic
+    // folder sizes since each entry is a few hundred bytes of XML.
+    const buf = await readBoundedBody(response, MAX_PROPFIND_BYTES, 'Nextcloud PROPFIND response');
+    const xml = buf.toString('utf8');
     // Pass the *user-root* prefix (not the listed-folder path) so each
     // returned item carries its full path relative to the user's
     // storage root — that keeps `item.path` self-contained for the
@@ -618,17 +670,17 @@ class NextcloudService {
   }
 
   /**
-   * Search for files using Nextcloud's WebDAV SEARCH endpoint.
-   * Falls back to filtering the current folder client-side if the
-   * server doesn't support DAV search.
+   * Search files inside a single folder by filename.
+   *
+   * This is intentionally NOT recursive: we issue one PROPFIND with
+   * `Depth: 1` (via `listItems`) and filter by substring match on the
+   * client. A true global search would use WebDAV SEARCH (RFC 5323),
+   * which Nextcloud does support, but the response shape varies between
+   * major versions and the picker UX only needs in-folder lookup.
    */
   async searchItems(userId, query, folderPath = '') {
     if (!query || query.trim().length === 0) return [];
 
-    // Use a basic recursive PROPFIND + client-side filter. SEARCH (RFC 5323)
-    // works on Nextcloud but the response shape varies between major
-    // versions; folder listing + filter is portable and good enough for
-    // the typical file picker workflow.
     const items = await this.listItems(userId, folderPath);
     const needle = query.trim().toLowerCase();
     return items.filter(item => item.name.toLowerCase().includes(needle));
@@ -671,12 +723,19 @@ class NextcloudService {
     const sizeHeader = response.headers.get('content-length');
     const size = sizeHeader ? parseInt(sizeHeader, 10) : 0;
 
+    // Cap download bytes so a single huge file (intentional or not)
+    // can't OOM the worker. The client also enforces a per-file upload
+    // cap (`uploadConfig.maxFileSizeMB`), but that is bypassable by
+    // calling this endpoint directly — the real safety belt belongs
+    // here on the server.
+    const content = await readBoundedBody(response, MAX_DOWNLOAD_BYTES, 'Nextcloud download');
+
     return {
       id: filePath,
       name,
       mimeType,
       size,
-      content: Buffer.from(await response.arrayBuffer())
+      content
     };
   }
 }

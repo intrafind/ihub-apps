@@ -58,11 +58,14 @@ function CloudStorageConfig({ filterType } = {}) {
 
   const handleAddProvider = () => {
     const type = filterType || 'office365';
+    // Nextcloud intentionally has no `sources` map — it exposes a
+    // single per-user source (the files root). Office 365 and Google
+    // Drive seed the typical per-provider source toggles.
     const defaultSources =
       type === 'googledrive'
         ? { myDrive: true, sharedDrives: true, sharedWithMe: true }
         : type === 'nextcloud'
-          ? { personalFiles: true }
+          ? undefined
           : { personalDrive: true, followedSites: true, teams: true };
 
     setEditingProvider({
@@ -119,9 +122,12 @@ function CloudStorageConfig({ filterType } = {}) {
     // type from office365 to nextcloud) and those would otherwise be
     // written to platform.json as empty strings, adding noise the
     // discriminated-union schema flags as unknown fields.
+    // `sources` lives in the per-type lists because Nextcloud has no
+    // source toggles (see schema) and including it globally would
+    // persist an empty `sources` object for Nextcloud providers.
     const fieldsByType = {
-      office365: ['tenantId', 'clientId', 'clientSecret', 'siteUrl', 'driveId'],
-      googledrive: ['clientId', 'clientSecret'],
+      office365: ['tenantId', 'clientId', 'clientSecret', 'siteUrl', 'driveId', 'sources'],
+      googledrive: ['clientId', 'clientSecret', 'sources'],
       nextcloud: ['serverUrl', 'clientId', 'clientSecret']
     };
     const allowed = new Set([
@@ -131,7 +137,6 @@ function CloudStorageConfig({ filterType } = {}) {
       'type',
       'enabled',
       'redirectUri',
-      'sources',
       ...(fieldsByType[editingProvider.type] || [])
     ]);
     const providerToSave = {};
@@ -475,9 +480,9 @@ function CloudStorageConfig({ filterType } = {}) {
                               teams: true
                             };
                           } else if (newType === 'nextcloud') {
-                            newProvider.sources = {
-                              personalFiles: true
-                            };
+                            // Nextcloud has no `sources` toggles — see
+                            // the schema comment on `nextcloudProviderSchema`.
+                            delete newProvider.sources;
                           }
                           setEditingProvider(newProvider);
                         }}
@@ -807,33 +812,9 @@ function CloudStorageConfig({ filterType } = {}) {
                           />
                         </div>
 
-                        {/* Nextcloud sources */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                            {t('admin.cloudStorage.sources', 'Available Sources')}
-                          </label>
-                          <div className="space-y-2">
-                            <label className="flex items-center">
-                              <input
-                                type="checkbox"
-                                checked={editingProvider.sources?.personalFiles !== false}
-                                onChange={e =>
-                                  setEditingProvider({
-                                    ...editingProvider,
-                                    sources: {
-                                      ...editingProvider.sources,
-                                      personalFiles: e.target.checked
-                                    }
-                                  })
-                                }
-                                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                              />
-                              <span className="ml-2 text-sm text-gray-700 dark:text-gray-300">
-                                {t('admin.cloudStorage.personalFiles', 'Personal Files')}
-                              </span>
-                            </label>
-                          </div>
-                        </div>
+                        {/* Nextcloud has a single per-user source (the
+                            files root) so no Sources toggle is exposed
+                            — see comment on `nextcloudProviderSchema`. */}
                       </>
                     )}
 
@@ -844,13 +825,18 @@ function CloudStorageConfig({ filterType } = {}) {
                         them copy-paste straight into the IdP's redirect-URI
                         field without having to construct it by hand. */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                      <label
+                        htmlFor="cloudStorage-callback-url"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                      >
                         {t('admin.cloudStorage.callbackUrl', 'Callback URL')}
                       </label>
                       <div className="flex">
                         <input
+                          id="cloudStorage-callback-url"
                           type="text"
                           readOnly
+                          aria-describedby="cloudStorage-callback-url-hint"
                           value={
                             editingCallbackUrl ||
                             t(
@@ -866,16 +852,34 @@ function CloudStorageConfig({ filterType } = {}) {
                           onClick={handleCopyCallbackUrl}
                           disabled={!editingCallbackUrl}
                           className="inline-flex items-center px-3 py-2 border border-l-0 border-gray-300 dark:border-gray-600 rounded-r-md bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed"
-                          title={t('common.copy', 'Copy')}
+                          aria-label={
+                            callbackUrlCopied
+                              ? t('common.copied', 'Copied')
+                              : t('common.copy', 'Copy')
+                          }
+                          title={
+                            callbackUrlCopied
+                              ? t('common.copied', 'Copied')
+                              : t('common.copy', 'Copy')
+                          }
                         >
                           <Icon
                             name={callbackUrlCopied ? 'check' : 'clipboard'}
                             size="sm"
                             className={callbackUrlCopied ? 'text-green-600' : ''}
+                            aria-hidden="true"
                           />
                         </button>
                       </div>
-                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                      {/* aria-live announces "Copied" to screen readers
+                          without visually duplicating the icon swap. */}
+                      <span className="sr-only" aria-live="polite">
+                        {callbackUrlCopied ? t('common.copied', 'Copied') : ''}
+                      </span>
+                      <p
+                        id="cloudStorage-callback-url-hint"
+                        className="mt-1 text-xs text-gray-500 dark:text-gray-400"
+                      >
                         {t(
                           'admin.cloudStorage.callbackUrlHint',
                           'Register this URL as the redirect URI in your provider (Azure AD / Google Cloud / Nextcloud OAuth admin). Leave the optional Redirect URI field below blank to use this auto-detected value.'

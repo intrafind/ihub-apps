@@ -8,7 +8,7 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 - **Folder Navigation**: Drill into folders, navigate via breadcrumbs, jump back to any level
 - **Search**: Real-time filename search with debouncing
 - **OAuth 2.0**: Per-user tokens with refresh-token rotation
-- **Encrypted Token Storage**: AES-256-GCM encryption for stored tokens
+- **Encrypted Token Storage**: AES-256-CBC encryption for stored user tokens (same as the Office 365 / Google Drive flow; the platform-secret encryption used for `clientSecret` in `platform.json` is AES-256-GCM)
 - **Automatic Token Refresh**: Seamless renewal so users stay connected
 - **Multi-Instance**: Configure multiple Nextcloud providers if your users are spread across different Nextcloud servers
 
