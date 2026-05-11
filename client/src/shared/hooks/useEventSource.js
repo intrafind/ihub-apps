@@ -200,6 +200,15 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
           if (name === 'done' || name === 'error') {
             abortControllerRef.current = null;
             if (onProcessingChange) onProcessingChange(false);
+            // Release the browser's HTTP/1.1 connection slot. Without this the
+            // fetch sits in the pool until TCP keep-alive times out; opening 2
+            // streams per round in compare mode hits the 6-connection limit by
+            // the third message and the whole UI appears to hang.
+            try {
+              ac.abort();
+            } catch {
+              // already aborted — nothing to do
+            }
           }
         };
 
