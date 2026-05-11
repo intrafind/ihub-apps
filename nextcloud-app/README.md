@@ -24,14 +24,24 @@ once and the same grant powers both this embed and the in-iHub cloud picker.
 ```
 nextcloud-app/
 ├── appinfo/
-│   └── info.xml                  # App metadata (canonical version comes from iHub)
+│   ├── info.xml                  # App metadata (NC 28-33, navigation entry)
+│   └── routes.php                # `page#index` → /
+├── img/
+│   └── app.svg                   # iHub logo (top-nav + file-action icon)
 ├── lib/
-│   └── Controller/
-│       └── PageController.php    # Renders the iframe host page
+│   ├── AppInfo/Application.php   # IBootstrap — registers event listener
+│   ├── Controller/PageController.php   # Renders the iframe host page
+│   └── Listener/LoadScriptsListener.php  # Injects JS + initial state on Files page
 ├── templates/
-│   └── main.php                  # HTML host: iframe + file-action bridge
+│   └── main.php                  # HTML host: iframe mount point
 ├── src/
-│   └── main.js                   # JS bundle: file action + postMessage bridge
+│   ├── files-init.ts             # @nextcloud/files FileAction registration
+│   ├── main.ts                   # Iframe host bootstrap (loadState + postMessage)
+│   └── shared.ts                 # URL/path validation helpers
+├── css/main.css                  # Host page styles
+├── package.json                  # npm deps (Vite, @nextcloud/files, l10n, dialogs, initial-state)
+├── vite.config.ts                # @nextcloud/vite-config preset, two entries
+├── tsconfig.json                 # TypeScript config
 ├── Makefile                      # build + package
 └── README.md                     # this file
 ```
@@ -39,11 +49,16 @@ nextcloud-app/
 ## Build
 
 ```bash
-make build
+make install        # npm ci (first time, or after deps change)
+make build          # Vite produces js/ihub_chat-{main,files-init}.mjs
+# or just:
+make build          # also runs `make install`
 ```
 
-Produces `js/main.js`. There is no transpilation step — the source uses only
-features supported by Nextcloud's bundled bridges (ES2017+).
+Requires Node 20+, npm 10+. Output goes to `js/` (gitignored — built fresh per
+release). The Vite preset (`@nextcloud/vite-config`) marks Vue and Nextcloud
+globals as externals and emits `.mjs` bundles in the layout the Nextcloud
+`Util::addScript` / `script()` helpers expect.
 
 ## Install on a dev Nextcloud instance
 
@@ -104,9 +119,11 @@ not on that list.
 
 - The app does not yet ship a polished settings UI; admins set the iHub
   base URL via `occ config:app:set ihub_chat ihub_base_url --value=…`.
-- The app does not register a sidebar/Apps page — for the v1 flow only
-  the file action and the iframe host page are wired up. Adding a
-  sidebar tab is a straightforward follow-up (uses the same iframe URL).
+- The iHub logo (`img/app.svg`) is rendered as-is in the Nextcloud top
+  nav. Nextcloud's theming filter expects monochrome SVGs; a multi-color
+  brand mark will display with its own colors rather than the theme's
+  accent. Provide a monochrome alternative if you want full theme
+  integration.
 - No automated tests yet — please test manually before deploying to a
   production Nextcloud instance.
 

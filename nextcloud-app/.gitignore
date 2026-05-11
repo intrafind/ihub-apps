@@ -1,0 +1,10 @@
+node_modules/
+js/
+# Vite-emitted CSS lives next to the hand-written source main.css —
+# ignore only the generated chunks, keep the source.
+css/*.chunk.css
+css/ihub_chat-*.css
+*.tar.gz
+.vite/
+*.log
+.DS_Store
