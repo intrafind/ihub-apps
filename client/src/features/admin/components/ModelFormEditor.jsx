@@ -593,6 +593,37 @@ function ModelFormEditor({
                         </p>
                       </div>
                     </div>
+                    <div className="flex items-start">
+                      <div className="flex items-center h-5">
+                        <input
+                          id="autoDiscovery"
+                          name="autoDiscovery"
+                          type="checkbox"
+                          checked={data.autoDiscovery || false}
+                          onChange={handleInputChange}
+                          disabled={!(data.provider === 'openai' || data.provider === 'local')}
+                          className="focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed"
+                        />
+                      </div>
+                      <div className="ml-3 text-sm">
+                        <label
+                          htmlFor="autoDiscovery"
+                          className={`font-medium ${
+                            data.provider === 'openai' || data.provider === 'local'
+                              ? 'text-gray-700 dark:text-gray-300'
+                              : 'text-gray-400 dark:text-gray-600'
+                          }`}
+                        >
+                          {t('admin.models.fields.autoDiscovery', 'Auto Discovery')}
+                        </label>
+                        <p className="text-gray-500 dark:text-gray-400">
+                          {t(
+                            'admin.models.hints.autoDiscovery',
+                            'Automatically detect the active model from the /v1/models endpoint. Useful for local LLM providers (vLLM, LM Studio, Jan.ai) where the model can change. Only available for OpenAI-compatible providers.'
+                          )}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </fieldset>
               </div>

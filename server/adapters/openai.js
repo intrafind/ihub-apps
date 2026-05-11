@@ -5,6 +5,7 @@ import { convertToolsFromGeneric } from './toolCalling/index.js';
 import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 import { parseJsonAsync } from '../utils/asyncJson.js';
+import modelDiscoveryService from '../services/ModelDiscoveryService.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
@@ -112,15 +113,18 @@ class OpenAIAdapterClass extends BaseAdapter {
   /**
    * Create a completion request for OpenAI
    */
-  createCompletionRequest(model, messages, apiKey, options = {}) {
+  async createCompletionRequest(model, messages, apiKey, options = {}) {
     const { temperature, stream, tools, toolChoice, responseFormat, responseSchema, maxTokens } =
       this.extractRequestOptions(options);
 
     const formattedMessages = this.formatMessages(messages);
     this.debugLogMessages(messages, formattedMessages, 'OpenAI');
 
+    // Use model discovery to get the effective model ID if enabled
+    const effectiveModelId = await modelDiscoveryService.getEffectiveModelId(model, apiKey);
+
     const body = {
-      model: model.modelId,
+      model: effectiveModelId,
       messages: formattedMessages,
       stream,
       temperature: parseFloat(temperature),

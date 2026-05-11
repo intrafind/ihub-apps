@@ -450,6 +450,7 @@
   "serverErrors": {
     "appNotFound": "Anwendung nicht gefunden",
     "modelNotFound": "Modell nicht gefunden",
+    "modelNotAvailable": "Modell '{modelId}' ist auf {provider} nicht verfügbar. Das konfigurierte Modell '{configuredModel}' konnte nicht gefunden werden. Wenn Sie einen lokalen LLM-Anbieter (vLLM, LM Studio, Jan.ai) verwenden, stellen Sie bitte sicher, dass das Modell geladen und aktiv ist. Sie können 'Auto-Erkennung' in den Modelleinstellungen aktivieren, um das aktive Modell automatisch zu erkennen.",
     "missingRequiredFields": "Erforderliche Felder fehlen",
     "messagesRequired": "Nachrichten-Array ist erforderlich",
     "missingSessionId": "Sitzungs-ID ist erforderlich",
