@@ -120,7 +120,7 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "archiver": "^7.0.1",
-    "axios": "^1.15.2",
+    "axios": "^1.16.0",
     "dotenv": "^17.4.2",
     "file-saver": "^2.0.5",
     "gray-matter": "^4.0.3",
@@ -128,7 +128,7 @@
     "http-proxy-agent": "^9.0.0",
     "https-proxy-agent": "^9.0.0",
     "react-icons": "^5.5.0",
-    "react-resizable-panels": "^4.10.0"
+    "react-resizable-panels": "^4.11.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.11.3",
