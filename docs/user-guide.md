@@ -44,4 +44,30 @@ Toggle **Keep Chat History** to preserve conversations in your browser. When dis
 
 Click the book icon above the input field to open the prompts library. You can search by name or description and sort the results. Selecting **Insert** copies the prompt text into your current message so you can edit or send it immediately.
 
+## Compare Mode
+
+If enabled by your administrator, some apps offer **Compare Mode** – a powerful feature that lets you query two different AI models simultaneously and view their responses side-by-side.
+
+### Activating Compare Mode
+
+1. Look for the **Compare Mode** toggle button in the header (next to "New Chat")
+2. Click the toggle to switch to side-by-side layout
+3. Select a different model for each panel using the dropdowns in the panel headers
+
+### Using Compare Mode
+
+- **Send messages**: Type once and your input is sent to both models simultaneously
+- **Independent responses**: Each model streams its response in its own panel
+- **Separate controls**: Each panel has its own resend, edit, and delete buttons
+- **Independent scrolling**: Scroll each panel separately to compare different parts of long responses
+
+### When to Use Compare Mode
+
+- **Evaluate models**: Compare different models to see which performs better for your task
+- **Quality assurance**: Verify response consistency across models
+- **Get diverse perspectives**: See how different models approach the same question
+- **Cost vs performance**: Compare expensive high-quality models against faster alternatives
+
+For detailed information, see the [Compare Mode](compare-mode.md) documentation.
+
 \*\*\* End of File

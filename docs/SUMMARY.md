@@ -45,6 +45,7 @@
     - [Ask User Tool](ask-user-tool.md)
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)
+    - [Compare Mode](compare-mode.md)
     - [Auto-Send Query Parameter](auto-send-feature.md)
     - [Feedback Feature](feedback-feature.md)
     - [iFinder Integration](iFinder-Integration.md)
