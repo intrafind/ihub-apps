@@ -1569,6 +1569,22 @@
         "failed": "Fehlgeschlagen",
         "details": "Details"
       }
+    },
+    "integrations": {
+      "backToIntegrations": "Zurück zu Integrationen",
+      "cards": {
+        "nextcloud": {
+          "title": "Nextcloud",
+          "description": "Ermöglichen Sie Benutzern, Dateien aus jeder Nextcloud-Instanz während eines Chats zu durchsuchen und anzuhängen. Verwendet dieselbe `cloudStorage`-Konfiguration wie Office 365 und Google Drive."
+        }
+      }
+    }
+  },
+  "cloudStorage": {
+    "nextcloud": {
+      "notConnected": "Nextcloud nicht verbunden",
+      "connectPrompt": "Verbinden Sie Ihr Nextcloud-Konto, um Dateien aus Ihrer Nextcloud-Instanz zu durchsuchen und anzuhängen.",
+      "connect": "Mit Nextcloud verbinden"
     }
   },
   "components": {

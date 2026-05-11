@@ -40,6 +40,8 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 6. Click **Add**. Nextcloud will show you a **Client Identifier** and a **Secret**. Copy both — the secret is shown only once.
 
 > **Tip — multiple instances:** If you operate several Nextcloud servers, repeat this step on each instance and create one iHub provider per server.
+>
+> **Caveat — one active connection per user:** Tokens are stored under `contents/integrations/nextcloud/<userId>.json`, keyed by user and service name (not by provider ID — same model as Office 365 / Google Drive). If a single end user connects to more than one Nextcloud provider, the most recently completed OAuth flow wins; reconnecting via the picker switches them to that provider. Most deployments only configure one provider per service, so this rarely surfaces in practice.
 
 ---
 
@@ -117,7 +119,7 @@ The token is per-user and per-provider — switching Nextcloud instances require
 
 - **PKCE not supported by Nextcloud OAuth**: iHub relies on the session-bound `state` parameter for CSRF protection, which matches what Nextcloud's OAuth 2.0 app supports.
 - **Path-traversal protection**: All `folderPath` / `filePath` parameters are validated to reject `..` segments and NUL bytes before being passed to WebDAV.
-- **Encrypted tokens at rest**: Access tokens and refresh tokens are stored in `contents/.tokens.json` encrypted with AES-256-GCM, identical to the Office 365 / Google Drive flow.
+- **Encrypted tokens at rest**: Access and refresh tokens are written to `contents/integrations/nextcloud/<userId>.json` via `TokenStorageService.encryptTokens`, which encrypts with AES-256-CBC (the same crypto used for Office 365 / Google Drive user tokens; AES-256-GCM is only used by `TokenStorageService.encryptString` for platform-secret encryption like `clientSecret` in `platform.json`).
 - **Rate limiting**: The OAuth initiation endpoint is rate-limited to 10 requests per minute per IP to prevent abuse.
 
 ## Troubleshooting

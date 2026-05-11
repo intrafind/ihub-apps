@@ -1325,6 +1325,22 @@
         "failed": "Failed",
         "details": "Details"
       }
+    },
+    "integrations": {
+      "backToIntegrations": "Back to Integrations",
+      "cards": {
+        "nextcloud": {
+          "title": "Nextcloud",
+          "description": "Let users browse and attach files from any Nextcloud instance during a chat. Same `cloudStorage` config surface as Office 365 and Google Drive."
+        }
+      }
+    }
+  },
+  "cloudStorage": {
+    "nextcloud": {
+      "notConnected": "Nextcloud Not Connected",
+      "connectPrompt": "Connect your Nextcloud account to browse and attach files from your Nextcloud instance.",
+      "connect": "Connect to Nextcloud"
     }
   },
   "components": {
