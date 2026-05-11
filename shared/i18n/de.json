@@ -965,6 +965,53 @@
       "step4": "Weisen Sie das Add-in Benutzern oder der gesamten Organisation zu.",
       "step5": "Benutzer finden das Add-in in Outlook unter „Add-Ins abrufen“ oder „Meine Add-Ins“."
     },
+    "nextcloudEmbed": {
+      "title": "Nextcloud-Embed",
+      "description": "Konfiguriere die eingebettete iHub-Oberfläche, die innerhalb von Nextcloud geöffnet wird, sobald jemand ein Dokument auswählt und einen Chat startet.",
+      "statusTitle": "Integrationsstatus",
+      "statusEnabled": "Das Nextcloud-Embed ist aktiviert. Füge unten einen Nextcloud-Ursprung hinzu, damit dieser iHub einbetten darf.",
+      "statusDisabled": "Aktivieren, um automatisch einen OAuth-Client anzulegen und die eingebettete Oberfläche scharfzuschalten.",
+      "enable": "Aktivieren",
+      "disable": "Deaktivieren",
+      "enabled": "Nextcloud-Embed erfolgreich aktiviert. OAuth-Client wurde angelegt.",
+      "disabled": "Nextcloud-Embed deaktiviert",
+      "viewClient": "OAuth-Client ansehen",
+      "embedUrlTitle": "Embed-URL",
+      "embedUrlDesc": "Verwende diese URL als iframe-Quelle in deiner Nextcloud-App. Die Dateiauswahl wird im URL-Hash übergeben (siehe Doku).",
+      "infoXmlTitle": "Nextcloud appinfo/info.xml",
+      "infoXmlDesc": "Lege diese Datei unter appinfo/info.xml in deine Nextcloud-App. Die URLs sind auf dieses Deployment fixiert.",
+      "copy": "Kopieren",
+      "download": "Herunterladen",
+      "downloadError": "info.xml konnte nicht heruntergeladen werden",
+      "originsTitle": "Erlaubte Nextcloud-Ursprünge",
+      "originsDesc": "Nur diese Nextcloud-Ursprünge dürfen iHub einbetten oder Auswahl-Nachrichten via postMessage senden. Wird sowohl für CSP frame-ancestors als auch für die postMessage-Origin-Prüfung verwendet.",
+      "addOrigin": "Hinzufügen",
+      "originInvalid": "Gib einen gültigen http(s)-Ursprung an, z. B. https://cloud.beispiel.de",
+      "noOrigins": "Noch keine Ursprünge hinzugefügt. Das Einbetten von iHub aus einer Nextcloud-Instanz wird blockiert, bis du deren Ursprung hier ergänzt.",
+      "displayTitle": "Anzeigeeinstellungen",
+      "displayName": "Anzeigename",
+      "descriptionField": "Beschreibung",
+      "starterPromptsTitle": "Standard-Startfragen",
+      "starterPromptsDesc": "Werden im Embed angezeigt, wenn die ausgewählte App keine eigenen Startfragen hat. Beim Klick wird der Prompt sofort gegen die aktuelle Auswahl gesendet.",
+      "noPrompts": "Keine Standard-Startfragen konfiguriert. Füge eine hinzu, um Vorschläge im Embed anzuzeigen.",
+      "addPrompt": "Frage hinzufügen",
+      "promptIndex": "Frage Nr. {{n}}",
+      "promptTitle": "Titel",
+      "promptMessage": "Nachricht",
+      "moveUp": "Nach oben",
+      "moveDown": "Nach unten",
+      "remove": "Entfernen",
+      "save": "Speichern",
+      "saved": "Konfiguration gespeichert",
+      "saveError": "Konfiguration konnte nicht gespeichert werden",
+      "loadError": "Nextcloud-Embed-Status konnte nicht geladen werden",
+      "toggleError": "Nextcloud-Embed konnte nicht aktualisiert werden",
+      "setupTitle": "Bereitstellungsanleitung",
+      "step1": "Richte unter Admin → Integrationen → Nextcloud einen Nextcloud-Cloud-Speicher-Anbieter ein (dieser stellt OAuth + WebDAV bereit).",
+      "step2": "Füge deinen Nextcloud-Ursprung (z. B. https://cloud.beispiel.de) oben hinzu, damit die Embed-Seite iframe und postMessage akzeptiert.",
+      "step3": "Baue und installiere das mitgelieferte Nextcloud-App-Skelett (siehe nextcloud-app/README.md im iHub-Repo).",
+      "step4": "Nutzer klicken in Nextcloud Files mit der rechten Maustaste auf eine Datei → „Mit iHub chatten“ — das Embed öffnet sich mit den vorausgewählten Dokumenten."
+    },
     "cloudStorage": {
       "title": "Cloud-Speicher-Integration",
       "subtitle": "Cloud-Speicher-Anbieter für Datei-Uploads konfigurieren",
@@ -1571,6 +1618,10 @@
         "nextcloud": {
           "title": "Nextcloud",
           "description": "Ermöglichen Sie Benutzern, Dateien aus jeder Nextcloud-Instanz während eines Chats zu durchsuchen und anzuhängen. Verwendet dieselbe `cloudStorage`-Konfiguration wie Office 365 und Google Drive."
+        },
+        "nextcloudEmbed": {
+          "title": "Nextcloud-Embed",
+          "description": "iHub innerhalb von Nextcloud einbetten. Nutzer starten Chats aus Nextcloud Files mit vorausgewählten Dokumenten — analog zum Outlook-Add-in."
         }
       }
     }

@@ -41,7 +41,9 @@ import nextcloudRoutes from './routes/integrations/nextcloud.js';
 import ifinderRoutes from './routes/integrations/ifinder.js';
 import officeAddinRoutes from './routes/integrations/officeAddin.js';
 import browserExtensionRoutes from './routes/integrations/browserExtension.js';
+import nextcloudEmbedRoutes from './routes/integrations/nextcloudEmbed.js';
 import registerOfficeRoutes from './routes/office.js';
+import registerNextcloudEmbedPageRoutes from './routes/nextcloudEmbedPages.js';
 import { setDefaultLanguage } from '../shared/localize.js';
 import { initTelemetry, shutdownTelemetry } from './telemetry.js';
 import { setupMiddleware } from './middleware/setup.js';
@@ -437,6 +439,7 @@ if (cluster.isPrimary && workerCount > 1) {
   app.use(buildApiPath('/integrations/ifinder'), ifinderRoutes);
   app.use(buildApiPath('/integrations/office-addin'), officeAddinRoutes);
   app.use(buildApiPath('/integrations/browser-extension'), browserExtensionRoutes);
+  app.use(buildApiPath('/integrations/nextcloud-embed'), nextcloudEmbedRoutes);
 
   // --- Session Management handled in sessionRoutes ---
 
@@ -444,6 +447,7 @@ if (cluster.isPrimary && workerCount > 1) {
   // so the extension guard in staticRoutes does not 404 them
   registerPwaRoutes(app);
   registerOfficeRoutes(app);
+  registerNextcloudEmbedPageRoutes(app);
   registerThemeRoutes(app);
   registerToolsServiceRoutes(app);
 
