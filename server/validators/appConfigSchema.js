@@ -209,6 +209,11 @@ const featuresSchema = z
             'You are a helpful assistant that improves user prompts to be more specific and effective. Improve this prompt: {{prompt}}'
           )
       })
+      .optional(),
+    compareMode: z
+      .object({
+        enabled: z.boolean().optional().default(false)
+      })
       .optional()
   })
   .passthrough(); // Allow additional feature flags
