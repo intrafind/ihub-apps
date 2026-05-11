@@ -23,17 +23,56 @@
 
   // ----- Shared helpers --------------------------------------------------
 
+  // Provider ids in iHub's cloudStorage config are admin-controlled identifiers
+  // (e.g. `nextcloud-main`). Restrict to a safe alphanumeric + dash/underscore
+  // grammar so attacker-controlled values can't break out of the URL hash.
+  var PROVIDER_ID_RE = /^[A-Za-z0-9_-]{1,200}$/;
+
+  /**
+   * Canonicalise the iHub base URL via the `URL` parser, which rejects
+   * `javascript:` / `data:` / opaque-host inputs that would otherwise turn
+   * an iframe `src` assignment into a script-execution vector. Returns a
+   * trimmed `https?://host[:port]` origin or `null` if the input cannot
+   * be safely used as an iframe target.
+   */
+  function safeBaseUrl(raw) {
+    if (typeof raw !== 'string' || raw.length === 0 || raw.length > 2048) return null;
+    var u;
+    try {
+      u = new URL(raw);
+    } catch (_e) {
+      return null;
+    }
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    if (u.username || u.password) return null;
+    return u.origin;
+  }
+
   /**
    * Build the iframe URL with the current selection encoded in the hash.
-   * @param {string} baseUrl     Trimmed iHub origin (no trailing slash).
+   * Returns `null` when any input fails validation; callers must check.
+   *
+   * @param {string} baseUrl     iHub origin (http[s]).
    * @param {string} providerId  iHub cloudStorage Nextcloud provider id.
    * @param {string[]} paths     Selected file paths.
+   * @returns {string|null}
    */
   function buildEmbedUrl(baseUrl, providerId, paths) {
+    var origin = safeBaseUrl(baseUrl);
+    if (!origin) return null;
+    if (typeof providerId !== 'string' || !PROVIDER_ID_RE.test(providerId)) return null;
+    if (!Array.isArray(paths)) return null;
+    var safePaths = [];
+    for (var i = 0; i < paths.length; i++) {
+      var p = paths[i];
+      if (typeof p !== 'string' || p.length === 0 || p.length > 4096) return null;
+      if (p.indexOf('\0') !== -1) return null;
+      safePaths.push(p);
+    }
     var hash = new URLSearchParams();
     hash.set('providerId', providerId);
-    hash.set('paths', JSON.stringify(paths));
-    return baseUrl + '/nextcloud/taskpane.html#' + hash.toString();
+    hash.set('paths', JSON.stringify(safePaths));
+    return origin + '/nextcloud/taskpane.html#' + hash.toString();
   }
 
   function readFilePathsFromContext(context) {
@@ -101,6 +140,16 @@
         if (!paths.length) return;
 
         var url = buildEmbedUrl(cfg.baseUrl, cfg.providerId, paths);
+        if (!url) {
+          OC.dialogs.alert(
+            t(
+              'ihub_chat',
+              'iHub Chat could not open: the configured iHub base URL or provider id is invalid. Ask an administrator to check the values stored via `occ config:app:set ihub_chat ...`.'
+            ),
+            t('ihub_chat', 'iHub Chat')
+          );
+          return;
+        }
         // Open in a new tab so the user doesn't lose their Nextcloud
         // Files context. The host page (templates/main.php) is mainly
         // useful as a Nextcloud navigation target; the file action path
@@ -116,46 +165,52 @@
     var rootEl = document.getElementById('ihub-chat-root');
     if (!rootEl) return; // Not on the host page — skip.
 
-    var baseUrl = rootEl.getAttribute('data-ihub-base-url') || '';
-    var providerId = rootEl.getAttribute('data-ihub-provider-id') || 'nextcloud-main';
-    if (!baseUrl) {
+    var rawBaseUrl = rootEl.getAttribute('data-ihub-base-url') || '';
+    var rawProviderId = rootEl.getAttribute('data-ihub-provider-id') || 'nextcloud-main';
+    if (!rawBaseUrl) {
       // PageController's template already renders a config-missing
       // message in this case; nothing to do.
       return;
     }
 
+    // `buildEmbedUrl` returns null if either value fails validation; that's
+    // also the right answer for the `targetOrigin` used below.
     var initialPaths = parsePathsFromHash() || [];
+    var src = buildEmbedUrl(rawBaseUrl, rawProviderId, initialPaths);
+    var targetOrigin = safeBaseUrl(rawBaseUrl);
+    if (!src || !targetOrigin) {
+      rootEl.textContent = t(
+        'ihub_chat',
+        'iHub Chat could not load: the configured iHub base URL or provider id is invalid.'
+      );
+      return;
+    }
+
     var iframe = document.createElement('iframe');
-    iframe.src = buildEmbedUrl(baseUrl, providerId, initialPaths);
+    // Assigning `src` to a same-validated URL is safe — the URL has already
+    // been parsed by `new URL()` (in `safeBaseUrl`) which rejects
+    // `javascript:` / `data:` / opaque-host schemes.
+    iframe.src = src;
     iframe.allow = 'clipboard-write';
     iframe.style.cssText = 'border:0;width:100%;height:100vh;min-height:600px;background:#fff;';
     rootEl.appendChild(iframe);
 
-    // Subsequent selection changes — when the user picks files in
-    // Nextcloud Files while the host page is open in another tab or
-    // pane — are forwarded via postMessage. We use the iframe's
-    // origin as the targetOrigin so we never broadcast to `*`.
-    var targetOrigin;
-    try {
-      targetOrigin = new URL(baseUrl).origin;
-    } catch (_e) {
-      targetOrigin = null;
-    }
-
-    if (targetOrigin) {
-      window.addEventListener('hashchange', function () {
-        var paths = parsePathsFromHash();
-        if (!paths) return;
-        iframe.contentWindow.postMessage(
-          {
-            kind: 'ihub.nextcloud.selection',
-            providerId: providerId,
-            paths: paths
-          },
-          targetOrigin
-        );
-      });
-    }
+    // Subsequent selection changes — when the user picks files in Nextcloud
+    // Files while the host page is open in another tab or pane — are
+    // forwarded via postMessage. We use the iframe's origin as the
+    // targetOrigin so we never broadcast to `*`.
+    window.addEventListener('hashchange', function () {
+      var paths = parsePathsFromHash();
+      if (!paths) return;
+      iframe.contentWindow.postMessage(
+        {
+          kind: 'ihub.nextcloud.selection',
+          providerId: rawProviderId,
+          paths: paths
+        },
+        targetOrigin
+      );
+    });
   }
 
   function parsePathsFromHash() {
