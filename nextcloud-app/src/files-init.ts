@@ -6,6 +6,7 @@
 import {
   registerFileAction,
   Permission,
+  FileType,
   type IFileAction,
   type ActionContext,
   type ActionContextSingle,
@@ -59,7 +60,10 @@ const action: IFileAction = {
   enabled: (ctx: ActionContext) =>
     ctx.view.id !== 'trashbin'
       && ctx.nodes.length > 0
-      && ctx.nodes.some((n) => ((n.permissions ?? 0) & Permission.READ) !== 0),
+      // Files only — chatting about a folder doesn't have a meaningful
+      // semantics in iHub today.
+      && ctx.nodes.every((n) => n.type === FileType.File)
+      && ctx.nodes.every((n) => ((n.permissions ?? 0) & Permission.READ) !== 0),
   exec: async (ctx: ActionContextSingle) => {
     const p = ctx.nodes[0]?.path
     if (!p) return null

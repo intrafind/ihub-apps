@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=Edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>iHub Apps</title>
+    <script type="text/javascript">
+      // Same pending-message buffer the taskpane uses. The Nextcloud-side
+      // app shell can post a fresh selection at any moment; without this
+      // buffer the very first message — fired by a parent that mounted the
+      // iframe with selection already chosen — would be dropped on the
+      // floor before React mounts.
+      window.__ihubPendingMessages = [];
+      window.__ihubMessageBuffer = function (event) {
+        window.__ihubPendingMessages.push({ origin: event.origin, data: event.data });
+      };
+      window.addEventListener('message', window.__ihubMessageBuffer);
+    </script>
+  </head>
+  <body style="width: 100%; height: 100%; margin: 0; padding: 0">
+    <div id="ihub-embed-root"></div>
+    <script type="module" src="./full-app-entry.jsx"></script>
+  </body>
+</html>

@@ -3,11 +3,31 @@
  * throughout the iHub application.
  */
 
+// Per-tab/iframe flag set by embed entry points (e.g.
+// `client/nextcloud/full-app-entry.jsx`). When present, integration settings
+// are forced to "no chrome" and localStorage is never touched — direct-visit
+// users in other tabs keep their own preferences untouched, and the embed
+// experience always renders without iHub's own header/footer regardless of
+// any stale state from a previous session.
+const EMBED_MODE_KEY = 'ihubEmbedMode';
+
+function isEmbedMode() {
+  try {
+    return sessionStorage.getItem(EMBED_MODE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /**
- * Get the integration settings from localStorage or use defaults
+ * Get the integration settings from localStorage or use defaults.
+ * In embed mode, always returns "no chrome" without reading localStorage.
  * @returns {Object} The integration settings
  */
 export const getIntegrationSettings = () => {
+  if (isEmbedMode()) {
+    return { showHeader: false, showFooter: false, language: null };
+  }
   try {
     const savedSettings = localStorage.getItem('ihubIntegrationSettings');
     if (savedSettings) {
@@ -20,10 +40,15 @@ export const getIntegrationSettings = () => {
 };
 
 /**
- * Save integration settings to localStorage
+ * Save integration settings to localStorage.
+ * No-op in embed mode so iframe activity doesn't pollute the storage shared
+ * with direct-visit usage.
  * @param {Object} settings - The settings to save
  */
 export const saveIntegrationSettings = settings => {
+  if (isEmbedMode()) {
+    return;
+  }
   try {
     localStorage.setItem('ihubIntegrationSettings', JSON.stringify(settings));
   } catch (error) {

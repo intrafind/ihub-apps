@@ -1,7 +1,9 @@
 // Iframe host bootstrap for templates/main.php. Reads the iHub base URL
 // and provider id from initial state (set by PageController) and mounts an
-// iframe pointing at the iHub embed page. Forwards selection changes via
-// postMessage to the iframe's origin (never `*`).
+// iframe pointing at the iHub Nextcloud taskpane, which has the OAuth-popup
+// auth bridge wired up (see client/nextcloud/taskpane-entry.jsx). The
+// taskpane handles its own file selection via URL hash — when the user
+// opens it from the nav entry there's no file context, so `paths` is empty.
 
 import { translate as t } from '@nextcloud/l10n'
 import { loadState } from '@nextcloud/initial-state'
