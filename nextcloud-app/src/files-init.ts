@@ -13,11 +13,13 @@ import {
 } from '@nextcloud/files';
 import { translate as t } from '@nextcloud/l10n';
 import { loadState } from '@nextcloud/initial-state';
+import { generateUrl } from '@nextcloud/router';
 import { showError } from '@nextcloud/dialogs';
 import AppIcon from '../img/app.svg?raw';
-import { buildEmbedUrl, type IhubConfig } from './shared';
+import { safeBaseUrl, type IhubConfig } from './shared';
 
 const APP_ID = 'ihub_chat';
+const PROVIDER_ID_RE = /^[A-Za-z0-9_-]{1,200}$/;
 
 function readConfig(): IhubConfig {
   return {
@@ -26,6 +28,28 @@ function readConfig(): IhubConfig {
   };
 }
 
+// Validates the selection payload that gets forwarded through the URL hash
+// (matching the rules in `buildEmbedUrl` in shared.ts) before we send users
+// off to the ihub_chat host page. Centralising the validation here keeps the
+// failure surface on the action itself instead of inside the iframe.
+function buildHostPageHash(providerId: string, paths: string[]): string | null {
+  if (!PROVIDER_ID_RE.test(providerId)) return null;
+  if (!Array.isArray(paths)) return null;
+  for (const p of paths) {
+    if (typeof p !== 'string' || p.length === 0 || p.length > 4096) return null;
+    if (p.indexOf('\0') !== -1) return null;
+  }
+  const params = new URLSearchParams();
+  params.set('providerId', providerId);
+  params.set('paths', JSON.stringify(paths));
+  return params.toString();
+}
+
+// Open the iHub iframe **inside** Nextcloud by navigating to the app's own
+// host page (/apps/ihub_chat/) with the selection in the URL hash. The host
+// page (templates/main.php + src/main.ts) reads the hash, builds the iHub
+// URL via shared.ts, and mounts the iframe — so the user stays in the
+// Nextcloud chrome (top nav, sidebar) instead of jumping to a new tab.
 function openEmbed(paths: string[]): void {
   const cfg = readConfig();
   if (!cfg.baseUrl) {
@@ -38,18 +62,32 @@ function openEmbed(paths: string[]): void {
     return;
   }
 
-  const url = buildEmbedUrl(cfg.baseUrl, cfg.providerId, paths);
-  if (!url) {
+  // Sanity-check the configured base URL up front so users get a clear
+  // diagnostic from the file action, not a half-rendered iframe.
+  if (!safeBaseUrl(cfg.baseUrl)) {
     showError(
       t(
         APP_ID,
-        'iHub Chat could not open: the configured iHub base URL or provider id is invalid. Ask an administrator to check the values stored via `occ config:app:set ihub_chat …`.'
+        'iHub Chat could not open: the configured iHub base URL is invalid. Ask an administrator to check the value stored via `occ config:app:set ihub_chat ihub_base_url …`.'
       )
     );
     return;
   }
 
-  window.open(url, '_blank', 'noopener,noreferrer');
+  const hash = buildHostPageHash(cfg.providerId, paths);
+  if (hash === null) {
+    showError(
+      t(
+        APP_ID,
+        'iHub Chat could not open: the file selection or configured provider id is invalid.'
+      )
+    );
+    return;
+  }
+
+  // `generateUrl` honours Nextcloud's webroot + index.php rewrite settings.
+  const navUrl = generateUrl('/apps/{appId}/', { appId: APP_ID }) + '#' + hash;
+  window.location.assign(navUrl);
 }
 
 const action: IFileAction = {
