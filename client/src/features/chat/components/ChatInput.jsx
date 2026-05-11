@@ -10,6 +10,7 @@ import ModelSelector from './ModelSelector';
 import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
+import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 
 /**
@@ -74,6 +75,7 @@ function ChatInput({
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
+  const { platformConfig } = usePlatformConfig();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const workflowSearchRef = useRef(null);
@@ -156,13 +158,26 @@ function ChatInput({
   // Calculate if single-action optimization is active in ChatInputActionsMenu
   // This logic mirrors the calculation in ChatInputActionsMenu.jsx
   const hasTools = app?.tools && app.tools.length > 0;
+  // Local upload (paper-clip + dropzone) is independent from cloud storage
+  // upload, which is rendered as separate entries in the actions menu.
+  const localUploadEnabled = uploadConfig?.localUploadEnabled === true;
+  // Match ChatInputActionsMenu's hasCloudProviders calculation so the
+  // single-action optimization stays in sync (issue #1426).
+  const cloudStorageEnabledForApp = uploadConfig?.cloudStorageUpload?.enabled === true;
+  const platformCloudStorage = platformConfig?.cloudStorage;
+  const hasCloudProviders =
+    cloudStorageEnabledForApp &&
+    platformCloudStorage?.enabled === true &&
+    Array.isArray(platformCloudStorage?.providers) &&
+    platformCloudStorage.providers.some(p => p.enabled);
   const quickActionCount =
-    (uploadConfig?.enabled === true ? 1 : 0) +
+    (localUploadEnabled ? 1 : 0) +
     (magicPromptEnabled && !showUndoMagicPrompt ? 1 : 0) +
     (showUndoMagicPrompt ? 1 : 0) +
     (onVoiceInput ? 1 : 0);
   const totalActions = quickActionCount + (hasTools ? 1 : 0);
-  const isSingleActionOptimization = totalActions === 1 && quickActionCount === 1 && !hasTools;
+  const isSingleActionOptimization =
+    totalActions === 1 && quickActionCount === 1 && !hasTools && !hasCloudProviders;
 
   // Handler to trigger file upload dialog via ref
   const handleAttachFile = useCallback(() => {
@@ -462,7 +477,7 @@ function ChatInput({
 
             {/* Upload icon - show directly on desktop if enabled and NOT in single-action mode */}
             {/* When single action, ChatInputActionsMenu shows it directly without a menu */}
-            {uploadConfig?.enabled === true && !isSingleActionOptimization && (
+            {localUploadEnabled && !isSingleActionOptimization && (
               <button
                 type="button"
                 onClick={handleAttachFile}
@@ -609,7 +624,7 @@ function ChatInput({
         />
       )}
 
-      {uploadConfig?.enabled === true ? (
+      {localUploadEnabled ? (
         <UnifiedUploader
           onFileSelect={handleLocalFileSelect}
           disabled={isInputDisabled || isProcessing}

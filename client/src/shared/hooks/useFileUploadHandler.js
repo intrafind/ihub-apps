@@ -39,17 +39,33 @@ export function useFileUploadHandler() {
     const audioConfig = uploadConfig?.audioUpload || {};
     const videoConfig = uploadConfig?.videoUpload || {};
     const fileConfig = uploadConfig?.fileUpload || {};
+    const cloudStorageConfig = uploadConfig?.cloudStorageUpload || {};
 
-    // Check if upload is enabled at all
-    const uploadEnabled =
+    // Local upload covers paper-clip / drag-and-drop file selection
+    const localUploadEnabled =
       uploadConfig?.enabled !== false &&
       (imageConfig?.enabled === true ||
         audioConfig?.enabled === true ||
         videoConfig?.enabled === true ||
         fileConfig?.enabled === true);
 
-    if (!uploadEnabled) {
-      return { enabled: false };
+    // Cloud storage is offered through the actions menu and can be enabled
+    // independently from local file upload (issue #1426).
+    const cloudStorageUploadEnabled =
+      uploadConfig?.enabled !== false && cloudStorageConfig?.enabled === true;
+
+    if (!localUploadEnabled && !cloudStorageUploadEnabled) {
+      return { enabled: false, localUploadEnabled: false };
+    }
+
+    if (!localUploadEnabled) {
+      // Only cloud storage uploads are available — skip local-upload specific
+      // computations and return a minimal config that still exposes cloud info.
+      return {
+        enabled: true,
+        localUploadEnabled: false,
+        cloudStorageUpload: { ...cloudStorageConfig, enabled: true }
+      };
     }
 
     // Determine if image upload should be disabled based on model capabilities
@@ -75,6 +91,7 @@ export function useFileUploadHandler() {
 
     return {
       enabled: true,
+      localUploadEnabled: true,
       imageUploadEnabled,
       audioUploadEnabled,
       videoUploadEnabled,
@@ -181,7 +198,7 @@ export function useFileUploadHandler() {
           ]
         : [],
       // Cloud storage upload settings
-      cloudStorageUpload: uploadConfig?.cloudStorageUpload || { enabled: false }
+      cloudStorageUpload: { ...cloudStorageConfig, enabled: cloudStorageUploadEnabled }
     };
   };
 
