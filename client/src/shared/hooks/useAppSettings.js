@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { saveAppSettings, loadAppSettings } from '../../utils/appSettings';
 import { fetchModels, fetchStyles } from '../../api/api';
+import { filterModelsForApp, pickInitialModelForApp } from '../../utils/modelFiltering';
 import { useUIConfig } from '../contexts/UIConfigContext';
 
 /**
@@ -68,12 +69,15 @@ function useAppSettings(appId, app) {
       setHeaderColor(app.color);
     }
 
-    const defaultModel = models.find(m => m.default);
-
-    let initialModel = app.preferredModel;
-    if (!models.some(m => m.id === initialModel)) {
-      initialModel = defaultModel ? defaultModel.id : models[0]?.id || null;
-    }
+    // Pick the initial model from the set of models that are actually
+    // compatible with the app (allowedModels, tools requirement, settings
+    // filter). Without this filter the initial selection could land on a
+    // model that's excluded by the app — and since the model selector
+    // auto-hides when only one compatible model remains, the user would
+    // never see the mismatch but the chat would behave as if the wrong
+    // model was selected (e.g. image generation controls and vision
+    // uploads disappear because the resolved model doesn't support them).
+    const initialModel = pickInitialModelForApp(models, app);
 
     // Initialize with app defaults
     const initialState = {
@@ -108,7 +112,15 @@ function useAppSettings(appId, app) {
     // Load saved settings and override defaults if available
     const savedSettings = loadAppSettings(appId);
     if (savedSettings) {
-      if (savedSettings.selectedModel && models.some(m => m.id === savedSettings.selectedModel))
+      // Only restore the saved model if it's still compatible with the
+      // current app config — otherwise we'd resurrect a stale selection
+      // (e.g. after the admin tightened allowedModels) and bypass the
+      // initial-model logic above.
+      const compatibleModels = filterModelsForApp(models, app);
+      if (
+        savedSettings.selectedModel &&
+        compatibleModels.some(m => m.id === savedSettings.selectedModel)
+      )
         setSelectedModel(savedSettings.selectedModel);
       if (savedSettings.selectedStyle) setSelectedStyle(savedSettings.selectedStyle);
       if (savedSettings.selectedOutputFormat)
