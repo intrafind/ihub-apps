@@ -166,10 +166,13 @@ sudo -u www-data php occ config:app:get ihub_chat ihub_base_url
 sudo -u www-data php occ config:app:get ihub_chat ihub_provider_id
 ```
 
-> **HTTPS only:** the iHub base URL is loaded inside an iframe from a
-> Nextcloud page that itself is on HTTPS in production. Mixed content is
-> blocked; the plugin's URL validator rejects non-HTTPS bases in deployed
-> Nextcloud instances.
+> **Use HTTPS in production:** the iHub base URL is loaded inside an iframe
+> from a Nextcloud page that itself runs on HTTPS in any sane production
+> deployment, and the browser blocks mixed content there. The plugin's URL
+> validator (`nextcloud-app/src/shared.ts::safeBaseUrl`) accepts both `http:`
+> and `https:` so a dev Nextcloud over plain HTTP can iframe a dev iHub on
+> the same scheme; the production guarantee comes from the host page being
+> HTTPS, not from the validator.
 
 ---
 

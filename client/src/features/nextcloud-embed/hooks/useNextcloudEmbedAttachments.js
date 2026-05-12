@@ -56,10 +56,23 @@ function makeLoadingPlaceholder(path) {
 }
 
 async function downloadAsFile(path) {
-  const response = await apiClient.get('/integrations/nextcloud/download', {
-    params: { filePath: path },
-    responseType: 'blob'
-  });
+  let response;
+  try {
+    response = await apiClient.get('/integrations/nextcloud/download', {
+      params: { filePath: path },
+      responseType: 'blob'
+    });
+  } catch (err) {
+    // Mirror `nextcloudDocumentContext.downloadOne`: a 401 means the iHub
+    // user hasn't OAuth-linked their Nextcloud account yet. The caller
+    // checks `err instanceof NextcloudNotLinkedError` to abort the
+    // auto-attach loop and surface the connect-flow UI instead of a
+    // generic per-file failure.
+    if (err?.response?.status === 401) {
+      throw new NextcloudNotLinkedError();
+    }
+    throw err;
+  }
   const blob = response.data;
   const name = fileNameFromPath(path);
   const contentType = contentTypeFromExtension(name);

@@ -748,7 +748,7 @@
       "originsDesc": "Only these Nextcloud origins may iframe iHub or postMessage selections to it. Used for both CSP frame-ancestors and the postMessage origin check.",
       "addOrigin": "Add",
       "originInvalid": "Enter a valid http(s) origin like https://cloud.example.com",
-      "noOrigins": "No origins added yet. iframing iHub from a Nextcloud instance will be blocked until you add its origin here.",
+      "noOrigins": "No origins added yet. Iframing iHub from a Nextcloud instance will be blocked until you add its origin here.",
       "displayTitle": "Display Settings",
       "displayName": "Display Name",
       "descriptionField": "Description",
