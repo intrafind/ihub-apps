@@ -143,13 +143,26 @@ router.get('/info.xml', (req, res) => {
 });
 
 function generateInfoXml({ baseUrl, displayName, description }) {
+  // We deliberately mirror the shape of `nextcloud-app/appinfo/info.xml`
+  // that ships in this repo (Nextcloud 28-33, navigation entry, no
+  // settings/embed-url fields). Admins are supposed to drop this file
+  // into their app skeleton, so anything we emit that the skeleton
+  // doesn't implement just causes confusion or install-time errors.
+  //
+  // The `<description>` element uses standard XML escaping rather than a
+  // CDATA section so an admin-supplied description containing `]]>` can't
+  // truncate the CDATA early and produce malformed XML. We don't need
+  // CDATA: the description is short prose that escapes cleanly.
+  // `baseUrl` is unused in the generated XML; the embed URL lives on the
+  // JS bundle, configured via `occ config:app:set ihub_chat ihub_base_url`.
+  void baseUrl;
   return `<?xml version="1.0"?>
 <info xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
       xsi:noNamespaceSchemaLocation="https://apps.nextcloud.com/schema/apps/info.xsd">
   <id>ihub_chat</id>
   <name>${escapeXml(displayName)}</name>
   <summary>${escapeXml(description)}</summary>
-  <description><![CDATA[${description}]]></description>
+  <description>${escapeXml(description)}</description>
   <version>1.0.0</version>
   <licence>agpl</licence>
   <author>intrafind</author>
@@ -157,7 +170,7 @@ function generateInfoXml({ baseUrl, displayName, description }) {
   <category>integration</category>
   <bugs>https://github.com/intrafind/ihub-apps/issues</bugs>
   <dependencies>
-    <nextcloud min-version="27" max-version="30"/>
+    <nextcloud min-version="28" max-version="33"/>
   </dependencies>
   <navigations>
     <navigation>
@@ -165,11 +178,6 @@ function generateInfoXml({ baseUrl, displayName, description }) {
       <route>ihub_chat.page.index</route>
     </navigation>
   </navigations>
-  <settings>
-    <admin-section>OCA\\IhubChat\\Settings\\AdminSection</admin-section>
-    <admin>OCA\\IhubChat\\Settings\\Admin</admin>
-  </settings>
-  <embed-url>${escapeXml(baseUrl)}/nextcloud/taskpane.html</embed-url>
 </info>`;
 }
 
