@@ -34,6 +34,8 @@ function ChatMessage({
   compact = false, // New prop to indicate compact mode (for widget or mobile)
   onOpenInCanvas,
   onInsert,
+  insertAction = null, // { variant: 'icon'|'primary', labelKey: string } — Office host promotes the per-message insert action to a labelled primary button; web app default keeps the legacy icon button on the action row.
+  isLatestAssistantMessage = false, // Keeps the primary insert button always-visible on the most recent assistant response inside small Outlook panes.
   canvasEnabled = false,
   app = null, // App configuration for custom response rendering
   models = [], // Available models for determining if model param should be included in link
@@ -913,6 +915,42 @@ function ChatMessage({
         )}
       </div>
 
+      {/*
+        Primary insert action (Office taskpane). Renders as a labelled brand-coloured
+        button beneath the bubble — the dominant CTA for "add this response to my
+        email / document" inside Outlook, where the action used to be a tiny icon
+        lost amongst the copy/feedback chrome (see issue #1450). Always visible on
+        the latest assistant message so it stays in view on small panes; older
+        assistant turns fade their button with the rest of the action row.
+      */}
+      {!isUser &&
+        !isError &&
+        !message.loading &&
+        onInsert &&
+        insertAction?.variant === 'primary' && (
+          <div
+            className={`mt-2 w-full transition-opacity duration-200 ${
+              isLatestAssistantMessage || showActions ? 'opacity-100' : 'opacity-60'
+            }`}
+          >
+            <button
+              type="button"
+              onClick={() => onInsert(message.content)}
+              className="inline-flex w-full items-center justify-center gap-2 px-3 py-2 rounded-md text-sm font-semibold bg-indigo-600 text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-1 transition-colors"
+            >
+              <Icon name="arrow-right" size="sm" className="text-white" />
+              <span>
+                {t(
+                  insertAction.labelKey || 'office.insertIntoDocument',
+                  insertAction.labelKey === 'office.insertIntoEmail'
+                    ? 'Add to email'
+                    : 'Add to document'
+                )}
+              </span>
+            </button>
+          </div>
+        )}
+
       {/* Info about finish reason and retry options */}
       {!isUser && !isError && !message.loading && message.finishReason && (
         <div className="flex items-center gap-2 text-xs text-gray-600 mb-1">
@@ -1033,7 +1071,7 @@ function ChatMessage({
             </button>
           )}
 
-          {!isUser && !isError && onInsert && (
+          {!isUser && !isError && onInsert && insertAction?.variant !== 'primary' && (
             <button
               onClick={() => onInsert(message.content)}
               className="flex items-center gap-1 hover:text-blue-600 transition-colors duration-150"

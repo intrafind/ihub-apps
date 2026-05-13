@@ -21,6 +21,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
+import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 
 function buildParamsFromApp(app) {
   const params = { language: officeLocale };
@@ -38,6 +39,7 @@ function buildParamsFromApp(app) {
 function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const navigate = useNavigate();
   const officeConfig = useOfficeConfig();
+  const embeddedHost = useEmbeddedHost();
 
   const appName = getLocalizedContent(selectedApp?.name, officeLocale);
   const greetingTitle = getLocalizedContent(selectedApp?.greeting?.title, officeLocale);
@@ -353,6 +355,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 editable={true}
                 compact={true}
                 onInsert={handleInsert}
+                insertAction={embeddedHost?.insertAction}
                 appId={selectedApp?.id}
                 chatId={chatIdRef.current}
                 app={selectedApp}
