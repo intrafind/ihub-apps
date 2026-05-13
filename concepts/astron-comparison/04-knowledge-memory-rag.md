@@ -189,45 +189,34 @@ JSON-stringified config (`SourceHandler.js:30-49`).
 
 ### 2.4 Conversation persistence (= short-term "memory")
 
-- `server/services/integrations/ConversationStateManager.js:1-123`:
-  in-memory `Map<chatId, state>` with 24 h TTL and hourly cleanup.
-  Tracks `conversationId`, `lastParentId`, `title`, `baseUrl`,
-  `profileId`. **Single-process only — no Redis/DB.**
-- `server/routes/chat/conversationRoutes.js:1-268`: GET/DELETE
-  message-history endpoints that **proxy to the external iAssistant
-  API** (`/apps/:appId/conversations/:conversationId/messages`). ihub
-  itself never stores past messages.
-- `ConversationApiService` and `iAssistantService.js:1-46` are thin
-  wrappers; the iAssistant adapter
+- `ConversationStateManager.js:1-123`: in-memory `Map<chatId, state>`,
+  24 h TTL, hourly cleanup. **Single-process only — no Redis/DB.**
+- `conversationRoutes.js:1-268`: GET/DELETE message-history endpoints
+  that **proxy to the external iAssistant API**. ihub never stores past
+  messages itself.
+- The iAssistant adapter
   (`server/adapters/iassistant-conversation.js:117,153`) is the only
-  code path that ever round-trips a conversation ID — and only for
-  IntraFind's own RAG product.
-- For all _other_ providers (OpenAI, Anthropic, Google, Mistral,
-  Bedrock, vLLM, openai-responses), conversation history is rebuilt
-  client-side and re-sent on every request (`RequestBuilder.js:293-
-  304, 382-396`). `sendChatHistory: boolean` on each app config
-  (default `true`, see `CLAUDE.md` § "App Configuration Schema") just
-  toggles whether the client passes prior turns back.
-- `feedbackStorage.js:1-97` appends thumbs-up/down to
-  `contents/data/feedback.jsonl`. That's the only persistent
-  per-message store; it is **not** read back during chat — pure
-  analytics.
+  code path that round-trips a `conversationId` — IntraFind-only.
+- For all _other_ providers (OpenAI, Anthropic, Google, etc.) the
+  client rebuilds history and re-sends it every request
+  (`RequestBuilder.js:293-304, 382-396`). `sendChatHistory: boolean`
+  (app config, default `true`) just toggles client inclusion.
+- `feedbackStorage.js:1-97` appends ratings to
+  `contents/data/feedback.jsonl` — analytics only, never read back.
 
 ### 2.5 User-fingerprint / per-user state
 
-`server/services/UserFingerprint.js:1-70`: pseudonymous SHA-256
-`usr_<16hex>` of `userId + pepper`. Used for usage tracking only — no
-user-profile / preference memory store.
+`UserFingerprint.js:1-70`: pseudonymous SHA-256 `usr_<16hex>` of
+`userId + pepper`. Usage tracking only — no profile/preference store.
 
 ### 2.6 Where the LLM ends up
 
-`RequestBuilder.prepareChatRequest`
-(`server/services/chat/RequestBuilder.js:115-422`) calls
+`RequestBuilder.prepareChatRequest` (`RequestBuilder.js:115-422`) calls
 `processMessageTemplates`, which substitutes sources into the system
 prompt, then ships the entire conversation + source text to the model
 adapter. Token budget = `min(app.tokenLimit, model.tokenLimit)`
-(`RequestBuilder.js:330-339`). There is **no chunk-level scoring**: if
-your three sources total 200 k tokens you'll blow the context window.
+(`RequestBuilder.js:330-339`). **No chunk-level scoring**: three big
+sources will blow the context window.
 
 ### 2.7 Honest summary
 
@@ -375,12 +364,11 @@ Tradeoffs:
 | qdrant      | Best filters + payload + perf                         | Extra service to operate              |
 | weaviate    | Hybrid out of the box                                 | Heavy                                 |
 
-**Recommendation:** ship `sqlite-vss` by default (matches the
-"single-folder install" ergonomics of `contents/`), expose a
-`platform.rag.vectorStore` enum so admins can switch to `pgvector` when
-they outgrow it. Schema lives in `server/migrations/V0??__add_rag_tables.js`
-(uses the existing Flyway-style migration system documented in
-`CLAUDE.md` § "Configuration Migration System").
+**Recommendation:** ship `sqlite-vss` by default (matches `contents/`
+single-folder ergonomics); expose `platform.rag.vectorStore` enum to
+switch to `pgvector` at scale. Schema via
+`server/migrations/V0??__add_rag_tables.js` (existing Flyway-style
+system).
 
 **Embedding strategy**
 
