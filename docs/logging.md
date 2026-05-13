@@ -218,6 +218,45 @@ Use descriptive component names that identify the source of the log:
 - **RequestBuilder**: Request building
 - **[RouteName]**: Route-specific logs (e.g., DataRoutes, AdminRoutes)
 
+### Automatic Request Context (`userId`, `oauthClientId`, `ip`)
+
+Every log entry emitted while handling an HTTP request automatically carries three additional fields, so logs can be filtered by who triggered them and from where:
+
+| Field | Source | Notes |
+|-------|--------|-------|
+| `userId` | `req.user.id` | The authenticated user. For OAuth client_credentials tokens this equals the OAuth client id (the token has no human subject). `'anonymous'` for unauthenticated traffic. |
+| `oauthClientId` | OAuth metadata on `req.user` | Set when the request was authenticated via an OAuth client — either client_credentials / static API key (`req.user.isOAuthClient`) or user-delegated authorization_code (`req.user.clientId`). Omitted for non-OAuth requests. |
+| `ip` | `req.ip` | Calling IP address, resolved via Express `trust proxy` so `X-Forwarded-For` is honoured behind a reverse proxy. |
+
+**How it works:** A middleware installed early in `server/middleware/setup.js` opens an `AsyncLocalStorage` scope per request (see `server/utils/requestContext.js`). The logger reads from this store on every call and merges the fields in. Caller-supplied fields always win — e.g. if you explicitly log `{ userId: 'audited-subject' }` for an admin action, that value is not overwritten.
+
+**Example output for an authenticated request:**
+
+```json
+{"component":"AppsRoutes","level":"info","timestamp":"...","message":"App started","appId":"chat","userId":"alice@example.com","oauthClientId":"web-spa","ip":"203.0.113.7"}
+```
+
+**Example output for an anonymous request:**
+
+```json
+{"component":"AppsRoutes","level":"info","timestamp":"...","message":"App started","appId":"chat","userId":"anonymous","ip":"203.0.113.7"}
+```
+
+**Filtering by user / client / IP with `jq`:**
+
+```bash
+# All actions by a specific user
+cat logs/app.log | jq 'select(.userId == "alice@example.com")'
+
+# All traffic from a specific OAuth client
+cat logs/app.log | jq 'select(.oauthClientId == "ci-pipeline")'
+
+# All actions from a specific IP
+cat logs/app.log | jq 'select(.ip == "203.0.113.7")'
+```
+
+Logs emitted outside a request (server startup, scheduled background jobs, cluster master) do not have these fields — the context store is unset in those code paths.
+
 ### Log Format
 
 #### JSON Format (Default)
