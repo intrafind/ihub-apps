@@ -14,32 +14,10 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { isValidReturnUrl } from '../../utils/oauthReturnUrl.js';
+import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 const router = express.Router();
-
-/**
- * Validate returnUrl to prevent open-redirect and pseudo-XSS attacks.
- *
- * Allows:
- *  - Relative paths (must start with a single `/`, never `//`).
- *  - Absolute URLs on the same hostname that use the http(s) scheme.
- *
- * Crucially rejects `javascript:`, `data:`, `file:`, `gopher:`, and any
- * other non-http(s) scheme — `url.hostname` is happy to parse
- * `javascript://ihub.example.com/...` and `URL.hostname` will then
- * match `req.hostname`, so a scheme check is mandatory.
- */
-function isValidReturnUrl(returnUrl, req) {
-  if (!returnUrl) return false;
-  if (returnUrl.startsWith('/') && !returnUrl.startsWith('//')) return true;
-  try {
-    const url = new URL(returnUrl);
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-    return url.hostname === req.hostname;
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Validate a file path used in Nextcloud WebDAV URLs. We allow Unicode
@@ -485,18 +463,7 @@ router.get('/download', authRequired, async (req, res) => {
     // open an XSS path. Keep the safer baseline.
     res.setHeader('Content-Type', 'application/octet-stream');
     if (file.size) res.setHeader('Content-Length', file.size);
-    // Nextcloud allows quotes, backslashes, newlines, and Unicode in
-    // filenames. Send both an ASCII-safe `filename` (fallback for old
-    // clients) and an RFC 5987 `filename*` (UTF-8) so the value can't
-    // break out of the header or inject extra headers.
-    const asciiFallback = (file.name || 'download')
-      .replace(/[^\x20-\x7E]/g, '_')
-      .replace(/["\\\r\n]/g, '_');
-    const utf8Encoded = encodeURIComponent(file.name || 'download');
-    res.setHeader(
-      'Content-Disposition',
-      `attachment; filename="${asciiFallback}"; filename*=UTF-8''${utf8Encoded}`
-    );
+    res.setHeader('Content-Disposition', buildContentDisposition(file.name));
     res.send(file.content);
   } catch (error) {
     logger.error('Error downloading Nextcloud file', {

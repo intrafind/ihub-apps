@@ -4,6 +4,7 @@ import tokenStorage from '../TokenStorageService.js';
 import { httpFetch } from '../../utils/httpConfig.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 
 /**
  * Google Drive export MIME type mappings for Google Workspace documents
@@ -867,7 +868,10 @@ class GoogleDriveService {
         throw new Error(`Failed to download file: ${response.statusText}`);
       }
 
-      const content = Buffer.from(await response.arrayBuffer());
+      // Bounded read defends against an attacker hitting `/download`
+      // directly with a huge file. Client-side upload caps don't help
+      // against `curl`. See server/utils/boundedBodyReader.js.
+      const content = await readBoundedBody(response, MAX_DOWNLOAD_BYTES, 'Google Drive download');
 
       return {
         id: fileInfo.id,
