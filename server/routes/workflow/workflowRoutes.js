@@ -1272,6 +1272,13 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         response: res,
         lastActivity: new Date()
       });
+      // Pin this registration: if a fresh SSE GET reconnects on the same
+      // executionId, the Map entry is replaced. We don't want this connection's
+      // close handler to then delete the new entry (or remove the new
+      // listener) and we don't want the new connection to delete THIS entry
+      // when it registers. Identity-pinning lets the close handler bail out
+      // when it's stale.
+      const myEntry = workflowClients.get(executionId);
 
       // Send initial connection event
       res.write(`event: connected\ndata: ${JSON.stringify({ executionId })}\n\n`);
@@ -1356,23 +1363,11 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       // Register event handler
       actionTracker.on('fire-sse', handleWorkflowEvent);
 
-      // Handle client disconnect
-      req.on('close', () => {
-        // Remove event listener
-        actionTracker.off('fire-sse', handleWorkflowEvent);
-
-        // Remove client from map
-        workflowClients.delete(executionId);
-
-        logger.info('SSE connection closed for workflow execution', {
-          component: 'WorkflowRoutes',
-          executionId
-        });
-      });
-
       // Send periodic heartbeat to keep connection alive
       const heartbeatInterval = setInterval(() => {
-        if (!workflowClients.has(executionId)) {
+        // Only this connection's heartbeat operates on its own entry — if a
+        // newer SSE replaced us, stop heartbeating (the new one has its own).
+        if (workflowClients.get(executionId) !== myEntry) {
           clearInterval(heartbeatInterval);
           return;
         }
@@ -1381,13 +1376,33 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           res.write(`: heartbeat\n\n`);
         } catch (_err) {
           clearInterval(heartbeatInterval);
-          workflowClients.delete(executionId);
+          // Only delete if this is still our entry — don't wipe a successor.
+          if (workflowClients.get(executionId) === myEntry) {
+            workflowClients.delete(executionId);
+          }
         }
       }, 30000); // 30 second heartbeat
 
-      // Clean up heartbeat on disconnect
+      // Handle client disconnect. Combined into one handler so cleanup is
+      // atomic — both the actionTracker listener removal and the Map deletion
+      // are gated by the identity check.
       req.on('close', () => {
         clearInterval(heartbeatInterval);
+        // Always remove THIS connection's listener — it's tied to this closure
+        // and would otherwise leak with each reconnect.
+        actionTracker.off('fire-sse', handleWorkflowEvent);
+
+        // Only remove the Map entry if it's still ours. A fresh SSE GET on
+        // the same executionId would have already replaced it; deleting now
+        // would orphan the new connection.
+        if (workflowClients.get(executionId) === myEntry) {
+          workflowClients.delete(executionId);
+        }
+
+        logger.info('SSE connection closed for workflow execution', {
+          component: 'WorkflowRoutes',
+          executionId
+        });
       });
     }
   );

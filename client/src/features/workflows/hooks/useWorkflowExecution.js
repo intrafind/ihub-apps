@@ -25,6 +25,11 @@ function useWorkflowExecution(executionId) {
   const [error, setError] = useState(null);
   const eventSourceRef = useRef(null);
   const reconnectTimeoutRef = useRef(null);
+  // Tracks whether the hook is still mounted. Used by the reconnect setTimeout
+  // to bail out if the component unmounted while the timer was pending —
+  // otherwise the reconnect creates a fresh EventSource that no cleanup path
+  // will ever close (per-page-visit leak).
+  const mountedRef = useRef(true);
   const featureFlags = useFeatureFlags();
 
   // Fetch initial execution state
@@ -226,6 +231,7 @@ function useWorkflowExecution(executionId) {
             }
           }));
           eventSource.close();
+          eventSourceRef.current = null;
           setConnected(false);
           // Refetch state after completion to ensure all data is loaded
           // (SSE event may have truncated data, server has the full state)
@@ -239,6 +245,7 @@ function useWorkflowExecution(executionId) {
             errors: [...(prev?.errors || []), data.error]
           }));
           eventSource.close();
+          eventSourceRef.current = null;
           setConnected(false);
           break;
 
@@ -248,6 +255,7 @@ function useWorkflowExecution(executionId) {
             status: 'cancelled'
           }));
           eventSource.close();
+          eventSourceRef.current = null;
           setConnected(false);
           break;
 
@@ -279,17 +287,17 @@ function useWorkflowExecution(executionId) {
       }
 
       reconnectTimeoutRef.current = setTimeout(() => {
+        // Bail out if the component unmounted while we were waiting — without
+        // this guard, the reconnect creates a brand-new EventSource that no
+        // cleanup function references, leaking the connection for the rest of
+        // the page session.
+        if (!mountedRef.current) return;
         // Only reconnect if execution is still running/paused
         if (state?.status === 'running' || state?.status === 'paused') {
           console.log('Attempting SSE reconnection...');
           connectSSE();
         }
       }, 3000);
-    };
-
-    return () => {
-      eventSource.close();
-      eventSourceRef.current = null;
     };
   }, [executionId, state?.status, featureFlags]);
 
@@ -360,6 +368,15 @@ function useWorkflowExecution(executionId) {
     fetchState();
   }, [fetchState]);
 
+  // Track mount status so the reconnect setTimeout in connectSSE can bail out
+  // if the component has unmounted before its 3s timer fires.
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
   // Connect SSE when execution is running or paused
   useEffect(() => {
     if (state && (state.status === 'running' || state.status === 'paused') && state.canReconnect) {
@@ -373,6 +390,7 @@ function useWorkflowExecution(executionId) {
       }
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
     };
   }, [state?.status, state?.canReconnect, connectSSE]);

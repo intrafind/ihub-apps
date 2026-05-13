@@ -124,6 +124,12 @@ function AdminWorkflowExecutionsPage() {
 
   /** @type {React.MutableRefObject<NodeJS.Timeout|null>} */
   const pollTimerRef = useRef(null);
+  // Tracks the AbortController for the current in-flight loadExecutions request.
+  // Each new tick (or unmount) aborts the previous one so slow responses don't
+  // accumulate and saturate the browser's 6-connection-per-origin HTTP/1.1 pool
+  // — a steady 5s poll with 30s axios timeout could otherwise stack ~6 pending
+  // requests on a slow network and freeze the rest of the UI.
+  const inFlightAbortRef = useRef(null);
 
   /**
    * Loads executions from the admin API with current filter parameters.
@@ -133,6 +139,13 @@ function AdminWorkflowExecutionsPage() {
    */
   const loadExecutions = useCallback(
     async (showLoadingSpinner = false) => {
+      // Abort any prior in-flight request before issuing a new one.
+      if (inFlightAbortRef.current) {
+        inFlightAbortRef.current.abort();
+      }
+      const controller = new AbortController();
+      inFlightAbortRef.current = controller;
+
       try {
         if (showLoadingSpinner) {
           setLoading(true);
@@ -144,15 +157,21 @@ function AdminWorkflowExecutionsPage() {
           params.search = searchTerm.trim();
         }
 
-        const data = await fetchAdminExecutions(params);
+        const data = await fetchAdminExecutions(params, { signal: controller.signal });
 
         setExecutions(Array.isArray(data.executions) ? data.executions : []);
         setStats(data.stats || null);
         setTotal(data.total || 0);
       } catch (err) {
+        // Don't surface our own aborts — they're expected when a new tick
+        // supersedes the previous one or the component unmounts.
+        if (err.name === 'CanceledError' || err.name === 'AbortError') return;
         console.error('Error loading executions:', err);
         setError(err.message);
       } finally {
+        if (inFlightAbortRef.current === controller) {
+          inFlightAbortRef.current = null;
+        }
         if (showLoadingSpinner) {
           setLoading(false);
         }
@@ -181,6 +200,16 @@ function AdminWorkflowExecutionsPage() {
       }
     };
   }, [autoRefresh, loadExecutions]);
+
+  // Abort any in-flight request on unmount.
+  useEffect(() => {
+    return () => {
+      if (inFlightAbortRef.current) {
+        inFlightAbortRef.current.abort();
+        inFlightAbortRef.current = null;
+      }
+    };
+  }, []);
 
   /**
    * Handles cancelling a workflow execution with confirmation dialog.

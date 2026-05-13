@@ -74,6 +74,7 @@ export async function parseSseStream(body, onEvent, signal) {
     // id: and retry: fields are intentionally ignored here
   };
 
+  let completedCleanly = false;
   try {
     while (true) {
       if (signal?.aborted) {
@@ -109,7 +110,23 @@ export async function parseSseStream(body, onEvent, signal) {
         processLine(line);
       }
     }
+    completedCleanly = true;
   } finally {
-    reader.releaseLock();
+    // If we exited via an exception (e.g. consumer's onEvent threw), the
+    // underlying body stream is still flowing — releaseLock alone won't
+    // close the socket. Cancel the reader so the browser releases the
+    // HTTP/1.1 connection slot.
+    if (!completedCleanly) {
+      try {
+        await reader.cancel();
+      } catch {
+        // already cancelled — nothing to do
+      }
+    }
+    try {
+      reader.releaseLock();
+    } catch {
+      // already released (cancel() releases the lock on some implementations)
+    }
   }
 }

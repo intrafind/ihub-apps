@@ -346,6 +346,7 @@ export default function registerSessionRoutes(
         res.setHeader('Content-Type', 'text/event-stream');
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
         clients.set(chatId, { response: res, lastActivity: new Date(), appId });
         // Pin this registration so a stale close handler from a previous SSE on the
         // same chatId can't delete a fresh entry (or abort a fresh active request)
@@ -353,7 +354,24 @@ export default function registerSessionRoutes(
         const myEntry = clients.get(chatId);
         actionTracker.trackConnected(chatId);
 
+        // Heartbeat: write an SSE comment every 30s so reverse proxies (nginx
+        // default idle timeout is 60s) don't silently kill the connection.
+        // If the write throws, the socket is dead — clear the interval and
+        // let req.on('close') handle the rest of the cleanup.
+        const heartbeatInterval = setInterval(() => {
+          if (clients.get(chatId) !== myEntry) {
+            clearInterval(heartbeatInterval);
+            return;
+          }
+          try {
+            res.write(': heartbeat\n\n');
+          } catch {
+            clearInterval(heartbeatInterval);
+          }
+        }, 30000);
+
         req.on('close', () => {
+          clearInterval(heartbeatInterval);
           if (clients.get(chatId) !== myEntry) return;
           if (activeRequests.has(chatId)) {
             try {
@@ -751,8 +769,15 @@ export default function registerSessionRoutes(
             user: req.user
           });
         } else {
-          const clientRes = clients.get(chatId).response;
-          clients.set(chatId, { ...clients.get(chatId), lastActivity: new Date() });
+          // Mutate the existing entry in place rather than replacing it. The SSE
+          // GET handler pins this object reference via `myEntry` to identify a
+          // stale `req.on('close')` after a reconnect; replacing the entry here
+          // would defeat that check, letting a dead socket's close handler bail
+          // out and leak the Map entry + activeRequests controller for up to
+          // 5 minutes until cleanupInactiveClients evicts it.
+          const clientEntry = clients.get(chatId);
+          const clientRes = clientEntry.response;
+          clientEntry.lastActivity = new Date();
           const prep = await chatService.prepareChatRequest({
             appId,
             modelId,

@@ -28,47 +28,50 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
   const heartbeatIntervalRef = useRef(null);
   const fullContentRef = useRef('');
 
-  const cleanupEventSource = useCallback(async () => {
+  // Synchronously release the connection slot: abort the fetch and clear timers.
+  // Kept separate from cleanupEventSource so callers (and initEventSource) can
+  // tear the slot down without awaiting a 30s axios round-trip — that delay
+  // re-opened the original leak window (an in-flight fetch keeps holding its
+  // HTTP/1.1 slot until ac.abort() actually runs).
+  const abortAndClearTimers = useCallback(() => {
     const ac = abortControllerRef.current;
-    if (!ac) return;
-
     abortControllerRef.current = null;
 
-    // Clear timers
-    try {
-      if (heartbeatIntervalRef.current) {
-        clearInterval(heartbeatIntervalRef.current);
-        heartbeatIntervalRef.current = null;
-      }
-    } catch (err) {
-      console.error('Error clearing heartbeat interval:', err);
+    if (heartbeatIntervalRef.current) {
+      clearInterval(heartbeatIntervalRef.current);
+      heartbeatIntervalRef.current = null;
+    }
+    if (connectionTimeoutRef.current) {
+      clearTimeout(connectionTimeoutRef.current);
+      connectionTimeoutRef.current = null;
     }
 
-    try {
-      if (connectionTimeoutRef.current) {
-        clearTimeout(connectionTimeoutRef.current);
-        connectionTimeoutRef.current = null;
+    if (ac) {
+      try {
+        ac.abort();
+      } catch {
+        // already aborted — nothing to do
       }
-    } catch (err) {
-      console.error('Error clearing connection timeout:', err);
     }
 
-    // Tell the server to stop streaming
-    try {
-      if (appId && chatId) {
+    return !!ac;
+  }, []);
+
+  const cleanupEventSource = useCallback(async () => {
+    const wasActive = abortAndClearTimers();
+
+    // Best-effort notification to the server. Fire-and-forget — the server
+    // detects the disconnect via req.on('close') regardless, and we don't want
+    // a slow /stop call to delay the next stream the caller may immediately
+    // open (rapid send-button clicks would otherwise race; see B2 in audit).
+    if (wasActive && appId && chatId) {
+      try {
         await stopAppChatStream(appId, chatId);
+      } catch (err) {
+        console.warn('Failed to stop chat stream:', err);
       }
-    } catch (err) {
-      console.warn('Failed to stop chat stream:', err);
     }
-
-    // Abort the fetch
-    try {
-      ac.abort();
-    } catch (err) {
-      console.error('Error aborting SSE fetch:', err);
-    }
-  }, [appId, chatId]);
+  }, [appId, chatId, abortAndClearTimers]);
 
   const startHeartbeat = useCallback(() => {
     if (heartbeatIntervalRef.current) {
@@ -108,9 +111,17 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
    */
   const initEventSource = useCallback(
     async url => {
-      // Clean up any existing stream first
-      if (abortControllerRef.current) {
-        await cleanupEventSource();
+      // Synchronously tear down any prior stream first. We deliberately do NOT
+      // `await cleanupEventSource()` here — that awaits stopAppChatStream
+      // (axios, 30s timeout), and during that window a re-entrant call would
+      // see abortControllerRef.current === null and proceed in parallel,
+      // orphaning the first controller (no ref left to abort it on unmount).
+      const hadPrior = abortAndClearTimers();
+      if (hadPrior && appId && chatId) {
+        // Notify the server in the background; do not block the new stream.
+        stopAppChatStream(appId, chatId).catch(err =>
+          console.warn('Failed to stop prior chat stream:', err)
+        );
       }
 
       fullContentRef.current = '';
@@ -227,6 +238,17 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
         }
         if (onProcessingChange) onProcessingChange(false);
       } finally {
+        // Always abort the controller — release the HTTP/1.1 connection slot.
+        // The handleSseEvent 'done'/'error' path already aborts on the happy
+        // path; this finally covers the failure paths (mid-stream network
+        // error, malformed event, exception thrown by the consumer's onEvent
+        // callback) that would otherwise leave the fetch hanging in the
+        // browser's connection pool until TCP keep-alive expires.
+        try {
+          ac.abort();
+        } catch {
+          // already aborted — nothing to do
+        }
         // Ensure we don't hold a stale abort controller after the stream ends
         if (abortControllerRef.current === ac) {
           abortControllerRef.current = null;
@@ -242,6 +264,9 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
       }
     },
     [
+      abortAndClearTimers,
+      appId,
+      chatId,
       cleanupEventSource,
       onProcessingChange,
       onEvent,
@@ -251,14 +276,19 @@ function useEventSource({ appId, chatId, timeoutDuration = 60000, onEvent, onPro
     ]
   );
 
-  // Cleanup on unmount
+  // Cleanup on unmount — release the slot synchronously, then notify the server
+  // in the background. Awaiting the public async cleanup here would race the
+  // browser navigation; abortAndClearTimers is enough to free the connection.
   useEffect(() => {
     return () => {
-      cleanupEventSource();
-      if (heartbeatIntervalRef.current) clearInterval(heartbeatIntervalRef.current);
-      if (connectionTimeoutRef.current) clearTimeout(connectionTimeoutRef.current);
+      abortAndClearTimers();
+      if (appId && chatId) {
+        stopAppChatStream(appId, chatId).catch(() => {
+          // server may be unreachable on tab close — best effort only
+        });
+      }
     };
-  }, [cleanupEventSource]);
+  }, [abortAndClearTimers, appId, chatId]);
 
   return {
     initEventSource,
