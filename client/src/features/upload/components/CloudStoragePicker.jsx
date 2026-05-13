@@ -8,7 +8,7 @@ import NextcloudFileBrowser from './NextcloudFileBrowser';
 
 /**
  * Cloud Storage Picker component
- * Modal for selecting files from cloud storage providers (Office 365, Google Drive)
+ * Modal for selecting files from cloud storage providers (Office 365, Google Drive, Nextcloud)
  */
 const CloudStoragePicker = ({
   onFileSelect,

@@ -292,8 +292,10 @@ server/
 └── routes/integrations/office365.js            # OAuth and browsing API routes
 
 client/src/features/upload/
-├── components/Office365FileBrowser.jsx         # File browser UI component
-└── hooks/useOffice365Browser.js                # State management hook
+├── components/CloudFileBrowserShell.jsx        # Shared file-browser UI (all providers)
+├── components/Office365FileBrowser.jsx         # Thin adapter over the shell
+├── hooks/useCloudStorageBrowser.js             # Shared state-management factory
+└── hooks/useOffice365Browser.js                # Thin adapter over the factory
 
 contents/integrations/office365/                # Encrypted token storage (auto-created)
 ```

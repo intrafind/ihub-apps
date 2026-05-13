@@ -269,8 +269,10 @@ server/
 └── routes/integrations/googledrive.js            # OAuth and browsing API routes
 
 client/src/features/upload/
-├── components/GoogleDriveFileBrowser.jsx         # File browser UI component
-└── hooks/useGoogleDriveBrowser.js                # State management hook
+├── components/CloudFileBrowserShell.jsx          # Shared file-browser UI (all providers)
+├── components/GoogleDriveFileBrowser.jsx         # Thin adapter over the shell
+├── hooks/useCloudStorageBrowser.js               # Shared state-management factory
+└── hooks/useGoogleDriveBrowser.js                # Thin adapter over the factory
 
 contents/integrations/googledrive/                # Encrypted token storage (auto-created)
 ```
