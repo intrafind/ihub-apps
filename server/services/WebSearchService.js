@@ -100,7 +100,8 @@ class BraveSearchProvider extends SearchProvider {
       // surface here as a thrown Error from node-fetch. Without this branch the upstream
       // wrapper only sees `error.message` and drops the code/cause, making proxy issues
       // impossible to diagnose from the logs.
-      const causeMsg = error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
+      const causeMsg =
+        error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
       logger.error('Brave search network request failed', {
         component: 'WebSearch',
         provider: 'brave',
@@ -114,7 +115,9 @@ class BraveSearchProvider extends SearchProvider {
       const detailParts = [error?.message];
       if (error?.code) detailParts.push(`code=${error.code}`);
       if (causeMsg) detailParts.push(`cause=${causeMsg}`);
-      const wrapped = new Error(`Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`);
+      const wrapped = new Error(
+        `Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`
+      );
       wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
       wrapped.cause = error;
       throw wrapped;
