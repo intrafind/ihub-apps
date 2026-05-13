@@ -5,6 +5,7 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 
 /**
  * Office 365 Service for Microsoft 365 file access integration
@@ -1019,12 +1020,17 @@ class Office365Service {
         throw new Error(`Failed to download file: ${response.statusText}`);
       }
 
+      // Bounded read defends against an attacker hitting `/download`
+      // directly with a huge file. Client-side upload caps don't help
+      // against `curl`. See server/utils/boundedBodyReader.js.
+      const content = await readBoundedBody(response, MAX_DOWNLOAD_BYTES, 'Office 365 download');
+
       return {
         id: fileInfo.id,
         name: fileInfo.name,
         mimeType: fileInfo.file.mimeType,
         size: fileInfo.size,
-        content: Buffer.from(await response.arrayBuffer())
+        content
       };
     } catch (error) {
       logger.error('Error downloading file', {

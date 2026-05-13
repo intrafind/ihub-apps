@@ -4,6 +4,7 @@ import { httpFetch } from '../../utils/httpConfig.js';
 import { getForwardedProto, getForwardedHost } from '../../utils/publicBaseUrl.js';
 import logger from '../../utils/logger.js';
 import configCache from '../../configCache.js';
+import { readBoundedBody, MAX_DOWNLOAD_BYTES } from '../../utils/boundedBodyReader.js';
 
 /**
  * Nextcloud Service for Nextcloud file access integration.
@@ -25,45 +26,10 @@ import configCache from '../../configCache.js';
  *   - Nextcloud rotates refresh tokens on every refresh, so callers must
  *     persist the new refresh token returned by `refreshAccessToken`.
  */
-// Server-side caps on payload sizes from Nextcloud responses. The client
-// already enforces an upload cap, but a malicious or misconfigured
-// Nextcloud could otherwise stream multi-GB bodies through iHub and OOM
-// the worker. These are deliberately generous defaults; tighten via the
-// constants below if a deployment needs more conservative limits.
+// PROPFIND responses are small XML directory listings — a tighter cap
+// than the download budget defends against malicious or misconfigured
+// servers without affecting healthy responses.
 const MAX_PROPFIND_BYTES = 10 * 1024 * 1024; // 10 MiB
-const MAX_DOWNLOAD_BYTES = 200 * 1024 * 1024; // 200 MiB
-
-/**
- * Read a fetch Response body into a Buffer with a hard byte cap.
- * Aborts mid-stream once the cap is exceeded so we never allocate
- * more than `maxBytes + last_chunk_size` of memory.
- */
-async function readBoundedBody(response, maxBytes, label) {
-  const contentLength = response.headers.get('content-length');
-  if (contentLength && Number(contentLength) > maxBytes) {
-    throw new Error(`${label} exceeds the ${maxBytes}-byte limit`);
-  }
-
-  const chunks = [];
-  let received = 0;
-  // node-fetch returns a Node Readable stream on response.body; iterate
-  // it directly so we can bail before allocating the full payload.
-  for await (const chunk of response.body) {
-    received += chunk.length;
-    if (received > maxBytes) {
-      // Best-effort: tell the upstream to stop sending, but the
-      // critical part is that we stop accumulating.
-      try {
-        response.body.destroy();
-      } catch {
-        /* ignore */
-      }
-      throw new Error(`${label} exceeds the ${maxBytes}-byte limit`);
-    }
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-}
 
 class NextcloudService {
   constructor() {
