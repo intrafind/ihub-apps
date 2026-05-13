@@ -21,6 +21,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
+import './OfficeChatPanel.css';
 
 function buildParamsFromApp(app) {
   const params = { language: officeLocale };
@@ -292,9 +293,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const hasMessages = adapter.messages.length > 0;
 
   return (
-    <div className="h-screen w-full flex flex-col p-0 bg-slate-50">
-      <div className="flex-1 min-h-0 flex flex-col max-w-lg mx-auto w-full">
-        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden border border-[#e0e0e0] rounded-lg bg-white">
+    <div className="office-task-pane h-screen w-full flex flex-col p-0 bg-slate-50">
+      <div className="flex-1 min-h-0 flex flex-col w-full">
+        <div className="flex flex-col h-full min-h-0 w-full overflow-hidden bg-white">
           <ChatHeader
             showCheckmark={false}
             selectedApp={{ name: appName || 'Select app' }}
@@ -307,33 +308,37 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
           <div className="flex-1 flex flex-col min-h-0">
             {/* Empty state: greeting + starter prompts */}
             {!hasMessages && (
-              <div className="px-4 pt-6 pb-3 border-b border-slate-100 bg-slate-50/60">
-                <div className="flex flex-col items-center mb-4 text-center">
+              <div className="office-greeting border-b border-slate-100 bg-slate-50/60">
+                <div className="flex flex-col items-center office-greeting-header text-center">
                   {greetingTitle || greetingSubtitle ? (
                     <>
                       {greetingTitle && (
-                        <p className="text-base font-semibold text-slate-900">{greetingTitle}</p>
+                        <p className="office-greeting-title font-semibold text-slate-900">
+                          {greetingTitle}
+                        </p>
                       )}
                       {greetingSubtitle && (
-                        <p className="mt-1 text-sm text-slate-600">{greetingSubtitle}</p>
+                        <p className="office-greeting-subtitle text-slate-600">
+                          {greetingSubtitle}
+                        </p>
                       )}
                     </>
                   ) : (
                     <div
-                      className="w-16 h-16 flex items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 text-white font-bold text-2xl shadow-lg"
+                      className="office-greeting-badge flex items-center justify-center rounded-xl bg-gradient-to-br from-violet-500 via-fuchsia-500 to-cyan-400 text-white font-bold shadow-lg"
                       aria-hidden
                     >
                       AI
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-2">
+                <div className="flex flex-col gap-1.5">
                   {starterPrompts.map(prompt => (
                     <button
                       key={prompt.key}
                       type="button"
                       onClick={() => handlePromptSelect(prompt)}
-                      className="w-full text-left px-3 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-sm text-slate-700"
+                      className="office-starter-prompt w-full text-left rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-colors text-slate-700"
                     >
                       {prompt.label}
                     </button>
