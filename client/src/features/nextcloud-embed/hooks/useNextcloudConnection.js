@@ -9,7 +9,7 @@ import { apiClient } from '../../../api/client';
  *
  * Unlike `useNextcloudBrowser` (which does the full picker flow), this
  * hook only owns the connect state — it never lists files. The actual
- * file fetch happens later through `fetchCurrentDocumentContext`.
+ * file fetch happens later through `useNextcloudEmbedAttachments`.
  *
  * @param {{ providerId?: string }} options
  * @param {string} [options.providerId] Provider id forwarded into the

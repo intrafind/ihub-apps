@@ -40,16 +40,19 @@ reaches into Nextcloud.
 │  │  file action (nextcloud-app/)    │   │
 │  └────────────┬─────────────────────┘   │
 │               │ navigate to             │
-│               │ <ihub>/nextcloud/       │
-│               │ taskpane.html#paths=…   │
+│               │ /apps/ihub_chat/#paths=…│
 │               ▼                         │
+│  ┌──────────────────────────────────┐   │
+│  │ Host page (templates/main.php)   │   │
+│  │  iframes <ihub>/nextcloud/       │   │
+│  │  full-embed.html#paths=…         │   │
+│  └────────────┬─────────────────────┘   │
 └───────────────┼─────────────────────────┘
-                │
-                │ (iframe or new tab)
+                │ (iframe inside NC chrome)
                 │
 ┌───────────────┼─────────────────────────┐
 │  iHub (ihub.example.com)                │
-│  /nextcloud/taskpane.html               │
+│  /nextcloud/full-embed.html             │
 │                                         │
 │  ┌──────────────────────────────────┐   │
 │  │ Selection bridge (hash + msg)    │   │
@@ -57,14 +60,15 @@ reaches into Nextcloud.
 │               │ getCurrentSelection()   │
 │               ▼                         │
 │  ┌──────────────────────────────────┐   │
-│  │ Document context: per-path GET   │   │
-│  │ /api/integrations/nextcloud/     │   │
-│  │  download?filePath=…             │   │
+│  │ useNextcloudEmbedAttachments:    │   │
+│  │  per-path GET /api/integrations/ │   │
+│  │  nextcloud/download?filePath=…   │   │
+│  │  → fileUploadHandler.setFile()   │   │
 │  └────────────┬─────────────────────┘   │
-│               │ HostMailContext         │
+│               │ regular chat flow       │
 │               ▼                         │
 │  ┌──────────────────────────────────┐   │
-│  │ useOfficeChatAdapter (unchanged) │   │
+│  │ AppChat (unchanged)              │   │
 │  │  → /api/apps/.../chat/...        │   │
 │  └──────────────────────────────────┘   │
 └─────────────────────────────────────────┘
@@ -76,8 +80,8 @@ reaches into Nextcloud.
 | --- | --- |
 | `server/migrations/V038__add_nextcloud_embed_config.js` | Default `nextcloudEmbed` block + `nextcloud-embed` group |
 | `server/routes/admin/nextcloudEmbed.js` | Admin status / enable / disable / config |
-| `server/routes/integrations/nextcloudEmbed.js` | Public runtime config + Nextcloud `info.xml` |
-| `server/routes/nextcloudEmbedPages.js` | Serves `/nextcloud/taskpane.html` with CSP `frame-ancestors` |
+| `server/routes/integrations/nextcloudEmbed.js` | Public runtime config |
+| `server/routes/nextcloudEmbedPages.js` | Serves `/nextcloud/full-embed.html` with CSP `frame-ancestors` |
 
 No new file-access code. `/api/integrations/nextcloud/download` already
 serves the embed unchanged.
@@ -86,17 +90,18 @@ serves the embed unchanged.
 
 | Path | Purpose |
 | --- | --- |
-| `client/nextcloud/taskpane.html` | Entry HTML (no Office.js, includes a postMessage buffer) |
-| `client/nextcloud/taskpane-entry.jsx` | Bootstrap: config → bridge → mount `OfficeApp` with Nextcloud host adapter |
+| `client/nextcloud/full-embed.html` | Entry HTML (postMessage buffer + iframe mount point) |
+| `client/nextcloud/full-app-entry.jsx` | Bootstrap: config → bridge → OAuth gate → mount the standard iHub `<App />` |
 | `client/nextcloud/nextcloud.css` | Scoped Tailwind reset |
 | `client/public/nextcloud/callback.html` | iHub OAuth popup callback |
 | `client/src/features/nextcloud-embed/utilities/nextcloudAuthDialog.js` | Browser-popup auth dialog |
 | `client/src/features/nextcloud-embed/utilities/nextcloudSelectionBridge.js` | Hash + postMessage receiver |
-| `client/src/features/nextcloud-embed/utilities/nextcloudDocumentContext.js` | Builds `HostMailContext` via `/download` |
+| `client/src/features/nextcloud-embed/utilities/nextcloudFileMeta.js` | Filename/content-type from path/extension |
 | `client/src/features/nextcloud-embed/hooks/useNextcloudConnection.js` | "Connect Nextcloud" CTA state |
+| `client/src/features/nextcloud-embed/hooks/useNextcloudEmbedAttachments.js` | Auto-attach selected files into the chat uploader |
 | `client/src/features/admin/pages/AdminNextcloudEmbedPage.jsx` | Admin UI |
 
-The Vite multi-entry config picks up `client/nextcloud/taskpane.html` and
+The Vite multi-entry config picks up `client/nextcloud/full-embed.html` and
 emits the bundle into `client/dist/nextcloud/`.
 
 ## Nextcloud-side scaffold
@@ -151,4 +156,4 @@ occ config:app:set ihub_chat ihub_provider_id --value=nextcloud-main
   user originally suggested host-injected tokens. The plan calls this
   decision out so it can be reverted easily by adding a fallback
   `Authorization: Bearer <hostToken>` path in
-  `nextcloudDocumentContext.js`. Strictly additive.
+  `useNextcloudEmbedAttachments.js`. Strictly additive.

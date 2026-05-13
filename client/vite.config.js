@@ -46,11 +46,10 @@ export default defineConfig({
         'extension-options': resolve(__dirname, 'extension/options.html'),
         // Nextcloud embed — built into client/dist/nextcloud/ and served by
         // server/routes/nextcloudEmbedPages.js with a frame-ancestors CSP
-        // derived from the admin-configured allowedHostOrigins.
-        'nextcloud-taskpane': resolve(__dirname, 'nextcloud/taskpane.html'),
-        // Full-app variant of the Nextcloud embed — runs the same OAuth
-        // bootstrap as taskpane but mounts the standard <App /> so the
-        // user gets the wide iHub experience inside Nextcloud.
+        // derived from the admin-configured allowedHostOrigins. The
+        // Nextcloud-side scaffold (`nextcloud-app/src/shared.ts::buildEmbedUrl`)
+        // points users at this entry, which mounts the standard <App /> with
+        // an OAuth gate in front of it.
         'nextcloud-full-embed': resolve(__dirname, 'nextcloud/full-embed.html')
       },
       output: {

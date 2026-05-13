@@ -1,17 +1,15 @@
 /**
  * Shared helpers for deriving display metadata from a Nextcloud file path.
- *
- * Used by both the mail-context adapter (`nextcloudDocumentContext.js`,
- * which feeds the Outlook-style chat adapter in the taskpane build) and the
- * new full-app uploader adapter (`useNextcloudEmbedAttachments`). Keep this
- * file dependency-free so it can be imported anywhere.
+ * Used by the full-app uploader adapter (`useNextcloudEmbedAttachments`).
+ * Keep this file dependency-free so it can be imported anywhere.
  */
 
 export function fileNameFromPath(path) {
-  if (typeof path !== 'string') return 'document';
+  if (typeof path !== 'string' || path.length === 0) return 'document';
   const trimmed = path.replace(/\/+$/, '');
+  if (trimmed.length === 0) return 'document';
   const idx = trimmed.lastIndexOf('/');
-  return idx === -1 ? trimmed : trimmed.slice(idx + 1) || 'document';
+  return idx === -1 ? trimmed : trimmed.slice(idx + 1);
 }
 
 /**

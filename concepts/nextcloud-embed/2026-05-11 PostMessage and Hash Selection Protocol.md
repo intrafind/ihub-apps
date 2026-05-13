@@ -52,7 +52,7 @@ Invalid payloads are dropped silently. Listeners are not notified.
 The Nextcloud-side file action opens
 
 ```
-https://<ihub>/nextcloud/taskpane.html#providerId=<id>&paths=<json>
+https://<ihub>/nextcloud/full-embed.html#providerId=<id>&paths=<json>
 ```
 
 where `<json>` is `encodeURIComponent(JSON.stringify(paths))`. The iHub
@@ -96,7 +96,7 @@ information leakage if the bridge's origin checks are ever loosened.
 origins (e.g. `https://cloud.example.com`). The same list drives:
 
 1. The bridge's `event.origin` check (this document).
-2. The CSP `frame-ancestors` directive on `/nextcloud/taskpane.html`
+2. The CSP `frame-ancestors` directive on `/nextcloud/full-embed.html`
    (see `server/routes/nextcloudEmbedPages.js`).
 
 Both checks must agree on canonical form (scheme + host + port, no
@@ -126,7 +126,7 @@ need one place to update.
 - **Tokens**: explicitly not in the payload. See the design doc for
   why; if a future requirement demands host-injected tokens, add a
   separate, optional field plus a fallback path in
-  `nextcloudDocumentContext.js`.
+  `useNextcloudEmbedAttachments.js`.
 - **File metadata**: only paths cross the boundary. Size, mime, mtime
   are fetched authoritatively by iHub through the existing `/download`
   endpoint headers.

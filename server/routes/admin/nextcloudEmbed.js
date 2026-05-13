@@ -6,14 +6,20 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import { createOAuthClient } from '../../utils/oauthClientManager.js';
+import { encryptPlatformSecrets } from '../../utils/platformSecrets.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
 
 async function savePlatformConfig(updates) {
   const rootDir = getRootDir();
   const platformConfigPath = join(rootDir, 'contents', 'config', 'platform.json');
+  // `configCache.getPlatform()` returns secrets in their *decrypted* form. We
+  // must re-encrypt before writing back to disk so unrelated sections
+  // (Jira / OIDC / LDAP / cloud storage providers) keep their at-rest
+  // encryption — otherwise enabling/disabling the Nextcloud embed silently
+  // downgrades every secret in platform.json to plaintext.
   const existing = configCache.getPlatform() || {};
-  const merged = { ...existing, ...updates };
+  const merged = encryptPlatformSecrets({ ...existing, ...updates });
   await atomicWriteJSON(platformConfigPath, merged);
   await configCache.refreshCacheEntry('config/platform.json');
   return merged;
@@ -60,23 +66,26 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
    *         description: Nextcloud embed integration status
    */
   app.get(buildServerPath('/api/admin/nextcloud-embed/status'), adminAuth, (req, res) => {
-    const platform = configCache.getPlatform();
-    const cfg = platform?.nextcloudEmbed || {};
-    const baseUrl = buildPublicBaseUrl(req);
+    try {
+      const platform = configCache.getPlatform();
+      const cfg = platform?.nextcloudEmbed || {};
+      const baseUrl = buildPublicBaseUrl(req);
 
-    res.json({
-      enabled: cfg.enabled || false,
-      oauthClientId: cfg.oauthClientId || '',
-      displayName: cfg.displayName || { en: 'iHub Apps', de: 'iHub Apps' },
-      description: cfg.description || {
-        en: 'AI-powered assistant for Nextcloud',
-        de: 'KI-gestützter Assistent für Nextcloud'
-      },
-      starterPrompts: Array.isArray(cfg.starterPrompts) ? cfg.starterPrompts : [],
-      allowedHostOrigins: Array.isArray(cfg.allowedHostOrigins) ? cfg.allowedHostOrigins : [],
-      infoXmlUrl: `${baseUrl}/api/integrations/nextcloud-embed/info.xml`,
-      embedUrl: `${baseUrl}/nextcloud/taskpane.html`
-    });
+      res.json({
+        enabled: cfg.enabled || false,
+        oauthClientId: cfg.oauthClientId || '',
+        displayName: cfg.displayName || { en: 'iHub Apps', de: 'iHub Apps' },
+        description: cfg.description || {
+          en: 'AI-powered assistant for Nextcloud',
+          de: 'KI-gestützter Assistent für Nextcloud'
+        },
+        starterPrompts: Array.isArray(cfg.starterPrompts) ? cfg.starterPrompts : [],
+        allowedHostOrigins: Array.isArray(cfg.allowedHostOrigins) ? cfg.allowedHostOrigins : [],
+        embedUrl: `${baseUrl}/nextcloud/full-embed.html`
+      });
+    } catch (error) {
+      return sendInternalError(res, error, 'load Nextcloud embed status');
+    }
   });
 
   /**
@@ -160,7 +169,7 @@ export default function registerAdminNextcloudEmbedRoutes(app) {
       res.json({
         message: 'Nextcloud embed enabled successfully',
         oauthClientId,
-        infoXmlUrl: `${baseUrl}/api/integrations/nextcloud-embed/info.xml`
+        embedUrl: `${baseUrl}/nextcloud/full-embed.html`
       });
     } catch (error) {
       return sendInternalError(res, error, 'enable Nextcloud embed');
