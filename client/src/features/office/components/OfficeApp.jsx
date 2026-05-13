@@ -6,6 +6,7 @@ import ChatHeader from './chat/ChatHeader';
 import SettingsDialog from './settings-dialog';
 import AppListPanel from '../../../shared/components/AppListPanel';
 import { officeLocale } from '../utilities/officeLocale';
+import { useOfficeFavoriteApps } from '../utilities/officeFavorites';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
 import {
   storeTokenResponse,
@@ -53,11 +54,19 @@ function storeSelectedApp(app) {
 
 function SelectPage({ user, onLogout, onSelect }) {
   const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
+  const { favorites, toggleFavorite } = useOfficeFavoriteApps();
 
   const menuItems = [
     { key: 'settings', label: 'Settings', onClick: () => setIsSettingsOpen(true) },
     { key: 'logout', label: 'Logout', onClick: onLogout }
   ];
+
+  const handleToggleFavorite = React.useCallback(
+    (_event, appId) => {
+      toggleFavorite(appId);
+    },
+    [toggleFavorite]
+  );
 
   return (
     <div className="h-screen w-full flex flex-col p-0 bg-slate-50">
@@ -67,6 +76,8 @@ function SelectPage({ user, onLogout, onSelect }) {
             onSelect={onSelect}
             language={officeLocale}
             header={<ChatHeader title="Select App" showCheckmark={false} menuItems={menuItems} />}
+            favorites={favorites}
+            onToggleFavorite={handleToggleFavorite}
           />
         </div>
       </div>
