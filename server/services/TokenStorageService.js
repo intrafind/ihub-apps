@@ -201,6 +201,32 @@ class TokenStorageService {
   }
 
   /**
+   * Reject filename components that could escape the integrations
+   * directory or otherwise produce surprising on-disk paths. Both
+   * `userId` (sourced from the authenticated user, but a malicious or
+   * misbehaving IdP could supply arbitrary values) and `providerId`
+   * (admin-defined, but routes accept it from the query string before
+   * we look up the matching configured provider) are external inputs
+   * from CodeQL's perspective. Enforce a conservative allowlist:
+   * letters, digits, and a handful of separators commonly used in
+   * stable identifiers (email-style `userId`s, UUIDs, slugified
+   * provider IDs).
+   *
+   * Throws synchronously rather than silently rewriting the value so
+   * the caller's logging carries the bad input.
+   *
+   * @private
+   */
+  _assertSafeFilenameComponent(value, label) {
+    if (typeof value !== 'string' || value.length === 0 || value.length > 256) {
+      throw new Error(`Invalid ${label}: must be a non-empty string up to 256 characters`);
+    }
+    if (!/^[A-Za-z0-9._@+-]+$/.test(value)) {
+      throw new Error(`Invalid ${label}: contains characters outside the safe filename set`);
+    }
+  }
+
+  /**
    * Resolve the on-disk filename for a token blob.
    *
    * Per-provider scoping is the supported form: callers pass a
@@ -213,8 +239,18 @@ class TokenStorageService {
    * Callers that omit `providerId` fall back to the legacy single-slot
    * `<userId>.json` path. Production paths always pass `providerId`; the
    * un-scoped form is kept for tests and for the migration entry point.
+   *
+   * Both `userId` and `providerId` are validated via
+   * `_assertSafeFilenameComponent` before being interpolated into the
+   * path so a malicious IdP-supplied `userId` (or a tampered URL
+   * `providerId`) cannot escape `storageBasePath/serviceName/`.
    */
   _tokenFilePath(userId, serviceName, providerId) {
+    this._assertSafeFilenameComponent(userId, 'userId');
+    this._assertSafeFilenameComponent(serviceName, 'serviceName');
+    if (providerId) {
+      this._assertSafeFilenameComponent(providerId, 'providerId');
+    }
     const dir = path.join(this.storageBasePath, serviceName);
     const filename = providerId ? `${userId}__${providerId}.json` : `${userId}.json`;
     return path.join(dir, filename);
@@ -774,6 +810,20 @@ class TokenStorageService {
       let skipped = 0;
 
       for (const serviceName of services) {
+        // Directory listings can technically contain anything if the
+        // host filesystem was tampered with; refuse to touch directory
+        // names that don't look like a normal service slug.
+        try {
+          this._assertSafeFilenameComponent(serviceName, 'serviceName');
+        } catch (err) {
+          logger.warn('Skipping integration directory with unsafe name', {
+            component: 'TokenStorage',
+            entry: serviceName,
+            error: err.message
+          });
+          skipped += 1;
+          continue;
+        }
         const serviceDir = path.join(this.storageBasePath, serviceName);
         let stat;
         try {
@@ -790,6 +840,20 @@ class TokenStorageService {
           if (!entry.endsWith('.json') || entry.includes('__')) continue;
 
           const userId = entry.slice(0, -'.json'.length);
+          // Same containment check: a hostile filename in the listing
+          // could otherwise flow into the rename target.
+          try {
+            this._assertSafeFilenameComponent(userId, 'userId');
+          } catch (err) {
+            logger.warn('Skipping legacy token file with unsafe name', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              error: err.message
+            });
+            skipped += 1;
+            continue;
+          }
           const oldPath = path.join(serviceDir, entry);
 
           let tokenData;
@@ -831,6 +895,24 @@ class TokenStorageService {
               component: 'TokenStorage',
               serviceName,
               file: entry
+            });
+            skipped += 1;
+            continue;
+          }
+
+          // `providerId` here came out of an encrypted payload that we
+          // wrote, but defense-in-depth: a tampered on-disk file could
+          // contain anything. `_tokenFilePath` runs the same check
+          // internally; doing it explicitly first lets us skip rather
+          // than throw out of the migration loop.
+          try {
+            this._assertSafeFilenameComponent(providerId, 'providerId');
+          } catch (err) {
+            logger.warn('Skipping legacy token file: providerId fails safety check', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              error: err.message
             });
             skipped += 1;
             continue;
