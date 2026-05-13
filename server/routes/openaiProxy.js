@@ -250,6 +250,23 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       });
     }
 
+    // Track client disconnection so we can abort the upstream LLM call instead
+    // of streaming tokens into a dead socket for the full generation duration.
+    // Without this, a closed browser tab silently wastes provider tokens AND
+    // any errors after headers were sent leave the response in an inconsistent
+    // state (the JSON-error fallback at the bottom throws ERR_HTTP_HEADERS_SENT).
+    const upstreamAbort = new AbortController();
+    let clientDisconnected = false;
+    const onClientClose = () => {
+      clientDisconnected = true;
+      try {
+        upstreamAbort.abort();
+      } catch {
+        // already aborted — nothing to do
+      }
+    };
+    req.on('close', onClientClose);
+
     try {
       const request = createCompletionRequest(model, messages, apiKey, {
         stream,
@@ -264,7 +281,8 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
       const llmResponse = await throttledFetch(model.id, request.url, {
         method: 'POST',
         headers: request.headers,
-        body: JSON.stringify(request.body)
+        body: JSON.stringify(request.body),
+        signal: upstreamAbort.signal
       });
 
       res.status(llmResponse.status);
@@ -313,6 +331,7 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
 
         try {
           while (true) {
+            if (clientDisconnected) break;
             const { done, value } = await reader.read();
             if (done) break;
 
@@ -485,11 +504,17 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
             }
           }
         } finally {
-          reader.releaseLock();
+          try {
+            reader.releaseLock();
+          } catch {
+            // already released
+          }
         }
 
-        res.write('data: [DONE]\n\n');
-        res.end();
+        if (!clientDisconnected && !res.writableEnded) {
+          res.write('data: [DONE]\n\n');
+          res.end();
+        }
       } else {
         const data = await llmResponse.text();
 
@@ -549,19 +574,39 @@ export default function registerOpenAIProxyRoutes(app, { basePath = '' } = {}) {
         }
       }
     } catch (error) {
-      logger.error('[OpenAI Proxy] Error occurred', {
-        component: 'OpenAIProxy',
-        error: error,
-        modelId,
-        provider: model?.provider,
-        stream
-      });
-      const lang =
-        req.headers['accept-language']?.split(',')[0] ||
-        configCache.getPlatform()?.defaultLanguage ||
-        'en';
-      const msg = await getLocalizedError('internalError', {}, lang);
-      res.status(500).json({ error: msg });
+      // Aborts triggered by client disconnect are expected, not real errors.
+      const isAbort =
+        clientDisconnected || error?.name === 'AbortError' || error?.code === 'ERR_ABORTED';
+      if (!isAbort) {
+        logger.error('[OpenAI Proxy] Error occurred', {
+          component: 'OpenAIProxy',
+          error: error,
+          modelId,
+          provider: model?.provider,
+          stream
+        });
+      }
+      // If headers were already sent (mid-stream failure), we can't send a
+      // JSON error — that throws ERR_HTTP_HEADERS_SENT and leaves the response
+      // dangling. End the stream cleanly instead.
+      if (res.headersSent) {
+        if (!res.writableEnded) {
+          try {
+            res.end();
+          } catch {
+            // already closed
+          }
+        }
+      } else if (!isAbort) {
+        const lang =
+          req.headers['accept-language']?.split(',')[0] ||
+          configCache.getPlatform()?.defaultLanguage ||
+          'en';
+        const msg = await getLocalizedError('internalError', {}, lang);
+        res.status(500).json({ error: msg });
+      }
+    } finally {
+      req.off('close', onClientClose);
     }
   });
 }

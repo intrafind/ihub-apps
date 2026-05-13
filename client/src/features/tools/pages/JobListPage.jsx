@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { apiClient } from '../../../api/client';
@@ -45,14 +45,28 @@ function ProgressBar({ value, max }) {
 export default function JobListPage() {
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Abort the previous in-flight fetch when a new poll tick starts (or on
+  // unmount) so slow responses don't pile up against the browser's 6-connection
+  // HTTP/1.1 limit.
+  const inFlightAbortRef = useRef(null);
 
   const fetchJobs = useCallback(async () => {
+    if (inFlightAbortRef.current) {
+      inFlightAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    inFlightAbortRef.current = controller;
+
     try {
-      const res = await apiClient.get('/tools-service/jobs');
+      const res = await apiClient.get('/tools-service/jobs', { signal: controller.signal });
       setJobs(res.data);
-    } catch {
-      // Silently fail
+    } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
+      // Silently fail other errors
     } finally {
+      if (inFlightAbortRef.current === controller) {
+        inFlightAbortRef.current = null;
+      }
       setLoading(false);
     }
   }, []);
@@ -65,7 +79,13 @@ export default function JobListPage() {
       fetchJobs();
     }, 5000);
 
-    return () => clearInterval(interval);
+    return () => {
+      clearInterval(interval);
+      if (inFlightAbortRef.current) {
+        inFlightAbortRef.current.abort();
+        inFlightAbortRef.current = null;
+      }
+    };
   }, [fetchJobs]);
 
   const handleDownload = jobId => {

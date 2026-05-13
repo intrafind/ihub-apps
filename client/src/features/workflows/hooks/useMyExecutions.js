@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { apiClient } from '../../../api/client';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
@@ -25,6 +25,10 @@ function useMyExecutions(options = {}) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const featureFlags = useFeatureFlags();
+  // Abort the previous in-flight request whenever a new one starts, and on
+  // unmount. Polling pages call this on a 5s interval; without aborting, slow
+  // responses could stack up to the browser's 6-connection HTTP/1.1 limit.
+  const inFlightAbortRef = useRef(null);
 
   const fetchExecutions = useCallback(async () => {
     // Don't fetch if workflows feature is disabled
@@ -33,6 +37,12 @@ function useMyExecutions(options = {}) {
       setLoading(false);
       return;
     }
+
+    if (inFlightAbortRef.current) {
+      inFlightAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    inFlightAbortRef.current = controller;
 
     setLoading(true);
     setError(null);
@@ -43,13 +53,19 @@ function useMyExecutions(options = {}) {
       params.append('limit', String(limit));
       params.append('offset', String(offset));
 
-      const response = await apiClient.get(`/workflows/my-executions?${params.toString()}`);
+      const response = await apiClient.get(`/workflows/my-executions?${params.toString()}`, {
+        signal: controller.signal
+      });
       setExecutions(response.data || []);
     } catch (err) {
+      if (err.name === 'CanceledError' || err.name === 'AbortError') return;
       console.error('Failed to fetch executions:', err);
       setError(err.response?.data?.error || err.message || 'Failed to load executions');
       setExecutions([]);
     } finally {
+      if (inFlightAbortRef.current === controller) {
+        inFlightAbortRef.current = null;
+      }
       setLoading(false);
     }
   }, [status, limit, offset, featureFlags]);
@@ -57,6 +73,16 @@ function useMyExecutions(options = {}) {
   useEffect(() => {
     fetchExecutions();
   }, [fetchExecutions]);
+
+  // Abort any in-flight request on unmount.
+  useEffect(() => {
+    return () => {
+      if (inFlightAbortRef.current) {
+        inFlightAbortRef.current.abort();
+        inFlightAbortRef.current = null;
+      }
+    };
+  }, []);
 
   // Calculate running/paused count for badge display
   const runningCount = executions.filter(

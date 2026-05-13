@@ -475,9 +475,9 @@ export const updateToolScript = async (toolId, content) => {
  * @param {number} [params.offset] - Number of results to skip
  * @returns {Promise<Object>} Response containing executions array, total count, and stats
  */
-export const fetchAdminExecutions = async params => {
+export const fetchAdminExecutions = async (params, { signal } = {}) => {
   const queryString = params ? '?' + new URLSearchParams(params).toString() : '';
-  const response = await makeAdminApiCall(`/admin/workflows/executions${queryString}`);
+  const response = await makeAdminApiCall(`/admin/workflows/executions${queryString}`, { signal });
   return response.data;
 };
 

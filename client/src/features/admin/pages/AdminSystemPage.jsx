@@ -33,6 +33,12 @@ function AdminSystemPage() {
   const [updateActionMessageType, setUpdateActionMessageType] = useState('success');
   const updatePollIntervalRef = useRef(null);
   const rollbackPollIntervalRef = useRef(null);
+  // Abort prior in-flight /admin/version polls when a new tick starts (or on
+  // unmount). On a slow network, 3s ticks with 30s axios timeouts could
+  // otherwise stack ~10 pending requests and saturate the browser's
+  // 6-connection HTTP/1.1 pool.
+  const updatePollAbortRef = useRef(null);
+  const rollbackPollAbortRef = useRef(null);
 
   // Fetch version information on mount
   useEffect(() => {
@@ -86,11 +92,19 @@ function AdminSystemPage() {
     fetchUpdateStatus();
   }, []);
 
-  // Clean up polling intervals on unmount
+  // Clean up polling intervals (and any in-flight version-poll requests) on unmount
   useEffect(() => {
     return () => {
       if (updatePollIntervalRef.current) clearInterval(updatePollIntervalRef.current);
       if (rollbackPollIntervalRef.current) clearInterval(rollbackPollIntervalRef.current);
+      if (updatePollAbortRef.current) {
+        updatePollAbortRef.current.abort();
+        updatePollAbortRef.current = null;
+      }
+      if (rollbackPollAbortRef.current) {
+        rollbackPollAbortRef.current.abort();
+        rollbackPollAbortRef.current = null;
+      }
     };
   }, []);
 
@@ -115,11 +129,22 @@ function AdminSystemPage() {
 
       // Poll until server comes back
       updatePollIntervalRef.current = setInterval(async () => {
+        // Abort any previous tick's request still in flight — otherwise slow
+        // (non-refused) failures could pile up and saturate the connection pool.
+        if (updatePollAbortRef.current) {
+          updatePollAbortRef.current.abort();
+        }
+        const controller = new AbortController();
+        updatePollAbortRef.current = controller;
         try {
-          const response = await makeAdminApiCall('/admin/version', { method: 'GET' });
+          const response = await makeAdminApiCall('/admin/version', {
+            method: 'GET',
+            signal: controller.signal
+          });
           if (response.data) {
             clearInterval(updatePollIntervalRef.current);
             updatePollIntervalRef.current = null;
+            updatePollAbortRef.current = null;
             setUpdateActionMessage(
               t('admin.system.updateSuccess', 'Update complete! Now running version {{version}}.', {
                 version: response.data.app
@@ -138,7 +163,11 @@ function AdminSystemPage() {
             }
           }
         } catch {
-          // Server not ready yet, keep polling
+          // Server not ready yet (or our own abort), keep polling
+        } finally {
+          if (updatePollAbortRef.current === controller) {
+            updatePollAbortRef.current = null;
+          }
         }
       }, 3000);
 
@@ -193,11 +222,20 @@ function AdminSystemPage() {
 
       // Poll until server comes back
       rollbackPollIntervalRef.current = setInterval(async () => {
+        if (rollbackPollAbortRef.current) {
+          rollbackPollAbortRef.current.abort();
+        }
+        const controller = new AbortController();
+        rollbackPollAbortRef.current = controller;
         try {
-          const response = await makeAdminApiCall('/admin/version', { method: 'GET' });
+          const response = await makeAdminApiCall('/admin/version', {
+            method: 'GET',
+            signal: controller.signal
+          });
           if (response.data) {
             clearInterval(rollbackPollIntervalRef.current);
             rollbackPollIntervalRef.current = null;
+            rollbackPollAbortRef.current = null;
             setUpdateActionMessage(
               t(
                 'admin.system.rollbackSuccess',
@@ -218,7 +256,11 @@ function AdminSystemPage() {
             }
           }
         } catch {
-          // Server not ready yet
+          // Server not ready yet (or our own abort)
+        } finally {
+          if (rollbackPollAbortRef.current === controller) {
+            rollbackPollAbortRef.current = null;
+          }
         }
       }, 3000);
 

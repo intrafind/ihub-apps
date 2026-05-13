@@ -65,11 +65,22 @@ export function cleanupInactiveClients() {
             logger.error('Error aborting request for chat', {
               component: 'SSE',
               chatId,
-              error: e
+              error: error?.message || String(error)
             });
           }
         }
-        client.response.end();
+        try {
+          client.response.end();
+        } catch (endErr) {
+          // The socket may already be dead — end() can throw on an already
+          // destroyed stream. We're cleaning up anyway, so just log and
+          // continue.
+          logger.warn('Error ending inactive client response', {
+            component: 'SSE',
+            chatId,
+            error: endErr?.message || String(endErr)
+          });
+        }
         clients.delete(chatId);
         logger.info('Removed inactive client', { component: 'SSE', chatId });
       }
