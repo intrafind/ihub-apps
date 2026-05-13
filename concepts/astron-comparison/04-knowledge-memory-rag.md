@@ -70,25 +70,21 @@ All methods are async; `**kwargs` left open for backend-specific extras.
 
 ### 1.4 Knowledge-enhanced chat flow
 
-(`deepwiki.com/iflytek/astron-agent/8.3-knowledge-enhanced-chat-flow`)
-
-- Bot config flag `supportDocument` toggles enhancement per-session.
-- `knowledgeService.getChuncksByBotId(botId, ask, 3)` retrieves chunks
-  via `KnowledgeV2ServiceCallHandler` (POST to knowledge-engine URL).
-- I18n prompt wrappers `loose.prefix.prompt` + `loose.suffix.prompt`
-  splice chunks around the user question.
-- **Chunks persisted to `req_knowledge_records` table keyed by request
-  ID** → on multi-turn, history reconstruction re-wraps the same chunks
-  so the context stays stable.
-- Token-budget guard `spark.chat.max.input.tokens` (default 8000) with
+- Bot flag `supportDocument` toggles enhancement per-session.
+- `knowledgeService.getChuncksByBotId(botId, ask, 3)` → POST to
+  knowledge-engine URL.
+- I18n wrappers `loose.prefix.prompt` + `loose.suffix.prompt` splice
+  chunks around the user question.
+- **Chunks persisted to `req_knowledge_records` keyed by request ID**
+  → multi-turn history reconstruction re-wraps the same chunks.
+- Budget guard `spark.chat.max.input.tokens` (default 8000) with
   dynamic history truncation.
 
 ### 1.5 Citation / grounding
 
-Not explicitly implemented in `core/knowledge`. Citations bubble up via
-RAGFlow's chunk metadata (doc ID, position, highlight) but there is no
-post-LLM citation verification. Knowledge-graph linking is delegated to
-RAGFlow's `use_kg` flag.
+Not explicit in `core/knowledge`. Citations bubble up via RAGFlow chunk
+metadata (doc ID, position, highlight); no post-LLM verification. KG
+linking delegated to RAGFlow's `use_kg` flag.
 
 ### 1.6 Memory module
 
@@ -110,18 +106,15 @@ It is the "Xingchen DB" service: a multi-tenant SQL-execution gateway.
 
 ### 1.7 Conversation history
 
-Lives in `core/agent` (Java/Spring Boot console + Python engine).
-`ChatHistoryServiceImpl.getSystemBotHistory` joins prior request pairs
-with `req_knowledge_records` to rebuild the historical RAG-augmented
-context. Storage = MySQL + Redis (per `docs/CONFIGURATION.md`).
-No explicit semantic-/episodic-memory layer; no summarisation pipeline
-documented.
+In `core/agent`: `ChatHistoryServiceImpl.getSystemBotHistory` joins
+prior request pairs with `req_knowledge_records` to rebuild the
+historical RAG-augmented context. Storage = MySQL + Redis. No
+semantic-/episodic-memory layer; no summarisation pipeline.
 
 ### 1.8 Embedding model
 
-Not implemented in-house — outsourced to RAGFlow (which ships its own
-embedder choice: e.g. BGE, BAAI, OpenAI). astron-agent calls `openai>=2.7.1`
-elsewhere but `core/knowledge` itself never calls `embeddings.create`.
+Outsourced to RAGFlow (BGE/BAAI/OpenAI etc.). `core/knowledge` itself
+never calls `embeddings.create`.
 
 ### Sources
 
