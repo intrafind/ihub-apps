@@ -600,7 +600,15 @@ export async function runTool(toolId, params = {}) {
 
     return await fn(params);
   } catch (error) {
-    logger.error('Failed to execute tool', { component: 'ToolLoader', toolId, error: err });
-    throw err;
+    logger.error('Failed to execute tool', {
+      component: 'ToolLoader',
+      toolId,
+      errorName: error?.name,
+      errorMessage: error?.message,
+      errorCode: error?.code,
+      errorCause: error?.cause?.message || error?.cause,
+      error
+    });
+    throw error;
   }
 }

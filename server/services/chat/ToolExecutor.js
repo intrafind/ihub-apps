@@ -491,9 +491,19 @@ class ToolExecutor {
         message
       };
     } catch (toolError) {
+      const causeMessage =
+        toolError?.cause?.message ||
+        (typeof toolError?.cause === 'string' ? toolError.cause : undefined);
+      const causeCode = toolError?.cause?.code;
+
       logger.error('Tool execution failed', {
         component: 'ToolExecutor',
         toolId,
+        toolInput: args,
+        errorName: toolError?.name,
+        errorCode: toolError?.code || causeCode,
+        errorMessage: toolError?.message,
+        errorCause: causeMessage,
         error: toolError
       });
 
@@ -501,13 +511,17 @@ class ToolExecutor {
         error: true,
         message: `Tool execution failed: ${toolError.message || 'Unknown error'}`,
         toolId,
+        code: toolError?.code || causeCode,
+        cause: causeMessage,
         details: toolError.stack || toolError.toString()
       };
 
       actionTracker.trackToolCallEnd(chatId, {
         toolName: toolId,
         toolOutput: errorResult,
-        error: true
+        error: true,
+        errorCode: errorResult.code,
+        errorMessage: errorResult.message
       });
 
       await logInteraction(
