@@ -127,7 +127,11 @@ export default function registerAuthRoutes(app) {
       } catch (error) {
         logger.warn('Local authentication failed', { component: 'Auth', error });
         recordAuthEvent('local', 'login_failure');
-        return sendErrorResponse(res, 401, 'Invalid credentials');
+        return sendErrorResponse(
+          res,
+          401,
+          'Authentication failed. Please check your username and password.'
+        );
       }
 
       // Set HTTP-only cookie for authentication

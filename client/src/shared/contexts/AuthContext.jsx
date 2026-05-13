@@ -465,7 +465,8 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error('Local login error:', error);
-      const errorMessage = error.message || 'Local login failed';
+      // Extract the error message from the response
+      const errorMessage = error.response?.data?.error || error.message || 'Local login failed';
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
@@ -534,7 +535,8 @@ export function AuthProvider({ children }) {
       }
     } catch (error) {
       console.error('LDAP login error:', error);
-      const errorMessage = error.message || 'LDAP login failed';
+      // Extract the error message from the response
+      const errorMessage = error.response?.data?.error || error.message || 'LDAP login failed';
       dispatch({ type: AUTH_ACTIONS.SET_ERROR, payload: errorMessage });
       return { success: false, error: errorMessage };
     }
