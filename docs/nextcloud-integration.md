@@ -41,9 +41,7 @@ The Nextcloud integration lets users browse and attach files from their Nextclou
 
 6. Click **Add**. Nextcloud will show you a **Client Identifier** and a **Secret**. Copy both — the secret is shown only once.
 
-> **Tip — multiple instances:** If you operate several Nextcloud servers, repeat this step on each instance and create one iHub provider per server.
->
-> **Caveat — one active connection per user:** Tokens are stored under `contents/integrations/nextcloud/<userId>.json`, keyed by user and service name (not by provider ID — same model as Office 365 / Google Drive). If a single end user connects to more than one Nextcloud provider, the most recently completed OAuth flow wins; reconnecting via the picker switches them to that provider. Most deployments only configure one provider per service, so this rarely surfaces in practice.
+> **Tip — multiple instances:** If you operate several Nextcloud servers, repeat this step on each instance and create one iHub provider per server. End users can be connected to all of them concurrently — tokens are stored per `(user, service, provider)` so flows don't overwrite each other.
 
 ---
 

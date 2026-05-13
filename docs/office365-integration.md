@@ -297,5 +297,5 @@ client/src/features/upload/
 ├── hooks/useCloudStorageBrowser.js             # Shared state-management factory
 └── hooks/useOffice365Browser.js                # Thin adapter over the factory
 
-contents/integrations/office365/                # Encrypted token storage (auto-created)
+contents/integrations/office365/                # Encrypted token storage, one file per (user, provider)
 ```

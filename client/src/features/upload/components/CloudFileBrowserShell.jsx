@@ -57,7 +57,7 @@ const CloudFileBrowserShell = ({
     searchItems,
     setSortBy,
     setSortDirection
-  } = useBrowserHook();
+  } = useBrowserHook(provider);
 
   const [showUnsupportedFiles, setShowUnsupportedFiles] = useState(false);
   const [searchInput, setSearchInput] = useState('');

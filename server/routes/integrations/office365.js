@@ -392,7 +392,9 @@ router.get('/status', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const isAuthenticated = await Office365Service.isUserAuthenticated(req.user.id);
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+
+    const isAuthenticated = await Office365Service.isUserAuthenticated(req.user.id, providerId);
 
     if (!isAuthenticated) {
       return res.json({
@@ -402,10 +404,10 @@ router.get('/status', authRequired, async (req, res) => {
     }
 
     // Get user info from Microsoft
-    const userInfo = await Office365Service.getUserInfo(req.user.id);
+    const userInfo = await Office365Service.getUserInfo(req.user.id, providerId);
 
     // Get token expiration info
-    const tokenInfo = await Office365Service.getTokenExpirationInfo(req.user.id);
+    const tokenInfo = await Office365Service.getTokenExpirationInfo(req.user.id, providerId);
 
     res.json({
       connected: true,
@@ -452,12 +454,18 @@ router.post('/disconnect', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const success = await Office365Service.deleteUserTokens(req.user.id);
+    const providerId =
+      (typeof req.query.providerId === 'string' && req.query.providerId) ||
+      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
+      undefined;
+
+    const success = await Office365Service.deleteUserTokens(req.user.id, providerId);
 
     if (success) {
       logger.info('Office 365 disconnected', {
         component: 'Office 365',
-        userId: req.user.id
+        userId: req.user.id,
+        providerId
       });
       res.json({
         success: true,
@@ -531,17 +539,18 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     }
 
     const { source } = req.params;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     let drives = [];
 
     switch (source) {
       case 'personal':
-        drives = await Office365Service.listPersonalDrives(req.user.id);
+        drives = await Office365Service.listPersonalDrives(req.user.id, providerId);
         break;
       case 'sharepoint':
-        drives = await Office365Service.listSharePointDrives(req.user.id);
+        drives = await Office365Service.listSharePointDrives(req.user.id, providerId);
         break;
       case 'teams':
-        drives = await Office365Service.listTeamsDrives(req.user.id);
+        drives = await Office365Service.listTeamsDrives(req.user.id, providerId);
         break;
       default:
         return sendBadRequest(res, 'Source must be one of: personal, sharepoint, teams');
@@ -577,6 +586,7 @@ router.get('/items', authRequired, async (req, res) => {
     }
 
     const { driveId, folderId, search } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (driveId && !isValidGraphId(driveId)) {
       return sendBadRequest(res, 'driveId contains invalid characters or is too long');
@@ -592,9 +602,9 @@ router.get('/items', authRequired, async (req, res) => {
       if (!driveId) {
         return sendBadRequest(res, 'driveId is required for search');
       }
-      items = await Office365Service.searchItems(req.user.id, driveId, search);
+      items = await Office365Service.searchItems(req.user.id, driveId, search, providerId);
     } else {
-      items = await Office365Service.listItems(req.user.id, driveId, folderId);
+      items = await Office365Service.listItems(req.user.id, driveId, folderId, providerId);
     }
 
     res.json({
@@ -626,6 +636,7 @@ router.get('/download', authRequired, async (req, res) => {
     }
 
     const { fileId, driveId } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (!fileId) {
       return sendBadRequest(res, 'fileId query parameter is required');
@@ -639,7 +650,7 @@ router.get('/download', authRequired, async (req, res) => {
       return sendBadRequest(res, 'driveId contains invalid characters or is too long');
     }
 
-    const file = await Office365Service.downloadFile(req.user.id, fileId, driveId);
+    const file = await Office365Service.downloadFile(req.user.id, fileId, driveId, providerId);
 
     // Force `application/octet-stream` rather than reflecting the
     // upstream Graph Content-Type. The download is always served with

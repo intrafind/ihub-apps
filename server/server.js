@@ -281,6 +281,10 @@ if (cluster.isPrimary && workerCount > 1) {
     await tokenStorageService.initializeEncryptionKey();
     await tokenStorageService.initializeJwtSecret();
     await tokenStorageService.initializeRSAKeyPair();
+    // Rename any pre-scoping `<userId>.json` integration token files to
+    // the new `<userId>__<providerId>.json` layout. Safe no-op on
+    // already-migrated installs.
+    await tokenStorageService.migrateLegacyTokenFiles();
   } catch (error) {
     logger.error('Failed to initialize encryption key or JWT secret', {
       component: 'Server',

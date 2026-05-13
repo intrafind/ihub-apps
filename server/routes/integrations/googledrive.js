@@ -254,7 +254,9 @@ router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const isAuthenticated = await GoogleDriveService.isUserAuthenticated(req.user.id);
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+
+    const isAuthenticated = await GoogleDriveService.isUserAuthenticated(req.user.id, providerId);
 
     if (!isAuthenticated) {
       return res.json({
@@ -263,8 +265,8 @@ router.get('/status', authRequired, googleDriveApiLimiter, async (req, res) => {
       });
     }
 
-    const userInfo = await GoogleDriveService.getUserInfo(req.user.id);
-    const tokenInfo = await GoogleDriveService.getTokenExpirationInfo(req.user.id);
+    const userInfo = await GoogleDriveService.getUserInfo(req.user.id, providerId);
+    const tokenInfo = await GoogleDriveService.getTokenExpirationInfo(req.user.id, providerId);
 
     res.json({
       connected: true,
@@ -310,12 +312,18 @@ router.post('/disconnect', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const success = await GoogleDriveService.deleteUserTokens(req.user.id);
+    const providerId =
+      (typeof req.query.providerId === 'string' && req.query.providerId) ||
+      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
+      undefined;
+
+    const success = await GoogleDriveService.deleteUserTokens(req.user.id, providerId);
 
     if (success) {
       logger.info('Google Drive disconnected', {
         component: 'Google Drive',
-        userId: req.user.id
+        userId: req.user.id,
+        providerId
       });
       res.json({
         success: true,
@@ -403,6 +411,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
     }
 
     const { source } = req.params;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     let drives = [];
 
     switch (source) {
@@ -419,7 +428,7 @@ router.get('/drives/:source', authRequired, async (req, res) => {
         ];
         break;
       case 'sharedDrives':
-        drives = await GoogleDriveService.listSharedDrives(req.user.id);
+        drives = await GoogleDriveService.listSharedDrives(req.user.id, providerId);
         break;
       case 'sharedWithMe':
         // Shared with Me is a virtual drive entry (flat list, no folder hierarchy)
@@ -467,6 +476,7 @@ router.get('/items', authRequired, async (req, res) => {
     }
 
     const { driveId, folderId, search, source } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     let items;
 
@@ -474,16 +484,21 @@ router.get('/items', authRequired, async (req, res) => {
       // Search mode
       const searchDriveId =
         driveId && driveId !== 'root' && driveId !== 'sharedWithMe' ? driveId : null;
-      items = await GoogleDriveService.searchFiles(req.user.id, search, searchDriveId);
+      items = await GoogleDriveService.searchFiles(req.user.id, search, searchDriveId, providerId);
     } else if (source === 'sharedWithMe' || driveId === 'sharedWithMe') {
       // Shared with Me - flat list
-      items = await GoogleDriveService.listSharedWithMe(req.user.id);
+      items = await GoogleDriveService.listSharedWithMe(req.user.id, providerId);
     } else if (driveId === 'root' || !driveId) {
       // My Drive
-      items = await GoogleDriveService.listMyDriveFiles(req.user.id, folderId);
+      items = await GoogleDriveService.listMyDriveFiles(req.user.id, folderId, providerId);
     } else {
       // Shared drive
-      items = await GoogleDriveService.listSharedDriveFiles(req.user.id, driveId, folderId);
+      items = await GoogleDriveService.listSharedDriveFiles(
+        req.user.id,
+        driveId,
+        folderId,
+        providerId
+      );
     }
 
     res.json({
@@ -515,6 +530,7 @@ router.get('/download', authRequired, async (req, res) => {
     }
 
     const { fileId } = req.query;
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (!fileId) {
       return sendBadRequest(res, 'fileId query parameter is required');
@@ -524,7 +540,7 @@ router.get('/download', authRequired, async (req, res) => {
       return sendBadRequest(res, 'fileId must be a valid Google Drive file identifier');
     }
 
-    const file = await GoogleDriveService.downloadFile(req.user.id, fileId);
+    const file = await GoogleDriveService.downloadFile(req.user.id, fileId, providerId);
 
     // Force `application/octet-stream` rather than reflecting the
     // upstream Google Drive Content-Type. The download is always served

@@ -254,7 +254,10 @@ class NextcloudService {
         );
       }
 
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
+      // tokens.providerId is the source of truth — it was set by the
+      // OAuth exchange. Pass it explicitly so the storage layer scopes
+      // the file as `<userId>__<providerId>.json`.
+      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
       logger.info('Nextcloud tokens stored for user', {
         component: 'NextcloudService',
         userId,
@@ -270,16 +273,17 @@ class NextcloudService {
     }
   }
 
-  async getUserTokens(userId) {
+  async getUserTokens(userId, providerId) {
     try {
-      const tokens = await tokenStorage.getUserTokens(userId, this.serviceName);
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
+      const tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
+      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
 
       if (!expired) return tokens;
 
       logger.info('Nextcloud tokens expired, attempting refresh', {
         component: 'NextcloudService',
-        userId
+        userId,
+        providerId
       });
 
       try {
@@ -300,16 +304,18 @@ class NextcloudService {
         await this.storeUserTokens(userId, refreshedTokens);
         logger.info('Successfully refreshed and stored Nextcloud tokens for user', {
           component: 'NextcloudService',
-          userId
+          userId,
+          providerId
         });
         return refreshedTokens;
       } catch (refreshError) {
         logger.error('Failed to refresh Nextcloud tokens for user', {
           component: 'NextcloudService',
           userId,
+          providerId,
           error: refreshError
         });
-        await this.deleteUserTokens(userId);
+        await this.deleteUserTokens(userId, providerId);
         throw new Error('Nextcloud authentication expired. Please reconnect your account.');
       }
     } catch (error) {
@@ -328,13 +334,14 @@ class NextcloudService {
     }
   }
 
-  async deleteUserTokens(userId) {
+  async deleteUserTokens(userId, providerId) {
     try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
+      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
       if (result) {
         logger.info('Nextcloud tokens deleted for user', {
           component: 'NextcloudService',
-          userId
+          userId,
+          providerId
         });
       }
       return result;
@@ -347,9 +354,9 @@ class NextcloudService {
     }
   }
 
-  async getTokenExpirationInfo(userId) {
+  async getTokenExpirationInfo(userId, providerId) {
     try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName);
+      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
       const now = new Date();
       const expiresAt = new Date(metadata.expiresAt);
       const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
@@ -407,8 +414,8 @@ class NextcloudService {
   /**
    * Get current user info from Nextcloud's OCS API.
    */
-  async getUserInfo(userId) {
-    const tokens = await this.getUserTokens(userId);
+  async getUserInfo(userId, providerId) {
+    const tokens = await this.getUserTokens(userId, providerId);
     const provider = this._getProviderConfig(tokens.providerId);
 
     const ocsUrl = `${provider.serverUrl}/ocs/v2.php/cloud/user?format=json`;
@@ -436,9 +443,9 @@ class NextcloudService {
     };
   }
 
-  async isUserAuthenticated(userId) {
+  async isUserAuthenticated(userId, providerId) {
     try {
-      const tokens = await this.getUserTokens(userId);
+      const tokens = await this.getUserTokens(userId, providerId);
       const provider = this._getProviderConfig(tokens.providerId);
 
       // Lightweight reachability check — OCS user endpoint
@@ -576,8 +583,8 @@ class NextcloudService {
    * List items in a folder (relative path within the user's files
    * directory; empty / "/" means the root).
    */
-  async listItems(userId, folderPath = '') {
-    const tokens = await this.getUserTokens(userId);
+  async listItems(userId, folderPath = '', providerId) {
+    const tokens = await this.getUserTokens(userId, providerId);
     const provider = this._getProviderConfig(tokens.providerId);
     const username = await this._resolveNextcloudUsername(userId, tokens, provider);
 
@@ -644,10 +651,10 @@ class NextcloudService {
    * which Nextcloud does support, but the response shape varies between
    * major versions and the picker UX only needs in-folder lookup.
    */
-  async searchItems(userId, query, folderPath = '') {
+  async searchItems(userId, query, folderPath = '', providerId) {
     if (!query || query.trim().length === 0) return [];
 
-    const items = await this.listItems(userId, folderPath);
+    const items = await this.listItems(userId, folderPath, providerId);
     const needle = query.trim().toLowerCase();
     return items.filter(item => item.name.toLowerCase().includes(needle));
   }
@@ -656,10 +663,10 @@ class NextcloudService {
    * Download a file by its relative path within the user's Nextcloud
    * storage. Returns the file content as a Buffer plus metadata.
    */
-  async downloadFile(userId, filePath) {
+  async downloadFile(userId, filePath, providerId) {
     if (!filePath) throw new Error('filePath is required');
 
-    const tokens = await this.getUserTokens(userId);
+    const tokens = await this.getUserTokens(userId, providerId);
     const provider = this._getProviderConfig(tokens.providerId);
     const username = await this._resolveNextcloudUsername(userId, tokens, provider);
 

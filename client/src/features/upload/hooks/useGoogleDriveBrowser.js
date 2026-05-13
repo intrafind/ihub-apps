@@ -13,26 +13,33 @@ const isGoogleDoc = item => item?.isGoogleDoc === true;
 
 /**
  * Google Drive adapter for the shared cloud-storage browser factory.
+ *
+ * `provider` is the cloud-storage provider config from `platform.json`;
+ * we forward its `id` so the server can scope token files per provider
+ * (one user can be connected to multiple Google accounts).
  */
-export const useGoogleDriveBrowser = () =>
-  useCloudStorageBrowser({
-    basePath: '/integrations/googledrive',
-    initialFolderTarget: null,
-    buildFolderQuery: (target, drive) => {
-      const params = { driveId: drive.id };
-      if (target) params.folderId = target;
-      // `sharedWithMe` is a synthetic source — the backend needs the
-      // hint to query the Drive API's `sharedWithMe=true` filter.
-      if (drive.id === 'sharedWithMe') params.source = 'sharedWithMe';
-      return params;
+export const useGoogleDriveBrowser = provider =>
+  useCloudStorageBrowser(
+    {
+      basePath: '/integrations/googledrive',
+      initialFolderTarget: null,
+      buildFolderQuery: (target, drive) => {
+        const params = { driveId: drive.id };
+        if (target) params.folderId = target;
+        // `sharedWithMe` is a synthetic source — the backend needs the
+        // hint to query the Drive API's `sharedWithMe=true` filter.
+        if (drive.id === 'sharedWithMe') params.source = 'sharedWithMe';
+        return params;
+      },
+      buildDownloadQuery: item => ({ fileId: item.id }),
+      buildBreadcrumbFromItem: folderItem => ({
+        id: folderItem.id,
+        name: folderItem.name,
+        type: 'folder'
+      }),
+      buildBreadcrumbTarget: crumb => (crumb.type === 'drive' ? null : crumb.id),
+      buildDriveBreadcrumb: drive => ({ id: drive.id, name: drive.name, type: 'drive' }),
+      isVirtualFile: isGoogleDoc
     },
-    buildDownloadQuery: item => ({ fileId: item.id }),
-    buildBreadcrumbFromItem: folderItem => ({
-      id: folderItem.id,
-      name: folderItem.name,
-      type: 'folder'
-    }),
-    buildBreadcrumbTarget: crumb => (crumb.type === 'drive' ? null : crumb.id),
-    buildDriveBreadcrumb: drive => ({ id: drive.id, name: drive.name, type: 'drive' }),
-    isVirtualFile: isGoogleDoc
-  });
+    { providerId: provider?.id }
+  );
