@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/auto-instrumentations-node": "^0.75.0",
+    "@opentelemetry/auto-instrumentations-node": "^0.76.0",
     "@opentelemetry/exporter-metrics-otlp-http": "^0.202.0",
     "@opentelemetry/exporter-prometheus": "^0.218.0",
     "@opentelemetry/exporter-trace-otlp-http": "^0.202.0",
@@ -44,7 +44,7 @@
     "jsdom": "^26.0.0",
     "jsonwebtoken": "^9.0.2",
     "jwks-rsa": "^3.0.1",
-    "ldap-authentication": "^3.3.4",
+    "ldap-authentication": "^4.0.4",
     "memorystore": "^1.6.7",
     "multer": "^2.1.1",
     "node-fetch": "^3.3.0",
@@ -61,7 +61,7 @@
     "zod": "^3.25.74",
     "zod-to-json-schema": "^3.24.6",
     "html-to-text": "^9.0.5",
-    "uuid": "^11.1.0"
+    "uuid": "^14.0.0"
   },
   "devDependencies": {
     "@babel/core": "^7.28.0",
