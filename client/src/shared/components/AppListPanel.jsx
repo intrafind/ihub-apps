@@ -69,15 +69,7 @@ function AppListPanel({
       const bName = getLocalizedContent(b.name, language) || b.id || '';
       return aName.localeCompare(bName);
     });
-  }, [
-    apps,
-    favoritesEnabled,
-    favoritesOnly,
-    favoriteIds,
-    shouldShowSearch,
-    searchQuery,
-    language
-  ]);
+  }, [apps, favoritesEnabled, favoritesOnly, favoriteIds, shouldShowSearch, searchQuery, language]);
 
   return (
     <div className="flex flex-col h-full min-h-0">
