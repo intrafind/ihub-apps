@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatHeader from './chat/ChatHeader';
+import OfficeMailContextBanner from './chat/OfficeMailContextBanner';
 import ItemSelectorDialog from './apps-dialog';
 import VariablesDialog, {
   buildInitialVariablesMap,
@@ -13,6 +14,7 @@ import VariablesDialog, {
 } from './variables-dialog';
 import SettingsDialog from './settings-dialog';
 import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
+import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
@@ -67,6 +69,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     setHostContextFlags
   } = useAppSettings(selectedApp?.id, selectedApp);
   const fileUploadHandler = useFileUploadHandler();
+  const mailSnapshot = useOutlookMailContextSnapshot();
   const currentModel = models.find(m => m.id === selectedModel) || null;
   const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
 
@@ -126,6 +129,15 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       // outgoing apiMessage. Empty object in the main web app — no-op.
       params.hostContextFlags = hostContextFlags;
 
+      // Mail context snapshot — the user can drop individual attachments
+      // and toggle the body off via OfficeMailContextBanner before send.
+      // Forwarding the edited snapshot here avoids a second
+      // host.readMessageContext() round-trip inside the adapter and ensures
+      // the user's removals are honored. Null falls back to the adapter's
+      // own fetch (extension side panel, no-context routes).
+      const snapshotOverride = mailSnapshot.buildSnapshotOverride();
+      if (snapshotOverride) params.hostContextOverride = snapshotOverride;
+
       // Resend can pass a `selectedFile` override to bypass async state updates;
       // otherwise we read whatever the user has staged in the uploader.
       const sf =
@@ -158,7 +170,8 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       enabledTools,
       websearchEnabled,
       hostContextFlags,
-      fileUploadHandler
+      fileUploadHandler,
+      mailSnapshot
     ]
   );
 
@@ -367,6 +380,23 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 showAvatars={false}
               />
             </div>
+
+            {/* Mail-context banner: shows the email body + attachments
+                queued for this message so users can review and trim
+                before pressing send. Renders nothing when there's no
+                mail context (extension side panel, compose mode, etc.). */}
+            <OfficeMailContextBanner
+              ctx={mailSnapshot.ctx}
+              loading={mailSnapshot.loading}
+              visibleAttachments={mailSnapshot.visibleAttachments}
+              removedAttachmentIds={mailSnapshot.removedAttachmentIds}
+              onRemoveAttachment={mailSnapshot.removeAttachment}
+              onRestoreAttachments={mailSnapshot.restoreAttachments}
+              includeBody={hostContextFlags?.emailBody !== false}
+              onToggleBody={value =>
+                setHostContextFlags(prev => ({ ...(prev || {}), emailBody: value }))
+              }
+            />
 
             {/* Input */}
             <div className="border-t border-gray-200 bg-white flex-shrink-0">
