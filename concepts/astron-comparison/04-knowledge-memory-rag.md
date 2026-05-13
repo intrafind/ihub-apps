@@ -372,14 +372,12 @@ system).
 
 **Embedding strategy**
 
-- Reuse the existing LLM adapter abstraction
-  (`server/adapters/index.js`) where the provider supports embeddings
-  (OpenAI, Bedrock-Titan, Cohere, etc.). Add an `embed()` method to
-  `BaseAdapter`.
-- Fallback: bundle `@xenova/transformers` BGE-small (Apache-2, runs in
-  Node) so air-gapped deployments work out-of-the-box.
-- Embedding model is per-KB (recorded in `index.sqlite` metadata table);
-  re-indexing required to change it.
+- Add `embed()` to `BaseAdapter`; reuse existing OpenAI / Bedrock-Titan /
+  Cohere paths in `server/adapters/`.
+- Fallback: bundle `@xenova/transformers` BGE-small (Apache-2,
+  Node-native) for air-gapped installs.
+- Per-KB embedding model recorded in metadata; changing it requires
+  re-indexing.
 
 **Ingestion pipeline**
 
@@ -399,16 +397,15 @@ Job is sync for files < 10 MB, queued (BullMQ / in-mem queue) above.
 `server/services/rag/RagService.search(kbId, query, {topK, filter,
 hybrid, rerank})` returns `[{ chunkId, text, score, doc, link, …meta }]`.
 
-Integration: extend `SourceHandler` with a new `KnowledgeBaseHandler`
-(`server/sources/KnowledgeBaseHandler.js`) — it implements `loadContent`
-by calling `RagService.search()` with the **user's last message** as
-the query (already plumbed via `chatId` + `userVariables`). This lets
-KBs slot into the existing `app.sources` config with **zero churn** in
-`PromptService` (`server/services/PromptService.js:276-346`).
+Integration: new `KnowledgeBaseHandler` extends `SourceHandler`; its
+`loadContent` calls `RagService.search()` with the user's last message
+as the query (`chatId` + `userVariables` already plumbed). KBs slot
+into the existing `app.sources` array with **zero churn** in
+`PromptService` (`PromptService.js:276-346`).
 
-**Tests:** unit for chunkers + embedder mocks; integration loading
-`contents/sources/faq.md` and verifying top-1 chunk includes the
-expected answer; perf test 10 k chunks @ p95 < 200 ms.
+**Tests:** chunker unit; embedder mocks; integration loads
+`contents/sources/faq.md` and asserts top-1; perf 10 k chunks
+p95 < 200 ms.
 
 ### 5.2 Persistent conversation memory (#2)
 
