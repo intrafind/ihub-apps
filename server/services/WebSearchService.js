@@ -87,15 +87,59 @@ class BraveSearchProvider extends SearchProvider {
       actionTracker.trackAction(chatId, { action: 'search', query, provider: 'brave' });
     }
 
-    const res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
-      headers: {
-        'X-Subscription-Token': apiKey,
-        Accept: 'application/json'
-      }
-    });
+    let res;
+    try {
+      res = await throttledFetch('braveSearch', `${endpoint}?q=${encodeURIComponent(query)}`, {
+        headers: {
+          'X-Subscription-Token': apiKey,
+          Accept: 'application/json'
+        }
+      });
+    } catch (error) {
+      // Network/proxy failures (ECONNREFUSED, ETIMEDOUT, TLS errors, proxy unreachable, ...)
+      // surface here as a thrown Error from node-fetch. Without this branch the upstream
+      // wrapper only sees `error.message` and drops the code/cause, making proxy issues
+      // impossible to diagnose from the logs.
+      const causeMsg = error?.cause?.message || (typeof error?.cause === 'string' ? error.cause : undefined);
+      logger.error('Brave search network request failed', {
+        component: 'WebSearch',
+        provider: 'brave',
+        endpoint,
+        errorName: error?.name,
+        errorCode: error?.code || error?.cause?.code,
+        errorMessage: error?.message,
+        errorCause: causeMsg,
+        hint: 'If a proxy is configured, verify HTTPS_PROXY/HTTP_PROXY, ssl.domainWhitelist, and proxy.urlPatterns in platform.json.'
+      });
+      const detailParts = [error?.message];
+      if (error?.code) detailParts.push(`code=${error.code}`);
+      if (causeMsg) detailParts.push(`cause=${causeMsg}`);
+      const wrapped = new Error(`Brave search request failed: ${detailParts.filter(Boolean).join(' ')}`);
+      wrapped.code = error?.code || error?.cause?.code || 'NETWORK_ERROR';
+      wrapped.cause = error;
+      throw wrapped;
+    }
 
     if (!res.ok) {
-      throw new Error(`Brave search failed with status ${res.status}`);
+      let bodyPreview = '';
+      try {
+        bodyPreview = (await res.text()).slice(0, 500);
+      } catch {
+        // ignore body read errors
+      }
+      logger.error('Brave search returned non-OK status', {
+        component: 'WebSearch',
+        provider: 'brave',
+        status: res.status,
+        statusText: res.statusText,
+        bodyPreview
+      });
+      const err = new Error(
+        `Brave search failed with status ${res.status}${res.statusText ? ` (${res.statusText})` : ''}`
+      );
+      err.code = `HTTP_${res.status}`;
+      err.status = res.status;
+      throw err;
     }
 
     const data = await res.json();
@@ -280,7 +324,20 @@ class WebSearchService {
     try {
       return await provider.search(query, options);
     } catch (error) {
-      throw new Error(`Search failed with ${providerName}: ${error.message}`);
+      logger.error('Web search provider failed', {
+        component: 'WebSearch',
+        provider: providerName,
+        errorName: error?.name,
+        errorCode: error?.code,
+        errorMessage: error?.message,
+        errorCause: error?.cause?.message || error?.cause
+      });
+      const wrapped = new Error(`Search failed with ${providerName}: ${error.message}`);
+      // Preserve original code/cause so admins (and the ToolExecutor error report)
+      // can see proxy/network/TLS specifics instead of a generic "Search failed" line.
+      if (error?.code) wrapped.code = error.code;
+      wrapped.cause = error;
+      throw wrapped;
     }
   }
 }
