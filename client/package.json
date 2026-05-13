@@ -28,7 +28,7 @@
     "jszip": "^3.10.1",
     "mammoth": "^1.11.0",
     "marked": "^15.0.8",
-    "mermaid": "^11.12.3",
+    "mermaid": "^11.15.0",
     "microsoft-cognitiveservices-speech-sdk": "^1.44.0",
     "pdfjs-dist": "^4.10.38",
     "pptxgenjs": "^4.0.1",
