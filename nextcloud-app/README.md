@@ -8,9 +8,10 @@
 > in scope of this skeleton.
 
 This app adds a **Chat with iHub** action to the Nextcloud Files UI. When a
-user clicks it, Nextcloud loads `<ihub-base-url>/nextcloud/taskpane.html` in
-an iframe (or new tab — configurable) with the selected file paths encoded
-in the URL hash. The embedded iHub UI takes it from there.
+user clicks it, Nextcloud loads `<ihub-base-url>/nextcloud/full-embed.html`
+in an iframe inside the Nextcloud chrome (top nav, sidebar stay visible),
+with the selected file paths encoded in the URL hash. The embedded iHub UI
+takes it from there.
 
 iHub authenticates the user against its own OAuth client (auto-created when
 the admin enables **Admin → Integrations → Nextcloud Embed** in iHub). iHub
@@ -94,10 +95,10 @@ registry. When the user clicks it on one or more selected files:
    Nextcloud root, e.g. `/Reports/q1.pdf`).
 2. It builds the iHub embed URL:
    ```
-   <ihubBaseUrl>/nextcloud/taskpane.html#providerId=<id>&paths=<urlencoded-json>
+   <ihubBaseUrl>/nextcloud/full-embed.html#providerId=<id>&paths=<urlencoded-json>
    ```
-3. It opens the URL inside an iframe pane (or a new tab — controlled by the
-   admin setting). The iHub embed reads the hash, downloads the files
+3. It navigates to the app's host page (`/apps/ihub_chat/`), which iframes
+   the embed URL above. The iHub embed reads the hash, downloads the files
    through `/api/integrations/nextcloud/download`, and renders the chat UI.
 
 When the user changes the selection while the iframe is mounted, the
@@ -129,9 +130,10 @@ not on that list.
 
 ## Pointers
 
-- iHub source of truth for the embed URL + info.xml is the iHub admin
-  page (**Admin → Integrations → Nextcloud Embed**) — values are
-  per-deployment.
+- iHub source of truth for the embed URL is the iHub admin page
+  (**Admin → Integrations → Nextcloud Embed**) — values are
+  per-deployment. The `appinfo/info.xml` shipped here is the canonical
+  metadata; iHub does not generate a competing one.
 - Nextcloud app developer docs:
   https://docs.nextcloud.com/server/latest/developer_manual/
 - Nextcloud Files plugin API:

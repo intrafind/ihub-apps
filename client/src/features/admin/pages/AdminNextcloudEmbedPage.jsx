@@ -5,7 +5,6 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import { buildApiUrl } from '../../../utils/runtimeBasePath';
 
 function AdminNextcloudEmbedPage() {
   const { t } = useTranslation();
@@ -56,7 +55,8 @@ function AdminNextcloudEmbedPage() {
       setAllowedHostOrigins(
         Array.isArray(data.allowedHostOrigins) ? data.allowedHostOrigins.slice() : []
       );
-    } catch (_err) {
+    } catch (err) {
+      console.error('[nextcloud-embed] loadStatus failed', err);
       setMessage({
         type: 'error',
         text: t('admin.nextcloudEmbed.loadError', 'Failed to load Nextcloud embed status')
@@ -73,7 +73,11 @@ function AdminNextcloudEmbedPage() {
 
   const handleToggle = async () => {
     if (!status) return;
-    const action = status.enabled ? 'disable' : 'enable';
+    // Capture the pre-toggle state *before* the await; reading `status.enabled`
+    // after `loadStatus()` resolves would refer to the post-toggle state and
+    // invert the toast.
+    const wasEnabled = status.enabled;
+    const action = wasEnabled ? 'disable' : 'enable';
     try {
       setToggling(true);
       setMessage(null);
@@ -81,14 +85,15 @@ function AdminNextcloudEmbedPage() {
       await loadStatus();
       setMessage({
         type: 'success',
-        text: status.enabled
+        text: wasEnabled
           ? t('admin.nextcloudEmbed.disabled', 'Nextcloud embed disabled')
           : t(
               'admin.nextcloudEmbed.enabled',
               'Nextcloud embed enabled successfully. OAuth client has been created.'
             )
       });
-    } catch (_err) {
+    } catch (err) {
+      console.error('[nextcloud-embed] toggle failed', err);
       setMessage({
         type: 'error',
         text: t('admin.nextcloudEmbed.toggleError', 'Failed to update Nextcloud embed')
@@ -177,7 +182,8 @@ function AdminNextcloudEmbedPage() {
       await loadStatus();
       setMessage({ type: 'success', text: t('admin.nextcloudEmbed.saved', 'Configuration saved') });
       setTimeout(() => setMessage(null), 3000);
-    } catch (_err) {
+    } catch (err) {
+      console.error('[nextcloud-embed] saveConfig failed', err);
       setMessage({
         type: 'error',
         text: t('admin.nextcloudEmbed.saveError', 'Failed to save configuration')
@@ -208,28 +214,7 @@ function AdminNextcloudEmbedPage() {
     });
   };
 
-  const infoXmlUrl = status?.infoXmlUrl || buildApiUrl('integrations/nextcloud-embed/info.xml');
   const embedUrl = status?.embedUrl || '';
-  const infoXmlApiPath = buildApiUrl('integrations/nextcloud-embed/info.xml');
-
-  const handleDownloadInfoXml = async () => {
-    try {
-      const res = await fetch(infoXmlApiPath);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'info.xml';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (_err) {
-      setMessage({
-        type: 'error',
-        text: t('admin.nextcloudEmbed.downloadError', 'Failed to download info.xml')
-      });
-    }
-  };
 
   return (
     <AdminAuth>
@@ -330,70 +315,33 @@ function AdminNextcloudEmbedPage() {
                 )}
               </div>
 
-              {/* Embed URL + info.xml */}
+              {/* Embed URL */}
               {status?.enabled && (
-                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 space-y-6">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                      {t('admin.nextcloudEmbed.embedUrlTitle', 'Embed URL')}
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      {t(
-                        'admin.nextcloudEmbed.embedUrlDesc',
-                        'Use this URL as the iframe src inside your Nextcloud app. Pass the file selection in the URL hash (see docs).'
-                      )}
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        readOnly
-                        value={embedUrl}
-                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-none"
-                        onClick={e => e.target.select()}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard?.writeText(embedUrl)}
-                        className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        {t('admin.nextcloudEmbed.copy', 'Copy')}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-100 dark:border-gray-700 pt-6">
-                    <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-                      {t('admin.nextcloudEmbed.infoXmlTitle', 'Nextcloud appinfo/info.xml')}
-                    </h2>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-                      {t(
-                        'admin.nextcloudEmbed.infoXmlDesc',
-                        'Drop this into your Nextcloud app under appinfo/info.xml. URLs are pinned to this deployment.'
-                      )}
-                    </p>
-                    <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        readOnly
-                        value={infoXmlUrl}
-                        className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-none"
-                        onClick={e => e.target.select()}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => navigator.clipboard?.writeText(infoXmlUrl)}
-                        className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
-                      >
-                        {t('admin.nextcloudEmbed.copy', 'Copy')}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleDownloadInfoXml}
-                        className="shrink-0 rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700"
-                      >
-                        {t('admin.nextcloudEmbed.download', 'Download')}
-                      </button>
-                    </div>
+                <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                    {t('admin.nextcloudEmbed.embedUrlTitle', 'Embed URL')}
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
+                    {t(
+                      'admin.nextcloudEmbed.embedUrlDesc',
+                      'The shipped Nextcloud app skeleton (nextcloud-app/) already points at this URL; this field is for reference and copy-paste when configuring a custom Nextcloud-side integration.'
+                    )}
+                  </p>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="text"
+                      readOnly
+                      value={embedUrl}
+                      className="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 px-3 py-2 text-sm font-mono text-gray-700 dark:text-gray-300 focus:outline-none"
+                      onClick={e => e.target.select()}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => navigator.clipboard?.writeText(embedUrl)}
+                      className="shrink-0 rounded-lg border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    >
+                      {t('admin.nextcloudEmbed.copy', 'Copy')}
+                    </button>
                   </div>
                 </div>
               )}
