@@ -1701,7 +1701,8 @@
       "selectAuthMethod": "Authentifizierungsmethode wählen:",
       "localAuth": "Lokale Authentifizierung",
       "ldapAuth": "LDAP-Authentifizierung",
-      "backToMethodSelection": "Zurück zur Methodenauswahl"
+      "backToMethodSelection": "Zurück zur Methodenauswahl",
+      "localAuthFailed": "Authentifizierung fehlgeschlagen. Bitte überprüfen Sie Ihren Benutzernamen und Ihr Passwort."
     },
     "logout": "Abmelden",
     "menu": {

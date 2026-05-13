@@ -345,7 +345,8 @@
       "selectAuthMethod": "Select authentication method:",
       "localAuth": "Local Authentication",
       "ldapAuth": "LDAP Authentication",
-      "backToMethodSelection": "Back to method selection"
+      "backToMethodSelection": "Back to method selection",
+      "localAuthFailed": "Authentication failed. Please check your username and password."
     },
     "logout": "Sign out",
     "menu": {
