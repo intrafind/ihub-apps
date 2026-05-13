@@ -17,6 +17,7 @@ import config from '../config.js';
 import configCache from '../configCache.js';
 import tokenStorageService from '../services/TokenStorageService.js';
 import logger from '../utils/logger.js';
+import { runWithContext, setContext } from '../utils/requestContext.js';
 import activityTracker from '../telemetry/ActivityTracker.js';
 
 /**
@@ -398,6 +399,22 @@ export function setupMiddleware(app, platformConfig = {}) {
   // Trust proxy for proper IP and protocol detection
   app.set('trust proxy', 1);
 
+  // Open the per-request logging context. Subsequent middleware and route
+  // handlers run inside an AsyncLocalStorage scope, so every logger call on
+  // the request's async chain gets userId / oauthClientId / ip merged in
+  // automatically. The store is a mutable object: the auth chain below
+  // mutates it with user/client info once authentication has resolved.
+  app.use((req, res, next) => {
+    runWithContext(
+      {
+        ip: req.ip,
+        userId: undefined,
+        oauthClientId: undefined
+      },
+      () => next()
+    );
+  });
+
   // CORS options are resolved per-request from the live platform config so
   // changes saved via /api/admin/cors/config take effect without a server
   // restart. The cors() middleware accepts a (req, callback) -> options
@@ -584,6 +601,25 @@ export function setupMiddleware(app, platformConfig = {}) {
       platformConfig // Pass platform config to respect NTLM requirements
     )
   );
+
+  // Populate the request logging context with the authenticated identity so
+  // every subsequent log line carries userId / oauthClientId. The store was
+  // opened earlier in the middleware chain (right after trust proxy) with a
+  // mutable object — see runWithContext above.
+  app.use((req, res, next) => {
+    if (req.user) {
+      const updates = { userId: req.user.id };
+      // OAuth client_credentials / static API key: req.user.id IS the client id.
+      // OAuth authorization_code (user-delegated): req.user.clientId is set.
+      if (req.user.isOAuthClient) {
+        updates.oauthClientId = req.user.id;
+      } else if (req.user.clientId) {
+        updates.oauthClientId = req.user.clientId;
+      }
+      setContext(updates);
+    }
+    next();
+  });
 
   // Enhance user with permissions after authentication
   app.use((req, res, next) => {

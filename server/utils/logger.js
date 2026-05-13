@@ -1,4 +1,5 @@
 import winston from 'winston';
+import { getContext } from './requestContext.js';
 
 // Default log level and format (fallback if not configured)
 const DEFAULT_LOG_LEVEL = 'info';
@@ -286,8 +287,38 @@ function processLogArgs(args) {
     }
   }
 
+  // Merge per-request context (userId, oauthClientId, ip) so logs are
+  // attributable without each call site having to pass them through.
+  // Caller-provided fields always win.
+  logData = mergeRequestContext(logData);
+
   // Redact sensitive information from the log data
   return redactSensitiveData(logData);
+}
+
+/**
+ * Merge fields from the active request context into the log data without
+ * overriding fields explicitly set by the caller. Returns the data unchanged
+ * when called outside a request (e.g. server startup, background jobs).
+ *
+ * @param {Object} logData - Structured log data.
+ * @returns {Object} Log data with request context fields merged in.
+ */
+function mergeRequestContext(logData) {
+  const ctx = getContext();
+  if (!ctx) return logData;
+
+  const merged = { ...logData };
+  if (ctx.userId !== undefined && merged.userId === undefined) {
+    merged.userId = ctx.userId;
+  }
+  if (ctx.oauthClientId !== undefined && merged.oauthClientId === undefined) {
+    merged.oauthClientId = ctx.oauthClientId;
+  }
+  if (ctx.ip !== undefined && merged.ip === undefined) {
+    merged.ip = ctx.ip;
+  }
+  return merged;
 }
 
 /**
