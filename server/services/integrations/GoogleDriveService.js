@@ -313,7 +313,7 @@ class GoogleDriveService {
         });
       }
 
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
+      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
       logger.info('Google Drive tokens stored for user', {
         component: 'Google Drive',
         userId,
@@ -332,13 +332,14 @@ class GoogleDriveService {
   /**
    * Retrieve and decrypt user tokens with automatic refresh if expired
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
    * @returns {Promise<Object>} Decrypted tokens
    */
-  async getUserTokens(userId) {
+  async getUserTokens(userId, providerId) {
     try {
-      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
 
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
+      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
 
       if (expired) {
         logger.info('Tokens expired for user, attempting refresh', {
@@ -375,7 +376,7 @@ class GoogleDriveService {
             error: refreshError
           });
 
-          await this.deleteUserTokens(userId);
+          await this.deleteUserTokens(userId, providerId);
           throw new Error('Google Drive authentication expired. Please reconnect your account.');
         }
       }
@@ -399,15 +400,17 @@ class GoogleDriveService {
   /**
    * Delete user tokens (disconnect)
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
    * @returns {Promise<boolean>} Success status
    */
-  async deleteUserTokens(userId) {
+  async deleteUserTokens(userId, providerId) {
     try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
+      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
       if (result) {
         logger.info('Google Drive tokens deleted for user', {
           component: 'Google Drive',
-          userId
+          userId,
+          providerId
         });
       }
       return result;
@@ -426,14 +429,15 @@ class GoogleDriveService {
    * @param {string} method - HTTP method
    * @param {Object|null} data - Request body
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
    * @param {number} retryCount - Current retry count
    * @returns {Promise<Object>} API response
    */
-  async makeApiRequest(endpoint, method = 'GET', data = null, userId, retryCount = 0) {
+  async makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
     const maxRetries = 1;
 
     try {
-      const tokens = await this.getUserTokens(userId);
+      const tokens = await this.getUserTokens(userId, providerId);
 
       const url = endpoint.startsWith('http') ? endpoint : `${this.driveApiUrl}${endpoint}`;
 
@@ -461,7 +465,11 @@ class GoogleDriveService {
           });
 
           try {
-            const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+            const expiredTokens = await tokenStorage.getUserTokens(
+              userId,
+              this.serviceName,
+              providerId
+            );
 
             if (!expiredTokens.refreshToken) {
               throw new Error('No refresh token available');
@@ -474,14 +482,21 @@ class GoogleDriveService {
 
             await this.storeUserTokens(userId, refreshedTokens);
 
-            return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
+            return await this.makeApiRequest(
+              endpoint,
+              method,
+              data,
+              userId,
+              providerId,
+              retryCount + 1
+            );
           } catch (refreshError) {
             logger.error('Forced token refresh failed', {
               component: 'Google Drive',
               error: refreshError
             });
 
-            await this.deleteUserTokens(userId);
+            await this.deleteUserTokens(userId, providerId);
             throw new Error('Google Drive authentication expired. Please reconnect your account.');
           }
         } else if (response.status === 401) {
@@ -536,15 +551,16 @@ class GoogleDriveService {
    * @param {string} userId - User ID
    * @returns {Promise<boolean>} Authentication status
    */
-  async isUserAuthenticated(userId) {
+  async isUserAuthenticated(userId, providerId) {
     try {
-      await this.getUserTokens(userId);
-      await this.makeApiRequest(this.userInfoUrl, 'GET', null, userId);
+      await this.getUserTokens(userId, providerId);
+      await this.makeApiRequest(this.userInfoUrl, 'GET', null, userId, providerId);
       return true;
     } catch (error) {
       logger.info('User Google Drive authentication failed', {
         component: 'Google Drive',
         userId,
+        providerId,
         error
       });
       return false;
@@ -554,11 +570,12 @@ class GoogleDriveService {
   /**
    * Get user's Google account information
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
    * @returns {Promise<Object>} User info
    */
-  async getUserInfo(userId) {
+  async getUserInfo(userId, providerId) {
     try {
-      const data = await this.makeApiRequest(this.userInfoUrl, 'GET', null, userId);
+      const data = await this.makeApiRequest(this.userInfoUrl, 'GET', null, userId, providerId);
 
       return {
         id: data.id,
@@ -580,9 +597,9 @@ class GoogleDriveService {
    * @param {string} userId - User ID
    * @returns {Promise<Object>} Token metadata
    */
-  async getTokenExpirationInfo(userId) {
+  async getTokenExpirationInfo(userId, providerId) {
     try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName);
+      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
       const now = new Date();
       const expiresAt = new Date(metadata.expiresAt);
       const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
@@ -611,7 +628,7 @@ class GoogleDriveService {
    * @returns {Promise<Array>} All items from all pages
    * @private
    */
-  async _fetchAllPages(endpoint, params, userId, maxPages = 10) {
+  async _fetchAllPages(endpoint, params, userId, providerId, maxPages = 10) {
     const allItems = [];
     let pageToken = null;
     let pageCount = 0;
@@ -633,7 +650,7 @@ class GoogleDriveService {
 
       const queryString = new URLSearchParams(queryParams).toString();
       const url = `${endpoint}?${queryString}`;
-      const data = await this.makeApiRequest(url, 'GET', null, userId);
+      const data = await this.makeApiRequest(url, 'GET', null, userId, providerId);
 
       if (data.files) {
         allItems.push(...data.files);
@@ -654,7 +671,7 @@ class GoogleDriveService {
    * @param {string} folderId - Folder ID (null for root)
    * @returns {Promise<Array>} List of files/folders
    */
-  async listMyDriveFiles(userId, folderId = null) {
+  async listMyDriveFiles(userId, folderId = null, providerId) {
     try {
       const rawParentId = folderId || 'root';
       const parentId = rawParentId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -666,7 +683,7 @@ class GoogleDriveService {
         orderBy: 'folder,name'
       };
 
-      const files = await this._fetchAllPages('/files', params, userId);
+      const files = await this._fetchAllPages('/files', params, userId, providerId);
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
@@ -683,7 +700,7 @@ class GoogleDriveService {
    * @param {string} userId - User ID
    * @returns {Promise<Array>} List of shared drives
    */
-  async listSharedDrives(userId) {
+  async listSharedDrives(userId, providerId) {
     try {
       logger.info('Loading shared drives', { component: 'Google Drive' });
 
@@ -692,7 +709,7 @@ class GoogleDriveService {
         fields: 'nextPageToken,drives(id,name)'
       };
 
-      const drives = await this._fetchAllPages('/drives', params, userId);
+      const drives = await this._fetchAllPages('/drives', params, userId, providerId);
 
       const result = drives.map(drive => ({
         id: drive.id,
@@ -720,7 +737,7 @@ class GoogleDriveService {
    * @param {string} folderId - Folder ID (null for root)
    * @returns {Promise<Array>} List of files/folders
    */
-  async listSharedDriveFiles(userId, driveId, folderId = null) {
+  async listSharedDriveFiles(userId, driveId, folderId = null, providerId) {
     try {
       const rawParentId = folderId || driveId;
       const parentId = rawParentId.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
@@ -736,7 +753,7 @@ class GoogleDriveService {
         orderBy: 'folder,name'
       };
 
-      const files = await this._fetchAllPages('/files', params, userId);
+      const files = await this._fetchAllPages('/files', params, userId, providerId);
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
@@ -753,7 +770,7 @@ class GoogleDriveService {
    * @param {string} userId - User ID
    * @returns {Promise<Array>} List of shared files
    */
-  async listSharedWithMe(userId) {
+  async listSharedWithMe(userId, providerId) {
     try {
       const params = {
         q: 'sharedWithMe=true and trashed=false',
@@ -763,7 +780,7 @@ class GoogleDriveService {
         orderBy: 'folder,name'
       };
 
-      const files = await this._fetchAllPages('/files', params, userId);
+      const files = await this._fetchAllPages('/files', params, userId, providerId);
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
@@ -782,7 +799,7 @@ class GoogleDriveService {
    * @param {string} driveId - Optional shared drive ID
    * @returns {Promise<Array>} List of matching files
    */
-  async searchFiles(userId, query, driveId = null) {
+  async searchFiles(userId, query, driveId = null, providerId) {
     try {
       if (!query || query.trim().length === 0) {
         return [];
@@ -803,7 +820,7 @@ class GoogleDriveService {
         params.supportsAllDrives = 'true';
       }
 
-      const files = await this._fetchAllPages('/files', params, userId);
+      const files = await this._fetchAllPages('/files', params, userId, providerId);
 
       return files.map(file => this._mapFileToItem(file));
     } catch (error) {
@@ -821,10 +838,10 @@ class GoogleDriveService {
    * @param {string} fileId - File ID
    * @returns {Promise<Object>} File data with content
    */
-  async downloadFile(userId, fileId) {
+  async downloadFile(userId, fileId, providerId) {
     try {
       // Retrieve tokens once for all operations in this method
-      const tokens = await this.getUserTokens(userId);
+      const tokens = await this.getUserTokens(userId, providerId);
 
       // Get file metadata first
       const metadataUrl = `${this.driveApiUrl}/files/${fileId}?fields=id,name,mimeType,size,webViewLink`;

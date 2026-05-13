@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { apiClient } from '../../../api/client';
 import { processCloudFile } from '../utils/cloudFileProcessing';
 
@@ -18,7 +18,7 @@ import { processCloudFile } from '../utils/cloudFileProcessing';
  * to define how a folder/file query is built and how breadcrumbs map
  * back to their navigation target.
  */
-export function useCloudStorageBrowser(adapter) {
+export function useCloudStorageBrowser(adapter, options = {}) {
   const {
     basePath,
     buildFolderQuery,
@@ -29,6 +29,13 @@ export function useCloudStorageBrowser(adapter) {
     initialFolderTarget,
     isVirtualFile
   } = adapter;
+  // `providerId` is the cloud-storage provider's stable id from
+  // platform.json. The server uses it to scope token files so a user
+  // can connect to e.g. two Office 365 tenants concurrently.
+  const providerId = options.providerId || null;
+  // Memoised so it can be listed in callback deps without retriggering
+  // every render of the consuming component.
+  const baseQuery = useMemo(() => (providerId ? { providerId } : {}), [providerId]);
 
   const [authStatus, setAuthStatus] = useState('checking');
   const [sources, setSources] = useState([]);
@@ -53,7 +60,7 @@ export function useCloudStorageBrowser(adapter) {
   const checkAuthStatus = useCallback(async () => {
     try {
       setAuthStatus('checking');
-      const response = await apiClient.get(`${basePath}/status`);
+      const response = await apiClient.get(`${basePath}/status`, { params: baseQuery });
       setAuthStatus(response.data.connected ? 'connected' : 'not_connected');
       return response.data.connected;
     } catch (err) {
@@ -66,7 +73,7 @@ export function useCloudStorageBrowser(adapter) {
       }
       return false;
     }
-  }, [basePath]);
+  }, [basePath, baseQuery]);
 
   const handleAuthError = useCallback(message => {
     setAuthStatus('not_connected');
@@ -77,7 +84,7 @@ export function useCloudStorageBrowser(adapter) {
     try {
       setLoading(true);
       setError(null);
-      const response = await apiClient.get(`${basePath}/sources`);
+      const response = await apiClient.get(`${basePath}/sources`, { params: baseQuery });
       setSources(response.data.sources || []);
       return response.data.sources || [];
     } catch (err) {
@@ -91,7 +98,7 @@ export function useCloudStorageBrowser(adapter) {
     } finally {
       setLoading(false);
     }
-  }, [basePath, handleAuthError]);
+  }, [basePath, baseQuery, handleAuthError]);
 
   const loadDrivesForSource = useCallback(
     async sourceId => {
@@ -99,7 +106,9 @@ export function useCloudStorageBrowser(adapter) {
         setLoading(true);
         setError(null);
         setCurrentSource(sourceId);
-        const response = await apiClient.get(`${basePath}/drives/${sourceId}`);
+        const response = await apiClient.get(`${basePath}/drives/${sourceId}`, {
+          params: baseQuery
+        });
         const result = response.data.drives || [];
         setDrives(result);
         return result;
@@ -115,7 +124,7 @@ export function useCloudStorageBrowser(adapter) {
         setLoading(false);
       }
     },
-    [basePath, handleAuthError]
+    [basePath, baseQuery, handleAuthError]
   );
 
   const goBackToSources = useCallback(() => {
@@ -135,7 +144,7 @@ export function useCloudStorageBrowser(adapter) {
       try {
         setLoading(true);
         setError(null);
-        const params = { ...buildFolderQuery(target, drive) };
+        const params = { ...baseQuery, ...buildFolderQuery(target, drive) };
         if (search && search.trim().length > 0) {
           params.search = search.trim();
         }
@@ -154,7 +163,7 @@ export function useCloudStorageBrowser(adapter) {
         setLoading(false);
       }
     },
-    [basePath, buildFolderQuery, handleAuthError]
+    [basePath, baseQuery, buildFolderQuery, handleAuthError]
   );
 
   const selectDrive = useCallback(
@@ -274,7 +283,7 @@ export function useCloudStorageBrowser(adapter) {
 
           try {
             const response = await apiClient.get(`${basePath}/download`, {
-              params: buildDownloadQuery(item, currentDrive),
+              params: { ...baseQuery, ...buildDownloadQuery(item, currentDrive) },
               responseType: 'blob'
             });
             const blob = response.data;
@@ -297,7 +306,7 @@ export function useCloudStorageBrowser(adapter) {
         setDownloading({ active: false, current: 0, total: 0 });
       }
     },
-    [basePath, buildDownloadQuery, currentDrive, isVirtualFile, selectedFiles]
+    [basePath, baseQuery, buildDownloadQuery, currentDrive, isVirtualFile, selectedFiles]
   );
 
   const searchItems = useCallback(

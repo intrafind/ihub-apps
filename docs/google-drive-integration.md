@@ -274,5 +274,5 @@ client/src/features/upload/
 ├── hooks/useCloudStorageBrowser.js               # Shared state-management factory
 └── hooks/useGoogleDriveBrowser.js                # Thin adapter over the factory
 
-contents/integrations/googledrive/                # Encrypted token storage (auto-created)
+contents/integrations/googledrive/                # Encrypted token storage, one file per (user, provider)
 ```

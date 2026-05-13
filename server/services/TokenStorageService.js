@@ -201,6 +201,45 @@ class TokenStorageService {
   }
 
   /**
+   * Resolve the on-disk filename for a token blob.
+   *
+   * Per-provider scoping is the supported form: callers pass a
+   * `providerId` and the file ends up at `<userId>__<providerId>.json`,
+   * which lets a user connect to multiple instances of the same service
+   * (e.g. two Office 365 tenants) without each overwriting the others.
+   * `__` is used as the separator so `userId` values that contain a `.`
+   * (typical for email-style IDs) don't collide with the `.json` suffix.
+   *
+   * Callers that omit `providerId` fall back to the legacy single-slot
+   * `<userId>.json` path. Production paths always pass `providerId`; the
+   * un-scoped form is kept for tests and for the migration entry point.
+   */
+  _tokenFilePath(userId, serviceName, providerId) {
+    const dir = path.join(this.storageBasePath, serviceName);
+    const filename = providerId ? `${userId}__${providerId}.json` : `${userId}.json`;
+    return path.join(dir, filename);
+  }
+
+  /**
+   * Like `_tokenFilePath`, but if the providerId-scoped file does not
+   * exist, fall back to the legacy `<userId>.json` path so a partially-
+   * migrated install still serves tokens. Once the startup migration has
+   * run, this almost always resolves to the scoped path.
+   */
+  async _resolveExistingTokenFilePath(userId, serviceName, providerId) {
+    if (providerId) {
+      const scoped = this._tokenFilePath(userId, serviceName, providerId);
+      try {
+        await fs.access(scoped);
+        return scoped;
+      } catch {
+        // Fall through to legacy path
+      }
+    }
+    return this._tokenFilePath(userId, serviceName, null);
+  }
+
+  /**
    * Encrypt token data with user and service-specific security
    */
   encryptTokens(tokens, userId, serviceName) {
@@ -278,14 +317,21 @@ class TokenStorageService {
   }
 
   /**
-   * Store encrypted user tokens for a specific service
+   * Store encrypted user tokens for a specific service + provider.
+   *
+   * `providerId` scopes the on-disk filename so the same user can
+   * connect to multiple instances of the same service (e.g. two
+   * Office 365 tenants or two Nextcloud servers) without each
+   * overwriting the others. Callers should always pass the providerId
+   * from the OAuth state — only tests omit it.
    */
-  async storeUserTokens(userId, serviceName, tokens) {
+  async storeUserTokens(userId, serviceName, tokens, providerId = null) {
     try {
       const encryptedTokens = this.encryptTokens(tokens, userId, serviceName);
       const now = new Date();
       const tokenData = {
         ...encryptedTokens,
+        providerId: providerId || tokens?.providerId || null,
         createdAt: now.toISOString(),
         expiresAt: tokens.expiresIn
           ? new Date(now.getTime() + tokens.expiresIn * 1000).toISOString()
@@ -296,13 +342,14 @@ class TokenStorageService {
       const tokenDir = path.join(this.storageBasePath, serviceName);
       await fs.mkdir(tokenDir, { recursive: true });
 
-      const tokenFile = path.join(tokenDir, `${userId}.json`);
+      const tokenFile = this._tokenFilePath(userId, serviceName, tokenData.providerId);
       await fs.writeFile(tokenFile, JSON.stringify(tokenData, null, 2));
 
       logger.info('Tokens stored for user', {
         component: 'TokenStorage',
         serviceName,
-        userId
+        userId,
+        providerId: tokenData.providerId
       });
       return true;
     } catch (error) {
@@ -315,11 +362,14 @@ class TokenStorageService {
   }
 
   /**
-   * Retrieve and decrypt user tokens for a specific service
+   * Retrieve and decrypt user tokens for a specific service + provider.
+   * Falls back to the legacy single-slot file if the scoped one is
+   * missing (upgrade safety; the eager startup migration normally
+   * renames legacy files first).
    */
-  async getUserTokens(userId, serviceName) {
+  async getUserTokens(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       return this.decryptTokens(tokenData, userId, serviceName);
@@ -339,9 +389,9 @@ class TokenStorageService {
    * Check if tokens are expired based on stored expiration time
    * Includes a 2-minute buffer for proactive refresh
    */
-  async areTokensExpired(userId, serviceName) {
+  async areTokensExpired(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       if (!tokenData.expiresAt) {
@@ -367,16 +417,17 @@ class TokenStorageService {
   }
 
   /**
-   * Delete user tokens for a specific service (disconnect)
+   * Delete user tokens for a specific service + provider (disconnect)
    */
-  async deleteUserTokens(userId, serviceName) {
+  async deleteUserTokens(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       await fs.unlink(tokenFile);
       logger.info('Tokens deleted for user', {
         component: 'TokenStorage',
         serviceName,
-        userId
+        userId,
+        providerId
       });
       return true;
     } catch (error) {
@@ -391,12 +442,12 @@ class TokenStorageService {
   }
 
   /**
-   * Check if user has valid tokens for a specific service
+   * Check if user has valid tokens for a specific service + provider
    */
-  async hasValidTokens(userId, serviceName) {
+  async hasValidTokens(userId, serviceName, providerId = null) {
     try {
-      await this.getUserTokens(userId, serviceName);
-      const expired = await this.areTokensExpired(userId, serviceName);
+      await this.getUserTokens(userId, serviceName, providerId);
+      const expired = await this.areTokensExpired(userId, serviceName, providerId);
       return !expired;
     } catch (error) {
       return false;
@@ -434,14 +485,15 @@ class TokenStorageService {
   /**
    * Get token metadata without decrypting the actual tokens
    */
-  async getTokenMetadata(userId, serviceName) {
+  async getTokenMetadata(userId, serviceName, providerId = null) {
     try {
-      const tokenFile = path.join(this.storageBasePath, serviceName, `${userId}.json`);
+      const tokenFile = await this._resolveExistingTokenFilePath(userId, serviceName, providerId);
       const tokenData = JSON.parse(await fs.readFile(tokenFile, 'utf8'));
 
       return {
         userId: tokenData.userId,
         serviceName: tokenData.serviceName,
+        providerId: tokenData.providerId || null,
         createdAt: tokenData.createdAt,
         expiresAt: tokenData.expiresAt,
         expired: tokenData.expiresAt ? new Date(tokenData.expiresAt) <= new Date() : false
@@ -691,6 +743,145 @@ class TokenStorageService {
    */
   getRSAPrivateKey() {
     return this.rsaKeyPair?.privateKey || null;
+  }
+
+  /**
+   * Migrate legacy token files in `contents/integrations/*` from the
+   * old single-slot `<userId>.json` layout to the per-provider
+   * `<userId>__<providerId>.json` layout.
+   *
+   * Each legacy file is decrypted to read its `providerId` (the field
+   * is also persisted in plaintext on new files but historical files
+   * only carry it inside the encrypted payload). On success the file
+   * is renamed; on failure (missing providerId, decryption error,
+   * etc.) the file is left in place and logged so an operator can
+   * decide whether to delete it. The migration runs once per process
+   * start and is a no-op on already-migrated installs.
+   */
+  async migrateLegacyTokenFiles() {
+    try {
+      // Quick exit if the integrations directory has never been
+      // created (fresh install).
+      try {
+        await fs.access(this.storageBasePath);
+      } catch (err) {
+        if (err.code === 'ENOENT') return;
+        throw err;
+      }
+
+      const services = await fs.readdir(this.storageBasePath);
+      let migrated = 0;
+      let skipped = 0;
+
+      for (const serviceName of services) {
+        const serviceDir = path.join(this.storageBasePath, serviceName);
+        let stat;
+        try {
+          stat = await fs.stat(serviceDir);
+        } catch {
+          continue;
+        }
+        if (!stat.isDirectory()) continue;
+
+        const entries = await fs.readdir(serviceDir);
+        for (const entry of entries) {
+          // Already-scoped filenames contain the `__` separator —
+          // those are new-format files and need no migration.
+          if (!entry.endsWith('.json') || entry.includes('__')) continue;
+
+          const userId = entry.slice(0, -'.json'.length);
+          const oldPath = path.join(serviceDir, entry);
+
+          let tokenData;
+          try {
+            tokenData = JSON.parse(await fs.readFile(oldPath, 'utf8'));
+          } catch (err) {
+            logger.warn('Skipping unparseable legacy token file during migration', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              error: err.message
+            });
+            skipped += 1;
+            continue;
+          }
+
+          // The on-disk file may already carry the providerId in
+          // plaintext (from this codebase) or only inside the
+          // encrypted blob (older installs).
+          let providerId = tokenData.providerId || null;
+          if (!providerId) {
+            try {
+              const decrypted = this.decryptTokens(tokenData, userId, serviceName);
+              providerId = decrypted.providerId || null;
+            } catch (err) {
+              logger.warn('Skipping legacy token file: could not recover providerId', {
+                component: 'TokenStorage',
+                serviceName,
+                file: entry,
+                error: err.message
+              });
+              skipped += 1;
+              continue;
+            }
+          }
+
+          if (!providerId) {
+            logger.warn('Skipping legacy token file: no providerId in payload', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry
+            });
+            skipped += 1;
+            continue;
+          }
+
+          const newPath = this._tokenFilePath(userId, serviceName, providerId);
+
+          // If the new-format path already exists (unlikely but
+          // possible after a partial rename) keep the new one and
+          // delete the legacy file to converge.
+          try {
+            await fs.access(newPath);
+            await fs.unlink(oldPath);
+            logger.info('Removed duplicate legacy token file (scoped file already exists)', {
+              component: 'TokenStorage',
+              serviceName,
+              file: entry,
+              providerId
+            });
+            migrated += 1;
+            continue;
+          } catch {
+            // Scoped path does not exist; proceed with rename.
+          }
+
+          await fs.rename(oldPath, newPath);
+          migrated += 1;
+          logger.info('Migrated legacy token file to per-provider path', {
+            component: 'TokenStorage',
+            serviceName,
+            userId,
+            providerId
+          });
+        }
+      }
+
+      if (migrated > 0 || skipped > 0) {
+        logger.info('Token-file migration complete', {
+          component: 'TokenStorage',
+          migrated,
+          skipped
+        });
+      }
+    } catch (error) {
+      logger.error('Error migrating legacy token files', {
+        component: 'TokenStorage',
+        error: error.message
+      });
+      // Non-fatal: server continues to boot, falling back to legacy
+      // read paths via `_resolveExistingTokenFilePath`.
+    }
   }
 }
 

@@ -309,7 +309,7 @@ class Office365Service {
         });
       }
 
-      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens);
+      await tokenStorage.storeUserTokens(userId, this.serviceName, tokens, tokens.providerId);
       logger.info('Office 365 tokens stored for user', {
         component: 'Office365Service',
         userId,
@@ -328,12 +328,13 @@ class Office365Service {
   /**
    * Retrieve and decrypt user tokens with automatic refresh if expired
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID (omit for legacy single-slot lookup)
    * @returns {Promise<Object>} Decrypted tokens
    */
-  async getUserTokens(userId) {
+  async getUserTokens(userId, providerId) {
     try {
       // First, get the tokens to check their scope
-      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+      let tokens = await tokenStorage.getUserTokens(userId, this.serviceName, providerId);
 
       // Check if tokens have old scopes that require admin consent (Group.Read.All, ChannelSettings.Read.All)
       // These tokens need to be invalidated so user can re-authenticate with new scopes
@@ -353,7 +354,7 @@ class Office365Service {
       }
 
       // Check if tokens are expired
-      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName);
+      const expired = await tokenStorage.areTokensExpired(userId, this.serviceName, providerId);
 
       if (expired) {
         logger.info('Tokens expired, attempting refresh', {
@@ -392,7 +393,7 @@ class Office365Service {
           });
 
           // If refresh fails, delete the invalid tokens so user can reconnect
-          await this.deleteUserTokens(userId);
+          await this.deleteUserTokens(userId, providerId);
 
           throw new Error('Office 365 authentication expired. Please reconnect your account.');
         }
@@ -419,15 +420,17 @@ class Office365Service {
   /**
    * Delete user tokens (disconnect)
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID (omit for legacy single-slot delete)
    * @returns {Promise<boolean>} Success status
    */
-  async deleteUserTokens(userId) {
+  async deleteUserTokens(userId, providerId) {
     try {
-      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName);
+      const result = await tokenStorage.deleteUserTokens(userId, this.serviceName, providerId);
       if (result) {
         logger.info('Office 365 tokens deleted for user', {
           component: 'Office365Service',
-          userId
+          userId,
+          providerId
         });
       }
       return result;
@@ -446,14 +449,15 @@ class Office365Service {
    * @param {string} method - HTTP method
    * @param {Object|null} data - Request body
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID for per-tenant token lookup
    * @param {number} retryCount - Current retry count
    * @returns {Promise<Object>} API response
    */
-  async makeApiRequest(endpoint, method = 'GET', data = null, userId, retryCount = 0) {
+  async makeApiRequest(endpoint, method = 'GET', data = null, userId, providerId, retryCount = 0) {
     const maxRetries = 1; // Allow one retry for token refresh
 
     try {
-      const tokens = await this.getUserTokens(userId);
+      const tokens = await this.getUserTokens(userId, providerId);
 
       const url = endpoint.startsWith('http') ? endpoint : `${this.graphApiUrl}${endpoint}`;
 
@@ -482,7 +486,11 @@ class Office365Service {
 
           try {
             // Force refresh tokens
-            const expiredTokens = await tokenStorage.getUserTokens(userId, this.serviceName);
+            const expiredTokens = await tokenStorage.getUserTokens(
+              userId,
+              this.serviceName,
+              providerId
+            );
 
             if (!expiredTokens.refreshToken) {
               throw new Error('No refresh token available');
@@ -497,11 +505,19 @@ class Office365Service {
 
             logger.info('Forced token refresh successful for user', {
               component: 'Office365Service',
-              userId
+              userId,
+              providerId
             });
 
             // Retry the request with fresh tokens
-            return await this.makeApiRequest(endpoint, method, data, userId, retryCount + 1);
+            return await this.makeApiRequest(
+              endpoint,
+              method,
+              data,
+              userId,
+              providerId,
+              retryCount + 1
+            );
           } catch (refreshError) {
             logger.error('Forced token refresh failed', {
               component: 'Office365Service',
@@ -509,7 +525,7 @@ class Office365Service {
             });
 
             // Clean up invalid tokens
-            await this.deleteUserTokens(userId);
+            await this.deleteUserTokens(userId, providerId);
             throw new Error('Office 365 authentication expired. Please reconnect your account.');
           }
         } else if (response.status === 401) {
@@ -568,23 +584,25 @@ class Office365Service {
    * @param {string} userId - User ID
    * @returns {Promise<boolean>} Authentication status
    */
-  async isUserAuthenticated(userId) {
+  async isUserAuthenticated(userId, providerId) {
     try {
       // Try to get tokens - this will attempt refresh if expired
-      await this.getUserTokens(userId);
+      await this.getUserTokens(userId, providerId);
 
       // Double-check by trying to make a lightweight API call
-      await this.makeApiRequest('/me', 'GET', null, userId);
+      await this.makeApiRequest('/me', 'GET', null, userId, providerId);
 
       logger.info('User has valid Office 365 authentication', {
         component: 'Office365Service',
-        userId
+        userId,
+        providerId
       });
       return true;
     } catch (error) {
       logger.info('User Office 365 authentication failed', {
         component: 'Office365Service',
         userId,
+        providerId,
         error
       });
       return false;
@@ -594,11 +612,12 @@ class Office365Service {
   /**
    * Get user's Microsoft account information
    * @param {string} userId - User ID
+   * @param {string} [providerId] - Provider ID
    * @returns {Promise<Object>} User info
    */
-  async getUserInfo(userId) {
+  async getUserInfo(userId, providerId) {
     try {
-      const data = await this.makeApiRequest('/me', 'GET', null, userId);
+      const data = await this.makeApiRequest('/me', 'GET', null, userId, providerId);
 
       return {
         id: data.id,
@@ -622,9 +641,9 @@ class Office365Service {
    * @param {string} userId - User ID
    * @returns {Promise<Object>} Token metadata
    */
-  async getTokenExpirationInfo(userId) {
+  async getTokenExpirationInfo(userId, providerId) {
     try {
-      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName);
+      const metadata = await tokenStorage.getTokenMetadata(userId, this.serviceName, providerId);
       const now = new Date();
       const expiresAt = new Date(metadata.expiresAt);
       const minutesUntilExpiry = Math.floor((expiresAt - now) / (1000 * 60));
@@ -653,7 +672,7 @@ class Office365Service {
    * @returns {Promise<Array>} Array of responses with {id, status, body}
    * @private
    */
-  async _makeBatchRequest(requests, userId) {
+  async _makeBatchRequest(requests, userId, providerId) {
     if (!requests || requests.length === 0) {
       return [];
     }
@@ -670,7 +689,7 @@ class Office365Service {
       }))
     };
 
-    const response = await this.makeApiRequest('/$batch', 'POST', batchPayload, userId);
+    const response = await this.makeApiRequest('/$batch', 'POST', batchPayload, userId, providerId);
     return response.responses || [];
   }
 
@@ -681,7 +700,7 @@ class Office365Service {
    * @returns {Promise<Array>} Array of drive objects
    * @private
    */
-  async _batchGetGroupDrives(teams, userId) {
+  async _batchGetGroupDrives(teams, userId, providerId) {
     if (!teams || teams.length === 0) {
       return [];
     }
@@ -709,7 +728,7 @@ class Office365Service {
       });
 
       // Execute batch
-      const responses = await this._makeBatchRequest(requests, userId);
+      const responses = await this._makeBatchRequest(requests, userId, providerId);
 
       // Process responses
       for (const response of responses) {
@@ -758,12 +777,12 @@ class Office365Service {
    * @returns {Promise<Array>} All values from all pages
    * @private
    */
-  async _fetchAllPages(endpoint, userId) {
+  async _fetchAllPages(endpoint, userId, providerId) {
     const allValues = [];
     let url = endpoint;
 
     while (url) {
-      const data = await this.makeApiRequest(url, 'GET', null, userId);
+      const data = await this.makeApiRequest(url, 'GET', null, userId, providerId);
       if (data.value) {
         allValues.push(...data.value);
       }
@@ -778,14 +797,14 @@ class Office365Service {
    * @param {string} userId - User ID
    * @returns {Promise<Array>} List of Teams drives
    */
-  async listTeamsDrives(userId) {
+  async listTeamsDrives(userId, providerId) {
     try {
       // Get all joined teams
       logger.info('Fetching joined teams', {
         component: 'Office365Service'
       });
 
-      const teams = await this._fetchAllPages('/me/joinedTeams', userId);
+      const teams = await this._fetchAllPages('/me/joinedTeams', userId, providerId);
 
       logger.info('Joined teams retrieved', {
         component: 'Office365Service',
@@ -802,7 +821,7 @@ class Office365Service {
       }
 
       // Use batch API to get team drives (no per-team limit needed)
-      const teamsDrives = await this._batchGetGroupDrives(teams, userId);
+      const teamsDrives = await this._batchGetGroupDrives(teams, userId, providerId);
 
       logger.info('Loaded Teams drives', {
         component: 'Office365Service',
@@ -825,10 +844,10 @@ class Office365Service {
    * @param {string} userId - User ID
    * @returns {Promise<Array>} List of personal drives
    */
-  async listPersonalDrives(userId) {
+  async listPersonalDrives(userId, providerId) {
     try {
       logger.info('Loading personal OneDrive drives', { component: 'Office365Service' });
-      const personalDrives = await this._fetchAllPages('/me/drives', userId);
+      const personalDrives = await this._fetchAllPages('/me/drives', userId, providerId);
 
       const drives = personalDrives.map(drive => ({
         id: drive.id,
@@ -859,17 +878,21 @@ class Office365Service {
    * @param {string} userId - User ID
    * @returns {Promise<Array>} List of SharePoint drives
    */
-  async listSharePointDrives(userId) {
+  async listSharePointDrives(userId, providerId) {
     try {
       logger.info('Loading followed SharePoint sites', { component: 'Office365Service' });
       const allDrives = [];
 
-      const sites = await this._fetchAllPages('/me/followedSites', userId);
+      const sites = await this._fetchAllPages('/me/followedSites', userId, providerId);
       logger.info('Found followed sites', { component: 'Office365Service', count: sites.length });
 
       for (const site of sites) {
         try {
-          const siteDrives = await this._fetchAllPages(`/sites/${site.id}/drives`, userId);
+          const siteDrives = await this._fetchAllPages(
+            `/sites/${site.id}/drives`,
+            userId,
+            providerId
+          );
           for (const drive of siteDrives) {
             allDrives.push({
               id: drive.id,
@@ -912,7 +935,7 @@ class Office365Service {
    * @param {string} folderId - Folder ID (optional, uses root if not provided)
    * @returns {Promise<Array>} List of items
    */
-  async listItems(userId, driveId = null, folderId = null) {
+  async listItems(userId, driveId = null, folderId = null, providerId) {
     try {
       let endpoint;
       if (driveId && folderId) {
@@ -925,7 +948,7 @@ class Office365Service {
         endpoint = '/me/drive/root/children';
       }
 
-      const items = await this._fetchAllPages(endpoint, userId);
+      const items = await this._fetchAllPages(endpoint, userId, providerId);
 
       return items.map(item => ({
         id: item.id,
@@ -955,14 +978,14 @@ class Office365Service {
    * @param {string} query - Search query
    * @returns {Promise<Array>} List of matching items
    */
-  async searchItems(userId, driveId, query) {
+  async searchItems(userId, driveId, query, providerId) {
     try {
       if (!query || query.trim().length === 0) {
         return [];
       }
 
       const endpoint = `/drives/${driveId}/root/search(q='${encodeURIComponent(query)}')`;
-      const items = await this._fetchAllPages(endpoint, userId);
+      const items = await this._fetchAllPages(endpoint, userId, providerId);
 
       return items.map(item => ({
         id: item.id,
@@ -992,11 +1015,11 @@ class Office365Service {
    * @param {string} driveId - Drive ID (optional)
    * @returns {Promise<Object>} File data with content
    */
-  async downloadFile(userId, fileId, driveId = null) {
+  async downloadFile(userId, fileId, driveId = null, providerId) {
     try {
       // Get file metadata first
       const endpoint = driveId ? `/drives/${driveId}/items/${fileId}` : `/me/drive/items/${fileId}`;
-      const fileInfo = await this.makeApiRequest(endpoint, 'GET', null, userId);
+      const fileInfo = await this.makeApiRequest(endpoint, 'GET', null, userId, providerId);
 
       if (!fileInfo.file) {
         throw new Error('Item is not a file');
@@ -1009,7 +1032,7 @@ class Office365Service {
       }
 
       // Download file content
-      const tokens = await this.getUserTokens(userId);
+      const tokens = await this.getUserTokens(userId, providerId);
       const response = await httpFetch(downloadUrl, {
         headers: {
           Authorization: `Bearer ${tokens.accessToken}`

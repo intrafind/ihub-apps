@@ -216,7 +216,9 @@ router.get('/status', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const isAuthenticated = await NextcloudService.isUserAuthenticated(req.user.id);
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+
+    const isAuthenticated = await NextcloudService.isUserAuthenticated(req.user.id, providerId);
 
     if (!isAuthenticated) {
       return res.json({
@@ -227,15 +229,16 @@ router.get('/status', authRequired, async (req, res) => {
 
     let userInfo = null;
     try {
-      userInfo = await NextcloudService.getUserInfo(req.user.id);
+      userInfo = await NextcloudService.getUserInfo(req.user.id, providerId);
     } catch (userInfoError) {
       logger.warn('Nextcloud connected but user info lookup failed', {
         component: 'Nextcloud',
         userId: req.user.id,
+        providerId,
         error: userInfoError.message
       });
     }
-    const tokenInfo = await NextcloudService.getTokenExpirationInfo(req.user.id);
+    const tokenInfo = await NextcloudService.getTokenExpirationInfo(req.user.id, providerId);
 
     res.json({
       connected: true,
@@ -284,12 +287,19 @@ router.post('/disconnect', authRequired, async (req, res) => {
       return sendAuthRequired(res);
     }
 
-    const success = await NextcloudService.deleteUserTokens(req.user.id);
+    // Accept providerId from either query (legacy clients) or JSON body.
+    const providerId =
+      (typeof req.query.providerId === 'string' && req.query.providerId) ||
+      (typeof req.body?.providerId === 'string' && req.body.providerId) ||
+      undefined;
+
+    const success = await NextcloudService.deleteUserTokens(req.user.id, providerId);
 
     if (success) {
       logger.info('Nextcloud disconnected', {
         component: 'Nextcloud',
-        userId: req.user.id
+        userId: req.user.id,
+        providerId
       });
       res.json({
         success: true,
@@ -353,9 +363,11 @@ router.get('/drives/:source', authRequired, async (req, res) => {
       return sendBadRequest(res, 'Source must be one of: personal');
     }
 
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
+
     let displayName = 'Nextcloud';
     try {
-      const userInfo = await NextcloudService.getUserInfo(req.user.id);
+      const userInfo = await NextcloudService.getUserInfo(req.user.id, providerId);
       if (userInfo?.displayName) {
         displayName = `${userInfo.displayName}'s files`;
       } else if (userInfo?.id) {
@@ -406,6 +418,7 @@ router.get('/items', authRequired, async (req, res) => {
 
     const folderPath = typeof req.query.folderPath === 'string' ? req.query.folderPath : '';
     const search = typeof req.query.search === 'string' ? req.query.search : '';
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
 
     if (folderPath && !isValidNextcloudPath(folderPath)) {
       return sendBadRequest(res, 'folderPath contains invalid characters or path traversal');
@@ -413,9 +426,9 @@ router.get('/items', authRequired, async (req, res) => {
 
     let items;
     if (search && search.trim().length > 0) {
-      items = await NextcloudService.searchItems(req.user.id, search, folderPath);
+      items = await NextcloudService.searchItems(req.user.id, search, folderPath, providerId);
     } else {
-      items = await NextcloudService.listItems(req.user.id, folderPath);
+      items = await NextcloudService.listItems(req.user.id, folderPath, providerId);
     }
 
     res.json({ success: true, items });
@@ -445,6 +458,7 @@ router.get('/download', authRequired, async (req, res) => {
     }
 
     const filePath = typeof req.query.filePath === 'string' ? req.query.filePath : '';
+    const providerId = typeof req.query.providerId === 'string' ? req.query.providerId : undefined;
     if (!filePath) {
       return sendBadRequest(res, 'filePath query parameter is required');
     }
@@ -453,7 +467,7 @@ router.get('/download', authRequired, async (req, res) => {
       return sendBadRequest(res, 'filePath contains invalid characters or path traversal');
     }
 
-    const file = await NextcloudService.downloadFile(req.user.id, filePath);
+    const file = await NextcloudService.downloadFile(req.user.id, filePath, providerId);
 
     // Force `application/octet-stream` rather than reflecting the
     // upstream Content-Type. The download is always served with
