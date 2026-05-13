@@ -145,14 +145,14 @@ The token is per-user and per-provider — switching Nextcloud instances require
 
 The flow described above is the **picker** flow — the user is inside iHub and reaches into Nextcloud to attach files. iHub also ships a second, complementary surface: the **embedded** flow, where the user is inside Nextcloud and starts a chat in iHub with the currently selected document(s). This mirrors the Outlook add-in (chat about the current email) and the browser extension (chat about the active tab).
 
-Internally the embed reuses 100% of the picker's server-side machinery — same `NextcloudService`, same `/api/integrations/nextcloud/download` endpoint, same encrypted per-user OAuth tokens. The only new pieces are a thin admin/runtime config (`nextcloudEmbed` in `platform.json`), a dedicated `/nextcloud/taskpane.html` entry, and a small Nextcloud-side app that wires "Chat with iHub" into Files.
+Internally the embed reuses 100% of the picker's server-side machinery — same `NextcloudService`, same `/api/integrations/nextcloud/download` endpoint, same encrypted per-user OAuth tokens. The only new pieces are a thin admin/runtime config (`nextcloudEmbed` in `platform.json`), a dedicated `/nextcloud/full-embed.html` entry, and a small Nextcloud-side app that wires "Chat with iHub" into Files.
 
 ## Architecture in 30 seconds
 
 1. The Nextcloud app shell adds a **Chat with iHub** action to the Nextcloud Files UI.
-2. On click, it opens iHub's embed page (`<ihub>/nextcloud/taskpane.html`) inside an iframe (or a new tab), with the selected file paths encoded in the URL hash.
-3. The embed boots, fetches `/api/integrations/nextcloud-embed/config` for branding + starter prompts + the allowlist of acceptable parent origins, and renders the standard iHub embedded shell (login → app picker → chat).
-4. When the user sends a message, iHub downloads each selected path through the existing per-user OAuth `/download` endpoint and folds the file content into the outgoing chat message, exactly like Outlook attachments.
+2. On click, it navigates to the app's host page inside the Nextcloud chrome (`/apps/ihub_chat/`), which iframes `<ihub>/nextcloud/full-embed.html` with the selected file paths encoded in the URL hash.
+3. The embed boots, fetches `/api/integrations/nextcloud-embed/config` for branding + starter prompts + the allowlist of acceptable parent origins, and renders the standard iHub `<App />` behind an OAuth gate (login → app picker → chat).
+4. The first time a chat opens, `useNextcloudEmbedAttachments` downloads each selected path through the existing per-user OAuth `/download` endpoint and pre-attaches the files to the chat uploader. From there it's the regular iHub chat flow.
 
 The embed does **not** receive any Nextcloud token. The user OAuth-links Nextcloud to iHub once (via the picker flow above) and the same grant powers both surfaces.
 
@@ -164,7 +164,7 @@ The embed does **not** receive any Nextcloud token. The user OAuth-links Nextclo
 4. Add at least one entry under **Allowed Nextcloud Origins** — for example `https://cloud.example.com`. The embed page refuses to be iframed by any origin not on this list (CSP `frame-ancestors`), and the in-iframe bridge ignores postMessages whose `event.origin` isn't on the list.
 5. Customise the **Display Name**, **Description**, and **Starter Prompts** as desired. These appear in the embed when the selected app has no starter prompts of its own.
 
-Copy the **Embed URL** and the **info.xml URL** from the page — both contain the values your Nextcloud app needs.
+Copy the **Embed URL** from the page if you're configuring a custom Nextcloud-side integration; the shipped `nextcloud-app/` skeleton already points at this URL.
 
 ## Step 2 — Install the Nextcloud app
 
@@ -182,11 +182,10 @@ See `nextcloud-app/README.md` for the full instructions.
 ## Step 3 — End-user flow
 
 1. The user opens **Files** in Nextcloud, selects one or more documents, and chooses **Chat with iHub** from the action menu.
-2. The Nextcloud app navigates to `<ihub>/nextcloud/taskpane.html#providerId=…&paths=…`.
+2. The Nextcloud app navigates to its own host page, which iframes `<ihub>/nextcloud/full-embed.html#providerId=…&paths=…`.
 3. If the user is not signed in to iHub, the embed shows the standard iHub sign-in prompt.
-4. If the user has not yet linked their Nextcloud account to iHub, the embed shows **Connect Nextcloud**, which opens the existing OAuth flow against the configured cloud-storage Nextcloud provider. They complete it once and land back in the embed.
-5. The embed lists the selected documents as attachments and offers iHub apps the user has access to. Sending a message folds the document text into the outgoing prompt; image and PDF attachments are sent as binary payloads.
-6. A `+`-menu toggle ("Include documents") lets users send a generic message without the attached documents leaking into the prompt.
+4. If the user has not yet linked their Nextcloud account to iHub, downloading any selected document fails with a 401 and the auto-attach falls back to the cloud-storage picker for them to OAuth-link.
+5. The embed opens the iHub app picker; once an app is selected, `useNextcloudEmbedAttachments` pre-attaches the selected Nextcloud documents to the chat uploader. Sending a message uses the documents through the regular file-upload chat path.
 
 ## How embed auth differs from the picker
 

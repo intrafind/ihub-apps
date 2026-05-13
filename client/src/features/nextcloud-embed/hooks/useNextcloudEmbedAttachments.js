@@ -3,8 +3,20 @@ import { apiClient } from '../../../api/client';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
 import { getCurrentSelection, onSelectionChange } from '../utilities/nextcloudSelectionBridge';
 import { contentTypeFromExtension, fileNameFromPath } from '../utilities/nextcloudFileMeta';
-import { NextcloudNotLinkedError } from '../utilities/nextcloudDocumentContext';
 import { processCloudFile, isCloudFileSupported } from '../../upload/utils/cloudFileProcessing';
+
+/**
+ * Thrown when `/api/integrations/nextcloud/download` returns 401, signalling
+ * that the iHub user hasn't OAuth-linked their Nextcloud account yet. The
+ * caller aborts the auto-attach loop on this and surfaces a "Connect
+ * Nextcloud" CTA instead of treating it as a generic per-file failure.
+ */
+export class NextcloudNotLinkedError extends Error {
+  constructor() {
+    super('Nextcloud account is not linked to this iHub user');
+    this.name = 'NextcloudNotLinkedError';
+  }
+}
 
 // Dedup state lives on `window`, not `sessionStorage`. Each click of
 // "Chat with iHub" in Nextcloud reloads the host page (/apps/ihub_chat/),
@@ -63,11 +75,10 @@ async function downloadAsFile(path) {
       responseType: 'blob'
     });
   } catch (err) {
-    // Mirror `nextcloudDocumentContext.downloadOne`: a 401 means the iHub
-    // user hasn't OAuth-linked their Nextcloud account yet. The caller
-    // checks `err instanceof NextcloudNotLinkedError` to abort the
-    // auto-attach loop and surface the connect-flow UI instead of a
-    // generic per-file failure.
+    // A 401 here means the iHub user hasn't OAuth-linked their Nextcloud
+    // account yet. The caller checks `err instanceof NextcloudNotLinkedError`
+    // to abort the auto-attach loop and surface the connect-flow UI instead
+    // of a generic per-file failure.
     if (err?.response?.status === 401) {
       throw new NextcloudNotLinkedError();
     }
@@ -103,7 +114,13 @@ async function downloadAsFile(path) {
 export function useNextcloudEmbedAttachments(fileUploadHandler, app, currentModel) {
   const host = useEmbeddedHost();
   const liveRef = useRef({ fileUploadHandler, app, currentModel });
-  liveRef.current = { fileUploadHandler, app, currentModel };
+  // Keep the ref in sync with the latest callsite values without retriggering
+  // the attach effect. Doing this inside `useEffect` (rather than during
+  // render) keeps the assignment side-effect-free under React StrictMode's
+  // double-invoke, while still updating before any consumer reads `liveRef`.
+  useEffect(() => {
+    liveRef.current = { fileUploadHandler, app, currentModel };
+  });
 
   const hostKind = host?.kind;
   const appId = app?.id;
@@ -173,6 +190,11 @@ export function useNextcloudEmbedAttachments(fileUploadHandler, app, currentMode
 
       if (eligiblePaths.length === 0) {
         console.warn('[nextcloud-embed] No eligible files in selection');
+        // Record this selection as "handled" — otherwise the next render
+        // would re-enter attach() with the same selection and warn again
+        // forever. Subsequent fresh selections (different sig) will still
+        // run, and `RESET_EVENT` clears the dedup on item-changed.
+        writeLastSignature(sig);
         return;
       }
 

@@ -5,7 +5,7 @@
  * The Nextcloud shell can hand a selection to the iframe two ways:
  *
  *   1. **URL hash** at navigation time — e.g.
- *        `/nextcloud/taskpane.html#providerId=cloud-main&paths=%5B%22%2FReports%2Fq1.pdf%22%5D`
+ *        `/nextcloud/full-embed.html#providerId=cloud-main&paths=%5B%22%2FReports%2Fq1.pdf%22%5D`
  *      This is the simple path: a hard `window.location.assign` to the
  *      iframe URL carries the selection in the hash. No postMessage
  *      handshake required for the first selection.
@@ -18,9 +18,9 @@
  *      config (`/api/integrations/nextcloud-embed/config`).
  *
  * The bridge is intentionally a thin event source. It does not fetch
- * anything; `nextcloudDocumentContext` consumes the latest selection and
- * calls the existing `/api/integrations/nextcloud/download` endpoint for
- * each path.
+ * anything; `useNextcloudEmbedAttachments` consumes the latest selection
+ * and calls the existing `/api/integrations/nextcloud/download` endpoint
+ * for each path.
  *
  * @typedef {Object} NextcloudSelection
  * @property {string} providerId  Nextcloud cloud-storage provider id (matches
@@ -46,7 +46,10 @@ function sanitizePaths(value) {
     if (path.length === 0 || path.length > 4096) return null;
     if (path.includes('\0')) return null;
     // No `..` segments — defense in depth even though the server enforces
-    // this on `/download`. Keeps malformed selections out of the UI.
+    // this on `/download` (the server is the authority on path safety; this
+    // check only filters obvious garbage before the UI shows it). Variants
+    // like url-encoded `%2e%2e` arrive here as opaque string segments and
+    // are forwarded to the server, which decodes and rejects them.
     const segments = path.split('/');
     if (segments.some(seg => seg === '..')) return null;
     out.push(path);
@@ -107,7 +110,7 @@ function originIsAllowed(origin) {
   if (typeof origin !== 'string') return false;
   // The embed is loaded inside an iframe from a Nextcloud origin, so the
   // parent's origin must match one of the admin-configured entries.
-  return allowedHostOrigins.indexOf(origin) !== -1;
+  return allowedHostOrigins.includes(origin);
 }
 
 /**

@@ -25,7 +25,6 @@ import {
   initNextcloudSelectionBridge,
   onSelectionChange
 } from '../src/features/nextcloud-embed/utilities/nextcloudSelectionBridge';
-import { fetchCurrentDocumentContext } from '../src/features/nextcloud-embed/utilities/nextcloudDocumentContext';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -203,21 +202,15 @@ function EmbedRoot({ initialError }) {
     /* benign — buffer is best-effort */
   }
 
-  // Nextcloud host adapter: same shape the taskpane uses so OfficeLogin's
-  // host.runAuthDialog / loginBullets / loginSubtitle all resolve.
+  // Nextcloud host adapter — supplies OfficeLogin with the host kind, the
+  // auth-dialog opener, and the login subtitle/bullets. The full-app embed
+  // does NOT use `host.readMessageContext()` (that's the Outlook-taskpane
+  // attachment-injection path); selected Nextcloud files are auto-attached
+  // into the chat uploader by `useNextcloudEmbedAttachments` instead.
   const nextcloudHost = {
     kind: 'nextcloud',
     loginSubtitle: 'iHub Apps for Nextcloud',
     runAuthDialog: openNextcloudAuthDialog,
-    readMessageContext: fetchCurrentDocumentContext,
-    contextToggles: [
-      {
-        key: 'documentContent',
-        label: 'Include documents',
-        defaultEnabled: true,
-        controls: ['attachments']
-      }
-    ],
     loginBullets: [
       {
         text: 'Run any iHub AI app against documents you picked in Nextcloud — summarise, translate, draft, ask.'
@@ -231,9 +224,8 @@ function EmbedRoot({ initialError }) {
     ]
   };
 
-  // Re-emit selection changes as a `ihub:itemchanged` DOM event. Originally
-  // introduced for the taskpane's `OfficeChatPanel`, the event is now also
-  // consumed by `useNextcloudEmbedAttachments` (mounted inside AppChat) to
+  // Re-emit selection changes as a `ihub:itemchanged` DOM event.
+  // `useNextcloudEmbedAttachments` (mounted inside AppChat) listens for it to
   // reset its per-selection dedup signature — without this, a fresh selection
   // in Nextcloud would be skipped as a duplicate of the last attached one.
   onSelectionChange(() => {
