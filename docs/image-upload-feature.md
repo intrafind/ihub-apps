@@ -9,13 +9,15 @@ The image upload feature allows users to attach images to their chat messages. I
 Enable the feature in an app by adding an `imageUpload` object with an `enabled` flag and optional settings:
 
 ```json
-"upload": {
-  "enabled": true,
-  "allowMultiple": false
-},
-"imageUpload": {
-  "enabled": true,
-  "resizeImages": true
+{
+  "upload": {
+    "enabled": true,
+    "allowMultiple": false,
+    "imageUpload": {
+      "enabled": true,
+      "resizeImages": true
+    }
+  }
 }
 ```
 
@@ -28,7 +30,7 @@ Enable the feature in an app by adding an `imageUpload` object with an `enabled`
 - All selected images will be processed individually and sent with the message
 - This setting applies to both image and file uploads
 
-**imageUpload.resizeImages** (boolean)
+**upload.imageUpload.resizeImages** (boolean)
 
 - When `true` (default) the uploaded image is resized to a maximum dimension of 1024 px and converted to JPEG before being sent.
 - Set to `false` to use the original image without resizing or format conversion.
