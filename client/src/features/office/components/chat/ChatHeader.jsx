@@ -31,28 +31,31 @@ const ChatHeader = ({
   }, [menuOpen]);
 
   return (
-    <header className="flex items-center justify-between w-full px-2 py-1.5 bg-white border-b border-[#e0e0e0] shrink-0">
-      <div className="flex items-center gap-2 min-w-0">
+    <header className="office-chat-header flex items-center justify-between w-full px-1.5 py-1 bg-white border-b border-[#e0e0e0] shrink-0">
+      <div className="flex items-center gap-1 min-w-0">
         {onBackClick && (
           <button
             type="button"
             onClick={onBackClick}
             aria-label="Back to app selection"
-            className="rounded-full p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100 shrink-0"
+            className="rounded-full p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100 shrink-0"
           >
-            <ArrowLeftIcon className="h-5 w-5" aria-hidden />
+            <ArrowLeftIcon className="h-4 w-4" aria-hidden />
           </button>
         )}
         {titleIcon && <span className="flex-shrink-0 text-slate-600">{titleIcon}</span>}
         {showCheckmark && (
-          <span className="flex-shrink-0 text-green-600 font-bold text-lg leading-none" aria-hidden>
+          <span
+            className="flex-shrink-0 text-green-600 font-bold text-base leading-none"
+            aria-hidden
+          >
             ✓
           </span>
         )}
         {selectedApp ? (
           <button
             type="button"
-            className="flex items-center gap-1 cursor-pointer font-semibold text-slate-900 hover:text-slate-700 min-w-0"
+            className="office-chat-header-title flex items-center gap-1 cursor-pointer font-semibold text-slate-900 hover:text-slate-700 min-w-0"
             onClick={onItemClick}
             aria-label="Select app"
           >
@@ -60,20 +63,22 @@ const ChatHeader = ({
             <ChevronDownIcon className="h-4 w-4 shrink-0" aria-hidden />
           </button>
         ) : title ? (
-          <h1 className="text-base font-semibold text-slate-900 truncate">{title}</h1>
+          <h1 className="office-chat-header-title font-semibold text-slate-900 truncate">
+            {title}
+          </h1>
         ) : null}
       </div>
 
-      <div className="flex items-center gap-1 shrink-0">
+      <div className="flex items-center gap-0.5 shrink-0">
         {onWriteClick && (
           <button
             type="button"
             onClick={onWriteClick}
             aria-label="New chat"
             title="New chat"
-            className="rounded-full p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+            className="rounded-full p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
           >
-            <PencilSquareIcon className="h-5 w-5" aria-hidden />
+            <PencilSquareIcon className="h-4 w-4" aria-hidden />
           </button>
         )}
 
@@ -84,9 +89,9 @@ const ChatHeader = ({
               onClick={() => setMenuOpen(o => !o)}
               aria-label="Open menu"
               aria-expanded={menuOpen}
-              className="rounded-full p-1.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+              className="rounded-full p-1 text-slate-600 hover:text-slate-900 hover:bg-slate-100"
             >
-              <Bars3Icon className="h-5 w-5" aria-hidden />
+              <Bars3Icon className="h-4 w-4" aria-hidden />
             </button>
             {menuOpen && (
               <div className="absolute right-0 top-full mt-1 min-w-[140px] rounded-lg border border-slate-200 bg-white shadow-lg z-50 py-1">
