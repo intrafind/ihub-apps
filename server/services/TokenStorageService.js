@@ -253,7 +253,18 @@ class TokenStorageService {
     }
     const dir = path.join(this.storageBasePath, serviceName);
     const filename = providerId ? `${userId}__${providerId}.json` : `${userId}.json`;
-    return path.join(dir, filename);
+    // Defense-in-depth containment check: compose the candidate path,
+    // resolve it to an absolute form, and reject anything that doesn't
+    // sit directly inside the per-service directory. The allowlist in
+    // `_assertSafeFilenameComponent` already excludes path separators,
+    // but this second layer satisfies CodeQL's path-traversal analysis
+    // and protects against future changes to that allowlist.
+    const candidate = path.resolve(dir, filename);
+    const baseDir = path.resolve(dir) + path.sep;
+    if (!candidate.startsWith(baseDir)) {
+      throw new Error('Resolved token-file path escapes its service directory');
+    }
+    return candidate;
   }
 
   /**
