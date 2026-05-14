@@ -938,7 +938,7 @@ function ChatMessage({
       {/* Combined action icons and feedback buttons in a single row */}
       <div className="mt-1 px-1">
         <div
-          className={`flex items-center gap-${compact ? '1' : '3'} text-xs transition-opacity duration-200 ${
+          className={`flex items-center ${compact ? 'gap-1 flex-wrap' : 'gap-3'} text-xs transition-opacity duration-200 ${
             showActions ? 'opacity-100' : 'opacity-0'
           } ${isUser ? 'text-gray-500' : 'text-gray-500'}`}
         >
