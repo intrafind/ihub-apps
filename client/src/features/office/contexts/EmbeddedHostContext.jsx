@@ -39,8 +39,22 @@ import * as React from 'react';
  *                                    listed field is cleared from the context the
  *                                    chat hook merges into the outgoing message.
  *
+ * @typedef {Object} InsertActionConfig
+ * @property {'icon'|'primary'} variant                   How the per-message insert action is
+ *                                                        rendered. `'icon'` is the compact
+ *                                                        icon-only button used in the main
+ *                                                        web app and the browser extension.
+ *                                                        `'primary'` renders a labelled,
+ *                                                        brand-coloured button beneath each
+ *                                                        assistant message — the dominant
+ *                                                        action in the Outlook/Word taskpane.
+ * @property {string} labelKey                            i18n key resolved at render time —
+ *                                                        e.g. `'office.insertIntoEmail'` for
+ *                                                        Outlook, `'office.insertIntoDocument'`
+ *                                                        for Word/PowerPoint hosts.
+ *
  * @typedef {Object} EmbeddedHostAdapter
- * @property {string} kind                                'office' | 'extension'
+ * @property {string} kind                                'office' | 'extension' | 'nextcloud'
  * @property {string} loginSubtitle                       e.g. "iHub Apps for Outlook"
  * @property {(authorizeUrl: string, onSuccess: (callbackUrl: string) => void, onError: (err: any) => void) => void} runAuthDialog
  * @property {() => Promise<HostMailContext>} readMessageContext  Returns mail/page context appended to chat messages.
@@ -50,6 +64,15 @@ import * as React from 'react';
  *                                                        the chat input's `+` menu. Empty /
  *                                                        omitted means no toggles render and
  *                                                        all available context is always sent.
+ * @property {InsertActionConfig} [insertAction]          Optional override for how the per-message
+ *                                                        "Insert into document/email" action is
+ *                                                        rendered. When omitted the host uses the
+ *                                                        web app default (compact icon button on
+ *                                                        the action row). Outlook ships
+ *                                                        `{ variant: 'primary', labelKey: 'office.insertIntoEmail' }`
+ *                                                        so the action becomes the dominant
+ *                                                        call-to-action beneath each assistant
+ *                                                        message — see issue #1450.
  */
 
 /** @type {React.Context<EmbeddedHostAdapter|null>} */

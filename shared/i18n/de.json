@@ -581,6 +581,10 @@
       "ariaLabel": "Text in Editor diktieren"
     }
   },
+  "office": {
+    "insertIntoEmail": "In E-Mail einfügen",
+    "insertIntoDocument": "In Dokument einfügen"
+  },
   "admin": {
     "providers": {
       "title": "Anbieter-Zugangsdaten",
