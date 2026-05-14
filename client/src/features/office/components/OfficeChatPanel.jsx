@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatHeader from './chat/ChatHeader';
+import MailAttachmentStatusBanner from './MailAttachmentStatusBanner';
 import ItemSelectorDialog from './apps-dialog';
 import VariablesDialog, {
   buildInitialVariablesMap,
@@ -13,6 +14,7 @@ import VariablesDialog, {
 } from './variables-dialog';
 import SettingsDialog from './settings-dialog';
 import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
+import { useMailAttachmentStatuses } from '../hooks/useMailAttachmentStatuses';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
@@ -65,6 +67,8 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     setHostContextFlags
   } = useAppSettings(selectedApp?.id, selectedApp);
   const fileUploadHandler = useFileUploadHandler();
+  const { statuses: mailAttachmentStatuses, apiUnavailable: mailAttachmentApiUnavailable } =
+    useMailAttachmentStatuses();
   const currentModel = models.find(m => m.id === selectedModel) || null;
   const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
 
@@ -367,6 +371,10 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
 
             {/* Input */}
             <div className="border-t border-gray-200 bg-white flex-shrink-0">
+              <MailAttachmentStatusBanner
+                statuses={mailAttachmentStatuses}
+                apiUnavailable={mailAttachmentApiUnavailable}
+              />
               <ChatInput
                 app={selectedApp}
                 value={inputValue}
