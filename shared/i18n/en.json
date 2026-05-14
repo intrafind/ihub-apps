@@ -118,6 +118,19 @@
     "toggleLabel": "Web Search",
     "toggleDescription": "Search the web for up-to-date information"
   },
+  "office": {
+    "pinned": {
+      "addCurrent": "Add this email",
+      "addCurrentTooltip": "Attach this email to the chat",
+      "addSelected": "Add selected emails",
+      "addSelectedTooltip": "Attach every email you have selected in Outlook",
+      "alreadyAdded": "Already added",
+      "removeOne": "Remove from chat",
+      "clearAll": "Clear",
+      "clearAllTooltip": "Remove every pinned email",
+      "untitled": "(no subject)"
+    }
+  },
   "pages": {
     "home": {
       "title": "iHub Apps",

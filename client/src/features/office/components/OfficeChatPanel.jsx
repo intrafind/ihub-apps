@@ -12,11 +12,17 @@ import VariablesDialog, {
   missingRequiredVariableNames
 } from './variables-dialog';
 import SettingsDialog from './settings-dialog';
+import PinnedEmailsBar from './PinnedEmailsBar';
 import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
 import { buildPromptTemplate } from '../utilities/buildChatApiMessages';
+import {
+  fetchCurrentMailContext,
+  fetchSelectedItemsContext
+} from '../utilities/outlookMailContext';
+import { isMultiSelectBodySupported } from '../utilities/officeCapabilities';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
@@ -74,6 +80,17 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const [isVariablesOpen, setIsVariablesOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectorItems, setSelectorItems] = useState([]);
+  // Emails the user has explicitly attached to this chat (pin/collect mode,
+  // or bulk-pulled via Mailbox 1.15+ multi-select). Survives ItemChanged so
+  // the user can navigate between emails while building up a context set;
+  // wiped on new-chat / app-switch alongside the chat history.
+  const [pinnedEmails, setPinnedEmails] = useState([]);
+  const [multiSelectLoading, setMultiSelectLoading] = useState(false);
+  // itemId of the email currently open in Outlook. Lets us hide the
+  // "Add this email" affordance once it's already in the pin list, and
+  // dedupe in the prompt builder.
+  const [currentItemId, setCurrentItemId] = useState(null);
+  const multiSelectSupported = isMultiSelectBodySupported();
 
   // Initialize variables when app changes
   useEffect(() => {
@@ -92,17 +109,109 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [selectedApp?.id]);
 
-  // Reset chat when Outlook switches emails
+  // Mirror of `pinnedEmails` for the ItemChanged listener — using a ref
+  // avoids re-binding the document listener every time the array changes.
+  const pinnedEmailsRef = useRef([]);
   useEffect(() => {
+    pinnedEmailsRef.current = pinnedEmails;
+  }, [pinnedEmails]);
+
+  // Track the currently-open email's itemId so the "Add this email" button
+  // can hide once the user has pinned it. Reading the id alone is cheap —
+  // we don't fetch the body here, that still happens lazily inside
+  // useOfficeChatAdapter.sendMessage. Refreshed on mount and whenever
+  // Outlook switches emails.
+  useEffect(() => {
+    let cancelled = false;
+    const refresh = async () => {
+      try {
+        const ctx = await fetchCurrentMailContext();
+        if (!cancelled) setCurrentItemId(ctx?.itemId ?? null);
+      } catch {
+        if (!cancelled) setCurrentItemId(null);
+      }
+    };
+    refresh();
     const handler = () => {
-      chatIdRef.current = `office-${uuidv4()}`;
-      selectedStarterPromptRef.current = null;
-      adapter.clearMessages();
-      setInputValue('');
+      refresh();
+      // Pinned emails are the whole point of the feature, so they must
+      // survive ItemChanged. We only reset the chat history (and the
+      // staged input) when the user has nothing pinned — otherwise we'd
+      // silently throw away the context they were assembling.
+      if (pinnedEmailsRef.current.length === 0) {
+        chatIdRef.current = `office-${uuidv4()}`;
+        selectedStarterPromptRef.current = null;
+        adapter.clearMessages();
+        setInputValue('');
+      }
     };
     document.addEventListener('ihub:itemchanged', handler);
-    return () => document.removeEventListener('ihub:itemchanged', handler);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('ihub:itemchanged', handler);
+    };
   }, [adapter]);
+
+  const handlePinCurrent = useCallback(async () => {
+    try {
+      const ctx = await fetchCurrentMailContext();
+      if (!ctx?.available) return;
+      if (!ctx.itemId && !ctx.subject && !ctx.bodyText) return;
+      setPinnedEmails(prev => {
+        if (ctx.itemId && prev.some(p => p.itemId === ctx.itemId)) return prev;
+        return [
+          ...prev,
+          {
+            itemId: ctx.itemId ?? null,
+            subject: ctx.subject ?? null,
+            bodyText: ctx.bodyText ?? null,
+            attachments: ctx.attachments ?? []
+          }
+        ];
+      });
+    } catch {
+      /* silently swallow — surfacing host errors here would be noisy */
+    }
+  }, []);
+
+  const handleUnpin = useCallback(itemId => {
+    setPinnedEmails(prev => {
+      if (!itemId) return prev;
+      return prev.filter(p => p.itemId !== itemId);
+    });
+  }, []);
+
+  const handleClearPinned = useCallback(() => {
+    setPinnedEmails([]);
+  }, []);
+
+  const handlePinSelected = useCallback(async () => {
+    if (!multiSelectSupported) return;
+    setMultiSelectLoading(true);
+    try {
+      const items = await fetchSelectedItemsContext();
+      if (!Array.isArray(items) || items.length === 0) return;
+      setPinnedEmails(prev => {
+        const seen = new Set(prev.map(p => p.itemId).filter(Boolean));
+        const additions = [];
+        for (const it of items) {
+          if (it.itemId && seen.has(it.itemId)) continue;
+          if (it.itemId) seen.add(it.itemId);
+          additions.push({
+            itemId: it.itemId ?? null,
+            subject: it.subject ?? null,
+            bodyText: it.bodyText ?? null,
+            attachments: []
+          });
+        }
+        return additions.length ? [...prev, ...additions] : prev;
+      });
+    } catch {
+      /* silently swallow */
+    } finally {
+      setMultiSelectLoading(false);
+    }
+  }, [multiSelectSupported]);
 
   const handleInsert = useCallback(content => {
     displayReplyFormWithAssistantResponse(content);
@@ -123,6 +232,11 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       // contextToggles declarations) to strip body / attachments from the
       // outgoing apiMessage. Empty object in the main web app — no-op.
       params.hostContextFlags = hostContextFlags;
+      // Emails the user has explicitly attached to this chat — pin/collect
+      // mode or bulk-pulled via native multi-select. Stripped from the
+      // outgoing server payload inside useOfficeChatAdapter once their
+      // bodies have been merged into apiMessage.content.
+      params.pinnedEmails = pinnedEmails;
 
       // Resend can pass a `selectedFile` override to bypass async state updates;
       // otherwise we read whatever the user has staged in the uploader.
@@ -156,6 +270,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       enabledTools,
       websearchEnabled,
       hostContextFlags,
+      pinnedEmails,
       fileUploadHandler
     ]
   );
@@ -243,6 +358,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       selectedStarterPromptRef.current = null;
       adapter.clearMessages();
       setInputValue('');
+      setPinnedEmails([]);
       setSelectedApp(newApp);
       setIsSelectorOpen(false);
     },
@@ -254,6 +370,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     selectedStarterPromptRef.current = null;
     adapter.clearMessages();
     setInputValue('');
+    setPinnedEmails([]);
   }, [adapter]);
 
   if (!authData) return null;
@@ -364,6 +481,21 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 showAvatars={false}
               />
             </div>
+
+            {/* Pinned emails toolbar (above input) */}
+            <PinnedEmailsBar
+              pinned={pinnedEmails}
+              onUnpin={handleUnpin}
+              onClearAll={handleClearPinned}
+              onPinCurrent={handlePinCurrent}
+              onPinSelected={handlePinSelected}
+              canPinCurrent={!!currentItemId}
+              isCurrentPinned={
+                !!currentItemId && pinnedEmails.some(p => p.itemId === currentItemId)
+              }
+              isMultiSelectSupported={multiSelectSupported}
+              multiSelectLoading={multiSelectLoading}
+            />
 
             {/* Input */}
             <div className="border-t border-gray-200 bg-white flex-shrink-0">

@@ -132,6 +132,19 @@
     "toggleLabel": "Websuche",
     "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
   },
+  "office": {
+    "pinned": {
+      "addCurrent": "Diese E-Mail hinzufügen",
+      "addCurrentTooltip": "Diese E-Mail an den Chat anhängen",
+      "addSelected": "Ausgewählte E-Mails hinzufügen",
+      "addSelectedTooltip": "Alle in Outlook ausgewählten E-Mails anhängen",
+      "alreadyAdded": "Bereits hinzugefügt",
+      "removeOne": "Aus dem Chat entfernen",
+      "clearAll": "Leeren",
+      "clearAllTooltip": "Alle angehefteten E-Mails entfernen",
+      "untitled": "(kein Betreff)"
+    }
+  },
   "pages": {
     "home": {
       "title": "iHub Apps",

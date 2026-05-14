@@ -136,3 +136,113 @@ export async function fetchCurrentMailContext() {
     attachments
   };
 }
+
+function getSelectedItemsAsync() {
+  return new Promise((resolve, reject) => {
+    if (
+      typeof Office === 'undefined' ||
+      !Office.context ||
+      !Office.context.mailbox ||
+      typeof Office.context.mailbox.getSelectedItemsAsync !== 'function'
+    ) {
+      reject(new Error('getSelectedItemsAsync is not available (requires Mailbox 1.13+).'));
+      return;
+    }
+    Office.context.mailbox.getSelectedItemsAsync(result => {
+      if (result.status === Office.AsyncResultStatus.Failed) {
+        reject(result.error);
+        return;
+      }
+      resolve(Array.isArray(result.value) ? result.value : []);
+    });
+  });
+}
+
+function loadItemByIdAsync(itemId) {
+  return new Promise((resolve, reject) => {
+    if (
+      typeof Office === 'undefined' ||
+      !Office.context ||
+      !Office.context.mailbox ||
+      typeof Office.context.mailbox.loadItemByIdAsync !== 'function'
+    ) {
+      reject(new Error('loadItemByIdAsync is not available (requires Mailbox 1.15+).'));
+      return;
+    }
+    Office.context.mailbox.loadItemByIdAsync(itemId, result => {
+      if (result.status === Office.AsyncResultStatus.Failed) {
+        reject(result.error);
+        return;
+      }
+      resolve(result.value);
+    });
+  });
+}
+
+function getLoadedItemBodyTextAsync(loadedItem) {
+  return new Promise(resolve => {
+    if (!loadedItem || !loadedItem.body || typeof loadedItem.body.getAsync !== 'function') {
+      resolve(null);
+      return;
+    }
+    loadedItem.body.getAsync(Office.CoercionType.Text, result => {
+      resolve(result.status === Office.AsyncResultStatus.Succeeded ? (result.value ?? null) : null);
+    });
+  });
+}
+
+function unloadItemAsync(loadedItem) {
+  return new Promise(resolve => {
+    if (!loadedItem || typeof loadedItem.unloadAsync !== 'function') {
+      resolve();
+      return;
+    }
+    loadedItem.unloadAsync(() => resolve());
+  });
+}
+
+/**
+ * Read body + subject for every email the user has currently selected in
+ * Outlook (Ctrl-click multi-select). Requires Mailbox 1.15+ — callers should
+ * gate this behind `isMultiSelectBodySupported()` from officeCapabilities.js.
+ *
+ * Attachments are intentionally NOT pulled here: loadItemByIdAsync's loaded
+ * item doesn't expose getAttachmentContentAsync, and round-tripping every
+ * selected email's attachments would explode token budgets. Pinned single
+ * emails (added one-by-one via `fetchCurrentMailContext`) still carry their
+ * attachments.
+ */
+export async function fetchSelectedItemsContext() {
+  const stubs = await getSelectedItemsAsync();
+  const out = [];
+  for (const stub of stubs) {
+    if (!stub || !stub.itemId) continue;
+    let loaded = null;
+    try {
+      loaded = await loadItemByIdAsync(stub.itemId);
+      const bodyText = await getLoadedItemBodyTextAsync(loaded);
+      out.push({
+        available: true,
+        subject: stub.subject ?? null,
+        itemId: stub.itemId,
+        bodyText,
+        attachments: []
+      });
+    } catch {
+      out.push({
+        available: true,
+        subject: stub.subject ?? null,
+        itemId: stub.itemId,
+        bodyText: null,
+        attachments: []
+      });
+    } finally {
+      if (loaded) {
+        try {
+          await unloadItemAsync(loaded);
+        } catch {}
+      }
+    }
+  }
+  return out;
+}

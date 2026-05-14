@@ -76,6 +76,70 @@ export function combineUserTextWithEmailBody(userText, emailBodyText) {
   return `${u}\n\n--- Current email ---\n${e}`;
 }
 
+function formatPinnedEmail(p, idx) {
+  const subject = (p?.subject || '').trim();
+  const body = (p?.bodyText || '').trim();
+  const header = `[${idx + 1}]${subject ? ` Subject: ${subject}` : ''}`;
+  return body ? `${header}\n${body}` : header;
+}
+
+/**
+ * Stitch user text together with the current Outlook mail item and any
+ * pinned-from-other-emails context. Output shape stays identical to
+ * `combineUserTextWithEmailBody` when `pinned` is empty so the
+ * single-email flow is a strict no-op regression-wise.
+ *
+ * @param {Object}    args
+ * @param {string}    args.userText                 What the user typed.
+ * @param {string|null} args.currentBodyText        Body of Office.context.mailbox.item
+ *                                                  (already stripped by the user's
+ *                                                  context-toggle if they turned it off).
+ * @param {string|null} [args.currentItemId]        itemId of the current Outlook item —
+ *                                                  used to dedupe against pinned[].
+ * @param {Array<{subject?: string, bodyText?: string|null, itemId?: string|null}>} [args.pinned]
+ *                                                  Emails the user explicitly attached to this
+ *                                                  message (pin/collect mode, or bulk-pulled via
+ *                                                  native multi-select).
+ */
+export function combineUserTextWithEmailContext({
+  userText,
+  currentBodyText,
+  currentItemId,
+  pinned
+}) {
+  const list = Array.isArray(pinned) ? pinned : [];
+  if (list.length === 0) {
+    return combineUserTextWithEmailBody(userText, currentBodyText);
+  }
+
+  const u = (userText || '').trim();
+  const seen = new Set();
+  const dedupedPinned = [];
+  for (const p of list) {
+    const id = p?.itemId;
+    if (id && currentItemId && id === currentItemId) continue;
+    if (id && seen.has(id)) continue;
+    if (id) seen.add(id);
+    if (!(p?.subject || '').trim() && !(p?.bodyText || '').trim()) continue;
+    dedupedPinned.push(p);
+  }
+
+  const segments = [];
+  if (u) segments.push(u);
+
+  if (dedupedPinned.length > 0) {
+    const pinnedBlock = dedupedPinned.map((p, i) => formatPinnedEmail(p, i)).join('\n\n');
+    segments.push(`--- Pinned emails (${dedupedPinned.length}) ---\n${pinnedBlock}`);
+  }
+
+  const currentBody = (currentBodyText || '').trim();
+  if (currentBody) {
+    segments.push(`--- Current email ---\n${currentBody}`);
+  }
+
+  return segments.join('\n\n');
+}
+
 export function buildPromptTemplate(selectedStarterPrompt, selectedApp) {
   const fromPromptObject = p => {
     if (!p || typeof p !== 'object') return null;
