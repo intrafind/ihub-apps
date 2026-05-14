@@ -33,30 +33,58 @@ function AppCard({
 
   if (variant === 'compact') {
     return (
-      <button
-        type="button"
-        className="relative bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 w-full flex flex-row cursor-pointer text-left"
+      <div
+        className="relative bg-white rounded-lg shadow hover:shadow-md transition-shadow duration-200 w-full"
         style={{ height: '75px', minHeight: '72px' }}
         role="listitem"
-        onClick={() => onClick?.(app)}
       >
-        <div
-          className="flex items-center justify-center w-10 h-full flex-shrink-0 rounded-l-lg"
-          style={{ backgroundColor: app.color || '#4F46E5' }}
+        {onToggleFavorite && (
+          <button
+            type="button"
+            onClick={e => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleFavorite(e, app.id);
+            }}
+            className="absolute top-1 right-1 z-10 p-1 rounded-full hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-300"
+            title={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+            aria-label={isFavorite ? t('pages.appsList.unfavorite') : t('pages.appsList.favorite')}
+          >
+            <Icon
+              name="star"
+              size="sm"
+              className={isFavorite ? 'text-yellow-500' : 'text-gray-400'}
+              solid={isFavorite}
+            />
+          </button>
+        )}
+        <button
+          type="button"
+          className="w-full h-full flex flex-row cursor-pointer text-left rounded-lg"
+          onClick={() => onClick?.(app)}
         >
-          <div className="w-8 h-8 bg-white/30 rounded-full flex items-center justify-center">
-            <Icon name={app.icon} className="w-6 h-6 text-white" />
+          <div
+            className="flex items-center justify-center w-10 h-full flex-shrink-0 rounded-l-lg"
+            style={{ backgroundColor: app.color || '#4F46E5' }}
+          >
+            <div className="w-8 h-8 bg-white/30 rounded-full flex items-center justify-center">
+              <Icon name={app.icon} className="w-6 h-6 text-white" />
+            </div>
           </div>
-        </div>
-        <div className="px-4 py-2 flex flex-col flex-1 overflow-hidden justify-center">
-          <h4 className="font-semibold text-sm text-slate-900 truncate" title={name}>
-            {name}
-          </h4>
-          <p className="text-slate-500 text-xs truncate mt-0.5" title={description}>
-            {description}
-          </p>
-        </div>
-      </button>
+          <div
+            className={`py-2 flex flex-col flex-1 overflow-hidden justify-center ${
+              onToggleFavorite ? 'pl-4 pr-9' : 'px-4'
+            }`}
+          >
+            <h4 className="font-semibold text-sm text-slate-900 truncate" title={name}>
+              {name}
+            </h4>
+            <p className="text-slate-500 text-xs truncate mt-0.5" title={description}>
+              {description}
+            </p>
+          </div>
+        </button>
+      </div>
     );
   }
 

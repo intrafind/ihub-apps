@@ -1,0 +1,110 @@
+/*
+ * Office task-pane styles.
+ *
+ * The Outlook task pane is user-resizable: ~280 px on low-DPI / small monitors
+ * up to ~600 px on wide desktops. We use a CSS container query on the root
+ * `.office-task-pane` element so individual chat components can adapt to the
+ * available *container* width — not the viewport — and stay usable at the
+ * 280 px minimum without regressing on wider panes.
+ */
+
+.office-task-pane {
+  container-type: inline-size;
+  container-name: office-pane;
+}
+
+/* ---- Greeting + starter prompts (empty state) ---- */
+
+.office-greeting {
+  padding: 0.75rem 0.75rem 0.5rem;
+}
+
+.office-greeting-header {
+  margin-bottom: 0.75rem;
+}
+
+.office-greeting-title {
+  font-size: 0.875rem; /* text-sm */
+  line-height: 1.25rem;
+}
+
+.office-greeting-subtitle {
+  margin-top: 0.125rem;
+  font-size: 0.75rem; /* text-xs */
+  line-height: 1rem;
+}
+
+.office-greeting-badge {
+  width: 2.75rem;
+  height: 2.75rem;
+  font-size: 1.125rem;
+}
+
+.office-starter-prompt {
+  padding: 0.375rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
+}
+
+/* Slightly more breathing room once the pane is wide enough. */
+@container office-pane (min-width: 400px) {
+  .office-greeting {
+    padding: 1.25rem 1rem 0.75rem;
+  }
+
+  .office-greeting-header {
+    margin-bottom: 1rem;
+  }
+
+  .office-greeting-title {
+    font-size: 1rem; /* text-base */
+    line-height: 1.5rem;
+  }
+
+  .office-greeting-subtitle {
+    margin-top: 0.25rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+
+  .office-greeting-badge {
+    width: 4rem;
+    height: 4rem;
+    font-size: 1.5rem;
+  }
+
+  .office-starter-prompt {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
+/* ---- Header (ChatHeader scopes itself via .office-chat-header) ---- */
+
+.office-chat-header .office-chat-header-title {
+  font-size: 0.8125rem;
+  line-height: 1.15rem;
+}
+
+@container office-pane (min-width: 400px) {
+  .office-chat-header .office-chat-header-title {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+}
+
+/* ---- Chat message bubble + action row ----
+ *
+ * Reduce bubble padding and tighten action-button gaps at narrow widths so
+ * the row of icons (copy / download / edit / resend / star) doesn't overflow
+ * the bubble on a 280 px pane. ChatMessage already uses a `compact` prop in
+ * Office, so we scope these overrides to compact mode only.
+ */
+
+@container office-pane (max-width: 360px) {
+  .office-task-pane .chat-widget-message-content {
+    padding: 0.5rem 0.625rem;
+    border-radius: 0.875rem;
+  }
+}
