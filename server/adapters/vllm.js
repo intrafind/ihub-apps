@@ -28,20 +28,42 @@ class VLLMAdapterClass extends BaseAdapter {
         return { ...base, content: finalContent };
       }
 
-      // Format messages with image content for vision models
-      return {
-        ...base,
-        content: [
-          ...(content ? [{ type: 'text', text: content }] : []),
-          {
-            type: 'image_url',
-            image_url: {
-              url: message.imageData.base64,
-              detail: 'high'
-            }
+      // Format messages with image content for vision models.
+      //
+      // Previously this branch only handled the single-image (object) shape
+      // and shipped `message.imageData.base64` straight as the `image_url.url`.
+      // Two bugs in one: the Office / chat client sends `imageData` as an
+      // array, so the property access returned `undefined`; and even when a
+      // legacy single image came through, raw base64 isn't a valid
+      // `image_url.url` value — it must be wrapped in a `data:<mime>;base64,…`
+      // URL. Result: every Outlook image attachment silently failed on vLLM
+      // (issue #1467). Mirror OpenAIAdapter.formatMessages here so arrays
+      // and the data-URL wrapping behave the same way across providers.
+      const contentParts = content ? [{ type: 'text', text: content }] : [];
+
+      if (Array.isArray(message.imageData)) {
+        message.imageData
+          .filter(img => img && img.base64)
+          .forEach(img => {
+            contentParts.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(img.base64)}`,
+                detail: 'high'
+              }
+            });
+          });
+      } else {
+        contentParts.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${message.imageData.format || message.imageData.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
+            detail: 'high'
           }
-        ]
-      };
+        });
+      }
+
+      return { ...base, content: contentParts };
     });
 
     return formattedMessages;

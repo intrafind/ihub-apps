@@ -27,19 +27,34 @@ class MistralAdapterClass extends BaseAdapter {
         return { ...base, content };
       }
 
-      return {
-        ...base,
-        content: [
-          ...(content ? [{ type: 'text', text: content }] : []),
-          {
-            type: 'image_url',
-            image_url: {
-              url: message.imageData.base64,
-              detail: 'high'
-            }
+      // Mirror OpenAIAdapter.formatMessages — see vllm.js comment for the
+      // full story. Same bug, same fix (issue #1467): handle array shape
+      // and wrap raw base64 in a proper `data:<mime>;base64,…` URL.
+      const contentParts = content ? [{ type: 'text', text: content }] : [];
+
+      if (Array.isArray(message.imageData)) {
+        message.imageData
+          .filter(img => img && img.base64)
+          .forEach(img => {
+            contentParts.push({
+              type: 'image_url',
+              image_url: {
+                url: `data:${img.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(img.base64)}`,
+                detail: 'high'
+              }
+            });
+          });
+      } else {
+        contentParts.push({
+          type: 'image_url',
+          image_url: {
+            url: `data:${message.imageData.format || message.imageData.fileType || 'image/jpeg'};base64,${this.cleanBase64Data(message.imageData.base64)}`,
+            detail: 'high'
           }
-        ]
-      };
+        });
+      }
+
+      return { ...base, content: contentParts };
     });
 
     return formattedMessages;
