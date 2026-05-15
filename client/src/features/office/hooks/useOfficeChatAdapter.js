@@ -4,7 +4,8 @@ import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHost
 import {
   combineUserTextWithEmailContext,
   buildImageDataFromMailAttachments,
-  buildFileDataFromMailAttachments
+  buildFileDataFromMailAttachments,
+  collectAttachmentsForSend
 } from '../utilities/buildChatApiMessages';
 
 /**
@@ -105,8 +106,16 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // Combine manual uploads with attachments harvested from the host
       // (email attachments in Outlook, none today in the extension; this
       // path stays untouched because attachments is just an empty array).
-      const hostImageData = buildImageDataFromMailAttachments(ctx.attachments || []);
-      const hostFileData = await buildFileDataFromMailAttachments(ctx.attachments || []);
+      // Pinned emails' attachments are now included too — previously they
+      // were stored when the user clicked "Add this email" but never
+      // forwarded to the model. See issue #1467.
+      const mergedAttachments = collectAttachmentsForSend(
+        ctx.attachments,
+        pinnedEmails,
+        ctx.itemId ?? null
+      );
+      const hostImageData = await buildImageDataFromMailAttachments(mergedAttachments);
+      const hostFileData = await buildFileDataFromMailAttachments(mergedAttachments);
 
       const combinedImageData = combineUploadData(apiMessage.imageData, hostImageData);
       const combinedFileData = combineUploadData(apiMessage.fileData, hostFileData);

@@ -38,6 +38,15 @@ import * as React from 'react';
  *                                    toggle gates. When the toggle is OFF, every
  *                                    listed field is cleared from the context the
  *                                    chat hook merges into the outgoing message.
+ * @property {boolean} [hidden]       When `true`, the toggle still drives the
+ *                                    chat-hook filter but is NOT rendered in the
+ *                                    chat input's `+` menu. Use this when the
+ *                                    same control is surfaced more naturally
+ *                                    elsewhere (e.g. the Outlook taskpane's
+ *                                    OfficeMailContextBanner provides both the
+ *                                    "Include body" checkbox and the per-attachment
+ *                                    X buttons, making a duplicate menu toggle
+ *                                    confusing — see issue #1467).
  *
  * @typedef {Object} InsertActionConfig
  * @property {'icon'|'primary'} variant                   How the per-message insert action is

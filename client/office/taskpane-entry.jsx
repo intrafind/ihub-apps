@@ -81,21 +81,27 @@ Office.onReady(async () => {
     loginSubtitle: 'iHub Apps for Outlook',
     runAuthDialog: openOfficeAuthDialog,
     readMessageContext: fetchCurrentMailContext,
-    // Per-message opt-out toggles surfaced under the chat input's `+` menu.
-    // Both default to ON to preserve the long-standing Outlook behaviour
-    // (every message attaches the email body + attachments).
+    // Per-message context filters. Both default to ON to preserve the
+    // long-standing Outlook behaviour (every message attaches the email
+    // body + attachments). `hidden: true` keeps them out of the chat
+    // input's `+` menu because the OfficeMailContextBanner already
+    // surfaces the same controls — an "Include body" checkbox sits on
+    // the email card and each attachment ships with its own X button —
+    // so the duplicated menu toggles only confused users (issue #1467).
     contextToggles: [
       {
         key: 'emailBody',
         label: 'Include email body',
         defaultEnabled: true,
-        controls: ['bodyText']
+        controls: ['bodyText'],
+        hidden: true
       },
       {
         key: 'attachments',
         label: 'Include attachments',
         defaultEnabled: true,
-        controls: ['attachments']
+        controls: ['attachments'],
+        hidden: true
       }
     ],
     // In the Office taskpane the "insert this response into the document /

@@ -60,11 +60,14 @@ function ChatInputActionsMenu({
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
   // its `contextToggles` array. Empty in the main web app — the section
-  // below renders nothing.
+  // below renders nothing. Toggles flagged `hidden: true` still drive the
+  // adapter's context filter but are skipped here because the same control
+  // is exposed more naturally elsewhere (e.g. the Outlook taskpane shows
+  // body / attachment controls in OfficeMailContextBanner — issue #1467).
   const embeddedHost = useEmbeddedHost();
   const hostContextToggles =
     onHostContextFlagChange && Array.isArray(embeddedHost?.contextToggles)
-      ? embeddedHost.contextToggles
+      ? embeddedHost.contextToggles.filter(t => !t?.hidden)
       : [];
   const [isOpen, setIsOpen] = useState(false);
   const [availableTools, setAvailableTools] = useState([]);

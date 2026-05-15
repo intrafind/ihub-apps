@@ -1,8 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { formatFileSize } from '../../../upload/utils/cloudFileProcessing';
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp|svg)$/i;
+// Default to compact mode once the banner would otherwise show this many
+// attachment rows — at 3+ attachments the full banner can eat 200 px+
+// of vertical space, which on a 600 px-tall Outlook task pane pushes the
+// chat input off the visible area. Users can still expand on demand.
+const COMPACT_DEFAULT_THRESHOLD = 3;
 
 function isImageAttachment(att) {
   if (!att) return false;
@@ -34,6 +39,13 @@ function shortenBody(text, max = 140) {
  * Empty state (no live mail context, body and attachments both absent)
  * collapses the banner entirely so the chat input sits flush with the
  * message list.
+ *
+ * Compact mode (issue #1467): when the email has many attachments, the
+ * banner auto-collapses to a single summary row to keep the chat input
+ * visible on narrow / short Outlook task panes. The user can toggle back
+ * to the full view via the chevron button — both states honor the same
+ * "Include body" / per-attachment-remove controls so no functionality is
+ * lost in compact mode.
  */
 function OfficeMailContextBanner({
   ctx,
@@ -57,6 +69,23 @@ function OfficeMailContextBanner({
 
   const hasBody = Boolean(ctx?.bodyText && ctx.bodyText.trim().length > 0);
   const hasAttachments = attachments.length > 0;
+
+  // Default to compact when the email brings in enough attachments that
+  // the full banner would dominate the task pane. Tracked per email item
+  // (ctx.itemId) — switching emails recomputes the default rather than
+  // carrying the previous email's expanded state into a different inbox.
+  // The previous-itemId ref lets us clear the manual override during
+  // render when the email changes, without bouncing through useEffect
+  // (which would trigger an extra render and an eslint set-state warning).
+  const itemId = ctx?.itemId ?? null;
+  const shouldDefaultCompact = remainingAttachments.length >= COMPACT_DEFAULT_THRESHOLD;
+  const [compactOverride, setCompactOverride] = useState(/** @type {boolean|null} */ (null));
+  const prevItemIdRef = useRef(itemId);
+  if (prevItemIdRef.current !== itemId) {
+    prevItemIdRef.current = itemId;
+    if (compactOverride !== null) setCompactOverride(null);
+  }
+  const compact = compactOverride === null ? shouldDefaultCompact : compactOverride;
 
   if (loading) {
     return (
@@ -97,6 +126,54 @@ function OfficeMailContextBanner({
     0
   );
 
+  // Compact summary: single row showing subject + attachment count + size.
+  // Lets the user verify what's queued without the full per-attachment list.
+  if (compact) {
+    const attachmentSummary =
+      remainingAttachments.length === 0
+        ? hasAttachments
+          ? 'No attachments will be sent'
+          : null
+        : `${remainingAttachments.length} attachment${
+            remainingAttachments.length === 1 ? '' : 's'
+          } • ${formatFileSize(totalAttachmentSize)}`;
+
+    return (
+      <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm">
+        <button
+          type="button"
+          onClick={() => setCompactOverride(false)}
+          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-slate-50 transition-colors rounded-lg"
+          aria-expanded="false"
+          aria-label="Expand email context details"
+          title="Show full email context"
+        >
+          <div className="flex-shrink-0 text-slate-500">
+            <Icon name="mail" size="sm" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-xs font-medium text-slate-900 truncate" title={subject}>
+              {subject}
+            </div>
+            <div className="text-[11px] text-slate-500 truncate">
+              {bodySent ? 'Email body' : 'Body excluded'}
+              {attachmentSummary ? ` • ${attachmentSummary}` : ''}
+            </div>
+          </div>
+          {removedCount > 0 && (
+            <span
+              className="flex-shrink-0 text-[11px] text-indigo-600 font-medium"
+              title={`${removedCount} attachment${removedCount === 1 ? '' : 's'} removed`}
+            >
+              −{removedCount}
+            </span>
+          )}
+          <Icon name="chevronDown" size="sm" className="flex-shrink-0 text-slate-400" aria-hidden />
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="mx-3 mt-2 mb-1 rounded-lg border border-slate-200 bg-white shadow-sm">
       <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
@@ -104,16 +181,28 @@ function OfficeMailContextBanner({
           <Icon name="info" size="xs" className="text-slate-400" />
           <span>Context attached to this message</span>
         </div>
-        {removedCount > 0 && (
+        <div className="flex items-center gap-2">
+          {removedCount > 0 && (
+            <button
+              type="button"
+              onClick={onRestoreAttachments}
+              className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
+              title="Restore removed attachments"
+            >
+              Restore {removedCount}
+            </button>
+          )}
           <button
             type="button"
-            onClick={onRestoreAttachments}
-            className="text-xs text-indigo-600 hover:text-indigo-800 font-medium"
-            title="Restore removed attachments"
+            onClick={() => setCompactOverride(true)}
+            className="text-slate-400 hover:text-slate-600 transition-colors p-0.5 rounded"
+            aria-expanded="true"
+            aria-label="Collapse email context details"
+            title="Collapse"
           >
-            Restore {removedCount}
+            <Icon name="chevronUp" size="sm" />
           </button>
-        )}
+        </div>
       </div>
 
       {/* Email body card */}

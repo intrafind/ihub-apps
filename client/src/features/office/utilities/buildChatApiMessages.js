@@ -5,27 +5,135 @@ export function createUserMessageId() {
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i;
+// Match ImageUploader: cap at 1024px and re-encode as JPEG at 80% quality.
+// Phone-camera JPGs embedded in emails can be 4–5 MB which exceeds the
+// per-image limits on some vision models (e.g. Anthropic 5 MB). Without
+// this normalization those messages silently fail on the provider side
+// — see issue #1467.
+const IMAGE_MAX_DIMENSION = 1024;
+const IMAGE_REENCODE_QUALITY = 0.8;
+
+/**
+ * Strip MIME-type parameters so e.g. `image/jpeg; name="foo.jpg"` collapses to
+ * `image/jpeg`. Outlook (and some Exchange servers) decorate the contentType
+ * with a `name=` parameter which the LLM adapters then send as the `media_type`
+ * — Anthropic rejects anything that isn't a bare MIME type, so without this
+ * step image attachments fail before the model ever sees them.
+ */
+function sanitizeContentType(ct) {
+  if (!ct || typeof ct !== 'string') return '';
+  return ct.split(';')[0].trim().toLowerCase();
+}
 
 export function isImageAttachment(att) {
   if (!att) return false;
-  const ct = (att.contentType || '').toLowerCase();
+  const ct = sanitizeContentType(att.contentType);
   if (ct.startsWith('image/')) return true;
   const name = (att.name || '').toLowerCase();
   return IMAGE_EXT.test(name);
 }
 
-export function buildImageDataFromMailAttachments(attachments) {
+/**
+ * Resize a raw-base64 image down to `maxDimension` (longest edge) and
+ * re-encode as JPEG at 80% quality. Returns the original base64 unchanged
+ * if the image already fits, the format doesn't support canvas decode
+ * (e.g. corrupted data), or anything throws during the round-trip. The
+ * caller treats this as "best effort" — we'd rather send the original
+ * image than drop it entirely.
+ */
+async function resizeImageBase64(base64Content, contentType, maxDimension) {
+  if (!base64Content) return { base64: base64Content, contentType };
+  let objectUrl = null;
+  try {
+    const binary = atob(base64Content);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: contentType || 'image/jpeg' });
+    objectUrl = URL.createObjectURL(blob);
+
+    const img = await new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = () => reject(new Error('image-load-failed'));
+      im.src = objectUrl;
+    });
+
+    const w0 = img.naturalWidth;
+    const h0 = img.naturalHeight;
+    if (!w0 || !h0) return { base64: base64Content, contentType };
+
+    // No resize needed — image fits within the target box.
+    if (Math.max(w0, h0) <= maxDimension) {
+      return { base64: base64Content, contentType };
+    }
+
+    let width;
+    let height;
+    if (w0 >= h0) {
+      width = maxDimension;
+      height = Math.round((h0 * maxDimension) / w0);
+    } else {
+      height = maxDimension;
+      width = Math.round((w0 * maxDimension) / h0);
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return { base64: base64Content, contentType };
+    ctx.drawImage(img, 0, 0, width, height);
+    const dataUrl = canvas.toDataURL('image/jpeg', IMAGE_REENCODE_QUALITY);
+    const newBase64 = dataUrl.replace(/^data:image\/[a-z]+;base64,/, '');
+    return { base64: newBase64, contentType: 'image/jpeg' };
+  } catch {
+    return { base64: base64Content, contentType };
+  } finally {
+    if (objectUrl) {
+      try {
+        URL.revokeObjectURL(objectUrl);
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+}
+
+/**
+ * Build the imageData array sent to the LLM from a list of Outlook
+ * attachments. Filters out inline images (HTML-signature logos, embedded
+ * UI badges, etc.) so they don't silently bloat the request — they're
+ * already hidden from the OfficeMailContextBanner UI for the same reason.
+ * Image content-types are normalized and oversized images are resized to
+ * fit the strictest vision-model limit (Anthropic, 5 MB / image).
+ */
+export async function buildImageDataFromMailAttachments(attachments) {
   if (!attachments?.length) return null;
-  const images = attachments.filter(isImageAttachment).filter(a => a.content && !a.error);
+  const images = attachments
+    .filter(a => !a?.isInline)
+    .filter(isImageAttachment)
+    .filter(a => a.content && !a.error);
   if (!images.length) return null;
-  // Map to the shape the server adapters expect: { base64, fileType }
-  return images.map(a => ({
-    source: 'local',
-    base64: a.content.content,
-    fileType: a.contentType,
-    fileName: a.name,
-    fileSize: a.size
-  }));
+
+  const processed = await Promise.all(
+    images.map(async a => {
+      const cleanType = sanitizeContentType(a.contentType) || 'image/jpeg';
+      const { base64, contentType } = await resizeImageBase64(
+        a.content.content,
+        cleanType,
+        IMAGE_MAX_DIMENSION
+      );
+      return {
+        source: 'local',
+        base64,
+        fileType: contentType,
+        fileName: a.name,
+        fileSize: a.size
+      };
+    })
+  );
+
+  return processed.length ? processed : null;
 }
 
 function base64ToFile(base64, name, contentType) {
@@ -42,19 +150,24 @@ function base64ToFile(base64, name, contentType) {
 // in the shape RequestBuilder.preprocessMessagesWithFileData expects.
 export async function buildFileDataFromMailAttachments(attachments) {
   if (!attachments?.length) return null;
-  const files = attachments.filter(a => !isImageAttachment(a)).filter(a => a.content && !a.error);
+  const files = attachments
+    .filter(a => !a?.isInline)
+    .filter(a => !isImageAttachment(a))
+    .filter(a => a.content && !a.error);
   if (!files.length) return null;
 
   const results = await Promise.all(
     files.map(async a => {
       try {
-        const file = base64ToFile(a.content.content, a.name, a.contentType);
+        const cleanType =
+          sanitizeContentType(a.contentType) || a.contentType || 'application/octet-stream';
+        const file = base64ToFile(a.content.content, a.name, cleanType);
         const { content, pageImages } = await processDocumentFile(file);
         return {
           source: 'local',
           fileName: a.name,
-          fileType: a.contentType,
-          displayType: a.contentType,
+          fileType: cleanType,
+          displayType: cleanType,
           content: content || undefined,
           pageImages: pageImages?.length ? pageImages : undefined
         };
@@ -66,6 +179,27 @@ export async function buildFileDataFromMailAttachments(attachments) {
 
   const valid = results.filter(Boolean);
   return valid.length ? valid : null;
+}
+
+/**
+ * Merge the current Outlook item's attachments with attachments harvested
+ * from emails the user has pinned (via "Add this email" / multi-select).
+ * Pinned items whose itemId matches the current item are skipped so the
+ * same attachments aren't sent twice.
+ */
+export function collectAttachmentsForSend(currentAttachments, pinnedEmails, currentItemId) {
+  const current = Array.isArray(currentAttachments) ? currentAttachments : [];
+  const pinned = Array.isArray(pinnedEmails) ? pinnedEmails : [];
+  if (pinned.length === 0) return current;
+
+  const merged = [...current];
+  for (const p of pinned) {
+    if (p?.itemId && currentItemId && p.itemId === currentItemId) continue;
+    const list = Array.isArray(p?.attachments) ? p.attachments : [];
+    if (list.length === 0) continue;
+    merged.push(...list);
+  }
+  return merged;
 }
 
 export function combineUserTextWithEmailBody(userText, emailBodyText) {
