@@ -76,28 +76,19 @@ Office.onReady(async () => {
   const insertLabelKey = isOutlookHost ? 'office.insertIntoEmail' : 'office.insertIntoDocument';
 
   // Outlook host adapter: popup-window auth dialog + Outlook mailbox context.
+  //
+  // No `contextToggles` are declared (issue #1467). The body /
+  // attachments filters that used to live in the chat input's `+` menu
+  // are now owned by OfficeMailContextBanner — the "Include body"
+  // checkbox sits on the email card and each attachment ships with its
+  // own X button, so the duplicated menu toggles only confused users.
+  // The browser-extension side panel still declares its own `pageText`
+  // toggle in sidepanel-entry.jsx; that surface keeps working unchanged.
   const outlookHost = {
     kind: 'office',
     loginSubtitle: 'iHub Apps for Outlook',
     runAuthDialog: openOfficeAuthDialog,
     readMessageContext: fetchCurrentMailContext,
-    // Per-message opt-out toggles surfaced under the chat input's `+` menu.
-    // Both default to ON to preserve the long-standing Outlook behaviour
-    // (every message attaches the email body + attachments).
-    contextToggles: [
-      {
-        key: 'emailBody',
-        label: 'Include email body',
-        defaultEnabled: true,
-        controls: ['bodyText']
-      },
-      {
-        key: 'attachments',
-        label: 'Include attachments',
-        defaultEnabled: true,
-        controls: ['attachments']
-      }
-    ],
     // In the Office taskpane the "insert this response into the document /
     // email" button is the whole reason the user opened the add-in, so it
     // gets promoted to a labelled primary button beneath each assistant

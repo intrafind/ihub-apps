@@ -60,7 +60,10 @@ function ChatInputActionsMenu({
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
   // its `contextToggles` array. Empty in the main web app — the section
-  // below renders nothing.
+  // below renders nothing. The Outlook taskpane intentionally declares no
+  // toggles (issue #1467) because the OfficeMailContextBanner already
+  // surfaces equivalent controls; the browser extension still uses this
+  // mechanism for its `Include page` toggle.
   const embeddedHost = useEmbeddedHost();
   const hostContextToggles =
     onHostContextFlagChange && Array.isArray(embeddedHost?.contextToggles)

@@ -71,7 +71,12 @@ function ChatInput({
   // Clarification state
   clarificationPending = false, // When true, input is disabled waiting for clarification answer
   // Document token size warning
-  fileTokenWarning = null
+  fileTokenWarning = null,
+  // Optional override for the auto-grow textarea cap. Defaults to 5 lines
+  // (~150 px) in single-line mode and 12 lines in multiline mode. The
+  // Outlook taskpane passes 3 so the input doesn't dominate the small
+  // task pane when the user pastes a long prompt — issue #1467.
+  maxRows = null
 }) {
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
@@ -238,8 +243,14 @@ function ChatInput({
         // Calculate the new height based on content
         const scrollHeight = textarea.scrollHeight;
         const minHeight = inputRows * 1.5 * 16; // Convert em to px (assuming 16px base font size)
-        // Max height: 150px (approx 5 lines) for single-line mode, 12 lines for multiline mode
-        const maxHeight = multilineMode ? 12 * 1.5 * 16 + 24 : 150;
+        // Default cap: 5 lines (single-line mode) / 12 lines (multiline mode).
+        // `maxRows` lets the embedding host (Outlook taskpane) clamp lower.
+        const defaultMaxLines = multilineMode ? 12 : 5;
+        const effectiveMaxLines =
+          typeof maxRows === 'number' && maxRows > 0
+            ? Math.max(maxRows, inputRows)
+            : defaultMaxLines;
+        const maxHeight = effectiveMaxLines * 1.5 * 16 + (multilineMode ? 24 : 0);
 
         // Set the height to fit content, but respect min/max limits
         const newHeight = Math.min(Math.max(scrollHeight, minHeight), maxHeight);
@@ -256,7 +267,7 @@ function ChatInput({
         textarea.removeEventListener('input', autoResize);
       };
     }
-  }, [value, multilineMode, inputRows, actualInputRef]);
+  }, [value, multilineMode, inputRows, maxRows, actualInputRef]);
 
   const handleSubmit = e => {
     e.preventDefault();
@@ -421,8 +432,15 @@ function ChatInput({
               aria-label={t('chat.inputLabel', 'Type your message')}
               style={{
                 minHeight: multilineMode ? `${inputRows * 1.5}em` : undefined,
-                maxHeight: multilineMode ? `calc(11 * 1.5em + 1.5rem)` : undefined,
-                overflowY: multilineMode ? 'auto' : 'hidden',
+                maxHeight: multilineMode
+                  ? `calc(11 * 1.5em + 1.5rem)`
+                  : typeof maxRows === 'number' && maxRows > 0
+                    ? `calc(${Math.max(maxRows, inputRows)} * 1.5em)`
+                    : undefined,
+                // Show a scrollbar once the textarea hits the cap — `maxRows`
+                // would otherwise hide overflowing text in single-line mode.
+                overflowY:
+                  multilineMode || (typeof maxRows === 'number' && maxRows > 0) ? 'auto' : 'hidden',
                 height: multilineMode ? 'auto' : undefined
               }}
               title={

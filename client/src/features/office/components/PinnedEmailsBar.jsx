@@ -12,6 +12,10 @@ function truncate(s, n) {
  * Outlook taskpane. Lets users attach the currently-open email — and, on
  * Mailbox 1.15+, any emails Ctrl-selected in the message list — to the
  * outgoing prompt without losing them when they navigate between emails.
+ *
+ * When `embedded` is true (the OfficeContextStrip usage) the surrounding
+ * collapsible strip owns the page-level margins / borders, so this bar
+ * just renders its contents flush. Issue #1467.
  */
 function PinnedEmailsBar({
   pinned,
@@ -22,7 +26,8 @@ function PinnedEmailsBar({
   canPinCurrent,
   isCurrentPinned,
   isMultiSelectSupported,
-  multiSelectLoading
+  multiSelectLoading,
+  embedded = false
 }) {
   const { t } = useTranslation();
   const hasPins = Array.isArray(pinned) && pinned.length > 0;
@@ -30,8 +35,12 @@ function PinnedEmailsBar({
   // Nothing to do when we can't pin and don't have any pins to show.
   if (!hasPins && !canPinCurrent && !isMultiSelectSupported) return null;
 
+  const outerClassName = embedded
+    ? 'office-pinned-bar bg-slate-50/70 px-3 py-2 text-xs'
+    : 'office-pinned-bar border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-xs';
+
   return (
-    <div className="office-pinned-bar border-t border-slate-100 bg-slate-50/70 px-3 py-2 text-xs">
+    <div className={outerClassName}>
       <div className="flex flex-wrap items-center gap-1.5">
         {canPinCurrent && (
           <button
