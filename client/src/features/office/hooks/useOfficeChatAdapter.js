@@ -2,7 +2,7 @@ import { useCallback } from 'react';
 import useAppChat from '../../chat/hooks/useAppChat';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
-  combineUserTextWithEmailBody,
+  combineUserTextWithEmailContext,
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments
 } from '../utilities/buildChatApiMessages';
@@ -89,7 +89,18 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // No-op when the host has no toggles or the user hasn't touched any.
       ctx = applyHostContextFlags(ctx, host.contextToggles, params?.hostContextFlags);
 
-      const enrichedContent = combineUserTextWithEmailBody(apiMessage.content, ctx.bodyText);
+      // Pinned emails ride alongside the current item: either the user
+      // clicked "Pin this email" on a previously-open message, or they
+      // Ctrl-selected multiple emails and bulk-pulled them via the
+      // Mailbox 1.15+ multi-select API. Both paths feed the same shape.
+      const pinnedEmails = Array.isArray(params?.pinnedEmails) ? params.pinnedEmails : [];
+
+      const enrichedContent = combineUserTextWithEmailContext({
+        userText: apiMessage.content,
+        currentBodyText: ctx.bodyText,
+        currentItemId: ctx.itemId ?? null,
+        pinned: pinnedEmails
+      });
 
       // Combine manual uploads with attachments harvested from the host
       // (email attachments in Outlook, none today in the extension; this
@@ -100,13 +111,15 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       const combinedImageData = combineUploadData(apiMessage.imageData, hostImageData);
       const combinedFileData = combineUploadData(apiMessage.fileData, hostFileData);
 
-      // hostContextFlags is a client-only opt-out signal — strip it before
-      // forwarding so it doesn't show up in the outgoing chat-completion
-      // request body.
+      // hostContextFlags + pinnedEmails are client-only signals — strip
+      // them before forwarding so they don't show up in the outgoing
+      // chat-completion request body. The enriched content carries the
+      // pinned data into the prompt instead.
 
       const {
         hostContextFlags: _hostContextFlags,
         hostContextOverride: _hostContextOverride,
+        pinnedEmails: _pinnedEmails,
         ...paramsForServer
       } = params || {};
 
