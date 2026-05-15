@@ -23,6 +23,12 @@ export function useOutlookMailContextSnapshot() {
   const host = useEmbeddedHost();
   const [state, setState] = useState({ loading: true, ctx: null });
   const [removedAttachmentIds, setRemovedAttachmentIds] = useState(() => new Set());
+  // Per-email opt-out for the email body. Survives within a single email view
+  // but resets on ItemChanged so the user can't accidentally suppress the
+  // body of an unrelated email. Replaces the old `hostContextFlags.emailBody`
+  // plumbing (issue #1467) — the OfficeMailContextBanner owns this state now
+  // and the contextToggles mechanism is no longer used in the Outlook host.
+  const [includeBody, setIncludeBody] = useState(true);
   // Bumped by ItemChanged so the chat panel can reset its edit state too.
   const [generation, setGeneration] = useState(0);
   const cancelRef = useRef({ cancelled: false });
@@ -47,6 +53,7 @@ export function useOutlookMailContextSnapshot() {
 
     function onItemChange() {
       setRemovedAttachmentIds(new Set());
+      setIncludeBody(true);
       setGeneration(g => g + 1);
       load();
     }
@@ -79,16 +86,20 @@ export function useOutlookMailContextSnapshot() {
    * Build the context override to forward to the chat adapter. Returns null
    * when no live context exists (extension on chrome:// page, Outlook compose
    * mode without an item, etc.) so the adapter can fall back to its own
-   * `host.readMessageContext()` call.
+   * `host.readMessageContext()` call. Honors the "Include body" checkbox in
+   * the banner by clearing `bodyText` when the user has opted out.
    */
   const buildSnapshotOverride = useCallback(() => {
     if (!state.ctx) return null;
     const filtered = { ...state.ctx };
+    if (!includeBody) {
+      filtered.bodyText = null;
+    }
     if (removedAttachmentIds.size > 0 && Array.isArray(filtered.attachments)) {
       filtered.attachments = filtered.attachments.filter(a => !removedAttachmentIds.has(a?.id));
     }
     return filtered;
-  }, [state.ctx, removedAttachmentIds]);
+  }, [state.ctx, removedAttachmentIds, includeBody]);
 
   const visibleAttachments = useMemo(() => {
     const list = Array.isArray(state.ctx?.attachments) ? state.ctx.attachments : [];
@@ -106,6 +117,8 @@ export function useOutlookMailContextSnapshot() {
     removeAttachment,
     restoreAttachments,
     buildSnapshotOverride,
+    includeBody,
+    setIncludeBody,
     generation
   };
 }

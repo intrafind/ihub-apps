@@ -195,6 +195,43 @@ describe('buildImageDataFromMailAttachments', () => {
     expect(out).toHaveLength(1);
     expect(out[0].base64).toBe(tinyBase64);
   });
+
+  test('skips cloud attachments where content.format is url, not base64', async () => {
+    // OneDrive / SharePoint attachments arrive as { format: 'url', content: '<sharelink>' }.
+    // The previous code fed the share-link URL into atob() and shipped it to the LLM
+    // as a malformed image, which is the actual silent failure path in issue #1467
+    // (reproducible on vLLM, not Anthropic-specific as the MIME-param theory suggested).
+    const out = await buildImageDataFromMailAttachments([
+      {
+        id: 'a1',
+        name: 'photo.jpg',
+        contentType: 'image/jpeg',
+        size: 5_000_000,
+        content: { format: 'url', content: 'https://onedrive.live.com/.../photo.jpg' }
+      }
+    ]);
+    expect(out).toBeNull();
+  });
+
+  test('skips attachments without a usable content blob', async () => {
+    const out = await buildImageDataFromMailAttachments([
+      {
+        id: 'a1',
+        name: 'photo.jpg',
+        contentType: 'image/jpeg',
+        size: 1000,
+        content: { format: 'base64', content: '' }
+      },
+      {
+        id: 'a2',
+        name: 'photo2.jpg',
+        contentType: 'image/jpeg',
+        size: 1000
+        // no `content` at all
+      }
+    ]);
+    expect(out).toBeNull();
+  });
 });
 
 describe('buildFileDataFromMailAttachments', () => {
@@ -242,6 +279,19 @@ describe('buildFileDataFromMailAttachments', () => {
     expect(out).toHaveLength(1);
     expect(out[0].fileType).toBe('application/pdf');
     expect(out[0].displayType).toBe('application/pdf');
+  });
+
+  test('skips cloud file attachments (format: url)', async () => {
+    const out = await buildFileDataFromMailAttachments([
+      {
+        id: 'a1',
+        name: 'invoice.pdf',
+        contentType: 'application/pdf',
+        size: 100_000,
+        content: { format: 'url', content: 'https://onedrive.live.com/.../invoice.pdf' }
+      }
+    ]);
+    expect(out).toBeNull();
   });
 });
 

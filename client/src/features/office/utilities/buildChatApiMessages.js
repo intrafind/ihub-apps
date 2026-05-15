@@ -100,19 +100,40 @@ async function resizeImageBase64(base64Content, contentType, maxDimension) {
 }
 
 /**
+ * True only when the attachment's `content` blob carries actual binary
+ * data. Outlook's `getAttachmentContentAsync` can return four formats —
+ * `Base64`, `Eml`, `iCalendar`, `Url` — and only `base64` is usable as an
+ * image / file payload. Cloud attachments (OneDrive / SharePoint links)
+ * arrive as `format: 'url'` with `content` set to the share link, which
+ * we previously fed straight into `atob()` and shipped to the LLM as if
+ * it were base64. That was the silent failure path behind issue #1467.
+ */
+function hasBase64Content(att) {
+  if (!att?.content) return false;
+  const fmt = String(att.content.format || '').toLowerCase();
+  // Office.js returns the enum value verbatim; treat anything other
+  // than the explicit "base64" string as non-base64 to be safe.
+  if (fmt && fmt !== 'base64') return false;
+  return typeof att.content.content === 'string' && att.content.content.length > 0;
+}
+
+/**
  * Build the imageData array sent to the LLM from a list of Outlook
  * attachments. Filters out inline images (HTML-signature logos, embedded
  * UI badges, etc.) so they don't silently bloat the request — they're
  * already hidden from the OfficeMailContextBanner UI for the same reason.
  * Image content-types are normalized and oversized images are resized to
- * fit the strictest vision-model limit (Anthropic, 5 MB / image).
+ * fit the strictest vision-model limit (Anthropic, 5 MB / image). Cloud
+ * attachments (format: 'url') are dropped because their `content` is a
+ * share link, not binary data.
  */
 export async function buildImageDataFromMailAttachments(attachments) {
   if (!attachments?.length) return null;
   const images = attachments
     .filter(a => !a?.isInline)
     .filter(isImageAttachment)
-    .filter(a => a.content && !a.error);
+    .filter(hasBase64Content)
+    .filter(a => !a.error);
   if (!images.length) return null;
 
   const processed = await Promise.all(
@@ -148,12 +169,15 @@ function base64ToFile(base64, name, contentType) {
 // Processes non-image attachments through the shared document pipeline.
 // Returns an array of { fileName, fileType, displayType, content?, pageImages? }
 // in the shape RequestBuilder.preprocessMessagesWithFileData expects.
+// Skips cloud attachments (format: 'url') and EML / iCalendar items since
+// the document pipeline expects binary file bytes — see `hasBase64Content`.
 export async function buildFileDataFromMailAttachments(attachments) {
   if (!attachments?.length) return null;
   const files = attachments
     .filter(a => !a?.isInline)
     .filter(a => !isImageAttachment(a))
-    .filter(a => a.content && !a.error);
+    .filter(hasBase64Content)
+    .filter(a => !a.error);
   if (!files.length) return null;
 
   const results = await Promise.all(

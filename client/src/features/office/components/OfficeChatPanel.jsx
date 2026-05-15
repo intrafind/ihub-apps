@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatHeader from './chat/ChatHeader';
-import OfficeMailContextBanner from './chat/OfficeMailContextBanner';
+import OfficeContextStrip from './chat/OfficeContextStrip';
 import ItemSelectorDialog from './apps-dialog';
 import VariablesDialog, {
   buildInitialVariablesMap,
@@ -13,7 +13,6 @@ import VariablesDialog, {
   missingRequiredVariableNames
 } from './variables-dialog';
 import SettingsDialog from './settings-dialog';
-import PinnedEmailsBar from './PinnedEmailsBar';
 import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
 import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
@@ -232,10 +231,12 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       if (selectedModel) params.modelId = selectedModel;
       if (enabledTools?.length) params.enabledTools = enabledTools;
       if (selectedApp?.websearch?.enabled) params.websearchEnabled = websearchEnabled;
-      // Per-message host-context opt-out flags, e.g. { emailBody: false }.
-      // useOfficeChatAdapter consults these (alongside the host adapter's
-      // contextToggles declarations) to strip body / attachments from the
-      // outgoing apiMessage. Empty object in the main web app — no-op.
+      // Per-message host-context opt-out flags from the `+` menu, e.g.
+      // { pageText: false } in the browser extension. The Outlook
+      // taskpane no longer uses this for body / attachments — those
+      // controls live on OfficeContextStrip and are forwarded via
+      // params.hostContextOverride (mailSnapshot.buildSnapshotOverride).
+      // See issue #1467.
       params.hostContextFlags = hostContextFlags;
       // Emails the user has explicitly attached to this chat — pin/collect
       // mode or bulk-pulled via native multi-select. Stripped from the
@@ -244,11 +245,12 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       params.pinnedEmails = pinnedEmails;
 
       // Mail context snapshot — the user can drop individual attachments
-      // and toggle the body off via OfficeMailContextBanner before send.
-      // Forwarding the edited snapshot here avoids a second
-      // host.readMessageContext() round-trip inside the adapter and ensures
-      // the user's removals are honored. Null falls back to the adapter's
-      // own fetch (extension side panel, no-context routes).
+      // and toggle the body off via OfficeContextStrip / its embedded
+      // OfficeMailContextBanner before send. Forwarding the edited
+      // snapshot here avoids a second host.readMessageContext() round-trip
+      // inside the adapter and ensures the user's removals (and body
+      // opt-out) are honored. Null falls back to the adapter's own fetch
+      // (extension side panel, no-context routes).
       const snapshotOverride = mailSnapshot.buildSnapshotOverride();
       if (snapshotOverride) params.hostContextOverride = snapshotOverride;
 
@@ -498,32 +500,23 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
               />
             </div>
 
-            {/* Mail-context banner: shows the email body + attachments
-                queued for this message so users can review and trim
-                before pressing send. Renders nothing when there's no
-                mail context (extension side panel, compose mode, etc.). */}
-            <OfficeMailContextBanner
+            {/* Collapsible context strip: hosts the email-body banner +
+                the pinned-emails toolbar behind a single chevron so the
+                chat input stays accessible on small Outlook task panes.
+                See issue #1467. Renders nothing when there's no mail
+                context (extension side panel, compose mode, etc.). */}
+            <OfficeContextStrip
               ctx={mailSnapshot.ctx}
               loading={mailSnapshot.loading}
               visibleAttachments={mailSnapshot.visibleAttachments}
               removedAttachmentIds={mailSnapshot.removedAttachmentIds}
               onRemoveAttachment={mailSnapshot.removeAttachment}
               onRestoreAttachments={mailSnapshot.restoreAttachments}
-              includeBody={hostContextFlags?.emailBody !== false}
-              onToggleBody={value =>
-                setHostContextFlags(prev => ({ ...(prev || {}), emailBody: value }))
-              }
-            />
-
-            {/* Pinned emails toolbar: lets users attach OTHER emails (beyond
-                the currently open one) to the same chat — via per-email "Add
-                this email" or, on Mailbox 1.15+, bulk-pull every Ctrl-selected
-                email at once. Orthogonal to the banner above, which only
-                edits the current item. */}
-            <PinnedEmailsBar
+              includeBody={mailSnapshot.includeBody}
+              onToggleBody={mailSnapshot.setIncludeBody}
               pinned={pinnedEmails}
               onUnpin={handleUnpin}
-              onClearAll={handleClearPinned}
+              onClearPinned={handleClearPinned}
               onPinCurrent={handlePinCurrent}
               onPinSelected={handlePinSelected}
               canPinCurrent={!!currentItemId}
@@ -568,6 +561,9 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                   setHostContextFlags(prev => ({ ...(prev || {}), [key]: value }))
                 }
                 clarificationPending={adapter.clarificationPending}
+                // Keep the input from dominating the small Outlook task pane;
+                // long prompts scroll inside the 3-line box. Issue #1467.
+                maxRows={3}
               />
             </div>
           </div>

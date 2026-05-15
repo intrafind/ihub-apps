@@ -100,11 +100,22 @@
  * the row of icons (copy / download / edit / resend / star) doesn't overflow
  * the bubble on a 280 px pane. ChatMessage already uses a `compact` prop in
  * Office, so we scope these overrides to compact mode only.
+ *
+ * The default `.chat-widget-message-content` cap of 95% leaves a noticeable
+ * gutter on the assistant side. On a 300 px task pane that gutter eats
+ * ~15 px the response could otherwise use. Widen to ~100% on narrow panes
+ * so the AI answer reads naturally — issue #1467 (review feedback).
  */
 
 @container office-pane (max-width: 360px) {
   .office-task-pane .chat-widget-message-content {
     padding: 0.5rem 0.625rem;
     border-radius: 0.875rem;
+  }
+}
+
+@container office-pane (max-width: 500px) {
+  .office-task-pane .chat-widget-message.assistant .chat-widget-message-content {
+    max-width: 100%;
   }
 }
