@@ -57,6 +57,24 @@ Office.onReady(async () => {
   const rootEl = document.getElementById('office-root');
   if (!rootEl) return;
 
+  // Detect which Office host is running this add-in so we can pick host-aware
+  // copy for the "insert into document" primary action. `Office.context.host`
+  // returns the Office.HostType enum string ("Outlook" | "Word" | "PowerPoint"
+  // | …); we fall back to the mailbox presence check that the rest of the
+  // codebase already uses, so older clients that don't populate `host` still
+  // get the Outlook label.
+  const officeHost = (() => {
+    try {
+      if (Office.context?.host) return String(Office.context.host);
+    } catch {
+      // Office.context.host can throw in some weird embed scenarios.
+    }
+    if (Office.context?.mailbox) return 'Outlook';
+    return null;
+  })();
+  const isOutlookHost = officeHost === 'Outlook';
+  const insertLabelKey = isOutlookHost ? 'office.insertIntoEmail' : 'office.insertIntoDocument';
+
   // Outlook host adapter: popup-window auth dialog + Outlook mailbox context.
   const outlookHost = {
     kind: 'office',
@@ -79,7 +97,16 @@ Office.onReady(async () => {
         defaultEnabled: true,
         controls: ['attachments']
       }
-    ]
+    ],
+    // In the Office taskpane the "insert this response into the document /
+    // email" button is the whole reason the user opened the add-in, so it
+    // gets promoted to a labelled primary button beneath each assistant
+    // message instead of the small icon used in the main web app.
+    // See issue #1450.
+    insertAction: {
+      variant: 'primary',
+      labelKey: insertLabelKey
+    }
   };
 
   const root = createRoot(rootEl);

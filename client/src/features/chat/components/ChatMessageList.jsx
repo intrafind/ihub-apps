@@ -23,6 +23,7 @@ function ChatMessageList({
   compact = false,
   onOpenInCanvas,
   onInsert,
+  insertAction = null,
   canvasEnabled = false,
   // Integration auth props
   requiredIntegrations = [],
@@ -119,6 +120,18 @@ function ChatMessageList({
     return null;
   }
 
+  // Index of the most recent assistant message. The Office insertAction
+  // ('primary' variant) uses this to stay always-visible on the latest
+  // response while older assistant turns fold back into hover-revealed icons,
+  // so a small Outlook taskpane keeps a single dominant CTA in view.
+  let lastAssistantIndex = -1;
+  for (let i = displayedMessages.length - 1; i >= 0; i--) {
+    if (displayedMessages[i].role === 'assistant') {
+      lastAssistantIndex = i;
+      break;
+    }
+  }
+
   return (
     <div
       ref={chatContainerRef}
@@ -160,6 +173,8 @@ function ChatMessageList({
                 compact={compact}
                 onOpenInCanvas={onOpenInCanvas}
                 onInsert={onInsert}
+                insertAction={insertAction}
+                isLatestAssistantMessage={index === lastAssistantIndex}
                 canvasEnabled={canvasEnabled}
                 app={app}
                 models={models}

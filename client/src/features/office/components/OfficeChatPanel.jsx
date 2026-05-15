@@ -4,6 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import ChatMessageList from '../../chat/components/ChatMessageList';
 import ChatInput from '../../chat/components/ChatInput';
 import ChatHeader from './chat/ChatHeader';
+import OfficeMailContextBanner from './chat/OfficeMailContextBanner';
 import ItemSelectorDialog from './apps-dialog';
 import VariablesDialog, {
   buildInitialVariablesMap,
@@ -14,6 +15,7 @@ import VariablesDialog, {
 import SettingsDialog from './settings-dialog';
 import PinnedEmailsBar from './PinnedEmailsBar';
 import useOfficeChatAdapter from '../hooks/useOfficeChatAdapter';
+import useOutlookMailContextSnapshot from '../hooks/useOutlookMailContextSnapshot';
 import useAppSettings from '../../../shared/hooks/useAppSettings';
 import useFileUploadHandler from '../../../shared/hooks/useFileUploadHandler';
 import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
@@ -27,6 +29,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
 import { useOfficeConfig } from '../contexts/OfficeConfigContext';
+import { useEmbeddedHost } from '../contexts/EmbeddedHostContext';
 import './OfficeChatPanel.css';
 
 function buildParamsFromApp(app) {
@@ -45,6 +48,7 @@ function buildParamsFromApp(app) {
 function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   const navigate = useNavigate();
   const officeConfig = useOfficeConfig();
+  const embeddedHost = useEmbeddedHost();
 
   const appName = getLocalizedContent(selectedApp?.name, officeLocale);
   const greetingTitle = getLocalizedContent(selectedApp?.greeting?.title, officeLocale);
@@ -71,6 +75,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     setHostContextFlags
   } = useAppSettings(selectedApp?.id, selectedApp);
   const fileUploadHandler = useFileUploadHandler();
+  const mailSnapshot = useOutlookMailContextSnapshot();
   const currentModel = models.find(m => m.id === selectedModel) || null;
   const uploadConfig = fileUploadHandler.createUploadConfig(selectedApp, currentModel);
 
@@ -238,6 +243,15 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       // bodies have been merged into apiMessage.content.
       params.pinnedEmails = pinnedEmails;
 
+      // Mail context snapshot — the user can drop individual attachments
+      // and toggle the body off via OfficeMailContextBanner before send.
+      // Forwarding the edited snapshot here avoids a second
+      // host.readMessageContext() round-trip inside the adapter and ensures
+      // the user's removals are honored. Null falls back to the adapter's
+      // own fetch (extension side panel, no-context routes).
+      const snapshotOverride = mailSnapshot.buildSnapshotOverride();
+      if (snapshotOverride) params.hostContextOverride = snapshotOverride;
+
       // Resend can pass a `selectedFile` override to bypass async state updates;
       // otherwise we read whatever the user has staged in the uploader.
       const sf =
@@ -271,7 +285,8 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
       websearchEnabled,
       hostContextFlags,
       pinnedEmails,
-      fileUploadHandler
+      fileUploadHandler,
+      mailSnapshot
     ]
   );
 
@@ -475,6 +490,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
                 editable={true}
                 compact={true}
                 onInsert={handleInsert}
+                insertAction={embeddedHost?.insertAction}
                 appId={selectedApp?.id}
                 chatId={chatIdRef.current}
                 app={selectedApp}
@@ -482,7 +498,28 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
               />
             </div>
 
-            {/* Pinned emails toolbar (above input) */}
+            {/* Mail-context banner: shows the email body + attachments
+                queued for this message so users can review and trim
+                before pressing send. Renders nothing when there's no
+                mail context (extension side panel, compose mode, etc.). */}
+            <OfficeMailContextBanner
+              ctx={mailSnapshot.ctx}
+              loading={mailSnapshot.loading}
+              visibleAttachments={mailSnapshot.visibleAttachments}
+              removedAttachmentIds={mailSnapshot.removedAttachmentIds}
+              onRemoveAttachment={mailSnapshot.removeAttachment}
+              onRestoreAttachments={mailSnapshot.restoreAttachments}
+              includeBody={hostContextFlags?.emailBody !== false}
+              onToggleBody={value =>
+                setHostContextFlags(prev => ({ ...(prev || {}), emailBody: value }))
+              }
+            />
+
+            {/* Pinned emails toolbar: lets users attach OTHER emails (beyond
+                the currently open one) to the same chat — via per-email "Add
+                this email" or, on Mailbox 1.15+, bulk-pull every Ctrl-selected
+                email at once. Orthogonal to the banner above, which only
+                edits the current item. */}
             <PinnedEmailsBar
               pinned={pinnedEmails}
               onUnpin={handleUnpin}

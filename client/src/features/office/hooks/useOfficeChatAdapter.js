@@ -66,12 +66,21 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // (in the extension's side panel). Both shapes share
       // { bodyText, attachments } so the rest of this function is
       // host-agnostic.
-      let ctx = { available: false, bodyText: null, attachments: [] };
-      try {
-        ctx = await host.readMessageContext();
-      } catch {
-        // Context unavailable (compose mode without a selected item,
-        // chrome:// page, etc.) — proceed without it.
+      //
+      // `params.hostContextOverride` lets the caller pass a pre-resolved
+      // (and user-edited) context — e.g. the `OfficeMailContextBanner` lets
+      // users drop individual attachments before send, and forwards the
+      // edited snapshot here so we don't double-fetch the email and so the
+      // user's removals are honored.
+      let ctx = params?.hostContextOverride || null;
+      if (!ctx) {
+        ctx = { available: false, bodyText: null, attachments: [] };
+        try {
+          ctx = await host.readMessageContext();
+        } catch {
+          // Context unavailable (compose mode without a selected item,
+          // chrome:// page, etc.) — proceed without it.
+        }
       }
 
       // Apply the user's per-message opt-out flags from the chat input's
@@ -109,6 +118,7 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
 
       const {
         hostContextFlags: _hostContextFlags,
+        hostContextOverride: _hostContextOverride,
         pinnedEmails: _pinnedEmails,
         ...paramsForServer
       } = params || {};

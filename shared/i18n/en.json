@@ -1779,6 +1779,10 @@
       "ariaLabel": "Dictate text to editor"
     }
   },
+  "office": {
+    "insertIntoEmail": "Add to email",
+    "insertIntoDocument": "Add to document"
+  },
   "teams": {
     "status": {
       "initializing": "Initializing...",
