@@ -476,17 +476,18 @@ const baseWorkflowConfigSchema = z.object({
           /** Default initial data passed to the workflow on trigger */
           initialData: z.record(z.any()).optional()
         })
-        .refine(
-          t =>
-            t.type !== 'schedule' ||
-            (typeof t.cron === 'string' && t.cron.length > 0),
-          { message: 'Schedule triggers require a cron expression', path: ['cron'] }
-        )
-        .refine(t => t.type !== 'webhook' || (typeof t.secret === 'string' && t.secret.length >= 16), {
-          message:
-            'Webhook triggers require a secret of at least 16 characters for HMAC authentication',
-          path: ['secret']
+        .refine(t => t.type !== 'schedule' || (typeof t.cron === 'string' && t.cron.length > 0), {
+          message: 'Schedule triggers require a cron expression',
+          path: ['cron']
         })
+        .refine(
+          t => t.type !== 'webhook' || (typeof t.secret === 'string' && t.secret.length >= 16),
+          {
+            message:
+              'Webhook triggers require a secret of at least 16 characters for HMAC authentication',
+            path: ['secret']
+          }
+        )
     )
     .optional()
 });

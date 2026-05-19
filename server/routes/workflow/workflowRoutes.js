@@ -1323,9 +1323,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // trailing dot so that allowing `workflow.node` does not also accept
         // a hypothetical `workflow.nodes` event.
         if (
-          !workflowEventTypes.some(
-            type => eventType === type || eventType.startsWith(`${type}.`)
-          )
+          !workflowEventTypes.some(type => eventType === type || eventType.startsWith(`${type}.`))
         ) {
           return;
         }

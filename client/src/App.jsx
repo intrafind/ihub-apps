@@ -52,9 +52,7 @@ const AdminWorkflowsPage = lazyWithRetry(() => import('./features/admin/pages/Ad
 const AdminWorkflowEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowEditPage')
 );
-const WorkflowEditorPage = lazyWithRetry(
-  () => import('./features/admin/pages/WorkflowEditorPage')
-);
+const WorkflowEditorPage = lazyWithRetry(() => import('./features/admin/pages/WorkflowEditorPage'));
 const AdminWorkflowExecutionsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
 );
