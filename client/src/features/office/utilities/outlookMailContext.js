@@ -1,5 +1,10 @@
 /* global Office */
 
+import {
+  fetchCurrentAppointmentContext,
+  isOutlookAppointmentItemAvailable
+} from './outlookCalendarContext';
+
 export function isOutlookMailItemAvailable() {
   try {
     return (
@@ -10,6 +15,21 @@ export function isOutlookMailItemAvailable() {
     );
   } catch {
     return false;
+  }
+}
+
+/**
+ * Returns the lowercased itemType of the currently selected Outlook item,
+ * or null if Office.js / mailbox.item is unavailable. Used by the host
+ * adapter to pick between the mail and appointment context readers.
+ */
+export function getCurrentOutlookItemType() {
+  try {
+    const item = Office.context?.mailbox?.item;
+    if (!item) return null;
+    return String(item.itemType || '').toLowerCase() || null;
+  } catch {
+    return null;
   }
 }
 
@@ -79,6 +99,22 @@ function getSubjectAsync() {
       resolve(null);
     }
   });
+}
+
+/**
+ * Unified entry point used by the host adapter — dispatches to either the
+ * mail-context or appointment-context reader based on the current item's
+ * `itemType`. Adds an `itemKind: 'message'|'appointment'` discriminator to
+ * the mail-context payload so downstream consumers (snapshot hook, context
+ * strip, chat adapter) can pick the right banner / prompt formatter.
+ */
+export async function fetchCurrentOutlookItemContext() {
+  const itemType = getCurrentOutlookItemType();
+  if (itemType === 'appointment' || isOutlookAppointmentItemAvailable()) {
+    return fetchCurrentAppointmentContext();
+  }
+  const ctx = await fetchCurrentMailContext();
+  return { ...ctx, itemKind: 'message' };
 }
 
 export async function fetchCurrentMailContext() {

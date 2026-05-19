@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import Icon from '../../../../shared/components/Icon';
 import { formatFileSize } from '../../../upload/utils/cloudFileProcessing';
 import OfficeMailContextBanner from './OfficeMailContextBanner';
+import OfficeAppointmentContextBanner from './OfficeAppointmentContextBanner';
 import PinnedEmailsBar from '../PinnedEmailsBar';
 
 // Collapse by default once the strip would otherwise show this many rows
@@ -42,6 +43,7 @@ function OfficeContextStrip({
   isMultiSelectSupported,
   multiSelectLoading
 }) {
+  const isAppointment = ctx?.itemKind === 'appointment';
   const attachments = useMemo(
     () => (Array.isArray(visibleAttachments) ? visibleAttachments : []),
     [visibleAttachments]
@@ -54,8 +56,11 @@ function OfficeContextStrip({
 
   const hasBody = Boolean(ctx?.bodyText && ctx.bodyText.trim().length > 0);
   const hasAttachments = attachments.length > 0;
-  const hasPinned = pinnedList.length > 0;
-  const hasPinControls = canPinCurrent || isMultiSelectSupported;
+  // Pinned emails and pin controls are mail-only — they don't apply to a
+  // single calendar item, so we suppress them when the user is on an
+  // appointment surface to keep the strip focused on the meeting metadata.
+  const hasPinned = !isAppointment && pinnedList.length > 0;
+  const hasPinControls = !isAppointment && (canPinCurrent || isMultiSelectSupported);
 
   // Default-collapse threshold counts what the user would actually see
   // once expanded — attachments still in the queue plus pinned emails.
@@ -98,8 +103,32 @@ function OfficeContextStrip({
             d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
           />
         </svg>
-        Reading current email…
+        {isAppointment ? 'Reading current meeting…' : 'Reading current email…'}
       </div>
+    );
+  }
+
+  // For appointments we render a dedicated banner with meeting metadata —
+  // the email-style strip (collapse chevron, pinned-emails toolbar, file
+  // attachments) isn't a meaningful fit for a single calendar item.
+  if (isAppointment) {
+    const hasAnyApptMeta = Boolean(
+      ctx?.subject ||
+      ctx?.start ||
+      ctx?.end ||
+      ctx?.location ||
+      ctx?.organizer ||
+      ctx?.requiredAttendees?.length ||
+      ctx?.optionalAttendees?.length
+    );
+    if (!hasBody && !hasAnyApptMeta) return null;
+    return (
+      <OfficeAppointmentContextBanner
+        ctx={ctx}
+        loading={false}
+        includeBody={includeBody}
+        onToggleBody={onToggleBody}
+      />
     );
   }
 

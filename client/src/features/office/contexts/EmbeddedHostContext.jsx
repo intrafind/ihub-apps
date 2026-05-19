@@ -107,8 +107,8 @@ const DEFAULT_OFFICE_ADAPTER = {
     openOfficeAuthDialog(authorizeUrl, onSuccess, onError);
   },
   readMessageContext: async () => {
-    const { fetchCurrentMailContext } = await import('../utilities/outlookMailContext');
-    return fetchCurrentMailContext();
+    const { fetchCurrentOutlookItemContext } = await import('../utilities/outlookMailContext');
+    return fetchCurrentOutlookItemContext();
   },
   contextToggles: []
 };

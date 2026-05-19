@@ -10,7 +10,7 @@ import { EmbeddedHostProvider } from '../src/features/office/contexts/EmbeddedHo
 import OfficeApp from '../src/features/office/components/OfficeApp';
 import { installOfficeAuthInterceptor } from '../src/features/office/api/officeAuthBridge';
 import { openOfficeAuthDialog } from '../src/features/office/utilities/officeAuthDialog';
-import { fetchCurrentMailContext } from '../src/features/office/utilities/outlookMailContext';
+import { fetchCurrentOutlookItemContext } from '../src/features/office/utilities/outlookMailContext';
 
 /**
  * Derive the base path from the current URL so the config fetch works
@@ -88,7 +88,12 @@ Office.onReady(async () => {
     kind: 'office',
     loginSubtitle: 'iHub Apps for Outlook',
     runAuthDialog: openOfficeAuthDialog,
-    readMessageContext: fetchCurrentMailContext,
+    // Unified reader dispatches between mail and appointment items by
+    // inspecting `Office.context.mailbox.item.itemType`. Existing mail
+    // surfaces get the same payload as before plus `itemKind: 'message'`;
+    // calendar surfaces receive the appointment shape (subject, start,
+    // end, organizer, attendees, location, body).
+    readMessageContext: fetchCurrentOutlookItemContext,
     // In the Office taskpane the "insert this response into the document /
     // email" button is the whole reason the user opened the add-in, so it
     // gets promoted to a labelled primary button beneath each assistant

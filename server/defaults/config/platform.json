@@ -239,6 +239,38 @@
           "de": "Was sind die wichtigsten Erkenntnisse aus dieser E-Mail?"
         }
       }
+    ],
+    "calendarStarterPrompts": [
+      {
+        "title": {
+          "en": "Draft an agenda for this meeting",
+          "de": "Entwirf eine Agenda für dieses Meeting"
+        },
+        "message": {
+          "en": "Draft an agenda for this meeting. Use the invite details and the knowledge base; flag anything that is missing.",
+          "de": "Entwirf eine Agenda für dieses Meeting. Nutze die Einladungsdetails und die Wissensdatenbank; markiere fehlende Punkte."
+        }
+      },
+      {
+        "title": {
+          "en": "Prepare me for this meeting",
+          "de": "Bereite mich auf dieses Meeting vor"
+        },
+        "message": {
+          "en": "Prepare me for this meeting. Give me a one-page briefing using the invite and the knowledge base.",
+          "de": "Bereite mich auf dieses Meeting vor. Erstelle ein einseitiges Briefing aus Einladung und Wissensdatenbank."
+        }
+      },
+      {
+        "title": {
+          "en": "Who is attending and why?",
+          "de": "Wer nimmt teil und warum?"
+        },
+        "message": {
+          "en": "Tell me about the attendees of this meeting and why each is likely on the invite.",
+          "de": "Erzähle mir etwas über die Teilnehmenden dieses Meetings und warum jede Person vermutlich eingeladen wurde."
+        }
+      }
     ]
   }
 }
