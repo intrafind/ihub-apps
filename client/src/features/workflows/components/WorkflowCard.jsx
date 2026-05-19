@@ -9,8 +9,9 @@ import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
  * @param {Object} props - Component props
  * @param {Object} props.workflow - Workflow definition object
  * @param {Function} props.onStart - Callback when start button is clicked
+ * @param {Function} [props.onEdit] - Optional callback when edit button is clicked (shown only if provided, typically for admins)
  */
-function WorkflowCard({ workflow, onStart }) {
+function WorkflowCard({ workflow, onStart, onEdit }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [showTechnical] = useTechnicalDetailsToggle();
@@ -36,9 +37,19 @@ function WorkflowCard({ workflow, onStart }) {
           >
             <Icon name="workflow" className="text-indigo-600 dark:text-indigo-400 w-5 h-5" />
           </div>
-          <h3 className="font-semibold text-base text-gray-900 dark:text-white leading-snug">
+          <h3 className="font-semibold text-base text-gray-900 dark:text-white leading-snug flex-1">
             {name}
           </h3>
+          {onEdit && (
+            <button
+              onClick={() => onEdit(workflow)}
+              className="flex-shrink-0 p-1.5 -m-1.5 text-gray-400 hover:text-indigo-600 dark:text-gray-500 dark:hover:text-indigo-400 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              aria-label={t('workflows.card.edit', 'Edit workflow')}
+              title={t('workflows.card.edit', 'Edit workflow')}
+            >
+              <Icon name="pencil" className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
         </div>
 
         <p className="text-gray-600 dark:text-gray-300 text-sm mb-4 line-clamp-3 flex-1">

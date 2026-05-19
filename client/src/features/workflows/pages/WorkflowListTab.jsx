@@ -25,6 +25,10 @@ function WorkflowListTab() {
     setShowStartModal(true);
   };
 
+  const handleEditClick = workflow => {
+    navigate(`/admin/workflows/${workflow.id}/edit`);
+  };
+
   const handleModalClose = () => {
     setShowStartModal(false);
     setSelectedWorkflow(null);
@@ -98,7 +102,12 @@ function WorkflowListTab() {
     <>
       <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {workflows.map(workflow => (
-          <WorkflowCard key={workflow.id} workflow={workflow} onStart={handleStartClick} />
+          <WorkflowCard
+            key={workflow.id}
+            workflow={workflow}
+            onStart={handleStartClick}
+            onEdit={isAdmin ? handleEditClick : undefined}
+          />
         ))}
       </div>
 

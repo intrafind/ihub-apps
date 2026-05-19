@@ -66,6 +66,14 @@ export function workflowToFlow(workflow) {
       edge.condition?.type && edge.condition.type !== 'always' ? edge.condition.type : undefined
   }));
 
+  // Auto-layout when the workflow has no saved positions (every node sits at origin).
+  // Typically happens for newly-created workflows that haven't been arranged yet.
+  const needsLayout =
+    nodes.length > 1 && nodes.every(n => n.position.x === 0 && n.position.y === 0);
+  if (needsLayout) {
+    return { nodes: applyDagreLayout(nodes, edges), edges };
+  }
+
   return { nodes, edges };
 }
 
@@ -102,7 +110,7 @@ export function flowToWorkflow(rfNodes, rfEdges, existingWorkflow) {
 }
 
 /**
- * Applies automatic Dagre-based layout to position nodes in a top-to-bottom hierarchy.
+ * Applies automatic Dagre-based layout to position nodes in a left-to-right flow.
  * Useful when importing workflows that have no position data, or to tidy up a messy graph.
  *
  * @param {object[]} nodes - React Flow node array
@@ -112,7 +120,7 @@ export function flowToWorkflow(rfNodes, rfEdges, existingWorkflow) {
 export function applyDagreLayout(nodes, edges) {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', ranksep: 80, nodesep: 60 });
+  g.setGraph({ rankdir: 'LR', ranksep: 80, nodesep: 60 });
 
   nodes.forEach(node => {
     g.setNode(node.id, { width: 200, height: 80 });
