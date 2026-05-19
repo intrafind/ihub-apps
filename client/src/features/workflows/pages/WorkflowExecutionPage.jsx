@@ -342,6 +342,11 @@ function WorkflowExecutionPage() {
   const isActive = state.status === 'running' || state.status === 'paused';
   const hasCheckpoint = !!state.pendingCheckpoint;
 
+  // Short, stable identifier for filenames. Execution IDs are prefixed
+  // `wf-exec-`, so slicing the raw ID yields the same suffix for every run.
+  const shortExecId = state.executionId.replace(/^wf-exec-/, '').slice(0, 8) || state.executionId;
+  const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
+
   const workflowOutput = getDisplayableOutput(state.data);
   const workflowOutputKeys = Object.keys(workflowOutput);
   const primaryOutputKey = state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
@@ -401,7 +406,7 @@ function WorkflowExecutionPage() {
           <button
             onClick={e => {
               e.stopPropagation();
-              downloadAsFile(value, `${key}-${state.executionId.slice(0, 8)}.md`);
+              downloadAsFile(value, `${key}-${workflowSlug}-${shortExecId}.md`);
             }}
             className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
           >
@@ -942,7 +947,7 @@ function WorkflowExecutionPage() {
                 onClick={() =>
                   downloadAsFile(
                     JSON.stringify(workflowOutput, null, 2),
-                    `workflow-output-${state.executionId.slice(0, 8)}.json`,
+                    `${workflowSlug}-${shortExecId}-output.json`,
                     'application/json'
                   )
                 }

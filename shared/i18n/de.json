@@ -1941,7 +1941,8 @@
       "deny": "Behalten"
     },
     "errors": {
-      "cannotDeleteRunning": "Bitte den Workflow vor dem Löschen abbrechen."
+      "cannotDeleteRunning": "Bitte den Workflow vor dem Löschen abbrechen.",
+      "noResultToDownload": "Diese Ausführung hat noch kein Ergebnis zum Herunterladen."
     },
     "sofar": "Bisher",
     "checkpointNeedsInput": "Dieser Workflow benötigt Ihre Eingabe",

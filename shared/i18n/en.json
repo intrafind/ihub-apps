@@ -1976,7 +1976,8 @@
       "deny": "Keep it"
     },
     "errors": {
-      "cannotDeleteRunning": "Cancel the workflow before deleting it."
+      "cannotDeleteRunning": "Cancel the workflow before deleting it.",
+      "noResultToDownload": "This run has no result to download yet."
     },
     "sofar": "So far",
     "checkpointNeedsInput": "This workflow needs your input",

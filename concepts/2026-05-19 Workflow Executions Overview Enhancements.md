@@ -249,6 +249,27 @@ Reuses Heroicons already registered in `Icon`:
 - **Integration (server):** `PATCH archived` round-trips.
 - **Manual UI:** start two workflows with different inputs; verify input preview shows; archive one, toggle filter; delete a completed one; download a completed one's JSON.
 
+## Follow-up: documentation review
+
+After this lands, the `docs/` content covering workflows (and likely the wider admin area) needs a pass. Two related problems are surfacing in practice:
+
+1. **People edit JSON config files directly** — `contents/apps/*.json`, `contents/workflows/*.json`, `contents/config/groups.json`, etc. — even though almost everything is now manageable through the admin UI.
+2. **The docs don't describe the admin UI.** Today they focus on file schemas and CLI/server behavior. That makes the JSON the path of least resistance for new users, which is more error-prone, bypasses validation, and means changes don't show up consistently across sessions.
+
+What this work touches that the docs should now reflect:
+
+- New per-run actions on the **My Executions** page: input preview, model badge, download result, archive/unarchive (with the *Show archived* toggle), and delete.
+- The fact that a workflow's **primary output** (`chatIntegration.primaryOutput`) drives the user-facing download. Authors choosing or renaming output keys should know this.
+- Archive is a soft hide; delete is permanent and refuses while running — call this out so admins/users don't expect a recycle bin.
+
+What to audit beyond this feature:
+
+- For each area that has an admin UI (apps, prompts, models, sources, tools, groups, workflows, pages, UI/branding), the docs should lead with **"use the admin UI under `/admin/…`"** and treat the JSON schema as the reference for what the UI configures, not as the recommended workflow.
+- Add screenshots or short flows for the common tasks people currently solve by hand-editing JSON: creating an app, granting a group access, adding a model, publishing a workflow, etc.
+- Cross-link from the JSON schema sections back to the corresponding admin page, so people who land in the schema docs see that there is a UI for it.
+
+This is intentionally not part of this PR — it's its own task. Track it as a separate doc-revision pass.
+
 ## Open questions
 
 None at this time. The owner-vs-admin permission split, hard-delete semantics, and model-derivation strategy were called out in brainstorming and confirmed.

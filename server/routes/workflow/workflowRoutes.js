@@ -1505,11 +1505,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           exportedAt: new Date().toISOString()
         };
 
-        // Set headers for file download
+        // Build a useful filename. Execution IDs are prefixed `wf-exec-`, so
+        // strip the prefix before slicing — otherwise every run's filename
+        // ends in the same literal `wf-exec-`.
+        const shortId = executionId.replace(/^wf-exec-/, '').slice(0, 8) || executionId;
+        const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
         res.setHeader('Content-Type', 'application/json');
         res.setHeader(
           'Content-Disposition',
-          `attachment; filename="workflow-${executionId.slice(0, 8)}.json"`
+          `attachment; filename="${workflowSlug}-${shortId}.json"`
         );
 
         res.json(exportData);
