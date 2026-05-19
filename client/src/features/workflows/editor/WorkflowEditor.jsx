@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -37,10 +38,11 @@ const edgeTypes = { conditional: ConditionalEdge };
  * @param {function} props.onAddNode - Callback receiving the node type string
  */
 function NodePalette({ onAddNode }) {
+  const { t } = useTranslation();
   return (
     <div className="w-48 border-r border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-3 overflow-y-auto">
       <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase mb-3">
-        Node Types
+        {t('workflows.editor.nodeTypes', 'Node Types')}
       </h3>
       {NODE_TYPES_LIST.map(group => (
         <div key={group.group} className="mb-3">
@@ -79,6 +81,7 @@ function NodePalette({ onAddNode }) {
  * @param {function} [props.onPublish] - Optional publish callback receiving (nodes, edges)
  */
 function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) {
+  const { t } = useTranslation();
   const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
   const [selectedNode, setSelectedNode] = useState(null);
@@ -177,21 +180,21 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
               onClick={handleAutoLayout}
               className="bg-gray-600 text-white text-xs px-3 py-1.5 rounded hover:bg-gray-700 transition-colors"
             >
-              Auto Layout
+              {t('workflows.editor.autoLayout', 'Auto Layout')}
             </button>
             {onPublish && (
               <button
                 onClick={() => onPublish(nodes, edges)}
                 className="bg-green-600 text-white text-xs px-3 py-1.5 rounded hover:bg-green-700 transition-colors"
               >
-                Publish
+                {t('workflows.editor.publish', 'Publish')}
               </button>
             )}
             <button
               onClick={() => onSave(nodes, edges)}
               className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded hover:bg-blue-700 transition-colors"
             >
-              Save
+              {t('workflows.editor.save', 'Save')}
             </button>
           </Panel>
         </ReactFlow>

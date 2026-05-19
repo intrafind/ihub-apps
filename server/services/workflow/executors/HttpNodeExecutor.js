@@ -11,6 +11,8 @@
  * @module services/workflow/executors/HttpNodeExecutor
  */
 
+import dns from 'node:dns/promises';
+import net from 'node:net';
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { throttledFetch } from '../../../requestThrottler.js';
 import logger from '../../../utils/logger.js';
@@ -41,33 +43,107 @@ import logger from '../../../utils/logger.js';
  */
 
 /**
- * Check whether a hostname resolves to a private or internal network address.
- * Used to prevent Server-Side Request Forgery (SSRF) attacks.
+ * Check whether a single IP address (v4 or v6 in normalized form) belongs
+ * to a private or otherwise sensitive network range.
  *
  * Blocks:
- * - localhost and loopback (127.x.x.x, ::1)
- * - RFC 1918 private ranges (10.x, 172.16-31.x, 192.168.x)
- * - Link-local (169.254.x.x) - includes AWS IMDS endpoint
- * - IPv6 ULA (fc00::/7) and link-local (fe80::/10)
- * - Unspecified address (0.x.x.x)
+ * - IPv4 loopback (127/8) and unspecified (0/8)
+ * - RFC 1918 private ranges (10/8, 172.16/12, 192.168/16)
+ * - Link-local (169.254/16) -- includes AWS IMDS
+ * - IPv4 multicast/reserved (224/4, 240/4)
+ * - IPv4-mapped IPv6 (::ffff:0:0/96), checked via inner IPv4
+ * - IPv6 loopback (::1), link-local (fe80::/10), ULA (fc00::/7), unspecified (::)
  *
- * @param {string} hostname - The hostname to check
- * @returns {boolean} True if the hostname resolves to a private/internal address
+ * @param {string} ip - The IP address to check
+ * @returns {boolean} True if the IP is in a blocked range
  */
-function isPrivateIP(hostname) {
-  if (hostname === 'localhost' || hostname === '::1') return true;
-  const patterns = [
-    /^10\./,
-    /^172\.(1[6-9]|2\d|3[01])\./,
-    /^192\.168\./,
-    /^127\./,
-    /^0\./,
-    /^169\.254\./, // AWS IMDS - critical!
-    /^fc/i,
-    /^fd/i,
-    /^fe80/i // IPv6 ULA + link-local
-  ];
-  return patterns.some(p => p.test(hostname));
+function isPrivateIP(ip) {
+  if (!ip) return true; // be safe: unknown is blocked
+  const family = net.isIP(ip);
+
+  if (family === 4) {
+    const parts = ip.split('.').map(Number);
+    const [a, b] = parts;
+    if (a === 10) return true;
+    if (a === 127) return true;
+    if (a === 0) return true;
+    if (a === 169 && b === 254) return true;
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    if (a === 192 && b === 168) return true;
+    if (a >= 224) return true; // multicast + reserved
+    return false;
+  }
+
+  if (family === 6) {
+    const lower = ip.toLowerCase();
+    if (lower === '::1' || lower === '::') return true;
+    if (lower.startsWith('fe80:') || lower.startsWith('fe80::')) return true;
+    // ULA: fc00::/7 -> first byte 0xfc or 0xfd
+    if (lower.startsWith('fc') || lower.startsWith('fd')) return true;
+    // IPv4-mapped IPv6 (::ffff:a.b.c.d) -> check inner IPv4
+    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateIP(mapped[1]);
+    // IPv4-compatible IPv6 (::a.b.c.d) is deprecated but check anyway
+    const compat = lower.match(/^::(\d+\.\d+\.\d+\.\d+)$/);
+    if (compat) return isPrivateIP(compat[1]);
+    return false;
+  }
+
+  // Not a valid IP -- callers should resolve DNS first
+  return false;
+}
+
+/**
+ * SSRF guard: resolve the URL's hostname to one or more IP addresses and
+ * verify every resolved IP is in a public range. Catches DNS-based
+ * bypasses where an external hostname resolves to a private IP.
+ *
+ * @param {URL} parsedUrl - The parsed request URL
+ * @returns {Promise<{ok: boolean, reason?: string}>}
+ */
+async function assertPublicTarget(parsedUrl) {
+  // Strip IPv6 brackets that URL parsing leaves on the hostname.
+  let host = parsedUrl.hostname;
+  if (host.startsWith('[') && host.endsWith(']')) {
+    host = host.slice(1, -1);
+  }
+
+  // Block obvious magic hostnames before DNS even runs.
+  const lowerHost = host.toLowerCase();
+  if (lowerHost === 'localhost' || lowerHost.endsWith('.localhost')) {
+    return { ok: false, reason: 'localhost is blocked' };
+  }
+
+  // If the hostname is already an IP, check it directly.
+  if (net.isIP(host)) {
+    return isPrivateIP(host) ? { ok: false, reason: `IP ${host} is private` } : { ok: true };
+  }
+
+  // Resolve A and AAAA. If both fail we'll reject; if either resolves to a
+  // private IP we reject. Any unresolved family is ignored (not all hosts
+  // have both records).
+  let addrs = [];
+  try {
+    const [v4, v6] = await Promise.allSettled([
+      dns.resolve4(host),
+      dns.resolve6(host)
+    ]);
+    if (v4.status === 'fulfilled') addrs.push(...v4.value);
+    if (v6.status === 'fulfilled') addrs.push(...v6.value);
+  } catch (err) {
+    return { ok: false, reason: `DNS resolution failed: ${err.message}` };
+  }
+
+  if (addrs.length === 0) {
+    return { ok: false, reason: 'host did not resolve to any IP' };
+  }
+
+  for (const addr of addrs) {
+    if (isPrivateIP(addr)) {
+      return { ok: false, reason: `host resolves to private IP ${addr}` };
+    }
+  }
+  return { ok: true };
 }
 
 /**
@@ -202,12 +278,22 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
         return this.createErrorResult(`Invalid URL: ${url}`, { nodeId: node.id });
       }
 
-      if (isPrivateIP(parsedUrl.hostname)) {
+      // Only http(s) URLs are allowed: blocks file:, gopher:, ftp:, etc.
+      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        return this.createErrorResult(
+          `Unsupported URL protocol: ${parsedUrl.protocol}. Only http(s) is allowed.`,
+          { nodeId: node.id }
+        );
+      }
+
+      // Resolve the hostname and verify all resolved IPs are public. This
+      // catches DNS-based SSRF bypasses where a public hostname points at
+      // an internal IP.
+      const ssrfCheck = await assertPublicTarget(parsedUrl);
+      if (!ssrfCheck.ok) {
         return this.createErrorResult(
           'Request to private/internal network is blocked (SSRF protection)',
-          {
-            nodeId: node.id
-          }
+          { nodeId: node.id, reason: ssrfCheck.reason }
         );
       }
 
@@ -245,11 +331,17 @@ export class HttpNodeExecutor extends BaseNodeExecutor {
       const timeoutId = setTimeout(() => controller.abort(), clampedTimeout);
 
       try {
+        // `redirect: 'manual'` prevents redirect-based SSRF: a server
+        // could otherwise return a 302 pointing at a private IP after the
+        // initial SSRF check passed. If a redirect is returned, surface
+        // it to the workflow as the response so the workflow author can
+        // decide what to do.
         const response = await throttledFetch(`http-node-${node.id}`, url, {
           method,
           headers: fetchHeaders,
           body,
-          signal: controller.signal
+          signal: controller.signal,
+          redirect: 'manual'
         });
 
         clearTimeout(timeoutId);
