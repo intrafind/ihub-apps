@@ -193,7 +193,9 @@ export async function resolveAndValidatePath(filePath, baseDir) {
     const relativeFromExisting = path.relative(existingPath, resolvedFull);
     const canonicalFull = path.resolve(canonicalExisting, relativeFromExisting);
 
-    const canonicalBaseWithSep = canonicalBase.endsWith(path.sep) ? canonicalBase : canonicalBase + path.sep;
+    const canonicalBaseWithSep = canonicalBase.endsWith(path.sep)
+      ? canonicalBase
+      : canonicalBase + path.sep;
     if (canonicalFull !== canonicalBase && !canonicalFull.startsWith(canonicalBaseWithSep)) {
       return null;
     }

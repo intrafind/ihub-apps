@@ -20,7 +20,11 @@ import { actionTracker } from '../../actionTracker.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { getRootDir } from '../../pathUtils.js';
-import { validateIdForPath, resolveAndValidatePath, resolveAndValidateRealPath } from '../../utils/pathSecurity.js';
+import {
+  validateIdForPath,
+  resolveAndValidatePath,
+  resolveAndValidateRealPath
+} from '../../utils/pathSecurity.js';
 import {
   sendNotFound,
   sendBadRequest,
