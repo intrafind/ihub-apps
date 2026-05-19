@@ -12,6 +12,7 @@
  * @module routes/workflow/triggerRoutes
  */
 
+import express from 'express';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import { getTriggerManager } from '../../services/workflow/triggers/TriggerManager.js';
@@ -68,18 +69,21 @@ export function registerTriggerRoutes(app, { authRequired, adminAuth }) {
     adminAuth,
     checkWorkflowsFeature,
     async (req, res) => {
-      const validation = validateIdForPath(req.params.id, 'workflow');
-      if (!validation.valid) {
-        return res.status(400).json({ error: 'Invalid workflow ID' });
+      if (!validateIdForPath(req.params.id, 'workflow', res)) {
+        return;
       }
 
       try {
         const triggerManager = getTriggerManager();
-        await triggerManager.fireTrigger(validation.sanitized, {
-          id: 'manual',
-          type: 'manual',
-          initialData: req.body?.initialData || {}
-        });
+        await triggerManager.fireTrigger(
+          req.params.id,
+          {
+            id: 'manual',
+            type: 'manual',
+            initialData: req.body?.initialData || {}
+          },
+          { user: req.user }
+        );
         res.json({ success: true, message: 'Trigger fired' });
       } catch (error) {
         logger.error({
@@ -97,42 +101,77 @@ export function registerTriggerRoutes(app, { authRequired, adminAuth }) {
    * Public webhook endpoint. External systems (e.g. GitHub, CI pipelines)
    * call this URL to trigger a workflow execution.
    *
-   * Authentication is handled via HMAC-SHA256 signature verification
-   * (headers: x-hub-signature-256 or x-signature) when a secret is
-   * configured on the trigger. If no secret is configured, any request
-   * is accepted.
+   * Authentication is enforced via HMAC-SHA256 signature verification
+   * (headers: x-hub-signature-256 or x-signature). The trigger MUST have
+   * a `secret` configured -- requests to a trigger without a secret are
+   * rejected with 401, because otherwise anyone on the network could
+   * fire workflows.
    *
-   * The request body is passed as initialData to the workflow.
+   * The raw request body is captured for HMAC verification (parsing
+   * + re-stringifying would change byte order and break valid
+   * signatures from third-party services like GitHub).
+   *
+   * The parsed body is passed as initialData to the workflow.
    */
   app.post(
     buildServerPath('/api/workflows/:workflowId/webhooks/:triggerId'),
+    // Capture the raw body for HMAC verification BEFORE JSON parsing.
+    // This route bypasses the global body parser to keep byte fidelity.
+    express.raw({ type: '*/*', limit: '1mb' }),
     checkWorkflowsFeature,
     async (req, res) => {
-      const wfValidation = validateIdForPath(req.params.workflowId, 'workflow');
-      const triggerValidation = validateIdForPath(req.params.triggerId, 'trigger');
-
-      if (!wfValidation.valid || !triggerValidation.valid) {
-        return res.status(400).json({ error: 'Invalid ID' });
+      if (!validateIdForPath(req.params.workflowId, 'workflow', res)) {
+        return;
+      }
+      if (!validateIdForPath(req.params.triggerId, 'trigger', res)) {
+        return;
       }
 
       try {
         const triggerManager = getTriggerManager();
-        const webhookRef = triggerManager.getWebhookTrigger(triggerValidation.sanitized);
+        const webhookRef = triggerManager.getWebhookTrigger(
+          req.params.workflowId,
+          req.params.triggerId
+        );
 
-        if (!webhookRef || webhookRef.workflowId !== wfValidation.sanitized) {
+        if (!webhookRef) {
           return res.status(404).json({ error: 'Webhook trigger not found' });
         }
 
-        // Verify HMAC signature if the trigger has a secret configured
+        // Require a configured secret to prevent anonymous workflow execution
+        if (!webhookRef.trigger.config.secret) {
+          logger.warn({
+            component: 'triggerRoutes',
+            message: 'Webhook trigger has no secret configured; rejecting request',
+            workflowId: req.params.workflowId,
+            triggerId: req.params.triggerId
+          });
+          return res
+            .status(401)
+            .json({ error: 'Webhook trigger requires a secret. Configure one to enable.' });
+        }
+
+        // Verify HMAC over the raw body bytes (not re-stringified JSON)
+        const rawBody = Buffer.isBuffer(req.body) ? req.body : Buffer.from('');
         const signature = req.headers['x-hub-signature-256'] || req.headers['x-signature'];
-        if (!webhookRef.trigger.verifySignature(req.body, signature)) {
+        if (!webhookRef.trigger.verifyRawSignature(rawBody, signature)) {
           return res.status(401).json({ error: 'Invalid signature' });
         }
 
-        await triggerManager.fireTrigger(wfValidation.sanitized, {
-          id: triggerValidation.sanitized,
+        // Parse JSON now that the signature is verified
+        let initialData = {};
+        if (rawBody.length > 0) {
+          try {
+            initialData = JSON.parse(rawBody.toString('utf8'));
+          } catch {
+            return res.status(400).json({ error: 'Invalid JSON body' });
+          }
+        }
+
+        await triggerManager.fireTrigger(req.params.workflowId, {
+          id: req.params.triggerId,
           type: 'webhook',
-          initialData: req.body || {}
+          initialData
         });
 
         res.json({ success: true, message: 'Webhook processed' });

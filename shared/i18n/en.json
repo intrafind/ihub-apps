@@ -1491,6 +1491,39 @@
     "failed": "Failed",
     "cancelled": "Cancelled"
   },
+  "workflows": {
+    "title": "Workflows",
+    "subtitle": "Manage and run automated workflows",
+    "newWorkflow": "New Workflow",
+    "tabs": {
+      "available": "Available Workflows",
+      "myExecutions": "My Executions"
+    },
+    "editor": {
+      "title": "Workflow Editor",
+      "newWorkflowHeading": "New Workflow",
+      "back": "Back",
+      "saving": "Saving...",
+      "saveSuccess": "Workflow saved",
+      "saveFailed": "Save failed: {{message}}",
+      "publishSuccess": "Workflow published successfully",
+      "publishFailed": "Publish failed: {{message}}",
+      "loadingWorkflow": "Loading workflow...",
+      "loadFailed": "Failed to load workflow",
+      "promptId": "Enter workflow ID:",
+      "promptIdHint": "Use only letters, numbers, dots, underscores, and hyphens.",
+      "save": "Save",
+      "publish": "Publish",
+      "autoLayout": "Auto Layout",
+      "nodeTypes": "Node Types",
+      "selectNode": "Select a node to configure",
+      "config": "Configuration",
+      "configJson": "Config (JSON)",
+      "type": "Type",
+      "name": "Name",
+      "applyChanges": "Apply Changes"
+    }
+  },
   "documentTitle": {
     "admin": "Admin",
     "settings": "Settings",

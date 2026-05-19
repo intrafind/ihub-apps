@@ -54,11 +54,23 @@ export function resetTriggerManager() {
  * manager.setWorkflowLoader(loadWorkflows);
  * manager.registerWorkflowTriggers(workflow);
  */
+/**
+ * Builds a composite key for the webhook trigger lookup map to avoid
+ * collisions when two workflows define triggers with the same id.
+ *
+ * @param {string} workflowId
+ * @param {string} triggerId
+ * @returns {string} `${workflowId}:${triggerId}`
+ */
+function webhookKey(workflowId, triggerId) {
+  return `${workflowId}:${triggerId}`;
+}
+
 export class TriggerManager {
   constructor() {
     /** @type {Map<string, Array<ScheduleTrigger|WebhookTrigger>>} workflowId -> trigger instances */
     this.triggers = new Map();
-    /** @type {Map<string, {trigger: WebhookTrigger, workflowId: string}>} triggerId -> ref */
+    /** @type {Map<string, {trigger: WebhookTrigger, workflowId: string, triggerId: string}>} `${workflowId}:${triggerId}` -> ref */
     this.webhookTriggers = new Map();
     /** @type {import('../WorkflowEngine.js').WorkflowEngine|null} */
     this.engine = null;
@@ -94,10 +106,11 @@ export class TriggerManager {
    * @param {Object[]} [workflow.triggers] - Trigger configurations
    */
   registerWorkflowTriggers(workflow) {
-    if (!workflow.triggers?.length) return;
-
-    // Unregister existing triggers for this workflow first
+    // Always unregister first, so workflows that have ALL their triggers
+    // removed in an update correctly stop firing.
     this.unregisterWorkflowTriggers(workflow.id);
+
+    if (!workflow.triggers?.length) return;
 
     const instances = [];
 
@@ -111,9 +124,10 @@ export class TriggerManager {
         } else if (triggerConfig.type === 'webhook') {
           const trigger = new WebhookTrigger(triggerConfig);
           instances.push(trigger);
-          this.webhookTriggers.set(triggerConfig.id, {
+          this.webhookTriggers.set(webhookKey(workflow.id, triggerConfig.id), {
             trigger,
-            workflowId: workflow.id
+            workflowId: workflow.id,
+            triggerId: triggerConfig.id
           });
         }
       } catch (error) {
@@ -144,13 +158,14 @@ export class TriggerManager {
     const instances = this.triggers.get(workflowId);
     if (instances) {
       instances.forEach(t => t.stop?.());
-      // Clean up webhook trigger references
-      for (const [triggerId, ref] of this.webhookTriggers) {
-        if (ref.workflowId === workflowId) {
-          this.webhookTriggers.delete(triggerId);
-        }
-      }
       this.triggers.delete(workflowId);
+    }
+    // Always clean up webhook references for this workflow, even when
+    // there were no instances in the map (defensive cleanup after restart).
+    for (const [key, ref] of this.webhookTriggers) {
+      if (ref.workflowId === workflowId) {
+        this.webhookTriggers.delete(key);
+      }
     }
   }
 
@@ -168,13 +183,19 @@ export class TriggerManager {
    * Fires a trigger by starting a new workflow execution.
    * Reloads the workflow definition from disk to ensure the latest version is used.
    *
+   * Scheduled and webhook triggers run as the synthetic 'system' user with
+   * NO group memberships -- they are not admin. Manual triggers may pass a
+   * `user` in options to run as the calling user.
+   *
    * @param {string} workflowId - ID of the workflow to execute
    * @param {Object} trigger - Trigger metadata
    * @param {string} trigger.id - Trigger identifier
    * @param {string} trigger.type - Trigger type ('schedule', 'webhook', 'manual')
    * @param {Object} [trigger.initialData] - Data to pass as initial workflow input
+   * @param {Object} [options] - Execution options
+   * @param {Object} [options.user] - User to run the workflow as (defaults to system)
    */
-  async fireTrigger(workflowId, trigger) {
+  async fireTrigger(workflowId, trigger, options = {}) {
     if (!this.engine) {
       logger.error({
         component: 'TriggerManager',
@@ -207,8 +228,12 @@ export class TriggerManager {
         triggerType: trigger.type
       });
 
+      // Default to a non-privileged system user. Callers (e.g. the manual
+      // trigger admin endpoint) may pass their own authenticated user.
+      const user = options.user || { id: 'system', name: 'System Trigger', groups: [] };
+
       await this.engine.start(workflow, trigger.initialData || {}, {
-        user: { id: 'system', name: 'System Trigger', groups: ['admin'] },
+        user,
         chatId: `trigger-${Date.now()}`
       });
     } catch (error) {
@@ -221,13 +246,14 @@ export class TriggerManager {
   }
 
   /**
-   * Looks up a registered webhook trigger by its ID.
+   * Looks up a registered webhook trigger by workflow + trigger ID.
    *
-   * @param {string} triggerId - The trigger ID to look up
-   * @returns {{trigger: WebhookTrigger, workflowId: string}|undefined}
+   * @param {string} workflowId - The workflow ID
+   * @param {string} triggerId - The trigger ID
+   * @returns {{trigger: WebhookTrigger, workflowId: string, triggerId: string}|undefined}
    */
-  getWebhookTrigger(triggerId) {
-    return this.webhookTriggers.get(triggerId);
+  getWebhookTrigger(workflowId, triggerId) {
+    return this.webhookTriggers.get(webhookKey(workflowId, triggerId));
   }
 
   /**

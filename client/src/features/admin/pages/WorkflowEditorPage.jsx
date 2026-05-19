@@ -1,8 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import { apiClient } from '../../../api/client';
 import { WorkflowEditor } from '../../workflows/editor/WorkflowEditor';
 import { workflowToFlow, flowToWorkflow } from '../../workflows/editor/workflowEditorUtils';
+
+/** Same character class enforced by validateIdForPath() on the server. */
+const VALID_ID_PATTERN = /^[a-zA-Z0-9._-]+$/;
 
 /**
  * Admin page for visually editing a workflow using the React Flow-based editor.
@@ -14,12 +18,19 @@ import { workflowToFlow, flowToWorkflow } from '../../workflows/editor/workflowE
 function WorkflowEditorPage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [workflow, setWorkflow] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState(null); // { kind: 'success'|'error', message }
 
   const isNew = id === 'new';
+
+  const showToast = useCallback((kind, message) => {
+    setToast({ kind, message });
+    setTimeout(() => setToast(null), 4000);
+  }, []);
 
   useEffect(() => {
     const loadWorkflow = async () => {
@@ -59,14 +70,14 @@ function WorkflowEditorPage() {
         const response = await apiClient.get(`/workflows/${id}`);
         setWorkflow(response.data);
       } catch (err) {
-        setError(err.message || 'Failed to load workflow');
+        setError(err.message || t('workflows.editor.loadFailed', 'Failed to load workflow'));
       } finally {
         setLoading(false);
       }
     };
 
     loadWorkflow();
-  }, [id, isNew]);
+  }, [id, isNew, t]);
 
   /**
    * Saves the current canvas state back to the API.
@@ -81,8 +92,19 @@ function WorkflowEditorPage() {
 
         if (isNew) {
           if (!updated.id) {
-            const newId = prompt('Enter workflow ID:');
+            // Use window.prompt with i18n strings. A nicer in-app modal can
+            // come later; this matches the validateIdForPath() server pattern.
+            const promptMsg = `${t('workflows.editor.promptId', 'Enter workflow ID:')}\n${t('workflows.editor.promptIdHint', 'Use only letters, numbers, dots, underscores, and hyphens.')}`;
+            const newId = window.prompt(promptMsg);
             if (!newId) {
+              setSaving(false);
+              return;
+            }
+            if (!VALID_ID_PATTERN.test(newId) || newId.includes('..')) {
+              showToast(
+                'error',
+                t('workflows.editor.promptIdHint', 'Use only letters, numbers, dots, underscores, and hyphens.')
+              );
               setSaving(false);
               return;
             }
@@ -95,13 +117,17 @@ function WorkflowEditorPage() {
         }
 
         setWorkflow(updated);
+        showToast('success', t('workflows.editor.saveSuccess', 'Workflow saved'));
       } catch (err) {
-        alert(`Save failed: ${err.message}`);
+        showToast(
+          'error',
+          t('workflows.editor.saveFailed', 'Save failed: {{message}}', { message: err.message })
+        );
       } finally {
         setSaving(false);
       }
     },
-    [workflow, isNew, id, navigate]
+    [workflow, isNew, id, navigate, t, showToast]
   );
 
   /**
@@ -112,18 +138,25 @@ function WorkflowEditorPage() {
       await handleSave(rfNodes, rfEdges);
       try {
         await apiClient.post(`/workflows/${workflow?.id || id}/publish`);
-        alert('Workflow published successfully');
+        showToast('success', t('workflows.editor.publishSuccess', 'Workflow published successfully'));
       } catch (err) {
-        alert(`Publish failed: ${err.message}`);
+        showToast(
+          'error',
+          t('workflows.editor.publishFailed', 'Publish failed: {{message}}', {
+            message: err.message
+          })
+        );
       }
     },
-    [handleSave, workflow, id]
+    [handleSave, workflow, id, t, showToast]
   );
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <div className="text-gray-500">Loading workflow...</div>
+        <div className="text-gray-500">
+          {t('workflows.editor.loadingWorkflow', 'Loading workflow...')}
+        </div>
       </div>
     );
   }
@@ -146,13 +179,13 @@ function WorkflowEditorPage() {
             onClick={() => navigate(-1)}
             className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
           >
-            &larr; Back
+            &larr; {t('workflows.editor.back', 'Back')}
           </button>
           <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {isNew
-              ? 'New Workflow'
+              ? t('workflows.editor.newWorkflowHeading', 'New Workflow')
               : (typeof workflow?.name === 'object' ? workflow.name.en : workflow?.name) ||
-                'Edit Workflow'}
+                t('workflows.editor.title', 'Workflow Editor')}
           </h1>
           {workflow?.status && (
             <span
@@ -166,16 +199,32 @@ function WorkflowEditorPage() {
             </span>
           )}
         </div>
-        {saving && <span className="text-sm text-gray-500">Saving...</span>}
+        {saving && (
+          <span className="text-sm text-gray-500">
+            {t('workflows.editor.saving', 'Saving...')}
+          </span>
+        )}
       </div>
 
-      <div className="flex-1">
+      <div className="flex-1 relative">
         <WorkflowEditor
           initialNodes={initialNodes}
           initialEdges={initialEdges}
           onSave={handleSave}
           onPublish={handlePublish}
         />
+        {toast && (
+          <div
+            role="status"
+            className={`absolute bottom-4 right-4 px-4 py-2 rounded shadow-lg text-sm ${
+              toast.kind === 'success'
+                ? 'bg-green-600 text-white'
+                : 'bg-red-600 text-white'
+            }`}
+          >
+            {toast.message}
+          </div>
+        )}
       </div>
     </div>
   );

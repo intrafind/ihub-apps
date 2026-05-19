@@ -32,19 +32,25 @@ export class WebhookTrigger {
   }
 
   /**
-   * Verifies the HMAC-SHA256 signature of an incoming webhook payload.
-   * If no secret is configured, verification is skipped (returns true).
+   * Verifies the HMAC-SHA256 signature of an incoming webhook payload
+   * over the raw request body bytes. This matches the convention used
+   * by GitHub, Stripe, and most other webhook providers, which sign
+   * the exact bytes they sent -- not a re-stringified parsed object.
    *
-   * @param {Object} payload - The parsed JSON body of the webhook request
+   * Returns false if no secret is configured. The route layer is
+   * responsible for refusing requests to secret-less triggers; this
+   * method only verifies a signature when verification is possible.
+   *
+   * @param {Buffer} rawBody - The raw request body bytes
    * @param {string} signature - The signature header value (e.g. 'sha256=abcdef...')
-   * @returns {boolean} True if the signature is valid or no secret is configured
+   * @returns {boolean} True if the signature is valid
    */
-  verifySignature(payload, signature) {
-    if (!this.config.secret) return true;
+  verifyRawSignature(rawBody, signature) {
+    if (!this.config.secret) return false;
 
     const expected = crypto
       .createHmac('sha256', this.config.secret)
-      .update(JSON.stringify(payload))
+      .update(rawBody || Buffer.alloc(0))
       .digest('hex');
 
     const sig = (signature || '').replace('sha256=', '');
@@ -52,14 +58,28 @@ export class WebhookTrigger {
     if (!sig) {
       logger.warn({
         component: 'WebhookTrigger',
-        message: 'Missing signature for webhook with secret configured',
+        message: 'Missing signature for webhook',
         triggerId: this.config.id
       });
       return false;
     }
 
+    let expectedBuf;
+    let sigBuf;
     try {
-      return crypto.timingSafeEqual(Buffer.from(expected, 'hex'), Buffer.from(sig, 'hex'));
+      expectedBuf = Buffer.from(expected, 'hex');
+      sigBuf = Buffer.from(sig, 'hex');
+    } catch {
+      return false;
+    }
+
+    // timingSafeEqual requires equal-length buffers; otherwise it throws
+    if (expectedBuf.length !== sigBuf.length) {
+      return false;
+    }
+
+    try {
+      return crypto.timingSafeEqual(expectedBuf, sigBuf);
     } catch {
       return false;
     }

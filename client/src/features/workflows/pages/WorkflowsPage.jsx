@@ -46,7 +46,7 @@ function WorkflowsPage() {
         </p>
         {isAdmin && (
           <Link
-            to="/admin/workflows/new"
+            to="/admin/workflows/new/edit"
             className="mt-4 inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium"
           >
             <Icon name="plus" className="w-5 h-5" />

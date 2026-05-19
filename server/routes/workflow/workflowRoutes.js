@@ -20,7 +20,7 @@ import { actionTracker } from '../../actionTracker.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { getRootDir } from '../../pathUtils.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import {
   sendNotFound,
   sendBadRequest,
@@ -1293,20 +1293,22 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         executionId
       });
 
-      // Define event types to listen for
+      // Define event types to listen for. The handler matches by prefix,
+      // so `workflow.node` covers `workflow.node.start/complete/error/retry`,
+      // and `workflow.subworkflow` covers start/complete events emitted by
+      // the planner executor.
       const workflowEventTypes = [
         'workflow.start',
         'workflow.iteration',
-        'workflow.node.start',
-        'workflow.node.complete',
-        'workflow.node.error',
+        'workflow.node',
         'workflow.paused',
-        'workflow.human.required',
-        'workflow.human.responded',
+        'workflow.human',
         'workflow.complete',
         'workflow.failed',
         'workflow.cancelled',
-        'workflow.checkpoint.saved'
+        'workflow.checkpoint',
+        'workflow.plan',
+        'workflow.subworkflow'
       ];
 
       /**
@@ -1322,8 +1324,14 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // Extract event type from the event data
         const eventType = eventData.event;
 
-        // Check if this is a workflow event we care about
-        if (!workflowEventTypes.some(type => eventType === type || eventType.startsWith(type))) {
+        // Check if this is a workflow event we care about. Compare with a
+        // trailing dot so that allowing `workflow.node` does not also accept
+        // a hypothetical `workflow.nodes` event.
+        if (
+          !workflowEventTypes.some(
+            type => eventType === type || eventType.startsWith(`${type}.`)
+          )
+        ) {
           return;
         }
 
@@ -1928,7 +1936,15 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       try {
         const rootDir = getRootDir();
         const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const historyDir = join(workflowsDir, '.history', id);
+        const historyRoot = join(workflowsDir, '.history');
+        // Defense-in-depth: resolve the per-workflow history dir and
+        // assert it stays inside .history. validateIdForPath already
+        // rejects path-traversal characters; this catches symlink/
+        // alternate-encoding bypasses that CodeQL flags.
+        const historyDir = resolveAndValidatePath(id, historyRoot);
+        if (!historyDir) {
+          return res.status(400).json({ error: 'Invalid workflow ID' });
+        }
 
         let versions = [];
         try {
@@ -1936,7 +1952,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           for (const file of files) {
             if (!file.endsWith('.json')) continue;
             try {
-              const filePath = join(historyDir, file);
+              const filePath = resolveAndValidatePath(file, historyDir);
+              if (!filePath) continue;
               const content = await fs.readFile(filePath, 'utf8');
               const data = JSON.parse(content);
               versions.push({
@@ -2033,16 +2050,22 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           _publishedBy: req.user?.name || req.user?.id || 'unknown'
         };
 
-        // Save to history
-        const historyDir = join(workflowsDir, '.history', id);
+        // Save to history (defense-in-depth path resolution)
+        const historyRoot = join(workflowsDir, '.history');
+        const historyDir = resolveAndValidatePath(id, historyRoot);
+        if (!historyDir) {
+          return res.status(400).json({ error: 'Invalid workflow ID' });
+        }
         await fs.mkdir(historyDir, { recursive: true });
 
+        // version comes from workflow.version which is schema-validated as
+        // semver, so it's a safe filename component. timestamp is also safe.
         const snapshotFile = join(historyDir, `${version}-${timestamp}.json`);
-        await fs.writeFile(snapshotFile, JSON.stringify(snapshot, null, 2), 'utf8');
+        await atomicWriteJSON(snapshotFile, snapshot);
 
         // Update workflow status
         workflow.status = 'published';
-        await fs.writeFile(workflowPath, JSON.stringify(workflow, null, 2), 'utf8');
+        await atomicWriteJSON(workflowPath, workflow);
 
         logger.info({
           component: 'workflowRoutes',
@@ -2109,21 +2132,33 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       }
 
       const versionParam = req.params.version;
-      // Basic version validation
-      if (!versionParam || !/^[\w.-]+$/.test(versionParam)) {
+      // Strict version validation: alphanumeric, dot, hyphen ONLY, no `..`
+      // The previous regex allowed `..` which is a path-traversal sequence.
+      if (
+        !versionParam ||
+        versionParam.length > 64 ||
+        !/^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/.test(versionParam) ||
+        versionParam.includes('..')
+      ) {
         return res.status(400).json({ error: 'Invalid version format' });
       }
 
       try {
         const rootDir = getRootDir();
         const workflowsDir = join(rootDir, 'contents', 'workflows');
-        const historyDir = join(workflowsDir, '.history', id);
+        const historyRoot = join(workflowsDir, '.history');
+        const historyDir = resolveAndValidatePath(id, historyRoot);
+        if (!historyDir) {
+          return res.status(400).json({ error: 'Invalid workflow ID' });
+        }
 
         // Find snapshot file by version prefix
         let snapshotFileName = null;
         try {
           const files = await fs.readdir(historyDir);
-          snapshotFileName = files.find(f => f.startsWith(versionParam) && f.endsWith('.json'));
+          snapshotFileName = files.find(
+            f => f.startsWith(`${versionParam}-`) && f.endsWith('.json')
+          );
         } catch {
           return res.status(404).json({ error: 'No version history found' });
         }
@@ -2132,8 +2167,11 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return res.status(404).json({ error: `Version ${versionParam} not found` });
         }
 
-        // Read snapshot
-        const snapshotPath = join(historyDir, snapshotFileName);
+        // Read snapshot (resolve+validate to satisfy defense-in-depth)
+        const snapshotPath = resolveAndValidatePath(snapshotFileName, historyDir);
+        if (!snapshotPath) {
+          return res.status(400).json({ error: 'Invalid snapshot path' });
+        }
         const content = await fs.readFile(snapshotPath, 'utf8');
         const snapshot = JSON.parse(content);
 
@@ -2148,7 +2186,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         const workflowPath = join(workflowsDir, filename);
-        await fs.writeFile(workflowPath, JSON.stringify(snapshot, null, 2), 'utf8');
+        await atomicWriteJSON(workflowPath, snapshot);
 
         logger.info({
           component: 'workflowRoutes',

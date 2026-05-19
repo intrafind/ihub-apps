@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Side panel for editing the selected workflow node's name and JSON configuration.
@@ -11,6 +12,7 @@ import { useState, useEffect } from 'react';
  * @param {function} props.onClose - Callback to close the panel
  */
 export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [configText, setConfigText] = useState('');
   const [parseError, setParseError] = useState(null);
@@ -43,12 +45,12 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose }) {
     <div className="w-80 border-l border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 p-4 overflow-y-auto">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-          Node Configuration
+          {t('workflows.editor.config', 'Configuration')}
         </h3>
         <button
           onClick={onClose}
           className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-          aria-label="Close panel"
+          aria-label={t('common.close', 'Close')}
         >
           &#x2715;
         </button>
@@ -57,7 +59,7 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose }) {
       <div className="space-y-4">
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            Type
+            {t('workflows.editor.type', 'Type')}
           </label>
           <div className="text-sm text-gray-900 dark:text-gray-100 font-mono bg-gray-50 dark:bg-gray-900 px-2 py-1 rounded">
             {selectedNode.data.nodeType}
@@ -66,20 +68,20 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose }) {
 
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            Name
+            {t('workflows.editor.name', 'Name')}
           </label>
           <input
             type="text"
             value={name}
             onChange={e => setName(e.target.value)}
             className="w-full text-sm border border-gray-300 dark:border-gray-600 rounded px-2 py-1.5 bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100"
-            placeholder="Node name"
+            placeholder={t('workflows.editor.name', 'Name')}
           />
         </div>
 
         <div>
           <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">
-            Config (JSON)
+            {t('workflows.editor.configJson', 'Config (JSON)')}
           </label>
           <textarea
             value={configText}
@@ -97,7 +99,7 @@ export function NodeConfigPanel({ selectedNode, onUpdateNode, onClose }) {
           onClick={handleApply}
           className="w-full bg-blue-600 text-white text-sm py-2 rounded hover:bg-blue-700 transition-colors"
         >
-          Apply Changes
+          {t('workflows.editor.applyChanges', 'Apply Changes')}
         </button>
       </div>
     </div>
