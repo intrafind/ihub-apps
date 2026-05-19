@@ -1937,7 +1937,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // assert it stays inside .history. validateIdForPath already
         // rejects path-traversal characters; this catches symlink/
         // alternate-encoding bypasses that CodeQL flags.
-        const historyDir = resolveAndValidatePath(id, historyRoot);
+        const historyDir = await resolveAndValidatePath(id, historyRoot);
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
@@ -1953,7 +1953,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           for (const file of files) {
             if (!file.endsWith('.json')) continue;
             try {
-              const filePath = resolveAndValidatePath(file, historyDir);
+              const filePath = await resolveAndValidatePath(file, historyDir);
               if (!filePath) continue;
               // lgtm[js/path-injection] -- `filePath` is the result of
               // resolveAndValidatePath(file, historyDir) which enforces a

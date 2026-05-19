@@ -154,27 +154,54 @@ export function sanitizeLanguageCode(lang, fallback = 'en') {
 
 /**
  * Validates that a resolved file path stays within the expected base directory.
- * Prevents path traversal by ensuring the resolved path starts with the base.
+ * Prevents path traversal by ensuring the canonical path starts with the canonical base.
  *
  * @param {string} filePath - The file path to validate (can be relative)
  * @param {string} baseDir - The base directory that the path must stay within
- * @returns {string|null} - The resolved absolute path if safe, null if traversal detected
+ * @returns {Promise<string|null>} - The resolved absolute path if safe, null if traversal detected
  */
-export function resolveAndValidatePath(filePath, baseDir) {
+export async function resolveAndValidatePath(filePath, baseDir) {
   if (!filePath || typeof filePath !== 'string') {
     return null;
   }
 
-  const resolvedBase = path.resolve(baseDir);
-  const resolvedFull = path.resolve(resolvedBase, filePath);
+  try {
+    const resolvedBase = path.resolve(baseDir);
+    const resolvedFull = path.resolve(resolvedBase, filePath);
 
-  // Ensure the resolved path is within the base directory
-  const baseWithSep = resolvedBase.endsWith(path.sep) ? resolvedBase : resolvedBase + path.sep;
-  if (resolvedFull !== resolvedBase && !resolvedFull.startsWith(baseWithSep)) {
+    // Quick lexical boundary check before realpath work
+    const baseWithSep = resolvedBase.endsWith(path.sep) ? resolvedBase : resolvedBase + path.sep;
+    if (resolvedFull !== resolvedBase && !resolvedFull.startsWith(baseWithSep)) {
+      return null;
+    }
+
+    const canonicalBase = await fs.realpath(resolvedBase);
+
+    // Canonicalize via the nearest existing parent so we can validate paths
+    // that may not exist yet.
+    let existingPath = resolvedFull;
+    while (existingPath !== path.dirname(existingPath)) {
+      try {
+        await fs.access(existingPath);
+        break;
+      } catch {
+        existingPath = path.dirname(existingPath);
+      }
+    }
+
+    const canonicalExisting = await fs.realpath(existingPath);
+    const relativeFromExisting = path.relative(existingPath, resolvedFull);
+    const canonicalFull = path.resolve(canonicalExisting, relativeFromExisting);
+
+    const canonicalBaseWithSep = canonicalBase.endsWith(path.sep) ? canonicalBase : canonicalBase + path.sep;
+    if (canonicalFull !== canonicalBase && !canonicalFull.startsWith(canonicalBaseWithSep)) {
+      return null;
+    }
+
+    return canonicalFull;
+  } catch {
     return null;
   }
-
-  return resolvedFull;
 }
 
 /**
