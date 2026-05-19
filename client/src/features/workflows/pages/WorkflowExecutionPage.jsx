@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -6,10 +6,24 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { resetChatId } from '../../../utils/chatId';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
-import { useWorkflowExecution } from '../hooks';
-import { HumanCheckpoint, ExecutionProgress, AppSelectionModal } from '../components';
+import {
+  useWorkflowExecution,
+  useElapsedTime,
+  useTechnicalDetailsToggle,
+  useDocumentTitleOverride
+} from '../hooks';
+import {
+  HumanCheckpoint,
+  ExecutionProgress,
+  AppSelectionModal,
+  StatusBadge,
+  ProgressBar,
+  TechnicalDetailsToggle
+} from '../components';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { getDisplayableOutput } from '../utils/filterInternalFields';
 
 /**
  * Helper to download content as a file
@@ -22,40 +36,6 @@ const downloadAsFile = (content, filename, type = 'text/markdown') => {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
-};
-
-/**
- * Helper to filter internal fields and get displayable output
- */
-const getDisplayableOutput = data => {
-  if (!data) return {};
-
-  const internalFields = new Set([
-    'nodeResults',
-    '_nodeIterations',
-    '_workflowDefinition',
-    '_workflow',
-    'pendingCheckpoint',
-    '_pausedAt',
-    '_pauseReason',
-    '_resumedAt',
-    '_modelOverride'
-  ]);
-
-  const output = {};
-  for (const [key, value] of Object.entries(data)) {
-    // Skip internal fields, underscore-prefixed, and human response variables
-    if (
-      internalFields.has(key) ||
-      key.startsWith('_') ||
-      key.startsWith('humanResponse_') ||
-      key.startsWith('_humanResult_')
-    ) {
-      continue;
-    }
-    output[key] = value;
-  }
-  return output;
 };
 
 /**
@@ -115,9 +95,39 @@ function WorkflowExecutionPage() {
 
   const { user } = useAuth();
   const isAdmin = user?.permissions?.adminAccess === true;
+  const [showTechnical] = useTechnicalDetailsToggle();
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
 
   const { state, loading, connected, error, respondToCheckpoint, cancelExecution, refetch } =
     useWorkflowExecution(executionId);
+
+  const elapsed = useElapsedTime(state?.startedAt, state?.completedAt);
+
+  const localizedName = state?.workflowName
+    ? getLocalizedContent(state.workflowName, currentLanguage)
+    : state?.workflowId;
+
+  const titlePrefix = useMemo(() => {
+    if (!state || !localizedName) return null;
+    switch (state.status) {
+      case 'running':
+        return t('workflows.documentTitle.running', '● Running: {{name}}', { name: localizedName });
+      case 'paused':
+        return t('workflows.documentTitle.paused', '⏸ {{name}}', { name: localizedName });
+      case 'completed':
+      case 'approved':
+        return t('workflows.documentTitle.completed', '✓ {{name}}', { name: localizedName });
+      case 'failed':
+        return t('workflows.documentTitle.failed', '⚠ {{name}}', { name: localizedName });
+      case 'cancelled':
+      case 'rejected':
+        return t('workflows.documentTitle.cancelled', '✕ {{name}}', { name: localizedName });
+      default:
+        return localizedName;
+    }
+  }, [state, localizedName, t]);
+
+  useDocumentTitleOverride(titlePrefix);
 
   /**
    * Toggle an output field's accordion panel open/closed.
@@ -242,12 +252,10 @@ function WorkflowExecutionPage() {
     navigate(`/apps/${app.id}`);
   };
 
-  const handleCancel = async () => {
-    if (
-      window.confirm(t('workflows.confirmCancel', 'Are you sure you want to cancel this workflow?'))
-    ) {
-      await cancelExecution();
-    }
+  const handleCancelClick = () => setShowCancelConfirm(true);
+  const handleCancelConfirm = async () => {
+    setShowCancelConfirm(false);
+    await cancelExecution();
   };
 
   const handleBack = () => {
@@ -418,6 +426,9 @@ function WorkflowExecutionPage() {
     );
   };
 
+  const totalSteps = state.data?._workflowDefinition?.nodes?.length || 0;
+  const completedSteps = state.completedNodes?.length || 0;
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
@@ -426,40 +437,49 @@ function WorkflowExecutionPage() {
           to="/workflows"
           className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-1"
         >
-          <Icon name="arrow-left" className="w-4 h-4" />
+          <Icon name="arrow-left" className="w-4 h-4" aria-hidden="true" />
           {t('workflows.backToWorkflows', 'Back to Workflows')}
         </Link>
       </nav>
 
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{workflowName}</h1>
-              {/* Connection indicator */}
+              <StatusBadge status={state.status} live />
               {isActive && (
                 <span
-                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    connected
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                  }`}
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400"
+                  title={connected ? 'Receiving live updates' : 'Reconnecting'}
                 >
                   <span
-                    className={`w-2 h-2 rounded-full mr-1 ${connected ? 'bg-green-500' : 'bg-gray-400'}`}
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                    }`}
+                    aria-hidden="true"
                   />
                   {connected
-                    ? t('workflows.connected', 'Connected')
-                    : t('workflows.disconnected', 'Disconnected')}
+                    ? t('workflows.live', 'Live')
+                    : t('workflows.reconnecting', 'Reconnecting…')}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-              <span>
-                {t('workflows.executionId', 'Execution')}: {state.executionId.slice(0, 16)}...
-              </span>
+            {/* Progress bar */}
+            {(isActive || state.status === 'completed' || state.status === 'approved') && (
+              <div className="mb-3">
+                <ProgressBar
+                  status={state.status}
+                  completedCount={completedSteps}
+                  totalCount={totalSteps}
+                  elapsedFormatted={elapsed.formatted}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 flex-wrap">
               {state.startedAt && (
                 <span>
                   {t('workflows.startedAt', 'Started')}:{' '}
@@ -472,78 +492,118 @@ function WorkflowExecutionPage() {
                   {new Date(state.completedAt).toLocaleString(currentLanguage)}
                 </span>
               )}
+              {showTechnical && (
+                <span className="font-mono">
+                  {t('workflows.executionId', 'Execution')}: {state.executionId.slice(0, 16)}…
+                </span>
+              )}
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
-            {isAdmin && state.workflowId && (
-              <Link
-                to={`/admin/workflows/${state.workflowId}/edit`}
-                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-              >
-                <Icon name="pencil" className="w-4 h-4" />
-                {t('workflows.editWorkflow', 'Edit Workflow')}
-              </Link>
-            )}
-            {isActive && (
-              <button
-                onClick={handleCancel}
-                className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
-              >
-                <Icon name="x-mark" className="w-4 h-4" />
-                {t('workflows.cancel', 'Cancel')}
-              </button>
-            )}
+          <div className="flex items-center gap-2 flex-wrap">
             {(state.status === 'completed' || state.status === 'approved') && (
               <button
                 onClick={() => setShowAppSelection(true)}
-                className="px-4 py-2 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-700 border border-indigo-300 dark:border-indigo-600 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 title={t(
                   'workflows.chatWithResults.title',
                   'Continue chatting with the workflow output in an app'
                 )}
               >
-                <Icon name="chat-bubble-left-right" className="w-4 h-4" />
+                <Icon name="chat-bubble-left-right" className="w-4 h-4" aria-hidden="true" />
                 {t('workflows.chatWithResults.button', 'Chat with Results')}
               </button>
             )}
-            <button
-              onClick={handleExportState}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-              title={t('workflows.exportState', 'Export execution state for debugging')}
-            >
-              <Icon name="arrow-down-tray" className="w-4 h-4" />
-              {t('workflows.export', 'Export')}
-            </button>
+            {isAdmin && state.workflowId && (
+              <Link
+                to={`/admin/workflows/${state.workflowId}/edit`}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                aria-label={t('workflows.editWorkflow', 'Edit Workflow')}
+              >
+                <Icon name="pencil" className="w-4 h-4" aria-hidden="true" />
+                {t('workflows.editWorkflow', 'Edit Workflow')}
+              </Link>
+            )}
             <button
               onClick={refetch}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+              className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               title={t('common.refresh', 'Refresh')}
+              aria-label={t('common.refresh', 'Refresh')}
             >
-              <Icon name="arrow-path" className="w-4 h-4" />
-              {t('common.refresh', 'Refresh')}
+              <Icon name="arrow-path" className="w-4 h-4" aria-hidden="true" />
             </button>
+            {showTechnical && (
+              <button
+                onClick={handleExportState}
+                className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                title={t('workflows.exportState', 'Export execution state for debugging')}
+                aria-label={t('workflows.export', 'Export')}
+              >
+                <Icon name="arrow-down-tray" className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
+            {isActive && (
+              <button
+                onClick={handleCancelClick}
+                className="px-4 py-2 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                aria-label={t('workflows.cancel', 'Cancel')}
+              >
+                <Icon name="x-mark" className="w-4 h-4" aria-hidden="true" />
+                {t('workflows.cancel', 'Cancel')}
+              </button>
+            )}
           </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end">
+          <TechnicalDetailsToggle />
         </div>
       </div>
 
-      {/* Main content grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Progress panel */}
-        <div>
-          <ExecutionProgress state={state} nodes={state.data?._workflowDefinition?.nodes || []} />
+      {/* Checkpoint takeover: when paused for input, the checkpoint is the page. */}
+      {hasCheckpoint && (
+        <div id="active-checkpoint" className="mb-6">
+          <HumanCheckpoint
+            checkpoint={state.pendingCheckpoint}
+            onRespond={respondToCheckpoint}
+            displayData={state.pendingCheckpoint?.displayData}
+          />
         </div>
+      )}
 
-        {/* Right panel - Checkpoint or status */}
-        <div>
-          {hasCheckpoint ? (
-            <HumanCheckpoint
-              checkpoint={state.pendingCheckpoint}
-              onRespond={respondToCheckpoint}
-              displayData={state.pendingCheckpoint?.displayData}
-            />
-          ) : (
+      {/* Main content grid */}
+      <div className={hasCheckpoint ? 'space-y-6' : 'grid gap-6 lg:grid-cols-2'}>
+        {/* Progress panel (collapsed under "So far" when checkpoint is pending) */}
+        {hasCheckpoint ? (
+          <details className="bg-white dark:bg-gray-800 rounded-lg shadow-md group" open={false}>
+            <summary className="cursor-pointer p-4 font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2 list-none">
+              <Icon
+                name="chevron-down"
+                className="w-4 h-4 transition-transform group-open:rotate-180"
+                aria-hidden="true"
+              />
+              {t('workflows.sofar', 'So far')}
+              <span className="text-sm text-gray-400 dark:text-gray-500">
+                ({completedSteps} {completedSteps === 1 ? 'step' : 'steps'})
+              </span>
+            </summary>
+            <div className="border-t border-gray-100 dark:border-gray-700">
+              <ExecutionProgress
+                state={state}
+                nodes={state.data?._workflowDefinition?.nodes || []}
+              />
+            </div>
+          </details>
+        ) : (
+          <div>
+            <ExecutionProgress state={state} nodes={state.data?._workflowDefinition?.nodes || []} />
+          </div>
+        )}
+
+        {/* Right panel - Status (only shown when no checkpoint is pending) */}
+        {!hasCheckpoint && (
+          <div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 {t('workflows.status', 'Status')}
@@ -620,7 +680,7 @@ function WorkflowExecutionPage() {
                           : `${state.data.executionMetrics.totalDuration}ms`}
                       </span>
                     </div>
-                    {state.data.executionMetrics.totalTokens?.total > 0 && (
+                    {showTechnical && state.data.executionMetrics.totalTokens?.total > 0 && (
                       <>
                         <div className="flex justify-between">
                           <span className="text-gray-500 dark:text-gray-400">
@@ -694,7 +754,7 @@ function WorkflowExecutionPage() {
               {state.status === 'failed' && (
                 <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                   <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-                    <Icon name="x-circle" className="w-5 h-5" />
+                    <Icon name="x-circle" className="w-5 h-5" aria-hidden="true" />
                     <span className="font-medium">
                       {t('workflows.failedMessage', 'Workflow failed')}
                     </span>
@@ -708,8 +768,8 @@ function WorkflowExecutionPage() {
                 </div>
               )}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Workflow Output - shown when workflow is finished */}
         {(state.status === 'completed' ||
@@ -809,6 +869,21 @@ function WorkflowExecutionPage() {
         isOpen={showAppSelection}
         onClose={() => setShowAppSelection(false)}
         onSelect={handleStartChatWithResults}
+      />
+
+      {/* Confirm dialog for cancelling the workflow */}
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title={t('workflows.confirmCancel.title', 'Cancel this workflow?')}
+        message={t(
+          'workflows.confirmCancel.message',
+          "The workflow will stop running. You can't resume it after cancelling."
+        )}
+        confirmLabel={t('workflows.confirmCancel.confirm', 'Yes, cancel')}
+        denyLabel={t('workflows.confirmCancel.deny', 'Keep running')}
+        danger
+        onConfirm={handleCancelConfirm}
+        onDeny={() => setShowCancelConfirm(false)}
       />
     </div>
   );

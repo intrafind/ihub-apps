@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
+import StatusBadge from './StatusBadge';
 
 /**
  * Helper to summarize a value for display
@@ -46,13 +48,15 @@ function NodeStatus({ status }) {
 }
 
 /**
- * Expanded detail view for a single progress item
+ * Expanded detail view for a single progress item.
+ * Technical fields (output variable names, raw JSON dumps) only render when
+ * the user has opted into "Show technical details".
  */
-function ItemDetails({ item, t }) {
+function ItemDetails({ item, t, showTechnical }) {
   return (
     <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50 p-3">
-      {/* Output variable and value */}
-      {item.outputVariable && item.outputValue && (
+      {/* Output variable and value — technical only */}
+      {showTechnical && item.outputVariable && item.outputValue && (
         <div className="mb-3">
           <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             {t('workflows.progress.outputVariable', 'Output Variable')}:{' '}
@@ -68,13 +72,22 @@ function ItemDetails({ item, t }) {
         </div>
       )}
 
+      {/* Plain summary of agent output when toggle is off */}
+      {!showTechnical && typeof item.outputValue === 'string' && item.outputValue && (
+        <div className="mb-3 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+          {item.outputValue.length > 600
+            ? item.outputValue.substring(0, 600) + '…'
+            : item.outputValue}
+        </div>
+      )}
+
       {/* Decision details */}
       {item.type === 'decision' && item.rawResult?.output && (
         <div className="mb-3">
           <div className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
             {t('workflows.progress.decisionResult', 'Decision Result')}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span
               className={`px-2 py-1 rounded text-xs font-medium ${
                 item.rawResult.output.branch === 'true'
@@ -84,7 +97,7 @@ function ItemDetails({ item, t }) {
             >
               Branch: {item.rawResult.output.branch}
             </span>
-            {item.rawResult.output.expression && (
+            {showTechnical && item.rawResult.output.expression && (
               <span className="text-xs text-gray-500 dark:text-gray-400 font-mono">
                 {item.rawResult.output.expression}
               </span>
@@ -112,8 +125,9 @@ function ItemDetails({ item, t }) {
         </div>
       )}
 
-      {/* Raw result for debugging (only show if no specific view) */}
-      {item.rawResult &&
+      {/* Raw result — technical only, shown if no specific renderer applies */}
+      {showTechnical &&
+        item.rawResult &&
         !item.outputVariable &&
         item.type !== 'decision' &&
         item.type !== 'human' && (
@@ -141,6 +155,7 @@ function ExecutionProgress({ state, nodes = [] }) {
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
   const [expandedNodes, setExpandedNodes] = useState(new Set());
+  const [showTechnical] = useTechnicalDetailsToggle();
 
   const toggleNode = nodeId => {
     setExpandedNodes(prev => {
@@ -392,25 +407,7 @@ function ExecutionProgress({ state, nodes = [] }) {
             </button>
           )}
         </div>
-        <span
-          className={`px-3 py-1 rounded-full text-sm font-medium ${
-            state.status === 'completed' || state.status === 'approved'
-              ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300'
-              : state.status === 'rejected'
-                ? 'bg-orange-100 text-orange-800 dark:bg-orange-900/50 dark:text-orange-300'
-                : state.status === 'failed'
-                  ? 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'
-                  : state.status === 'running'
-                    ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300'
-                    : state.status === 'paused'
-                      ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-300'
-                      : state.status === 'cancelled'
-                        ? 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-                        : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-300'
-          }`}
-        >
-          {state.status.charAt(0).toUpperCase() + state.status.slice(1)}
-        </span>
+        <StatusBadge status={state.status} />
       </div>
 
       {/* Progress timeline — groups repeated iterations of the same node */}
@@ -485,12 +482,13 @@ function ExecutionProgress({ state, nodes = [] }) {
                                 <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
                                   #{item.iteration}
                                 </span>
-                                {item.type === 'agent' && item.model && (
+                                {showTechnical && item.type === 'agent' && item.model && (
                                   <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
                                     {item.model}
                                   </span>
                                 )}
-                                {item.tokens &&
+                                {showTechnical &&
+                                  item.tokens &&
                                   (item.tokens.input > 0 || item.tokens.output > 0) && (
                                     <span
                                       className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
@@ -520,9 +518,11 @@ function ExecutionProgress({ state, nodes = [] }) {
                                   {item.insight}
                                 </p>
                               )}
-                              {item.outputVariable && item.outputValue && !isItemExpanded && (
+                              {item.outputValue && !isItemExpanded && (
                                 <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                                  <span className="font-mono">{item.outputVariable}</span> ={' '}
+                                  {showTechnical && item.outputVariable && (
+                                    <span className="font-mono">{item.outputVariable} = </span>
+                                  )}
                                   {summarizeValue(item.outputValue, 80)}
                                 </p>
                               )}
@@ -531,10 +531,13 @@ function ExecutionProgress({ state, nodes = [] }) {
                               <Icon
                                 name={isItemExpanded ? 'chevron-up' : 'chevron-down'}
                                 className="w-5 h-5 text-gray-400 flex-shrink-0"
+                                aria-hidden="true"
                               />
                             )}
                           </button>
-                          {isItemExpanded && hasDetails && <ItemDetails item={item} t={t} />}
+                          {isItemExpanded && hasDetails && (
+                            <ItemDetails item={item} t={t} showTechnical={showTechnical} />
+                          )}
                         </div>
                       );
                     })}
@@ -567,19 +570,21 @@ function ExecutionProgress({ state, nodes = [] }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
                     <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
-                    {item.type === 'agent' && item.model && (
+                    {showTechnical && item.type === 'agent' && item.model && (
                       <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
                         {item.model}
                       </span>
                     )}
-                    {item.tokens && (item.tokens.input > 0 || item.tokens.output > 0) && (
-                      <span
-                        className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
-                        title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
-                      >
-                        {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
-                      </span>
-                    )}
+                    {showTechnical &&
+                      item.tokens &&
+                      (item.tokens.input > 0 || item.tokens.output > 0) && (
+                        <span
+                          className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded"
+                          title={`Input: ${item.tokens.input}, Output: ${item.tokens.output}`}
+                        >
+                          {(item.tokens.input + item.tokens.output).toLocaleString()} tokens
+                        </span>
+                      )}
                     {item.duration !== undefined && item.duration !== null && (
                       <span className="text-xs text-gray-400 dark:text-gray-500">
                         {item.duration >= 1000
@@ -598,9 +603,11 @@ function ExecutionProgress({ state, nodes = [] }) {
                   {item.insight && (
                     <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{item.insight}</p>
                   )}
-                  {item.outputVariable && item.outputValue && !isExpanded && (
+                  {item.outputValue && !isExpanded && (
                     <p className="text-xs text-gray-500 dark:text-gray-500 mt-1 truncate">
-                      <span className="font-mono">{item.outputVariable}</span> ={' '}
+                      {showTechnical && item.outputVariable && (
+                        <span className="font-mono">{item.outputVariable} = </span>
+                      )}
                       {summarizeValue(item.outputValue, 80)}
                     </p>
                   )}
@@ -609,10 +616,13 @@ function ExecutionProgress({ state, nodes = [] }) {
                   <Icon
                     name={isExpanded ? 'chevron-up' : 'chevron-down'}
                     className="w-5 h-5 text-gray-400 flex-shrink-0"
+                    aria-hidden="true"
                   />
                 )}
               </button>
-              {isExpanded && hasDetails && <ItemDetails item={item} t={t} />}
+              {isExpanded && hasDetails && (
+                <ItemDetails item={item} t={t} showTechnical={showTechnical} />
+              )}
             </div>
           );
         })}

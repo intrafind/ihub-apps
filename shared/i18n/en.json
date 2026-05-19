@@ -1885,6 +1885,64 @@
       "available": "Available Workflows",
       "myExecutions": "My Executions"
     },
+    "elapsedShort": "{{minutes}}m {{seconds}}s",
+    "elapsedSeconds": "{{seconds}}s",
+    "stepCounter": "Step {{current}} of ~{{total}}",
+    "stepCounterApproxTooltip": "Total step count is approximate. Workflows may include loops, branches, or skipped steps.",
+    "documentTitle": {
+      "running": "● Running: {{name}}",
+      "paused": "⏸ {{name}}",
+      "completed": "✓ {{name}}",
+      "failed": "⚠ {{name}}",
+      "cancelled": "✕ {{name}}"
+    },
+    "technicalDetails": {
+      "toggleLabel": "Technical details",
+      "show": "Show technical details",
+      "hide": "Hide technical details",
+      "tooltip": "Show execution IDs, tokens, model info, and raw data"
+    },
+    "confirmCancel": {
+      "title": "Cancel this workflow?",
+      "message": "The workflow will stop running. You can't resume it after cancelling.",
+      "confirm": "Yes, cancel",
+      "deny": "Keep running"
+    },
+    "confirmDestructiveCheckpoint": {
+      "title": "Confirm action",
+      "message": "This action can't be undone. Continue?"
+    },
+    "checkpoint": {
+      "displayDataEmptyValue": "(empty)",
+      "showRawJson": "Show raw data",
+      "hideRawJson": "Hide raw data",
+      "longValueShowMore": "Show full value",
+      "longValueShowLess": "Show less"
+    },
+    "startModal": {
+      "aboutTitle": "About this workflow",
+      "aboutSteps": "{{count}} steps",
+      "aboutSteps_one": "{{count}} step",
+      "fieldRequired": "This field is required"
+    },
+    "emptyState": {
+      "available": {
+        "title": "No workflows available yet",
+        "bodyAdmin": "No workflows have been published yet. Create your first workflow to get started.",
+        "bodyUser": "Ask an administrator to publish a workflow that's available to your group."
+      },
+      "executions": {
+        "title": "You haven't run a workflow yet",
+        "body": "Pick one from the Available tab to get started.",
+        "cta": "Browse workflows",
+        "filteredTitle": "No {{status}} runs",
+        "filteredBody": "Try a different filter."
+      }
+    },
+    "sofar": "So far",
+    "checkpointNeedsInput": "This workflow needs your input",
+    "live": "Live",
+    "reconnecting": "Reconnecting…",
     "editor": {
       "title": "Workflow Editor",
       "newWorkflowHeading": "New Workflow",
