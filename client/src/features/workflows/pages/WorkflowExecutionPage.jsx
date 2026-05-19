@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -6,10 +6,26 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { resetChatId } from '../../../utils/chatId';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
-import { useWorkflowExecution } from '../hooks';
-import { HumanCheckpoint, ExecutionProgress, AppSelectionModal } from '../components';
+import { configureMarked } from '../../../shared/components/MarkdownRenderer';
+import {
+  useWorkflowExecution,
+  useElapsedTime,
+  useTechnicalDetailsToggle,
+  useDocumentTitleOverride
+} from '../hooks';
+import {
+  HumanCheckpoint,
+  ExecutionProgress,
+  AppSelectionModal,
+  StatusBadge,
+  ProgressBar,
+  TechnicalDetailsToggle
+} from '../components';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { apiClient } from '../../../api/client';
+import { getDisplayableOutput } from '../utils/filterInternalFields';
 
 /**
  * Helper to download content as a file
@@ -25,40 +41,6 @@ const downloadAsFile = (content, filename, type = 'text/markdown') => {
 };
 
 /**
- * Helper to filter internal fields and get displayable output
- */
-const getDisplayableOutput = data => {
-  if (!data) return {};
-
-  const internalFields = new Set([
-    'nodeResults',
-    '_nodeIterations',
-    '_workflowDefinition',
-    '_workflow',
-    'pendingCheckpoint',
-    '_pausedAt',
-    '_pauseReason',
-    '_resumedAt',
-    '_modelOverride'
-  ]);
-
-  const output = {};
-  for (const [key, value] of Object.entries(data)) {
-    // Skip internal fields, underscore-prefixed, and human response variables
-    if (
-      internalFields.has(key) ||
-      key.startsWith('_') ||
-      key.startsWith('humanResponse_') ||
-      key.startsWith('_humanResult_')
-    ) {
-      continue;
-    }
-    output[key] = value;
-  }
-  return output;
-};
-
-/**
  * Helper to render a value (handles strings, objects, arrays)
  * Automatically renders markdown content as formatted HTML
  */
@@ -71,13 +53,19 @@ const renderValue = value => {
       const html = markdownToHtml(value);
       return (
         <div
-          className="prose dark:prose-invert max-w-none prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-pre:bg-gray-50 dark:prose-pre:bg-gray-900"
+          className="prose dark:prose-invert max-w-none prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-a:text-indigo-600 dark:prose-a:text-indigo-400"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       );
     }
-    // Plain text - just show with whitespace preserved
-    return <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">{value}</div>;
+    // Plain text — render in a monospaced <pre> so ASCII art / box-drawing
+    // characters stay aligned (LLMs don't always wrap them in code fences).
+    // overflow-x-auto so very wide rows scroll instead of wrapping.
+    return (
+      <pre className="text-sm font-mono whitespace-pre bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-3 rounded overflow-x-auto">
+        {value}
+      </pre>
+    );
   }
   if (typeof value === 'object') {
     return (
@@ -103,6 +91,14 @@ function WorkflowExecutionPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+
+  // Install the same code-block renderer the chat uses. Without this, fenced
+  // code blocks (e.g. ASCII art reports) get marked's default <pre><code>,
+  // which renders correctly in chat (chat configures its renderer on mount)
+  // but loses the explicit monospace/overflow-x-auto styling here.
+  useEffect(() => {
+    configureMarked(t);
+  }, [t]);
   const [showAppSelection, setShowAppSelection] = useState(false);
   /** @type {[Set<string>, Function]} Tracks which output accordion panels are expanded */
   const [expandedOutputFields, setExpandedOutputFields] = useState(new Set());
@@ -115,9 +111,59 @@ function WorkflowExecutionPage() {
 
   const { user } = useAuth();
   const isAdmin = user?.permissions?.adminAccess === true;
+  const [showTechnical] = useTechnicalDetailsToggle();
+  const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [restartError, setRestartError] = useState(null);
 
   const { state, loading, connected, error, respondToCheckpoint, cancelExecution, refetch } =
     useWorkflowExecution(executionId);
+
+  const handleRestart = async () => {
+    setRestartError(null);
+    setRestarting(true);
+    try {
+      await apiClient.post(`/workflows/executions/${executionId}/restart`);
+      await refetch();
+    } catch (err) {
+      const msg =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to restart workflow';
+      setRestartError(msg);
+    } finally {
+      setRestarting(false);
+    }
+  };
+
+  const elapsed = useElapsedTime(state?.startedAt, state?.completedAt);
+
+  const localizedName = state?.workflowName
+    ? getLocalizedContent(state.workflowName, currentLanguage)
+    : state?.workflowId;
+
+  const titlePrefix = useMemo(() => {
+    if (!state || !localizedName) return null;
+    switch (state.status) {
+      case 'running':
+        return t('workflows.documentTitle.running', '● Running: {{name}}', { name: localizedName });
+      case 'paused':
+        return t('workflows.documentTitle.paused', '⏸ {{name}}', { name: localizedName });
+      case 'completed':
+      case 'approved':
+        return t('workflows.documentTitle.completed', '✓ {{name}}', { name: localizedName });
+      case 'failed':
+        return t('workflows.documentTitle.failed', '⚠ {{name}}', { name: localizedName });
+      case 'cancelled':
+      case 'rejected':
+        return t('workflows.documentTitle.cancelled', '✕ {{name}}', { name: localizedName });
+      default:
+        return localizedName;
+    }
+  }, [state, localizedName, t]);
+
+  useDocumentTitleOverride(titlePrefix);
 
   /**
    * Toggle an output field's accordion panel open/closed.
@@ -242,12 +288,10 @@ function WorkflowExecutionPage() {
     navigate(`/apps/${app.id}`);
   };
 
-  const handleCancel = async () => {
-    if (
-      window.confirm(t('workflows.confirmCancel', 'Are you sure you want to cancel this workflow?'))
-    ) {
-      await cancelExecution();
-    }
+  const handleCancelClick = () => setShowCancelConfirm(true);
+  const handleCancelConfirm = async () => {
+    setShowCancelConfirm(false);
+    await cancelExecution();
   };
 
   const handleBack = () => {
@@ -298,6 +342,11 @@ function WorkflowExecutionPage() {
   const isActive = state.status === 'running' || state.status === 'paused';
   const hasCheckpoint = !!state.pendingCheckpoint;
 
+  // Short, stable identifier for filenames. Execution IDs are prefixed
+  // `wf-exec-`, so slicing the raw ID yields the same suffix for every run.
+  const shortExecId = state.executionId.replace(/^wf-exec-/, '').slice(0, 8) || state.executionId;
+  const workflowSlug = (state.workflowId || 'workflow').replace(/[^a-zA-Z0-9._-]/g, '_');
+
   const workflowOutput = getDisplayableOutput(state.data);
   const workflowOutputKeys = Object.keys(workflowOutput);
   const primaryOutputKey = state.data?._workflowDefinition?.chatIntegration?.primaryOutput;
@@ -305,6 +354,35 @@ function WorkflowExecutionPage() {
   const additionalKeys = hasPrimaryOutput
     ? workflowOutputKeys.filter(k => k !== primaryOutputKey)
     : workflowOutputKeys;
+
+  // Start inputs: take user-provided values that were passed to the start node
+  // (filtered to exclude both internal underscore keys and downstream outputs).
+  const startInputVariables =
+    state.data?._workflowDefinition?.nodes?.find(n => n.type === 'start')?.config?.inputVariables ||
+    [];
+  const startInputs = startInputVariables
+    .map(v => {
+      const value = state.data?.[v.name];
+      if (value === undefined || value === null || value === '') return null;
+      return { name: v.name, label: v.label, type: v.type, value };
+    })
+    .filter(Boolean);
+
+  // Workflow-level model the user selected when starting (kept as a runtime override)
+  const startedWithModel = state.data?._modelOverride;
+  const workflowDefaultModel = state.data?._workflowDefinition?.config?.defaultModelId;
+
+  // Cancellation reason — engine records it as a workflow_cancelled history event
+  const cancellationReason = (state.history || []).find(h => h.type === 'workflow_cancelled')?.data
+    ?.reason;
+
+  // Show output even when cancelled if any prompt steps produced results — users
+  // want to see what was generated before timeout/cancellation.
+  const showOutput =
+    state.status === 'completed' ||
+    state.status === 'approved' ||
+    state.status === 'rejected' ||
+    (state.status === 'cancelled' && workflowOutputKeys.length > 0);
 
   const renderFieldActions = (key, value) => (
     <div className="flex items-center gap-1.5">
@@ -328,11 +406,11 @@ function WorkflowExecutionPage() {
           <button
             onClick={e => {
               e.stopPropagation();
-              downloadAsFile(value, `${key}-${state.executionId.slice(0, 8)}.md`);
+              downloadAsFile(value, `${key}-${workflowSlug}-${shortExecId}.md`);
             }}
             className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
           >
-            <Icon name="arrow-down-tray" className="w-3 h-3" />
+            <Icon name="download" className="w-3 h-3" />
             {t('workflows.download', 'Download')}
           </button>
         )}
@@ -418,6 +496,9 @@ function WorkflowExecutionPage() {
     );
   };
 
+  const totalSteps = state.data?._workflowDefinition?.nodes?.length || 0;
+  const completedSteps = state.completedNodes?.length || 0;
+
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Breadcrumb */}
@@ -426,40 +507,49 @@ function WorkflowExecutionPage() {
           to="/workflows"
           className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 flex items-center gap-1"
         >
-          <Icon name="arrow-left" className="w-4 h-4" />
+          <Icon name="arrow-left" className="w-4 h-4" aria-hidden="true" />
           {t('workflows.backToWorkflows', 'Back to Workflows')}
         </Link>
       </nav>
 
       {/* Header */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mb-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-3 mb-3 flex-wrap">
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{workflowName}</h1>
-              {/* Connection indicator */}
+              <StatusBadge status={state.status} live />
               {isActive && (
                 <span
-                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                    connected
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
-                  }`}
+                  className="inline-flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400"
+                  title={connected ? 'Receiving live updates' : 'Reconnecting'}
                 >
                   <span
-                    className={`w-2 h-2 rounded-full mr-1 ${connected ? 'bg-green-500' : 'bg-gray-400'}`}
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      connected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                    }`}
+                    aria-hidden="true"
                   />
                   {connected
-                    ? t('workflows.connected', 'Connected')
-                    : t('workflows.disconnected', 'Disconnected')}
+                    ? t('workflows.live', 'Live')
+                    : t('workflows.reconnecting', 'Reconnecting…')}
                 </span>
               )}
             </div>
 
-            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-              <span>
-                {t('workflows.executionId', 'Execution')}: {state.executionId.slice(0, 16)}...
-              </span>
+            {/* Progress bar */}
+            {(isActive || state.status === 'completed' || state.status === 'approved') && (
+              <div className="mb-3">
+                <ProgressBar
+                  status={state.status}
+                  completedCount={completedSteps}
+                  totalCount={totalSteps}
+                  elapsedFormatted={elapsed.formatted}
+                />
+              </div>
+            )}
+
+            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400 flex-wrap">
               {state.startedAt && (
                 <span>
                   {t('workflows.startedAt', 'Started')}:{' '}
@@ -472,78 +562,118 @@ function WorkflowExecutionPage() {
                   {new Date(state.completedAt).toLocaleString(currentLanguage)}
                 </span>
               )}
+              {showTechnical && (
+                <span className="font-mono">
+                  {t('workflows.executionId', 'Execution')}: {state.executionId.slice(0, 16)}…
+                </span>
+              )}
             </div>
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2">
-            {isAdmin && state.workflowId && (
-              <Link
-                to={`/admin/workflows/${state.workflowId}/edit`}
-                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-              >
-                <Icon name="pencil" className="w-4 h-4" />
-                {t('workflows.editWorkflow', 'Edit Workflow')}
-              </Link>
-            )}
-            {isActive && (
-              <button
-                onClick={handleCancel}
-                className="px-4 py-2 text-red-600 border border-red-300 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2"
-              >
-                <Icon name="x-mark" className="w-4 h-4" />
-                {t('workflows.cancel', 'Cancel')}
-              </button>
-            )}
+          <div className="flex items-center gap-2 flex-wrap">
             {(state.status === 'completed' || state.status === 'approved') && (
               <button
                 onClick={() => setShowAppSelection(true)}
-                className="px-4 py-2 text-indigo-600 dark:text-indigo-400 bg-white dark:bg-gray-700 border border-indigo-300 dark:border-indigo-600 rounded-lg hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors flex items-center gap-2"
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors flex items-center gap-2 font-medium focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 title={t(
                   'workflows.chatWithResults.title',
                   'Continue chatting with the workflow output in an app'
                 )}
               >
-                <Icon name="chat-bubble-left-right" className="w-4 h-4" />
+                <Icon name="chat-bubble-left-right" className="w-4 h-4" aria-hidden="true" />
                 {t('workflows.chatWithResults.button', 'Chat with Results')}
               </button>
             )}
-            <button
-              onClick={handleExportState}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
-              title={t('workflows.exportState', 'Export execution state for debugging')}
-            >
-              <Icon name="arrow-down-tray" className="w-4 h-4" />
-              {t('workflows.export', 'Export')}
-            </button>
+            {isAdmin && state.workflowId && (
+              <Link
+                to={`/admin/workflows/${state.workflowId}/edit`}
+                className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                aria-label={t('workflows.editWorkflow', 'Edit Workflow')}
+              >
+                <Icon name="pencil" className="w-4 h-4" aria-hidden="true" />
+                {t('workflows.editWorkflow', 'Edit Workflow')}
+              </Link>
+            )}
             <button
               onClick={refetch}
-              className="px-4 py-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors flex items-center gap-2"
+              className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               title={t('common.refresh', 'Refresh')}
+              aria-label={t('common.refresh', 'Refresh')}
             >
-              <Icon name="arrow-path" className="w-4 h-4" />
-              {t('common.refresh', 'Refresh')}
+              <Icon name="arrow-path" className="w-4 h-4" aria-hidden="true" />
             </button>
+            {showTechnical && (
+              <button
+                onClick={handleExportState}
+                className="p-2 text-gray-600 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                title={t('workflows.exportState', 'Export execution state for debugging')}
+                aria-label={t('workflows.export', 'Export')}
+              >
+                <Icon name="download" className="w-4 h-4" aria-hidden="true" />
+              </button>
+            )}
+            {isActive && (
+              <button
+                onClick={handleCancelClick}
+                className="px-4 py-2 text-red-600 dark:text-red-400 border border-red-300 dark:border-red-700 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                aria-label={t('workflows.cancel', 'Cancel')}
+              >
+                <Icon name="x-mark" className="w-4 h-4" aria-hidden="true" />
+                {t('workflows.cancel', 'Cancel')}
+              </button>
+            )}
           </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end">
+          <TechnicalDetailsToggle />
         </div>
       </div>
 
-      {/* Main content grid */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        {/* Progress panel */}
-        <div>
-          <ExecutionProgress state={state} nodes={state.data?._workflowDefinition?.nodes || []} />
+      {/* Checkpoint takeover: when paused for input, the checkpoint is the page. */}
+      {hasCheckpoint && (
+        <div id="active-checkpoint" className="mb-6">
+          <HumanCheckpoint
+            checkpoint={state.pendingCheckpoint}
+            onRespond={respondToCheckpoint}
+            displayData={state.pendingCheckpoint?.displayData}
+          />
         </div>
+      )}
 
-        {/* Right panel - Checkpoint or status */}
-        <div>
-          {hasCheckpoint ? (
-            <HumanCheckpoint
-              checkpoint={state.pendingCheckpoint}
-              onRespond={respondToCheckpoint}
-              displayData={state.pendingCheckpoint?.displayData}
-            />
-          ) : (
+      {/* Main content grid */}
+      <div className={hasCheckpoint ? 'space-y-6' : 'grid gap-6 lg:grid-cols-2'}>
+        {/* Progress panel (collapsed under "So far" when checkpoint is pending) */}
+        {hasCheckpoint ? (
+          <details className="bg-white dark:bg-gray-800 rounded-lg shadow-md group" open={false}>
+            <summary className="cursor-pointer p-4 font-medium text-gray-700 dark:text-gray-200 flex items-center gap-2 list-none">
+              <Icon
+                name="chevron-down"
+                className="w-4 h-4 transition-transform group-open:rotate-180"
+                aria-hidden="true"
+              />
+              {t('workflows.sofar', 'So far')}
+              <span className="text-sm text-gray-400 dark:text-gray-500">
+                ({completedSteps} {completedSteps === 1 ? 'step' : 'steps'})
+              </span>
+            </summary>
+            <div className="border-t border-gray-100 dark:border-gray-700">
+              <ExecutionProgress
+                state={state}
+                nodes={state.data?._workflowDefinition?.nodes || []}
+              />
+            </div>
+          </details>
+        ) : (
+          <div>
+            <ExecutionProgress state={state} nodes={state.data?._workflowDefinition?.nodes || []} />
+          </div>
+        )}
+
+        {/* Right panel - Status (only shown when no checkpoint is pending) */}
+        {!hasCheckpoint && (
+          <div>
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6">
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                 {t('workflows.status', 'Status')}
@@ -620,7 +750,7 @@ function WorkflowExecutionPage() {
                           : `${state.data.executionMetrics.totalDuration}ms`}
                       </span>
                     </div>
-                    {state.data.executionMetrics.totalTokens?.total > 0 && (
+                    {showTechnical && state.data.executionMetrics.totalTokens?.total > 0 && (
                       <>
                         <div className="flex justify-between">
                           <span className="text-gray-500 dark:text-gray-400">
@@ -687,6 +817,34 @@ function WorkflowExecutionPage() {
                       {t('workflows.cancelledMessage', 'Workflow was cancelled')}
                     </span>
                   </div>
+                  {cancellationReason && (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      {t('workflows.cancelledReason', 'Reason')}:{' '}
+                      <span className="font-medium">
+                        {t(`workflows.cancelReason.${cancellationReason}`, cancellationReason)}
+                      </span>
+                    </p>
+                  )}
+                  {/* Resume button — engine refuses user_cancelled, so hide it then */}
+                  {cancellationReason !== 'user_cancelled' &&
+                    cancellationReason !== 'user_requested' && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={restarting}
+                          onClick={handleRestart}
+                          className="inline-flex items-center px-3 py-1.5 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:text-indigo-300 dark:border-indigo-700 dark:hover:bg-gray-700 disabled:opacity-50"
+                        >
+                          <Icon name="play" className="w-4 h-4 mr-1.5" />
+                          {restarting
+                            ? t('workflows.resuming', 'Resuming…')
+                            : t('workflows.resume', 'Resume from last step')}
+                        </button>
+                      </div>
+                    )}
+                  {restartError && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{restartError}</p>
+                  )}
                 </div>
               )}
 
@@ -694,7 +852,7 @@ function WorkflowExecutionPage() {
               {state.status === 'failed' && (
                 <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800">
                   <div className="flex items-center gap-2 text-red-700 dark:text-red-300">
-                    <Icon name="x-circle" className="w-5 h-5" />
+                    <Icon name="x-circle" className="w-5 h-5" aria-hidden="true" />
                     <span className="font-medium">
                       {t('workflows.failedMessage', 'Workflow failed')}
                     </span>
@@ -705,103 +863,166 @@ function WorkflowExecutionPage() {
                         state.errors[state.errors.length - 1]}
                     </p>
                   )}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Workflow Output - shown when workflow is finished */}
-        {(state.status === 'completed' ||
-          state.status === 'approved' ||
-          state.status === 'rejected') &&
-          workflowOutputKeys.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
-              {/* Output header with download-all button */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {t('workflows.output', 'Workflow Output')}
-                </h3>
-                <button
-                  onClick={() =>
-                    downloadAsFile(
-                      JSON.stringify(workflowOutput, null, 2),
-                      `workflow-output-${state.executionId.slice(0, 8)}.json`,
-                      'application/json'
-                    )
-                  }
-                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
-                  title={t('workflows.downloadAllJson', 'Download all output as JSON')}
-                >
-                  <Icon name="arrow-down-tray" className="w-4 h-4" />
-                  {t('workflows.downloadJson', 'Download JSON')}
-                </button>
-              </div>
-
-              {/* Primary output mode: show primary field prominently, rest in collapsible section */}
-              {hasPrimaryOutput ? (
-                <div className="space-y-6">
-                  {/* Primary output - always visible */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                        {primaryOutputKey.replace(/_/g, ' ')}
-                      </h4>
-                      {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
-                    </div>
-                    {renderValue(workflowOutput[primaryOutputKey])}
-                  </div>
-
-                  {/* Additional data - collapsible */}
-                  {additionalKeys.length > 0 && (
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                  {((state.currentNodes || []).length > 0 ||
+                    (state.failedNodes || []).length > 0) && (
+                    <div className="mt-3 flex items-center gap-2">
                       <button
-                        onClick={() => setAdditionalDataExpanded(prev => !prev)}
-                        className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                        type="button"
+                        disabled={restarting}
+                        onClick={handleRestart}
+                        className="inline-flex items-center px-3 py-1.5 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:text-indigo-300 dark:border-indigo-700 dark:hover:bg-gray-700 disabled:opacity-50"
                       >
-                        <div className="flex items-center gap-2">
-                          <Icon
-                            name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
-                            className="w-4 h-4 text-gray-400"
-                          />
-                          <span className="font-medium text-gray-600 dark:text-gray-400">
-                            {t('workflows.output.additionalData', 'Additional Data')}
-                          </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
-                            ({additionalKeys.length}{' '}
-                            {additionalKeys.length === 1
-                              ? t('workflows.output.field', 'field')
-                              : t('workflows.output.fields', 'fields')}
-                            )
-                          </span>
-                        </div>
+                        <Icon name="play" className="w-4 h-4 mr-1.5" />
+                        {restarting
+                          ? t('workflows.resuming', 'Resuming…')
+                          : t('workflows.resume', 'Resume from last step')}
                       </button>
-                      {additionalDataExpanded && (
-                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-                          {additionalKeys.map(key => (
-                            <div key={key}>
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                  {key.replace(/_/g, ' ')}
-                                </h4>
-                                {renderFieldActions(key, workflowOutput[key])}
-                              </div>
-                              {renderFieldContent(key, workflowOutput[key])}
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
+                  {restartError && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{restartError}</p>
+                  )}
                 </div>
-              ) : (
-                /* Accordion mode: each field in its own collapsible panel */
-                <div className="space-y-2">
-                  {workflowOutputKeys.map(key => renderAccordionPanel(key))}
+              )}
+
+              {/* Model used */}
+              {(startedWithModel || workflowDefaultModel) && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {t('workflows.modelUsed', 'Model')}
+                  </h4>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                      <Icon name="cpu-chip" className="w-3 h-3 mr-1" />
+                      {startedWithModel || workflowDefaultModel}
+                    </span>
+                    {!startedWithModel && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        ({t('workflows.workflowDefault', 'workflow default')})
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
-          )}
+
+            {/* Start inputs panel */}
+            {startInputs.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  {t('workflows.startInputs', 'Inputs')}
+                </h3>
+                <dl className="space-y-3">
+                  {startInputs.map(input => (
+                    <div key={input.name}>
+                      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        {input.label
+                          ? getLocalizedContent(input.label, currentLanguage) || input.name
+                          : input.name}
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">
+                        {typeof input.value === 'string'
+                          ? input.value
+                          : JSON.stringify(input.value, null, 2)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Workflow Output - shown when workflow is finished, or when cancelled but partial output exists */}
+        {showOutput && workflowOutputKeys.length > 0 && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
+            {/* Output header with download-all button */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {state.status === 'cancelled'
+                  ? t('workflows.partialOutput', 'Partial Output (before cancellation)')
+                  : t('workflows.output', 'Workflow Output')}
+              </h3>
+              <button
+                onClick={() =>
+                  downloadAsFile(
+                    JSON.stringify(workflowOutput, null, 2),
+                    `${workflowSlug}-${shortExecId}-output.json`,
+                    'application/json'
+                  )
+                }
+                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
+                title={t('workflows.downloadAllJson', 'Download all output as JSON')}
+              >
+                <Icon name="download" className="w-4 h-4" />
+                {t('workflows.downloadJson', 'Download JSON')}
+              </button>
+            </div>
+
+            {/* Primary output mode: show primary field prominently, rest in collapsible section */}
+            {hasPrimaryOutput ? (
+              <div className="space-y-6">
+                {/* Primary output - always visible */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
+                      {primaryOutputKey.replace(/_/g, ' ')}
+                    </h4>
+                    {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
+                  </div>
+                  {renderValue(workflowOutput[primaryOutputKey])}
+                </div>
+
+                {/* Additional data - collapsible */}
+                {additionalKeys.length > 0 && (
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setAdditionalDataExpanded(prev => !prev)}
+                      className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon
+                          name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
+                          className="w-4 h-4 text-gray-400"
+                        />
+                        <span className="font-medium text-gray-600 dark:text-gray-400">
+                          {t('workflows.output.additionalData', 'Additional Data')}
+                        </span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          ({additionalKeys.length}{' '}
+                          {additionalKeys.length === 1
+                            ? t('workflows.output.field', 'field')
+                            : t('workflows.output.fields', 'fields')}
+                          )
+                        </span>
+                      </div>
+                    </button>
+                    {additionalDataExpanded && (
+                      <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                        {additionalKeys.map(key => (
+                          <div key={key}>
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
+                                {key.replace(/_/g, ' ')}
+                              </h4>
+                              {renderFieldActions(key, workflowOutput[key])}
+                            </div>
+                            {renderFieldContent(key, workflowOutput[key])}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Accordion mode: each field in its own collapsible panel */
+              <div className="space-y-2">
+                {workflowOutputKeys.map(key => renderAccordionPanel(key))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* App selection modal for "Chat with Results" */}
@@ -809,6 +1030,21 @@ function WorkflowExecutionPage() {
         isOpen={showAppSelection}
         onClose={() => setShowAppSelection(false)}
         onSelect={handleStartChatWithResults}
+      />
+
+      {/* Confirm dialog for cancelling the workflow */}
+      <ConfirmDialog
+        isOpen={showCancelConfirm}
+        title={t('workflows.confirmCancel.title', 'Cancel this workflow?')}
+        message={t(
+          'workflows.confirmCancel.message',
+          "The workflow will stop running. You can't resume it after cancelling."
+        )}
+        confirmLabel={t('workflows.confirmCancel.confirm', 'Yes, cancel')}
+        denyLabel={t('workflows.confirmCancel.deny', 'Keep running')}
+        danger
+        onConfirm={handleCancelConfirm}
+        onDeny={() => setShowCancelConfirm(false)}
       />
     </div>
   );

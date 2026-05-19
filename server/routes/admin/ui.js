@@ -183,42 +183,47 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Delete asset
    */
-  app.delete(buildServerPath('/api/admin/ui/assets/:id'), authRequired, adminAuth, (req, res) => {
-    try {
-      const { id } = req.params;
-      const assetsDir = join(getRootDir(), 'contents/uploads/assets');
+  app.delete(
+    buildServerPath('/api/admin/ui/assets/:id'),
+    authRequired,
+    adminAuth,
+    async (req, res) => {
+      try {
+        const { id } = req.params;
+        const assetsDir = join(getRootDir(), 'contents/uploads/assets');
 
-      // Validate path stays within assets directory (prevents traversal)
-      const filepath = resolveAndValidatePath(id, assetsDir);
-      if (!filepath) {
-        return res.status(400).json({
+        // Validate path stays within assets directory (prevents traversal)
+        const filepath = await resolveAndValidatePath(id, assetsDir);
+        if (!filepath) {
+          return res.status(400).json({
+            success: false,
+            message: 'Invalid asset id'
+          });
+        }
+
+        if (!fs.existsSync(filepath)) {
+          return res.status(404).json({
+            success: false,
+            message: 'Asset not found'
+          });
+        }
+
+        fs.unlinkSync(filepath);
+
+        res.json({
+          success: true,
+          message: 'Asset deleted successfully'
+        });
+      } catch (error) {
+        logger.error('Error deleting asset', { component: 'AdminUI', error });
+        res.status(500).json({
           success: false,
-          message: 'Invalid asset id'
+          message: 'Failed to delete asset',
+          error: error.message
         });
       }
-
-      if (!fs.existsSync(filepath)) {
-        return res.status(404).json({
-          success: false,
-          message: 'Asset not found'
-        });
-      }
-
-      fs.unlinkSync(filepath);
-
-      res.json({
-        success: true,
-        message: 'Asset deleted successfully'
-      });
-    } catch (error) {
-      logger.error('Error deleting asset', { component: 'AdminUI', error });
-      res.status(500).json({
-        success: false,
-        message: 'Failed to delete asset',
-        error: error.message
-      });
     }
-  });
+  );
 
   /**
    * Get UI configuration

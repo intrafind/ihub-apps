@@ -103,7 +103,7 @@ function extractZip(zipPath, extractPath) {
         // Extract the relative path within contents/
         const relativePath = contentsMatch[1];
         const contentsBase = path.join(extractPath, 'contents');
-        const entryPath = resolveAndValidatePath(relativePath, contentsBase);
+        const entryPath = await resolveAndValidatePath(relativePath, contentsBase);
 
         // Prevent ZIP slip: skip entries that would escape the extract directory
         if (!entryPath) {

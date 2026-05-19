@@ -41,7 +41,7 @@ async function safeExtractZip(zipBuffer, targetDir) {
 
   for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
     const normalised = path.normalize(relativePath).replace(/\\/g, '/');
-    const destPath = resolveAndValidatePath(normalised, targetDir);
+    const destPath = await resolveAndValidatePath(normalised, targetDir);
     if (!destPath) {
       throw new Error(`Zip path escapes target directory: ${relativePath}`);
     }
@@ -142,7 +142,7 @@ export default function registerAdminSkillsRoutes(app) {
         if (!validateIdForPath(req.params.name, 'skill', res)) return;
 
         const skillsDir = getSkillsDirectory();
-        const skillPathResolved = resolveAndValidatePath(req.params.name, skillsDir);
+        const skillPathResolved = await resolveAndValidatePath(req.params.name, skillsDir);
         if (!skillPathResolved) {
           logger.warn('Path traversal attempt blocked when deleting skill', {
             component: 'AdminSkills',
@@ -187,7 +187,7 @@ export default function registerAdminSkillsRoutes(app) {
         }
 
         const skillsRoot = getSkillsDirectory();
-        const resolvedSkillPath = resolveAndValidatePath(skillName, skillsRoot);
+        const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsRoot);
         if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
           logger.warn('Skill directory validation blocked for invalid path', {
             component: 'AdminSkills',
@@ -217,7 +217,7 @@ export default function registerAdminSkillsRoutes(app) {
         if (!validateIdForPath(skillName, 'skill', res)) return;
 
         const skillsRoot = getSkillsDirectory();
-        const resolvedSkillPath = resolveAndValidatePath(skillName, skillsRoot);
+        const resolvedSkillPath = await resolveAndValidatePath(skillName, skillsRoot);
         if (!resolvedSkillPath || path.basename(resolvedSkillPath) !== skillName) {
           logger.warn('Skill export blocked for invalid path', {
             component: 'AdminSkills',

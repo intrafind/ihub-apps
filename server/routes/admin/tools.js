@@ -238,23 +238,12 @@ export default function registerAdminToolsRoutes(app) {
         }
       }
 
-      // Append workflow tools that have chatIntegration enabled
-      const { data: workflows } = configCache.getWorkflows();
-      const workflowTools = workflows
-        .filter(wf => wf.chatIntegration?.enabled)
-        .map(wf => ({
-          id: `workflow:${wf.id}`,
-          name: wf.chatIntegration?.toolDescription || wf.name,
-          description: wf.chatIntegration?.toolDescription || wf.description,
-          isWorkflowTool: true,
-          workflowId: wf.id
-        }));
-
-      const allTools = [...tools, ...workflowTools];
+      // Workflows are managed as a dedicated app.workflows array (first-class
+      // citizens), so they are intentionally NOT mixed into the tools list.
 
       // Generate ETag for caching using MD5 hash (same as configCache)
       const hash = createHash('md5');
-      hash.update(JSON.stringify(allTools));
+      hash.update(JSON.stringify(tools));
       const etag = `"${hash.digest('hex')}"`;
 
       if (etag) {
@@ -264,7 +253,7 @@ export default function registerAdminToolsRoutes(app) {
           return res.status(304).end();
         }
       }
-      res.json(allTools);
+      res.json(tools);
     } catch (error) {
       return sendInternalError(res, error, 'fetch tools');
     }
