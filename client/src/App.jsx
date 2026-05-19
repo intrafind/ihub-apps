@@ -52,6 +52,7 @@ const AdminWorkflowsPage = lazyWithRetry(() => import('./features/admin/pages/Ad
 const AdminWorkflowEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowEditPage')
 );
+const WorkflowEditorPage = lazyWithRetry(() => import('./features/admin/pages/WorkflowEditorPage'));
 const AdminWorkflowExecutionsPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowExecutionsPage')
 );
@@ -461,6 +462,12 @@ function App() {
             <Route
               path="admin/workflows/:id"
               element={<LazyAdminRoute component={AdminWorkflowEditPage} />}
+            />
+          )}
+          {showAdminPage('workflows') && (
+            <Route
+              path="admin/workflows/:id/edit"
+              element={<LazyAdminRoute component={WorkflowEditorPage} />}
             />
           )}
           {showAdminPage('sources') && (

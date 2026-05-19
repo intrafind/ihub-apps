@@ -96,7 +96,10 @@ function useWorkflowExecution(executionId) {
       'workflow.complete',
       'workflow.failed',
       'workflow.cancelled',
-      'workflow.checkpoint.saved'
+      'workflow.checkpoint.saved',
+      'workflow.plan.created',
+      'workflow.subworkflow.start',
+      'workflow.subworkflow.complete'
     ];
 
     const handleEvent = event => {
@@ -261,7 +264,50 @@ function useWorkflowExecution(executionId) {
 
         case 'workflow.checkpoint.saved':
           // Checkpoint saved - this is informational, no state update needed
-          // Could be used to show a toast notification in the future
+          break;
+
+        case 'workflow.plan.created':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              planCreated: data.plan
+            }
+          }));
+          break;
+
+        case 'workflow.subworkflow.start':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              subworkflows: {
+                ...prev?.data?.subworkflows,
+                [data.executionId]: {
+                  status: 'running',
+                  depth: data.depth,
+                  taskCount: data.taskCount
+                }
+              }
+            }
+          }));
+          break;
+
+        case 'workflow.subworkflow.complete':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              subworkflows: {
+                ...prev?.data?.subworkflows,
+                [data.executionId]: {
+                  ...prev?.data?.subworkflows?.[data.executionId],
+                  status: 'completed',
+                  completedAt: new Date().toISOString()
+                }
+              }
+            }
+          }));
           break;
 
         default:
