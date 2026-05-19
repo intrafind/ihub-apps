@@ -103,7 +103,10 @@ function WorkflowEditorPage() {
             if (!VALID_ID_PATTERN.test(newId) || newId.includes('..')) {
               showToast(
                 'error',
-                t('workflows.editor.promptIdHint', 'Use only letters, numbers, dots, underscores, and hyphens.')
+                t(
+                  'workflows.editor.promptIdHint',
+                  'Use only letters, numbers, dots, underscores, and hyphens.'
+                )
               );
               setSaving(false);
               return;
@@ -138,7 +141,10 @@ function WorkflowEditorPage() {
       await handleSave(rfNodes, rfEdges);
       try {
         await apiClient.post(`/workflows/${workflow?.id || id}/publish`);
-        showToast('success', t('workflows.editor.publishSuccess', 'Workflow published successfully'));
+        showToast(
+          'success',
+          t('workflows.editor.publishSuccess', 'Workflow published successfully')
+        );
       } catch (err) {
         showToast(
           'error',
@@ -200,9 +206,7 @@ function WorkflowEditorPage() {
           )}
         </div>
         {saving && (
-          <span className="text-sm text-gray-500">
-            {t('workflows.editor.saving', 'Saving...')}
-          </span>
+          <span className="text-sm text-gray-500">{t('workflows.editor.saving', 'Saving...')}</span>
         )}
       </div>
 
@@ -217,9 +221,7 @@ function WorkflowEditorPage() {
           <div
             role="status"
             className={`absolute bottom-4 right-4 px-4 py-2 rounded shadow-lg text-sm ${
-              toast.kind === 'success'
-                ? 'bg-green-600 text-white'
-                : 'bg-red-600 text-white'
+              toast.kind === 'success' ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
             }`}
           >
             {toast.message}

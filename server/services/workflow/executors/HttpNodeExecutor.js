@@ -124,10 +124,7 @@ async function assertPublicTarget(parsedUrl) {
   // have both records).
   let addrs = [];
   try {
-    const [v4, v6] = await Promise.allSettled([
-      dns.resolve4(host),
-      dns.resolve6(host)
-    ]);
+    const [v4, v6] = await Promise.allSettled([dns.resolve4(host), dns.resolve6(host)]);
     if (v4.status === 'fulfilled') addrs.push(...v4.value);
     if (v6.status === 'fulfilled') addrs.push(...v6.value);
   } catch (err) {
