@@ -310,13 +310,7 @@ const workflowGlobalConfigSchema = z
      * agentic workflows (multi-step research, large doc analysis) routinely
      * exceed the old 10-minute cap.
      */
-    maxExecutionTime: z
-      .number()
-      .int()
-      .min(1000)
-      .max(3600000)
-      .optional()
-      .default(300000),
+    maxExecutionTime: z.number().int().min(1000).max(3600000).optional().default(300000),
 
     /**
      * Maximum number of nodes allowed in this workflow

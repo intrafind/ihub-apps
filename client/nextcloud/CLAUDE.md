@@ -5,7 +5,8 @@
 
 ### May 11, 2026
 
-| ID | Time | T | Title | Read |
-|----|------|---|-------|------|
-| #421 | 10:19 PM | 🔵 | Nextcloud embed OAuth not triggering despite successful page load | ~211 |
+| ID   | Time     | T   | Title                                                             | Read |
+| ---- | -------- | --- | ----------------------------------------------------------------- | ---- |
+| #421 | 10:19 PM | 🔵  | Nextcloud embed OAuth not triggering despite successful page load | ~211 |
+
 </claude-mem-context>
