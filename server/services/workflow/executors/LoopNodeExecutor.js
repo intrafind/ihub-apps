@@ -32,7 +32,7 @@ import logger from '../../../utils/logger.js';
  *   config: {
  *     mode: 'for',
  *     count: 5,
- *     body: [{ id: 'inner-agent', type: 'agent', config: { ... } }],
+ *     body: [{ id: 'inner-step', type: 'prompt', config: { ... } }],
  *     outputVariable: 'loopResults'
  *   }
  * }
@@ -59,7 +59,7 @@ import logger from '../../../utils/logger.js';
  *     mode: 'while',
  *     condition: 'data.retryCount < 3',
  *     maxIterations: 10,
- *     body: [{ id: 'retry-step', type: 'agent', config: { ... } }]
+ *     body: [{ id: 'retry-step', type: 'prompt', config: { ... } }]
  *   }
  * }
  */

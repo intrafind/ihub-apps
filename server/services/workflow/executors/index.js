@@ -6,7 +6,7 @@
  *
  * - StartNodeExecutor: Entry point that initializes workflow state
  * - EndNodeExecutor: Exit point that collects final output
- * - AgentNodeExecutor: LLM agent with optional tool access
+ * - PromptNodeExecutor: LLM prompt step with optional tool access
  * - ToolNodeExecutor: Direct tool invocation without LLM
  * - DecisionNodeExecutor: Conditional branching logic
  *
@@ -16,20 +16,20 @@
  * @module services/workflow/executors
  *
  * @example
- * import { getExecutor, AgentNodeExecutor } from './executors/index.js';
+ * import { getExecutor, PromptNodeExecutor } from './executors/index.js';
  *
  * // Using factory function
- * const executor = getExecutor('agent');
+ * const executor = getExecutor('prompt');
  * const result = await executor.execute(node, state, context);
  *
  * // Direct instantiation
- * const agentExecutor = new AgentNodeExecutor({ maxIterations: 5 });
+ * const promptExecutor = new PromptNodeExecutor({ maxIterations: 5 });
  */
 
 export { BaseNodeExecutor } from './BaseNodeExecutor.js';
 export { StartNodeExecutor } from './StartNodeExecutor.js';
 export { EndNodeExecutor } from './EndNodeExecutor.js';
-export { AgentNodeExecutor } from './AgentNodeExecutor.js';
+export { PromptNodeExecutor } from './PromptNodeExecutor.js';
 export { ToolNodeExecutor } from './ToolNodeExecutor.js';
 export { DecisionNodeExecutor } from './DecisionNodeExecutor.js';
 export { HumanNodeExecutor } from './HumanNodeExecutor.js';
@@ -45,7 +45,7 @@ export { CodeNodeExecutor } from './CodeNodeExecutor.js';
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
 import { EndNodeExecutor } from './EndNodeExecutor.js';
-import { AgentNodeExecutor } from './AgentNodeExecutor.js';
+import { PromptNodeExecutor } from './PromptNodeExecutor.js';
 import { ToolNodeExecutor } from './ToolNodeExecutor.js';
 import { DecisionNodeExecutor } from './DecisionNodeExecutor.js';
 import { HumanNodeExecutor } from './HumanNodeExecutor.js';
@@ -65,7 +65,7 @@ import { CodeNodeExecutor } from './CodeNodeExecutor.js';
 const executorRegistry = {
   start: StartNodeExecutor,
   end: EndNodeExecutor,
-  agent: AgentNodeExecutor,
+  prompt: PromptNodeExecutor,
   tool: ToolNodeExecutor,
   decision: DecisionNodeExecutor,
   human: HumanNodeExecutor,
@@ -92,7 +92,7 @@ const executorCache = new Map();
  * This factory function returns the appropriate executor for the specified
  * node type. Executors are cached for performance since they are stateless.
  *
- * @param {string} nodeType - The type of node ('start', 'end', 'agent', 'tool', 'decision')
+ * @param {string} nodeType - The type of node ('start', 'end', 'prompt', 'tool', 'decision')
  * @param {Object} [options] - Optional configuration for the executor
  * @param {boolean} [options.fresh=false] - If true, create a new instance instead of using cache
  * @returns {BaseNodeExecutor} Executor instance for the node type
@@ -100,11 +100,11 @@ const executorCache = new Map();
  *
  * @example
  * // Get cached executor (default)
- * const executor = getExecutor('agent');
+ * const executor = getExecutor('prompt');
  *
  * @example
  * // Get fresh executor instance with custom options
- * const executor = getExecutor('agent', {
+ * const executor = getExecutor('prompt', {
  *   fresh: true,
  *   maxIterations: 20
  * });
@@ -179,7 +179,7 @@ export function registerExecutor(nodeType, ExecutorClass) {
  *
  * @example
  * const types = getRegisteredTypes();
- * // ['start', 'end', 'agent', 'tool', 'decision']
+ * // ['start', 'end', 'prompt', 'tool', 'decision']
  */
 export function getRegisteredTypes() {
   return Object.keys(executorRegistry);

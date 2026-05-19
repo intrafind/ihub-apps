@@ -46,7 +46,7 @@ export class SubWorkflowMaterializer {
 
     const taskNodes = plan.tasks.map((task, index) => ({
       id: task.id || `task-${index}`,
-      type: 'agent',
+      type: 'prompt',
       name: { en: task.title || `Task ${index + 1}` },
       position: { x: 0, y: (index + 1) * 100 },
       config: {
@@ -64,7 +64,7 @@ export class SubWorkflowMaterializer {
       const synthId = 'synthesizer';
       nodes.push({
         id: synthId,
-        type: 'agent',
+        type: 'prompt',
         name: { en: 'Synthesizer' },
         position: { x: 0, y: (taskNodes.length + 1) * 100 },
         config: {

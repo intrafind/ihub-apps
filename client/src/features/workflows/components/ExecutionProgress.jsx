@@ -35,7 +35,10 @@ function NodeStatus({ status }) {
     running: { icon: 'arrow-path', color: 'text-blue-600', bg: 'bg-blue-100', animate: true },
     completed: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-100' },
     failed: { icon: 'x-circle', color: 'text-red-600', bg: 'bg-red-100' },
-    paused: { icon: 'pause-circle', color: 'text-yellow-600', bg: 'bg-yellow-100' }
+    paused: { icon: 'pause-circle', color: 'text-yellow-600', bg: 'bg-yellow-100' },
+    cancelled: { icon: 'stop-circle', color: 'text-gray-600', bg: 'bg-gray-200' },
+    rejected: { icon: 'stop-circle', color: 'text-orange-600', bg: 'bg-orange-100' },
+    approved: { icon: 'check-circle', color: 'text-green-600', bg: 'bg-green-100' }
   };
 
   const c = config[status] || config.pending;
@@ -196,10 +199,25 @@ function ExecutionProgress({ state, nodes = [] }) {
       statuses.set(nodeId, 'failed');
     });
 
-    // Mark current nodes
+    // Mark current nodes. When the workflow itself has reached a terminal state
+    // (cancelled / failed / completed), the lingering currentNodes entries are
+    // nodes that never got to run, not nodes still executing — so don't render
+    // them as "running" (issue: end node showed "Currently executing..." forever
+    // after a timeout cancellation).
+    const terminalStatuses = new Set(['cancelled', 'failed', 'completed', 'approved', 'rejected']);
+    const isTerminal = terminalStatuses.has(state?.status);
     (state?.currentNodes || []).forEach(nodeId => {
       if (!statuses.has(nodeId)) {
-        statuses.set(nodeId, state?.status === 'paused' ? 'paused' : 'running');
+        let nodeStatus;
+        if (state?.status === 'paused') {
+          nodeStatus = 'paused';
+        } else if (isTerminal) {
+          // Map to a per-node status that matches the workflow's terminal state
+          nodeStatus = state.status === 'completed' ? 'completed' : state.status;
+        } else {
+          nodeStatus = 'running';
+        }
+        statuses.set(nodeId, nodeStatus);
       }
     });
 
@@ -268,8 +286,8 @@ function ExecutionProgress({ state, nodes = [] }) {
           const branch = result.output?.branch;
           insight = branch ? `Decision: took "${branch}" branch` : 'Decision evaluated';
         }
-        // For agent nodes, show what variable was set
-        else if (nodeInfo.type === 'agent') {
+        // For prompt nodes, show what variable was set
+        else if (nodeInfo.type === 'prompt') {
           outputVariable = result.outputVariable;
           outputValue = result.output;
           if (outputVariable) {
@@ -323,16 +341,27 @@ function ExecutionProgress({ state, nodes = [] }) {
     });
 
     // Add current nodes that aren't in history yet (for currently executing nodes)
+    const isWorkflowTerminal = ['cancelled', 'failed', 'completed', 'approved', 'rejected'].includes(
+      state?.status
+    );
     (state?.currentNodes || []).forEach(nodeId => {
       if (!seenCurrentNodes.has(nodeId)) {
         const nodeInfo = nodeMap.get(nodeId) || { name: nodeId, type: 'unknown' };
+        const resolvedStatus = nodeStatuses.get(nodeId) || (isWorkflowTerminal ? state.status : 'running');
+        const insight = isWorkflowTerminal
+          ? state?.status === 'cancelled'
+            ? 'Did not run (workflow cancelled)'
+            : state?.status === 'failed'
+              ? 'Did not run (workflow failed)'
+              : null
+          : 'Currently executing...';
         items.push({
           nodeId,
           historyIndex: `current-${nodeId}`,
           name: nodeInfo.name,
           type: nodeInfo.type,
-          status: nodeStatuses.get(nodeId) || 'running',
-          insight: 'Currently executing...'
+          status: resolvedStatus,
+          insight
         });
       }
     });
@@ -347,7 +376,7 @@ function ExecutionProgress({ state, nodes = [] }) {
         return 'play-circle';
       case 'end':
         return 'stop-circle';
-      case 'agent':
+      case 'prompt':
         return 'cpu-chip';
       case 'tool':
         return 'wrench';
@@ -482,7 +511,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                                 <span className="text-xs bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400 px-2 py-0.5 rounded">
                                   #{item.iteration}
                                 </span>
-                                {showTechnical && item.type === 'agent' && item.model && (
+                                {showTechnical && item.type === 'prompt' && item.model && (
                                   <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
                                     {item.model}
                                   </span>
@@ -570,7 +599,7 @@ function ExecutionProgress({ state, nodes = [] }) {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Icon name={getTypeIcon(item.type)} className="w-4 h-4 text-gray-400" />
                     <span className="font-medium text-gray-900 dark:text-white">{item.name}</span>
-                    {showTechnical && item.type === 'agent' && item.model && (
+                    {showTechnical && item.type === 'prompt' && item.model && (
                       <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/50 dark:text-purple-300 px-2 py-0.5 rounded">
                         {item.model}
                       </span>

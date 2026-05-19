@@ -59,10 +59,10 @@ function WorkflowCard({ workflow, onStart }) {
 
         {showTechnical && (
           <div className="flex flex-wrap gap-1.5 mb-4">
-            {nodeTypes.agent > 0 && (
+            {nodeTypes.prompt > 0 && (
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-200">
                 <Icon name="cpu" className="w-3 h-3 mr-1" aria-hidden="true" />
-                {nodeTypes.agent} agent{nodeTypes.agent > 1 ? 's' : ''}
+                {nodeTypes.prompt} prompt{nodeTypes.prompt > 1 ? 's' : ''}
               </span>
             )}
             {nodeTypes.tool > 0 && (

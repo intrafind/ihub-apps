@@ -54,7 +54,7 @@
     },
     {
       "id": "thinker",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Research Strategist",
         "de": "Recherche-Stratege"
@@ -111,7 +111,7 @@
     },
     {
       "id": "researcher",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Web Researcher",
         "de": "Web-Rechercheur"
@@ -172,7 +172,7 @@
     },
     {
       "id": "report-generator",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Report Generator",
         "de": "Bericht-Generator"

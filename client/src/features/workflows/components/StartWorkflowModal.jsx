@@ -174,10 +174,10 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
     return startNode?.config?.inputVariables || [];
   }, [workflow]);
 
-  // Check if workflow has agent nodes (needs model selection)
+  // Check if workflow has prompt nodes (needs model selection)
   const hasAgentNodes = useMemo(() => {
     if (!workflow?.nodes) return false;
-    return workflow.nodes.some(n => n.type === 'agent');
+    return workflow.nodes.some(n => n.type === 'prompt');
   }, [workflow]);
 
   // Get allowed models from workflow config or use all available

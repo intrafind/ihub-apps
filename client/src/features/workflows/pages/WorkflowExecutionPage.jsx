@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../../../shared/contexts/AuthContext';
@@ -6,6 +6,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import { resetChatId } from '../../../utils/chatId';
 import { buildApiUrl } from '../../../utils/runtimeBasePath';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
+import { configureMarked } from '../../../shared/components/MarkdownRenderer';
 import {
   useWorkflowExecution,
   useElapsedTime,
@@ -23,6 +24,7 @@ import {
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import Icon from '../../../shared/components/Icon';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import { apiClient } from '../../../api/client';
 import { getDisplayableOutput } from '../utils/filterInternalFields';
 
 /**
@@ -51,13 +53,19 @@ const renderValue = value => {
       const html = markdownToHtml(value);
       return (
         <div
-          className="prose dark:prose-invert max-w-none prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-a:text-indigo-600 dark:prose-a:text-indigo-400 prose-code:bg-gray-100 dark:prose-code:bg-gray-800 prose-pre:bg-gray-50 dark:prose-pre:bg-gray-900"
+          className="prose dark:prose-invert max-w-none prose-headings:text-gray-900 dark:prose-headings:text-white prose-p:text-gray-700 dark:prose-p:text-gray-300 prose-a:text-indigo-600 dark:prose-a:text-indigo-400"
           dangerouslySetInnerHTML={{ __html: html }}
         />
       );
     }
-    // Plain text - just show with whitespace preserved
-    return <div className="prose dark:prose-invert max-w-none whitespace-pre-wrap">{value}</div>;
+    // Plain text — render in a monospaced <pre> so ASCII art / box-drawing
+    // characters stay aligned (LLMs don't always wrap them in code fences).
+    // overflow-x-auto so very wide rows scroll instead of wrapping.
+    return (
+      <pre className="text-sm font-mono whitespace-pre bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 p-3 rounded overflow-x-auto">
+        {value}
+      </pre>
+    );
   }
   if (typeof value === 'object') {
     return (
@@ -83,6 +91,14 @@ function WorkflowExecutionPage() {
   const navigate = useNavigate();
   const { t, i18n } = useTranslation();
   const currentLanguage = i18n.language;
+
+  // Install the same code-block renderer the chat uses. Without this, fenced
+  // code blocks (e.g. ASCII art reports) get marked's default <pre><code>,
+  // which renders correctly in chat (chat configures its renderer on mount)
+  // but loses the explicit monospace/overflow-x-auto styling here.
+  useEffect(() => {
+    configureMarked(t);
+  }, [t]);
   const [showAppSelection, setShowAppSelection] = useState(false);
   /** @type {[Set<string>, Function]} Tracks which output accordion panels are expanded */
   const [expandedOutputFields, setExpandedOutputFields] = useState(new Set());
@@ -97,9 +113,29 @@ function WorkflowExecutionPage() {
   const isAdmin = user?.permissions?.adminAccess === true;
   const [showTechnical] = useTechnicalDetailsToggle();
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+  const [restarting, setRestarting] = useState(false);
+  const [restartError, setRestartError] = useState(null);
 
   const { state, loading, connected, error, respondToCheckpoint, cancelExecution, refetch } =
     useWorkflowExecution(executionId);
+
+  const handleRestart = async () => {
+    setRestartError(null);
+    setRestarting(true);
+    try {
+      await apiClient.post(`/workflows/executions/${executionId}/restart`);
+      await refetch();
+    } catch (err) {
+      const msg =
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Failed to restart workflow';
+      setRestartError(msg);
+    } finally {
+      setRestarting(false);
+    }
+  };
 
   const elapsed = useElapsedTime(state?.startedAt, state?.completedAt);
 
@@ -314,6 +350,35 @@ function WorkflowExecutionPage() {
     ? workflowOutputKeys.filter(k => k !== primaryOutputKey)
     : workflowOutputKeys;
 
+  // Start inputs: take user-provided values that were passed to the start node
+  // (filtered to exclude both internal underscore keys and downstream outputs).
+  const startInputVariables =
+    state.data?._workflowDefinition?.nodes?.find(n => n.type === 'start')?.config
+      ?.inputVariables || [];
+  const startInputs = startInputVariables
+    .map(v => {
+      const value = state.data?.[v.name];
+      if (value === undefined || value === null || value === '') return null;
+      return { name: v.name, label: v.label, type: v.type, value };
+    })
+    .filter(Boolean);
+
+  // Workflow-level model the user selected when starting (kept as a runtime override)
+  const startedWithModel = state.data?._modelOverride;
+  const workflowDefaultModel = state.data?._workflowDefinition?.config?.defaultModelId;
+
+  // Cancellation reason — engine records it as a workflow_cancelled history event
+  const cancellationReason = (state.history || []).find(h => h.type === 'workflow_cancelled')
+    ?.data?.reason;
+
+  // Show output even when cancelled if any prompt steps produced results — users
+  // want to see what was generated before timeout/cancellation.
+  const showOutput =
+    state.status === 'completed' ||
+    state.status === 'approved' ||
+    state.status === 'rejected' ||
+    (state.status === 'cancelled' && workflowOutputKeys.length > 0);
+
   const renderFieldActions = (key, value) => (
     <div className="flex items-center gap-1.5">
       <button
@@ -340,7 +405,7 @@ function WorkflowExecutionPage() {
             }}
             className="px-2 py-1 text-xs bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded hover:bg-indigo-200 dark:hover:bg-indigo-900/50 transition-colors flex items-center gap-1"
           >
-            <Icon name="arrow-down-tray" className="w-3 h-3" />
+            <Icon name="download" className="w-3 h-3" />
             {t('workflows.download', 'Download')}
           </button>
         )}
@@ -540,7 +605,7 @@ function WorkflowExecutionPage() {
                 title={t('workflows.exportState', 'Export execution state for debugging')}
                 aria-label={t('workflows.export', 'Export')}
               >
-                <Icon name="arrow-down-tray" className="w-4 h-4" aria-hidden="true" />
+                <Icon name="download" className="w-4 h-4" aria-hidden="true" />
               </button>
             )}
             {isActive && (
@@ -747,6 +812,37 @@ function WorkflowExecutionPage() {
                       {t('workflows.cancelledMessage', 'Workflow was cancelled')}
                     </span>
                   </div>
+                  {cancellationReason && (
+                    <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                      {t('workflows.cancelledReason', 'Reason')}:{' '}
+                      <span className="font-medium">
+                        {t(
+                          `workflows.cancelReason.${cancellationReason}`,
+                          cancellationReason
+                        )}
+                      </span>
+                    </p>
+                  )}
+                  {/* Resume button — engine refuses user_cancelled, so hide it then */}
+                  {cancellationReason !== 'user_cancelled' &&
+                    cancellationReason !== 'user_requested' && (
+                      <div className="mt-3 flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={restarting}
+                          onClick={handleRestart}
+                          className="inline-flex items-center px-3 py-1.5 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:text-indigo-300 dark:border-indigo-700 dark:hover:bg-gray-700 disabled:opacity-50"
+                        >
+                          <Icon name="play" className="w-4 h-4 mr-1.5" />
+                          {restarting
+                            ? t('workflows.resuming', 'Resuming…')
+                            : t('workflows.resume', 'Resume from last step')}
+                        </button>
+                      </div>
+                    )}
+                  {restartError && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{restartError}</p>
+                  )}
                 </div>
               )}
 
@@ -765,22 +861,85 @@ function WorkflowExecutionPage() {
                         state.errors[state.errors.length - 1]}
                     </p>
                   )}
+                  {((state.currentNodes || []).length > 0 ||
+                    (state.failedNodes || []).length > 0) && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={restarting}
+                        onClick={handleRestart}
+                        className="inline-flex items-center px-3 py-1.5 border border-indigo-300 rounded-md text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 dark:bg-gray-800 dark:text-indigo-300 dark:border-indigo-700 dark:hover:bg-gray-700 disabled:opacity-50"
+                      >
+                        <Icon name="play" className="w-4 h-4 mr-1.5" />
+                        {restarting
+                          ? t('workflows.resuming', 'Resuming…')
+                          : t('workflows.resume', 'Resume from last step')}
+                      </button>
+                    </div>
+                  )}
+                  {restartError && (
+                    <p className="mt-2 text-sm text-red-600 dark:text-red-400">{restartError}</p>
+                  )}
+                </div>
+              )}
+
+              {/* Model used */}
+              {(startedWithModel || workflowDefaultModel) && (
+                <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    {t('workflows.modelUsed', 'Model')}
+                  </h4>
+                  <div className="flex items-center gap-2 text-sm">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-700 dark:bg-purple-900/40 dark:text-purple-300">
+                      <Icon name="cpu-chip" className="w-3 h-3 mr-1" />
+                      {startedWithModel || workflowDefaultModel}
+                    </span>
+                    {!startedWithModel && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        ({t('workflows.workflowDefault', 'workflow default')})
+                      </span>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
+
+            {/* Start inputs panel */}
+            {startInputs.length > 0 && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 mt-6">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+                  {t('workflows.startInputs', 'Inputs')}
+                </h3>
+                <dl className="space-y-3">
+                  {startInputs.map(input => (
+                    <div key={input.name}>
+                      <dt className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+                        {input.label
+                          ? getLocalizedContent(input.label, currentLanguage) || input.name
+                          : input.name}
+                      </dt>
+                      <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100 break-words whitespace-pre-wrap">
+                        {typeof input.value === 'string'
+                          ? input.value
+                          : JSON.stringify(input.value, null, 2)}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Workflow Output - shown when workflow is finished */}
-        {(state.status === 'completed' ||
-          state.status === 'approved' ||
-          state.status === 'rejected') &&
-          workflowOutputKeys.length > 0 && (
+        {/* Workflow Output - shown when workflow is finished, or when cancelled but partial output exists */}
+        {showOutput && workflowOutputKeys.length > 0 && (
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
               {/* Output header with download-all button */}
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {t('workflows.output', 'Workflow Output')}
+                  {state.status === 'cancelled'
+                    ? t('workflows.partialOutput', 'Partial Output (before cancellation)')
+                    : t('workflows.output', 'Workflow Output')}
                 </h3>
                 <button
                   onClick={() =>
@@ -793,7 +952,7 @@ function WorkflowExecutionPage() {
                   className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
                   title={t('workflows.downloadAllJson', 'Download all output as JSON')}
                 >
-                  <Icon name="arrow-down-tray" className="w-4 h-4" />
+                  <Icon name="download" className="w-4 h-4" />
                   {t('workflows.downloadJson', 'Download JSON')}
                 </button>
               </div>

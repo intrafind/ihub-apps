@@ -451,6 +451,8 @@
       "iassistant": "Basierend auf iAssistant-Wissensbasis",
       "grounding": "Basierend auf Such-Grounding",
       "mixed": "Basierend auf externem Wissen",
+      "workflow": "Erzeugt durch Workflow",
+      "workflowTooltip": "Workflow-Ausführung öffnen",
       "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
     }
   },
@@ -1846,6 +1848,20 @@
     "title": "Workflows",
     "subtitle": "Automatisierte Workflows verwalten und ausführen",
     "newWorkflow": "Neuer Workflow",
+    "modelUsed": "Modell",
+    "workflowDefault": "Workflow-Standard",
+    "startInputs": "Eingaben",
+    "cancelledReason": "Grund",
+    "partialOutput": "Teilausgabe (vor Abbruch)",
+    "cancelReason": {
+      "timeout": "Zeitüberschreitung",
+      "user_requested": "Vom Benutzer abgebrochen",
+      "user_cancelled": "Vom Benutzer abgebrochen",
+      "server_restart": "Server-Neustart",
+      "workflow_cancelled": "Workflow abgebrochen"
+    },
+    "resume": "Ab letztem Schritt fortsetzen",
+    "resuming": "Wird fortgesetzt…",
     "tabs": {
       "available": "Verfügbare Workflows",
       "myExecutions": "Meine Ausführungen"

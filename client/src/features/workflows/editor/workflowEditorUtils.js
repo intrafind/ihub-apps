@@ -7,7 +7,7 @@ import dagre from '@dagrejs/dagre';
 export const NODE_TYPE_COLORS = {
   start: '#10B981',
   end: '#6B7280',
-  agent: '#3B82F6',
+  prompt: '#3B82F6',
   tool: '#8B5CF6',
   decision: '#F59E0B',
   human: '#EC4899',
@@ -28,7 +28,7 @@ export const NODE_TYPE_COLORS = {
  */
 export const NODE_TYPES_LIST = [
   { group: 'Flow', types: ['start', 'end'] },
-  { group: 'AI', types: ['agent', 'planner', 'verifier'] },
+  { group: 'AI', types: ['prompt', 'planner', 'verifier'] },
   { group: 'Logic', types: ['decision', 'loop', 'parallel', 'join', 'transform', 'code'] },
   { group: 'Integration', types: ['tool', 'http', 'human', 'memory'] }
 ];
@@ -139,7 +139,7 @@ export function applyDagreLayout(nodes, edges) {
 /**
  * Creates a new React Flow node with a unique ID based on type and timestamp.
  *
- * @param {string} type - The node type (e.g. 'agent', 'decision', 'tool')
+ * @param {string} type - The node type (e.g. 'prompt', 'decision', 'tool')
  * @param {{ x: number, y: number }} position - The initial canvas position
  * @returns {object} A React Flow node object
  */

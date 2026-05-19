@@ -351,6 +351,7 @@ const baseAppConfigSchema = z.object({
   autoStart: z.boolean().optional().default(false),
   websearch: websearchSchema,
   tools: z.array(z.string()).optional(),
+  workflows: z.array(z.string()).optional(),
   skills: z.array(z.string()).optional(),
   skillSettings: z
     .object({
