@@ -13,6 +13,7 @@ out-of-the-box for demos and evaluation.
 ## Recurring Meetings
 
 ### Weekly Engineering Sync
+
 - **Cadence:** Mondays, 10:00 – 10:30 (local time)
 - **Purpose:** Surface blockers, share progress on the current sprint,
   align on cross-team dependencies.
@@ -21,12 +22,14 @@ out-of-the-box for demos and evaluation.
 - **Owners:** Engineering Manager hosts; tech leads contribute updates.
 
 ### Monthly Product Review
+
 - **Cadence:** First Wednesday of the month, 14:00 – 15:30.
 - **Purpose:** Review feature launches, key metrics, customer feedback.
 - **Typical agenda:** Launch recap → Metrics deep-dive → Roadmap
   preview → Q&A.
 
 ### Quarterly Business Review (QBR)
+
 - **Cadence:** First week of each new quarter.
 - **Purpose:** Whole-company review of OKRs, financials, customer
   health, and strategic priorities for the next quarter.
