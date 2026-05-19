@@ -1,31 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
-
-/**
- * Status badge component
- */
-function StatusBadge({ status }) {
-  const statusConfig = {
-    pending: { bg: 'bg-gray-100', text: 'text-gray-800', icon: 'clock' },
-    running: { bg: 'bg-blue-100', text: 'text-blue-800', icon: 'arrow-path', animate: true },
-    paused: { bg: 'bg-yellow-100', text: 'text-yellow-800', icon: 'pause' },
-    completed: { bg: 'bg-green-100', text: 'text-green-800', icon: 'check-circle' },
-    failed: { bg: 'bg-red-100', text: 'text-red-800', icon: 'x-circle' },
-    cancelled: { bg: 'bg-gray-100', text: 'text-gray-800', icon: 'x-mark' }
-  };
-
-  const config = statusConfig[status] || statusConfig.pending;
-
-  return (
-    <span
-      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${config.bg} ${config.text}`}
-    >
-      <Icon name={config.icon} className={`w-3 h-3 mr-1 ${config.animate ? 'animate-spin' : ''}`} />
-      {status.charAt(0).toUpperCase() + status.slice(1)}
-    </span>
-  );
-}
+import StatusBadge from './StatusBadge';
 
 /**
  * Card component displaying a workflow execution.

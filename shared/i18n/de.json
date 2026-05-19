@@ -1850,6 +1850,64 @@
       "available": "Verfügbare Workflows",
       "myExecutions": "Meine Ausführungen"
     },
+    "elapsedShort": "{{minutes}} Min. {{seconds}} Sek.",
+    "elapsedSeconds": "{{seconds}} Sek.",
+    "stepCounter": "Schritt {{current}} von ~{{total}}",
+    "stepCounterApproxTooltip": "Die Gesamtschrittzahl ist ungefähr. Workflows können Schleifen, Verzweigungen oder übersprungene Schritte enthalten.",
+    "documentTitle": {
+      "running": "● Läuft: {{name}}",
+      "paused": "⏸ {{name}}",
+      "completed": "✓ {{name}}",
+      "failed": "⚠ {{name}}",
+      "cancelled": "✕ {{name}}"
+    },
+    "technicalDetails": {
+      "toggleLabel": "Technische Details",
+      "show": "Technische Details anzeigen",
+      "hide": "Technische Details ausblenden",
+      "tooltip": "Ausführungs-IDs, Tokens, Modellinformationen und Rohdaten anzeigen"
+    },
+    "confirmCancel": {
+      "title": "Diesen Workflow abbrechen?",
+      "message": "Der Workflow wird angehalten. Nach dem Abbruch kann er nicht fortgesetzt werden.",
+      "confirm": "Ja, abbrechen",
+      "deny": "Weiter laufen lassen"
+    },
+    "confirmDestructiveCheckpoint": {
+      "title": "Aktion bestätigen",
+      "message": "Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?"
+    },
+    "checkpoint": {
+      "displayDataEmptyValue": "(leer)",
+      "showRawJson": "Rohdaten anzeigen",
+      "hideRawJson": "Rohdaten ausblenden",
+      "longValueShowMore": "Vollständigen Wert anzeigen",
+      "longValueShowLess": "Weniger anzeigen"
+    },
+    "startModal": {
+      "aboutTitle": "Über diesen Workflow",
+      "aboutSteps": "{{count}} Schritte",
+      "aboutSteps_one": "{{count}} Schritt",
+      "fieldRequired": "Dieses Feld ist erforderlich"
+    },
+    "emptyState": {
+      "available": {
+        "title": "Noch keine Workflows verfügbar",
+        "bodyAdmin": "Es wurden noch keine Workflows veröffentlicht. Erstellen Sie Ihren ersten Workflow.",
+        "bodyUser": "Bitten Sie eine:n Administrator:in, einen Workflow für Ihre Gruppe zu veröffentlichen."
+      },
+      "executions": {
+        "title": "Sie haben noch keinen Workflow ausgeführt",
+        "body": "Wählen Sie einen Workflow aus dem Tab „Verfügbar“, um zu starten.",
+        "cta": "Workflows durchsuchen",
+        "filteredTitle": "Keine {{status}} Ausführungen",
+        "filteredBody": "Versuchen Sie einen anderen Filter."
+      }
+    },
+    "sofar": "Bisher",
+    "checkpointNeedsInput": "Dieser Workflow benötigt Ihre Eingabe",
+    "live": "Live",
+    "reconnecting": "Verbindung wird hergestellt…",
     "editor": {
       "title": "Workflow-Editor",
       "newWorkflowHeading": "Neuer Workflow",
