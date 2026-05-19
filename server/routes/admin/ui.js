@@ -183,13 +183,13 @@ export default function registerAdminUIRoutes(app) {
   /**
    * Delete asset
    */
-  app.delete(buildServerPath('/api/admin/ui/assets/:id'), authRequired, adminAuth, (req, res) => {
+  app.delete(buildServerPath('/api/admin/ui/assets/:id'), authRequired, adminAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const assetsDir = join(getRootDir(), 'contents/uploads/assets');
 
       // Validate path stays within assets directory (prevents traversal)
-      const filepath = resolveAndValidatePath(id, assetsDir);
+      const filepath = await resolveAndValidatePath(id, assetsDir);
       if (!filepath) {
         return res.status(400).json({
           success: false,
