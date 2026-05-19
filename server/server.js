@@ -569,6 +569,19 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Sweep orphaned workflow executions left over from a crashed/restarted
+  // previous process. Must run before trigger registration so re-emitted
+  // events don't trip on stale state.
+  try {
+    const { sweepOrphanedExecutions } = await import('./services/workflow/orphanSweeper.js');
+    await sweepOrphanedExecutions();
+  } catch (error) {
+    logger.warn({
+      component: 'Server',
+      message: `Orphan sweeper skipped: ${error.message}`
+    });
+  }
+
   // Initialize workflow triggers (schedules and webhooks)
   try {
     const { loadWorkflows } = await import('./routes/workflow/workflowRoutes.js');

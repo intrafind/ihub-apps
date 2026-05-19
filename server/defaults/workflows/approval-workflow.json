@@ -41,7 +41,7 @@
     },
     {
       "id": "research",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Research Topic",
         "de": "Thema recherchieren"
@@ -113,7 +113,7 @@
     },
     {
       "id": "summarize",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Create Summary",
         "de": "Zusammenfassung erstellen"

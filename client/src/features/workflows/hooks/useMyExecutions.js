@@ -19,7 +19,7 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * @property {number} runningCount - Count of running/paused executions
  */
 function useMyExecutions(options = {}) {
-  const { status, limit = 20, offset = 0 } = options;
+  const { status, limit = 20, offset = 0, includeArchived = false } = options;
 
   const [executions, setExecutions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -50,6 +50,7 @@ function useMyExecutions(options = {}) {
     try {
       const params = new URLSearchParams();
       if (status) params.append('status', status);
+      if (includeArchived) params.append('includeArchived', 'true');
       params.append('limit', String(limit));
       params.append('offset', String(offset));
 
@@ -68,7 +69,7 @@ function useMyExecutions(options = {}) {
       }
       setLoading(false);
     }
-  }, [status, limit, offset, featureFlags]);
+  }, [status, limit, offset, includeArchived, featureFlags]);
 
   useEffect(() => {
     fetchExecutions();

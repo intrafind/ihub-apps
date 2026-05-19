@@ -18,6 +18,38 @@ import ClarificationCard from './ClarificationCard';
 import CitationPanel from './CitationPanel';
 import SearchStatusIndicator from './SearchStatusIndicator';
 import WorkflowStepIndicator from './WorkflowStepIndicator';
+import HumanCheckpoint from '../../workflows/components/HumanCheckpoint';
+import { apiClient } from '../../../api/client';
+
+/**
+ * Renders a workflow checkpoint inline in a chat bubble. Tracks which
+ * checkpoint id the user already responded to so the card disappears after
+ * submit (preventing double-submit 400s) while still rendering the next
+ * checkpoint when a new one arrives. Keys the inner component by checkpoint
+ * id so internal state (selectedOption, submitting, etc.) resets between
+ * sequential checkpoints in the same workflow.
+ */
+function ChatCheckpoint({ executionId, checkpoint }) {
+  const [respondedId, setRespondedId] = useState(null);
+  if (!checkpoint || checkpoint.id === respondedId) return null;
+  return (
+    <div className="mt-3">
+      <HumanCheckpoint
+        key={checkpoint.id}
+        checkpoint={checkpoint}
+        displayData={checkpoint.displayData}
+        onRespond={async ({ checkpointId, response, data }) => {
+          await apiClient.post(`/workflows/executions/${executionId}/respond`, {
+            checkpointId,
+            response,
+            data
+          });
+          setRespondedId(checkpointId);
+        }}
+      />
+    </div>
+  );
+}
 import AnswerSourceBadge from './AnswerSourceBadge';
 import './ChatMessage.css';
 
@@ -725,6 +757,13 @@ function ChatMessage({
             loading={message.loading}
           />
         )}
+        {/* Human-in-the-loop checkpoint for chat-launched workflows */}
+        {!isUser && message.workflowCheckpoint?.checkpoint && (
+          <ChatCheckpoint
+            executionId={message.workflowCheckpoint.executionId}
+            checkpoint={message.workflowCheckpoint.checkpoint}
+          />
+        )}
         {/* Skill activation indicators */}
         {!isUser && message.activeSkills?.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
@@ -910,7 +949,10 @@ function ChatMessage({
         {/* Answer source indicator - show for completed assistant messages inside bubble */}
         {!isUser && !isError && !message.loading && (
           <div className="flex justify-end">
-            <AnswerSourceBadge answerSource={message.answerSource} />
+            <AnswerSourceBadge
+              answerSource={message.answerSource}
+              workflowResult={message.workflowResult}
+            />
           </div>
         )}
       </div>

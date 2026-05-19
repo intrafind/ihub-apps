@@ -521,12 +521,16 @@ export class WorkflowEngine {
                 pauseReason: result.pauseReason || 'node_requested_pause'
               });
 
-              // Update state to paused with checkpoint info
+              // Update state to paused with checkpoint info.
+              // Record _pausedAtMs (wall clock) so resume() can extend the
+              // execution deadline by the time spent waiting for the human —
+              // user thinking time must not eat into maxExecutionTime.
               await this.stateManager.update(executionId, {
                 status: WorkflowStatus.PAUSED,
                 data: {
                   ...result.stateUpdates,
                   _pausedAt: nodeId,
+                  _pausedAtMs: Date.now(),
                   _pauseReason: result.pauseReason
                 }
               });
@@ -997,14 +1001,38 @@ export class WorkflowEngine {
       currentNodes: state.currentNodes
     });
 
+    // Extend the execution deadline by however long the workflow sat paused
+    // so human idle time does NOT eat into maxExecutionTime. Also accumulate
+    // a `_humanWaitMs` counter for observability.
+    const pausedAtMs = state.data?._pausedAtMs;
+    const previousDeadline = state.data?._executionDeadline;
+    const pausedDurationMs = pausedAtMs ? Math.max(0, Date.now() - pausedAtMs) : 0;
+    const extendedDeadline =
+      previousDeadline && pausedDurationMs > 0
+        ? previousDeadline + pausedDurationMs
+        : previousDeadline;
+    const accumulatedHumanWait = (state.data?._humanWaitMs || 0) + pausedDurationMs;
+
     // Merge resume data into state (stateManager.update uses deep merge internally)
     await this.stateManager.update(executionId, {
       status: WorkflowStatus.RUNNING,
       data: {
         ...resumeData,
-        _resumedAt: new Date().toISOString()
+        _resumedAt: new Date().toISOString(),
+        _pausedAtMs: null,
+        ...(extendedDeadline ? { _executionDeadline: extendedDeadline } : {}),
+        _humanWaitMs: accumulatedHumanWait
       }
     });
+
+    if (pausedDurationMs > 0) {
+      logger.info('Extended execution deadline by human wait time', {
+        component: 'WorkflowEngine',
+        executionId,
+        pausedDurationMs,
+        extendedDeadline
+      });
+    }
 
     // Set up new abort controller
     const abortController = new AbortController();
@@ -1076,6 +1104,145 @@ export class WorkflowEngine {
       executionId,
       nodeId: state.currentNodes[0],
       reason
+    });
+
+    return this.stateManager.get(executionId);
+  }
+
+  /**
+   * Resumes a workflow that was previously cancelled or failed mid-execution
+   * (timeout, server restart, transient error). The interrupted node will be
+   * re-executed from scratch; previously-completed nodes are not re-run.
+   *
+   * For user-initiated cancellations we refuse — those were intentional.
+   *
+   * @param {string} executionId
+   * @param {Object} [options]
+   * @returns {Promise<Object>} New execution state
+   */
+  async resumeFromTerminated(executionId, options = {}) {
+    const state = await this.stateManager.get(executionId);
+    if (!state) {
+      const error = new Error(`Execution not found: ${executionId}`);
+      error.code = 'EXECUTION_NOT_FOUND';
+      throw error;
+    }
+
+    const RESUMABLE = new Set([WorkflowStatus.CANCELLED, WorkflowStatus.FAILED]);
+    if (!RESUMABLE.has(state.status)) {
+      const error = new Error(
+        `Cannot resume execution with status '${state.status}'. Only cancelled or failed executions can be resumed via resumeFromTerminated.`
+      );
+      error.code = 'INVALID_STATE_FOR_RESUME';
+      throw error;
+    }
+
+    // Don't resurrect user-cancelled executions — that was an explicit stop.
+    const lastCancelEvent = (state.history || [])
+      .slice()
+      .reverse()
+      .find(h => h.type === 'workflow_cancelled');
+    const cancelReason = lastCancelEvent?.data?.reason;
+    if (cancelReason === 'user_cancelled' || cancelReason === 'user_requested') {
+      const error = new Error('Cannot resume a workflow that was cancelled by the user.');
+      error.code = 'USER_CANCELLED';
+      throw error;
+    }
+
+    // currentNodes is the set of in-flight / ready-to-run nodes. For a timeout
+    // cancellation it's typically non-empty (the next iteration node was about
+    // to run). For a hard failure the engine moves the failed node out of
+    // currentNodes into failedNodes and may leave currentNodes empty — in that
+    // case we recover the resume point by re-queueing the failed nodes for
+    // retry.
+    const hasCurrent = Array.isArray(state.currentNodes) && state.currentNodes.length > 0;
+    const hasFailed = Array.isArray(state.failedNodes) && state.failedNodes.length > 0;
+    if (!hasCurrent && !hasFailed) {
+      const error = new Error(
+        'Cannot resume: no in-flight nodes recorded. The workflow finished its last scheduled node before interruption.'
+      );
+      error.code = 'NO_RESUME_POINT';
+      throw error;
+    }
+    const resumeNodes = hasCurrent ? [...state.currentNodes] : [...new Set(state.failedNodes)];
+
+    const workflow = options.workflow || state.data?._workflowDefinition;
+    if (!workflow) {
+      const error = new Error(
+        'Workflow definition not available. Provide it in options or ensure it was stored in state.'
+      );
+      error.code = 'WORKFLOW_NOT_AVAILABLE';
+      throw error;
+    }
+
+    const now = new Date().toISOString();
+
+    // Reset the execution deadline. The original deadline (set at workflow
+    // start) is in the past — that's the whole reason we're resuming. Give
+    // the resumed run a fresh window equal to maxExecutionTime so it can
+    // actually finish. Track total accumulated runtime across resumes for
+    // observability.
+    const maxExecutionTime = workflow.config?.maxExecutionTime || 300000;
+    const newDeadline = Date.now() + maxExecutionTime;
+    const previousElapsed = state.data?._totalElapsedMs || 0;
+    const startedAtTs = state.data?._workflow?.startedAt
+      ? new Date(state.data._workflow.startedAt).getTime()
+      : null;
+    const interruptedAtTs = state.completedAt ? new Date(state.completedAt).getTime() : null;
+    const lastRunElapsed =
+      startedAtTs && interruptedAtTs ? Math.max(0, interruptedAtTs - startedAtTs) : 0;
+
+    // Clear the terminal markers, requeue the resume nodes, clear failedNodes
+    // so the engine doesn't immediately re-flag them on retry. completedNodes
+    // is preserved so already-finished work is not re-run.
+    await this.stateManager.update(executionId, {
+      status: WorkflowStatus.RUNNING,
+      errors: [],
+      completedAt: null,
+      currentNodes: resumeNodes,
+      failedNodes: [],
+      data: {
+        _resumedAt: now,
+        _resumedFromStatus: state.status,
+        _executionDeadline: newDeadline,
+        _totalElapsedMs: previousElapsed + lastRunElapsed,
+        _resumeCount: (state.data?._resumeCount || 0) + 1
+      }
+    });
+
+    await this.stateManager.addStep(executionId, {
+      nodeId: null,
+      type: 'workflow_resumed',
+      data: {
+        fromStatus: state.status,
+        reason: cancelReason || null,
+        resumeNodes
+      },
+      timestamp: now
+    });
+
+    try {
+      getExecutionRegistry().updateStatus(executionId, WorkflowStatus.RUNNING);
+    } catch {
+      // Registry may not be wired in this environment — non-fatal.
+    }
+
+    logger.info('Resuming terminated workflow execution', {
+      component: 'WorkflowEngine',
+      executionId,
+      fromStatus: state.status,
+      resumeNodes
+    });
+
+    const abortController = new AbortController();
+    this.abortControllers.set(executionId, abortController);
+
+    this._runExecutionLoop(workflow, executionId, options, abortController.signal).catch(error => {
+      logger.error('Resumed workflow execution failed', {
+        component: 'WorkflowEngine',
+        executionId,
+        error
+      });
     });
 
     return this.stateManager.get(executionId);
@@ -1159,6 +1326,25 @@ export class WorkflowEngine {
    */
   async getState(executionId) {
     return this.stateManager.get(executionId);
+  }
+
+  /**
+   * Hard-deletes an execution's checkpoint data from disk. Refuses if the
+   * execution is currently active. The ExecutionRegistry entry must be
+   * removed separately by the caller.
+   *
+   * @param {string} executionId - The execution identifier
+   * @returns {Promise<void>}
+   */
+  async deleteExecution(executionId) {
+    if (this.abortControllers && this.abortControllers.has(executionId)) {
+      const error = new Error(
+        `Cannot delete execution ${executionId} while it is active. Cancel it first.`
+      );
+      error.code = 'EXECUTION_ACTIVE';
+      throw error;
+    }
+    await this.stateManager.cleanup(executionId, false);
   }
 
   /**

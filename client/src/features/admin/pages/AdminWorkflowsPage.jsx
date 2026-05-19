@@ -521,6 +521,16 @@ function AdminWorkflowsPage() {
                               <button
                                 onClick={e => {
                                   e.stopPropagation();
+                                  navigate(`/admin/workflows/${workflow.id}/edit`);
+                                }}
+                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-full"
+                                title={t('admin.workflows.openVisualEditor', 'Open visual editor')}
+                              >
+                                <Icon name="edit" className="h-4 w-4" />
+                              </button>
+                              <button
+                                onClick={e => {
+                                  e.stopPropagation();
                                   handleDeleteWorkflow(workflow.id);
                                 }}
                                 className="p-2 text-red-600 hover:bg-red-50 rounded-full"

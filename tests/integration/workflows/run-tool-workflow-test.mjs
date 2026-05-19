@@ -23,7 +23,7 @@ const toolCallingWorkflow = {
     },
     {
       id: 'searcher',
-      type: 'agent',
+      type: 'prompt',
       name: { en: 'Search Agent' },
       config: {
         system: {

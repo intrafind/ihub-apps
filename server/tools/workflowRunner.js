@@ -13,7 +13,9 @@
 
 import { WorkflowEngine } from '../services/workflow/WorkflowEngine.js';
 import { getExecutionRegistry } from '../services/workflow/ExecutionRegistry.js';
+import { recordPendingFinish } from '../services/workflow/chatBridge.js';
 import { actionTracker } from '../actionTracker.js';
+import { clients } from '../sse.js';
 import configCache from '../configCache.js';
 import logger from '../utils/logger.js';
 
@@ -122,14 +124,10 @@ export default async function workflowRunner(params = {}) {
 
   const workflowName = resolveLocalized(workflow.name, language);
 
-  // 2. Phase 1 restriction: reject workflows with human nodes
-  const humanNodes = (workflow.nodes || []).filter(n => n.type === 'human');
-  if (humanNodes.length > 0) {
-    return {
-      status: 'error',
-      error: `Workflow '${workflowName}' contains human checkpoint nodes and cannot be run from chat yet. This will be supported in a future update.`
-    };
-  }
+  // Note: workflows with human-checkpoint nodes are supported in chat. The
+  // engine emits `workflow.human.required` when it pauses; the bridge below
+  // forwards it as a `workflow.checkpoint` chat event so the chat UI can
+  // render the prompt and POST the response to /workflows/executions/:id/respond.
 
   // 3. Prepare initial data from input variables
   const initialData = {
@@ -243,12 +241,73 @@ export default async function workflowRunner(params = {}) {
   const result = await new Promise(resolve => {
     let settled = false;
     let timeoutId;
+    let isPaused = false;
+
+    // (Re-)arm the safety-net timeout. While the workflow is paused waiting
+    // for human input we suspend the timer so the user can take as long as
+    // they want; it re-arms once execution actually resumes.
+    const armTimeout = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        actionTracker.off('fire-sse', bridgeHandler);
+        activeWorkflowExecutions.delete(chatId);
+        engine.cancel(executionId, 'timeout').catch(() => {});
+        if (chatId) {
+          actionTracker.trackWorkflowResult(chatId, {
+            workflowName,
+            status: 'failed',
+            error: 'Workflow execution timed out',
+            executionId
+          });
+        }
+        resolve({ status: 'failed', executionId, error: 'Workflow execution timed out' });
+      }, maxExecutionTime);
+    };
 
     const bridgeHandler = event => {
       // Only handle events from this specific workflow execution
       if (event.chatId !== executionId) return;
 
       const eventType = event.event;
+
+      // Human checkpoint: forward to chat as a paused step + dedicated event
+      // so the chat UI can render an interactive prompt. Suspend the
+      // safety-net timeout; the user shouldn't be racing it.
+      if (eventType === 'workflow.human.required' && chatId) {
+        isPaused = true;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
+        }
+        const node = (workflow.nodes || []).find(n => n.id === event.checkpoint?.nodeId);
+        const nodeName = node ? resolveLocalized(node.name, language) : event.checkpoint?.nodeId;
+        actionTracker.trackWorkflowStep(chatId, {
+          workflowName,
+          nodeName,
+          nodeType: 'human',
+          status: 'paused',
+          executionId,
+          chatVisible: node?.config?.chatVisible !== false
+        });
+        actionTracker.emit('fire-sse', {
+          event: 'workflow.checkpoint',
+          chatId,
+          executionId,
+          checkpoint: event.checkpoint
+        });
+        return;
+      }
+
+      // Workflow resumed past the checkpoint — re-arm the timeout.
+      if (eventType === 'workflow.human.responded' && chatId) {
+        if (isPaused) {
+          isPaused = false;
+          armTimeout();
+        }
+        return;
+      }
 
       if (eventType === 'workflow.node.start' && chatId) {
         // Find the node's display name from the workflow definition
@@ -314,6 +373,19 @@ export default async function workflowRunner(params = {}) {
             actionTracker.trackChunk(chatId, { content: outputText });
             actionTracker.trackDone(chatId, { finishReason: 'stop' });
           }
+
+          // If the chat SSE client disconnected, stash the finish so it can be
+          // delivered when the user reconnects (final output backfill).
+          if (!clients.has(chatId)) {
+            recordPendingFinish(chatId, {
+              workflowName,
+              executionId,
+              status: 'completed',
+              outputText,
+              outputFormat: workflow.chatIntegration?.outputFormat || 'markdown',
+              passthrough
+            });
+          }
         }
 
         // Return readable output string for passthrough (ToolExecutor streams it),
@@ -365,6 +437,20 @@ export default async function workflowRunner(params = {}) {
             actionTracker.trackChunk(chatId, { content: errorContent });
             actionTracker.trackDone(chatId, { finishReason: isCancelled ? 'cancelled' : 'error' });
           }
+
+          // Stash for backfill if the chat client is no longer connected.
+          if (!clients.has(chatId)) {
+            recordPendingFinish(chatId, {
+              workflowName,
+              executionId,
+              status: finalStatus,
+              outputText: errorContent,
+              outputFormat: 'markdown',
+              errorMsg,
+              isCancelled,
+              passthrough
+            });
+          }
         }
 
         resolve(
@@ -381,32 +467,9 @@ export default async function workflowRunner(params = {}) {
 
     actionTracker.on('fire-sse', bridgeHandler);
 
-    // Timeout safety net
-    timeoutId = setTimeout(() => {
-      if (!settled) {
-        settled = true;
-        actionTracker.off('fire-sse', bridgeHandler);
-        activeWorkflowExecutions.delete(chatId);
-
-        // Attempt to cancel the workflow with timeout reason
-        engine.cancel(executionId, 'timeout').catch(() => {});
-
-        if (chatId) {
-          actionTracker.trackWorkflowResult(chatId, {
-            workflowName,
-            status: 'failed',
-            error: 'Workflow execution timed out',
-            executionId
-          });
-        }
-
-        resolve({
-          status: 'failed',
-          executionId,
-          error: 'Workflow execution timed out'
-        });
-      }
-    }, maxExecutionTime);
+    // Initial arming of the safety-net timeout. armTimeout() (defined above)
+    // also re-arms when the workflow resumes after a human checkpoint.
+    armTimeout();
   });
 
   logger.info('Workflow execution finished', {

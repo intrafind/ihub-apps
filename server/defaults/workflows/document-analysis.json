@@ -103,7 +103,7 @@
     },
     {
       "id": "extract-insights",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Extract Key Insights",
         "de": "Kernaussagen extrahieren"
@@ -168,7 +168,7 @@
     },
     {
       "id": "generate-report",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Generate Report",
         "de": "Bericht erstellen"

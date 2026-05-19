@@ -2,14 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchToolsBasic } from '../../../api/api';
-import { apiClient } from '../../../api/client';
 import { VoiceInputComponent } from '../../voice/components';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 import ImageGenerationControls from './ImageGenerationControls';
 import { trackToolUsage } from '../../../utils/toolUsageTracker';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { useEmbeddedHost } from '../../office/contexts/EmbeddedHostContext';
-import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import { useKeyboardNavigation } from '../../../shared/hooks/useKeyboardNavigation';
 
 /**
@@ -56,7 +54,6 @@ function ChatInputActionsMenu({
 }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
-  const featureFlags = useFeatureFlags();
   // Embedded-host adapter (Outlook taskpane / browser-extension side panel)
   // declares which "Include …" toggles to render under the `+` menu via
   // its `contextToggles` array. Empty in the main web app — the section
@@ -95,7 +92,8 @@ function ChatInputActionsMenu({
   // Tool grouping configuration (websearch is now handled via app.websearch config, not app.tools)
   const TOOL_GROUPS = {};
 
-  // Load tools and workflow metadata when component mounts
+  // Load tool metadata when component mounts. Workflows live in app.workflows now
+  // and are triggered via @mentions, so they are intentionally not surfaced here.
   useEffect(() => {
     const loadTools = async () => {
       if (!app?.tools || app.tools.length === 0) return;
@@ -103,38 +101,7 @@ function ChatInputActionsMenu({
       try {
         setToolsLoading(true);
         const tools = await fetchToolsBasic();
-        const allTools = [...(tools || [])];
-
-        // Fetch workflow metadata for workflow tool entries
-        const hasWorkflowTools = app.tools.some(
-          t => typeof t === 'string' && t.startsWith('workflow:')
-        );
-        // Only fetch workflows if feature is enabled
-        if (hasWorkflowTools && featureFlags.isEnabled('workflows', true)) {
-          try {
-            const { data: workflows } = await apiClient.get('/workflows');
-            if (Array.isArray(workflows)) {
-              const lang = t('common.language', 'en');
-              for (const wf of workflows) {
-                const wfName = typeof wf.name === 'object' ? wf.name[lang] || wf.name.en : wf.name;
-                const wfDesc =
-                  typeof wf.description === 'object'
-                    ? wf.description[lang] || wf.description.en
-                    : wf.description;
-                // Register under both the app.tools key and the runtime tool ID
-                allTools.push({
-                  id: `workflow:${wf.id}`,
-                  name: wfName || wf.id,
-                  description: wfDesc
-                });
-              }
-            }
-          } catch {
-            // Workflows endpoint may not be available — fall back to raw IDs
-          }
-        }
-
-        setAvailableTools(allTools);
+        setAvailableTools(tools || []);
       } catch (error) {
         console.error('Failed to fetch tools:', error);
         setAvailableTools([]);
@@ -144,7 +111,7 @@ function ChatInputActionsMenu({
     };
 
     loadTools();
-  }, [app?.tools, t, featureFlags]);
+  }, [app?.tools]);
 
   // Close dropdown when clicking outside
   useEffect(() => {

@@ -585,7 +585,7 @@ class SourceManager {
 
       // Resolve path relative to contents directory
       const contentsDir = path.join(getRootDir(), 'contents');
-      const fullPath = resolveAndValidatePath(filePath, contentsDir);
+      const fullPath = await resolveAndValidatePath(filePath, contentsDir);
       if (!fullPath) {
         throw new Error('Invalid file path: Path must be within contents directory');
       }

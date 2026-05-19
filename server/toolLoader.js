@@ -374,14 +374,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
     }
   }
 
-  // Add workflow tools (entries like "workflow:<id>" in app.tools)
-  if (Array.isArray(app.tools)) {
-    const workflowToolIds = app.tools.filter(
-      t => typeof t === 'string' && t.startsWith('workflow:')
-    );
-    for (const ref of workflowToolIds) {
+  // Add workflow tools (from dedicated app.workflows array)
+  if (Array.isArray(app.workflows)) {
+    for (const wfId of app.workflows) {
       try {
-        const wfId = ref.replace('workflow:', '');
+        if (typeof wfId !== 'string' || !wfId) continue;
         const wf = configCache.getWorkflowById(wfId);
         if (!wf || wf.enabled === false || !wf.chatIntegration?.enabled) continue;
 
@@ -413,7 +410,11 @@ export async function getToolsForApp(app, language = null, context = {}) {
           parameters: buildWorkflowToolParams(wf, language || 'en')
         });
       } catch (error) {
-        logger.error('Error generating workflow tool', { component: 'ToolLoader', ref, error });
+        logger.error('Error generating workflow tool', {
+          component: 'ToolLoader',
+          workflowId: wfId,
+          error
+        });
       }
     }
   }

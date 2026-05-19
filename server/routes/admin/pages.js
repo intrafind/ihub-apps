@@ -56,7 +56,7 @@ export default function registerAdminPagesRoutes(app) {
       for (const [lang, relPath] of Object.entries(page.filePath || {})) {
         try {
           // Validate stored path stays within contents directory
-          const abs = resolveAndValidatePath(relPath, contentsBase);
+          const abs = await resolveAndValidatePath(relPath, contentsBase);
           if (!abs) {
             logger.warn('Skipping page file with invalid path', {
               component: 'AdminPages',
@@ -210,7 +210,7 @@ export default function registerAdminPagesRoutes(app) {
       for (const rel of Object.values(pageEntry.filePath || {})) {
         try {
           // Validate stored path stays within contents directory
-          const abs = resolveAndValidatePath(rel, contentsBase);
+          const abs = await resolveAndValidatePath(rel, contentsBase);
           if (!abs) {
             logger.warn('Skipping deletion of page file with invalid path', {
               component: 'AdminPages',

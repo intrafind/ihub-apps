@@ -7,7 +7,7 @@ import dagre from '@dagrejs/dagre';
 export const NODE_TYPE_COLORS = {
   start: '#10B981',
   end: '#6B7280',
-  agent: '#3B82F6',
+  prompt: '#3B82F6',
   tool: '#8B5CF6',
   decision: '#F59E0B',
   human: '#EC4899',
@@ -28,7 +28,7 @@ export const NODE_TYPE_COLORS = {
  */
 export const NODE_TYPES_LIST = [
   { group: 'Flow', types: ['start', 'end'] },
-  { group: 'AI', types: ['agent', 'planner', 'verifier'] },
+  { group: 'AI', types: ['prompt', 'planner', 'verifier'] },
   { group: 'Logic', types: ['decision', 'loop', 'parallel', 'join', 'transform', 'code'] },
   { group: 'Integration', types: ['tool', 'http', 'human', 'memory'] }
 ];
@@ -66,6 +66,14 @@ export function workflowToFlow(workflow) {
       edge.condition?.type && edge.condition.type !== 'always' ? edge.condition.type : undefined
   }));
 
+  // Auto-layout when the workflow has no saved positions (every node sits at origin).
+  // Typically happens for newly-created workflows that haven't been arranged yet.
+  const needsLayout =
+    nodes.length > 1 && nodes.every(n => n.position.x === 0 && n.position.y === 0);
+  if (needsLayout) {
+    return { nodes: applyDagreLayout(nodes, edges), edges };
+  }
+
   return { nodes, edges };
 }
 
@@ -102,7 +110,7 @@ export function flowToWorkflow(rfNodes, rfEdges, existingWorkflow) {
 }
 
 /**
- * Applies automatic Dagre-based layout to position nodes in a top-to-bottom hierarchy.
+ * Applies automatic Dagre-based layout to position nodes in a left-to-right flow.
  * Useful when importing workflows that have no position data, or to tidy up a messy graph.
  *
  * @param {object[]} nodes - React Flow node array
@@ -112,7 +120,7 @@ export function flowToWorkflow(rfNodes, rfEdges, existingWorkflow) {
 export function applyDagreLayout(nodes, edges) {
   const g = new dagre.graphlib.Graph();
   g.setDefaultEdgeLabel(() => ({}));
-  g.setGraph({ rankdir: 'TB', ranksep: 80, nodesep: 60 });
+  g.setGraph({ rankdir: 'LR', ranksep: 80, nodesep: 60 });
 
   nodes.forEach(node => {
     g.setNode(node.id, { width: 200, height: 80 });
@@ -139,7 +147,7 @@ export function applyDagreLayout(nodes, edges) {
 /**
  * Creates a new React Flow node with a unique ID based on type and timestamp.
  *
- * @param {string} type - The node type (e.g. 'agent', 'decision', 'tool')
+ * @param {string} type - The node type (e.g. 'prompt', 'decision', 'tool')
  * @param {{ x: number, y: number }} position - The initial canvas position
  * @returns {object} A React Flow node object
  */

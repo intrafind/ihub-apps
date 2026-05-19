@@ -83,7 +83,9 @@ function WorkflowsPage() {
       {/* Tab content */}
       <div className="max-w-5xl mx-auto">
         {activeTab === 'available' && <WorkflowListTab />}
-        {activeTab === 'my-executions' && <MyExecutionsTab />}
+        {activeTab === 'my-executions' && (
+          <MyExecutionsTab onBrowseWorkflows={() => setActiveTab('available')} />
+        )}
       </div>
     </div>
   );
