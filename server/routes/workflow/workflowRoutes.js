@@ -1944,12 +1944,20 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         let versions = [];
         try {
+          // lgtm[js/path-injection] -- `historyDir` is the result of
+          // resolveAndValidatePath(id, historyRoot) above (path.resolve +
+          // startsWith boundary check); `id` was already vetted by
+          // validateIdForPath() which rejects `..`, `/`, `\` and anything
+          // outside [A-Za-z0-9._-].
           const files = await fs.readdir(historyDir);
           for (const file of files) {
             if (!file.endsWith('.json')) continue;
             try {
               const filePath = resolveAndValidatePath(file, historyDir);
               if (!filePath) continue;
+              // lgtm[js/path-injection] -- `filePath` is the result of
+              // resolveAndValidatePath(file, historyDir) which enforces a
+              // path.resolve + startsWith boundary against historyDir.
               const content = await fs.readFile(filePath, 'utf8');
               const data = JSON.parse(content);
               versions.push({
@@ -2052,6 +2060,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
+        // lgtm[js/path-injection] -- `historyDir` is resolveAndValidatePath's
+        // bounded result for an already validateIdForPath-checked id.
         await fs.mkdir(historyDir, { recursive: true });
 
         // version comes from workflow.version which is schema-validated as
@@ -2151,6 +2161,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         // Find snapshot file by version prefix
         let snapshotFileName = null;
         try {
+          // lgtm[js/path-injection] -- `historyDir` is resolveAndValidatePath's
+          // bounded result for a validateIdForPath-checked id.
           const files = await fs.readdir(historyDir);
           snapshotFileName = files.find(
             f => f.startsWith(`${versionParam}-`) && f.endsWith('.json')
@@ -2168,6 +2180,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         if (!snapshotPath) {
           return res.status(400).json({ error: 'Invalid snapshot path' });
         }
+        // lgtm[js/path-injection] -- `snapshotPath` is resolveAndValidatePath's
+        // bounded result; both inputs already validated and historyDir is itself
+        // a bounded resolveAndValidatePath result.
         const content = await fs.readFile(snapshotPath, 'utf8');
         const snapshot = JSON.parse(content);
 
