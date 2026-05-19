@@ -9,7 +9,7 @@ import Icon from '../../../shared/components/Icon';
 const NODE_TYPE_ICONS = {
   start: 'play',
   end: 'check-circle',
-  agent: 'cpu-chip',
+  prompt: 'cpu-chip',
   tool: 'cog',
   decision: 'sliders',
   human: 'user',
@@ -23,7 +23,7 @@ const NODE_TYPE_COLORS = {
   start:
     'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400 border-green-300 dark:border-green-700',
   end: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 border-red-300 dark:border-red-700',
-  agent:
+  prompt:
     'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400 border-blue-300 dark:border-blue-700',
   tool: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 border-orange-300 dark:border-orange-700',
   decision:

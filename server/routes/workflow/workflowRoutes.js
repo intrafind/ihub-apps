@@ -1037,6 +1037,72 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
   /**
    * @swagger
+   * /api/workflows/executions/{executionId}/restart:
+   *   post:
+   *     summary: Restart a cancelled or failed execution
+   *     description: |
+   *       Resumes a workflow that was cancelled by timeout/server restart or
+   *       failed mid-execution. Previously-completed nodes are not re-run;
+   *       only the interrupted nodes (those in `currentNodes`) are picked up.
+   *       User-cancelled executions are refused.
+   *     tags:
+   *       - Workflows
+   *       - Execution
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: executionId
+   *         required: true
+   *         schema:
+   *           type: string
+   */
+  app.post(
+    buildServerPath('/api/workflows/executions/:executionId/restart'),
+    checkWorkflowsFeature,
+    authRequired,
+    async (req, res) => {
+      try {
+        const { executionId } = req.params;
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+
+        const state = await workflowEngine.resumeFromTerminated(executionId, {
+          user: req.user
+        });
+
+        logger.info('Workflow execution restarted from terminated state', {
+          component: 'WorkflowRoutes',
+          executionId,
+          userId: req.user?.id
+        });
+
+        res.json({
+          executionId: state.executionId,
+          status: state.status,
+          currentNodes: state.currentNodes
+        });
+      } catch (error) {
+        if (error.code === 'EXECUTION_NOT_FOUND') {
+          return sendNotFound(res, 'Execution');
+        }
+        if (
+          error.code === 'INVALID_STATE_FOR_RESUME' ||
+          error.code === 'WORKFLOW_NOT_AVAILABLE' ||
+          error.code === 'NO_RESUME_POINT' ||
+          error.code === 'USER_CANCELLED'
+        ) {
+          return sendBadRequest(res, error.message);
+        }
+        sendFailedOperationError(res, 'restart workflow execution', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
    * /api/workflows/executions/{executionId}/cancel:
    *   post:
    *     summary: Cancel execution

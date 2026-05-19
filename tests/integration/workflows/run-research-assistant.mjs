@@ -172,7 +172,7 @@ async function testAgentSearcherWorkflow(engine) {
       },
       {
         id: 'planner',
-        type: 'agent',
+        type: 'prompt',
         name: { en: 'Research Planner' },
         config: {
           system: {
@@ -193,7 +193,7 @@ async function testAgentSearcherWorkflow(engine) {
       },
       {
         id: 'searcher',
-        type: 'agent',
+        type: 'prompt',
         name: { en: 'Web Searcher' },
         config: {
           system: {
@@ -210,7 +210,7 @@ async function testAgentSearcherWorkflow(engine) {
       },
       {
         id: 'synthesizer',
-        type: 'agent',
+        type: 'prompt',
         name: { en: 'Research Synthesizer' },
         config: {
           system: {

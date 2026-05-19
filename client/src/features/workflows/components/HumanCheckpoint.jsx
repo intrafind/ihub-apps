@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import DOMPurify from 'dompurify';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -6,155 +7,153 @@ import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
 import { markdownToHtml, isMarkdown } from '../../../utils/markdownUtils';
 
-const LONG_STRING_THRESHOLD = 500;
-
 /**
- * Renders a single value from `displayData` in a human-friendly way:
- *  - markdown strings render formatted
- *  - long strings truncate with a "Show full" toggle
- *  - arrays/objects show a compact summary that expands on demand
- *  - primitives render as text
+ * Render any data value as a readable UI block.
+ *
+ * The aim is "looks like a report or form", NOT "looks like JSON". So we:
+ *  - expand everything by default (users need to read it to decide)
+ *  - render strings as prose (markdown-aware)
+ *  - render booleans as Yes/No chips, numbers as plain text
+ *  - render arrays of strings as bulleted lists
+ *  - render arrays of objects as a stack of subtle cards
+ *  - render objects as a label-above / value-below definition list with no
+ *    nested borders unless there is genuine nesting
+ *
+ * No chevron toggles, no "{N fields}" stubs, no fenced JSON.
  */
-function DisplayValue({ fieldKey, value }) {
-  const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+function humanizeKey(key) {
+  // "data_researchPlan" → "Research plan", "currentFocus" → "Current focus".
+  // We strip the engine's "data_" path prefix produced when showData was
+  // a dotted state path like "$.data.researchPlan".
+  const stripped = String(key).replace(/^data_/i, '');
+  const spaced = stripped
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!spaced) return '';
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
 
+function PrimitiveValue({ value }) {
+  const { t } = useTranslation();
   if (value === null || value === undefined || value === '') {
     return (
-      <span className="text-gray-400 dark:text-gray-500 italic">
+      <span className="text-gray-400 dark:text-gray-500 italic text-sm">
         {t('workflows.checkpoint.displayDataEmptyValue', '(empty)')}
       </span>
     );
   }
-
   if (typeof value === 'boolean') {
-    return <span className="font-mono">{value ? 'true' : 'false'}</span>;
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+          value
+            ? 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300'
+            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
+        }`}
+      >
+        {value ? t('common.yes', 'Yes') : t('common.no', 'No')}
+      </span>
+    );
   }
-
   if (typeof value === 'number') {
-    return <span className="font-mono">{String(value)}</span>;
+    return (
+      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+        {value.toLocaleString()}
+      </span>
+    );
+  }
+  return null;
+}
+
+function StringValue({ value }) {
+  if (isMarkdown(value)) {
+    const safeHtml = DOMPurify.sanitize(markdownToHtml(value));
+    return (
+      <div
+        className="prose prose-sm dark:prose-invert max-w-none prose-p:my-1 prose-headings:mt-2"
+        dangerouslySetInnerHTML={{ __html: safeHtml }}
+      />
+    );
+  }
+  return (
+    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
+      {value}
+    </p>
+  );
+}
+
+function DisplayValue({ value, depth = 0 }) {
+  if (
+    value === null ||
+    value === undefined ||
+    typeof value === 'boolean' ||
+    typeof value === 'number' ||
+    value === ''
+  ) {
+    return <PrimitiveValue value={value} />;
   }
 
   if (typeof value === 'string') {
-    const isLong = value.length > LONG_STRING_THRESHOLD;
-    const shown = expanded || !isLong ? value : value.substring(0, LONG_STRING_THRESHOLD) + '…';
-    if (isMarkdown(shown)) {
-      const html = markdownToHtml(shown);
-      return (
-        <div>
-          <div
-            className="prose dark:prose-invert prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: html }}
-          />
-          {isLong && (
-            <button
-              type="button"
-              onClick={() => setExpanded(prev => !prev)}
-              className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
-            >
-              {expanded
-                ? t('workflows.checkpoint.longValueShowLess', 'Show less')
-                : t('workflows.checkpoint.longValueShowMore', 'Show full value')}
-            </button>
-          )}
-        </div>
-      );
-    }
-    return (
-      <div>
-        <div className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap break-words">
-          {shown}
-        </div>
-        {isLong && (
-          <button
-            type="button"
-            onClick={() => setExpanded(prev => !prev)}
-            className="mt-1 text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 font-medium"
-          >
-            {expanded
-              ? t('workflows.checkpoint.longValueShowLess', 'Show less')
-              : t('workflows.checkpoint.longValueShowMore', 'Show full value')}
-          </button>
-        )}
-      </div>
-    );
+    return <StringValue value={value} />;
   }
 
   if (Array.isArray(value)) {
-    if (!expanded) {
+    if (value.length === 0) return <PrimitiveValue value="" />;
+    const isPrimitiveList = value.every(
+      v => v === null || ['string', 'number', 'boolean'].includes(typeof v)
+    );
+    if (isPrimitiveList) {
       return (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
-          aria-label={`Expand ${fieldKey}`}
-        >
-          <Icon name="chevron-down" className="w-3 h-3" aria-hidden="true" />[{value.length}{' '}
-          {value.length === 1 ? 'item' : 'items'}]
-        </button>
-      );
-    }
-    return (
-      <div>
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className="inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-2"
-        >
-          <Icon name="chevron-up" className="w-3 h-3" aria-hidden="true" />
-          Collapse
-        </button>
-        <ol className="list-decimal list-inside text-sm text-gray-800 dark:text-gray-200 space-y-1">
+        <ul className="list-disc list-outside ml-5 space-y-1 text-sm text-gray-800 dark:text-gray-200">
           {value.map((item, idx) => (
             <li key={idx} className="break-words">
-              {typeof item === 'object' ? JSON.stringify(item) : String(item)}
+              {typeof item === 'string' ? item : <PrimitiveValue value={item} />}
             </li>
           ))}
-        </ol>
+        </ul>
+      );
+    }
+    // Array of structured objects → stack of cards so each item is a
+    // discrete unit (think: research topics, plan steps).
+    return (
+      <div className="space-y-3">
+        {value.map((item, idx) => (
+          <div
+            key={idx}
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md p-3"
+          >
+            <div className="text-xs font-semibold text-gray-500 dark:text-gray-400 mb-2">
+              #{idx + 1}
+            </div>
+            <DisplayValue value={item} depth={depth + 1} />
+          </div>
+        ))}
       </div>
     );
   }
 
   if (typeof value === 'object') {
     const entries = Object.entries(value);
-    if (!expanded) {
-      return (
-        <button
-          type="button"
-          onClick={() => setExpanded(true)}
-          className="inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:underline"
-          aria-label={`Expand ${fieldKey}`}
-        >
-          <Icon name="chevron-down" className="w-3 h-3" aria-hidden="true" />
-          {`{${entries.length} ${entries.length === 1 ? 'field' : 'fields'}}`}
-        </button>
-      );
-    }
+    if (entries.length === 0) return <PrimitiveValue value="" />;
     return (
-      <div>
-        <button
-          type="button"
-          onClick={() => setExpanded(false)}
-          className="inline-flex items-center gap-1 text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-2"
-        >
-          <Icon name="chevron-up" className="w-3 h-3" aria-hidden="true" />
-          Collapse
-        </button>
-        <dl className="text-sm text-gray-800 dark:text-gray-200 space-y-1">
-          {entries.map(([k, v]) => (
-            <div key={k} className="flex gap-2">
-              <dt className="font-medium text-gray-600 dark:text-gray-400">{k}:</dt>
-              <dd className="break-words">
-                {typeof v === 'object' ? JSON.stringify(v) : String(v)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      </div>
+      <dl className="space-y-3">
+        {entries.map(([k, v]) => (
+          <div key={k}>
+            <dt className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1">
+              {humanizeKey(k)}
+            </dt>
+            <dd className="text-gray-800 dark:text-gray-200 break-words">
+              <DisplayValue value={v} depth={depth + 1} />
+            </dd>
+          </div>
+        ))}
+      </dl>
     );
   }
 
-  return <span>{String(value)}</span>;
+  return <span className="text-sm">{String(value)}</span>;
 }
 
 /**
@@ -172,14 +171,14 @@ function DisplayData({ displayData, showTechnical }) {
       <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
         {t('workflows.checkpoint.relevantData', 'Relevant Data')}
       </h4>
-      <div className="bg-white/80 dark:bg-gray-800/60 rounded-lg p-3 space-y-3 max-h-96 overflow-y-auto border border-yellow-200 dark:border-yellow-800/40">
+      <div className="bg-white/90 dark:bg-gray-800/60 rounded-lg p-4 space-y-5 max-h-[32rem] overflow-y-auto border border-yellow-200 dark:border-yellow-800/40">
         {entries.map(([key, value]) => (
-          <div key={key}>
-            <div className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
-              {key.replace(/_/g, ' ')}
-            </div>
-            <DisplayValue fieldKey={key} value={value} />
-          </div>
+          <section key={key}>
+            <h5 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              {humanizeKey(key)}
+            </h5>
+            <DisplayValue value={value} />
+          </section>
         ))}
       </div>
 

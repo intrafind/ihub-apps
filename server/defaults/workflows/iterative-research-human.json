@@ -41,7 +41,7 @@
     },
     {
       "id": "planner",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Research Planner",
         "de": "Recherche-Planer"
@@ -155,7 +155,7 @@
     },
     {
       "id": "researcher",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Topic Researcher",
         "de": "Themen-Rechercheur"
@@ -287,7 +287,7 @@
     },
     {
       "id": "report-generator",
-      "type": "agent",
+      "type": "prompt",
       "name": {
         "en": "Report Generator",
         "de": "Bericht-Generator"

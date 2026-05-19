@@ -11,6 +11,7 @@ import ModelHintBanner from './ModelHintBanner';
 import { VoiceInputComponent } from '../../voice/components';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 import MagicPromptLoader from '../../../shared/components/MagicPromptLoader';
 
 /**
@@ -81,6 +82,7 @@ function ChatInput({
   const { t, i18n } = useTranslation();
   const { uiConfig } = useUIConfig();
   const { platformConfig } = usePlatformConfig();
+  const featureFlags = useFeatureFlags();
   const localInputRef = useRef(null);
   const actualInputRef = inputRef || localInputRef;
   const workflowSearchRef = useRef(null);
@@ -94,7 +96,10 @@ function ChatInput({
   const promptsListEnabled =
     uiConfig?.promptsList?.enabled !== false && app?.features?.promptsList !== false;
   const slashCommandEnabled = promptsListEnabled || skillsSlashEnabled;
-  const workflowMentionsEnabled = app?.tools?.some(t => t.startsWith('workflow:'));
+  const workflowMentionsEnabled =
+    featureFlags.isEnabled('workflows', true) &&
+    Array.isArray(app?.workflows) &&
+    app.workflows.length > 0;
 
   // Derive the @mention query from the current input value
   const mentionQuery = showWorkflowSearch ? value.match(/@([\w.-]*)$/)?.[1] || '' : '';

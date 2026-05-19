@@ -30,7 +30,7 @@ import logger from '../../../utils/logger.js';
  *       {
  *         id: 'branch-a',
  *         nodes: [
- *           { id: 'agent-1', type: 'agent', config: { ... } }
+ *           { id: 'step-1', type: 'prompt', config: { ... } }
  *         ]
  *       },
  *       {

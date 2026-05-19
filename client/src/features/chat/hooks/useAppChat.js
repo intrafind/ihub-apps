@@ -168,6 +168,19 @@ function useAppChat({
             });
           }
           break;
+        case 'workflow.checkpoint':
+          // Human-in-the-loop pause from a chat-launched workflow. Attach
+          // the checkpoint payload to the current assistant message so the
+          // chat UI can render an interactive prompt (HumanCheckpoint).
+          if (lastMessageIdRef.current && data) {
+            updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
+              workflowCheckpoint: {
+                checkpoint: data.checkpoint,
+                executionId: data.executionId
+              }
+            });
+          }
+          break;
         case 'workflow.step': {
           if (lastMessageIdRef.current && data) {
             const currentMessage = messagesRef.current.find(m => m.id === lastMessageIdRef.current);
@@ -223,6 +236,7 @@ function useAppChat({
             updateAssistantMessage(lastMessageIdRef.current, fullContent, true, {
               workflowStep: null,
               workflowSteps: finalSteps,
+              workflowCheckpoint: null,
               workflowResult: {
                 status: data.status,
                 executionId: data.executionId,

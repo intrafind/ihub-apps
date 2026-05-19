@@ -276,6 +276,15 @@ function AdminWorkflowEditPage() {
                   {t('common.delete', 'Delete')}
                 </button>
               )}
+              {!isNewWorkflow && (
+                <button
+                  onClick={() => navigate(`/admin/workflows/${id}/edit`)}
+                  className="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Icon name="edit" className="h-4 w-4 mr-2" />
+                  {t('admin.workflows.openVisualEditor', 'Open visual editor')}
+                </button>
+              )}
               <button
                 onClick={() => navigate('/admin/workflows')}
                 className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -375,6 +384,37 @@ function AdminWorkflowEditPage() {
                       onChange={value => handleLocalizedChange('description', value)}
                       type="textarea"
                     />
+                  </div>
+
+                  {/* Max Execution Time */}
+                  <div className="sm:col-span-2">
+                    <label
+                      htmlFor="maxExecutionTime"
+                      className="block text-sm font-medium text-gray-700"
+                    >
+                      {t('admin.workflows.maxExecutionTime', 'Max execution time (seconds)')}
+                    </label>
+                    <input
+                      type="number"
+                      id="maxExecutionTime"
+                      min={1}
+                      max={3600}
+                      value={Math.round(
+                        (workflowData.config?.maxExecutionTime ?? 300000) / 1000
+                      )}
+                      onChange={e => {
+                        const seconds = Math.max(1, parseInt(e.target.value, 10) || 0);
+                        const ms = Math.min(seconds * 1000, 3600000);
+                        handleMetadataChange('config.maxExecutionTime', ms);
+                      }}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {t(
+                        'admin.workflows.maxExecutionTimeHelp',
+                        'Workflow is cancelled if it runs longer than this. Default 300s (5min), max 3600s (1h).'
+                      )}
+                    </p>
                   </div>
 
                   {/* Enabled Toggle */}

@@ -313,7 +313,7 @@ describe('Workflow JSON File Validation', () => {
 
   test('all agent nodes use modelId instead of model', () => {
     for (const [_file, workflow] of Object.entries(workflows)) {
-      const agentNodes = workflow.nodes.filter(n => n.type === 'agent');
+      const agentNodes = workflow.nodes.filter(n => n.type === 'prompt');
       for (const node of agentNodes) {
         expect(node.config.model).toBeUndefined();
         expect(node.config.modelId).toBeTruthy();
