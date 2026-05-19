@@ -3,6 +3,7 @@ import useAppChat from '../../chat/hooks/useAppChat';
 import { useEmbeddedHost, applyHostContextFlags } from '../contexts/EmbeddedHostContext';
 import {
   combineUserTextWithEmailContext,
+  combineUserTextWithAppointmentContext,
   buildImageDataFromMailAttachments,
   buildFileDataFromMailAttachments,
   collectAttachmentsForSend
@@ -94,14 +95,27 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // clicked "Pin this email" on a previously-open message, or they
       // Ctrl-selected multiple emails and bulk-pulled them via the
       // Mailbox 1.15+ multi-select API. Both paths feed the same shape.
+      // Calendar (appointment) items don't have a pin-emails flow today
+      // so this list will be empty when itemKind === 'appointment'.
       const pinnedEmails = Array.isArray(params?.pinnedEmails) ? params.pinnedEmails : [];
 
-      const enrichedContent = combineUserTextWithEmailContext({
-        userText: apiMessage.content,
-        currentBodyText: ctx.bodyText,
-        currentItemId: ctx.itemId ?? null,
-        pinned: pinnedEmails
-      });
+      // Appointment surfaces inject a structured "Current meeting" block
+      // (subject, time, organizer, attendees, location, description)
+      // instead of the email-body block. The downstream prompt for the
+      // meeting-agenda-generator / meeting-briefing apps references this
+      // section by name in its system prompt.
+      const isAppointment = ctx?.itemKind === 'appointment';
+      const enrichedContent = isAppointment
+        ? combineUserTextWithAppointmentContext({
+            userText: apiMessage.content,
+            appointmentCtx: ctx
+          })
+        : combineUserTextWithEmailContext({
+            userText: apiMessage.content,
+            currentBodyText: ctx.bodyText,
+            currentItemId: ctx.itemId ?? null,
+            pinned: pinnedEmails
+          });
 
       // Combine manual uploads with attachments harvested from the host
       // (email attachments in Outlook, none today in the extension; this
@@ -109,11 +123,9 @@ function useOfficeChatAdapter({ appId, chatId, onMessageComplete }) {
       // Pinned emails' attachments are now included too — previously they
       // were stored when the user clicked "Add this email" but never
       // forwarded to the model. See issue #1467.
-      const mergedAttachments = collectAttachmentsForSend(
-        ctx.attachments,
-        pinnedEmails,
-        ctx.itemId ?? null
-      );
+      const mergedAttachments = isAppointment
+        ? []
+        : collectAttachmentsForSend(ctx.attachments, pinnedEmails, ctx.itemId ?? null);
       const hostImageData = await buildImageDataFromMailAttachments(mergedAttachments);
       const hostFileData = await buildFileDataFromMailAttachments(mergedAttachments);
 

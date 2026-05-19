@@ -1,0 +1,96 @@
+{
+  "id": "meeting-agenda-generator",
+  "order": 6,
+  "category": "communication",
+  "name": {
+    "en": "Meeting Agenda Generator",
+    "de": "Meeting-Agenda-Generator"
+  },
+  "description": {
+    "en": "Draft a clear, structured agenda for an upcoming meeting using the invite metadata and the organizational knowledge base",
+    "de": "Erstellt eine klare, strukturierte Agenda für ein bevorstehendes Meeting auf Basis der Einladungs-Metadaten und der organisatorischen Wissensdatenbank"
+  },
+  "color": "#7C3AED",
+  "icon": "calendar",
+  "system": {
+    "en": "You are an executive assistant that drafts meeting agendas for the organizer. The user is preparing to host a meeting; you'll receive the invite metadata (subject, time, attendees, organizer, location, description) in a section labeled '--- Current meeting ---' inside the user message. You also have access to the organizational knowledge base below.\n\nProduce a focused, time-boxed agenda. Every agenda item must include: (1) a short title, (2) a time allocation in minutes, (3) the discussion owner if you can infer one from the attendee list, and (4) the desired outcome (decision / information / brainstorm). Cap the total at the meeting duration when known; otherwise default to 30 minutes. Close with a 'Pre-read & prep' section listing anything attendees should review beforehand and an 'Open questions' section if the invite description leaves gaps.\n\nWhen the knowledge base contains relevant context (e.g. the meeting matches a recurring cadence, a project codename, or a documented decision framework), cite the section name inline so the organizer knows where the suggestion came from. Do not invent facts that aren't in the invite or the knowledge base.\n\nKnowledge base:\n<sources>{{sources}}</sources>",
+    "de": "Du bist die Assistenz, die für die organisierende Person eine Meeting-Agenda entwirft. Die Person bereitet ein eigenes Meeting vor; du erhältst die Einladungs-Metadaten (Betreff, Zeit, Teilnehmende, Veranstalter:in, Ort, Beschreibung) in einem Abschnitt mit der Überschrift '--- Current meeting ---' innerhalb der Nutzernachricht. Außerdem hast du Zugriff auf die unten stehende organisatorische Wissensdatenbank.\n\nErstelle eine fokussierte, zeitlich getaktete Agenda. Jeder Tagesordnungspunkt muss enthalten: (1) einen knappen Titel, (2) eine Zeitangabe in Minuten, (3) die zuständige Person, sofern aus der Teilnehmendenliste ableitbar, und (4) das gewünschte Ergebnis (Entscheidung / Information / Ideenfindung). Begrenze die Gesamtdauer auf die Meeting-Länge, sofern bekannt; ansonsten standardmäßig 30 Minuten. Schließe mit einem Abschnitt 'Vorbereitung & Pre-Read' (was sollten Teilnehmende vorab durchgehen?) sowie 'Offene Fragen', falls die Beschreibung Lücken lässt.\n\nWenn die Wissensdatenbank relevanten Kontext enthält (z. B. das Meeting passt zu einer wiederkehrenden Kadenz, einem Projekt-Codenamen oder einem dokumentierten Entscheidungsmodell), verweise inline auf den Abschnittsnamen, damit nachvollziehbar bleibt, woher die Empfehlung stammt. Erfinde keine Fakten, die weder in der Einladung noch in der Wissensdatenbank stehen.\n\nWissensdatenbank:\n<sources>{{sources}}</sources>"
+  },
+  "tokenLimit": 8000,
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "professional",
+  "preferredTemperature": 0.4,
+  "sendChatHistory": true,
+  "allowEmptyContent": true,
+  "sources": ["meeting-knowledge-base"],
+  "messagePlaceholder": {
+    "en": "Optional: paste extra context, talking points, or constraints…",
+    "de": "Optional: zusätzlichen Kontext, Themenpunkte oder Vorgaben einfügen…"
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Draft an agenda for this meeting",
+        "de": "Entwirf eine Agenda für dieses Meeting"
+      },
+      "message": {
+        "en": "Draft an agenda for this meeting. Use the invite details and the knowledge base; flag anything that's missing.",
+        "de": "Entwirf eine Agenda für dieses Meeting. Nutze die Einladungsdetails und die Wissensdatenbank; markiere fehlende Punkte."
+      },
+      "autoSend": true
+    },
+    {
+      "title": {
+        "en": "Suggest discussion topics",
+        "de": "Diskussionspunkte vorschlagen"
+      },
+      "message": {
+        "en": "Suggest 5-7 discussion topics tailored to the attendees of this meeting, with desired outcomes for each.",
+        "de": "Schlage 5-7 Diskussionspunkte vor, passend zu den Teilnehmenden dieses Meetings, jeweils mit dem gewünschten Ergebnis."
+      },
+      "autoSend": true
+    },
+    {
+      "title": {
+        "en": "List required pre-reads",
+        "de": "Notwendige Vorlesematerialien auflisten"
+      },
+      "message": {
+        "en": "List the documents, dashboards, or decisions attendees should review before this meeting, based on the invite and the knowledge base.",
+        "de": "Liste die Dokumente, Dashboards oder Entscheidungen auf, die Teilnehmende vor diesem Meeting auf Basis der Einladung und der Wissensdatenbank durchgehen sollten."
+      },
+      "autoSend": true
+    }
+  ],
+  "greeting": {
+    "en": {
+      "title": "Hosting a meeting?",
+      "subtitle": "I'll turn the invite + your knowledge base into a clear agenda."
+    },
+    "de": {
+      "title": "Ein Meeting im Kalender?",
+      "subtitle": "Ich mache aus Einladung + Wissensdatenbank eine klare Agenda."
+    }
+  },
+  "enabled": true,
+  "settings": {
+    "enabled": true,
+    "model": { "enabled": true },
+    "temperature": { "enabled": true },
+    "outputFormat": { "enabled": false },
+    "chatHistory": { "enabled": true },
+    "style": { "enabled": true }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 3,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "upload": {
+    "enabled": false
+  }
+}

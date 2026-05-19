@@ -20,6 +20,25 @@
     }
   },
   {
+    "id": "meeting-knowledge-base",
+    "name": {
+      "en": "Meeting Knowledge Base",
+      "de": "Meeting-Wissensdatenbank"
+    },
+    "description": {
+      "en": "Organizational reference material consulted by the calendar-aware apps (recurring meetings, glossary, decision frameworks). Replace with a connector to your company wiki / ifinder source for real use.",
+      "de": "Organisatorisches Referenzmaterial für die kalenderbezogenen Apps (wiederkehrende Meetings, Glossar, Entscheidungsmodelle). Für den Produktiveinsatz durch eine Verbindung zum Unternehmenswiki / iFinder ersetzen."
+    },
+    "type": "filesystem",
+    "enabled": true,
+    "exposeAs": "prompt",
+    "tags": ["meetings", "calendar"],
+    "config": {
+      "path": "sources/meeting-knowledge-base.md",
+      "encoding": "utf-8"
+    }
+  },
+  {
     "id": "intrafind-website-home",
     "name": {
       "en": "IntraFind.com"

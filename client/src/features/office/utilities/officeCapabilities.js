@@ -40,3 +40,22 @@ export function isMultiSelectBodySupported() {
   if (typeof Office.context.mailbox.loadItemByIdAsync !== 'function') return false;
   return safeIsSetSupported('Mailbox', '1.15');
 }
+
+/**
+ * True when the currently-selected Outlook item is a calendar appointment.
+ * Used by the chat panel to pick calendar-specific starter prompts and by
+ * the context strip to switch between the mail and appointment banner.
+ *
+ * Unlike the multi-select capability checks this reads from the live
+ * `Office.context.mailbox.item`, so it must be re-evaluated whenever the
+ * `ihub:itemchanged` event fires.
+ */
+export function isOutlookAppointmentMode() {
+  if (!isMailboxAvailable()) return false;
+  try {
+    const itemType = String(Office.context.mailbox.item?.itemType || '').toLowerCase();
+    return itemType === 'appointment';
+  } catch {
+    return false;
+  }
+}
