@@ -330,6 +330,8 @@ Five musts plus one bonus:
 | **Phase 2 — Page templates & flows** | Apply List/CRUD template to all list pages; Settings template to Authentication/OAuth/UI/Security/Advanced; Integration Hub to Integrations. Bulk actions across list pages. Empty states. Wizards for the top 5 JTBDs (Publish App, Connect SSO, Rotate Key, Onboard Group, Bulk Edit). Command palette ships. Global search. | 8 weeks | Optional: bulk endpoints, `/api/admin/search`, "test connection" endpoints where missing |
 | **Phase 3 — Sub-roles & enterprise polish** | Sub-admin roles (read-only first, then scoped write). Dedicated Audit Log feed + retention + export. Change history per config. Generalised dry-run. Bulk import/export. Pinning/favorites. Chord shortcuts. In-product changelog. | 10 weeks | Audit-log persistence, change-history store, role-scoped permission filters |
 
+> **Parallel workstream throughout all three phases: documentation alignment.** See §12. Today many users edit JSON in `contents/` directly because `docs/` does not document the admin UI. Without this workstream, the redesign delivers a surface users are never taught to use.
+
 ### Phase 1 success criteria
 
 - Time-to-find-setting drops from ~30s to <10s (admin survey, n≥10)
@@ -344,7 +346,60 @@ Five musts plus one bonus:
 
 ---
 
-## 12. Enterprise table-stakes — what we are adding
+## 12. Documentation alignment (parallel workstream)
+
+The redesign has a documentation problem to solve in parallel. Today, **many users edit JSON files in `contents/` directly** — apps, models, prompts, groups, platform config — even though the admin UI already exposes everything they need. The root cause is not that the UI is missing functionality; it is that **`docs/` has almost no information about the admin UI itself**. Users follow the docs, the docs show them JSON snippets, so they edit JSON.
+
+This has knock-on effects:
+
+- Users miss validation that the UI would have caught (Zod schema errors only surface at server start)
+- Users miss the encryption-at-rest behavior for secrets (the UI encrypts on save; hand-edited JSON leaves secrets plaintext)
+- Users miss config-cache invalidation paths (the UI triggers reloads automatically)
+- Migration / inheritance / feature flags behave differently when set via UI vs. hand-edit
+- Every doc that shows "edit `apps/xyz.json`" is a missed teaching moment for the admin UI
+
+### What this means for the redesign
+
+Documentation alignment is a **required follow-up** to the IA redesign, not optional. Without it, the redesign delivers a beautiful admin that users still circumvent because the docs never tell them to use it.
+
+### Scope of documentation work
+
+**During Phase 1 (in parallel with chrome + Overview ship):**
+
+- Audit every file in `docs/` for references to direct JSON editing. Tag each as: (a) "should be done in admin UI", (b) "advanced/escape-hatch — keep JSON path", or (c) "out-of-date entirely".
+- For category (a), rewrite to show the admin UI flow as the primary path. JSON shown only as reference for what the UI produces.
+- For category (b), explicitly mark as "Advanced — most users should use Admin → [section]" with a link.
+
+**During Phase 2 (alongside page-template unification):**
+
+- For every admin page that lands on a new template, add or refresh its corresponding `docs/` chapter with screenshots and a task-oriented walkthrough ("How do I publish an app?", "How do I rotate a provider key?", "How do I connect SSO?").
+- Cross-link: every JSON schema doc gets a "Do this in the UI instead" banner at the top with a link to the relevant admin page.
+- Add a new `docs/admin-ui.md` (or section in `docs/SUMMARY.md`) that becomes the entry point for "I am an admin — where do I start?"
+
+**During Phase 3 (alongside sub-roles + audit log):**
+
+- Document sub-role boundaries with capability matrices
+- Document audit log retention and export
+- Document the command palette and keyboard shortcuts
+
+### Success criteria
+
+- Direct JSON edits by admins drop measurably (proxy metric: support tickets mentioning manual JSON edits)
+- Admin UI usage telemetry shows ≥80% of admin actions go through UI flows for the operations we have UI for
+- Every admin page in the new IA has a corresponding docs section, reachable from a single `docs/admin/` index
+- Doc PRs land in step with feature PRs (added to PR review checklist)
+
+### Risk if we skip this
+
+If we ship the redesign without documentation alignment, the most common scenario will be: an admin reads the docs, sees a JSON example, edits the file directly, hits a validation or cache error, and concludes "the admin UI is broken" — when in reality they never used it. We will have rebuilt the surface that nobody is being taught to use.
+
+### Open question
+
+Do we treat documentation alignment as a hard gate for Phase 1 ship, or as a fast-follow within 30 days of Phase 1 GA? **Draft recommendation:** fast-follow with a public README/changelog note pointing to the new admin UI as the canonical path. A 30-day window keeps Phase 1 unblocked while still landing the docs before the redesign reaches broad customer awareness.
+
+---
+
+## 13. Enterprise table-stakes — what we are adding
 
 | Capability | Priority | Phase |
 |---|---|---|
@@ -363,7 +418,7 @@ Explicitly **not** building: custom dashboard widget layouts (single opinionated
 
 ---
 
-## 13. Open decisions
+## 14. Open decisions
 
 These need a stakeholder call **before Phase 1 build kick-off**. Draft picks a default for each.
 
@@ -378,7 +433,7 @@ These need a stakeholder call **before Phase 1 build kick-off**. Draft picks a d
 
 ---
 
-## 14. What this redesign is not
+## 15. What this redesign is not
 
 - **Not a backend refactor.** Every IA change uses existing endpoints (`server/routes/admin/*`). Audit Log dedicated feed and sub-role permission filters are the only new backend asks (both Phase 3).
 - **Not a brand refresh.** Color, type, and density tighten, but the visual language is iHub's existing Tailwind palette — not a logo or identity change.
@@ -386,7 +441,7 @@ These need a stakeholder call **before Phase 1 build kick-off**. Draft picks a d
 
 ---
 
-## 15. Implementation notes (for the coder phase)
+## 16. Implementation notes (for the coder phase)
 
 - **Three React shells:** `<ListPage>`, `<SettingsPage>`, `<IntegrationHubPage>`. Slots for header, toolbar, content, footer/save-bar. Pages cannot drift visually.
 - **`SidebarContext`** holds collapsed state, expanded sections, pinned items, current alert counts (subscribed to `/api/admin/alerts/summary` polling every 60s).
@@ -399,13 +454,14 @@ These need a stakeholder call **before Phase 1 build kick-off**. Draft picks a d
 
 ---
 
-## 16. Next steps
+## 17. Next steps
 
 1. **Stakeholder review** of this draft (estimate: 60-min walk-through with PM + Eng leadership + 2-3 enterprise admins).
-2. **Decisions** on the 8 open questions in §13.
+2. **Decisions** on the 9 open questions in §14 (8 IA/feature decisions + 1 on documentation timing in §12).
 3. **Phase 1 ticket breakdown** by engineering, scoped to the 4-week target.
 4. **Component spike** on the three page shells before opening Phase 1 implementation tickets.
-5. **Feedback loop** with 2-3 enterprise admins after a week of Phase 1 in staging — adjust IA before broader rollout.
+5. **Documentation audit** kicked off in parallel — see §12. Tag every `docs/` page as UI-first, advanced/escape-hatch, or stale, and start rewriting UI-first pages in lockstep with Phase 1.
+6. **Feedback loop** with 2-3 enterprise admins after a week of Phase 1 in staging — adjust IA before broader rollout.
 
 ---
 

@@ -27,6 +27,7 @@ This redesign moves the admin to a **task-oriented, enterprise-grade workspace**
 - **OAuth hub + Server + Clients merged** into one tabbed page.
 - **Audit Log added** as first-class observability surface.
 - **Sub-admin roles deferred to Phase 3** — ship IA changes first.
+- **Documentation alignment is a required parallel workstream.** Many users today edit JSON in `contents/` directly because `docs/` does not document the admin UI. Without rewriting docs to be UI-first, the redesign delivers a surface nobody is taught to use. See draft §12.
 
 ## Phased rollout
 
@@ -45,3 +46,4 @@ These need a call before implementation begins. The draft includes recommendatio
 3. **Legacy integration routes** — remove with 1-minor-version redirect (recommended), or keep indefinitely?
 4. **Sub-roles timing** — Phase 3 (recommended) or sooner?
 5. **Audit Log scope** — full new feature in Phase 1 or stub from telemetry?
+6. **Documentation alignment timing** — hard gate for Phase 1 ship, or 30-day fast-follow (recommended)? See draft §12.
