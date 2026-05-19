@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   ReactFlow,
@@ -151,13 +151,38 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
     [setNodes]
   );
 
+  /** Delete a node and any edges connected to it; clear selection if it was selected */
+  const handleDeleteNode = useCallback(
+    nodeId => {
+      setNodes(nds => nds.filter(n => n.id !== nodeId));
+      setEdges(eds => eds.filter(e => e.source !== nodeId && e.target !== nodeId));
+      setSelectedNode(prev => (prev?.id === nodeId ? null : prev));
+    },
+    [setNodes, setEdges]
+  );
+
+  /**
+   * Nodes enriched with `nodeId` + `onDelete` (so the WorkflowNode can render
+   * an in-canvas delete button) and a `deletable` flag (start/end nodes are
+   * never deletable).
+   */
+  const enrichedNodes = useMemo(
+    () =>
+      nodes.map(n => ({
+        ...n,
+        deletable: n.data.nodeType !== 'start' && n.data.nodeType !== 'end',
+        data: { ...n.data, nodeId: n.id, onDelete: handleDeleteNode }
+      })),
+    [nodes, handleDeleteNode]
+  );
+
   return (
     <div className="flex h-full">
       <NodePalette onAddNode={handleAddNode} />
 
       <div className="flex-1 relative">
         <ReactFlow
-          nodes={nodes}
+          nodes={enrichedNodes}
           edges={edges}
           onNodesChange={onNodesChange}
           onEdgesChange={onEdgesChange}
@@ -204,6 +229,7 @@ function WorkflowEditorInner({ initialNodes, initialEdges, onSave, onPublish }) 
         <NodeConfigPanel
           selectedNode={selectedNode}
           onUpdateNode={handleUpdateNode}
+          onDeleteNode={handleDeleteNode}
           onClose={() => setSelectedNode(null)}
         />
       )}
