@@ -1,0 +1,96 @@
+{
+  "id": "meeting-briefing",
+  "order": 7,
+  "category": "communication",
+  "name": {
+    "en": "Meeting Briefing",
+    "de": "Meeting-Briefing"
+  },
+  "description": {
+    "en": "Get a one-page prep brief for an upcoming meeting: context, attendees, expected outcomes, and the questions you should be ready to answer",
+    "de": "Erhalte ein einseitiges Vorbereitungs-Briefing für ein Meeting: Kontext, Teilnehmende, erwartete Ergebnisse und die Fragen, auf die du vorbereitet sein solltest"
+  },
+  "color": "#0EA5E9",
+  "icon": "clock",
+  "system": {
+    "en": "You are a chief-of-staff style assistant preparing the user to attend an upcoming meeting. The user will not be hosting; their goal is to walk in informed. You'll receive the invite metadata (subject, time, attendees, organizer, location, description) in a section labeled '--- Current meeting ---' inside the user message, plus access to the organizational knowledge base below.\n\nProduce a concise one-page briefing with these sections, in order:\n  1. **TL;DR** — one or two sentences on what this meeting is about and why it matters.\n  2. **Likely outcomes** — what the organizer probably wants by the end (decision, alignment, info-share, etc.). Infer from the subject + description; be explicit when you're guessing.\n  3. **Attendees worth knowing** — pick out 3–5 attendees (or fewer if the meeting is smaller) and note their probable role / interest area, using the knowledge base for context where relevant.\n  4. **Context from the knowledge base** — anything that's relevant (recurring meeting cadence, project codenames, decision frameworks). Cite section names so the reader can dig deeper.\n  5. **Questions to bring** — 3–5 questions the user should be ready to ask or answer.\n  6. **Open risks / gaps** — anything missing from the invite that the user may want to clarify with the organizer.\n\nDo not invent attendee responsibilities, project status, or commitments that aren't supported by the invite or the knowledge base. When the knowledge base is silent, say so rather than guessing.\n\nKnowledge base:\n<sources>{{sources}}</sources>",
+    "de": "Du bist eine Stabsassistenz, die die nutzende Person auf ein bevorstehendes Meeting vorbereitet. Diese Person wird nicht selbst moderieren; Ziel ist, informiert in das Meeting zu gehen. Du erhältst die Einladungs-Metadaten (Betreff, Zeit, Teilnehmende, Veranstalter:in, Ort, Beschreibung) in einem Abschnitt mit der Überschrift '--- Current meeting ---' in der Nutzernachricht, sowie Zugriff auf die unten stehende organisatorische Wissensdatenbank.\n\nErstelle ein kompaktes einseitiges Briefing in dieser Reihenfolge:\n  1. **TL;DR** — ein bis zwei Sätze, worum es geht und warum es relevant ist.\n  2. **Wahrscheinliche Ergebnisse** — was die einladende Person voraussichtlich erreichen will (Entscheidung, Abstimmung, Information o. Ä.). Aus Betreff + Beschreibung ableiten; markiere ausdrücklich, wenn du vermutest.\n  3. **Relevante Teilnehmende** — wähle 3–5 Personen aus (oder weniger bei kleinen Runden) und beschreibe ihre vermutliche Rolle bzw. ihr Interessengebiet; nutze dabei die Wissensdatenbank, falls passend.\n  4. **Kontext aus der Wissensdatenbank** — alles Relevante (wiederkehrende Kadenz, Projekt-Codenamen, Entscheidungsmodelle). Nenne dabei die Abschnittsnamen, damit die Leserin / der Leser nachschlagen kann.\n  5. **Fragen, die ich mitbringen sollte** — 3–5 Fragen, auf die die Person vorbereitet sein sollte oder die sie aktiv stellen kann.\n  6. **Offene Risiken / Lücken** — was in der Einladung fehlt und gegebenenfalls vorab geklärt werden sollte.\n\nErfinde keine Zuständigkeiten, Projektstatus oder Zusagen, die weder durch die Einladung noch durch die Wissensdatenbank gedeckt sind. Wenn die Wissensdatenbank dazu schweigt, sage das, statt zu raten.\n\nWissensdatenbank:\n<sources>{{sources}}</sources>"
+  },
+  "tokenLimit": 8000,
+  "preferredOutputFormat": "markdown",
+  "preferredStyle": "professional",
+  "preferredTemperature": 0.4,
+  "sendChatHistory": true,
+  "allowEmptyContent": true,
+  "sources": ["meeting-knowledge-base"],
+  "messagePlaceholder": {
+    "en": "Optional: tell me what you specifically want to understand or be ready for…",
+    "de": "Optional: nenne, was du gezielt verstehen oder worauf du vorbereitet sein möchtest…"
+  },
+  "starterPrompts": [
+    {
+      "title": {
+        "en": "Prepare me for this meeting",
+        "de": "Bereite mich auf dieses Meeting vor"
+      },
+      "message": {
+        "en": "Prepare me for this meeting. Give me a one-page briefing using the invite and the knowledge base.",
+        "de": "Bereite mich auf dieses Meeting vor. Erstelle ein einseitiges Briefing aus Einladung und Wissensdatenbank."
+      },
+      "autoSend": true
+    },
+    {
+      "title": {
+        "en": "Who's attending and why?",
+        "de": "Wer nimmt teil und warum?"
+      },
+      "message": {
+        "en": "Tell me about the attendees of this meeting and why each is likely on the invite, using the knowledge base where it helps.",
+        "de": "Erzähle mir etwas über die Teilnehmenden dieses Meetings und warum jede Person vermutlich eingeladen wurde — nutze die Wissensdatenbank, wo es hilft."
+      },
+      "autoSend": true
+    },
+    {
+      "title": {
+        "en": "Questions I should ask",
+        "de": "Welche Fragen sollte ich stellen?"
+      },
+      "message": {
+        "en": "Suggest 5 questions I should be ready to ask or answer in this meeting, with the rationale for each.",
+        "de": "Schlage 5 Fragen vor, auf die ich in diesem Meeting vorbereitet sein sollte (zu stellen oder zu beantworten), jeweils mit Begründung."
+      },
+      "autoSend": true
+    }
+  ],
+  "greeting": {
+    "en": {
+      "title": "Meeting coming up?",
+      "subtitle": "I'll prep you with context from the invite and the knowledge base."
+    },
+    "de": {
+      "title": "Meeting steht an?",
+      "subtitle": "Ich bereite dich mit Kontext aus Einladung und Wissensdatenbank vor."
+    }
+  },
+  "enabled": true,
+  "settings": {
+    "enabled": true,
+    "model": { "enabled": true },
+    "temperature": { "enabled": true },
+    "outputFormat": { "enabled": false },
+    "chatHistory": { "enabled": true },
+    "style": { "enabled": true }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 3,
+    "microphone": {
+      "enabled": true,
+      "mode": "manual",
+      "showTranscript": true
+    }
+  },
+  "upload": {
+    "enabled": false
+  }
+}

@@ -11,7 +11,7 @@
  * This executor integrates with the existing ChatService and ToolExecutor
  * to provide full LLM capabilities within a workflow context.
  *
- * @module services/workflow/executors/AgentNodeExecutor
+ * @module services/workflow/executors/PromptNodeExecutor
  */
 
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
@@ -31,7 +31,7 @@ import logger from '../../../utils/logger.js';
 
 /**
  * Agent node configuration
- * @typedef {Object} AgentNodeConfig
+ * @typedef {Object} PromptNodeConfig
  * @property {string} [system] - System prompt for the agent
  * @property {string} [prompt] - User prompt template (can contain variable references)
  * @property {Array<string>} [tools] - Tool IDs available to this agent
@@ -57,10 +57,10 @@ import logger from '../../../utils/logger.js';
  * @extends BaseNodeExecutor
  *
  * @example
- * // Agent node configuration
+ * // Prompt node configuration
  * {
- *   id: 'research-agent',
- *   type: 'agent',
+ *   id: 'research-step',
+ *   type: 'prompt',
  *   name: 'Research Agent',
  *   config: {
  *     system: 'You are a research assistant. Search for relevant information.',
@@ -72,9 +72,9 @@ import logger from '../../../utils/logger.js';
  *   }
  * }
  */
-export class AgentNodeExecutor extends BaseNodeExecutor {
+export class PromptNodeExecutor extends BaseNodeExecutor {
   /**
-   * Create a new AgentNodeExecutor
+   * Create a new PromptNodeExecutor
    * @param {Object} options - Executor options
    */
   constructor(options = {}) {
@@ -101,7 +101,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     const { language = 'en' } = context;
 
     this.logger.info('Executing agent node', {
-      component: 'AgentNodeExecutor',
+      component: 'PromptNodeExecutor',
       nodeId: node.id,
       hasTools: (config.tools || []).length > 0
     });
@@ -156,7 +156,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       }
 
       this.logger.info('Agent node completed', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         nodeId: node.id,
         hasOutput: output !== undefined,
         model: model.id
@@ -181,8 +181,13 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
         { stateUpdates: hasStateUpdates ? stateUpdates : undefined }
       );
 
-      // Include tokens at result level for metrics aggregation
+      // Promote model + token info to the top of the result so they survive
+      // even when result.output is replaced by the bare outputVariable value
+      // (and so the persisted state exposes them to the UI).
       result.tokens = response.tokens;
+      result.model = model.id;
+      result.modelName = model.name;
+      result.content = output;
 
       // Add outputVariable to result for UI display
       if (config.outputVariable) {
@@ -193,7 +198,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       return result;
     } catch (error) {
       this.logger.error('Agent node failed', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         nodeId: node.id,
         error
       });
@@ -279,7 +284,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       for (const varName of config.inputFiles) {
         const raw = state.data?.[varName] || state.data?._fileData;
         logger.info('inputFiles lookup', {
-          component: 'AgentNodeExecutor',
+          component: 'PromptNodeExecutor',
           varName,
           rawType: typeof raw,
           isObject: raw && typeof raw === 'object',
@@ -446,7 +451,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
             break;
           default:
             this.logger.warn('Unknown comparison operator', {
-              component: 'AgentNodeExecutor',
+              component: 'PromptNodeExecutor',
               operator
             });
         }
@@ -577,7 +582,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       if (closingIndex === -1) {
         // Couldn't find matching closing tag
         this.logger.warn('Unbalanced {{#each}} block', {
-          component: 'AgentNodeExecutor',
+          component: 'PromptNodeExecutor',
           arrayPath
         });
         break;
@@ -734,7 +739,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
     const cachedContent = state.data?._sourceContent?.[cacheKey];
     if (cachedContent) {
       this.logger.debug('Using cached source content', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         sourceIds
       });
       return { content: cachedContent, cacheUpdates: null };
@@ -770,7 +775,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       if (result.metadata.errors.length > 0) {
         this.logger.warn('Source loading errors', {
-          component: 'AgentNodeExecutor',
+          component: 'PromptNodeExecutor',
           errors: result.metadata.errors
         });
       }
@@ -782,7 +787,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       return { content: result.content || null, cacheUpdates };
     } catch (error) {
       this.logger.error('Failed to load sources', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         sourceIds,
         error
       });
@@ -827,7 +832,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       iteration++;
 
       this.logger.debug('LLM iteration', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         nodeId,
         iteration,
         messageCount: currentMessages.length
@@ -896,7 +901,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
     if (iteration >= maxIterations) {
       this.logger.warn('Max iterations reached for node', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         nodeId,
         maxIterations
       });
@@ -934,7 +939,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       }
     } catch (error) {
       this.logger.warn('Failed to parse tool arguments', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         toolId,
         error: e
       });
@@ -956,7 +961,7 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
       };
     } catch (error) {
       this.logger.error('Tool execution failed', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         toolId,
         error
       });
@@ -1008,13 +1013,13 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
 
       // If no JSON found, return content as-is
       this.logger.warn('Could not parse structured output, returning raw content', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         nodeId
       });
       return content;
     } catch (error) {
       this.logger.warn('JSON parse error for structured output', {
-        component: 'AgentNodeExecutor',
+        component: 'PromptNodeExecutor',
         nodeId,
         error
       });
@@ -1023,4 +1028,4 @@ export class AgentNodeExecutor extends BaseNodeExecutor {
   }
 }
 
-export default AgentNodeExecutor;
+export default PromptNodeExecutor;

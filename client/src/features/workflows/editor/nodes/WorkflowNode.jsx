@@ -7,8 +7,10 @@ import { NODE_TYPE_COLORS } from '../workflowEditorUtils';
  * Displays the node type as a colored header, the node name, and a config preview.
  * Start nodes have no target handle; end nodes have no source handle.
  *
+ * Non-start/end nodes show a delete button on hover.
+ *
  * @param {object} props - React Flow node props
- * @param {object} props.data - Node data containing nodeType, nodeName, and nodeConfig
+ * @param {object} props.data - Node data: nodeType, nodeName, nodeConfig, nodeId, onDelete
  * @param {boolean} props.selected - Whether the node is currently selected
  */
 export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
@@ -33,12 +35,12 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
 
   return (
     <div
-      className={`rounded-lg shadow-md border-2 bg-white dark:bg-gray-800 min-w-[180px] max-w-[220px] ${
+      className={`group relative rounded-lg shadow-md border-2 bg-white dark:bg-gray-800 min-w-[180px] max-w-[220px] ${
         selected ? 'ring-2 ring-blue-400' : ''
       }`}
       style={{ borderColor: color }}
     >
-      {!isStart && <Handle type="target" position={Position.Top} className="!bg-gray-400" />}
+      {!isStart && <Handle type="target" position={Position.Left} className="!bg-gray-400" />}
 
       <div
         className="px-3 py-1.5 text-xs font-semibold text-white rounded-t-md"
@@ -46,6 +48,20 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
       >
         {data.nodeType}
       </div>
+
+      {!isStart && !isEnd && data.onDelete && (
+        <button
+          className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs transition-opacity"
+          onClick={e => {
+            e.stopPropagation();
+            data.onDelete(data.nodeId);
+          }}
+          title="Delete node"
+          aria-label="Delete node"
+        >
+          &#x2715;
+        </button>
+      )}
 
       <div className="px-3 py-2">
         <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
@@ -56,7 +72,7 @@ export const WorkflowNode = memo(function WorkflowNode({ data, selected }) {
         )}
       </div>
 
-      {!isEnd && <Handle type="source" position={Position.Bottom} className="!bg-gray-400" />}
+      {!isEnd && <Handle type="source" position={Position.Right} className="!bg-gray-400" />}
     </div>
   );
 });

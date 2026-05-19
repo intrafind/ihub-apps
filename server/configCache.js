@@ -8,7 +8,7 @@ import {
   filterResourcesByPermissions,
   isAnonymousAccessAllowed
 } from './utils/authorization.js';
-import { loadTools, localizeTools } from './toolLoader.js';
+import { loadTools } from './toolLoader.js';
 import { loadSkillsMetadata } from './services/skillLoader.js';
 import { validateSourceConfig } from './validators/sourceConfigSchema.js';
 import { createHash } from 'crypto';
@@ -1440,21 +1440,8 @@ class ConfigCache {
       return { data: [], etag: null };
     }
 
-    // Append workflow tools that have chatIntegration enabled
-    const { data: workflows } = this.getWorkflows();
-    const workflowTools = workflows
-      .filter(wf => wf.chatIntegration?.enabled)
-      .map(wf => ({
-        id: `workflow:${wf.id}`,
-        name: wf.chatIntegration?.toolDescription || wf.name,
-        description: wf.chatIntegration?.toolDescription || wf.description,
-        isWorkflowTool: true,
-        workflowId: wf.id
-      }));
-
-    if (workflowTools.length > 0) {
-      tools = [...tools, ...localizeTools(workflowTools, language)];
-    }
+    // Workflows are first-class citizens (app.workflows). They are NOT mixed
+    // into the tools list returned to the chat UI.
 
     const originalToolsCount = tools.length;
     let userSpecificEtag = toolsEtag || 'no-etag';

@@ -22,6 +22,11 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import {
+  buildReplayStepsFromState,
+  drainPendingFinish
+} from '../../services/workflow/chatBridge.js';
+import { activeWorkflowExecutions } from '../../tools/workflowRunner.js';
 
 export default function registerSessionRoutes(
   app,
@@ -354,6 +359,69 @@ export default function registerSessionRoutes(
         const myEntry = clients.get(chatId);
         actionTracker.trackConnected(chatId);
 
+        // --- Workflow disconnect resilience ---
+        // 1. If a workflow finished while the chat was disconnected, deliver
+        //    the result + final chunk + done now (final output backfill).
+        // 2. If a workflow is still running for this chatId, replay step
+        //    progress from persisted state so the chat catches up.
+        try {
+          const pending = drainPendingFinish(chatId);
+          if (pending) {
+            actionTracker.trackWorkflowResult(chatId, {
+              workflowName: pending.workflowName,
+              status: pending.status,
+              executionId: pending.executionId,
+              error: pending.errorMsg,
+              outputFormat: pending.outputFormat || 'markdown'
+            });
+            if (!pending.passthrough && pending.outputText) {
+              actionTracker.trackChunk(chatId, { content: pending.outputText });
+            }
+            const finishReason =
+              pending.status === 'cancelled'
+                ? 'cancelled'
+                : pending.status === 'failed'
+                  ? 'error'
+                  : 'stop';
+            actionTracker.trackDone(chatId, { finishReason });
+            logger.info('Delivered pending workflow finish on SSE reconnect', {
+              component: 'sessionRoutes',
+              chatId,
+              executionId: pending.executionId,
+              status: pending.status
+            });
+          } else {
+            const active = activeWorkflowExecutions.get(chatId);
+            if (active && active.engine && active.executionId) {
+              const state = await active.engine.stateManager.get(active.executionId);
+              const workflow = state?.data?._workflowDefinition;
+              if (state && workflow) {
+                const replayEvents = buildReplayStepsFromState(state, workflow);
+                for (const ev of replayEvents) {
+                  actionTracker.trackWorkflowStep(chatId, {
+                    workflowName: workflow.name,
+                    ...ev
+                  });
+                }
+                if (replayEvents.length > 0) {
+                  logger.info('Replayed workflow steps on SSE reconnect', {
+                    component: 'sessionRoutes',
+                    chatId,
+                    executionId: active.executionId,
+                    steps: replayEvents.length
+                  });
+                }
+              }
+            }
+          }
+        } catch (replayError) {
+          logger.warn('Workflow reconnect replay/backfill failed', {
+            component: 'sessionRoutes',
+            chatId,
+            error: replayError.message
+          });
+        }
+
         // Heartbeat: write an SSE comment every 30s so reverse proxies (nginx
         // default idle timeout is 60s) don't silently kill the connection.
         // If the write throws, the socket is dead — clear the interval and
@@ -642,6 +710,32 @@ export default function registerSessionRoutes(
         if (mentionMatch) {
           const mentionedId = mentionMatch[1];
           const mentionedWorkflow = configCache.getWorkflowById(mentionedId);
+
+          // If the user explicitly @-mentioned a workflow but it is not
+          // chat-runnable, refuse the message instead of falling through to
+          // the LLM (which would happily pick a *different* registered
+          // workflow tool — the @human → @auto switch users have seen).
+          if (mentionedWorkflow) {
+            const isDisabled = mentionedWorkflow.enabled === false;
+            const noChatIntegration = !mentionedWorkflow.chatIntegration?.enabled;
+
+            if (isDisabled || noChatIntegration) {
+              const wfName =
+                (typeof mentionedWorkflow.name === 'object'
+                  ? mentionedWorkflow.name[clientLanguage] || mentionedWorkflow.name.en
+                  : mentionedWorkflow.name) || mentionedId;
+              const reason = isDisabled
+                ? `Workflow "${wfName}" is disabled.`
+                : `Workflow "${wfName}" is not configured for chat (chatIntegration.enabled is false).`;
+              actionTracker.trackError(chatId, { message: reason });
+              if (!clients.has(chatId)) {
+                return res.status(400).json({ status: 'error', message: reason });
+              }
+              actionTracker.trackChunk(chatId, { content: reason });
+              actionTracker.trackDone(chatId, { finishReason: 'error' });
+              return res.json({ status: 'streaming', chatId });
+            }
+          }
 
           if (
             mentionedWorkflow &&

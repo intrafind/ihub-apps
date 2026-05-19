@@ -30,9 +30,7 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
   const featureFlags = useFeatureFlags();
 
   // Determine which workflow IDs are available for this app
-  const appWorkflowIds = (app?.tools || [])
-    .filter(t => t.startsWith('workflow:'))
-    .map(t => t.replace('workflow:', ''));
+  const appWorkflowIds = Array.isArray(app?.workflows) ? app.workflows : [];
 
   const fetchAndFilter = useCallback(async () => {
     // Don't fetch if workflows feature is disabled
@@ -47,6 +45,11 @@ const WorkflowMentionSearch = forwardRef(({ isOpen, query, onClose, onSelect, ap
 
       const available = allWorkflows
         .filter(w => appWorkflowIds.includes(w.id))
+        // Only show workflows the user can actually trigger from chat (must
+        // have chatIntegration.enabled). Human-checkpoint nodes ARE supported
+        // now — the chat renders an inline checkpoint UI when the workflow
+        // pauses for input.
+        .filter(w => w.enabled !== false && w.chatIntegration?.enabled)
         .map(w => ({
           ...w,
           localizedName: getLocalizedContent(w.name, i18n.language),

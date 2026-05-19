@@ -1,4 +1,4 @@
-export const version = '033';
+export const version = '035';
 export const description = 'add_cors_defaults';
 
 export async function precondition(ctx) {

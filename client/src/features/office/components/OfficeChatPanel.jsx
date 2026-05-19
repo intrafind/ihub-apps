@@ -21,9 +21,13 @@ import { displayReplyFormWithAssistantResponse } from '../utilities/replyForm';
 import { buildPromptTemplate } from '../utilities/buildChatApiMessages';
 import {
   fetchCurrentMailContext,
+  fetchCurrentOutlookItemContext,
   fetchSelectedItemsContext
 } from '../utilities/outlookMailContext';
-import { isMultiSelectBodySupported } from '../utilities/officeCapabilities';
+import {
+  isMultiSelectBodySupported,
+  isOutlookAppointmentMode
+} from '../utilities/officeCapabilities';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { officeLocale } from '../utilities/officeLocale';
 import { fetchApps } from '../../../api/api';
@@ -94,6 +98,12 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // "Add this email" affordance once it's already in the pin list, and
   // dedupe in the prompt builder.
   const [currentItemId, setCurrentItemId] = useState(null);
+  // Tracks whether the current Outlook item is a calendar appointment so
+  // we can swap the starter-prompt set (and hide the pin-email controls,
+  // which don't apply to a single meeting). Re-checked on every
+  // ihub:itemchanged event so users moving between Inbox and Calendar see
+  // the right prompts without needing to reopen the taskpane.
+  const [isAppointment, setIsAppointment] = useState(() => isOutlookAppointmentMode());
   const multiSelectSupported = isMultiSelectBodySupported();
 
   // Initialize variables when app changes
@@ -128,8 +138,18 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   useEffect(() => {
     let cancelled = false;
     const refresh = async () => {
+      // Re-detect appointment mode on every refresh so users moving
+      // between Inbox and Calendar see the right starter prompts and the
+      // pin-email toolbar stays hidden inside meeting items.
+      const apptMode = isOutlookAppointmentMode();
+      if (!cancelled) setIsAppointment(apptMode);
       try {
-        const ctx = await fetchCurrentMailContext();
+        // For appointments we only need the itemId to track changes —
+        // pulling the full mail context returns "not available". Use the
+        // unified reader so we never miss the calendar item.
+        const ctx = apptMode
+          ? await fetchCurrentOutlookItemContext()
+          : await fetchCurrentMailContext();
         if (!cancelled) setCurrentItemId(ctx?.itemId ?? null);
       } catch {
         if (!cancelled) setCurrentItemId(null);
@@ -393,8 +413,16 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   if (!authData) return null;
   if (!selectedApp) return <Navigate to="/select" replace />;
 
-  const configuredDefaults = Array.isArray(officeConfig?.starterPrompts)
-    ? officeConfig.starterPrompts
+  // Calendar items get their own starter-prompt set so users don't see
+  // mail prompts like "Summarize this email" inside a meeting. Falls back
+  // to the mail prompts when the admin hasn't configured calendar prompts
+  // yet so an upgrade with no admin action still shows _something_.
+  const configuredDefaults = Array.isArray(
+    isAppointment ? officeConfig?.calendarStarterPrompts : officeConfig?.starterPrompts
+  )
+    ? isAppointment
+      ? officeConfig.calendarStarterPrompts
+      : officeConfig.starterPrompts
     : [];
 
   const defaultPrompts = configuredDefaults.map((p, idx) => ({
@@ -519,11 +547,11 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
               onClearPinned={handleClearPinned}
               onPinCurrent={handlePinCurrent}
               onPinSelected={handlePinSelected}
-              canPinCurrent={!!currentItemId}
+              canPinCurrent={!isAppointment && !!currentItemId}
               isCurrentPinned={
                 !!currentItemId && pinnedEmails.some(p => p.itemId === currentItemId)
               }
-              isMultiSelectSupported={multiSelectSupported}
+              isMultiSelectSupported={!isAppointment && multiSelectSupported}
               multiSelectLoading={multiSelectLoading}
             />
 

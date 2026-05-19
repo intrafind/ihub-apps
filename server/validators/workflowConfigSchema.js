@@ -94,7 +94,7 @@ const positionSchema = z.object({
  *
  * - start: Entry point of the workflow (exactly one required)
  * - end: Exit point of the workflow (at least one required)
- * - agent: LLM-powered agent that processes input and produces output
+ * - prompt: LLM prompt step that processes input and produces output
  * - tool: External tool or API integration
  * - decision: Conditional branching based on data or LLM evaluation
  * - parallel: Fork execution into multiple parallel branches
@@ -106,7 +106,7 @@ const positionSchema = z.object({
 const nodeTypeEnum = z.enum([
   'start',
   'end',
-  'agent',
+  'prompt',
   'tool',
   'decision',
   'parallel',
@@ -147,7 +147,7 @@ export const nodeConfigSchema = z.object({
    * flexible configuration without strict type-specific validation.
    *
    * Examples:
-   * - agent: { appId: string, model: string, prompt: string }
+   * - prompt: { appId: string, model: string, prompt: string }
    * - tool: { toolId: string, parameters: object }
    * - decision: { conditions: array }
    * - transform: { mappings: object }
@@ -305,10 +305,12 @@ const workflowGlobalConfigSchema = z
     humanInLoop: z.enum(['none', 'approval_gates', 'real_time']).optional().default('none'),
 
     /**
-     * Maximum total execution time for the workflow in milliseconds
-     * Default: 300000 (5 minutes), Maximum: 600000 (10 minutes)
+     * Maximum total execution time for the workflow in milliseconds.
+     * Default: 300000 (5 minutes). Maximum: 3600000 (1 hour) — long-running
+     * agentic workflows (multi-step research, large doc analysis) routinely
+     * exceed the old 10-minute cap.
      */
-    maxExecutionTime: z.number().int().min(1000).max(600000).optional().default(300000),
+    maxExecutionTime: z.number().int().min(1000).max(3600000).optional().default(300000),
 
     /**
      * Maximum number of nodes allowed in this workflow

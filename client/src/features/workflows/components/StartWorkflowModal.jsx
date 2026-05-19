@@ -1,29 +1,36 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { apiClient } from '../../../api/client';
 import { fetchModels } from '../../../api/endpoints/models';
-import WorkflowPreview from './WorkflowPreview';
 import UnifiedUploader from '../../upload/components/UnifiedUploader';
+import { useTechnicalDetailsToggle } from '../hooks/useTechnicalDetailsToggle';
 
 /**
  * Renders a form field based on variable type
  */
-function FormField({ variable, value, onChange, disabled, language }) {
+function FormField({ variable, value, onChange, disabled, language, error, fieldRef }) {
   const label = getLocalizedContent(variable.label, language) || variable.name;
   const description = getLocalizedContent(variable.description, language);
   const placeholder = getLocalizedContent(variable.placeholder, language) || '';
 
-  const baseInputClasses =
-    'w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white';
+  const baseInputClasses = `w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white ${
+    error ? 'border-red-400 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+  }`;
+
+  const errorId = error ? `field-error-${variable.name}` : undefined;
 
   return (
-    <div className="mb-4">
+    <div className="mb-4" ref={fieldRef}>
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
         {label}
-        {variable.required && <span className="text-red-500 ml-1">*</span>}
+        {variable.required && (
+          <span className="text-red-500 ml-1" aria-hidden="true">
+            *
+          </span>
+        )}
       </label>
 
       {variable.type === 'file' || variable.type === 'image' ? (
@@ -121,6 +128,17 @@ function FormField({ variable, value, onChange, disabled, language }) {
       {description && variable.type !== 'boolean' && (
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{description}</p>
       )}
+
+      {error && (
+        <p
+          id={errorId}
+          role="alert"
+          className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-center gap-1"
+        >
+          <Icon name="exclamation-triangle" className="w-3 h-3" aria-hidden="true" />
+          {error}
+        </p>
+      )}
     </div>
   );
 }
@@ -144,7 +162,10 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
   const [loadingModels, setLoadingModels] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const fieldElementsRef = useRef({});
+  const [showTechnical] = useTechnicalDetailsToggle();
 
   // Extract input variables from start node config
   const inputVariables = useMemo(() => {
@@ -153,10 +174,10 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
     return startNode?.config?.inputVariables || [];
   }, [workflow]);
 
-  // Check if workflow has agent nodes (needs model selection)
+  // Check if workflow has prompt nodes (needs model selection)
   const hasAgentNodes = useMemo(() => {
     if (!workflow?.nodes) return false;
-    return workflow.nodes.some(n => n.type === 'agent');
+    return workflow.nodes.some(n => n.type === 'prompt');
   }, [workflow]);
 
   // Get allowed models from workflow config or use all available
@@ -217,24 +238,40 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
       [fieldName]: value
     }));
     setError(null);
+    if (fieldErrors[fieldName]) {
+      setFieldErrors(prev => {
+        const next = { ...prev };
+        delete next[fieldName];
+        return next;
+      });
+    }
   };
 
   const handleStart = async () => {
-    // Validate required fields
+    // Validate required fields with inline per-field errors
     if (missingRequired.length > 0) {
-      const missingNames = missingRequired.map(
-        v => getLocalizedContent(v.label, currentLanguage) || v.name
-      );
-      setError(
-        t('workflows.startModal.missingRequired', 'Please fill in required fields: {{fields}}', {
-          fields: missingNames.join(', ')
-        })
-      );
+      const requiredMessage = t('workflows.startModal.fieldRequired', 'This field is required');
+      const errors = {};
+      missingRequired.forEach(v => {
+        errors[v.name] = requiredMessage;
+      });
+      setFieldErrors(errors);
+      setError(null);
+
+      // Scroll the first invalid field into view and focus it
+      const first = missingRequired[0];
+      const node = fieldElementsRef.current[first.name];
+      if (node) {
+        node.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        const input = node.querySelector('input, select, textarea');
+        input?.focus();
+      }
       return;
     }
 
     setSubmitting(true);
     setError(null);
+    setFieldErrors({});
 
     try {
       // Include model selection in initial data if selected
@@ -267,10 +304,13 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
       setInitialData({});
       setSelectedModel('');
       setError(null);
+      setFieldErrors({});
       setShowAdvanced(false);
       onClose();
     }
   };
+
+  const stepCount = workflow.nodes?.length || 0;
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -299,22 +339,40 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
             <button
               onClick={handleClose}
               disabled={submitting}
-              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors"
+              className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+              aria-label={t('common.close', 'Close')}
             >
-              <Icon name="x" className="w-6 h-6" />
+              <Icon name="x" className="w-6 h-6" aria-hidden="true" />
             </button>
           </div>
 
           {/* Body - scrollable */}
           <div className="p-4 overflow-y-auto flex-1">
-            {/* Description */}
-            {description && (
-              <p className="text-gray-600 dark:text-gray-300 text-sm mb-4">{description}</p>
-            )}
-
-            {/* Workflow structure preview */}
-            <div className="mb-4">
-              <WorkflowPreview workflow={workflow} />
+            {/* About this workflow */}
+            <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-900/30 border border-gray-200 dark:border-gray-700 rounded-lg">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+                {t('workflows.startModal.aboutTitle', 'About this workflow')}
+              </h3>
+              {description ? (
+                <p className="text-sm text-gray-700 dark:text-gray-200">{description}</p>
+              ) : (
+                <p className="text-sm text-gray-400 italic">
+                  {t('workflows.noDescription', 'No description provided.')}
+                </p>
+              )}
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 flex items-center gap-3 flex-wrap">
+                <span className="inline-flex items-center gap-1">
+                  <Icon name="cube" className="w-3.5 h-3.5" aria-hidden="true" />
+                  {stepCount === 1
+                    ? t('workflows.startModal.aboutSteps_one', '{{count}} step', {
+                        count: stepCount
+                      })
+                    : t('workflows.startModal.aboutSteps', '{{count}} steps', {
+                        count: stepCount
+                      })}
+                </span>
+                {workflow.version && <span>v{workflow.version}</span>}
+              </div>
             </div>
 
             {/* Model selector - show only if workflow has agent nodes */}
@@ -370,6 +428,10 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
                     onChange={handleFieldChange}
                     disabled={submitting}
                     language={currentLanguage}
+                    error={fieldErrors[variable.name]}
+                    fieldRef={node => {
+                      fieldElementsRef.current[variable.name] = node;
+                    }}
                   />
                 ))}
               </div>
@@ -393,58 +455,56 @@ function StartWorkflowModal({ workflow, isOpen, onClose, onStarted }) {
               </div>
             )}
 
-            {/* Advanced: Raw JSON (collapsible) */}
-            <div className="mb-4">
-              <button
-                type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
-              >
-                <Icon name={showAdvanced ? 'chevron-down' : 'chevron-right'} className="w-4 h-4" />
-                {t('workflows.startModal.advanced', 'Advanced: Raw JSON')}
-              </button>
-
-              {showAdvanced && (
-                <div className="mt-2">
-                  <textarea
-                    value={JSON.stringify(initialData, null, 2)}
-                    onChange={e => {
-                      try {
-                        setInitialData(JSON.parse(e.target.value));
-                        setError(null);
-                      } catch {
-                        // Allow typing even if JSON is invalid temporarily
-                      }
-                    }}
-                    disabled={submitting}
-                    rows={6}
-                    placeholder='{"key": "value"}'
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
+            {/* Advanced: Raw JSON (only when technical details are on) */}
+            {showTechnical && (
+              <div className="mb-4">
+                <button
+                  type="button"
+                  onClick={() => setShowAdvanced(!showAdvanced)}
+                  className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
+                >
+                  <Icon
+                    name={showAdvanced ? 'chevron-down' : 'chevron-right'}
+                    className="w-4 h-4"
+                    aria-hidden="true"
                   />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {t(
-                      'workflows.startModal.advancedHelp',
-                      'Edit raw JSON data directly. Changes here override form fields.'
-                    )}
-                  </p>
-                </div>
-              )}
-            </div>
+                  {t('workflows.startModal.advanced', 'Advanced: Raw JSON')}
+                </button>
 
-            {/* Workflow info */}
-            <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-3 mb-4">
-              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                <span>
-                  <Icon name="cube" className="w-4 h-4 inline mr-1" />
-                  {workflow.nodes?.length || 0} nodes
-                </span>
-                {workflow.version && <span>v{workflow.version}</span>}
+                {showAdvanced && (
+                  <div className="mt-2">
+                    <textarea
+                      value={JSON.stringify(initialData, null, 2)}
+                      onChange={e => {
+                        try {
+                          setInitialData(JSON.parse(e.target.value));
+                          setError(null);
+                        } catch {
+                          // Allow typing even if JSON is invalid temporarily
+                        }
+                      }}
+                      disabled={submitting}
+                      rows={6}
+                      placeholder='{"key": "value"}'
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white font-mono text-sm"
+                    />
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {t(
+                        'workflows.startModal.advancedHelp',
+                        'Edit raw JSON data directly. Changes here override form fields.'
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
 
-            {/* Error message */}
+            {/* Error message (validation-level / general) */}
             {error && (
-              <div className="p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm mb-4">
+              <div
+                role="alert"
+                className="p-3 bg-red-100 border border-red-300 rounded-lg text-red-700 text-sm mb-4"
+              >
                 {error}
               </div>
             )}

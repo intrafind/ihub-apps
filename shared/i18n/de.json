@@ -451,6 +451,8 @@
       "iassistant": "Basierend auf iAssistant-Wissensbasis",
       "grounding": "Basierend auf Such-Grounding",
       "mixed": "Basierend auf externem Wissen",
+      "workflow": "Erzeugt durch Workflow",
+      "workflowTooltip": "Workflow-Ausführung öffnen",
       "tooltip": "Diese Antwort wurde generiert unter Verwendung von:"
     }
   },
@@ -1846,10 +1848,106 @@
     "title": "Workflows",
     "subtitle": "Automatisierte Workflows verwalten und ausführen",
     "newWorkflow": "Neuer Workflow",
+    "modelUsed": "Modell",
+    "workflowDefault": "Workflow-Standard",
+    "startInputs": "Eingaben",
+    "cancelledReason": "Grund",
+    "partialOutput": "Teilausgabe (vor Abbruch)",
+    "cancelReason": {
+      "timeout": "Zeitüberschreitung",
+      "user_requested": "Vom Benutzer abgebrochen",
+      "user_cancelled": "Vom Benutzer abgebrochen",
+      "server_restart": "Server-Neustart",
+      "workflow_cancelled": "Workflow abgebrochen"
+    },
+    "resume": "Ab letztem Schritt fortsetzen",
+    "resuming": "Wird fortgesetzt…",
     "tabs": {
       "available": "Verfügbare Workflows",
       "myExecutions": "Meine Ausführungen"
     },
+    "elapsedShort": "{{minutes}} Min. {{seconds}} Sek.",
+    "elapsedSeconds": "{{seconds}} Sek.",
+    "stepCounter": "Schritt {{current}} von ~{{total}}",
+    "stepCounterApproxTooltip": "Die Gesamtschrittzahl ist ungefähr. Workflows können Schleifen, Verzweigungen oder übersprungene Schritte enthalten.",
+    "documentTitle": {
+      "running": "● Läuft: {{name}}",
+      "paused": "⏸ {{name}}",
+      "completed": "✓ {{name}}",
+      "failed": "⚠ {{name}}",
+      "cancelled": "✕ {{name}}"
+    },
+    "technicalDetails": {
+      "toggleLabel": "Technische Details",
+      "show": "Technische Details anzeigen",
+      "hide": "Technische Details ausblenden",
+      "tooltip": "Ausführungs-IDs, Tokens, Modellinformationen und Rohdaten anzeigen"
+    },
+    "confirmCancel": {
+      "title": "Diesen Workflow abbrechen?",
+      "message": "Der Workflow wird angehalten. Nach dem Abbruch kann er nicht fortgesetzt werden.",
+      "confirm": "Ja, abbrechen",
+      "deny": "Weiter laufen lassen"
+    },
+    "confirmDestructiveCheckpoint": {
+      "title": "Aktion bestätigen",
+      "message": "Diese Aktion kann nicht rückgängig gemacht werden. Fortfahren?"
+    },
+    "checkpoint": {
+      "displayDataEmptyValue": "(leer)",
+      "showRawJson": "Rohdaten anzeigen",
+      "hideRawJson": "Rohdaten ausblenden",
+      "longValueShowMore": "Vollständigen Wert anzeigen",
+      "longValueShowLess": "Weniger anzeigen"
+    },
+    "startModal": {
+      "aboutTitle": "Über diesen Workflow",
+      "aboutSteps": "{{count}} Schritte",
+      "aboutSteps_one": "{{count}} Schritt",
+      "fieldRequired": "Dieses Feld ist erforderlich"
+    },
+    "emptyState": {
+      "available": {
+        "title": "Noch keine Workflows verfügbar",
+        "bodyAdmin": "Es wurden noch keine Workflows veröffentlicht. Erstellen Sie Ihren ersten Workflow.",
+        "bodyUser": "Bitten Sie eine:n Administrator:in, einen Workflow für Ihre Gruppe zu veröffentlichen."
+      },
+      "executions": {
+        "title": "Sie haben noch keinen Workflow ausgeführt",
+        "body": "Wählen Sie einen Workflow aus dem Tab „Verfügbar“, um zu starten.",
+        "cta": "Workflows durchsuchen",
+        "filteredTitle": "Keine {{status}} Ausführungen",
+        "filteredBody": "Versuchen Sie einen anderen Filter."
+      }
+    },
+    "showArchived": "Archivierte anzeigen",
+    "executionCard": {
+      "startedAt": "Gestartet",
+      "current": "Aktuell",
+      "inputLabel": "Eingabe",
+      "moreInputs": "+{{count}} weitere",
+      "archived": "Archiviert",
+      "download": "Ergebnis herunterladen",
+      "downloadDisabled": "Verfügbar nach Abschluss",
+      "delete": "Ausführung löschen",
+      "deleteDisabled": "Vor dem Löschen den Workflow abbrechen",
+      "archive": "Archivieren",
+      "unarchive": "Aus Archiv holen"
+    },
+    "confirmDelete": {
+      "title": "Diese Ausführung löschen?",
+      "message": "Die Ausführung und ihre Daten werden endgültig entfernt. Dies kann nicht rückgängig gemacht werden.",
+      "confirm": "Löschen",
+      "deny": "Behalten"
+    },
+    "errors": {
+      "cannotDeleteRunning": "Bitte den Workflow vor dem Löschen abbrechen.",
+      "noResultToDownload": "Diese Ausführung hat noch kein Ergebnis zum Herunterladen."
+    },
+    "sofar": "Bisher",
+    "checkpointNeedsInput": "Dieser Workflow benötigt Ihre Eingabe",
+    "live": "Live",
+    "reconnecting": "Verbindung wird hergestellt…",
     "editor": {
       "title": "Workflow-Editor",
       "newWorkflowHeading": "Neuer Workflow",

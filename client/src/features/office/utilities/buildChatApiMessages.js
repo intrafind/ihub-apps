@@ -234,6 +234,84 @@ export function combineUserTextWithEmailBody(userText, emailBodyText) {
   return `${u}\n\n--- Current email ---\n${e}`;
 }
 
+function formatAttendeesForPrompt(list) {
+  if (!Array.isArray(list) || list.length === 0) return '';
+  return list
+    .map(a => {
+      const name = (a?.name || '').trim();
+      const email = (a?.email || '').trim();
+      if (name && email && name !== email) return `${name} <${email}>`;
+      return name || email;
+    })
+    .filter(Boolean)
+    .join(', ');
+}
+
+function formatIsoForPrompt(iso) {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleString(undefined, {
+      weekday: 'short',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    });
+  } catch {
+    return iso;
+  }
+}
+
+/**
+ * Build the calendar block stitched into the outgoing chat message when
+ * the user is on an appointment surface. Mirrors `combineUserTextWith*`
+ * for email: produces a labeled section that the system prompt can refer
+ * to without us having to update every meeting-related app's prompt
+ * template separately.
+ */
+export function combineUserTextWithAppointmentContext({ userText, appointmentCtx }) {
+  const u = (userText || '').trim();
+  if (!appointmentCtx || appointmentCtx.available === false) return u;
+
+  const lines = [];
+  if (appointmentCtx.subject) lines.push(`Subject: ${appointmentCtx.subject}`);
+  if (appointmentCtx.isOrganizer) lines.push(`Your role: Organizer`);
+  else if (appointmentCtx.organizer?.email) lines.push(`Your role: Attendee`);
+
+  const start = formatIsoForPrompt(appointmentCtx.start);
+  const end = formatIsoForPrompt(appointmentCtx.end);
+  if (start && end) lines.push(`When: ${start} – ${end}`);
+  else if (start) lines.push(`When: ${start}`);
+
+  if (appointmentCtx.location) lines.push(`Location: ${appointmentCtx.location}`);
+
+  if (appointmentCtx.organizer) {
+    const o = appointmentCtx.organizer;
+    const display =
+      o.name && o.email && o.name !== o.email ? `${o.name} <${o.email}>` : o.name || o.email;
+    if (display) lines.push(`Organizer: ${display}`);
+  }
+
+  const required = formatAttendeesForPrompt(appointmentCtx.requiredAttendees);
+  if (required) lines.push(`Required attendees: ${required}`);
+  const optional = formatAttendeesForPrompt(appointmentCtx.optionalAttendees);
+  if (optional) lines.push(`Optional attendees: ${optional}`);
+
+  const body = (appointmentCtx.bodyText || '').trim();
+  if (body) {
+    lines.push('');
+    lines.push('Description:');
+    lines.push(body);
+  }
+
+  if (lines.length === 0) return u;
+  const meetingBlock = `--- Current meeting ---\n${lines.join('\n')}`;
+  if (!u) return meetingBlock;
+  return `${u}\n\n${meetingBlock}`;
+}
+
 function formatPinnedEmail(p, idx) {
   const subject = (p?.subject || '').trim();
   const body = (p?.bodyText || '').trim();
