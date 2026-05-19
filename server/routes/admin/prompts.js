@@ -1011,7 +1011,7 @@ export default function registerAdminPromptsRoutes(app) {
 
       const rootDir = getRootDir();
       const promptsDir = join(rootDir, 'contents', 'prompts');
-      const normalizedPromptFilePath = resolveAndValidatePath(`${promptId}.json`, promptsDir);
+      const normalizedPromptFilePath = await resolveAndValidatePath(`${promptId}.json`, promptsDir);
       if (!normalizedPromptFilePath) {
         return sendBadRequest(res, 'Invalid prompt path');
       }

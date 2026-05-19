@@ -2060,7 +2060,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         // Save to history (defense-in-depth path resolution)
         const historyRoot = join(workflowsDir, '.history');
-        const historyDir = resolveAndValidatePath(id, historyRoot);
+        const historyDir = await resolveAndValidatePath(id, historyRoot);
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
@@ -2157,7 +2157,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const rootDir = getRootDir();
         const workflowsDir = join(rootDir, 'contents', 'workflows');
         const historyRoot = join(workflowsDir, '.history');
-        const historyDir = resolveAndValidatePath(id, historyRoot);
+        const historyDir = await resolveAndValidatePath(id, historyRoot);
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }

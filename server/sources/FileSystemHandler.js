@@ -41,9 +41,9 @@ class FileSystemHandler extends SourceHandler {
    * @returns {string} - Resolved absolute path
    * @throws {Error} - If the path escapes the base directory
    */
-  _resolveSafePath(relativePath) {
+  async _resolveSafePath(relativePath) {
     const cleaned = sanitizeRelativePath(relativePath);
-    const resolved = resolveAndValidatePath(cleaned, this.basePath);
+    const resolved = await resolveAndValidatePath(cleaned, this.basePath);
     if (!resolved) {
       throw new Error(`Access denied: path ${relativePath} is outside allowed directory`);
     }
@@ -62,7 +62,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('FileSystemHandler requires a path in sourceConfig');
     }
 
-    const fullPath = this._resolveSafePath(filePath);
+    const fullPath = await this._resolveSafePath(filePath);
 
     try {
       // Get file stats
@@ -109,7 +109,7 @@ class FileSystemHandler extends SourceHandler {
   async getEnhancedCacheKey(sourceConfig) {
     try {
       const { path: filePath, url, encoding } = sourceConfig;
-      const fullPath = this._resolveSafePath(filePath);
+      const fullPath = await this._resolveSafePath(filePath);
       const stats = await fs.stat(fullPath);
 
       // Include relevant config in cache key for consistency
@@ -182,7 +182,7 @@ class FileSystemHandler extends SourceHandler {
    * @returns {Promise<Array>} - List of files with metadata
    */
   async listFiles(dirPath = '') {
-    const fullPath = this._resolveSafePath(dirPath);
+    const fullPath = await this._resolveSafePath(dirPath);
 
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });
@@ -216,7 +216,7 @@ class FileSystemHandler extends SourceHandler {
    */
   async fileExists(filePath) {
     try {
-      const fullPath = this._resolveSafePath(filePath);
+      const fullPath = await this._resolveSafePath(filePath);
       const stats = await fs.stat(fullPath);
       return stats.isFile();
     } catch {
@@ -239,7 +239,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('Content must be a string');
     }
 
-    const fullPath = this._resolveSafePath(filePath);
+    const fullPath = await this._resolveSafePath(filePath);
 
     try {
       // Ensure directory exists
@@ -278,7 +278,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('File path is required');
     }
 
-    const fullPath = this._resolveSafePath(filePath);
+    const fullPath = await this._resolveSafePath(filePath);
 
     try {
       await fs.unlink(fullPath);
@@ -309,7 +309,7 @@ class FileSystemHandler extends SourceHandler {
       throw new Error('Directory path is required');
     }
 
-    const fullPath = this._resolveSafePath(dirPath);
+    const fullPath = await this._resolveSafePath(dirPath);
 
     try {
       await fs.mkdir(fullPath, { recursive: true });
@@ -331,7 +331,7 @@ class FileSystemHandler extends SourceHandler {
    * @returns {Promise<Array>} - List of directories
    */
   async listDirectories(dirPath = '') {
-    const fullPath = this._resolveSafePath(dirPath);
+    const fullPath = await this._resolveSafePath(dirPath);
 
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });
@@ -377,7 +377,7 @@ class FileSystemHandler extends SourceHandler {
       return { files: [], directories: [] };
     }
 
-    const fullPath = this._resolveSafePath(dirPath);
+    const fullPath = await this._resolveSafePath(dirPath);
 
     try {
       const entries = await fs.readdir(fullPath, { withFileTypes: true });

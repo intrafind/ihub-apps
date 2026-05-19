@@ -8,11 +8,11 @@ import { resolveAndValidatePath } from './utils/pathSecurity.js';
 const cache = new Map();
 const CACHE_TTL = 60 * 1000; // 60 seconds
 
-function resolvePath(relativePath) {
+async function resolvePath(relativePath) {
   const rootDir = getRootDir();
   const contentsDir = config.CONTENTS_DIR;
   const baseDir = path.join(rootDir, contentsDir);
-  const resolved = resolveAndValidatePath(relativePath, baseDir);
+  const resolved = await resolveAndValidatePath(relativePath, baseDir);
   if (!resolved) {
     logger.warn(`Path traversal blocked in configLoader: ${relativePath}`);
     return path.join(baseDir, path.basename(relativePath));
@@ -32,7 +32,7 @@ async function loadFile(relativePath, { useCache = true, parse = 'text' } = {}) 
       cache.delete(cacheKey);
     }
 
-    const filePath = resolvePath(relativePath);
+    const filePath = await resolvePath(relativePath);
     const data = await fs.readFile(filePath, 'utf8');
     const result = parse === 'json' ? JSON.parse(data) : data;
 
@@ -66,7 +66,7 @@ export async function loadBuiltinLocaleJson(relativePath) {
   try {
     const rootDir = getRootDir();
     const baseDir = path.join(rootDir, 'shared', 'i18n');
-    const filePath = resolveAndValidatePath(relativePath, baseDir);
+    const filePath = await resolveAndValidatePath(relativePath, baseDir);
     if (!filePath) {
       logger.warn(`Path traversal blocked in loadBuiltinLocaleJson: ${relativePath}`);
       return null;
