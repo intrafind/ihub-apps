@@ -20,7 +20,7 @@ import { actionTracker } from '../../actionTracker.js';
 import { workflowConfigSchema } from '../../validators/workflowConfigSchema.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import { getRootDir } from '../../pathUtils.js';
-import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, resolveAndValidatePath, resolveAndValidateRealPath } from '../../utils/pathSecurity.js';
 import {
   sendNotFound,
   sendBadRequest,
@@ -2175,14 +2175,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           return res.status(404).json({ error: `Version ${versionParam} not found` });
         }
 
-        // Read snapshot (resolve+validate to satisfy defense-in-depth)
-        const snapshotPath = resolveAndValidatePath(snapshotFileName, historyDir);
+        // Read snapshot (resolve+validate with realpath to prevent symlink traversal)
+        const snapshotPath = await resolveAndValidateRealPath(snapshotFileName, historyDir);
         if (!snapshotPath) {
           return res.status(400).json({ error: 'Invalid snapshot path' });
         }
-        // lgtm[js/path-injection] -- `snapshotPath` is resolveAndValidatePath's
-        // bounded result; both inputs already validated and historyDir is itself
-        // a bounded resolveAndValidatePath result.
+        // snapshotPath is a realpath-bounded result constrained to historyDir.
         const content = await fs.readFile(snapshotPath, 'utf8');
         const snapshot = JSON.parse(content);
 
