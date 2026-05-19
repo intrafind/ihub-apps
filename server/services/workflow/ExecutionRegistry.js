@@ -108,7 +108,8 @@ export class ExecutionRegistry {
    * });
    */
   register(executionId, metadata) {
-    const { userId, workflowId, workflowName, status, startedAt, source } = metadata;
+    const { userId, workflowId, workflowName, status, startedAt, source, inputPreview, models } =
+      metadata;
 
     if (!executionId) {
       throw new Error('executionId is required');
@@ -133,7 +134,10 @@ export class ExecutionRegistry {
       currentNode: null,
       pendingCheckpoint: null,
       completedAt: null,
-      source: source || 'ui'
+      source: source || 'ui',
+      inputPreview: inputPreview || null,
+      models: Array.isArray(models) ? models : [],
+      archived: false
     };
 
     this.executions.set(executionId, execution);
@@ -244,6 +248,23 @@ export class ExecutionRegistry {
   }
 
   /**
+   * Sets the archived flag on an execution
+   * @param {string} executionId - The execution identifier
+   * @param {boolean} archived - Archive state
+   * @returns {Object|null} Updated execution or null if not found
+   */
+  setArchived(executionId, archived) {
+    const execution = this.executions.get(executionId);
+    if (!execution) return null;
+
+    execution.archived = Boolean(archived);
+    execution.updatedAt = new Date().toISOString();
+
+    this._scheduleSave();
+    return { ...execution };
+  }
+
+  /**
    * Gets an execution by ID
    * @param {string} executionId - The execution identifier
    * @returns {Object|null} Execution metadata or null if not found
@@ -276,6 +297,13 @@ export class ExecutionRegistry {
     let executions = Array.from(executionIds)
       .map(id => this.executions.get(id))
       .filter(Boolean);
+
+    // Apply archived filter — default hides archived runs.
+    if (filters.archived === 'only') {
+      executions = executions.filter(e => e.archived === true);
+    } else if (!filters.includeArchived) {
+      executions = executions.filter(e => e.archived !== true);
+    }
 
     // Apply status filter
     if (filters.status) {
