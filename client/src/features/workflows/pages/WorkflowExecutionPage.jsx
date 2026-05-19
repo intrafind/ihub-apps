@@ -353,8 +353,8 @@ function WorkflowExecutionPage() {
   // Start inputs: take user-provided values that were passed to the start node
   // (filtered to exclude both internal underscore keys and downstream outputs).
   const startInputVariables =
-    state.data?._workflowDefinition?.nodes?.find(n => n.type === 'start')?.config
-      ?.inputVariables || [];
+    state.data?._workflowDefinition?.nodes?.find(n => n.type === 'start')?.config?.inputVariables ||
+    [];
   const startInputs = startInputVariables
     .map(v => {
       const value = state.data?.[v.name];
@@ -368,8 +368,8 @@ function WorkflowExecutionPage() {
   const workflowDefaultModel = state.data?._workflowDefinition?.config?.defaultModelId;
 
   // Cancellation reason — engine records it as a workflow_cancelled history event
-  const cancellationReason = (state.history || []).find(h => h.type === 'workflow_cancelled')
-    ?.data?.reason;
+  const cancellationReason = (state.history || []).find(h => h.type === 'workflow_cancelled')?.data
+    ?.reason;
 
   // Show output even when cancelled if any prompt steps produced results — users
   // want to see what was generated before timeout/cancellation.
@@ -816,10 +816,7 @@ function WorkflowExecutionPage() {
                     <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">
                       {t('workflows.cancelledReason', 'Reason')}:{' '}
                       <span className="font-medium">
-                        {t(
-                          `workflows.cancelReason.${cancellationReason}`,
-                          cancellationReason
-                        )}
+                        {t(`workflows.cancelReason.${cancellationReason}`, cancellationReason)}
                       </span>
                     </p>
                   )}
@@ -933,94 +930,94 @@ function WorkflowExecutionPage() {
 
         {/* Workflow Output - shown when workflow is finished, or when cancelled but partial output exists */}
         {showOutput && workflowOutputKeys.length > 0 && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
-              {/* Output header with download-all button */}
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  {state.status === 'cancelled'
-                    ? t('workflows.partialOutput', 'Partial Output (before cancellation)')
-                    : t('workflows.output', 'Workflow Output')}
-                </h3>
-                <button
-                  onClick={() =>
-                    downloadAsFile(
-                      JSON.stringify(workflowOutput, null, 2),
-                      `workflow-output-${state.executionId.slice(0, 8)}.json`,
-                      'application/json'
-                    )
-                  }
-                  className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
-                  title={t('workflows.downloadAllJson', 'Download all output as JSON')}
-                >
-                  <Icon name="download" className="w-4 h-4" />
-                  {t('workflows.downloadJson', 'Download JSON')}
-                </button>
-              </div>
-
-              {/* Primary output mode: show primary field prominently, rest in collapsible section */}
-              {hasPrimaryOutput ? (
-                <div className="space-y-6">
-                  {/* Primary output - always visible */}
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                        {primaryOutputKey.replace(/_/g, ' ')}
-                      </h4>
-                      {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
-                    </div>
-                    {renderValue(workflowOutput[primaryOutputKey])}
-                  </div>
-
-                  {/* Additional data - collapsible */}
-                  {additionalKeys.length > 0 && (
-                    <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-                      <button
-                        onClick={() => setAdditionalDataExpanded(prev => !prev)}
-                        className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Icon
-                            name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
-                            className="w-4 h-4 text-gray-400"
-                          />
-                          <span className="font-medium text-gray-600 dark:text-gray-400">
-                            {t('workflows.output.additionalData', 'Additional Data')}
-                          </span>
-                          <span className="text-xs text-gray-400 dark:text-gray-500">
-                            ({additionalKeys.length}{' '}
-                            {additionalKeys.length === 1
-                              ? t('workflows.output.field', 'field')
-                              : t('workflows.output.fields', 'fields')}
-                            )
-                          </span>
-                        </div>
-                      </button>
-                      {additionalDataExpanded && (
-                        <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
-                          {additionalKeys.map(key => (
-                            <div key={key}>
-                              <div className="flex items-center justify-between mb-2">
-                                <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
-                                  {key.replace(/_/g, ' ')}
-                                </h4>
-                                {renderFieldActions(key, workflowOutput[key])}
-                              </div>
-                              {renderFieldContent(key, workflowOutput[key])}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                /* Accordion mode: each field in its own collapsible panel */
-                <div className="space-y-2">
-                  {workflowOutputKeys.map(key => renderAccordionPanel(key))}
-                </div>
-              )}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 lg:col-span-2">
+            {/* Output header with download-all button */}
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {state.status === 'cancelled'
+                  ? t('workflows.partialOutput', 'Partial Output (before cancellation)')
+                  : t('workflows.output', 'Workflow Output')}
+              </h3>
+              <button
+                onClick={() =>
+                  downloadAsFile(
+                    JSON.stringify(workflowOutput, null, 2),
+                    `workflow-output-${state.executionId.slice(0, 8)}.json`,
+                    'application/json'
+                  )
+                }
+                className="px-3 py-1.5 text-sm bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors flex items-center gap-1.5"
+                title={t('workflows.downloadAllJson', 'Download all output as JSON')}
+              >
+                <Icon name="download" className="w-4 h-4" />
+                {t('workflows.downloadJson', 'Download JSON')}
+              </button>
             </div>
-          )}
+
+            {/* Primary output mode: show primary field prominently, rest in collapsible section */}
+            {hasPrimaryOutput ? (
+              <div className="space-y-6">
+                {/* Primary output - always visible */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
+                      {primaryOutputKey.replace(/_/g, ' ')}
+                    </h4>
+                    {renderFieldActions(primaryOutputKey, workflowOutput[primaryOutputKey])}
+                  </div>
+                  {renderValue(workflowOutput[primaryOutputKey])}
+                </div>
+
+                {/* Additional data - collapsible */}
+                {additionalKeys.length > 0 && (
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+                    <button
+                      onClick={() => setAdditionalDataExpanded(prev => !prev)}
+                      className="w-full flex items-center justify-between p-3 text-left hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Icon
+                          name={additionalDataExpanded ? 'chevron-up' : 'chevron-down'}
+                          className="w-4 h-4 text-gray-400"
+                        />
+                        <span className="font-medium text-gray-600 dark:text-gray-400">
+                          {t('workflows.output.additionalData', 'Additional Data')}
+                        </span>
+                        <span className="text-xs text-gray-400 dark:text-gray-500">
+                          ({additionalKeys.length}{' '}
+                          {additionalKeys.length === 1
+                            ? t('workflows.output.field', 'field')
+                            : t('workflows.output.fields', 'fields')}
+                          )
+                        </span>
+                      </div>
+                    </button>
+                    {additionalDataExpanded && (
+                      <div className="border-t border-gray-200 dark:border-gray-700 p-4 space-y-4">
+                        {additionalKeys.map(key => (
+                          <div key={key}>
+                            <div className="flex items-center justify-between mb-2">
+                              <h4 className="font-medium text-gray-700 dark:text-gray-300 capitalize">
+                                {key.replace(/_/g, ' ')}
+                              </h4>
+                              {renderFieldActions(key, workflowOutput[key])}
+                            </div>
+                            {renderFieldContent(key, workflowOutput[key])}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Accordion mode: each field in its own collapsible panel */
+              <div className="space-y-2">
+                {workflowOutputKeys.map(key => renderAccordionPanel(key))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* App selection modal for "Chat with Results" */}

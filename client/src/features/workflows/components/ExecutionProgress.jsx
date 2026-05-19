@@ -341,13 +341,18 @@ function ExecutionProgress({ state, nodes = [] }) {
     });
 
     // Add current nodes that aren't in history yet (for currently executing nodes)
-    const isWorkflowTerminal = ['cancelled', 'failed', 'completed', 'approved', 'rejected'].includes(
-      state?.status
-    );
+    const isWorkflowTerminal = [
+      'cancelled',
+      'failed',
+      'completed',
+      'approved',
+      'rejected'
+    ].includes(state?.status);
     (state?.currentNodes || []).forEach(nodeId => {
       if (!seenCurrentNodes.has(nodeId)) {
         const nodeInfo = nodeMap.get(nodeId) || { name: nodeId, type: 'unknown' };
-        const resolvedStatus = nodeStatuses.get(nodeId) || (isWorkflowTerminal ? state.status : 'running');
+        const resolvedStatus =
+          nodeStatuses.get(nodeId) || (isWorkflowTerminal ? state.status : 'running');
         const insight = isWorkflowTerminal
           ? state?.status === 'cancelled'
             ? 'Did not run (workflow cancelled)'

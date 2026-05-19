@@ -89,7 +89,8 @@ export function buildReplayStepsFromState(state, workflow, language = 'en') {
   const localize = value => {
     if (value == null) return '';
     if (typeof value === 'string') return value;
-    if (typeof value === 'object') return value[language] || value.en || Object.values(value)[0] || '';
+    if (typeof value === 'object')
+      return value[language] || value.en || Object.values(value)[0] || '';
     return String(value);
   };
 
