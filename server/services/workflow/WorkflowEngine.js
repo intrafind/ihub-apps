@@ -1164,9 +1164,7 @@ export class WorkflowEngine {
       error.code = 'NO_RESUME_POINT';
       throw error;
     }
-    const resumeNodes = hasCurrent
-      ? [...state.currentNodes]
-      : [...new Set(state.failedNodes)];
+    const resumeNodes = hasCurrent ? [...state.currentNodes] : [...new Set(state.failedNodes)];
 
     const workflow = options.workflow || state.data?._workflowDefinition;
     if (!workflow) {
@@ -1190,9 +1188,7 @@ export class WorkflowEngine {
     const startedAtTs = state.data?._workflow?.startedAt
       ? new Date(state.data._workflow.startedAt).getTime()
       : null;
-    const interruptedAtTs = state.completedAt
-      ? new Date(state.completedAt).getTime()
-      : null;
+    const interruptedAtTs = state.completedAt ? new Date(state.completedAt).getTime() : null;
     const lastRunElapsed =
       startedAtTs && interruptedAtTs ? Math.max(0, interruptedAtTs - startedAtTs) : 0;
 
@@ -1330,6 +1326,25 @@ export class WorkflowEngine {
    */
   async getState(executionId) {
     return this.stateManager.get(executionId);
+  }
+
+  /**
+   * Hard-deletes an execution's checkpoint data from disk. Refuses if the
+   * execution is currently active. The ExecutionRegistry entry must be
+   * removed separately by the caller.
+   *
+   * @param {string} executionId - The execution identifier
+   * @returns {Promise<void>}
+   */
+  async deleteExecution(executionId) {
+    if (this.abortControllers && this.abortControllers.has(executionId)) {
+      const error = new Error(
+        `Cannot delete execution ${executionId} while it is active. Cancel it first.`
+      );
+      error.code = 'EXECUTION_ACTIVE';
+      throw error;
+    }
+    await this.stateManager.cleanup(executionId, false);
   }
 
   /**

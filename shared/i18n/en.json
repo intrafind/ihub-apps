@@ -1955,6 +1955,29 @@
         "filteredBody": "Try a different filter."
       }
     },
+    "showArchived": "Show archived",
+    "executionCard": {
+      "startedAt": "Started",
+      "current": "Current",
+      "inputLabel": "Input",
+      "moreInputs": "+{{count}} more",
+      "archived": "Archived",
+      "download": "Download result",
+      "downloadDisabled": "Available when finished",
+      "delete": "Delete execution",
+      "deleteDisabled": "Cancel the workflow before deleting",
+      "archive": "Archive",
+      "unarchive": "Unarchive"
+    },
+    "confirmDelete": {
+      "title": "Delete this execution?",
+      "message": "This permanently removes the run and its data. This can't be undone.",
+      "confirm": "Delete",
+      "deny": "Keep it"
+    },
+    "errors": {
+      "cannotDeleteRunning": "Cancel the workflow before deleting it."
+    },
     "sofar": "So far",
     "checkpointNeedsInput": "This workflow needs your input",
     "live": "Live",

@@ -87,6 +87,79 @@ function isAdmin(user) {
 }
 
 /**
+ * Maximum entries kept in the input preview shown on the executions list.
+ */
+const INPUT_PREVIEW_MAX_ENTRIES = 6;
+/**
+ * Per-value truncation length (characters) for string fields in the input preview.
+ */
+const INPUT_PREVIEW_MAX_VALUE_LENGTH = 120;
+
+/**
+ * Builds a sanitized input preview from a workflow execution's initial data.
+ * Strips internal underscore-prefixed keys, drops empty values, truncates long
+ * strings, and caps entry count. Object/array values are summarized.
+ *
+ * @param {Object} initialData - Raw initialData passed to /execute
+ * @returns {Object|null} Preview object (possibly with a `__more` count), or null if empty
+ */
+function buildInputPreview(initialData) {
+  if (!initialData || typeof initialData !== 'object') return null;
+
+  const preview = {};
+  const allKeys = Object.keys(initialData).filter(k => !k.startsWith('_'));
+  let kept = 0;
+
+  for (const key of allKeys) {
+    if (kept >= INPUT_PREVIEW_MAX_ENTRIES) break;
+    const value = initialData[key];
+    if (value === null || value === undefined || value === '') continue;
+
+    if (typeof value === 'string') {
+      preview[key] =
+        value.length > INPUT_PREVIEW_MAX_VALUE_LENGTH
+          ? value.slice(0, INPUT_PREVIEW_MAX_VALUE_LENGTH - 1) + '…'
+          : value;
+    } else if (typeof value === 'number' || typeof value === 'boolean') {
+      preview[key] = value;
+    } else if (Array.isArray(value)) {
+      preview[key] = `[${value.length} items]`;
+    } else if (typeof value === 'object') {
+      preview[key] = '[object]';
+    } else {
+      preview[key] = String(value);
+    }
+    kept += 1;
+  }
+
+  if (kept === 0) return null;
+
+  const remaining =
+    allKeys.filter(
+      k => initialData[k] !== null && initialData[k] !== undefined && initialData[k] !== ''
+    ).length - kept;
+  if (remaining > 0) preview.__more = remaining;
+
+  return preview;
+}
+
+/**
+ * Builds the distinct list of model IDs referenced by a workflow definition's
+ * nodes. Used at registration time so the executions list can show which
+ * model(s) a run uses.
+ *
+ * @param {Object} workflow - Workflow definition
+ * @returns {string[]} Distinct model IDs in insertion order
+ */
+function buildModelsList(workflow) {
+  const set = new Set();
+  for (const node of workflow?.nodes || []) {
+    if (typeof node.model === 'string' && node.model) set.add(node.model);
+  }
+  return Array.from(set);
+}
+
+/**
  * Loads all workflow definitions from the filesystem.
  * Workflows are stored as individual JSON files in contents/workflows/
  *
@@ -342,11 +415,12 @@ export default function registerWorkflowRoutes(app, deps = {}) {
     async (req, res) => {
       try {
         const userId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
-        const { status, limit = 20, offset = 0 } = req.query;
+        const { status, limit = 20, offset = 0, includeArchived } = req.query;
 
         const registry = getExecutionRegistry();
         const executions = registry.getByUser(userId, {
           status,
+          includeArchived: includeArchived === 'true' || includeArchived === '1',
           limit: parseInt(limit, 10),
           offset: parseInt(offset, 10)
         });
@@ -805,7 +879,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           workflowId: workflow.id,
           workflowName: workflow.name,
           status: state.status,
-          startedAt: state.createdAt
+          startedAt: state.createdAt,
+          inputPreview: buildInputPreview(initialData),
+          models: buildModelsList(workflow)
         });
 
         logger.info('Workflow execution started', {
@@ -1176,6 +1252,179 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         sendFailedOperationError(res, 'cancel workflow execution', error);
+      }
+    }
+  );
+
+  // ============================================================================
+  // Delete & Archive Endpoints
+  // ============================================================================
+
+  /**
+   * @swagger
+   * /api/workflows/executions/{executionId}:
+   *   delete:
+   *     summary: Hard-delete an execution
+   *     description: |
+   *       Removes a workflow execution from the registry and deletes its
+   *       checkpoint files on disk. Owner-only (or admin). Refuses to delete
+   *       a running execution — cancel it first.
+   *     tags:
+   *       - Workflows
+   *       - Execution
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: executionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     responses:
+   *       200:
+   *         description: Execution deleted
+   *       403:
+   *         description: Not the owner and not an admin
+   *       404:
+   *         description: Execution not found
+   *       409:
+   *         description: Execution is still running
+   */
+  app.delete(
+    buildServerPath('/api/workflows/executions/:executionId'),
+    checkWorkflowsFeature,
+    authRequired,
+    async (req, res) => {
+      try {
+        const { executionId } = req.params;
+
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+
+        const registry = getExecutionRegistry();
+        const execution = registry.get(executionId);
+
+        if (!execution) {
+          return sendNotFound(res, 'Execution');
+        }
+
+        const currentUserId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
+        if (execution.userId !== currentUserId && !isAdmin(req.user)) {
+          return sendInsufficientPermissions(res, 'delete execution');
+        }
+
+        if (execution.status === 'running') {
+          return res.status(409).json({
+            error: 'cannot_delete_running',
+            message: 'Cancel the workflow before deleting it.'
+          });
+        }
+
+        try {
+          await workflowEngine.deleteExecution(executionId);
+        } catch (error) {
+          if (error.code === 'EXECUTION_ACTIVE') {
+            return res.status(409).json({
+              error: 'cannot_delete_running',
+              message: 'Cancel the workflow before deleting it.'
+            });
+          }
+          throw error;
+        }
+
+        registry.remove(executionId);
+
+        logger.info('Workflow execution deleted', {
+          component: 'WorkflowRoutes',
+          executionId,
+          userId: currentUserId
+        });
+
+        res.json({ success: true });
+      } catch (error) {
+        sendFailedOperationError(res, 'delete execution', error);
+      }
+    }
+  );
+
+  /**
+   * @swagger
+   * /api/workflows/executions/{executionId}:
+   *   patch:
+   *     summary: Update execution metadata (currently archive/unarchive)
+   *     description: |
+   *       Toggle the archived flag on an execution. Owner-only (or admin).
+   *     tags:
+   *       - Workflows
+   *       - Execution
+   *     security:
+   *       - bearerAuth: []
+   *       - cookieAuth: []
+   *     parameters:
+   *       - in: path
+   *         name: executionId
+   *         required: true
+   *         schema:
+   *           type: string
+   *     requestBody:
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             properties:
+   *               archived:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Updated execution metadata
+   *       403:
+   *         description: Not the owner and not an admin
+   *       404:
+   *         description: Execution not found
+   */
+  app.patch(
+    buildServerPath('/api/workflows/executions/:executionId'),
+    checkWorkflowsFeature,
+    authRequired,
+    async (req, res) => {
+      try {
+        const { executionId } = req.params;
+        const { archived } = req.body || {};
+
+        if (!validateIdForPath(executionId, 'executionId')) {
+          return sendBadRequest(res, 'Invalid executionId');
+        }
+
+        if (typeof archived !== 'boolean') {
+          return sendBadRequest(res, 'archived must be a boolean');
+        }
+
+        const registry = getExecutionRegistry();
+        const execution = registry.get(executionId);
+
+        if (!execution) {
+          return sendNotFound(res, 'Execution');
+        }
+
+        const currentUserId = req.user?.id || req.user?.sub || req.user?.username || 'anonymous';
+        if (execution.userId !== currentUserId && !isAdmin(req.user)) {
+          return sendInsufficientPermissions(res, 'update execution');
+        }
+
+        const updated = registry.setArchived(executionId, archived);
+
+        logger.info('Workflow execution archive toggled', {
+          component: 'WorkflowRoutes',
+          executionId,
+          archived,
+          userId: currentUserId
+        });
+
+        res.json(updated);
+      } catch (error) {
+        sendFailedOperationError(res, 'update execution', error);
       }
     }
   );

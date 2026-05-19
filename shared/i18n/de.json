@@ -1920,6 +1920,29 @@
         "filteredBody": "Versuchen Sie einen anderen Filter."
       }
     },
+    "showArchived": "Archivierte anzeigen",
+    "executionCard": {
+      "startedAt": "Gestartet",
+      "current": "Aktuell",
+      "inputLabel": "Eingabe",
+      "moreInputs": "+{{count}} weitere",
+      "archived": "Archiviert",
+      "download": "Ergebnis herunterladen",
+      "downloadDisabled": "Verfügbar nach Abschluss",
+      "delete": "Ausführung löschen",
+      "deleteDisabled": "Vor dem Löschen den Workflow abbrechen",
+      "archive": "Archivieren",
+      "unarchive": "Aus Archiv holen"
+    },
+    "confirmDelete": {
+      "title": "Diese Ausführung löschen?",
+      "message": "Die Ausführung und ihre Daten werden endgültig entfernt. Dies kann nicht rückgängig gemacht werden.",
+      "confirm": "Löschen",
+      "deny": "Behalten"
+    },
+    "errors": {
+      "cannotDeleteRunning": "Bitte den Workflow vor dem Löschen abbrechen."
+    },
     "sofar": "Bisher",
     "checkpointNeedsInput": "Dieser Workflow benötigt Ihre Eingabe",
     "live": "Live",
