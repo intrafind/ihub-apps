@@ -9,7 +9,7 @@
  */
 
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { authRequired } from '../../middleware/authRequired.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -1928,16 +1928,18 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       if (!validateIdForPath(id, 'workflow', res)) {
         return;
       }
+      // basename() strips any path components — redundant since validateIdForPath
+      // already rejects '/', '\', and '..', but makes the sanitization explicit
+      // to CodeQL's taint analysis.
+      const safeId = basename(id);
 
       try {
         const rootDir = getRootDir();
         const workflowsDir = join(rootDir, 'contents', 'workflows');
         const historyRoot = join(workflowsDir, '.history');
         // Defense-in-depth: resolve the per-workflow history dir and
-        // assert it stays inside .history. validateIdForPath already
-        // rejects path-traversal characters; this catches symlink/
-        // alternate-encoding bypasses that CodeQL flags.
-        const historyDir = resolveAndValidatePath(id, historyRoot);
+        // assert it stays inside .history.
+        const historyDir = resolveAndValidatePath(safeId, historyRoot);
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
@@ -1948,7 +1950,9 @@ export default function registerWorkflowRoutes(app, deps = {}) {
           for (const file of files) {
             if (!file.endsWith('.json')) continue;
             try {
-              const filePath = resolveAndValidatePath(file, historyDir);
+              // basename() guards against any non-basename entries returned by
+              // readdir (defensive; readdir normally returns basenames only).
+              const filePath = resolveAndValidatePath(basename(file), historyDir);
               if (!filePath) continue;
               const content = await fs.readFile(filePath, 'utf8');
               const data = JSON.parse(content);
@@ -2021,13 +2025,14 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       if (!validateIdForPath(id, 'workflow', res)) {
         return;
       }
+      const safeId = basename(id);
 
       try {
         const rootDir = getRootDir();
         const workflowsDir = join(rootDir, 'contents', 'workflows');
 
         // Load current workflow
-        const filename = await findWorkflowFile(id, workflowsDir);
+        const filename = await findWorkflowFile(safeId, workflowsDir);
         if (!filename) {
           return sendNotFound(res, 'Workflow');
         }
@@ -2048,7 +2053,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         // Save to history (defense-in-depth path resolution)
         const historyRoot = join(workflowsDir, '.history');
-        const historyDir = resolveAndValidatePath(id, historyRoot);
+        const historyDir = resolveAndValidatePath(safeId, historyRoot);
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
@@ -2065,8 +2070,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         logger.info({
           component: 'workflowRoutes',
-          message: `Published workflow '${id}' version ${version}`,
-          workflowId: id,
+          message: `Published workflow '${safeId}' version ${version}`,
+          workflowId: safeId,
           version
         });
 
@@ -2126,6 +2131,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
       if (!validateIdForPath(id, 'workflow', res)) {
         return;
       }
+      const safeId = basename(id);
 
       const versionParam = req.params.version;
       // Strict version validation: alphanumeric, dot, hyphen ONLY, no `..`
@@ -2143,7 +2149,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         const rootDir = getRootDir();
         const workflowsDir = join(rootDir, 'contents', 'workflows');
         const historyRoot = join(workflowsDir, '.history');
-        const historyDir = resolveAndValidatePath(id, historyRoot);
+        const historyDir = resolveAndValidatePath(safeId, historyRoot);
         if (!historyDir) {
           return res.status(400).json({ error: 'Invalid workflow ID' });
         }
@@ -2164,7 +2170,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         }
 
         // Read snapshot (resolve+validate to satisfy defense-in-depth)
-        const snapshotPath = resolveAndValidatePath(snapshotFileName, historyDir);
+        // basename() guards against any non-basename entries returned by readdir.
+        const snapshotPath = resolveAndValidatePath(basename(snapshotFileName), historyDir);
         if (!snapshotPath) {
           return res.status(400).json({ error: 'Invalid snapshot path' });
         }
@@ -2176,7 +2183,7 @@ export default function registerWorkflowRoutes(app, deps = {}) {
         delete snapshot._publishedBy;
 
         // Write as current workflow
-        const filename = await findWorkflowFile(id, workflowsDir);
+        const filename = await findWorkflowFile(safeId, workflowsDir);
         if (!filename) {
           return sendNotFound(res, 'Workflow');
         }
@@ -2186,8 +2193,8 @@ export default function registerWorkflowRoutes(app, deps = {}) {
 
         logger.info({
           component: 'workflowRoutes',
-          message: `Activated version ${versionParam} for workflow '${id}'`,
-          workflowId: id,
+          message: `Activated version ${versionParam} for workflow '${safeId}'`,
+          workflowId: safeId,
           version: versionParam
         });
 
