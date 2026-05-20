@@ -5,6 +5,10 @@ import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import IconPicker from '../../../shared/components/IconPicker';
+import ToolsSelector from '../../../shared/components/ToolsSelector';
+import SourcePicker from '../components/SourcePicker';
+import { getLocalizedContent } from '../../../utils/localizeContent';
+import { fetchAdminModels, fetchAdminApps } from '../../../api/adminApi';
 import {
   fetchAgentProfile,
   createAgentProfile,
@@ -15,9 +19,16 @@ const BLANK_PROFILE = {
   id: '',
   name: { en: '' },
   description: { en: '' },
+  system: { en: '' },
   color: '#6366F1',
   icon: 'robot',
-  workflow: { ref: 'embedded', definition: { nodes: [], edges: [] } },
+  workflow: { ref: 'embedded' },
+  preferredModel: '',
+  preferredTemperature: 0.7,
+  maxIterations: 10,
+  tools: [],
+  sources: [],
+  apps: [],
   memory: { enabled: true, autoInclude: true, maxBytes: 8192 },
   inboxId: '',
   hitl: { approverGroups: [] },
@@ -31,27 +42,72 @@ const BLANK_PROFILE = {
   enabled: true
 };
 
-function isUnsafeKey(k) {
-  return k === '__proto__' || k === 'constructor' || k === 'prototype';
-}
+const TOP_LEVEL_FIELDS = new Set([
+  'id',
+  'name',
+  'description',
+  'system',
+  'color',
+  'icon',
+  'workflow',
+  'preferredModel',
+  'preferredTemperature',
+  'maxIterations',
+  'tools',
+  'sources',
+  'apps',
+  'memory',
+  'inboxId',
+  'hitl',
+  'planner',
+  'dynamicTasks',
+  'budgets',
+  'concurrency',
+  'artifacts',
+  'groups',
+  'serviceAccount',
+  'enabled',
+  'order'
+]);
 
 export default function AdminAgentEditPage() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
+  const currentLanguage = i18n.language;
   const navigate = useNavigate();
   const { profileId } = useParams();
   const isNew = !profileId || profileId === 'new';
+
   const [profile, setProfile] = useState(BLANK_PROFILE);
+  const [models, setModels] = useState([]);
+  const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('form');
 
   useEffect(() => {
+    (async () => {
+      try {
+        const [modelsResp, appsResp] = await Promise.all([fetchAdminModels(), fetchAdminApps()]);
+        setModels(modelsResp?.data || modelsResp || []);
+        setApps(appsResp?.data || appsResp || []);
+      } catch (err) {
+        // non-fatal — fields just won't show options
+        console.warn('Failed to load models/apps', err);
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
     if (isNew) return;
     (async () => {
       try {
         const data = await fetchAgentProfile(profileId);
-        setProfile(data?.data || BLANK_PROFILE);
+        const loaded = data?.data || data || {};
+        // Merge BLANK_PROFILE defaults with loaded so newly-added fields
+        // (system, preferredModel, etc.) have sensible initial values when
+        // editing an older profile.
+        setProfile({ ...BLANK_PROFILE, ...loaded });
       } catch (err) {
         setError(err.message);
       } finally {
@@ -60,53 +116,48 @@ export default function AdminAgentEditPage() {
     })();
   }, [profileId, isNew]);
 
-  // Generic dot-path update with prototype-pollution guard.
-  function update(path, value) {
-    setProfile(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      const keys = path.split('.');
-      for (const k of keys) if (isUnsafeKey(k)) return prev;
-      let obj = next;
-      for (let i = 0; i < keys.length - 1; i++) {
-        const k = keys[i];
-        if (!Object.prototype.hasOwnProperty.call(obj, k) || obj[k] === null) {
-          Object.defineProperty(obj, k, {
-            value: {},
-            writable: true,
-            enumerable: true,
-            configurable: true
-          });
-        }
-        obj = obj[k];
-      }
-      const leaf = keys[keys.length - 1];
-      Object.defineProperty(obj, leaf, {
-        value,
-        writable: true,
-        enumerable: true,
-        configurable: true
-      });
-      return next;
-    });
-  }
-
-  // Replace a top-level localized field (name, description) with a new
-  // {en: ..., de: ..., ...} map. Matches the handleLocalizedChange pattern
-  // in AppFormEditor / PromptFormEditor.
-  function handleLocalizedChange(field, value) {
-    if (isUnsafeKey(field)) return;
+  // ─── Update helpers (flat-spread; CodeQL-friendly) ───────────────────────
+  function handleField(field, value) {
+    if (!TOP_LEVEL_FIELDS.has(field)) return;
     setProfile(prev => ({ ...prev, [field]: value }));
   }
 
-  function updateCron(cron) {
+  function handlePlanner(partial) {
+    setProfile(prev => ({ ...prev, planner: { ...prev.planner, ...partial } }));
+  }
+  function handleDynamicTasks(partial) {
+    setProfile(prev => ({ ...prev, dynamicTasks: { ...prev.dynamicTasks, ...partial } }));
+  }
+  function handleMemory(partial) {
+    setProfile(prev => ({ ...prev, memory: { ...prev.memory, ...partial } }));
+  }
+  function handleBudgets(partial) {
+    setProfile(prev => ({ ...prev, budgets: { ...prev.budgets, ...partial } }));
+  }
+  function handleConcurrency(partial) {
+    setProfile(prev => ({ ...prev, concurrency: { ...prev.concurrency, ...partial } }));
+  }
+  function handleHitl(partial) {
+    setProfile(prev => ({ ...prev, hitl: { ...prev.hitl, ...partial } }));
+  }
+  function handleServiceAccount(partial) {
+    setProfile(prev => ({
+      ...prev,
+      serviceAccount: { ...prev.serviceAccount, ...partial }
+    }));
+  }
+  function handleCronSchedule(cron) {
     setProfile(prev => {
-      const next = JSON.parse(JSON.stringify(prev));
-      next.workflow = next.workflow || { ref: 'embedded', definition: { nodes: [], edges: [] } };
-      next.workflow.definition = next.workflow.definition || { nodes: [], edges: [] };
-      next.workflow.definition.triggers = cron
-        ? [{ type: 'schedule', config: { cron, timezone: 'UTC' } }]
-        : [];
-      return next;
+      const triggers = cron ? [{ type: 'schedule', config: { cron, timezone: 'UTC' } }] : [];
+      const def = prev.workflow?.definition || {};
+      return {
+        ...prev,
+        workflow: {
+          ...prev.workflow,
+          ref: prev.workflow?.ref || 'embedded',
+          definition: { ...def, triggers }
+        }
+      };
     });
   }
 
@@ -114,11 +165,10 @@ export default function AdminAgentEditPage() {
     setError(null);
     setSaving(true);
     try {
-      const payload = profile;
       if (isNew) {
-        await createAgentProfile(payload);
+        await createAgentProfile(profile);
       } else {
-        await updateAgentProfile(profileId, payload);
+        await updateAgentProfile(profileId, profile);
       }
       navigate('/admin/agents');
     } catch (err) {
@@ -196,40 +246,31 @@ export default function AdminAgentEditPage() {
               }}
             />
           ) : (
-            <div className="bg-white border rounded p-6 space-y-8 dark:bg-gray-800 dark:border-gray-700">
+            <div className="space-y-6">
               {/* Identity */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.identity', 'Identity')}
-                </h2>
+              <Section title={t('admin.agents.edit.identity', 'Identity')}>
                 <div className="grid grid-cols-1 sm:grid-cols-6 gap-4">
-                  <div className="sm:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.agents.edit.id', 'ID')}
-                      <span className="text-red-500 ml-1">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      disabled={!isNew}
-                      value={profile.id}
-                      onChange={e => update('id', e.target.value)}
-                      placeholder="todo-worker"
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                    />
-                  </div>
-
-                  <div className="sm:col-span-3">
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.agents.edit.enabled', 'Enabled')}
-                    </label>
-                    <div className="mt-2">
+                  <FieldText
+                    span={3}
+                    label={t('admin.agents.edit.id', 'ID')}
+                    required
+                    disabled={!isNew}
+                    value={profile.id}
+                    onChange={v => handleField('id', v)}
+                    placeholder="todo-worker"
+                  />
+                  <div className="sm:col-span-3 flex items-end">
+                    <label className="flex items-center gap-2">
                       <input
                         type="checkbox"
                         checked={profile.enabled !== false}
-                        onChange={e => update('enabled', e.target.checked)}
+                        onChange={e => handleField('enabled', e.target.checked)}
                         className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                       />
-                    </div>
+                      <span className="text-sm text-gray-700 dark:text-gray-300">
+                        {t('admin.agents.edit.enabled', 'Enabled')}
+                      </span>
+                    </label>
                   </div>
 
                   <div className="sm:col-span-6">
@@ -241,12 +282,9 @@ export default function AdminAgentEditPage() {
                         </span>
                       }
                       value={profile.name || {}}
-                      onChange={value => handleLocalizedChange('name', value)}
+                      onChange={v => handleField('name', v)}
                       required={true}
-                      placeholder={{
-                        en: 'TODO Worker',
-                        de: 'TODO-Worker'
-                      }}
+                      placeholder={{ en: 'TODO Worker', de: 'TODO-Worker' }}
                       name="name"
                     />
                   </div>
@@ -255,11 +293,11 @@ export default function AdminAgentEditPage() {
                     <DynamicLanguageEditor
                       label={t('admin.agents.edit.description', 'Description')}
                       value={profile.description || {}}
-                      onChange={value => handleLocalizedChange('description', value)}
+                      onChange={v => handleField('description', v)}
                       type="textarea"
                       placeholder={{
-                        en: 'Describe what the agent does, when it runs, and what tools it uses.',
-                        de: 'Beschreibe, was der Agent tut, wann er läuft und welche Tools er verwendet.'
+                        en: 'Short summary of what this agent does.',
+                        de: 'Kurze Beschreibung dessen, was dieser Agent tut.'
                       }}
                       name="description"
                     />
@@ -273,13 +311,13 @@ export default function AdminAgentEditPage() {
                       <input
                         type="color"
                         value={profile.color || '#6366F1'}
-                        onChange={e => update('color', e.target.value)}
+                        onChange={e => handleField('color', e.target.value)}
                         className="h-9 w-12 rounded border border-gray-300 cursor-pointer"
                       />
                       <input
                         type="text"
                         value={profile.color || ''}
-                        onChange={e => update('color', e.target.value)}
+                        onChange={e => handleField('color', e.target.value)}
                         placeholder="#6366F1"
                         className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                       />
@@ -292,124 +330,272 @@ export default function AdminAgentEditPage() {
                     </label>
                     <IconPicker
                       value={profile.icon || ''}
-                      onChange={value => update('icon', value)}
+                      onChange={v => handleField('icon', v)}
                       className="mt-1"
                     />
                   </div>
                 </div>
-              </section>
+              </Section>
 
-              {/* Schedule */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.schedule', 'Schedule (cron)')}
-                </h2>
-                <input
-                  type="text"
-                  placeholder="*/15 * * * *"
-                  value={cron}
-                  onChange={e => updateCron(e.target.value)}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                />
-                {cron && (
-                  <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                    {t(
-                      'admin.agents.edit.scheduleHint',
-                      'Standard cron syntax. Leave empty to disable.'
-                    )}{' '}
-                    <span className="font-mono">{cron}</span>
-                  </p>
+              {/* Brief — what the agent is and does */}
+              <Section
+                title={t('admin.agents.edit.brief', 'Agent brief')}
+                hint={t(
+                  'admin.agents.edit.briefHint',
+                  'The system prompt every step of the agent receives. Tell it who it is, what its job is, when to ask a human, and what it should leave behind (artifacts).'
                 )}
-              </section>
-
-              {/* Inbox */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.inbox', 'Inbox')}
-                </h2>
-                <input
-                  type="text"
-                  placeholder="engineering-todos"
-                  value={profile.inboxId || ''}
-                  onChange={e => update('inboxId', e.target.value)}
-                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.agents.edit.inboxHint',
-                    'Optional. ID of the inbox this agent reads work from. Create inboxes from Agents → Inboxes.'
-                  )}
-                </p>
-              </section>
-
-              {/* Capabilities */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.capabilities', 'Capabilities')}
-                </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!profile.planner?.enabled}
-                      onChange={e => update('planner.enabled', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {t('admin.agents.edit.plannerEnabled', 'Planner enabled')}
+              >
+                <DynamicLanguageEditor
+                  label={
+                    <span>
+                      {t('admin.agents.edit.system', 'System Instructions')}
+                      <span className="text-red-500 ml-1">*</span>
                     </span>
-                  </label>
+                  }
+                  value={profile.system || {}}
+                  onChange={v => handleField('system', v)}
+                  required={true}
+                  type="textarea"
+                  placeholder={{
+                    en: 'You are a TODO Worker. On each wake call read_inbox, pick the highest-priority item, do the work, call write_artifact, then write_inbox(mode=markDone).',
+                    de: 'Du bist ein TODO-Worker. Rufe bei jedem Wake read_inbox auf, wähle den wichtigsten Eintrag, erledige die Arbeit, rufe write_artifact und write_inbox(mode=markDone) auf.'
+                  }}
+                  name="system"
+                />
+              </Section>
+
+              {/* Model & decoding */}
+              <Section title={t('admin.agents.edit.model', 'Model')}>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.agents.edit.plannerMaxTasks', 'Planner max tasks')}
+                      {t('admin.agents.edit.preferredModel', 'Preferred model')}
+                    </label>
+                    <select
+                      value={profile.preferredModel || ''}
+                      onChange={e => handleField('preferredModel', e.target.value)}
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    >
+                      <option value="">
+                        {t('admin.agents.edit.selectModel', 'Use platform default')}
+                      </option>
+                      {models.map(m => (
+                        <option key={m.id} value={m.id}>
+                          {getLocalizedContent(m.name, currentLanguage) || m.id}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.temperature', 'Temperature')}
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={profile.preferredTemperature ?? 0.7}
+                      onChange={e =>
+                        handleField('preferredTemperature', parseFloat(e.target.value))
+                      }
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.maxIterations', 'Max tool-call iterations per step')}
                     </label>
                     <input
                       type="number"
                       min="1"
                       max="50"
-                      value={profile.planner?.maxTasks ?? 10}
-                      onChange={e => update('planner.maxTasks', Number(e.target.value))}
-                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
-                    />
-                  </div>
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={!!profile.dynamicTasks?.enabled}
-                      onChange={e => update('dynamicTasks.enabled', e.target.checked)}
-                      className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
-                    />
-                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                      {t('admin.agents.edit.dynamicTasksEnabled', 'Dynamic tasks enabled')}
-                    </span>
-                  </label>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      {t('admin.agents.edit.maxDepth', 'Max depth')}
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      max="10"
-                      value={profile.dynamicTasks?.maxDepth ?? 3}
-                      onChange={e => update('dynamicTasks.maxDepth', Number(e.target.value))}
+                      value={profile.maxIterations ?? 10}
+                      onChange={e => handleField('maxIterations', parseInt(e.target.value) || 10)}
                       className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     />
                   </div>
                 </div>
-              </section>
+              </Section>
+
+              {/* Capabilities — tools, apps, sources */}
+              <Section
+                title={t('admin.agents.edit.capabilities', 'Capabilities')}
+                hint={t(
+                  'admin.agents.edit.capabilitiesHint',
+                  'Memory/inbox/task/artifact tools are auto-registered for every agent. Add provider tools (e.g. webContentExtractor), iHub Apps (for App-as-tool), or knowledge sources here.'
+                )}
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.tools', 'Tools')}
+                    </label>
+                    <ToolsSelector
+                      selectedTools={profile.tools || []}
+                      onToolsChange={tools => handleField('tools', tools)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.apps', 'iHub Apps (App-as-tool)')}
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      {t(
+                        'admin.agents.edit.appsHint',
+                        'Apps the agent can invoke as synthetic tools (app__<id>). Requires the features.appAsTool flag to be ON.'
+                      )}
+                    </p>
+                    <AppMultiSelect
+                      value={profile.apps || []}
+                      apps={apps}
+                      onChange={v => handleField('apps', v)}
+                      currentLanguage={currentLanguage}
+                      t={t}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.sources', 'Sources')}
+                    </label>
+                    <SourcePicker
+                      value={profile.sources || []}
+                      onChange={v => handleField('sources', v)}
+                    />
+                  </div>
+                </div>
+              </Section>
+
+              {/* Decomposition */}
+              <Section
+                title={t('admin.agents.edit.decomposition', 'Decomposition')}
+                hint={t(
+                  'admin.agents.edit.decompositionHint',
+                  'How the agent breaks work into smaller pieces. Pick whichever applies; if neither is on, the agent runs as a single Prompt step.'
+                )}
+              >
+                <div className="space-y-4">
+                  <div className="rounded border border-gray-200 dark:border-gray-700 p-3">
+                    <label className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!profile.planner?.enabled}
+                        onChange={e => handlePlanner({ enabled: e.target.checked })}
+                        className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                      />
+                      <span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                          {t('admin.agents.edit.plannerEnabled', 'Planner (upfront)')}
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.agents.edit.plannerExplain',
+                            'Before doing work, a Planner LLM call produces N sub-tasks and the runtime materializes them as a sub-workflow. Best when the work is non-trivially decomposable up front (research, multi-step analysis).'
+                          )}
+                        </p>
+                      </span>
+                    </label>
+                    <div className="mt-2 pl-6">
+                      <label className="block text-xs text-gray-600 dark:text-gray-400">
+                        {t('admin.agents.edit.plannerMaxTasks', 'Max tasks in initial plan')}
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="50"
+                        disabled={!profile.planner?.enabled}
+                        value={profile.planner?.maxTasks ?? 10}
+                        onChange={e => handlePlanner({ maxTasks: Number(e.target.value) })}
+                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="rounded border border-gray-200 dark:border-gray-700 p-3">
+                    <label className="flex items-start gap-2">
+                      <input
+                        type="checkbox"
+                        checked={!!profile.dynamicTasks?.enabled}
+                        onChange={e => handleDynamicTasks({ enabled: e.target.checked })}
+                        className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                      />
+                      <span>
+                        <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                          {t('admin.agents.edit.dynamicTasksEnabled', 'Dynamic tasks (runtime)')}
+                        </span>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.agents.edit.dynamicTasksExplain',
+                            'At runtime the agent may call create_task() to enqueue work; a drain loop processes it FIFO until empty. Best when sub-tasks are discovered mid-run (e.g. one inbox item turns into 3 follow-ups). Combine with Planner if you also want an upfront plan.'
+                          )}
+                        </p>
+                      </span>
+                    </label>
+                    <div className="mt-2 pl-6">
+                      <label className="block text-xs text-gray-600 dark:text-gray-400">
+                        {t(
+                          'admin.agents.edit.maxDepth',
+                          'Max depth (refuse create_task beyond this nesting)'
+                        )}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        max="10"
+                        disabled={!profile.dynamicTasks?.enabled}
+                        value={profile.dynamicTasks?.maxDepth ?? 3}
+                        onChange={e => handleDynamicTasks({ maxDepth: Number(e.target.value) })}
+                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </Section>
+
+              {/* Schedule */}
+              <Section
+                title={t('admin.agents.edit.schedule', 'Schedule')}
+                hint={t(
+                  'admin.agents.edit.scheduleHint',
+                  'Optional cron expression. The agent runs on this schedule under its service-account identity. Leave empty for manual / webhook only.'
+                )}
+              >
+                <input
+                  type="text"
+                  placeholder="*/15 * * * *"
+                  value={cron}
+                  onChange={e => handleCronSchedule(e.target.value)}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                />
+              </Section>
+
+              {/* Inbox */}
+              <Section
+                title={t('admin.agents.edit.inbox', 'Inbox')}
+                hint={t(
+                  'admin.agents.edit.inboxHint',
+                  'Optional. ID of the inbox this agent reads work from via read_inbox. Create inboxes from Agents → Inboxes.'
+                )}
+              >
+                <input
+                  type="text"
+                  placeholder="engineering-todos"
+                  value={profile.inboxId || ''}
+                  onChange={e => handleField('inboxId', e.target.value)}
+                  className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                />
+              </Section>
 
               {/* Memory */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.memory', 'Memory')}
-                </h2>
+              <Section title={t('admin.agents.edit.memory', 'Memory')}>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <label className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       checked={profile.memory?.enabled !== false}
-                      onChange={e => update('memory.enabled', e.target.checked)}
+                      onChange={e => handleMemory({ enabled: e.target.checked })}
                       className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -420,7 +606,7 @@ export default function AdminAgentEditPage() {
                     <input
                       type="checkbox"
                       checked={profile.memory?.autoInclude !== false}
-                      onChange={e => update('memory.autoInclude', e.target.checked)}
+                      onChange={e => handleMemory({ autoInclude: e.target.checked })}
                       className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
                     />
                     <span className="text-sm text-gray-700 dark:text-gray-300">
@@ -436,7 +622,7 @@ export default function AdminAgentEditPage() {
                       min="0"
                       max="1000000"
                       value={profile.memory?.maxBytes ?? 8192}
-                      onChange={e => update('memory.maxBytes', Number(e.target.value))}
+                      onChange={e => handleMemory({ maxBytes: Number(e.target.value) })}
                       className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     />
                   </div>
@@ -450,13 +636,10 @@ export default function AdminAgentEditPage() {
                     {t('admin.agents.edit.editMemoryFile', 'Edit memory file →')}
                   </button>
                 )}
-              </section>
+              </Section>
 
               {/* Budgets & concurrency */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.budgets', 'Budgets & concurrency')}
-                </h2>
+              <Section title={t('admin.agents.edit.budgets', 'Budgets & concurrency')}>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -467,7 +650,7 @@ export default function AdminAgentEditPage() {
                       min="10"
                       max="86400"
                       value={profile.budgets?.maxWallTimeSec ?? 600}
-                      onChange={e => update('budgets.maxWallTimeSec', Number(e.target.value))}
+                      onChange={e => handleBudgets({ maxWallTimeSec: Number(e.target.value) })}
                       className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     />
                   </div>
@@ -480,72 +663,136 @@ export default function AdminAgentEditPage() {
                       min="1"
                       max="10"
                       value={profile.concurrency?.maxConcurrent ?? 1}
-                      onChange={e => update('concurrency.maxConcurrent', Number(e.target.value))}
+                      onChange={e => handleConcurrency({ maxConcurrent: Number(e.target.value) })}
                       className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     />
                   </div>
                 </div>
-              </section>
+              </Section>
 
               {/* HITL */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.hitl', 'HITL approver groups')}
-                </h2>
+              <Section
+                title={t('admin.agents.edit.hitl', 'HITL approver groups')}
+                hint={t(
+                  'admin.agents.edit.hitlHint',
+                  'Comma-separated group IDs. Users in any of these groups can approve human-checkpoint pauses for this profile.'
+                )}
+              >
                 <input
                   type="text"
-                  placeholder="agent-operators,agent-operators-todo-worker"
+                  placeholder="agent-operators"
                   value={(profile.hitl?.approverGroups || []).join(',')}
                   onChange={e =>
-                    update(
-                      'hitl.approverGroups',
-                      e.target.value
+                    handleHitl({
+                      approverGroups: e.target.value
                         .split(',')
                         .map(s => s.trim())
                         .filter(Boolean)
-                    )
+                    })
                   }
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.agents.edit.hitlHint',
-                    'Comma-separated group IDs. Users in any of these groups can approve human-checkpoint pauses for this profile.'
-                  )}
-                </p>
-              </section>
+              </Section>
 
-              {/* Service account groups */}
-              <section>
-                <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-gray-100">
-                  {t('admin.agents.edit.serviceAccount', 'Service account groups')}
-                </h2>
+              {/* Service account */}
+              <Section
+                title={t('admin.agents.edit.serviceAccount', 'Service account groups')}
+                hint={t(
+                  'admin.agents.edit.serviceAccountHint',
+                  'Groups the agent principal (agent:<id>) belongs to. These determine which apps/tools/models the agent can access via the standard group permission system.'
+                )}
+              >
                 <input
                   type="text"
                   placeholder="agents,authenticated"
                   value={(profile.serviceAccount?.groups || []).join(',')}
                   onChange={e =>
-                    update(
-                      'serviceAccount.groups',
-                      e.target.value
+                    handleServiceAccount({
+                      groups: e.target.value
                         .split(',')
                         .map(s => s.trim())
                         .filter(Boolean)
-                    )
+                    })
                   }
                   className="block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  {t(
-                    'admin.agents.edit.serviceAccountHint',
-                    'Groups the agent principal (agent:<id>) belongs to. These determine which apps/tools/models the agent can access.'
-                  )}
-                </p>
-              </section>
+              </Section>
             </div>
           )}
         </div>
       </div>
     </AdminAuth>
+  );
+}
+
+function Section({ title, hint, children }) {
+  return (
+    <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+      <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
+      {hint && <p className="mt-1 mb-3 text-sm text-gray-500 dark:text-gray-400">{hint}</p>}
+      {!hint && <div className="mt-3" />}
+      {children}
+    </div>
+  );
+}
+
+function FieldText({ span, label, required, value, onChange, placeholder, disabled }) {
+  const colClass = span === 3 ? 'sm:col-span-3' : span === 6 ? 'sm:col-span-6' : '';
+  return (
+    <div className={colClass}>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+        {label}
+        {required && <span className="text-red-500 ml-1">*</span>}
+      </label>
+      <input
+        type="text"
+        disabled={disabled}
+        value={value || ''}
+        onChange={e => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+      />
+    </div>
+  );
+}
+
+function AppMultiSelect({ value, apps, onChange, currentLanguage, t }) {
+  const valueSet = new Set(value || []);
+  function toggle(id) {
+    const next = new Set(valueSet);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    onChange(Array.from(next));
+  }
+  const enabled = (apps || []).filter(
+    a => a.enabled !== false && a.type !== 'redirect' && a.type !== 'iframe'
+  );
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 max-h-56 overflow-y-auto">
+      {enabled.length === 0 ? (
+        <p className="p-3 text-xs text-gray-500 dark:text-gray-400">
+          {t('admin.agents.edit.noApps', 'No chat-type apps available.')}
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+          {enabled.map(a => (
+            <li key={a.id} className="px-3 py-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={valueSet.has(a.id)}
+                  onChange={() => toggle(a.id)}
+                  className="h-4 w-4 text-indigo-600 border-gray-300 rounded"
+                />
+                <span className="text-sm text-gray-800 dark:text-gray-200">
+                  {getLocalizedContent(a.name, currentLanguage) || a.id}
+                </span>
+                <span className="text-xs text-gray-500 font-mono">{a.id}</span>
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
