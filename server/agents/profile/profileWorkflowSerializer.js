@@ -130,11 +130,7 @@ function buildDrainOnlyWorkflow(profile) {
 function buildPlannerWorkflow(profile) {
   const maxDepth = profile.dynamicTasks?.maxDepth ?? 3;
   const useDrain = profile.dynamicTasks?.enabled !== false;
-  // The Planner needs a `goal`. It always pulls from `state.data.brief`,
-  // which the run trigger pre-populates with the operator-supplied brief
-  // (falling back to the Profile's system instructions when no brief is
-  // supplied — see server/routes/agents/runs.js).
-  const goal = '${$.data.brief}';
+
   // taskTemplate is flat: its keys are spread directly into the materialized
   // task node's `config` by SubWorkflowMaterializer (see
   // server/services/workflow/SubWorkflowMaterializer.js: `...restTemplate`).
@@ -147,6 +143,125 @@ function buildPlannerWorkflow(profile) {
     }),
     dynamicTasks: { enabled: useDrain, maxDepth }
   };
+
+  // Planner system prompt that explicitly steers away from orchestration
+  // steps. Without this the planner happily decomposes the brief into
+  // "Read Inbox / Pick Item / Write Artifact / Mark Done" — i.e. it
+  // re-plans what the orchestrator already does. We want the planner to
+  // plan THE WORK (research, analysis, drafting), not the wiring.
+  const plannerSystem =
+    'You are a research/work planner. The orchestrator has already handled ' +
+    'inbox loading, item selection, artifact persistence, and marking the ' +
+    'inbox item done — DO NOT include any of those steps in your plan. ' +
+    'Plan the substantive work the agent must do to satisfy the request: ' +
+    'gathering information, calling search/tools, analyzing results, ' +
+    'synthesizing findings, drafting the deliverable. Each task should be ' +
+    'an independently executable step of REAL WORK. Return a structured ' +
+    'JSON plan.';
+
+  // Inbox-bound profile (e.g. todo-worker, research-agent): the planner is
+  // sandwiched between a "load one item" orchestrator and a "finalize one
+  // item" orchestrator. The orchestrators own the inbox lifecycle so the
+  // plan tasks (which are stateless) can't re-read or double-mark the
+  // inbox — that's exactly the "two items processed" bug otherwise.
+  if (profile.inboxId) {
+    const sysFallback = { en: 'You are an autonomous agent processing inbox items.' };
+    const profileSystem =
+      profile.system && Object.keys(profile.system).length > 0 ? profile.system : sysFallback;
+    return {
+      nodes: [
+        { id: 'start', type: 'start' },
+        {
+          id: 'load-inbox',
+          type: 'prompt',
+          config: {
+            modelId: pickModel(profile),
+            ...(profile.preferredTemperature !== undefined
+              ? { temperature: profile.preferredTemperature }
+              : {}),
+            system: profileSystem,
+            prompt:
+              'Call read_inbox to load all open items, pick the single highest-priority open ' +
+              'item, then respond with a JSON object describing it:\n\n' +
+              '```json\n{ "id": "<line-id-or-index>", "text": "<full item text>", "priority": "p1|p2|p3" }\n```\n\n' +
+              'Do not do any other work. Do not write artifacts. Do not mark anything done. ' +
+              'Just identify the next item the planner should work on.',
+            maxIterations: 5,
+            // Tools auto-registered for this orchestrator node include
+            // read_inbox / write_inbox because it is NOT a planner task.
+            tools: [],
+            outputVariable: 'currentInboxItem'
+          }
+        },
+        {
+          id: 'planner',
+          type: 'planner',
+          config: {
+            modelId: pickModel(profile),
+            // Override the default planner system to steer away from
+            // orchestration decomposition.
+            system: plannerSystem,
+            // Goal frames the planner's job as planning the WORK to solve
+            // the request. Orchestration is already handled outside the
+            // planner sub-DAG.
+            goal:
+              'Plan the substantive work required to fulfill this request. ' +
+              'DO NOT include steps for reading the inbox, marking items done, ' +
+              'or writing artifacts — those happen outside this plan.\n\n' +
+              '## Request\n${$.data.currentInboxItem}\n\n' +
+              '## Original brief (context)\n${$.data.brief}',
+            maxTasks: profile.planner?.maxTasks ?? 10,
+            taskTemplate,
+            ...(useDrain ? { dynamicTasks: { enabled: true, maxDepth } } : {})
+          }
+        },
+        {
+          id: 'finalize',
+          type: 'prompt',
+          config: {
+            modelId: pickModel(profile),
+            ...(profile.preferredTemperature !== undefined
+              ? { temperature: profile.preferredTemperature }
+              : {}),
+            system: profileSystem,
+            prompt:
+              'The planner has finished. Wrap up by making exactly two tool calls in this order:\n\n' +
+              '**Step 1 — Persist the deliverable.**\n' +
+              'Call `write_artifact` with EXACTLY these argument shapes:\n' +
+              '- `name`: a simple filename string (no slashes), e.g. `"report.md"`\n' +
+              '- `content`: a string containing the full report in markdown — aggregate the sub-task\n' +
+              '  results below into a coherent document. If the data is structured, format it as\n' +
+              '  markdown sections; do NOT pass an object/array here.\n' +
+              '- `contentType` (optional): `"text/markdown"`\n\n' +
+              'Example: `write_artifact(name="report.md", content="# Report\\n\\n...")`\n\n' +
+              '**Step 2 — Mark the inbox item done.**\n' +
+              'Call `write_inbox` with EXACTLY these arguments:\n' +
+              '- `mode`: `"markDone"`\n' +
+              '- `item`: the exact text of the inbox item being processed (substring match against\n' +
+              '  the inbox line is enough — copy from `currentInboxItem` below)\n' +
+              '- `note` (optional): a one-line completion summary\n\n' +
+              'Do not call any other tools. Do not retry on success.\n\n' +
+              '## Inbox item being processed\n' +
+              '{{currentInboxItem}}\n\n' +
+              '## Sub-task results (use this content for the artifact)\n' +
+              '{{nodeResults}}',
+            maxIterations: 5,
+            tools: [],
+            outputVariable: 'finalSummary'
+          }
+        },
+        { id: 'end', type: 'end' }
+      ],
+      edges: [
+        { from: 'start', to: 'load-inbox' },
+        { from: 'load-inbox', to: 'planner' },
+        { from: 'planner', to: 'finalize' },
+        { from: 'finalize', to: 'end' }
+      ]
+    };
+  }
+
+  // Non-inbox planner (e.g. research-and-summarize): simpler shape.
   return {
     nodes: [
       { id: 'start', type: 'start' },
@@ -155,7 +270,8 @@ function buildPlannerWorkflow(profile) {
         type: 'planner',
         config: {
           modelId: pickModel(profile),
-          goal,
+          system: plannerSystem,
+          goal: '${$.data.brief}',
           maxTasks: profile.planner?.maxTasks ?? 10,
           taskTemplate,
           ...(useDrain ? { dynamicTasks: { enabled: true, maxDepth } } : {})

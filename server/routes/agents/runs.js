@@ -21,6 +21,7 @@ import { WorkflowEngine, getExecutionRegistry } from '../../services/workflow/in
 import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
+import { actionTracker } from '../../actionTracker.js';
 import logger from '../../utils/logger.js';
 
 // Lazy-shared engine. WorkflowEngine state lives in StateManager (filesystem),
@@ -77,7 +78,28 @@ export default function registerAgentRunRoutes(app) {
 
         const { brief, variables } = req.body || {};
         const serialized = serializeProfile(profile);
-        const workflow = serialized.workflow.definition || {};
+
+        // Resolve workflow: either the profile's embedded definition or a
+        // reference to a hand-authored workflow in contents/workflows/.
+        // External refs let authors wire complex workflows (e.g.
+        // iterative-research-auto) to an agent profile without having to
+        // inline the whole definition into the profile file.
+        let workflow;
+        if (
+          serialized.workflow?.ref === 'external' &&
+          typeof serialized.workflow.workflowId === 'string'
+        ) {
+          const wf = configCache.getWorkflowById(serialized.workflow.workflowId);
+          if (!wf) {
+            return sendBadRequest(
+              res,
+              `External workflow ${serialized.workflow.workflowId} not found`
+            );
+          }
+          workflow = JSON.parse(JSON.stringify(wf));
+        } else {
+          workflow = serialized.workflow.definition || {};
+        }
         workflow.id = workflow.id || `agent:${profileId}`;
 
         // Defense in depth: planner nodes saved by older serializer versions
@@ -195,16 +217,158 @@ export default function registerAgentRunRoutes(app) {
   });
 
   // ── Single run ────────────────────────────────────────────────────────────
+  // Returns the enriched shape `useWorkflowExecution()` expects (canReconnect,
+  // pendingCheckpoint, etc.) so the agent run detail page can reuse the
+  // workflow execution hook without forking.
   app.get(buildServerPath('/api/agents/runs/:runId'), authRequired, async (req, res) => {
     try {
       const { runId } = req.params;
       if (!validateIdForPath(runId, 'run', res)) return;
       const state = await getEngine().getState(runId);
       if (!state) return sendNotFound(res, `Run ${runId} not found`);
-      res.json(state);
+
+      const canReconnect = state.status === 'running' || state.status === 'paused';
+      const pendingCheckpoint = state.data?.pendingCheckpoint || null;
+      const workflowName = state.data?._workflowDefinition?.name || null;
+
+      res.json({
+        executionId: state.executionId,
+        workflowId: state.workflowId,
+        workflowName,
+        status: state.status,
+        currentNodes: state.currentNodes,
+        completedNodes: state.completedNodes,
+        failedNodes: state.failedNodes,
+        createdAt: state.createdAt,
+        startedAt: state.startedAt,
+        completedAt: state.completedAt,
+        history: state.history,
+        errors: state.errors,
+        checkpoints: state.checkpoints?.map(cp => ({ id: cp.id, timestamp: cp.timestamp })),
+        data: state.data,
+        canReconnect,
+        pendingCheckpoint
+      });
     } catch (error) {
       sendFailedOperationError(res, 'read agent run', error);
     }
+  });
+
+  // ── SSE stream ────────────────────────────────────────────────────────────
+  // Mirrors /api/workflows/executions/:executionId/stream so the agent run
+  // detail page gets live updates without forcing operators to enable the
+  // workflows feature flag.
+  const agentClients = new Map();
+
+  app.get(buildServerPath('/api/agents/runs/:runId/stream'), authRequired, (req, res) => {
+    const { runId } = req.params;
+    if (!validateIdForPath(runId, 'run', res)) return;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    agentClients.set(runId, { response: res, lastActivity: new Date() });
+    const myEntry = agentClients.get(runId);
+
+    res.write(`event: connected\ndata: ${JSON.stringify({ runId })}\n\n`);
+
+    logger.info('SSE connection established for agent run', {
+      component: 'AgentRuns',
+      runId
+    });
+
+    // Event prefixes we forward to the client.
+    const forwardedPrefixes = ['workflow.', 'agent.'];
+
+    // Track this run and any descendant sub-workflow executionIds. The
+    // planner spawns a child workflow whose events fire with
+    // `chatId = childExecutionId` (not the parent runId) — without this
+    // bookkeeping the UI sees only the parent's start/planner/end nodes and
+    // none of the task work done in the sub-workflow.
+    const trackedIds = new Set([runId]);
+
+    // Seed from existing state in case the SSE client connects after some
+    // child workflows have already been spawned.
+    (async () => {
+      try {
+        const state = await getEngine().getState(runId);
+        const seed = ids => {
+          if (Array.isArray(ids)) {
+            for (const id of ids) trackedIds.add(id);
+          }
+        };
+        seed(state?.data?._childExecutionIds);
+        // Walk descendants one level deep at minimum
+        for (const childId of state?.data?._childExecutionIds || []) {
+          const childState = await getEngine().getState(childId);
+          seed(childState?.data?._childExecutionIds);
+        }
+      } catch (err) {
+        logger.warn('Could not seed child execution ids for SSE', {
+          component: 'AgentRuns',
+          runId,
+          error: err.message
+        });
+      }
+    })();
+
+    const handleEvent = eventData => {
+      const eventType = eventData.event;
+      if (typeof eventType !== 'string') return;
+      if (!forwardedPrefixes.some(p => eventType.startsWith(p))) return;
+
+      // Auto-track new child executions as they're spawned mid-run.
+      if (eventType === 'workflow.subworkflow.start') {
+        const childId = eventData.data?.executionId || eventData.executionId;
+        if (childId) trackedIds.add(childId);
+      }
+
+      const matchesRun =
+        (eventData.chatId && trackedIds.has(eventData.chatId)) ||
+        (eventData.executionId && trackedIds.has(eventData.executionId));
+      if (!matchesRun) return;
+
+      const client = agentClients.get(runId);
+      if (client) client.lastActivity = new Date();
+
+      try {
+        // Always tag the event with the parent runId so the client can route
+        // it consistently regardless of which (sub)workflow emitted it.
+        const payload = { ...eventData, _parentRunId: runId };
+        res.write(`event: ${eventType}\ndata: ${JSON.stringify(payload)}\n\n`);
+      } catch (error) {
+        logger.error('Error sending agent SSE event', {
+          component: 'AgentRuns',
+          runId,
+          eventType,
+          error: error.message
+        });
+      }
+    };
+
+    actionTracker.on('fire-sse', handleEvent);
+
+    const heartbeatInterval = setInterval(() => {
+      if (agentClients.get(runId) !== myEntry) {
+        clearInterval(heartbeatInterval);
+        return;
+      }
+      try {
+        res.write(`: heartbeat\n\n`);
+      } catch (_err) {
+        clearInterval(heartbeatInterval);
+        if (agentClients.get(runId) === myEntry) agentClients.delete(runId);
+      }
+    }, 30000);
+
+    req.on('close', () => {
+      clearInterval(heartbeatInterval);
+      actionTracker.off('fire-sse', handleEvent);
+      if (agentClients.get(runId) === myEntry) agentClients.delete(runId);
+      logger.info('SSE connection closed for agent run', { component: 'AgentRuns', runId });
+    });
   });
 
   // ── Cancel ────────────────────────────────────────────────────────────────

@@ -18,7 +18,23 @@ import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
  * @property {Function} reconnect - Function to reconnect SSE stream
  * @property {Function} refetch - Function to refetch execution state
  */
-function useWorkflowExecution(executionId) {
+function useWorkflowExecution(executionId, options = {}) {
+  const {
+    // Feature flag(s) required to enable fetching/streaming. Either a single
+    // flag id (string) or an array of acceptable flag ids — any one being
+    // enabled is sufficient. Defaults to the workflows feature.
+    requireFeature = 'workflows',
+    // Base path for the state endpoint (apiClient.get is relative to the API
+    // root, so no leading `/api/`).
+    stateEndpoint = 'workflows/executions',
+    // Base path for the SSE stream endpoint (buildApiUrl prepends /api).
+    streamEndpoint = 'workflows/executions',
+    // Suffix for the respond (HITL) endpoint.
+    respondEndpoint = 'respond',
+    // Suffix for the cancel endpoint.
+    cancelEndpoint = 'cancel'
+  } = options;
+
   const [state, setState] = useState(null);
   const [loading, setLoading] = useState(true);
   const [connected, setConnected] = useState(false);
@@ -32,15 +48,17 @@ function useWorkflowExecution(executionId) {
   const mountedRef = useRef(true);
   const featureFlags = useFeatureFlags();
 
+  const requiredFeatures = Array.isArray(requireFeature) ? requireFeature : [requireFeature];
+  const isFeatureEnabled = () => requiredFeatures.some(id => featureFlags.isEnabled(id, true));
+
   // Fetch initial execution state
   const fetchState = useCallback(async () => {
     if (!executionId) return;
 
-    // Don't fetch if workflows feature is disabled
-    if (!featureFlags.isEnabled('workflows', true)) {
+    if (!isFeatureEnabled()) {
       setState(null);
       setLoading(false);
-      setError('Workflows feature is disabled');
+      setError(`Required feature(s) ${requiredFeatures.join(' or ')} disabled`);
       return;
     }
 
@@ -48,7 +66,7 @@ function useWorkflowExecution(executionId) {
     setError(null);
 
     try {
-      const response = await apiClient.get(`/workflows/executions/${executionId}`);
+      const response = await apiClient.get(`/${stateEndpoint}/${executionId}`);
       setState(response.data);
     } catch (err) {
       console.error('Failed to fetch execution state:', err);
@@ -56,16 +74,14 @@ function useWorkflowExecution(executionId) {
     } finally {
       setLoading(false);
     }
-  }, [executionId, featureFlags]);
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
+  }, [executionId, featureFlags, stateEndpoint]);
 
   // Connect to SSE stream
   const connectSSE = useCallback(() => {
     if (!executionId) return;
 
-    // Don't connect if workflows feature is disabled
-    if (!featureFlags.isEnabled('workflows', true)) {
-      return;
-    }
+    if (!isFeatureEnabled()) return;
 
     // Close existing connection
     if (eventSourceRef.current) {
@@ -73,7 +89,7 @@ function useWorkflowExecution(executionId) {
       eventSourceRef.current = null;
     }
 
-    const url = buildApiUrl(`workflows/executions/${executionId}/stream`);
+    const url = buildApiUrl(`${streamEndpoint}/${executionId}/stream`);
     const eventSource = new EventSource(url);
     eventSourceRef.current = eventSource;
 
@@ -99,7 +115,20 @@ function useWorkflowExecution(executionId) {
       'workflow.checkpoint.saved',
       'workflow.plan.created',
       'workflow.subworkflow.start',
-      'workflow.subworkflow.complete'
+      'workflow.subworkflow.complete',
+      // Agent-specific events (only fire on agent runs, harmless otherwise)
+      'agent.task.created',
+      'agent.task.completed',
+      'agent.task.failed',
+      'agent.artifact.written',
+      'agent.memory.read',
+      'agent.memory.write',
+      'agent.inbox.read',
+      'agent.inbox.write',
+      'agent.tool.hallucinated',
+      'agent.hitl.requested',
+      'agent.hitl.approved',
+      'agent.hitl.rejected'
     ];
 
     const handleEvent = event => {
@@ -310,9 +339,98 @@ function useWorkflowExecution(executionId) {
           }));
           break;
 
+        case 'agent.task.created':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              _taskQueue: [
+                ...(prev?.data?._taskQueue || []),
+                {
+                  id: data.taskId,
+                  title: data.title,
+                  parentTaskId: data.parentTaskId || null,
+                  depth: data.depth ?? 0,
+                  status: 'open'
+                }
+              ]
+            }
+          }));
+          break;
+
+        case 'agent.task.completed':
+        case 'agent.task.failed':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              _taskQueue: (prev?.data?._taskQueue || []).map(t =>
+                t.id === data.taskId
+                  ? { ...t, status: eventType === 'agent.task.failed' ? 'failed' : 'done' }
+                  : t
+              )
+            }
+          }));
+          break;
+
+        case 'agent.artifact.written':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              _agent: {
+                ...(prev?.data?._agent || {}),
+                artifacts: [
+                  ...(prev?.data?._agent?.artifacts || []),
+                  {
+                    name: data.name || data.artifactName,
+                    bytes: data.bytes,
+                    at: new Date().toISOString()
+                  }
+                ]
+              }
+            }
+          }));
+          break;
+
+        case 'agent.tool.hallucinated':
+          setState(prev => ({
+            ...prev,
+            data: {
+              ...prev?.data,
+              _toolErrors: [
+                ...(prev?.data?._toolErrors || []),
+                {
+                  ts: new Date().toISOString(),
+                  requestedName: data.requestedName,
+                  availableTools: data.availableTools,
+                  reason: 'not_registered'
+                }
+              ]
+            }
+          }));
+          break;
+
+        case 'agent.memory.read':
+        case 'agent.memory.write':
+        case 'agent.inbox.read':
+        case 'agent.inbox.write':
+        case 'agent.hitl.requested':
+        case 'agent.hitl.approved':
+        case 'agent.hitl.rejected':
+          // Append to history so the UI can show a chronological tape.
+          setState(prev => ({
+            ...prev,
+            history: [
+              ...(prev?.history || []),
+              { event: eventType, ...data, at: new Date().toISOString() }
+            ]
+          }));
+          break;
+
         default:
           // Only log truly unhandled events, not expected internal events
-          if (!eventType.startsWith('workflow.')) {
+          if (!eventType.startsWith('workflow.') && !eventType.startsWith('agent.')) {
             console.log('Unhandled workflow event:', eventType, data);
           }
       }
@@ -352,13 +470,12 @@ function useWorkflowExecution(executionId) {
     async ({ checkpointId, response, data }) => {
       if (!executionId) return;
 
-      // Don't respond if workflows feature is disabled
-      if (!featureFlags.isEnabled('workflows', true)) {
-        throw new Error('Workflows feature is disabled');
+      if (!isFeatureEnabled()) {
+        throw new Error(`Required feature(s) ${requiredFeatures.join(' or ')} disabled`);
       }
 
       try {
-        const result = await apiClient.post(`/workflows/executions/${executionId}/respond`, {
+        const result = await apiClient.post(`/${stateEndpoint}/${executionId}/${respondEndpoint}`, {
           checkpointId,
           response,
           data
@@ -385,13 +502,12 @@ function useWorkflowExecution(executionId) {
     async (reason = 'user_cancelled') => {
       if (!executionId) return;
 
-      // Don't cancel if workflows feature is disabled
-      if (!featureFlags.isEnabled('workflows', true)) {
-        throw new Error('Workflows feature is disabled');
+      if (!isFeatureEnabled()) {
+        throw new Error(`Required feature(s) ${requiredFeatures.join(' or ')} disabled`);
       }
 
       try {
-        const result = await apiClient.post(`/workflows/executions/${executionId}/cancel`, {
+        const result = await apiClient.post(`/${stateEndpoint}/${executionId}/${cancelEndpoint}`, {
           reason
         });
 
