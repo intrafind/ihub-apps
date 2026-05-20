@@ -29,6 +29,7 @@
   var currentError = null;
   var isSubmitting = false;
   var selectedAuthMethod = null; // 'local' | 'ldap' | null
+  var isOverlayMode = false; // Track if gate is shown as overlay
 
   // --- Public API ---
   window.__authGate = {
@@ -47,6 +48,13 @@
     // where React fires tokenExpired while gate is already showing login form)
     if (window.__authGate.isVisible()) return;
     showGate({ overlay: true, reason: detail.reason });
+  });
+
+  // --- ESC Key Listener for Overlay Mode ---
+  window.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && isOverlayMode && window.__authGate.isVisible()) {
+      hideGate();
+    }
   });
 
   // --- Bootstrap ---
@@ -327,6 +335,9 @@
 
     if (options.overlay) {
       root.classList.add('ag-overlay');
+      isOverlayMode = true;
+    } else {
+      isOverlayMode = false;
     }
 
     // Re-fetch auth status and show UI
@@ -356,6 +367,7 @@
       root.classList.add('ag-hidden');
       root.classList.remove('ag-overlay');
       root.textContent = '';
+      isOverlayMode = false;
     }, 200);
   }
 
@@ -403,6 +415,18 @@
     var logoUrl = gateUI && gateUI.logoUrl;
 
     var header = createElement('div', 'ag-header');
+
+    // Close button (only in overlay mode)
+    if (isOverlayMode) {
+      var closeBtn = createElement('button', 'ag-close-btn');
+      closeBtn.setAttribute('type', 'button');
+      closeBtn.setAttribute('aria-label', t('close', 'Close'));
+      closeBtn.textContent = '\u00D7'; // × symbol
+      closeBtn.addEventListener('click', function () {
+        hideGate();
+      });
+      header.appendChild(closeBtn);
+    }
 
     // Logo — use configured logo or fall back to app icon
     // Prepend base path for root-relative logo URLs so they work behind a subpath proxy
