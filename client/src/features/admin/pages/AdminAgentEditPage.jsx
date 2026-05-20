@@ -161,14 +161,40 @@ export default function AdminAgentEditPage() {
     });
   }
 
+  // Strip empty entries from localized maps so we don't send `{en: ''}` which
+  // some schemas reject as min-length violations.
+  function cleanLocalized(obj) {
+    if (!obj || typeof obj !== 'object') return obj;
+    const out = {};
+    for (const [lang, val] of Object.entries(obj)) {
+      if (typeof val === 'string' && val.trim().length > 0) out[lang] = val;
+    }
+    return Object.keys(out).length > 0 ? out : undefined;
+  }
+
   async function handleSave() {
     setError(null);
     setSaving(true);
     try {
+      const payload = { ...profile };
+      const name = cleanLocalized(payload.name);
+      if (!name || Object.keys(name).length === 0) {
+        setError(t('admin.agents.edit.nameRequired', 'Name is required (at least one language).'));
+        setSaving(false);
+        return;
+      }
+      payload.name = name;
+      const description = cleanLocalized(payload.description);
+      if (description) payload.description = description;
+      else delete payload.description;
+      const system = cleanLocalized(payload.system);
+      if (system) payload.system = system;
+      else delete payload.system;
+
       if (isNew) {
-        await createAgentProfile(profile);
+        await createAgentProfile(payload);
       } else {
-        await updateAgentProfile(profileId, profile);
+        await updateAgentProfile(profileId, payload);
       }
       navigate('/admin/agents');
     } catch (err) {
@@ -346,15 +372,9 @@ export default function AdminAgentEditPage() {
                 )}
               >
                 <DynamicLanguageEditor
-                  label={
-                    <span>
-                      {t('admin.agents.edit.system', 'System Instructions')}
-                      <span className="text-red-500 ml-1">*</span>
-                    </span>
-                  }
+                  label={t('admin.agents.edit.system', 'System Instructions')}
                   value={profile.system || {}}
                   onChange={v => handleField('system', v)}
-                  required={true}
                   type="textarea"
                   placeholder={{
                     en: 'You are a TODO Worker. On each wake call read_inbox, pick the highest-priority item, do the work, call write_artifact, then write_inbox(mode=markDone).',

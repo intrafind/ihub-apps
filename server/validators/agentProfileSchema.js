@@ -9,6 +9,15 @@ const localizedStringSchema = z.record(
   z.string().min(1, 'Localized string cannot be empty')
 );
 
+// Lax variant used for optional localized fields. Empty per-language values
+// are tolerated (treated as "user hasn't filled this language in yet"). The
+// admin form strips empty entries before submit anyway; this is defense in
+// depth.
+const optionalLocalizedStringSchema = z.record(
+  z.string().regex(LANGUAGE_CODE_PATTERN, 'Invalid language code'),
+  z.string()
+);
+
 // Embedded workflow definition is intentionally permissive; the workflow
 // validator validates the full shape when the engine starts.
 // The Profile may omit `workflow.definition` entirely — the
@@ -101,7 +110,7 @@ const baseAgentProfileSchema = z.object({
     .min(1)
     .max(AGENT_PROFILE_ID_MAX_LENGTH),
   name: localizedStringSchema,
-  description: localizedStringSchema.optional(),
+  description: optionalLocalizedStringSchema.optional(),
   color: z
     .string()
     .regex(HEX_COLOR_PATTERN, 'Color must be a valid hex code (e.g. #6366F1)')
@@ -115,7 +124,7 @@ const baseAgentProfileSchema = z.object({
   // These are convenience fields on the Profile. The profileWorkflowSerializer
   // propagates them into every prompt node in the default workflow. Authors
   // who hand-author `workflow.definition` can still override per-node.
-  system: localizedStringSchema.optional(),
+  system: optionalLocalizedStringSchema.optional(),
   preferredModel: z.string().optional(),
   preferredTemperature: z.number().min(0).max(2).optional(),
   maxIterations: z.number().int().min(1).max(50).optional(),
