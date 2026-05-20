@@ -10,6 +10,11 @@ These files are only meant to be used as references / examples of what is possib
   - Includes **Model Hints** examples demonstrating the hint/info/warning/alert feature
   - See `models/MODEL_HINTS_EXAMPLES.md` for detailed documentation
 - **prompts/** - Example prompts
+- **agents/** - Example agent profiles and inboxes for the Agent Factory feature
+  - `agents/profiles/todo-worker.json` — drain-only TODO worker demo
+  - `agents/profiles/research-and-summarize.json` — Planner + drain demo
+  - `agents/inboxes/engineering-todos.md` — sample inbox seeded with three items
+  - Copy into `contents/agents/profiles/` and `contents/data/agent-inboxes/` to try
 - **logging-demo.sh** - Interactive demonstration of structured logging with component names
 
 ## Logging Demo

@@ -16,6 +16,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import { v4 as uuidv4 } from 'uuid';
 import { actionTracker } from '../../../actionTracker.js';
+import configCache from '../../../configCache.js';
 
 /**
  * Executor for human checkpoint nodes.
@@ -121,6 +122,17 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       checkpoint
     });
 
+    // Agent-specific HITL event for run-detail UIs
+    if (state?.data?._agent?.profileId) {
+      actionTracker.emit('fire-sse', {
+        event: 'agent.hitl.requested',
+        chatId: context.executionId,
+        executionId: context.executionId,
+        profileId: state.data._agent.profileId,
+        checkpoint
+      });
+    }
+
     // Return paused result with checkpoint info
     return {
       status: 'paused',
@@ -158,6 +170,49 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       checkpointId,
       response
     });
+
+    // ── Agent HITL: approver-group validation ──────────────────────────────
+    // When this workflow is an agent run (has state.data._agent.profileId),
+    // and the resumer is a real human (not the agent itself), validate that
+    // they are in one of the configured approver groups.
+    const agentEnvelope = state?.data?._agent;
+    const requester = context?.user;
+    const requesterIsRealUser = !!requester && requester.isAgent !== true;
+    if (agentEnvelope?.profileId && requesterIsRealUser) {
+      try {
+        const profiles = configCache.getAgentProfiles ? configCache.getAgentProfiles(true) : null;
+        const profile = profiles?.data?.find(p => p.id === agentEnvelope.profileId);
+        const approverGroups = profile?.hitl?.approverGroups || [];
+        if (Array.isArray(approverGroups) && approverGroups.length > 0) {
+          const userGroups = requester.groups || [];
+          const allowed = approverGroups.some(g => userGroups.includes(g));
+          if (!allowed) {
+            this.logger.warn('HITL approval denied: user not in approver groups', {
+              component: 'HumanNodeExecutor',
+              profileId: agentEnvelope.profileId,
+              userId: requester.id,
+              approverGroups
+            });
+            actionTracker.emit('fire-sse', {
+              event: 'agent.hitl.rejected',
+              chatId: context?.executionId,
+              executionId: context?.executionId,
+              reason: 'unauthorized_approver',
+              userId: requester.id,
+              profileId: agentEnvelope.profileId
+            });
+            return this.createErrorResult(
+              `User ${requester.id} is not a member of any approver group (${approverGroups.join(', ')})`
+            );
+          }
+        }
+      } catch (groupErr) {
+        this.logger.warn('Failed to validate approver groups', {
+          component: 'HumanNodeExecutor',
+          error: groupErr.message
+        });
+      }
+    }
 
     // Validate response against options if options were specified
     const { config } = node;
@@ -201,6 +256,20 @@ export class HumanNodeExecutor extends BaseNodeExecutor {
       checkpointId,
       response
     });
+
+    // Agent-specific approval/rejection event for run-detail UIs
+    if (agentEnvelope?.profileId) {
+      const isReject = response && /reject|deny|cancel/i.test(String(response));
+      actionTracker.emit('fire-sse', {
+        event: isReject ? 'agent.hitl.rejected' : 'agent.hitl.approved',
+        chatId: context?.executionId,
+        executionId: context?.executionId,
+        profileId: agentEnvelope.profileId,
+        checkpointId,
+        response,
+        userId: requester?.id || null
+      });
+    }
 
     // Return completed result with response data
     // Include branch in output for consistency with ExecutionProgress display

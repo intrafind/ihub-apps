@@ -3,6 +3,7 @@ import { loadAllApps } from './appsLoader.js';
 import { loadAllModels } from './modelsLoader.js';
 import { loadAllPrompts } from './promptsLoader.js';
 import { loadAllWorkflows } from './workflowsLoader.js';
+import { loadAllAgentProfiles } from './agentsLoader.js';
 import {
   resolveGroupInheritance,
   filterResourcesByPermissions,
@@ -303,7 +304,8 @@ class ConfigCache {
       'config/mimetypes.json',
       'config/features.json',
       'config/registries.json',
-      'config/installations.json'
+      'config/installations.json',
+      'config/agents.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -368,6 +370,26 @@ class ConfigCache {
             configPath,
             count: allWorkflows.length
           });
+          return;
+        }
+
+        // Special handling for agents.json — load agent profiles
+        if (configPath === 'config/agents.json') {
+          try {
+            const allProfiles = await loadAllAgentProfiles(true);
+            this.setCacheEntry(configPath, allProfiles);
+            logger.info('Cached agent profiles', {
+              component: 'ConfigCache',
+              configPath,
+              count: allProfiles.length
+            });
+          } catch (err) {
+            logger.warn('Failed to load agent profiles (cache will be empty)', {
+              component: 'ConfigCache',
+              error: err.message
+            });
+            this.setCacheEntry(configPath, []);
+          }
           return;
         }
 
@@ -597,6 +619,29 @@ class ConfigCache {
         return;
       }
 
+      // Special handling for agents.json - load agent profiles from per-file dir
+      if (key === 'config/agents.json') {
+        try {
+          const profiles = await loadAllAgentProfiles(true, false);
+          const newEtag = this.generateETag(profiles);
+          const existing = this.cache.get(key);
+          if (!existing || existing.etag !== newEtag) {
+            this.setCacheEntry(key, profiles);
+            logger.info('Cached agent profiles on refresh', {
+              component: 'ConfigCache',
+              configPath: 'config/agents.json',
+              count: profiles.length
+            });
+          }
+        } catch (err) {
+          logger.warn('Agent profiles refresh failed', {
+            component: 'ConfigCache',
+            error: err.message
+          });
+        }
+        return;
+      }
+
       // Special handling for groups.json - load and resolve inheritance
       if (key === 'config/groups.json') {
         const groupsConfig = await loadJson(key, { useCache: false });
@@ -740,6 +785,21 @@ class ConfigCache {
     return {
       data: models.data.filter(model => model.enabled !== false),
       etag: models.etag
+    };
+  }
+
+  /**
+   * Get agent profiles configuration
+   */
+  getAgentProfiles(includeDisabled = false) {
+    const profiles = this.get('config/agents.json');
+    if (profiles === null || !profiles.data) {
+      return { data: [], etag: null };
+    }
+    if (includeDisabled) return profiles;
+    return {
+      data: profiles.data.filter(p => p.enabled !== false),
+      etag: profiles.etag
     };
   }
 
@@ -1092,6 +1152,27 @@ class ConfigCache {
       });
     } catch (error) {
       logger.error('Error refreshing models cache', { component: 'ConfigCache', error });
+    }
+  }
+
+  /**
+   * Refresh agent profiles cache.
+   * Call when profiles are created, updated, or deleted.
+   */
+  async refreshAgentProfilesCache() {
+    logger.info('Refreshing agent profiles cache', { component: 'ConfigCache' });
+    try {
+      const profiles = await loadAllAgentProfiles(true);
+      this.setCacheEntry('config/agents.json', profiles);
+      logger.info('Agent profiles cache refreshed', {
+        component: 'ConfigCache',
+        count: profiles.length
+      });
+    } catch (error) {
+      logger.error('Error refreshing agent profiles cache', {
+        component: 'ConfigCache',
+        error
+      });
     }
   }
 

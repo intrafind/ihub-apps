@@ -172,6 +172,75 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           break;
         }
 
+        case 'drain': {
+          // Drain mode: pop the next open task from `state.data[queueKey]` on
+          // every iteration, run the body node(s) with `state.data._currentTask`
+          // populated, then mark the task done/failed. The body itself may
+          // call `create_task` to push more work onto the queue — that's the
+          // V1 dynamic-task primitive.
+          const queueKey = config.queueKey || '_taskQueue';
+          // Resolve the body: prefer inline `body`, else single node id via `child`.
+          let resolvedBody = Array.isArray(body) && body.length > 0 ? body : null;
+          if (!resolvedBody && config.child && context?.workflow?.nodes) {
+            const child = context.workflow.nodes.find(n => n.id === config.child);
+            if (child) resolvedBody = [child];
+          }
+          if (!resolvedBody || resolvedBody.length === 0) {
+            return this.createErrorResult(`drain mode requires either body or config.child`, {
+              nodeId: node.id
+            });
+          }
+
+          let i = 0;
+          let bounded = false;
+          while (i < hardCap) {
+            if (context.abortSignal?.aborted) break;
+            const queue = Array.isArray(currentState.data[queueKey])
+              ? currentState.data[queueKey]
+              : [];
+            const nextTask = queue.find(t => t?.status === 'open');
+            if (!nextTask) break;
+
+            // Mutate task to in_progress directly on currentState.data.
+            nextTask.status = 'in_progress';
+            nextTask.updatedAt = new Date().toISOString();
+            currentState.data._currentTask = nextTask;
+            currentState.data._loopIndex = i;
+
+            const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context);
+            results.push(bodyResult.output);
+            currentState = bodyResult.state;
+
+            // Resolve the task object in the new state (executeBodyNodes
+            // shallow-copies state.data, so we have to look it up again).
+            const queueAfter = Array.isArray(currentState.data[queueKey])
+              ? currentState.data[queueKey]
+              : [];
+            const refreshedTask = queueAfter.find(t => t.id === nextTask.id) || nextTask;
+
+            if (bodyResult.failed) {
+              refreshedTask.status = 'failed';
+              refreshedTask.updatedAt = new Date().toISOString();
+            } else if (refreshedTask.status === 'in_progress') {
+              // The body did not explicitly mark it via mark_task_done — auto-complete.
+              refreshedTask.status = 'done';
+              refreshedTask.updatedAt = new Date().toISOString();
+            }
+
+            i++;
+          }
+          if (i >= hardCap) bounded = true;
+          delete currentState.data._currentTask;
+          if (bounded) {
+            logger.warn('Drain loop hit hard cap', {
+              component: 'LoopNodeExecutor',
+              nodeId: node.id,
+              hardCap
+            });
+          }
+          break;
+        }
+
         default:
           return this.createErrorResult(`Unknown loop mode: ${mode}`, {
             nodeId: node.id

@@ -76,6 +76,43 @@ export class SubWorkflowMaterializer {
       });
     }
 
+    // Optional dynamic-tasks drain tail. When the parent planner is configured
+    // with `dynamicTasks.enabled`, agents executing the materialized tasks can
+    // push more tasks onto `_taskQueue`; the drain loop processes them after
+    // the planned tasks are done. This is the V1 Planner+drain mechanic.
+    const dynamicTasksEnabled = !!parentConfig.dynamicTasks?.enabled;
+    const dynamicTasksMaxDepth = parentConfig.dynamicTasks?.maxDepth ?? 3;
+    let drainNodeId = null;
+    if (dynamicTasksEnabled && taskNodes.length > 0) {
+      drainNodeId = 'drain';
+      const taskRunnerBody = {
+        id: 'drain-task-runner',
+        type: 'prompt',
+        name: { en: 'Drain task runner' },
+        position: { x: 0, y: (nodes.length + 1) * 100 },
+        config: {
+          ...restTemplate,
+          system: parentConfig.taskTemplate?.system || {
+            en: 'Process the current task in `_currentTask`.'
+          },
+          tools: templateTools || [],
+          dynamicTasks: { enabled: true, maxDepth: dynamicTasksMaxDepth }
+        }
+      };
+      nodes.push({
+        id: drainNodeId,
+        type: 'loop',
+        name: { en: 'Drain Dynamic Tasks' },
+        position: { x: 0, y: (nodes.length + 1) * 100 },
+        config: {
+          mode: 'drain',
+          queueKey: '_taskQueue',
+          body: [taskRunnerBody],
+          maxIterations: 50
+        }
+      });
+    }
+
     // End node
     nodes.push({
       id: 'sub-end',
@@ -114,25 +151,30 @@ export class SubWorkflowMaterializer {
         }
       }
 
-      // Last task -> synthesizer or end
+      // Last task -> synthesizer | drain | end
       const lastTask = taskNodes[taskNodes.length - 1];
+      let tail = 'sub-end';
       if (parentConfig.synthesize) {
-        edges.push({
-          id: 'edge-last-synth',
-          source: lastTask.id,
-          target: 'synthesizer'
-        });
-        edges.push({
-          id: 'edge-synth-end',
-          source: 'synthesizer',
-          target: 'sub-end'
-        });
+        edges.push({ id: 'edge-last-synth', source: lastTask.id, target: 'synthesizer' });
+        tail = 'synthesizer';
       } else {
-        edges.push({
-          id: 'edge-last-end',
-          source: lastTask.id,
-          target: 'sub-end'
-        });
+        edges.push({ id: 'edge-last-tail', source: lastTask.id, target: tail });
+      }
+      // If a drain tail is requested, splice it in:
+      //   synthesizer (or last task) -> drain -> sub-end
+      if (drainNodeId) {
+        // Replace the "tail -> sub-end" hop with "tail -> drain -> sub-end"
+        // For synthesize=true we never wrote tail->sub-end above, so we add it.
+        // For synthesize=false we already added last-task -> sub-end; replace.
+        if (!parentConfig.synthesize) {
+          // Remove the last-task->sub-end edge we just added
+          const idx = edges.findIndex(e => e.id === 'edge-last-tail');
+          if (idx >= 0) edges.splice(idx, 1);
+        }
+        edges.push({ id: `edge-${tail}-drain`, source: tail, target: drainNodeId });
+        edges.push({ id: 'edge-drain-end', source: drainNodeId, target: 'sub-end' });
+      } else if (parentConfig.synthesize) {
+        edges.push({ id: 'edge-synth-end', source: 'synthesizer', target: 'sub-end' });
       }
     } else {
       // No tasks - connect start directly to end

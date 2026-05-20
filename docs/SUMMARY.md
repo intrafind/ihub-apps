@@ -69,6 +69,7 @@
     - [Image Upload Feature](image-upload-feature.md)
     - [OCR Feature](ocr-feature.md)
     - [React Component Feature](react-component-feature.md)
+    - [Agent Factory (V1)](agents.md)
     - [Server Configuration](server-config.md)
     - [Environment Variables](environment-variables.md)
     - [Electron Desktop Application](electron-app.md)
