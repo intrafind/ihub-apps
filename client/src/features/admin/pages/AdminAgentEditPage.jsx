@@ -385,7 +385,13 @@ export default function AdminAgentEditPage() {
               </Section>
 
               {/* Model & decoding */}
-              <Section title={t('admin.agents.edit.model', 'Model')}>
+              <Section
+                title={t('admin.agents.edit.model', 'Model')}
+                hint={t(
+                  'admin.agents.edit.modelHint',
+                  'Image-generation models are filtered out — agents need a text model that can produce JSON for the planner and tool calls.'
+                )}
+              >
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -397,14 +403,24 @@ export default function AdminAgentEditPage() {
                       className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                     >
                       <option value="">
-                        {t('admin.agents.edit.selectModel', 'Use platform default')}
+                        {t('admin.agents.edit.selectModel', 'Pick a text model…')}
                       </option>
-                      {models.map(m => (
-                        <option key={m.id} value={m.id}>
-                          {getLocalizedContent(m.name, currentLanguage) || m.id}
-                        </option>
-                      ))}
+                      {models
+                        .filter(m => !m.supportsImageGeneration)
+                        .map(m => (
+                          <option key={m.id} value={m.id}>
+                            {getLocalizedContent(m.name, currentLanguage) || m.id}
+                          </option>
+                        ))}
                     </select>
+                    {!profile.preferredModel && (
+                      <p className="mt-1 text-xs text-yellow-700 dark:text-yellow-400">
+                        {t(
+                          'admin.agents.edit.modelWarn',
+                          'No model selected — the platform default may be an image model and break the planner.'
+                        )}
+                      </p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
