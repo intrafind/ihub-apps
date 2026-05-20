@@ -23,15 +23,16 @@ function memoryBaseDir() {
   return path.join(getRootDir(), 'contents', MEMORY_DIR);
 }
 
-// Validate the profile id with a strict regex AND canonicalize against the
-// memory base dir to prevent path traversal. Returns a safe absolute path or
-// throws an Error.
+// Validate the profile id with a strict regex, run it through `path.basename`
+// (a CodeQL-recognized path-injection sanitizer), AND canonicalize against the
+// memory base dir. Returns a safe absolute path or throws.
 async function memoryPath(profileId) {
   if (typeof profileId !== 'string' || !AGENT_PROFILE_ID_PATTERN.test(profileId)) {
     throw new Error(`Invalid profile id: ${profileId}`);
   }
+  const safeFilename = path.basename(`${profileId}.md`);
   const baseDir = memoryBaseDir();
-  const safe = await resolveAndValidatePath(`${profileId}.md`, baseDir);
+  const safe = await resolveAndValidatePath(safeFilename, baseDir);
   if (!safe) {
     throw new Error(`Invalid memory path for profile: ${profileId}`);
   }
