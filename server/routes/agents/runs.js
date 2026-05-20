@@ -80,20 +80,41 @@ export default function registerAgentRunRoutes(app) {
         const workflow = serialized.workflow.definition || {};
         workflow.id = workflow.id || `agent:${profileId}`;
 
+        // Defense in depth: ensure every planner node in the runtime
+        // workflow has a `goal`. Profiles saved before the serializer learned
+        // to set this would otherwise fail at the planner with
+        // "Planner goal is required".
+        if (Array.isArray(workflow.nodes)) {
+          workflow.nodes = workflow.nodes.map(n => {
+            if (n && n.type === 'planner' && (!n.config || !n.config.goal)) {
+              return { ...n, config: { ...(n.config || {}), goal: '${$.data.brief}' } };
+            }
+            return n;
+          });
+        }
+
         const principal = buildAgentPrincipal(profile, {
           userId: req.user?.id || 'anonymous',
           kind: 'manual'
         });
 
-        // Pre-populate the brief from the operator input, falling back to the
-        // Profile's system instructions (in English) so Planner-based agents
-        // always have a goal to plan against even when no brief is supplied.
+        // Pre-populate the brief from (in priority order):
+        //   1. operator-supplied brief in the POST body
+        //   2. the Profile's system instructions (English)
+        //   3. an inbox-aware default if the profile has an inboxId
+        //   4. a generic fallback so Planner never errors
         const systemFallback =
           (profile.system && (profile.system.en || Object.values(profile.system)[0])) || '';
-        const resolvedBrief = brief && brief.trim().length > 0 ? brief : systemFallback;
+        let resolvedBrief = brief && brief.trim().length > 0 ? brief : systemFallback;
+        if (!resolvedBrief && profile.inboxId) {
+          resolvedBrief = `Read the "${profile.inboxId}" inbox via read_inbox, pick the highest-priority open item, plan how to handle it, then execute the plan. When finished, call write_inbox(mode='markDone') for the item and write_artifact with a summary.`;
+        }
+        if (!resolvedBrief) {
+          resolvedBrief = `You are agent ${profileId}. Plan and execute the work this agent is configured for.`;
+        }
 
         const initialData = {
-          brief: resolvedBrief || '',
+          brief: resolvedBrief,
           variables: variables || {},
           _agent: {
             profileId,

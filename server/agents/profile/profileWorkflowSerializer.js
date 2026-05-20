@@ -219,18 +219,30 @@ function propagateProfileFields(profile, nodes) {
   const apps = Array.isArray(profile.apps) ? profile.apps : null;
   const sources = Array.isArray(profile.sources) ? profile.sources : null;
   return nodes.map(node => {
-    if (!node || node.type !== 'prompt') return node;
-    const cfg = node.config || {};
-    const merged = {
-      ...cfg,
-      ...(sys && !cfg.system ? { system: sys } : {}),
-      ...(model && !cfg.modelId ? { modelId: model } : {}),
-      ...(typeof temp === 'number' && cfg.temperature === undefined ? { temperature: temp } : {}),
-      ...(tools && (!Array.isArray(cfg.tools) || cfg.tools.length === 0) ? { tools } : {}),
-      ...(apps && (!Array.isArray(cfg.apps) || cfg.apps.length === 0) ? { apps } : {}),
-      ...(sources && (!Array.isArray(cfg.sources) || cfg.sources.length === 0) ? { sources } : {})
-    };
-    return { ...node, config: merged };
+    if (!node) return node;
+    if (node.type === 'prompt') {
+      const cfg = node.config || {};
+      const merged = {
+        ...cfg,
+        ...(sys && !cfg.system ? { system: sys } : {}),
+        ...(model && !cfg.modelId ? { modelId: model } : {}),
+        ...(typeof temp === 'number' && cfg.temperature === undefined ? { temperature: temp } : {}),
+        ...(tools && (!Array.isArray(cfg.tools) || cfg.tools.length === 0) ? { tools } : {}),
+        ...(apps && (!Array.isArray(cfg.apps) || cfg.apps.length === 0) ? { apps } : {}),
+        ...(sources && (!Array.isArray(cfg.sources) || cfg.sources.length === 0) ? { sources } : {})
+      };
+      return { ...node, config: merged };
+    }
+    if (node.type === 'planner') {
+      const cfg = node.config || {};
+      const merged = {
+        ...cfg,
+        ...(!cfg.goal ? { goal: '${$.data.brief}' } : {}),
+        ...(model && !cfg.modelId ? { modelId: model } : {})
+      };
+      return { ...node, config: merged };
+    }
+    return node;
   });
 }
 
