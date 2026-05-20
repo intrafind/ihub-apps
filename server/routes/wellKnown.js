@@ -105,7 +105,13 @@ export default function registerWellKnownRoutes(app) {
 
       const mcpConfig = platform.mcpServer || {};
       const mcpScopes = mcpConfig.enabled
-        ? ['mcp:tools:read', 'mcp:tools:call', 'mcp:apps:invoke', 'mcp:workflows:run', 'mcp:resources:read']
+        ? [
+            'mcp:tools:read',
+            'mcp:tools:call',
+            'mcp:apps:invoke',
+            'mcp:workflows:run',
+            'mcp:resources:read'
+          ]
         : [];
 
       // Build OpenID Connect Discovery response.
