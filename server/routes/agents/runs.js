@@ -85,8 +85,15 @@ export default function registerAgentRunRoutes(app) {
           kind: 'manual'
         });
 
+        // Pre-populate the brief from the operator input, falling back to the
+        // Profile's system instructions (in English) so Planner-based agents
+        // always have a goal to plan against even when no brief is supplied.
+        const systemFallback =
+          (profile.system && (profile.system.en || Object.values(profile.system)[0])) || '';
+        const resolvedBrief = brief && brief.trim().length > 0 ? brief : systemFallback;
+
         const initialData = {
-          brief: brief || '',
+          brief: resolvedBrief || '',
           variables: variables || {},
           _agent: {
             profileId,
