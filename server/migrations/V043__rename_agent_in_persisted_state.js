@@ -1,4 +1,4 @@
-export const version = '041';
+export const version = '043';
 export const description = 'rename_agent_in_persisted_state';
 
 /**
