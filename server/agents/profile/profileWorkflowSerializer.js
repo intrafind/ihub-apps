@@ -116,6 +116,11 @@ function buildDrainOnlyWorkflow(profile) {
 function buildPlannerWorkflow(profile) {
   const maxDepth = profile.dynamicTasks?.maxDepth ?? 3;
   const useDrain = profile.dynamicTasks?.enabled !== false;
+  // The Planner needs a `goal`. It always pulls from `state.data.brief`,
+  // which the run trigger pre-populates with the operator-supplied brief
+  // (falling back to the Profile's system instructions when no brief is
+  // supplied — see server/routes/agents/runs.js).
+  const goal = '${$.data.brief}';
   return {
     nodes: [
       { id: 'start', type: 'start' },
@@ -124,6 +129,7 @@ function buildPlannerWorkflow(profile) {
         type: 'planner',
         config: {
           modelId: pickModel(profile),
+          goal,
           maxTasks: profile.planner?.maxTasks ?? 10,
           taskTemplate: {
             type: 'prompt',
