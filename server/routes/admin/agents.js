@@ -10,7 +10,7 @@ import {
   sendFailedOperationError
 } from '../../utils/responseHelpers.js';
 import { buildServerPath } from '../../utils/basePath.js';
-import { validateIdForPath } from '../../utils/pathSecurity.js';
+import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { agentProfileSchema } from '../../validators/agentProfileSchema.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
@@ -22,8 +22,14 @@ function profilesDirPath() {
   return join(getRootDir(), PROFILES_DIR);
 }
 
-function profileFilePath(profileId) {
-  return join(profilesDirPath(), `${profileId}.json`);
+async function profileFilePath(profileId) {
+  // validateIdForPath should have run upstream; this is a defense-in-depth
+  // canonicalization that prevents any path traversal even if a route forgets.
+  const safe = await resolveAndValidatePath(`${profileId}.json`, profilesDirPath());
+  if (!safe) {
+    throw new Error(`Invalid profile path for: ${profileId}`);
+  }
+  return safe;
 }
 
 async function ensureProfilesDir() {
@@ -70,14 +76,16 @@ export default function registerAdminAgentsRoutes(app) {
       const profile = serializeProfile(parseResult.data);
 
       await ensureProfilesDir();
-      const target = profileFilePath(profile.id);
+      const target = await profileFilePath(profile.id);
       try {
+        // lgtm[js/path-injection] -- profile.id validated by AGENT_PROFILE_ID_PATTERN; path canonicalized.
         await fs.access(target);
         return sendBadRequest(res, `Profile ${profile.id} already exists`);
       } catch {
         // not found — good
       }
 
+      // lgtm[js/path-injection] -- profile.id validated; path canonicalized by resolveAndValidatePath.
       await atomicWriteJSON(target, profile);
       await configCache.refreshAgentProfilesCache();
       logger.info('Created agent profile', {
@@ -109,7 +117,9 @@ export default function registerAdminAgentsRoutes(app) {
       const profile = serializeProfile(parseResult.data);
 
       await ensureProfilesDir();
-      await atomicWriteJSON(profileFilePath(profileId), profile);
+      const updatePath = await profileFilePath(profileId);
+      // lgtm[js/path-injection] -- profileId validated by validateIdForPath; path canonicalized.
+      await atomicWriteJSON(updatePath, profile);
       await configCache.refreshAgentProfilesCache();
       logger.info('Updated agent profile', {
         component: 'AdminAgents',
@@ -135,7 +145,9 @@ export default function registerAdminAgentsRoutes(app) {
         if (!profile) return sendNotFound(res, `Profile ${profileId} not found`);
 
         const updated = { ...profile, enabled: !profile.enabled };
-        await atomicWriteJSON(profileFilePath(profileId), updated);
+        const togglePath = await profileFilePath(profileId);
+        // lgtm[js/path-injection] -- profileId validated by validateIdForPath; path canonicalized.
+        await atomicWriteJSON(togglePath, updated);
         await configCache.refreshAgentProfilesCache();
         res.json({ ok: true, enabled: updated.enabled });
       } catch (error) {
@@ -153,7 +165,9 @@ export default function registerAdminAgentsRoutes(app) {
         const { profileId } = req.params;
         if (!validateIdForPath(profileId, 'profile', res)) return;
         try {
-          await fs.unlink(profileFilePath(profileId));
+          const deletePath = await profileFilePath(profileId);
+          // lgtm[js/path-injection] -- profileId validated by validateIdForPath; path canonicalized by resolveAndValidatePath.
+          await fs.unlink(deletePath);
         } catch (err) {
           if (err.code === 'ENOENT') {
             return sendNotFound(res, `Profile ${profileId} not found`);

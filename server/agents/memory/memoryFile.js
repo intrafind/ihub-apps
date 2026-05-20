@@ -13,16 +13,29 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
+import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { AGENT_PROFILE_ID_PATTERN } from '../../validators/agentProfileSchema.js';
 
 const MEMORY_DIR = 'agents/memory';
 
-function memoryPath(profileId) {
-  if (!AGENT_PROFILE_ID_PATTERN.test(profileId)) {
+function memoryBaseDir() {
+  return path.join(getRootDir(), 'contents', MEMORY_DIR);
+}
+
+// Validate the profile id with a strict regex AND canonicalize against the
+// memory base dir to prevent path traversal. Returns a safe absolute path or
+// throws an Error.
+async function memoryPath(profileId) {
+  if (typeof profileId !== 'string' || !AGENT_PROFILE_ID_PATTERN.test(profileId)) {
     throw new Error(`Invalid profile id: ${profileId}`);
   }
-  return path.join(getRootDir(), 'contents', MEMORY_DIR, `${profileId}.md`);
+  const baseDir = memoryBaseDir();
+  const safe = await resolveAndValidatePath(`${profileId}.md`, baseDir);
+  if (!safe) {
+    throw new Error(`Invalid memory path for profile: ${profileId}`);
+  }
+  return safe;
 }
 
 function parseFrontmatter(raw) {
@@ -48,8 +61,13 @@ function buildFrontmatter(fm) {
 }
 
 export async function readMemory(profileId) {
-  const file = memoryPath(profileId);
+  // memoryPath validates `profileId` against AGENT_PROFILE_ID_PATTERN and
+  // canonicalizes the result against the memory base dir, preventing path
+  // traversal even if the caller supplied untrusted input.
+  await fs.mkdir(memoryBaseDir(), { recursive: true });
+  const file = await memoryPath(profileId);
   try {
+    // lgtm[js/path-injection] -- profileId validated by AGENT_PROFILE_ID_PATTERN; path canonicalized by resolveAndValidatePath.
     const raw = await fs.readFile(file, 'utf8');
     const { frontmatter, body } = parseFrontmatter(raw);
     return {
@@ -109,8 +127,10 @@ export async function writeMemory(
     ...(summary ? { summary } : {})
   });
 
-  const file = memoryPath(profileId);
-  await fs.mkdir(path.dirname(file), { recursive: true });
+  // memoryPath re-validates the profile id before constructing the path.
+  await fs.mkdir(memoryBaseDir(), { recursive: true });
+  const file = await memoryPath(profileId);
+  // lgtm[js/path-injection] -- profileId validated by AGENT_PROFILE_ID_PATTERN; path canonicalized by resolveAndValidatePath.
   await atomicWriteFile(file, `${frontmatter}${nextBody}`);
   logger.info('Memory written', {
     component: 'MemoryFile',

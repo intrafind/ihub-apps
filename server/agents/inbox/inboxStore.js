@@ -20,16 +20,27 @@ import fs from 'fs/promises';
 import path from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
+import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { INBOX_ID_PATTERN } from '../../validators/agentInboxSchema.js';
 
 const INBOX_DIR = 'data/agent-inboxes';
 
-function inboxPath(inboxId) {
-  if (!INBOX_ID_PATTERN.test(inboxId)) {
+function inboxBaseDir() {
+  return path.join(getRootDir(), 'contents', INBOX_DIR);
+}
+
+// Validate inboxId with a strict regex AND canonicalize against the inbox
+// base dir before returning the file path. Throws on traversal/invalid id.
+async function inboxPath(inboxId) {
+  if (typeof inboxId !== 'string' || !INBOX_ID_PATTERN.test(inboxId)) {
     throw new Error(`Invalid inbox id: ${inboxId}`);
   }
-  return path.join(getRootDir(), 'contents', INBOX_DIR, `${inboxId}.md`);
+  const safe = await resolveAndValidatePath(`${inboxId}.md`, inboxBaseDir());
+  if (!safe) {
+    throw new Error(`Invalid inbox path for: ${inboxId}`);
+  }
+  return safe;
 }
 
 function parseFrontmatter(raw) {
@@ -101,7 +112,11 @@ export async function listInboxes() {
 }
 
 export async function readInboxRaw(inboxId) {
-  const file = inboxPath(inboxId);
+  // inboxPath validates the id against INBOX_ID_PATTERN and canonicalizes the
+  // result against the inbox base dir, blocking path traversal.
+  await fs.mkdir(inboxBaseDir(), { recursive: true });
+  const file = await inboxPath(inboxId);
+  // lgtm[js/path-injection] -- inboxId validated by INBOX_ID_PATTERN; path canonicalized by resolveAndValidatePath.
   const raw = await fs.readFile(file, 'utf8');
   const { frontmatter, body } = parseFrontmatter(raw);
   return { inboxId, raw, frontmatter, body };
@@ -139,7 +154,9 @@ export async function readInbox(inboxId, { status = 'all' } = {}) {
 }
 
 export async function writeInbox(inboxId, { body, expectedVersion, updatedBy }) {
-  const file = inboxPath(inboxId);
+  // inboxPath re-validates the id before constructing the absolute path.
+  await fs.mkdir(inboxBaseDir(), { recursive: true });
+  const file = await inboxPath(inboxId);
   let current = { frontmatter: { version: 0 }, body: '' };
   try {
     current = await readInboxRaw(inboxId);
@@ -163,7 +180,7 @@ export async function writeInbox(inboxId, { body, expectedVersion, updatedBy }) 
     version: nextVersion
   });
   const content = `${frontmatter}${body}`;
-  await fs.mkdir(path.dirname(file), { recursive: true });
+  // lgtm[js/path-injection] -- inboxId validated by INBOX_ID_PATTERN; path canonicalized by resolveAndValidatePath.
   await atomicWriteFile(file, content);
   logger.info('Inbox written', {
     component: 'InboxStore',

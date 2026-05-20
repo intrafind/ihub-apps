@@ -19,6 +19,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { actionTracker } from '../actionTracker.js';
 import { getRootDir } from '../pathUtils.js';
 import { atomicWriteFile } from '../utils/atomicWrite.js';
+import { isValidId, resolveAndValidatePath } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 import memoryFile from '../agents/memory/memoryFile.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
@@ -269,12 +270,22 @@ export async function writeArtifact(params = {}) {
     throw new Error('content must be a string');
   }
   const runId = params.appConfig?._workflowState?.executionId || params.chatId;
-  if (!runId) {
-    throw new Error('writeArtifact requires a runId/executionId');
+  if (!runId || !isValidId(runId)) {
+    throw new Error('writeArtifact requires a valid runId/executionId');
   }
-  const dir = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts', runId);
+  const artifactsRoot = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
+  await fs.mkdir(artifactsRoot, { recursive: true });
+  const dir = await resolveAndValidatePath(runId, artifactsRoot);
+  if (!dir) {
+    throw new Error(`writeArtifact: invalid runId path: ${runId}`);
+  }
+  // lgtm[js/path-injection] -- runId validated by isValidId; path canonicalized.
   await fs.mkdir(dir, { recursive: true });
-  const file = path.join(dir, safeName);
+  const file = await resolveAndValidatePath(safeName, dir);
+  if (!file) {
+    throw new Error(`writeArtifact: invalid artifact path: ${safeName}`);
+  }
+  // lgtm[js/path-injection] -- runId+name validated; path canonicalized.
   await atomicWriteFile(file, content);
   const bytes = Buffer.byteLength(content);
 
