@@ -83,6 +83,41 @@
 .ag-header {
   text-align: center;
   margin-bottom: 24px;
+  position: relative;
+}
+
+/* Close button (shown only in overlay mode) */
+.ag-close-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--ag-card-bg);
+  color: var(--ag-text-secondary);
+  font-size: 28px;
+  line-height: 1;
+  cursor: pointer;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+  padding: 0;
+  font-family: var(--ag-font);
+}
+
+.ag-close-btn:hover {
+  background: var(--ag-bg);
+  color: var(--ag-text);
+}
+
+.ag-close-btn:focus {
+  outline: 2px solid var(--ag-primary);
+  outline-offset: 2px;
 }
 
 .ag-logo {

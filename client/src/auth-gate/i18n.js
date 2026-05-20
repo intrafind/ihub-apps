@@ -31,7 +31,8 @@ var __authGateI18n = (function () {
       sessionExpired: 'Your session has expired. Please sign in again.',
       demoAccounts: 'Demo accounts:',
       demoAdmin: 'Admin: admin / password123',
-      demoUser: 'User: user / password123'
+      demoUser: 'User: user / password123',
+      close: 'Close'
     },
     de: {
       signIn: 'Anmelden',
@@ -59,7 +60,8 @@ var __authGateI18n = (function () {
       sessionExpired: 'Ihre Sitzung ist abgelaufen. Bitte melden Sie sich erneut an.',
       demoAccounts: 'Demo-Konten:',
       demoAdmin: 'Admin: admin / password123',
-      demoUser: 'Benutzer: user / password123'
+      demoUser: 'Benutzer: user / password123',
+      close: 'Schließen'
     }
   };
 
