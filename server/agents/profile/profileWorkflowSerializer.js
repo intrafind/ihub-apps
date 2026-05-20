@@ -18,9 +18,23 @@
  */
 
 import logger from '../../utils/logger.js';
+import configCache from '../../configCache.js';
 
 function pickModel(profile) {
-  return profile.preferredModel || null;
+  if (profile.preferredModel) return profile.preferredModel;
+  // No preferred model set. Fall back to the first text-capable enabled model
+  // — the planner expects JSON output, which image-generation models can't
+  // produce. We do this at serialize-time so the persisted workflow has a
+  // concrete model id and isn't subject to platform-default drift.
+  try {
+    const { data: models = [] } = configCache.getModels?.() || { data: [] };
+    const textCapable = models.filter(m => m.enabled !== false && !m.supportsImageGeneration);
+    if (textCapable.length === 0) return null;
+    const explicitDefault = textCapable.find(m => m.default);
+    return (explicitDefault || textCapable[0]).id;
+  } catch {
+    return null;
+  }
 }
 
 function pickIterations(profile, fallback) {
@@ -121,6 +135,18 @@ function buildPlannerWorkflow(profile) {
   // (falling back to the Profile's system instructions when no brief is
   // supplied — see server/routes/agents/runs.js).
   const goal = '${$.data.brief}';
+  // taskTemplate is flat: its keys are spread directly into the materialized
+  // task node's `config` by SubWorkflowMaterializer (see
+  // server/services/workflow/SubWorkflowMaterializer.js: `...restTemplate`).
+  // Nesting these under a `config:` key creates a `config.config` cycle that
+  // crashes deepMerge in StartNodeExecutor.
+  const taskTemplate = {
+    ...basePromptConfig(profile, {
+      systemFallbackKey: 'Execute this planned sub-task.',
+      fallbackIterations: 10
+    }),
+    dynamicTasks: { enabled: useDrain, maxDepth }
+  };
   return {
     nodes: [
       { id: 'start', type: 'start' },
@@ -131,16 +157,7 @@ function buildPlannerWorkflow(profile) {
           modelId: pickModel(profile),
           goal,
           maxTasks: profile.planner?.maxTasks ?? 10,
-          taskTemplate: {
-            type: 'prompt',
-            config: {
-              ...basePromptConfig(profile, {
-                systemFallbackKey: 'Execute this planned sub-task.',
-                fallbackIterations: 10
-              }),
-              dynamicTasks: { enabled: useDrain, maxDepth }
-            }
-          },
+          taskTemplate,
           ...(useDrain ? { dynamicTasks: { enabled: true, maxDepth } } : {})
         }
       },
@@ -235,10 +252,24 @@ function propagateProfileFields(profile, nodes) {
     }
     if (node.type === 'planner') {
       const cfg = node.config || {};
+      // If taskTemplate was saved in the broken `{ type, config: {...} }`
+      // shape, flatten it. The materializer expects taskTemplate keys to be
+      // spread directly into the task node config.
+      let taskTemplate = cfg.taskTemplate;
+      if (
+        taskTemplate &&
+        typeof taskTemplate === 'object' &&
+        taskTemplate.config &&
+        typeof taskTemplate.config === 'object'
+      ) {
+        const { type: _t, config: inner, ...rest } = taskTemplate;
+        taskTemplate = { ...rest, ...inner };
+      }
       const merged = {
         ...cfg,
         ...(!cfg.goal ? { goal: '${$.data.brief}' } : {}),
-        ...(model && !cfg.modelId ? { modelId: model } : {})
+        ...(model && !cfg.modelId ? { modelId: model } : {}),
+        ...(taskTemplate ? { taskTemplate } : {})
       };
       return { ...node, config: merged };
     }

@@ -80,16 +80,26 @@ export default function registerAgentRunRoutes(app) {
         const workflow = serialized.workflow.definition || {};
         workflow.id = workflow.id || `agent:${profileId}`;
 
-        // Defense in depth: ensure every planner node in the runtime
-        // workflow has a `goal`. Profiles saved before the serializer learned
-        // to set this would otherwise fail at the planner with
-        // "Planner goal is required".
+        // Defense in depth: planner nodes saved by older serializer versions
+        // may be missing a `goal` or have taskTemplate wrapped in a broken
+        // `{type, config: {...}}` shape (which the materializer then expands
+        // into a node whose `config.config` causes deepMerge to recurse
+        // forever). Fix both shapes at trigger time so legacy profiles run.
         if (Array.isArray(workflow.nodes)) {
           workflow.nodes = workflow.nodes.map(n => {
-            if (n && n.type === 'planner' && (!n.config || !n.config.goal)) {
-              return { ...n, config: { ...(n.config || {}), goal: '${$.data.brief}' } };
+            if (!n || n.type !== 'planner') return n;
+            const cfg = { ...(n.config || {}) };
+            if (!cfg.goal) cfg.goal = '${$.data.brief}';
+            if (
+              cfg.taskTemplate &&
+              typeof cfg.taskTemplate === 'object' &&
+              cfg.taskTemplate.config &&
+              typeof cfg.taskTemplate.config === 'object'
+            ) {
+              const { type: _t, config: inner, ...rest } = cfg.taskTemplate;
+              cfg.taskTemplate = { ...rest, ...inner };
             }
-            return n;
+            return { ...n, config: cfg };
           });
         }
 
