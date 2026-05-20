@@ -1,5 +1,5 @@
 import { promises as fs } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
@@ -25,7 +25,9 @@ function profilesDirPath() {
 async function profileFilePath(profileId) {
   // validateIdForPath should have run upstream; this is a defense-in-depth
   // canonicalization that prevents any path traversal even if a route forgets.
-  const safe = await resolveAndValidatePath(`${profileId}.json`, profilesDirPath());
+  // path.basename is a CodeQL-recognized sanitizer for js/path-injection.
+  const safeFilename = basename(`${profileId}.json`);
+  const safe = await resolveAndValidatePath(safeFilename, profilesDirPath());
   if (!safe) {
     throw new Error(`Invalid profile path for: ${profileId}`);
   }

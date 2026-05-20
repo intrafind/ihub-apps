@@ -31,16 +31,22 @@ function artifactsRootDir() {
 
 // Returns a validated absolute directory path for the run, or null on any
 // path-traversal attempt. validateIdForPath should have rejected bad ids
-// upstream; this is defense-in-depth.
+// upstream; this is defense-in-depth. path.basename is a CodeQL-recognized
+// sanitizer for js/path-injection.
 async function artifactsDirForRun(runId) {
-  return await resolveAndValidatePath(runId, artifactsRootDir());
+  const safeId = path.basename(String(runId || ''));
+  if (!safeId || safeId === '.' || safeId === '..') return null;
+  return await resolveAndValidatePath(safeId, artifactsRootDir());
 }
 
 function safeName(name) {
   if (!name || typeof name !== 'string') return null;
   if (name.includes('/') || name.includes('..') || name.startsWith('.')) return null;
   if (name.length > 128) return null;
-  return name;
+  // path.basename strips any embedded separators (defense-in-depth + CodeQL).
+  const base = path.basename(name);
+  if (base !== name) return null;
+  return base;
 }
 
 export default function registerAgentArtifactRoutes(app) {

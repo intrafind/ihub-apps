@@ -30,13 +30,15 @@ function inboxBaseDir() {
   return path.join(getRootDir(), 'contents', INBOX_DIR);
 }
 
-// Validate inboxId with a strict regex AND canonicalize against the inbox
-// base dir before returning the file path. Throws on traversal/invalid id.
+// Validate inboxId with a strict regex, run through path.basename (a
+// CodeQL-recognized sanitizer), AND canonicalize against the inbox base dir.
+// Throws on traversal/invalid id.
 async function inboxPath(inboxId) {
   if (typeof inboxId !== 'string' || !INBOX_ID_PATTERN.test(inboxId)) {
     throw new Error(`Invalid inbox id: ${inboxId}`);
   }
-  const safe = await resolveAndValidatePath(`${inboxId}.md`, inboxBaseDir());
+  const safeFilename = path.basename(`${inboxId}.md`);
+  const safe = await resolveAndValidatePath(safeFilename, inboxBaseDir());
   if (!safe) {
     throw new Error(`Invalid inbox path for: ${inboxId}`);
   }

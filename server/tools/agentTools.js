@@ -259,7 +259,13 @@ function safeArtifactName(name) {
   if (name.length > 128) {
     throw new Error('artifact name too long');
   }
-  return name;
+  // path.basename is a CodeQL-recognized sanitizer; reject if anything
+  // changed (i.e. embedded separators).
+  const base = path.basename(name);
+  if (base !== name) {
+    throw new Error('artifact name must be a simple filename');
+  }
+  return base;
 }
 
 export async function writeArtifact(params = {}) {
@@ -269,15 +275,20 @@ export async function writeArtifact(params = {}) {
   if (typeof content !== 'string') {
     throw new Error('content must be a string');
   }
-  const runId = params.appConfig?._workflowState?.executionId || params.chatId;
-  if (!runId || !isValidId(runId)) {
+  const rawRunId = params.appConfig?._workflowState?.executionId || params.chatId;
+  if (!rawRunId || !isValidId(rawRunId)) {
     throw new Error('writeArtifact requires a valid runId/executionId');
+  }
+  // path.basename is a CodeQL-recognized sanitizer for js/path-injection.
+  const safeRunId = path.basename(String(rawRunId));
+  if (safeRunId !== rawRunId) {
+    throw new Error(`writeArtifact: invalid runId: ${rawRunId}`);
   }
   const artifactsRoot = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
   await fs.mkdir(artifactsRoot, { recursive: true });
-  const dir = await resolveAndValidatePath(runId, artifactsRoot);
+  const dir = await resolveAndValidatePath(safeRunId, artifactsRoot);
   if (!dir) {
-    throw new Error(`writeArtifact: invalid runId path: ${runId}`);
+    throw new Error(`writeArtifact: invalid runId path: ${safeRunId}`);
   }
   // lgtm[js/path-injection] -- runId validated by isValidId; path canonicalized.
   await fs.mkdir(dir, { recursive: true });

@@ -59,25 +59,43 @@ export default function AdminAgentEditPage() {
     })();
   }, [profileId, isNew]);
 
-  // Prototype-pollution guard: never traverse or assign into special keys.
-  const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+  function isUnsafeKey(k) {
+    return k === '__proto__' || k === 'constructor' || k === 'prototype';
+  }
 
   function update(path, value) {
     setProfile(prev => {
       const next = JSON.parse(JSON.stringify(prev));
       const keys = path.split('.');
-      // Refuse any path segment that targets a special key.
-      if (keys.some(k => FORBIDDEN_KEYS.has(k))) return prev;
+      // Refuse any path segment that targets a special key. Explicit ===
+      // comparisons keep CodeQL's prototype-pollution analyzer happy.
+      for (const k of keys) {
+        if (isUnsafeKey(k)) return prev;
+      }
       let obj = next;
       for (let i = 0; i < keys.length - 1; i++) {
         const k = keys[i];
+        if (isUnsafeKey(k)) return prev;
         if (!Object.prototype.hasOwnProperty.call(obj, k) || obj[k] === null) {
-          obj[k] = {};
+          // Use Object.defineProperty so we never assign onto the prototype
+          // chain; combined with the isUnsafeKey guard this is belt+suspenders.
+          Object.defineProperty(obj, k, {
+            value: {},
+            writable: true,
+            enumerable: true,
+            configurable: true
+          });
         }
         obj = obj[k];
       }
       const leaf = keys[keys.length - 1];
-      obj[leaf] = value;
+      if (isUnsafeKey(leaf)) return prev;
+      Object.defineProperty(obj, leaf, {
+        value,
+        writable: true,
+        enumerable: true,
+        configurable: true
+      });
       return next;
     });
   }
