@@ -24,7 +24,8 @@ The V1 lighthouse: a scheduled **TODO worker** agent that wakes every N minutes,
 
 ## Documents
 
-- **[V1 Requirements and Architecture](./2026-05-19%20V1%20Requirements%20and%20Architecture.md)** — the full spec. Start here.
+- **[V1 Slim Scope (2026-05-20)](./2026-05-20%20V1%20Slim%20Scope.md)** — revised V1 plan. Narrows the original to ~10 days of focused work, defers consolidation + tripartite memory + memory snapshots to V1.5, merges Planner with dynamic tasks, corrects two factual errors in the original (HumanNodeExecutor is not a stub; ChatService refactor is invasive). **Read this first.**
+- **[V1 Requirements and Architecture (2026-05-19)](./2026-05-19%20V1%20Requirements%20and%20Architecture.md)** — original full spec. Architecture and mental model still apply; build order and V1 scope are superseded by the slim-scope revision.
 
 ## Reference frameworks researched
 
