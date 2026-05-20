@@ -199,10 +199,15 @@ export default function registerMcpServerRoutes(app) {
   // Unauthenticated metadata endpoint; safe to expose.
   app.get(buildServerPath('/mcp/.well-known'), enabledCheck, (req, res) => {
     const cfg = gatewayConfig();
-    const baseUrl = (
+    let baseUrl =
       cfg.publicUrl ||
-      `${req.protocol || (req.secure ? 'https' : 'http')}://${req.get('host')}${buildServerPath('')}`
-    ).replace(/\/+$/, '');
+      `${req.protocol || (req.secure ? 'https' : 'http')}://${req.get('host')}${buildServerPath('')}`;
+    // Linear trailing-slash trim (the Host header is user-controlled; a regex
+    // like /\/+$/ is polynomial under CodeQL's ReDoS rule even though it's
+    // anchored — string ops sidestep that entirely).
+    while (baseUrl.length > 0 && baseUrl.charCodeAt(baseUrl.length - 1) === 47) {
+      baseUrl = baseUrl.slice(0, -1);
+    }
     res.json({
       issuer: baseUrl,
       mcp_endpoint: `${baseUrl}/mcp`,
