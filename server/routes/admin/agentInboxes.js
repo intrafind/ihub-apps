@@ -53,13 +53,11 @@ export default function registerAdminAgentInboxesRoutes(app) {
       res.json({ ok: true, version: result.version });
     } catch (error) {
       if (error.code === 'VERSION_CONFLICT') {
-        return res
-          .status(409)
-          .json({
-            error: 'VERSION_CONFLICT',
-            message: error.message,
-            currentVersion: error.currentVersion
-          });
+        return res.status(409).json({
+          error: 'VERSION_CONFLICT',
+          message: error.message,
+          currentVersion: error.currentVersion
+        });
       }
       sendFailedOperationError(res, 'write inbox', error);
     }
