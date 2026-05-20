@@ -93,10 +93,39 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // Execute sub-workflow if the engine reference is available
       if (context.engine) {
         const parentExecutionId = state.executionId;
+        // Pass only application-level data to the sub-workflow. We must NOT
+        // share the parent's `nodeResults` / `_workflowDefinition` etc by
+        // reference: StateManager.addStep mutates `state.data.nodeResults[id]`,
+        // and if the child shares that same object, the mutation creates a
+        // self-reference (sub-start → result → stateUpdates → nodeResults →
+        // sub-start …) that drives deepMerge into infinite recursion.
+        const SHARED_INTERNAL_KEYS = new Set([
+          'nodeResults',
+          'nodeInvocations',
+          'executionMetrics',
+          '_workflow',
+          '_workflowDefinition',
+          '_childExecutionIds',
+          '_executionDeadline',
+          '_pausedAt',
+          '_pausedAtMs',
+          '_pauseReason',
+          '_resumedAt',
+          '_resumeCount',
+          '_totalElapsedMs',
+          '_humanWaitMs',
+          '_nodeIterations',
+          '_currentStep'
+        ]);
+        const childInitial = {};
+        for (const [k, v] of Object.entries(state.data || {})) {
+          if (!SHARED_INTERNAL_KEYS.has(k)) childInitial[k] = v;
+        }
+        childInitial._planGoal = goal;
         const childExecutionId = await context.engine.executeSubWorkflow(
           parentExecutionId,
           workflowDef,
-          { ...state.data, _planGoal: goal },
+          childInitial,
           {
             depth: currentDepth + 1,
             maxDepth,

@@ -19,7 +19,7 @@
  * deepMerge(target, source);
  * // Returns: { items: [4, 5] }
  */
-export function deepMerge(target, source) {
+export function deepMerge(target, source, _seen) {
   // Handle null/undefined cases
   if (!source || typeof source !== 'object') {
     return target;
@@ -27,6 +27,20 @@ export function deepMerge(target, source) {
   if (!target || typeof target !== 'object') {
     return source;
   }
+
+  // Cycle protection. Without this, sharing a reference between target and
+  // source (e.g. `state.data.nodeResults` ending up on both sides after a
+  // node mutates state and returns stateUpdates that point back) drives this
+  // function into unbounded recursion and crashes the worker. If we've seen
+  // the same target+source pair already, return the shallow merge and stop.
+  const seen = _seen || new WeakMap();
+  const existing = seen.get(target);
+  if (existing && existing.has(source)) {
+    return { ...target, ...source };
+  }
+  const innerSet = existing || new Set();
+  innerSet.add(source);
+  seen.set(target, innerSet);
 
   // Start with a shallow copy of target
   const result = { ...target };
@@ -45,7 +59,7 @@ export function deepMerge(target, source) {
       typeof targetVal === 'object' &&
       !Array.isArray(targetVal)
     ) {
-      result[key] = deepMerge(targetVal, sourceVal);
+      result[key] = deepMerge(targetVal, sourceVal, seen);
     } else {
       // Arrays and primitives are replaced entirely
       result[key] = sourceVal;
