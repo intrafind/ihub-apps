@@ -265,6 +265,20 @@ function propagateProfileFields(profile, nodes) {
         const { type: _t, config: inner, ...rest } = taskTemplate;
         taskTemplate = { ...rest, ...inner };
       }
+      // Propagate Profile-level fields into the taskTemplate so each
+      // materialized task node inherits the agent's brief / model / tools /
+      // apps / sources without the operator having to edit each task.
+      if (taskTemplate) {
+        const tt = { ...taskTemplate };
+        if (sys && !tt.system) tt.system = sys;
+        if (model && !tt.modelId) tt.modelId = model;
+        if (typeof temp === 'number' && tt.temperature === undefined) tt.temperature = temp;
+        if (tools && (!Array.isArray(tt.tools) || tt.tools.length === 0)) tt.tools = tools;
+        if (apps && (!Array.isArray(tt.apps) || tt.apps.length === 0)) tt.apps = apps;
+        if (sources && (!Array.isArray(tt.sources) || tt.sources.length === 0))
+          tt.sources = sources;
+        taskTemplate = tt;
+      }
       const merged = {
         ...cfg,
         ...(!cfg.goal ? { goal: '${$.data.brief}' } : {}),
