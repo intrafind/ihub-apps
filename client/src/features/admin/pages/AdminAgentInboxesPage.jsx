@@ -32,7 +32,8 @@ export default function AdminAgentInboxesPage() {
     try {
       await createInbox(newId, `# ${newId}\n`);
       setNewId('');
-      await load();
+      // Drop straight into the editor so the user can add items immediately.
+      navigate(`/admin/agents/inboxes/${newId}`);
     } catch (err) {
       setError(err?.response?.data?.message || err.message);
     }

@@ -10,11 +10,14 @@ const localizedStringSchema = z.record(
 );
 
 // Embedded workflow definition is intentionally permissive; the workflow
-// validator validates the full shape when the engine starts. We only require
-// that an embedded ref carries a `definition`.
+// validator validates the full shape when the engine starts.
+// The Profile may omit `workflow.definition` entirely — the
+// profileWorkflowSerializer fills in a default shape on save based on the
+// Profile's `system`/`tools`/`sources`/`apps`/`preferredModel`/Planner/
+// Dynamic-Tasks settings. For `external` refs `workflowId` is required.
 const workflowRefSchema = z
   .object({
-    ref: z.enum(['embedded', 'external']).default('embedded'),
+    ref: z.enum(['embedded', 'external']).optional().default('embedded'),
     workflowId: z.string().optional(),
     definition: z
       .object({
@@ -27,15 +30,12 @@ const workflowRefSchema = z
   })
   .refine(
     data => {
-      if (data.ref === 'embedded') {
-        return data.definition && Array.isArray(data.definition.nodes);
-      }
       if (data.ref === 'external') {
         return typeof data.workflowId === 'string' && data.workflowId.length > 0;
       }
       return true;
     },
-    { message: 'embedded workflow requires definition.nodes; external requires workflowId' }
+    { message: 'external workflow requires a workflowId' }
   );
 
 const memorySchema = z
@@ -109,7 +109,19 @@ const baseAgentProfileSchema = z.object({
     .default('#6366F1'),
   icon: z.string().min(1).optional().default('robot'),
 
-  workflow: workflowRefSchema,
+  workflow: workflowRefSchema.optional().default({}),
+
+  // ── Agent brief: what it is, what model + capabilities it gets ──────────
+  // These are convenience fields on the Profile. The profileWorkflowSerializer
+  // propagates them into every prompt node in the default workflow. Authors
+  // who hand-author `workflow.definition` can still override per-node.
+  system: localizedStringSchema.optional(),
+  preferredModel: z.string().optional(),
+  preferredTemperature: z.number().min(0).max(2).optional(),
+  maxIterations: z.number().int().min(1).max(50).optional(),
+  tools: z.array(z.string()).optional().default([]),
+  sources: z.array(z.string()).optional().default([]),
+  apps: z.array(z.string()).optional().default([]),
 
   memory: memorySchema.optional().default({}),
   inboxId: z.string().optional(),

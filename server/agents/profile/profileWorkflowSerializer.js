@@ -11,27 +11,51 @@
  *  - Simple        : start → agent → end
  *  - Drain only    : start → seed → drain(child=task_runner) → end
  *  - Planner+drain : start → planner → ... → drain → end (Planner materializes sub-DAG)
+ *
+ * Profile-level convenience fields (system, preferredModel, tools, sources,
+ * apps, dynamicTasks) propagate into every prompt node in the default
+ * workflow so the form-based editor can stay flat.
  */
 
 import logger from '../../utils/logger.js';
 
-const DEFAULT_MODEL_ID = null; // null = engine picks default
+function pickModel(profile) {
+  return profile.preferredModel || null;
+}
 
-function buildSimpleWorkflow(profile, language = 'en') {
+function pickIterations(profile, fallback) {
+  if (typeof profile.maxIterations === 'number') return profile.maxIterations;
+  return fallback;
+}
+
+function basePromptConfig(profile, { systemFallbackKey, fallbackIterations }) {
+  return {
+    modelId: pickModel(profile),
+    ...(profile.preferredTemperature !== undefined
+      ? { temperature: profile.preferredTemperature }
+      : {}),
+    system:
+      profile.system && Object.keys(profile.system).length > 0
+        ? profile.system
+        : profile.description || { en: systemFallbackKey },
+    maxIterations: pickIterations(profile, fallbackIterations),
+    tools: Array.isArray(profile.tools) ? profile.tools.slice() : [],
+    apps: Array.isArray(profile.apps) ? profile.apps.slice() : [],
+    sources: Array.isArray(profile.sources) ? profile.sources.slice() : []
+  };
+}
+
+function buildSimpleWorkflow(profile) {
   return {
     nodes: [
       { id: 'start', type: 'start' },
       {
         id: 'agent',
         type: 'prompt',
-        config: {
-          modelId: DEFAULT_MODEL_ID,
-          system: profile.description || { [language]: 'You are a helpful agent.' },
-          maxIterations: 10,
-          tools: [],
-          apps: [],
-          sources: []
-        }
+        config: basePromptConfig(profile, {
+          systemFallbackKey: 'You are a helpful agent.',
+          fallbackIterations: 10
+        })
       },
       { id: 'end', type: 'end' }
     ],
@@ -42,18 +66,16 @@ function buildSimpleWorkflow(profile, language = 'en') {
   };
 }
 
-function buildDrainOnlyWorkflow(profile, language = 'en') {
+function buildDrainOnlyWorkflow(profile) {
   const maxDepth = profile.dynamicTasks?.maxDepth ?? 3;
   const taskRunnerNode = {
     id: 'task_runner',
     type: 'prompt',
     config: {
-      modelId: DEFAULT_MODEL_ID,
-      system: profile.description || { [language]: 'Process the current task.' },
-      maxIterations: 10,
-      tools: [],
-      apps: [],
-      sources: [],
+      ...basePromptConfig(profile, {
+        systemFallbackKey: 'Process the current task.',
+        fallbackIterations: 10
+      }),
       dynamicTasks: { enabled: true, maxDepth }
     }
   };
@@ -64,12 +86,10 @@ function buildDrainOnlyWorkflow(profile, language = 'en') {
         id: 'seed',
         type: 'prompt',
         config: {
-          modelId: DEFAULT_MODEL_ID,
-          system: profile.description || { [language]: 'Seed initial tasks from your inbox.' },
-          maxIterations: 5,
-          tools: [],
-          apps: [],
-          sources: [],
+          ...basePromptConfig(profile, {
+            systemFallbackKey: 'Seed initial tasks from your inbox.',
+            fallbackIterations: 5
+          }),
           dynamicTasks: { enabled: true, maxDepth }
         }
       },
@@ -93,7 +113,7 @@ function buildDrainOnlyWorkflow(profile, language = 'en') {
   };
 }
 
-function buildPlannerWorkflow(profile, _language = 'en') {
+function buildPlannerWorkflow(profile) {
   const maxDepth = profile.dynamicTasks?.maxDepth ?? 3;
   const useDrain = profile.dynamicTasks?.enabled !== false;
   return {
@@ -103,19 +123,19 @@ function buildPlannerWorkflow(profile, _language = 'en') {
         id: 'planner',
         type: 'planner',
         config: {
-          modelId: DEFAULT_MODEL_ID,
+          modelId: pickModel(profile),
           maxTasks: profile.planner?.maxTasks ?? 10,
           taskTemplate: {
             type: 'prompt',
             config: {
-              modelId: DEFAULT_MODEL_ID,
-              maxIterations: 10,
-              tools: [],
-              apps: [],
-              sources: [],
+              ...basePromptConfig(profile, {
+                systemFallbackKey: 'Execute this planned sub-task.',
+                fallbackIterations: 10
+              }),
               dynamicTasks: { enabled: useDrain, maxDepth }
             }
-          }
+          },
+          ...(useDrain ? { dynamicTasks: { enabled: true, maxDepth } } : {})
         }
       },
       { id: 'end', type: 'end' }
@@ -130,14 +150,10 @@ function buildPlannerWorkflow(profile, _language = 'en') {
 /**
  * Pick a sensible default workflow shape for the given Profile.
  */
-export function buildDefaultWorkflowForProfile(profile, language = 'en') {
-  if (profile.planner?.enabled) {
-    return buildPlannerWorkflow(profile, language);
-  }
-  if (profile.dynamicTasks?.enabled) {
-    return buildDrainOnlyWorkflow(profile, language);
-  }
-  return buildSimpleWorkflow(profile, language);
+export function buildDefaultWorkflowForProfile(profile) {
+  if (profile.planner?.enabled) return buildPlannerWorkflow(profile);
+  if (profile.dynamicTasks?.enabled) return buildDrainOnlyWorkflow(profile);
+  return buildSimpleWorkflow(profile);
 }
 
 /**
@@ -145,43 +161,71 @@ export function buildDefaultWorkflowForProfile(profile, language = 'en') {
  * definition. Returns a NEW profile object (does not mutate).
  *
  *  - If profile.workflow.ref === 'external', leave it untouched.
- *  - If profile.workflow.definition has nodes, leave it untouched.
+ *  - If profile.workflow.definition has nodes, leave it untouched (but
+ *    still propagate the Profile-level convenience fields into existing
+ *    prompt nodes whose config doesn't already specify them — this is what
+ *    makes Save in the form mode work after the user changes the system
+ *    prompt or tools list).
  *  - Otherwise, fill in a default workflow definition.
  */
-export function serializeProfile(profile, options = {}) {
-  const { language = 'en' } = options;
+export function serializeProfile(profile) {
   if (!profile || typeof profile !== 'object') {
     throw new Error('serializeProfile requires a profile object');
   }
-
   const next = JSON.parse(JSON.stringify(profile));
 
-  if (!next.workflow) {
-    next.workflow = { ref: 'embedded' };
-  }
-  if (next.workflow.ref === 'external') {
-    return next;
-  }
-  if (
+  if (!next.workflow) next.workflow = { ref: 'embedded' };
+  if (next.workflow.ref === 'external') return next;
+
+  const hasDefinition =
     next.workflow.definition &&
     Array.isArray(next.workflow.definition.nodes) &&
-    next.workflow.definition.nodes.length > 0
-  ) {
-    return next;
+    next.workflow.definition.nodes.length > 0;
+
+  if (!hasDefinition) {
+    next.workflow.ref = 'embedded';
+    next.workflow.definition = buildDefaultWorkflowForProfile(next);
+    logger.info('Filled in default workflow definition for profile', {
+      component: 'ProfileWorkflowSerializer',
+      profileId: next.id,
+      shape: next.planner?.enabled
+        ? 'planner+drain'
+        : next.dynamicTasks?.enabled
+          ? 'drain-only'
+          : 'simple'
+    });
+  } else {
+    // Workflow already authored. Propagate Profile-level convenience fields
+    // into prompt nodes that haven't explicitly set them. Authors who want
+    // per-node overrides simply set the field on the node and it wins.
+    const propagated = propagateProfileFields(next, next.workflow.definition.nodes);
+    next.workflow.definition.nodes = propagated;
   }
 
-  next.workflow.ref = 'embedded';
-  next.workflow.definition = buildDefaultWorkflowForProfile(next, language);
-  logger.info('Filled in default workflow definition for profile', {
-    component: 'ProfileWorkflowSerializer',
-    profileId: next.id,
-    shape: next.planner?.enabled
-      ? 'planner+drain'
-      : next.dynamicTasks?.enabled
-        ? 'drain-only'
-        : 'simple'
-  });
   return next;
+}
+
+function propagateProfileFields(profile, nodes) {
+  const sys = profile.system && Object.keys(profile.system).length > 0 ? profile.system : null;
+  const model = profile.preferredModel || null;
+  const temp = profile.preferredTemperature;
+  const tools = Array.isArray(profile.tools) ? profile.tools : null;
+  const apps = Array.isArray(profile.apps) ? profile.apps : null;
+  const sources = Array.isArray(profile.sources) ? profile.sources : null;
+  return nodes.map(node => {
+    if (!node || node.type !== 'prompt') return node;
+    const cfg = node.config || {};
+    const merged = {
+      ...cfg,
+      ...(sys && !cfg.system ? { system: sys } : {}),
+      ...(model && !cfg.modelId ? { modelId: model } : {}),
+      ...(typeof temp === 'number' && cfg.temperature === undefined ? { temperature: temp } : {}),
+      ...(tools && (!Array.isArray(cfg.tools) || cfg.tools.length === 0) ? { tools } : {}),
+      ...(apps && (!Array.isArray(cfg.apps) || cfg.apps.length === 0) ? { apps } : {}),
+      ...(sources && (!Array.isArray(cfg.sources) || cfg.sources.length === 0) ? { sources } : {})
+    };
+    return { ...node, config: merged };
+  });
 }
 
 export default { serializeProfile, buildDefaultWorkflowForProfile };
