@@ -3,6 +3,8 @@ import { z } from 'zod';
 import configCache from '../../configCache.js';
 import { loadTools, runTool } from '../../toolLoader.js';
 import { actionTracker } from '../../actionTracker.js';
+import { invokeAppNonStreaming } from './appInvoker.js';
+import { listMcpResources, readMcpResource } from './resourceAdapter.js';
 import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 
@@ -177,22 +179,23 @@ export async function buildMcpServer({ user, platform }) {
           ...jsonSchemaToInputSchema(buildAppInputSchema(app))
         },
         async args => {
-          // App invocation via MCP is not implemented in this round; the
-          // chat pipeline (server/services/chat) requires a streaming SSE
-          // channel that doesn't map cleanly onto the synchronous MCP
-          // tool-call response yet. We return a structured error so the
-          // calling agent understands the limitation rather than silently
-          // returning empty content.
-          logger.info('MCP gateway app invocation requested (not yet supported)', {
-            component: 'McpServerService',
-            appId: app.id,
-            user: user.id,
-            args: Object.keys(args || {})
-          });
-          return toolErrorResult(
-            `app__${app.id} via MCP requires the streaming chat protocol; ` +
-              'use the /api/chat endpoint or the iHub web UI for full responses'
-          );
+          try {
+            const text = await invokeAppNonStreaming({
+              appId: app.id,
+              args: args || {},
+              user,
+              language: platform?.defaultLanguage || 'en'
+            });
+            return toolSuccessResult(text || '');
+          } catch (err) {
+            logger.warn('MCP gateway app invocation failed', {
+              component: 'McpServerService',
+              appId: app.id,
+              user: user.id,
+              error: err.message
+            });
+            return toolErrorResult(err.message || 'app invocation failed');
+          }
         }
       );
     }
@@ -225,6 +228,38 @@ export async function buildMcpServer({ user, platform }) {
               error: err.message
             });
             return toolErrorResult(err.message || 'workflow execution failed');
+          }
+        }
+      );
+    }
+  }
+
+  // ---- Resources (sources + skills as MCP resources) ----------------------
+  if (expose.resources && tokenScopes.includes(MCP_SCOPES.RESOURCES_READ)) {
+    const resources = listMcpResources({ user, expose });
+    for (const r of resources) {
+      // registerResource binds a single URI to a read callback. The SDK's
+      // `resources/list` is served from the union of registered entries.
+      server.registerResource(
+        r.name,
+        r.uri,
+        { description: r.description, mimeType: r.mimeType },
+        async uriObj => {
+          try {
+            return await readMcpResource(uriObj.href || String(uriObj), {
+              user,
+              language: platform?.defaultLanguage || 'en'
+            });
+          } catch (err) {
+            logger.warn('MCP gateway resource read failed', {
+              component: 'McpServerService',
+              uri: r.uri,
+              user: user.id,
+              error: err.message
+            });
+            // MCP resource reads don't have an isError sentinel; throwing
+            // surfaces as a JSON-RPC error to the client.
+            throw err;
           }
         }
       );

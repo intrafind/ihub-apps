@@ -206,14 +206,29 @@ callers with the matching scope.
 - **iHub tool** → MCP tool with `id` unchanged, `inputSchema` = the
   tool's existing JSON schema parameters.
 - **iHub app** → MCP tool with id `app__<appId>` and `inputSchema`
-  derived from the app's `variables` array. NOTE: invoking an app
-  through the streaming chat pipeline over the synchronous MCP
-  `tools/call` is **not yet supported** — calling such a tool returns a
-  structured `isError` result pointing at `/api/chat`. This is
-  intentional in this round; the streaming chat lift is a follow-up.
+  derived from the app's `variables` array. App invocation runs in
+  non-streaming mode: the LLM request fires through `RequestBuilder`
+  (so prompt templating, system prompt, variables, model selection,
+  API-key resolution, and token budgeting match the web UI exactly),
+  the response is fetched synchronously via `throttledFetch`, and the
+  assistant text is returned as a single content block. Tool calling
+  inside an app, structured-output post-processing, and multi-modal
+  generation still need the streaming pipeline — those are not yet
+  surfaced over `/mcp`.
 - **iHub workflow** → MCP tool with id `workflow__<workflowId>` and
   `inputSchema` derived from the start node's `inputVariables`. Dispatch
   goes through the existing `runTool('workflow_<id>', args)` path.
+- **iHub sources** → MCP resources at `ihub://source/<sourceId>`.
+  `resources/list` enumerates every enabled source the OAuth client
+  has scope for; `resources/read` returns the content the source
+  produces (filesystem text, URL fetch, iFinder document, page). Sources
+  marked `exposeAs: "tool"` show up in the list with a sentinel body
+  pointing the agent at the corresponding `source_*` tool — calling
+  those over `tools/call` is how dynamic queries (search etc.) work.
+- **iHub skills** → MCP resources at `ihub://skill/<skillName>`.
+  Returns the skill's `SKILL.md` body. Skill resources (scripts,
+  references, assets) are not yet enumerated individually; agents that
+  need them can call the `read_skill_resource` tool.
 
 ### Session model
 
@@ -273,13 +288,34 @@ is registered.)
    requested `mcp:*` scopes, and consents.
 4. Subsequent MCP calls run as that user with full group permissions.
 
+## Agent-to-Agent (A2A) endpoint — experimental
+
+Set `platform.mcpServer.a2a.enabled: true` (Admin → MCP gateway → A2A
+toggle) to mount `/a2a` alongside `/mcp`. It uses the **same OAuth
+Bearer + `mcp:*` scope gate** as the MCP gateway — no separate
+credential or scope.
+
+A2A is JSON-RPC 2.0 over HTTP, task-oriented. iHub today implements
+the well-defined subset of the v0.x draft:
+
+| Method | Behaviour |
+|--------|-----------|
+| `agent/info` | Returns capability + auth metadata |
+| `agent/skills` | Enumerates iHub tools / apps / workflows as A2A skills |
+| `tasks/send` | Synchronous send-and-wait — dispatches to the underlying tool/app/workflow and returns the output in one response |
+
+Stateful methods (`tasks/get`, `tasks/cancel`, streaming
+`tasks/sendSubscribe`) return JSON-RPC `method not found`. The spec is
+still moving and a persistent task store is out of scope for this
+landing.
+
+Discovery: `/mcp/.well-known` advertises `a2a_endpoint` when enabled.
+
 ## Out of scope (follow-up)
 
-- **App invocation over MCP** — currently returns a structured `isError`.
-  The chat pipeline requires SSE streaming that doesn't yet map onto the
-  synchronous MCP tool-call response shape.
-- **Resources adapter** — sources/skills as MCP resources is gated
-  behind `expose.resources: false` until the adapter ships.
-- **A2A protocol endpoint** — same auth surface, new transport. Tracked
-  separately.
+- **Streaming task subscriptions** (`tasks/sendSubscribe`,
+  `tasks/get`, `tasks/cancel`) over A2A — needs a persistent task store.
+- **In-app tool calling over MCP** — apps invoked via `tools/call`
+  currently run the LLM call synchronously without iHub's tool
+  executor; an MCP-side tool loop is a follow-up.
 - **mTLS** for service-to-service — additive layer; optional.

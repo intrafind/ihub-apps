@@ -131,7 +131,14 @@ export const mcpGatewayConfigSchema = z.object({
       tools: z.boolean().default(true),
       apps: z.boolean().default(true),
       workflows: z.boolean().default(true),
-      resources: z.boolean().default(false)
+      resources: z.boolean().default(true)
+    })
+    .default({}),
+  // Optional Agent-to-Agent (A2A) endpoint alongside /mcp. The wire
+  // protocol is still moving; iHub mounts an auth-gated stub today.
+  a2a: z
+    .object({
+      enabled: z.boolean().default(false)
     })
     .default({})
 });

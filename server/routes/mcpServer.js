@@ -4,6 +4,7 @@ import { randomUUID } from 'crypto';
 import express from 'express';
 import mcpAuth from '../middleware/mcpAuth.js';
 import { buildMcpServer } from '../services/mcp/McpServerService.js';
+import { dispatchA2A } from '../services/mcp/a2aHandler.js';
 import configCache from '../configCache.js';
 import { buildServerPath } from '../utils/basePath.js';
 import logger from '../utils/logger.js';
@@ -208,11 +209,13 @@ export default function registerMcpServerRoutes(app) {
     while (baseUrl.length > 0 && baseUrl.charCodeAt(baseUrl.length - 1) === 47) {
       baseUrl = baseUrl.slice(0, -1);
     }
+    const a2aEnabled = cfg.a2a?.enabled === true;
     res.json({
       issuer: baseUrl,
       mcp_endpoint: `${baseUrl}/mcp`,
       mcp_sse_endpoint: `${baseUrl}/mcp/sse`,
-      transports: ['streamableHttp', 'sse'],
+      a2a_endpoint: a2aEnabled ? `${baseUrl}/a2a` : null,
+      transports: ['streamableHttp', 'sse', ...(a2aEnabled ? ['a2a'] : [])],
       scopes_supported: [
         'mcp:tools:read',
         'mcp:tools:call',
@@ -222,5 +225,44 @@ export default function registerMcpServerRoutes(app) {
       ],
       oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`
     });
+  });
+
+  // ---- A2A endpoint (experimental) --------------------------------------
+  // The A2A wire protocol is still v0.x; this scaffold implements the
+  // well-defined subset (agent/info, agent/skills, tasks/send) and uses
+  // the same OAuth Bearer + mcp:* scope gate as /mcp. Stateful tasks
+  // (tasks/get, tasks/cancel, sendSubscribe) return method-not-found
+  // until the spec stabilises.
+  const a2aEnabledCheck = (req, res, next) => {
+    const cfg = gatewayConfig();
+    if (cfg.a2a?.enabled !== true) {
+      return res
+        .status(404)
+        .json({ error: 'not_found', error_description: 'A2A endpoint is not enabled' });
+    }
+    return enabledCheck(req, res, next);
+  };
+
+  app.post(buildServerPath('/a2a'), a2aEnabledCheck, jsonBody, mcpAuth, async (req, res) => {
+    const platform = configCache.getPlatform() || {};
+    const body = req.body;
+    try {
+      if (Array.isArray(body)) {
+        // JSON-RPC batch.
+        const responses = await Promise.all(
+          body.map(msg => dispatchA2A(msg, { user: req.user, platform }))
+        );
+        return res.json(responses);
+      }
+      const response = await dispatchA2A(body, { user: req.user, platform });
+      return res.json(response);
+    } catch (err) {
+      logger.error('A2A endpoint error', { component: 'A2A', error: err.message });
+      return res.status(500).json({
+        jsonrpc: '2.0',
+        id: body?.id ?? null,
+        error: { code: -32603, message: err.message || 'internal error' }
+      });
+    }
   });
 }

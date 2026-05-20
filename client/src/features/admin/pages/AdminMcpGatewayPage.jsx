@@ -210,6 +210,20 @@ function AdminMcpGatewayPage() {
                 label="SSE (legacy)"
                 description="Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency."
               />
+              <Toggle
+                checked={!!gateway.a2a?.enabled}
+                onChange={v =>
+                  setPlatform(prev => ({
+                    ...prev,
+                    mcpServer: {
+                      ...(prev?.mcpServer || {}),
+                      a2a: { ...(prev?.mcpServer?.a2a || {}), enabled: v }
+                    }
+                  }))
+                }
+                label="A2A (experimental)"
+                description="Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises."
+              />
             </div>
           </section>
 
