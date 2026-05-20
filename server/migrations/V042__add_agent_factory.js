@@ -87,15 +87,18 @@ export async function up(ctx) {
     }
   }
 
-  // ── 3. Add platform feature flags ─────────────────────────────────────────
-  if (await ctx.fileExists('config/platform.json')) {
-    const platform = await ctx.readJson('config/platform.json');
+  // ── 3. Add feature flags ──────────────────────────────────────────────────
+  // The client-side feature toggle reads from config/features.json (which
+  // backs the resolveFeatures() registry). Default both flags to false so
+  // installations explicitly opt in via Admin → Features.
+  if (await ctx.fileExists('config/features.json')) {
+    const features = await ctx.readJson('config/features.json');
     let changed = false;
-    if (ctx.setDefault(platform, 'features.agentFactory', true)) changed = true;
-    if (ctx.setDefault(platform, 'features.appAsTool', false)) changed = true;
+    if (ctx.setDefault(features, 'agentFactory', false)) changed = true;
+    if (ctx.setDefault(features, 'appAsTool', false)) changed = true;
     if (changed) {
-      await ctx.writeJson('config/platform.json', platform);
-      ctx.log('Added agentFactory + appAsTool feature flags to platform.json');
+      await ctx.writeJson('config/features.json', features);
+      ctx.log('Added agentFactory + appAsTool to features.json');
     } else {
       ctx.log('Agent feature flags already present — skipping');
     }
