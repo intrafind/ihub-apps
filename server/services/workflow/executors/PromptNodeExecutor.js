@@ -17,6 +17,7 @@
 import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import ChatService from '../../chat/ChatService.js';
 import { normalizeToolName } from '../../../adapters/toolCalling/index.js';
+import { actionTracker } from '../../../actionTracker.js';
 import { getToolsForApp, runTool } from '../../../toolLoader.js';
 import configCache from '../../../configCache.js';
 import WorkflowLLMHelper from '../WorkflowLLMHelper.js';
@@ -173,6 +174,39 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         for (const id of agentToolIds) {
           if (!configuredToolIds.includes(id)) configuredToolIds.push(id);
         }
+      }
+
+      // Provider-native search resolution. `webSearch` is configured as an
+      // openai-responses-only tool; for Google models the GoogleConverter
+      // strips it (then results are pure hallucination because the model
+      // has no real search). Swap to `googleSearch` (native grounding).
+      //
+      // Gemini API limitation: google_search CANNOT be combined with
+      // function calling. If we register both, the converter silently
+      // drops all function tools and the node loses memory/inbox/task
+      // capabilities. So the swap is node-scoped:
+      //
+      //   - Materialized planner tasks (`_isPlannerTask: true`) become
+      //     search-only when grounding is needed. They return text/JSON;
+      //     the finalize orchestrator persists the work via
+      //     write_artifact / write_inbox afterwards.
+      //   - Orchestrator nodes (load-inbox, finalize) don't list webSearch
+      //     in their tools so the swap never triggers there; they keep
+      //     their function tools.
+      //   - Other (non-agent) nodes that explicitly list webSearch on
+      //     Google get the same search-only swap. Authors who want both
+      //     should split into separate nodes.
+      if (model?.provider === 'google' && configuredToolIds.includes('webSearch')) {
+        const droppedFunctionTools = configuredToolIds.filter(
+          id => id !== 'webSearch' && id !== 'googleSearch'
+        );
+        configuredToolIds = ['googleSearch'];
+        this.logger.info('Swapped webSearch → googleSearch (Google native grounding)', {
+          component: 'PromptNodeExecutor',
+          modelId: model.id,
+          droppedFunctionTools,
+          nodeId: node.id
+        });
       }
       let tools = [];
       if (configuredToolIds.length > 0) {
@@ -1008,11 +1042,72 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    */
   async executeToolCall(toolCall, tools, context) {
     const { user, chatId, appConfig } = context;
+    const requestedName = toolCall.function?.name;
 
-    // Find the actual tool ID
-    const toolId =
-      tools.find(t => normalizeToolName(t.id) === toolCall.function.name)?.id ||
-      toolCall.function.name;
+    // Strict allowlist: the LLM may emit a name that doesn't correspond to any
+    // registered tool (chain-of-thought leakage, hallucinated tool ids, or a
+    // provider quirk that slipped past the converter sanitizer). Do NOT fall
+    // back to the raw name and dispatch — instead, hand the model a clear
+    // error so it can self-correct. The run continues; the iteration cap
+    // bounds runaway behavior.
+    const matchedTool = tools.find(
+      t => t.id === requestedName || normalizeToolName(t.id) === requestedName
+    );
+
+    if (!matchedTool) {
+      const availableToolIds = tools.map(t => t.id);
+      this.logger.error('Agent attempted to call an unregistered tool', {
+        component: 'PromptNodeExecutor',
+        requestedName:
+          typeof requestedName === 'string' && requestedName.length > 200
+            ? `${requestedName.slice(0, 200)}…(${requestedName.length})`
+            : requestedName,
+        availableTools: availableToolIds,
+        executionId: context.executionId
+      });
+
+      // Record the attempt in workflow state for the UI to render.
+      const ws = context._workflowState;
+      if (ws && ws.data) {
+        if (!Array.isArray(ws.data._toolErrors)) ws.data._toolErrors = [];
+        ws.data._toolErrors.push({
+          ts: new Date().toISOString(),
+          requestedName:
+            typeof requestedName === 'string' && requestedName.length > 200
+              ? `${requestedName.slice(0, 200)}…(${requestedName.length})`
+              : requestedName,
+          availableTools: availableToolIds,
+          reason: 'not_registered'
+        });
+      }
+
+      // Emit a workflow event so AgentRunDetailPage's SSE stream sees it.
+      try {
+        actionTracker.emit('fire-sse', {
+          event: 'agent.tool.hallucinated',
+          chatId,
+          executionId: context.executionId,
+          requestedName,
+          availableTools: availableToolIds
+        });
+      } catch (_err) {
+        // never fail a tool call because of telemetry
+      }
+
+      const safeMessage = `Tool '${typeof requestedName === 'string' ? requestedName.slice(0, 80) : String(requestedName)}' is not registered for this agent. Available tools: ${availableToolIds.join(', ') || '(none)'}. Pick one of those or stop calling tools.`;
+      return {
+        role: 'tool',
+        tool_call_id: toolCall.id,
+        name: typeof requestedName === 'string' ? requestedName : 'unknown',
+        content: JSON.stringify({
+          error: true,
+          reason: 'tool_not_registered',
+          message: safeMessage
+        })
+      };
+    }
+
+    const toolId = matchedTool.id;
 
     // Parse arguments
     let args = {};
@@ -1113,11 +1208,34 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
    */
   _resolveAgentProfile(context) {
     const user = context?.user;
-    if (!user?.isAgent || !user?.profileId) return null;
+    if (!user?.isAgent || !user?.profileId) {
+      this.logger.info('Agent profile not resolved: not an agent run', {
+        component: 'PromptNodeExecutor',
+        userId: user?.id,
+        isAgent: user?.isAgent,
+        hasProfileId: !!user?.profileId,
+        executionId: context?.executionId
+      });
+      return null;
+    }
     try {
       const profiles = configCache.getAgentProfiles ? configCache.getAgentProfiles(true) : null;
-      if (!profiles?.data) return null;
-      return profiles.data.find(p => p.id === user.profileId) || null;
+      if (!profiles?.data) {
+        this.logger.warn('Agent profile lookup returned no profiles from cache', {
+          component: 'PromptNodeExecutor',
+          profileId: user.profileId
+        });
+        return null;
+      }
+      const resolved = profiles.data.find(p => p.id === user.profileId) || null;
+      if (!resolved) {
+        this.logger.warn('Agent profile id not found in cache', {
+          component: 'PromptNodeExecutor',
+          profileId: user.profileId,
+          availableProfiles: profiles.data.map(p => p.id)
+        });
+      }
+      return resolved;
     } catch (err) {
       this.logger.warn('Failed to resolve agent profile', {
         component: 'PromptNodeExecutor',

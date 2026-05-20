@@ -15,17 +15,15 @@
           "id": "planner",
           "type": "planner",
           "config": {
+            "goal": "${$.data.brief}",
             "maxTasks": 5,
             "synthesize": true,
             "dynamicTasks": { "enabled": true, "maxDepth": 2 },
             "taskTemplate": {
-              "type": "prompt",
-              "config": {
-                "maxIterations": 10,
-                "tools": [],
-                "apps": [],
-                "dynamicTasks": { "enabled": true, "maxDepth": 2 }
-              }
+              "maxIterations": 10,
+              "tools": [],
+              "apps": [],
+              "dynamicTasks": { "enabled": true, "maxDepth": 2 }
             }
           }
         },

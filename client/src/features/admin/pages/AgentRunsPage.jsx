@@ -12,16 +12,30 @@ export default function AgentRunsPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    (async () => {
+    let mounted = true;
+    let interval;
+
+    async function load() {
       try {
         const res = await fetchAgentRuns(profileId ? { profileId } : {});
+        if (!mounted) return;
         setRuns(res?.data || []);
+        setError(null);
       } catch (err) {
-        setError(err.message);
+        if (mounted) setError(err.message);
       } finally {
-        setLoading(false);
+        if (mounted) setLoading(false);
       }
-    })();
+    }
+
+    load();
+    // Refresh while any run is in flight; otherwise drop to a slower cadence.
+    interval = setInterval(load, 5000);
+
+    return () => {
+      mounted = false;
+      if (interval) clearInterval(interval);
+    };
   }, [profileId]);
 
   return (

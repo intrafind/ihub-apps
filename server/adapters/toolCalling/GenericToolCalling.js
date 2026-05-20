@@ -235,41 +235,59 @@ export function sanitizeSchemaForProvider(schema, provider) {
 
   const sanitized = JSON.parse(JSON.stringify(schema)); // Deep clone
 
-  function cleanObject(obj) {
+  // A node is a "schema" (where keywords like `title`/`format`/`minLength`
+  // are JSON Schema annotations we want to strip) only if it declares a
+  // `type`. A `properties` container — whose keys ARE property names — has
+  // no `type` of its own, so we must NOT apply the keyword strip there.
+  // Otherwise a property literally named `title`/`format`/`minLength` gets
+  // deleted from its parent's `properties`, then any `required: ['title']`
+  // pointing at it fails the provider's strict schema check.
+  function isSchemaNode(obj) {
+    return obj && typeof obj === 'object' && typeof obj.type === 'string';
+  }
+
+  function cleanObject(obj, parentKey) {
     if (!obj || typeof obj !== 'object') return obj;
 
-    // Remove provider-specific incompatible fields
-    if (provider === 'google') {
-      // Normalize non-standard type values to valid JSON Schema types
-      if (
-        obj.type &&
-        !['string', 'number', 'integer', 'boolean', 'array', 'object'].includes(obj.type)
-      ) {
-        obj.type = 'string';
-      }
-      // Ensure description is a plain string (not a multilingual object)
-      if (obj.description && typeof obj.description === 'object') {
-        obj.description = obj.description.en || Object.values(obj.description)[0] || '';
-      }
-      delete obj.exclusiveMaximum;
-      delete obj.exclusiveMinimum;
-      delete obj.title;
-      delete obj.format; // Google has limited format support
-      delete obj.minLength; // Use 'minimum' instead for strings
-      delete obj.maxLength; // Use 'maximum' instead for strings
-    }
+    // Inside a `properties` container, each key is a user-defined property
+    // name (e.g. `title`, `body`). Recurse into the children but do NOT
+    // treat keys of this container as schema keywords.
+    const isPropertiesContainer = parentKey === 'properties' && !isSchemaNode(obj);
 
-    if (provider === 'anthropic') {
-      // Anthropic is generally more flexible, but we might need to add restrictions here
+    if (!isPropertiesContainer) {
+      // Remove provider-specific incompatible fields
+      if (provider === 'google') {
+        // Normalize non-standard type values to valid JSON Schema types
+        if (
+          obj.type &&
+          !['string', 'number', 'integer', 'boolean', 'array', 'object'].includes(obj.type)
+        ) {
+          obj.type = 'string';
+        }
+        // Ensure description is a plain string (not a multilingual object)
+        if (obj.description && typeof obj.description === 'object') {
+          obj.description = obj.description.en || Object.values(obj.description)[0] || '';
+        }
+        delete obj.exclusiveMaximum;
+        delete obj.exclusiveMinimum;
+        delete obj.title;
+        delete obj.format; // Google has limited format support
+        delete obj.minLength; // Use 'minimum' instead for strings
+        delete obj.maxLength; // Use 'maximum' instead for strings
+      }
+
+      if (provider === 'anthropic') {
+        // Anthropic is generally more flexible, but we might need to add restrictions here
+      }
     }
 
     // Recursively clean nested objects
     for (const key in obj) {
       if (obj[key] && typeof obj[key] === 'object') {
         if (Array.isArray(obj[key])) {
-          obj[key] = obj[key].map(item => cleanObject(item));
+          obj[key] = obj[key].map(item => cleanObject(item, key));
         } else {
-          obj[key] = cleanObject(obj[key]);
+          obj[key] = cleanObject(obj[key], key);
         }
       }
     }

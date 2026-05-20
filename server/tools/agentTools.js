@@ -23,6 +23,7 @@ import { isValidId, resolveAndValidatePath } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 import memoryFile from '../agents/memory/memoryFile.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
+import { validateTaskRecord } from '../agents/runtime/taskRecord.js';
 
 function ensureAgent(user) {
   if (!user || user.isAgent !== true) {
@@ -191,9 +192,11 @@ export async function createTask(params = {}) {
       message: `createTask refused: depth ${nextDepth} exceeds maxDepth ${maxDepth}`
     };
   }
+  const now = new Date().toISOString();
   const task = {
-    id: `task_${new Date().toISOString().replace(/[:.]/g, '-')}_${uuidv4().slice(0, 8)}`,
+    id: `task_${now.replace(/[:.]/g, '-')}_${uuidv4().slice(0, 8)}`,
     title,
+    description: brief || '',
     brief: brief || '',
     priority,
     status: 'open',
@@ -201,9 +204,18 @@ export async function createTask(params = {}) {
     parentTaskId: currentTask?.id || null,
     depth: nextDepth,
     result: null,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString()
+    createdAt: now,
+    updatedAt: now
   };
+  const validation = validateTaskRecord(task);
+  if (!validation.ok) {
+    logger.error('Refusing to enqueue malformed task', {
+      component: 'AgentTools',
+      reason: validation.reason,
+      task
+    });
+    return { error: true, code: 'INVALID_TASK', message: validation.reason };
+  }
   state.data._taskQueue.push(task);
   emit(
     'agent.task.created',
@@ -271,9 +283,69 @@ function safeArtifactName(name) {
 export async function writeArtifact(params = {}) {
   const user = ensureAgent(params.user);
   const { name, content, contentType = 'text/markdown' } = params;
-  const safeName = safeArtifactName(name);
-  if (typeof content !== 'string') {
-    throw new Error('content must be a string');
+
+  // Be defensive about LLM tool-call args. Gemini in particular often
+  // emits a function call with the wrong arg type (e.g. `name: null`,
+  // `content: { ... }` instead of a string) and a strict throw burns an
+  // iteration without telling the model what to fix. So we fall back to
+  // a sensible filename from the profile config, and stringify non-string
+  // content. If we still can't recover, return a structured tool error so
+  // the model can self-correct on the next turn instead of throwing
+  // (which currently crashes the node and aborts the run).
+  const profile = params.appConfig?._agentProfile;
+  const primaryFilename =
+    (profile?.artifacts && typeof profile.artifacts.primary === 'string'
+      ? profile.artifacts.primary
+      : null) || 'report.md';
+
+  let effectiveName = name;
+  if (!effectiveName || typeof effectiveName !== 'string') {
+    effectiveName = primaryFilename;
+    logger.info('writeArtifact: missing name, defaulting from profile.artifacts.primary', {
+      component: 'AgentTools',
+      defaulted: effectiveName
+    });
+  }
+
+  let safeName;
+  try {
+    safeName = safeArtifactName(effectiveName);
+  } catch (err) {
+    return {
+      error: true,
+      code: 'INVALID_NAME',
+      message: `${err.message}. Pass a simple filename like '${primaryFilename}'.`
+    };
+  }
+
+  let effectiveContent = content;
+  if (typeof effectiveContent !== 'string') {
+    if (effectiveContent == null) {
+      return {
+        error: true,
+        code: 'MISSING_CONTENT',
+        message: 'content is required and must be a non-empty string'
+      };
+    }
+    // Coerce non-string content (objects/arrays/numbers) to a JSON string —
+    // the model probably intended that anyway and a hard reject just wastes
+    // another tool-call iteration.
+    try {
+      effectiveContent =
+        typeof effectiveContent === 'object'
+          ? JSON.stringify(effectiveContent, null, 2)
+          : String(effectiveContent);
+      logger.info('writeArtifact: coerced non-string content', {
+        component: 'AgentTools',
+        originalType: typeof content
+      });
+    } catch {
+      return {
+        error: true,
+        code: 'INVALID_CONTENT',
+        message: 'content could not be serialized to a string'
+      };
+    }
   }
   const rawRunId = params.appConfig?._workflowState?.executionId || params.chatId;
   if (!rawRunId || !isValidId(rawRunId)) {
@@ -297,8 +369,8 @@ export async function writeArtifact(params = {}) {
     throw new Error(`writeArtifact: invalid artifact path: ${safeName}`);
   }
   // lgtm[js/path-injection] -- runId+name validated; path canonicalized.
-  await atomicWriteFile(file, content);
-  const bytes = Buffer.byteLength(content);
+  await atomicWriteFile(file, effectiveContent);
+  const bytes = Buffer.byteLength(effectiveContent);
 
   const state = params.appConfig?._workflowState;
   if (state && state.data) {
@@ -313,7 +385,7 @@ export async function writeArtifact(params = {}) {
   }
   emit(
     'agent.artifact.written',
-    { profileId: user.profileId, runId, name: safeName, bytes, contentType },
+    { profileId: user.profileId, runId: safeRunId, name: safeName, bytes, contentType },
     params.chatId
   );
   return { ok: true, name: safeName, bytes };

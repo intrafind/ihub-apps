@@ -44,26 +44,90 @@ export class SubWorkflowMaterializer {
     // CRITICAL: Destructure tools from taskTemplate before spreading to prevent overwrite.
     const { tools: templateTools, ...restTemplate } = parentConfig.taskTemplate || {};
 
-    const taskNodes = plan.tasks.map((task, index) => ({
-      id: task.id || `task-${index}`,
-      type: 'prompt',
-      name: { en: task.title || `Task ${index + 1}` },
-      position: { x: 0, y: (index + 1) * 100 },
-      config: {
-        ...restTemplate,
-        system: task.description,
-        // Bedrock (and other strict APIs) require at least one user message.
-        // The task's title/description gives the agent a concrete instruction
-        // to act on; without this the node would send only a system message
-        // and the provider would reject with "conversation must start with a
-        // user message".
-        prompt: task.title
-          ? `${task.title}\n\n${task.description || ''}`.trim()
-          : task.description || `Execute task ${task.id || index}.`,
-        tools: [...(task.tools || []), ...(templateTools || [])],
-        outputVariable: `task_${task.id || index}_result`
+    const taskNodes = plan.tasks.map((task, index) => {
+      // The agent's persona system prompt lives on the profile (carried via
+      // restTemplate.system). Earlier versions of this materializer
+      // overrode that with task.description, which erased the agent's
+      // instructions on every task. Now we keep the profile system and put
+      // the task instruction in the user prompt.
+      const taskInstruction = task.title
+        ? `${task.title}\n\n${task.description || ''}`.trim()
+        : task.description || `Execute task ${task.id || index}.`;
+
+      // Build the user prompt with three context blocks so each task sees
+      // (a) the agent's brief / inbox item / any state the orchestrator set
+      // up before the planner, and (b) what previous tasks produced. The
+      // `{{...}}` placeholders are resolved by PromptNodeExecutor against
+      // state.data at runtime — same pattern as iterative-research-auto's
+      // `{{findings}}` accumulator. Without this, each task starts blind
+      // and produces uncorrelated work.
+      const promptParts = [];
+      if (index === 0) {
+        // First task: lead with the brief / inbox item context.
+        promptParts.push(
+          '## Context\n\n' +
+            '- Original brief: {{brief}}\n' +
+            '- Current inbox item (if any): {{currentInboxItem}}'
+        );
+      } else {
+        // Subsequent tasks: lead with prior task outputs.
+        promptParts.push(
+          '## Context\n\n' +
+            '- Original brief: {{brief}}\n' +
+            '- Current inbox item (if any): {{currentInboxItem}}\n\n' +
+            '## Previous task results\n\n' +
+            '{{nodeResults}}'
+        );
       }
-    }));
+      promptParts.push(`## Current task\n\n${taskInstruction}`);
+
+      return {
+        id: task.id || `task-${index}`,
+        type: 'prompt',
+        name: { en: task.title || `Task ${index + 1}` },
+        position: { x: 0, y: (index + 1) * 100 },
+        config: {
+          ...restTemplate,
+          // Marker the agent tool registrar uses to strip inbox tools from
+          // materialized tasks — the orchestrator owns inbox lifecycle, not
+          // individual plan tasks. Without this every task could re-read
+          // and re-mark the inbox, producing the "two items processed" bug.
+          _isPlannerTask: true,
+          // Bedrock (and other strict APIs) require at least one user message.
+          prompt: promptParts.join('\n\n'),
+          tools: [...(task.tools || []), ...(templateTools || [])],
+          outputVariable: `task_${task.id || index}_result`
+        }
+      };
+    });
+
+    // Assert every materialized prompt task has both a system message and a
+    // user/prompt content. A node with only a system message would be
+    // rejected by stricter providers (e.g. Bedrock: "conversation must start
+    // with a user message"). Fail fast at materialize time with a helpful
+    // diagnostic instead of failing 30 seconds later inside the provider
+    // adapter with a opaque error.
+    for (const tn of taskNodes) {
+      const hasSystem =
+        tn.config?.system &&
+        (typeof tn.config.system === 'string'
+          ? tn.config.system.trim().length > 0
+          : Object.values(tn.config.system).some(
+              v => typeof v === 'string' && v.trim().length > 0
+            ));
+      const hasPrompt = typeof tn.config?.prompt === 'string' && tn.config.prompt.trim().length > 0;
+      if (!hasSystem || !hasPrompt) {
+        const reason = !hasSystem ? 'missing system message' : 'missing user prompt content';
+        throw new Error(
+          `SubWorkflowMaterializer: task node ${tn.id} is malformed (${reason}). ` +
+            `Each task must carry both a system message and a user prompt. ` +
+            `Source plan task: ${JSON.stringify({
+              id: plan.tasks[taskNodes.indexOf(tn)]?.id,
+              title: plan.tasks[taskNodes.indexOf(tn)]?.title
+            })}`
+        );
+      }
+    }
 
     nodes.push(...taskNodes);
 
@@ -104,6 +168,9 @@ export class SubWorkflowMaterializer {
             en: 'Process the current task in `_currentTask`.'
           },
           tools: templateTools || [],
+          // Same as the planner-generated tasks above: drain workers should
+          // not own inbox lifecycle. The orchestrator reads/marks the inbox.
+          _isPlannerTask: true,
           dynamicTasks: { enabled: true, maxDepth: dynamicTasksMaxDepth }
         }
       };
