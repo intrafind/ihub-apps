@@ -52,6 +52,14 @@ export class SubWorkflowMaterializer {
       config: {
         ...restTemplate,
         system: task.description,
+        // Bedrock (and other strict APIs) require at least one user message.
+        // The task's title/description gives the agent a concrete instruction
+        // to act on; without this the node would send only a system message
+        // and the provider would reject with "conversation must start with a
+        // user message".
+        prompt: task.title
+          ? `${task.title}\n\n${task.description || ''}`.trim()
+          : task.description || `Execute task ${task.id || index}.`,
         tools: [...(task.tools || []), ...(templateTools || [])],
         outputVariable: `task_${task.id || index}_result`
       }
@@ -151,31 +159,19 @@ export class SubWorkflowMaterializer {
         }
       }
 
-      // Last task -> synthesizer | drain | end
+      // Build the tail chain: lastTask → [synthesizer?] → [drain?] → sub-end.
+      // Each step writes one edge; the final hop targets sub-end.
       const lastTask = taskNodes[taskNodes.length - 1];
-      let tail = 'sub-end';
+      let prev = lastTask.id;
       if (parentConfig.synthesize) {
-        edges.push({ id: 'edge-last-synth', source: lastTask.id, target: 'synthesizer' });
-        tail = 'synthesizer';
-      } else {
-        edges.push({ id: 'edge-last-tail', source: lastTask.id, target: tail });
+        edges.push({ id: `edge-${prev}-synth`, source: prev, target: 'synthesizer' });
+        prev = 'synthesizer';
       }
-      // If a drain tail is requested, splice it in:
-      //   synthesizer (or last task) -> drain -> sub-end
       if (drainNodeId) {
-        // Replace the "tail -> sub-end" hop with "tail -> drain -> sub-end"
-        // For synthesize=true we never wrote tail->sub-end above, so we add it.
-        // For synthesize=false we already added last-task -> sub-end; replace.
-        if (!parentConfig.synthesize) {
-          // Remove the last-task->sub-end edge we just added
-          const idx = edges.findIndex(e => e.id === 'edge-last-tail');
-          if (idx >= 0) edges.splice(idx, 1);
-        }
-        edges.push({ id: `edge-${tail}-drain`, source: tail, target: drainNodeId });
-        edges.push({ id: 'edge-drain-end', source: drainNodeId, target: 'sub-end' });
-      } else if (parentConfig.synthesize) {
-        edges.push({ id: 'edge-synth-end', source: 'synthesizer', target: 'sub-end' });
+        edges.push({ id: `edge-${prev}-drain`, source: prev, target: drainNodeId });
+        prev = drainNodeId;
       }
+      edges.push({ id: `edge-${prev}-end`, source: prev, target: 'sub-end' });
     } else {
       // No tasks - connect start directly to end
       edges.push({

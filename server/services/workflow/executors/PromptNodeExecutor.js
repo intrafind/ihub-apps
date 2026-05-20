@@ -346,6 +346,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       userContent = state.data.input;
     } else if (state.data?.message) {
       userContent = state.data.message;
+    } else if (state.data?.brief) {
+      // Agent runs land the operator's brief here; use it as a last-resort
+      // user message so providers that require one (e.g. Bedrock) don't 400.
+      userContent = state.data.brief;
+    } else if (state.data?._planGoal) {
+      userContent = state.data._planGoal;
     }
 
     // Append user hint from chat (e.g., "@document-analysis take care" → "take care")
