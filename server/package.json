@@ -32,6 +32,7 @@
     "pngjs": "^7.0.0",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
+    "croner": "^10.0.1",
     "dotenv": "^16.0.3",
     "envalid": "^7.3.1",
     "eventsource-parser": "^3.0.3",
