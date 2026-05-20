@@ -28,6 +28,9 @@ import config from '../../../config.js';
 import { getRootDir } from '../../../pathUtils.js';
 import path from 'path';
 import logger from '../../../utils/logger.js';
+import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
+import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
+import { getAppAsTools, stripAppToolsForAgent } from '../../../agents/runtime/appAsToolGateway.js';
 
 /**
  * Agent node configuration
@@ -122,6 +125,31 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         state = await this.contextSummarizer.summarizeContext(state, context);
       }
 
+      // Auto-include long-term memory for agent runs (before buildMessages).
+      const earlyAgentProfile = this._resolveAgentProfile(context);
+      if (
+        earlyAgentProfile &&
+        earlyAgentProfile.memory?.enabled !== false &&
+        earlyAgentProfile.memory?.autoInclude !== false
+      ) {
+        try {
+          const mem = await readMemoryBodyForPrompt(
+            earlyAgentProfile.id,
+            earlyAgentProfile.memory?.maxBytes || 8192
+          );
+          if (mem) {
+            const header = `# Long-term memory (last updated ${mem.updatedAt || 'unknown'}, version ${mem.version})`;
+            context = { ...context, _agentMemoryBlock: `${header}\n\n${mem.body}` };
+          }
+        } catch (memErr) {
+          this.logger.warn('Failed to load agent memory for prompt', {
+            component: 'PromptNodeExecutor',
+            profileId: earlyAgentProfile.id,
+            error: memErr.message
+          });
+        }
+      }
+
       // Build messages from config and state
       const messages = this.buildMessages(config, state, context);
 
@@ -133,11 +161,53 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         });
       }
 
-      // Get tools if configured
-      let tools = [];
-      if (config.tools && config.tools.length > 0) {
-        tools = await this.getAgentTools(config.tools, language, context);
+      // Resolve the agent profile if this is an agent run (used by tool registrar,
+      // memory auto-include, and App-as-tool gateway).
+      const agentProfile = this._resolveAgentProfile(context);
+
+      // Get tools if configured. Agent runs get auto-registered tools
+      // (memory/inbox/dynamic-tasks/artifacts) merged on top.
+      let configuredToolIds = Array.isArray(config.tools) ? [...config.tools] : [];
+      if (agentProfile) {
+        const agentToolIds = getAgentToolIds(agentProfile, config);
+        for (const id of agentToolIds) {
+          if (!configuredToolIds.includes(id)) configuredToolIds.push(id);
+        }
       }
+      let tools = [];
+      if (configuredToolIds.length > 0) {
+        tools = await this.getAgentTools(configuredToolIds, language, context);
+      }
+
+      // Append App-as-tool synthetic tools when enabled.
+      if (agentProfile) {
+        const appsForNode = Array.isArray(config.apps) ? config.apps : [];
+        if (appsForNode.length > 0) {
+          const platform = configCache.getPlatform()?.data || {};
+          const appAsToolEnabled = !!platform?.features?.appAsTool;
+          if (appAsToolEnabled) {
+            const appTools = await getAppAsTools(appsForNode, language);
+            tools = tools.concat(appTools);
+          } else {
+            this.logger.debug('App-as-tool feature flag is OFF — not registering app tools', {
+              component: 'PromptNodeExecutor',
+              nodeId: node.id,
+              requestedApps: appsForNode
+            });
+          }
+        }
+        // App→App nesting guard: when an agent calls an app internally, strip
+        // any synthetic `app__*` tools that would otherwise be forwarded.
+        tools = stripAppToolsForAgent(tools, context?.user);
+      }
+
+      // Thread the workflow state into the context so agent tools
+      // (createTask / listTasks / markTaskDone / writeArtifact) can read and
+      // mutate `state.data._taskQueue` and `state.data._agent`.
+      const contextForLLM = {
+        ...context,
+        _workflowState: state
+      };
 
       // Execute LLM call (with tool loop if tools are available)
       const response = await this.executeLLMWithTools({
@@ -145,7 +215,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         messages,
         tools,
         config,
-        context,
+        context: contextForLLM,
         nodeId: node.id
       });
 
@@ -232,6 +302,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     if (config.system) {
       const systemTemplate = this.getLocalizedValue(config.system, language);
       let systemContent = this.resolveTemplateVariables(systemTemplate, state);
+
+      // Agent runs auto-include the profile memory file body (if enabled).
+      // `context._agentMemoryBlock` is populated by execute() before
+      // buildMessages so we keep this synchronous.
+      if (context._agentMemoryBlock) {
+        systemContent += `\n\n${context._agentMemoryBlock}`;
+      }
 
       // Inject source content into system prompt if available
       if (context.sourceContent) {
@@ -937,7 +1014,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       if (toolCall.function.arguments) {
         args = JSON.parse(toolCall.function.arguments);
       }
-    } catch (error) {
+    } catch (e) {
       this.logger.warn('Failed to parse tool arguments', {
         component: 'PromptNodeExecutor',
         toolId,
@@ -945,12 +1022,54 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       });
     }
 
+    // App-as-tool synthetic dispatch: handled by gateway, not by global runTool.
+    if (typeof toolId === 'string' && toolId.startsWith('app__')) {
+      try {
+        const { invokeAppTool } = await import('../../../agents/runtime/appAsToolGateway.js');
+        const result = await invokeAppTool({
+          toolId,
+          args,
+          user,
+          chatId,
+          executionId: context.executionId,
+          abortSignal: context.abortSignal
+        });
+        return {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
+          content: JSON.stringify(result)
+        };
+      } catch (error) {
+        this.logger.error('App-as-tool invocation failed', {
+          component: 'PromptNodeExecutor',
+          toolId,
+          error
+        });
+        return {
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
+          content: JSON.stringify({ error: true, message: error.message })
+        };
+      }
+    }
+
     try {
+      // Make workflow state visible to agent tools that need to mutate it
+      // (createTask / listTasks / markTaskDone / writeArtifact).
+      const agentProfile = this._resolveAgentProfile(context);
+      const enrichedAppConfig = {
+        ...(appConfig || {}),
+        ...(agentProfile ? { _agentProfile: agentProfile } : {}),
+        ...(context._workflowState ? { _workflowState: context._workflowState } : {})
+      };
+
       const result = await runTool(toolId, {
         ...args,
         chatId,
         user,
-        appConfig
+        appConfig: enrichedAppConfig
       });
 
       return {
@@ -975,6 +1094,31 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           message: error.message
         })
       };
+    }
+  }
+
+  /**
+   * Resolve the AgentProfile for the current context, if the workflow is an
+   * agent run. The principal carries `profileId`; we look it up via
+   * configCache.
+   *
+   * @private
+   * @returns {Object|null}
+   */
+  _resolveAgentProfile(context) {
+    const user = context?.user;
+    if (!user?.isAgent || !user?.profileId) return null;
+    try {
+      const profiles = configCache.getAgentProfiles ? configCache.getAgentProfiles(true) : null;
+      if (!profiles?.data) return null;
+      return profiles.data.find(p => p.id === user.profileId) || null;
+    } catch (err) {
+      this.logger.warn('Failed to resolve agent profile', {
+        component: 'PromptNodeExecutor',
+        profileId: user.profileId,
+        error: err.message
+      });
+      return null;
     }
   }
 
