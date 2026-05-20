@@ -36,7 +36,7 @@ function buildToolParameters(app) {
   if (Array.isArray(app.variables)) {
     for (const v of app.variables) {
       if (!v?.name) continue;
-      let schemaType = 'string';
+      let schemaType;
       switch (v.type) {
         case 'number':
           schemaType = 'number';

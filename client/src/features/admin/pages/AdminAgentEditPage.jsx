@@ -59,16 +59,25 @@ export default function AdminAgentEditPage() {
     })();
   }, [profileId, isNew]);
 
+  // Prototype-pollution guard: never traverse or assign into special keys.
+  const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
   function update(path, value) {
     setProfile(prev => {
       const next = JSON.parse(JSON.stringify(prev));
       const keys = path.split('.');
+      // Refuse any path segment that targets a special key.
+      if (keys.some(k => FORBIDDEN_KEYS.has(k))) return prev;
       let obj = next;
       for (let i = 0; i < keys.length - 1; i++) {
-        if (obj[keys[i]] === undefined || obj[keys[i]] === null) obj[keys[i]] = {};
-        obj = obj[keys[i]];
+        const k = keys[i];
+        if (!Object.prototype.hasOwnProperty.call(obj, k) || obj[k] === null) {
+          obj[k] = {};
+        }
+        obj = obj[k];
       }
-      obj[keys[keys.length - 1]] = value;
+      const leaf = keys[keys.length - 1];
+      obj[leaf] = value;
       return next;
     });
   }
