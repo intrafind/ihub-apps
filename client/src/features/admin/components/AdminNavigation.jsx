@@ -267,6 +267,18 @@ function AdminNavigation() {
           current: location.pathname.startsWith('/admin/oauth')
         },
         {
+          key: 'mcp-gateway',
+          name: t('admin.nav.mcpGateway', 'MCP gateway'),
+          href: '/admin/mcp/gateway',
+          current: location.pathname === '/admin/mcp/gateway'
+        },
+        {
+          key: 'mcp-servers',
+          name: t('admin.nav.mcpServers', 'MCP servers'),
+          href: '/admin/mcp/servers',
+          current: location.pathname === '/admin/mcp/servers'
+        },
+        {
           key: 'users',
           name: t('admin.nav.users', 'Users'),
           href: '/admin/users',

@@ -1,0 +1,294 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import configCache from '../../configCache.js';
+import { loadTools, runTool } from '../../toolLoader.js';
+import { actionTracker } from '../../actionTracker.js';
+import { MCP_SCOPES } from './scopes.js';
+import logger from '../../utils/logger.js';
+
+/**
+ * Builds and serves the iHub MCP gateway. Each incoming HTTP/SSE request
+ * gets a fresh `McpServer` instance whose tool/resource registry is filtered
+ * by the caller's identity (req.user) so two different OAuth clients
+ * connecting concurrently never see each other's resources.
+ *
+ * Per-request server construction is deliberate:
+ *   - Permissions are derived from req.user.permissions, which differs by
+ *     caller, so a shared registry would leak resources.
+ *   - The SDK's `registerTool` accepts a callback; if the callback closes
+ *     over req.user the closures stay correct even under concurrent calls.
+ */
+
+/**
+ * Convert an iHub tool definition (`tool.parameters` is JSON Schema) into
+ * MCP's `inputSchema` shape (zod or JSON Schema both work). We pass JSON
+ * Schema directly since the SDK accepts it via `inputSchema`.
+ */
+function jsonSchemaToInputSchema(jsonSchema) {
+  // SDK accepts a Zod raw shape OR an `AnySchema` (with a JSON Schema). Pass
+  // through the JSON Schema by wrapping in a thin AnySchema object.
+  if (!jsonSchema || typeof jsonSchema !== 'object') {
+    return { jsonSchema: { type: 'object', properties: {} } };
+  }
+  return { jsonSchema };
+}
+
+function buildAppToolName(appId) {
+  return `app__${appId}`;
+}
+
+function buildWorkflowToolName(workflowId) {
+  return `workflow__${workflowId}`;
+}
+
+/**
+ * Build a JSON Schema for an iHub app's `tools/call` input from its
+ * `variables` array. We only need `message` plus declared variables — the
+ * model passes message text via the MCP tool argument.
+ */
+function buildAppInputSchema(app) {
+  const properties = {
+    message: {
+      type: 'string',
+      description: 'User message / prompt sent to the iHub app'
+    }
+  };
+  const required = ['message'];
+  if (Array.isArray(app.variables)) {
+    for (const v of app.variables) {
+      if (!v?.name) continue;
+      properties[v.name] = {
+        type: v.type === 'number' ? 'number' : 'string',
+        description: v.description || v.label || v.name
+      };
+      if (v.required) required.push(v.name);
+    }
+  }
+  return { type: 'object', properties, required };
+}
+
+/**
+ * Determine whether a user/client is permitted to see a given iHub tool.
+ * Permissions for iHub-native tools are governed by group ACLs; OAuth
+ * clients further narrow by their token scope and the platform.mcpServer
+ * exposure flags.
+ */
+function isToolAllowed(tool, user, expose) {
+  if (!expose.tools) return false;
+  // tool.permissions / tool.allowedGroups are honoured by the existing
+  // configCache.getToolsForUser flow; here we trust the manager to have
+  // pre-filtered. We still skip workflow_/source_/activate_skill since those
+  // are surfaced as their own MCP tool types.
+  if (tool.id?.startsWith('workflow_')) return false;
+  if (tool.id?.startsWith('source_')) return false;
+  if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;
+  // Honour user permissions if present
+  if (user?.permissions?.tools instanceof Set) {
+    if (!user.permissions.tools.has('*') && !user.permissions.tools.has(tool.id)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isAppAllowed(app, user, expose) {
+  if (!expose.apps) return false;
+  if (app.enabled === false) return false;
+  const allowed = user?.permissions?.apps;
+  if (!(allowed instanceof Set)) return false;
+  return allowed.has('*') || allowed.has(app.id);
+}
+
+function isWorkflowAllowed(wf, user, expose) {
+  if (!expose.workflows) return false;
+  if (wf.enabled === false) return false;
+  if (!wf.chatIntegration?.enabled) return false;
+  const allowed = user?.permissions?.workflows;
+  if (!(allowed instanceof Set)) return false;
+  return allowed.has('*') || allowed.has(wf.id);
+}
+
+/**
+ * Build the per-request MCP server bound to a specific authenticated user.
+ *
+ * @param {object} ctx - Build context.
+ * @param {object} ctx.user - Enhanced user object (req.user after
+ *   enhanceUserWithPermissions). MUST NOT be anonymous; mcpAuth enforces this.
+ * @param {object} ctx.platform - Platform config (configCache.getPlatform()).
+ * @returns {Promise<McpServer>}
+ */
+export async function buildMcpServer({ user, platform }) {
+  if (!user || user.id === 'anonymous') {
+    // Defence in depth — mcpAuth should already have rejected anonymous.
+    throw new Error('MCP gateway requires an authenticated user');
+  }
+
+  const gateway = platform?.mcpServer || {};
+  const expose = gateway.expose || { tools: true, apps: true, workflows: true, resources: false };
+  const tokenScopes = user.scopes || [];
+
+  const server = new McpServer(
+    { name: 'ihub-apps', version: '1.0.0' },
+    { capabilities: { tools: { listChanged: false }, resources: { listChanged: false } } }
+  );
+
+  // ---- Tools (iHub-native) -------------------------------------------------
+  if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
+    const tools = await loadTools(platform?.defaultLanguage || 'en');
+    for (const tool of tools) {
+      if (!isToolAllowed(tool, user, expose)) continue;
+      server.registerTool(
+        tool.id,
+        {
+          description: typeof tool.description === 'string' ? tool.description : '',
+          ...jsonSchemaToInputSchema(tool.parameters)
+        },
+        async args => {
+          if (!tokenScopes.includes(MCP_SCOPES.TOOLS_CALL)) {
+            return toolErrorResult('insufficient_scope: mcp:tools:call required');
+          }
+          try {
+            const result = await runTool(tool.id, args || {});
+            return toolSuccessResult(result);
+          } catch (err) {
+            logger.warn('MCP gateway tool call failed', {
+              component: 'McpServerService',
+              toolId: tool.id,
+              user: user.id,
+              error: err.message
+            });
+            return toolErrorResult(err.message || 'tool execution failed');
+          }
+        }
+      );
+    }
+  }
+
+  // ---- Apps (exposed as MCP tools) ----------------------------------------
+  if (expose.apps && tokenScopes.includes(MCP_SCOPES.APPS_INVOKE)) {
+    const { data: apps = [] } = configCache.getApps();
+    for (const app of apps) {
+      if (!isAppAllowed(app, user, expose)) continue;
+      server.registerTool(
+        buildAppToolName(app.id),
+        {
+          description:
+            extractText(app.description) || extractText(app.name) || `iHub app: ${app.id}`,
+          ...jsonSchemaToInputSchema(buildAppInputSchema(app))
+        },
+        async args => {
+          // App invocation via MCP is not implemented in this round; the
+          // chat pipeline (server/services/chat) requires a streaming SSE
+          // channel that doesn't map cleanly onto the synchronous MCP
+          // tool-call response yet. We return a structured error so the
+          // calling agent understands the limitation rather than silently
+          // returning empty content.
+          logger.info('MCP gateway app invocation requested (not yet supported)', {
+            component: 'McpServerService',
+            appId: app.id,
+            user: user.id,
+            args: Object.keys(args || {})
+          });
+          return toolErrorResult(
+            `app__${app.id} via MCP requires the streaming chat protocol; ` +
+              'use the /api/chat endpoint or the iHub web UI for full responses'
+          );
+        }
+      );
+    }
+  }
+
+  // ---- Workflows (exposed as MCP tools) -----------------------------------
+  if (expose.workflows && tokenScopes.includes(MCP_SCOPES.WORKFLOWS_RUN)) {
+    const { data: workflows = [] } = configCache.getWorkflows(true);
+    for (const wf of workflows) {
+      if (!isWorkflowAllowed(wf, user, expose)) continue;
+      const paramsSchema = buildWorkflowMcpParams(wf);
+      server.registerTool(
+        buildWorkflowToolName(wf.id),
+        {
+          description:
+            extractText(wf.chatIntegration?.toolDescription) ||
+            extractText(wf.description) ||
+            `iHub workflow: ${wf.id}`,
+          ...jsonSchemaToInputSchema(paramsSchema)
+        },
+        async args => {
+          try {
+            const result = await runTool(`workflow_${wf.id}`, args || {});
+            return toolSuccessResult(result);
+          } catch (err) {
+            logger.warn('MCP gateway workflow run failed', {
+              component: 'McpServerService',
+              workflowId: wf.id,
+              user: user.id,
+              error: err.message
+            });
+            return toolErrorResult(err.message || 'workflow execution failed');
+          }
+        }
+      );
+    }
+  }
+
+  // ---- Audit hook on every dispatch ---------------------------------------
+  try {
+    server.server.onRequest = async (request, extra) => {
+      actionTracker.trackToolCallStart?.(null, {
+        toolName: `mcp:${request.method}`,
+        toolInput: { user: user.id, scopes: tokenScopes }
+      });
+      return extra?.next?.();
+    };
+  } catch {
+    /* SDK may not expose onRequest in all versions */
+  }
+
+  return server;
+}
+
+function toolSuccessResult(payload) {
+  if (typeof payload === 'string') {
+    return { content: [{ type: 'text', text: payload }] };
+  }
+  return { content: [{ type: 'text', text: JSON.stringify(payload) }] };
+}
+
+function toolErrorResult(message) {
+  return { content: [{ type: 'text', text: message }], isError: true };
+}
+
+function extractText(value) {
+  if (!value) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object') {
+    return value.en || value.de || Object.values(value)[0] || '';
+  }
+  return String(value);
+}
+
+function buildWorkflowMcpParams(wf) {
+  const properties = {
+    input: { type: 'string', description: 'Primary input for the workflow' }
+  };
+  const required = ['input'];
+  const startNode = (wf.nodes || []).find(n => n.type === 'start');
+  for (const v of startNode?.config?.inputVariables || []) {
+    if (typeof v === 'string') {
+      if (v !== 'input') properties[v] = { type: 'string', description: v };
+      continue;
+    }
+    if (!v?.name || v.name === 'input') continue;
+    if (v.type === 'file' || v.type === 'image') continue;
+    properties[v.name] = {
+      type: ['number', 'integer', 'boolean'].includes(v.type) ? v.type : 'string',
+      description:
+        typeof v.description === 'string' ? v.description : extractText(v.description) || v.name
+    };
+    if (v.required) required.push(v.name);
+  }
+  return { type: 'object', properties, required };
+}
+
+// Expose zod re-export for tests that want to introspect the schema package.
+export { z };

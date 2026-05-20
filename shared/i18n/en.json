@@ -1170,7 +1170,31 @@
     "nav": {
       "logging": "Logging",
       "marketplace": "Marketplace",
+      "mcpGateway": "MCP gateway",
+      "mcpServers": "MCP servers",
       "telemetry": "Telemetry"
+    },
+    "mcp": {
+      "servers": {
+        "title": "MCP servers (outbound)",
+        "subtitle": "External MCP servers iHub connects to. Their tools are merged into the tool catalog with per-server prefixing.",
+        "create": "Add MCP server",
+        "empty": "No MCP servers configured"
+      },
+      "gateway": {
+        "title": "MCP gateway (inbound)",
+        "subtitle": "Expose iHub tools, apps, and workflows over the Model Context Protocol so MCP-aware clients (Claude Desktop, Cursor, agents) can use them as tools.",
+        "enable": "Enable MCP gateway",
+        "enableDesc": "When enabled, /mcp accepts OAuth-authenticated requests from external MCP clients. The endpoint is always 404 when disabled.",
+        "consent": "Require user consent",
+        "consentDesc": "Show the OAuth consent screen on authorization_code flow before issuing an MCP-scoped access token.",
+        "publicUrl": "Public URL",
+        "publicUrlDesc": "Announced in .well-known metadata so MCP-aware clients can auto-discover the endpoint. Leave empty to derive it from the request origin.",
+        "transports": "Transports",
+        "expose": "Exposed resources",
+        "exposeDesc": "Resource families surfaced via MCP. Per-OAuth-client allowlists further restrict what an individual caller sees.",
+        "connection": "Connection examples"
+      }
     },
     "telemetry": {
       "title": "Telemetry & Observability",

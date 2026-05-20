@@ -303,7 +303,8 @@ class ConfigCache {
       'config/mimetypes.json',
       'config/features.json',
       'config/registries.json',
-      'config/installations.json'
+      'config/installations.json',
+      'config/mcpServers.json'
     ];
 
     // Built-in locales that should always be preloaded
@@ -1227,6 +1228,21 @@ class ConfigCache {
     const cached = this.get('config/installations.json');
     if (!cached || !cached.data) {
       return { data: { installations: {} }, etag: null };
+    }
+    return cached;
+  }
+
+  /**
+   * Get the MCP outbound servers configuration.
+   * @returns {{ data: { servers: Array, security: Object }, etag: string|null }}
+   */
+  getMcpServers() {
+    const cached = this.get('config/mcpServers.json');
+    if (!cached || !cached.data) {
+      return {
+        data: { servers: [], security: { blockPrivateIps: true, allowedHosts: [] } },
+        etag: null
+      };
     }
     return cached;
   }

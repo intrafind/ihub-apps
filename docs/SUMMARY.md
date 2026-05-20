@@ -42,6 +42,7 @@
     - [Logging](logging.md)
   - [Features]()
     - [Tool Calling](tool-calling.md)
+    - [MCP Integration](mcp-integration.md)
     - [Ask User Tool](ask-user-tool.md)
     - [Structured Output](structured-output.md)
     - [Tools (Legacy)](tools.md)

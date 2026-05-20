@@ -27,6 +27,7 @@ import registerIntegrationTestRoutes from './admin/integrationTest.js';
 import registerAdminOfficeIntegrationRoutes from './admin/officeIntegration.js';
 import registerAdminBrowserExtensionRoutes from './admin/browserExtension.js';
 import registerAdminNextcloudEmbedRoutes from './admin/nextcloudEmbed.js';
+import registerAdminMcpServersRoutes from './admin/mcpServers.js';
 
 export default async function registerAdminRoutes(app) {
   registerAdminAuthRoutes(app);
@@ -58,4 +59,5 @@ export default async function registerAdminRoutes(app) {
   registerAdminOfficeIntegrationRoutes(app);
   registerAdminBrowserExtensionRoutes(app);
   registerAdminNextcloudEmbedRoutes(app);
+  registerAdminMcpServersRoutes(app);
 }

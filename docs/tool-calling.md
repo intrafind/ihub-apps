@@ -394,30 +394,19 @@ export async function* executeStream(params) {
 
 ### MCP Server Integration
 
-Model Context Protocol (MCP) enables dynamic tool discovery:
+iHub speaks the Model Context Protocol in **both directions** — it can act
+as an MCP client connecting to external MCP servers, and as an MCP server
+exposing iHub apps/workflows/tools to MCP-aware agents (Claude Desktop,
+Cursor, etc).
 
-```bash
-# Configure MCP server
-export MCP_SERVER_URL="http://localhost:8080/mcp"
-```
+See [MCP Integration](mcp-integration.md) for the full guide:
 
-MCP server response format:
-```json
-{
-  "tools": [
-    {
-      "name": "dynamicTool",
-      "description": "Dynamically discovered tool",
-      "inputSchema": {
-        "type": "object",
-        "properties": {
-          "param1": { "type": "string" }
-        }
-      }
-    }
-  ]
-}
-```
+- Outbound: register external MCP servers in `contents/config/mcpServers.json`
+  or via `/admin/mcp/servers`. Supports Streamable HTTP, SSE (legacy),
+  stdio, and WebSocket transports with SSRF guards and encrypted credentials.
+- Inbound: enable the gateway in `platform.mcpServer.enabled` and point
+  MCP-aware clients at `https://your-ihub/mcp`. Gated by the existing
+  OAuth2 authorization server using new `mcp:*` scopes.
 
 ### Tool Chaining and Workflows
 
