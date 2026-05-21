@@ -1,3 +1,4 @@
+import path from 'path';
 import RequestBuilder from '../chat/RequestBuilder.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
@@ -23,16 +24,30 @@ import logger from '../../utils/logger.js';
  */
 export async function invokeAppNonStreaming({ appId, args, user, language, timeoutMs = 60000 }) {
   // The caller (McpServerService) binds appId at MCP tool registration
-  // time from the trusted configCache list, but enforce a hard character
-  // check here so the function is safe to expose more broadly and so
-  // CodeQL sees a sanitiser before any downstream config lookup.
-  if (typeof appId !== 'string' || !isValidId(appId)) {
+  // time from the trusted configCache list, but enforce defence-in-depth
+  // here so the function is safe to expose more broadly. path.basename
+  // is the canonical CodeQL-recognised sanitiser for path injection;
+  // combined with the exact-match check it fails closed on anything
+  // containing /, \, or ..
+  if (typeof appId !== 'string') {
+    throw new Error(`Invalid app id: ${appId}`);
+  }
+  const safeAppId = path.basename(appId);
+  if (safeAppId !== appId || !isValidId(safeAppId)) {
     throw new Error(`Invalid app id: ${appId}`);
   }
 
   const message = args?.message;
   if (typeof message !== 'string' || !message.trim()) {
     throw new Error("Missing required argument: 'message'");
+  }
+
+  // Look up the app against configCache; pass only the trusted app.id
+  // back downstream so the user-controlled appId stops here.
+  const { data: apps = [] } = configCache.getApps();
+  const app = apps.find(a => a.id === safeAppId);
+  if (!app) {
+    throw new Error(`App not found: ${safeAppId}`);
   }
 
   // The MCP tool surface treats every non-message arg as an app variable so
@@ -42,7 +57,7 @@ export async function invokeAppNonStreaming({ appId, args, user, language, timeo
 
   const builder = new RequestBuilder();
   const prep = await builder.prepareChatRequest({
-    appId,
+    appId: app.id, // trusted value from configCache, not user input
     modelId: undefined, // RequestBuilder picks app.preferredModel
     messages: [{ role: 'user', content: message, variables }],
     temperature: undefined,

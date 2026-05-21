@@ -1,3 +1,4 @@
+import path from 'path';
 import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { getSkillContent, validateSkillName } from '../../services/skillLoader.js';
@@ -119,21 +120,27 @@ export async function readMcpResource(uri, { user, language = 'en' }) {
 
   const kind = rest.slice(0, slash);
   const rawId = decodeURIComponent(rest.slice(slash + 1));
+  // path.basename strips any directory components and is the canonical
+  // CodeQL-recognised sanitiser for path injection. Combined with the
+  // exact-match check below, anything containing /, \, or .. fails closed.
+  const safeId = path.basename(rawId);
+  if (safeId !== rawId) {
+    throw new Error(`Invalid resource id: ${rawId}`);
+  }
 
   if (kind === 'source') {
-    // Reject anything that doesn't match the source-id character set
-    // BEFORE we let the value reach any code path that builds a filesystem
-    // path. The downstream source handlers already sanity-check input,
-    // but a hard boundary here also breaks CodeQL's taint flow.
-    if (!isValidId(rawId)) {
-      throw new Error(`Source not found: ${rawId}`);
+    // Reject anything outside the source-id charset before any path build.
+    if (!isValidId(safeId)) {
+      throw new Error(`Source not found: ${safeId}`);
     }
-    const id = rawId;
     const { data: sources = [] } = configCache.getSources();
-    const source = sources.find(s => s.id === id);
+    const source = sources.find(s => s.id === safeId);
     if (!source || !isSourceVisible(source)) {
-      throw new Error(`Source not found: ${id}`);
+      throw new Error(`Source not found: ${safeId}`);
     }
+    // From this point on, only properties of the admin-managed `source`
+    // object flow downstream. The user-controlled `safeId` is used solely
+    // as a Map lookup key.
     const text = await readSourceContent(source, { user, language });
     return {
       contents: [
@@ -147,20 +154,21 @@ export async function readMcpResource(uri, { user, language = 'en' }) {
   }
 
   if (kind === 'skill') {
-    // skillLoader applies validateSkillName internally, but enforce here
-    // too so CodeQL sees the sanitiser at the MCP boundary.
-    const nameCheck = validateSkillName(rawId);
+    const nameCheck = validateSkillName(safeId);
     if (!nameCheck.valid) {
-      throw new Error(`Skill not found: ${rawId}`);
+      throw new Error(`Skill not found: ${safeId}`);
     }
-    const id = rawId;
     const { data: skills = [] } = configCache.getSkills();
-    const skill = skills.find(s => s.name === id);
+    const skill = skills.find(s => s.name === safeId);
     if (!skill || !isSkillVisible(skill, user)) {
-      throw new Error(`Skill not found: ${id}`);
+      throw new Error(`Skill not found: ${safeId}`);
     }
-    const content = await getSkillContent(id);
-    if (!content) throw new Error(`Skill not readable: ${id}`);
+    // Pass skill.name (from configCache, admin-managed) to getSkillContent
+    // rather than the user-controlled safeId. The lookup above is what
+    // certifies that this skill is allowed; the value we send downstream
+    // must come from the trusted side of that lookup.
+    const content = await getSkillContent(skill.name);
+    if (!content) throw new Error(`Skill not readable: ${skill.name}`);
     return {
       contents: [
         {

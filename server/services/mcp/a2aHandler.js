@@ -1,3 +1,4 @@
+import path from 'path';
 import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
@@ -147,38 +148,44 @@ async function handleTasksSend(params, { user, platform }) {
     return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'skillId required' } };
   }
 
+  // path.basename strips any directory separators / parent components and
+  // is the canonical CodeQL-recognised sanitiser for path injection.
+  const safeSkillId = path.basename(skillId);
+  if (safeSkillId !== skillId) {
+    return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid skillId' } };
+  }
+
   try {
     let output;
-    if (skillId.startsWith('app__')) {
+    if (safeSkillId.startsWith('app__')) {
       if (!(user.scopes || []).includes(MCP_SCOPES.APPS_INVOKE)) {
         return {
           __rpcError: { code: -32004, message: 'insufficient_scope: mcp:apps:invoke required' }
         };
       }
-      const appId = skillId.slice('app__'.length);
-      // Sanitise before passing to invokeAppNonStreaming. Belt-and-braces:
-      // invokeAppNonStreaming runs the same check, but enforcing here
-      // breaks the CodeQL taint flow at the A2A boundary too.
-      if (!isValidId(appId)) {
+      const appId = safeSkillId.slice('app__'.length);
+      const safeAppId = path.basename(appId);
+      if (safeAppId !== appId || !isValidId(safeAppId)) {
         return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid app id' } };
       }
       output = await invokeAppNonStreaming({
-        appId,
+        appId: safeAppId,
         args: input || {},
         user,
         language: platform?.defaultLanguage || 'en'
       });
-    } else if (skillId.startsWith('workflow__')) {
+    } else if (safeSkillId.startsWith('workflow__')) {
       if (!(user.scopes || []).includes(MCP_SCOPES.WORKFLOWS_RUN)) {
         return {
           __rpcError: { code: -32004, message: 'insufficient_scope: mcp:workflows:run required' }
         };
       }
-      const wfId = skillId.slice('workflow__'.length);
-      if (!isValidId(wfId)) {
+      const wfId = safeSkillId.slice('workflow__'.length);
+      const safeWfId = path.basename(wfId);
+      if (safeWfId !== wfId || !isValidId(safeWfId)) {
         return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid workflow id' } };
       }
-      output = await runTool(`workflow_${wfId}`, input || {});
+      output = await runTool(`workflow_${safeWfId}`, input || {});
     } else {
       // Treat as iHub tool id. runTool itself enforces isValidId, but
       // pre-check here for the same CodeQL taint-barrier reason.
@@ -187,10 +194,10 @@ async function handleTasksSend(params, { user, platform }) {
           __rpcError: { code: -32004, message: 'insufficient_scope: mcp:tools:call required' }
         };
       }
-      if (!isValidId(skillId)) {
+      if (!isValidId(safeSkillId)) {
         return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid skill id' } };
       }
-      output = await runTool(skillId, input || {});
+      output = await runTool(safeSkillId, input || {});
     }
 
     return {
