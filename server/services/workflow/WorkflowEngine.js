@@ -178,11 +178,16 @@ export class WorkflowEngine {
       });
     }
 
-    // Emit SSE event for UI tracking
+    // Emit SSE event for UI tracking. Flat payload to match the rest of
+    // the workflow/agent event surface (the client handler reads top-level
+    // fields, not a nested `data:` envelope).
     actionTracker.emit('fire-sse', {
       event: 'workflow.subworkflow.start',
       chatId: parentExecutionId,
-      data: { executionId: childExecutionId, depth, taskCount: workflowDef.nodes?.length }
+      executionId: childExecutionId,
+      parentExecutionId,
+      depth,
+      taskCount: workflowDef.nodes?.length
     });
 
     // Start child execution (non-blocking)
@@ -273,7 +278,25 @@ export class WorkflowEngine {
     const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
     const executionDeadline = Date.now() + maxExecutionTime;
 
-    // 4. Create execution state
+    // 4. Create execution state. We persist a SUMMARY of the workflow
+    // definition (just the node shape — id / type / config._isSynthesizer)
+    // so the UI can render orchestrator rows ("Planning", "Composing
+    // final report") with stable visibility before those nodes actually
+    // run. We don't store the full definition (with prompts, model ids,
+    // etc.) because it can be tens of KB per state save.
+    const workflowSummary = {
+      id: workflowDefinition.id,
+      name: workflowDefinition.name,
+      nodes: Array.isArray(workflowDefinition.nodes)
+        ? workflowDefinition.nodes.map(n => ({
+            id: n?.id,
+            type: n?.type,
+            // Carry only the markers the UI inspects.
+            ...(n?.config?._isSynthesizer === true ? { _isSynthesizer: true } : {})
+          }))
+        : []
+    };
+
     const state = await this.stateManager.create({
       executionId,
       workflowId,
@@ -283,7 +306,8 @@ export class WorkflowEngine {
           startedBy: options.user?.id || 'anonymous',
           startedAt: new Date().toISOString()
         },
-        _executionDeadline: executionDeadline
+        _executionDeadline: executionDeadline,
+        _workflowSummary: workflowSummary
       },
       currentNodes: startNodes
     });
@@ -758,6 +782,15 @@ export class WorkflowEngine {
     // 6. Build execution context
     const context = {
       executionId,
+      // ChatId is the ROOT run id — used as the SSE channel key by every
+      // event the executors emit (planner workflow.plan.created, task
+      // workers' agent.task.created, activate_skill, etc.). Without this
+      // those events fire with chatId=undefined and the route's SSE
+      // forwarder drops them — so tasks only show up in the UI AFTER the
+      // run completes (via API refetch). For top-level runs this equals
+      // the executionId; sub-workflows inherit it from options.chatId
+      // (PlannerNodeExecutor passes context.chatId when spawning the child).
+      chatId: options.chatId || executionId,
       nodeId,
       workflow,
       initialData: updatedState.data, // Initial data stored in state.data

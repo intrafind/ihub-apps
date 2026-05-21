@@ -13,17 +13,13 @@
  * dynamic-task tools read/write `appConfig._workflowState.data._taskQueue`.
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import { actionTracker } from '../actionTracker.js';
-import { getRootDir } from '../pathUtils.js';
-import { atomicWriteFile } from '../utils/atomicWrite.js';
-import { isValidId, resolveAndValidatePath } from '../utils/pathSecurity.js';
 import logger from '../utils/logger.js';
 import memoryFile from '../agents/memory/memoryFile.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
 import { validateTaskRecord } from '../agents/runtime/taskRecord.js';
+import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
 
 function ensureAgent(user) {
   if (!user || user.isAgent !== true) {
@@ -261,25 +257,12 @@ export async function markTaskDone(params = {}) {
 
 // ─── Artifacts ────────────────────────────────────────────────────────────
 
-function safeArtifactName(name) {
-  if (!name || typeof name !== 'string') {
-    throw new Error('artifact name is required');
-  }
-  if (name.includes('/') || name.includes('..') || name.startsWith('.')) {
-    throw new Error('artifact name must be a simple filename');
-  }
-  if (name.length > 128) {
-    throw new Error('artifact name too long');
-  }
-  // path.basename is a CodeQL-recognized sanitizer; reject if anything
-  // changed (i.e. embedded separators).
-  const base = path.basename(name);
-  if (base !== name) {
-    throw new Error('artifact name must be a simple filename');
-  }
-  return base;
-}
-
+/**
+ * Escape-hatch LLM tool. The runtime auto-persists synthesizer output and
+ * per-task results without needing this — but profile authors can still
+ * add `write_artifact` to `profile.tools[]` if they need to write a
+ * specifically-named artifact mid-run.
+ */
 export async function writeArtifact(params = {}) {
   const user = ensureAgent(params.user);
   const { name, content, contentType = 'text/markdown' } = params;
@@ -298,25 +281,8 @@ export async function writeArtifact(params = {}) {
       ? profile.artifacts.primary
       : null) || 'report.md';
 
-  let effectiveName = name;
-  if (!effectiveName || typeof effectiveName !== 'string') {
-    effectiveName = primaryFilename;
-    logger.info('writeArtifact: missing name, defaulting from profile.artifacts.primary', {
-      component: 'AgentTools',
-      defaulted: effectiveName
-    });
-  }
-
-  let safeName;
-  try {
-    safeName = safeArtifactName(effectiveName);
-  } catch (err) {
-    return {
-      error: true,
-      code: 'INVALID_NAME',
-      message: `${err.message}. Pass a simple filename like '${primaryFilename}'.`
-    };
-  }
+  const effectiveName =
+    !name || typeof name !== 'string' ? primaryFilename : name;
 
   let effectiveContent = content;
   if (typeof effectiveContent !== 'string') {
@@ -327,9 +293,6 @@ export async function writeArtifact(params = {}) {
         message: 'content is required and must be a non-empty string'
       };
     }
-    // Coerce non-string content (objects/arrays/numbers) to a JSON string —
-    // the model probably intended that anyway and a hard reject just wastes
-    // another tool-call iteration.
     try {
       effectiveContent =
         typeof effectiveContent === 'object'
@@ -347,48 +310,50 @@ export async function writeArtifact(params = {}) {
       };
     }
   }
-  const rawRunId = params.appConfig?._workflowState?.executionId || params.chatId;
-  if (!rawRunId || !isValidId(rawRunId)) {
-    throw new Error('writeArtifact requires a valid runId/executionId');
-  }
-  // path.basename is a CodeQL-recognized sanitizer for js/path-injection.
-  const safeRunId = path.basename(String(rawRunId));
-  if (safeRunId !== rawRunId) {
-    throw new Error(`writeArtifact: invalid runId: ${rawRunId}`);
-  }
-  const artifactsRoot = path.join(getRootDir(), 'contents', 'data', 'agent-artifacts');
-  await fs.mkdir(artifactsRoot, { recursive: true });
-  const dir = await resolveAndValidatePath(safeRunId, artifactsRoot);
-  if (!dir) {
-    throw new Error(`writeArtifact: invalid runId path: ${safeRunId}`);
-  }
-  // lgtm[js/path-injection] -- runId validated by isValidId; path canonicalized.
-  await fs.mkdir(dir, { recursive: true });
-  const file = await resolveAndValidatePath(safeName, dir);
-  if (!file) {
-    throw new Error(`writeArtifact: invalid artifact path: ${safeName}`);
-  }
-  // lgtm[js/path-injection] -- runId+name validated; path canonicalized.
-  await atomicWriteFile(file, effectiveContent);
-  const bytes = Buffer.byteLength(effectiveContent);
 
-  const state = params.appConfig?._workflowState;
-  if (state && state.data) {
-    state.data._agent = state.data._agent || {};
-    state.data._agent.artifacts = state.data._agent.artifacts || [];
-    state.data._agent.artifacts.push({
-      name: safeName,
-      writtenAt: new Date().toISOString(),
-      bytes,
-      contentType
-    });
+  // Resolve the ROOT run id so writes co-locate in one directory regardless
+  // of how deep the planner sub-workflow nesting goes. Walk the
+  // _parentExecutionId chain on the current workflow state if present.
+  let rawRunId;
+  const wfState = params.appConfig?._workflowState;
+  if (wfState?.data?._parentExecutionId) {
+    try {
+      const { getStateManager } = await import('../services/workflow/StateManager.js');
+      const sm = getStateManager();
+      let executionId = wfState.executionId;
+      let parentId = wfState.data._parentExecutionId;
+      let hops = 0;
+      while (parentId && hops < 5) {
+        const ps = await sm.get(parentId);
+        if (!ps) break;
+        executionId = ps.executionId || parentId;
+        parentId = ps.data?._parentExecutionId;
+        hops++;
+      }
+      rawRunId = executionId;
+    } catch {
+      rawRunId = wfState.executionId;
+    }
   }
-  emit(
-    'agent.artifact.written',
-    { profileId: user.profileId, runId: safeRunId, name: safeName, bytes, contentType },
-    params.chatId
-  );
-  return { ok: true, name: safeName, bytes };
+  rawRunId = rawRunId || params.chatId || wfState?.executionId;
+  try {
+    const result = await writeArtifactDirect({
+      runId: rawRunId,
+      name: effectiveName,
+      content: effectiveContent,
+      contentType,
+      profileId: user.profileId,
+      chatId: params.chatId,
+      state: params.appConfig?._workflowState
+    });
+    return { ok: true, name: result.name, bytes: result.bytes };
+  } catch (err) {
+    return {
+      error: true,
+      code: 'WRITE_FAILED',
+      message: `${err.message}. Pass a simple filename like '${primaryFilename}'.`
+    };
+  }
 }
 
 export default {

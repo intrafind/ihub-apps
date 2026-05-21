@@ -32,6 +32,7 @@ import logger from '../../../utils/logger.js';
 import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../../agents/runtime/appAsToolGateway.js';
+import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
 
 /**
  * Agent node configuration
@@ -103,6 +104,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   async execute(node, state, context) {
     const { config = {} } = node;
     const { language = 'en' } = context;
+    // Capture local start time for accurate per-task timing in _taskResults.
+    // The engine wraps the executor in _executeWithTimeout and adds its own
+    // metrics, but those land on the result AFTER execute() returns —
+    // so the auto-persist (which fires INSIDE execute) can't see them.
+    // Recording here lets us put startedAt + durationMs directly into
+    // state.data._taskResults so the UI step-timeline doesn't need to
+    // cross-reference nodeResults.
+    const executeStartedAt = new Date();
+    const executeStartMs = executeStartedAt.getTime();
 
     this.logger.info('Executing agent node', {
       component: 'PromptNodeExecutor',
@@ -127,9 +137,18 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
 
       // Auto-include long-term memory for agent runs (before buildMessages).
+      // Synthesizer nodes (`_isSynthesizer: true`) deliberately SKIP memory:
+      // their job is composing from the current run's sub-task results and
+      // citations only. Pulling in memory drags in stale content from
+      // earlier runs (e.g. a memory file that says "Daniel & Rowan" because
+      // an earlier hallucinated run wrote that), and the synthesizer drifts
+      // off-topic. Task workers still see memory — they're the ones who
+      // need recall.
       const earlyAgentProfile = this._resolveAgentProfile(context);
+      const skipMemory = config?._isSynthesizer === true;
       if (
         earlyAgentProfile &&
+        !skipMemory &&
         earlyAgentProfile.memory?.enabled !== false &&
         earlyAgentProfile.memory?.autoInclude !== false
       ) {
@@ -147,6 +166,31 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
             component: 'PromptNodeExecutor',
             profileId: earlyAgentProfile.id,
             error: memErr.message
+          });
+        }
+      }
+
+      // Build skill context blocks for agent runs. `<available_skills>` lists
+      // skill metadata (name + description) so the LLM knows what knowledge
+      // it can activate via the `activate_skill` tool. `<active_skill>`
+      // blocks contain the full SKILL.md body for any skills that have been
+      // activated earlier in the run (persisted to state.data._activatedSkills
+      // by the activate_skill tool or pre-activated by the planner).
+      //
+      // Synthesizer nodes get the active bodies (so the final composition
+      // can follow skill output formats) but not the `<available_skills>`
+      // metadata or the activate_skill tool — they don't decide WHAT to do.
+      if (earlyAgentProfile) {
+        try {
+          const skillsBlock = await this._buildSkillsBlock(earlyAgentProfile, config, state);
+          if (skillsBlock) {
+            context = { ...context, _agentSkillsBlock: skillsBlock };
+          }
+        } catch (skillErr) {
+          this.logger.warn('Failed to load skills for prompt', {
+            component: 'PromptNodeExecutor',
+            profileId: earlyAgentProfile.id,
+            error: skillErr.message
           });
         }
       }
@@ -173,6 +217,23 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         const agentToolIds = getAgentToolIds(agentProfile, config);
         for (const id of agentToolIds) {
           if (!configuredToolIds.includes(id)) configuredToolIds.push(id);
+        }
+      }
+
+      // Auto-attach `activate_skill` / `read_skill_resource` whenever the
+      // node has skills available (either on the profile or override on the
+      // node config). Synthesizer nodes skip this — they're text-out only.
+      const nodeSkillIds = Array.isArray(config.skills) && config.skills.length > 0
+        ? config.skills
+        : Array.isArray(agentProfile?.skills) && agentProfile.skills.length > 0
+          ? agentProfile.skills
+          : [];
+      if (nodeSkillIds.length > 0 && config._isSynthesizer !== true) {
+        if (!configuredToolIds.includes('activate_skill')) {
+          configuredToolIds.push('activate_skill');
+        }
+        if (!configuredToolIds.includes('read_skill_resource')) {
+          configuredToolIds.push('read_skill_resource');
         }
       }
 
@@ -237,10 +298,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
       // Thread the workflow state into the context so agent tools
       // (createTask / listTasks / markTaskDone / writeArtifact) can read and
-      // mutate `state.data._taskQueue` and `state.data._agent`.
+      // mutate `state.data._taskQueue` and `state.data._agent`. Also thread
+      // the current planner-task id so citation captures can tag each URL
+      // with the task that consulted it — that's what lets per-task
+      // artifacts get their own focused Sources section.
       const contextForLLM = {
         ...context,
-        _workflowState: state
+        _workflowState: state,
+        _taskId: config?._taskId || null
       };
 
       // Execute LLM call (with tool loop if tools are available)
@@ -271,6 +336,25 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         ...(config.outputVariable ? { [config.outputVariable]: output } : {}),
         ...(cacheUpdates ? { _sourceContent: cacheUpdates } : {})
       };
+
+      // ── Runtime-owned lifecycle: auto-persist task results and synthesizer
+      // output. The LLM is no longer expected to call write_artifact or
+      // mark_task_done — the runtime owns those operations now.
+      const autoPersist = await this._autoPersistResult({
+        node,
+        config,
+        output,
+        response,
+        state,
+        context,
+        agentProfile,
+        executeStartedAt,
+        executeStartMs
+      });
+      if (autoPersist?.stateUpdates) {
+        Object.assign(stateUpdates, autoPersist.stateUpdates);
+      }
+
       const hasStateUpdates = Object.keys(stateUpdates).length > 0;
 
       // Build result with model info and token usage for UI display
@@ -342,6 +426,13 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // buildMessages so we keep this synchronous.
       if (context._agentMemoryBlock) {
         systemContent += `\n\n${context._agentMemoryBlock}`;
+      }
+
+      // Agent runs also auto-include skills context: <available_skills>
+      // metadata + <active_skill> full bodies for activated ones. Both are
+      // pre-rendered in execute() and attached to context.
+      if (context._agentSkillsBlock) {
+        systemContent += `\n\n${context._agentSkillsBlock}`;
       }
 
       // Inject source content into system prompt if available
@@ -599,6 +690,42 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Skip 'this' references outside of each loops (they should be empty)
       if (trimmed === 'this' || trimmed.startsWith('this.')) {
         return '';
+      }
+
+      // Special template variable populated by the runtime — formats the
+      // accumulated planner task results into a markdown block so the
+      // synthesizer (and intermediate plan tasks) can see prior work.
+      if (trimmed === 'previousTaskResults') {
+        return this._formatPreviousTaskResults(state);
+      }
+
+      // Citations ledger collected from every search/extract tool call
+      // during the run. Renders a numbered list `[1] title — url` that the
+      // synthesizer cites inline. Named `citations` (NOT `sources`) so it
+      // doesn't collide with `profile.sources` — the configured knowledge
+      // bases the agent can look up via `source_*` tools. Citations are
+      // the runtime ledger of URLs the agent actually consulted; sources
+      // is the configured catalog it could consult.
+      if (trimmed === 'citations') {
+        return this._formatCitations(state);
+      }
+
+      // Inbox item — render clean. The state object stores the FULL parsed
+      // checklist line in `.raw`, which accumulates `-- done by …` notes
+      // every time the item gets re-checked. Stringifying the whole object
+      // bleeds that history (including prior hallucinated reports) into the
+      // current run's prompts and the synthesizer's final report. Render
+      // just `(P1) text` so the LLM sees what the user actually wrote.
+      if (trimmed === 'currentInboxItem') {
+        const item = state?.data?.currentInboxItem;
+        if (!item) return '';
+        if (typeof item === 'string') return item;
+        const text = (item.text || '').toString().trim();
+        if (!text) return '';
+        const priority = item.priority && item.priority !== 'unprioritized'
+          ? `(${item.priority.toUpperCase()}) `
+          : '';
+        return `${priority}${text}`;
       }
 
       const value = this.getNestedValue(trimmed, state.data || {});
@@ -975,6 +1102,26 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         finalContent += response.content;
       }
 
+      // Capture Gemini native grounding metadata (googleSearch). Unlike
+      // function-calling tools, grounding doesn't appear in the tool-call
+      // loop — the URLs ride alongside the assistant message. Push each
+      // grounding chunk into the run's _citations ledger so the
+      // synthesizer can cite them just like any other web/source result.
+      if (response.groundingMetadata) {
+        try {
+          this._captureCitationsFromGroundingMetadata({
+            groundingMetadata: response.groundingMetadata,
+            state: context._workflowState,
+            taskId: context._taskId || null
+          });
+        } catch (gErr) {
+          this.logger.warn('Grounding citation capture failed', {
+            component: 'PromptNodeExecutor',
+            error: gErr.message
+          });
+        }
+      }
+
       // Accumulate token usage from response (or estimate if not provided)
       if (response.usage) {
         totalTokens.input += response.usage.prompt_tokens || response.usage.input_tokens || 0;
@@ -1173,6 +1320,30 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         appConfig: enrichedAppConfig
       });
 
+      // Auto-capture citations from search/extract tool results so the
+      // synthesizer can cite each fact back to a URL. Without this, agents
+      // produce free-form text that may or may not be grounded; with it
+      // we get a per-run ledger of every URL the agent actually consulted.
+      // Tag each citation with the current task id so per-task artifacts
+      // can later filter their own Sources section.
+      const captureTaskId = context._taskId || null;
+      try {
+        this._captureCitationsFromToolResult({
+          toolId,
+          args,
+          result,
+          state: context._workflowState,
+          taskId: captureTaskId
+        });
+      } catch (captureErr) {
+        // Citation capture must never fail a tool call.
+        this.logger.warn('Citation capture failed', {
+          component: 'PromptNodeExecutor',
+          toolId,
+          error: captureErr.message
+        });
+      }
+
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -1247,6 +1418,96 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
   }
 
   /**
+   * Build the agent-skills system-prompt block for this node.
+   *
+   * Renders two sub-blocks the LLM gets to read in the system message:
+   *
+   *   <available_skills> … </available_skills>   (metadata only)
+   *   <active_skill name="…"> … </active_skill>   (full SKILL.md body, repeated)
+   *
+   * "Available" lists what this node CAN activate. The planner uses it to
+   * decide WHAT to do; task executors use it to look up procedural detail
+   * for HOW. "Active" carries skill bodies the planner pre-activated (via
+   * `skills_used` in its plan JSON) or that earlier task workers loaded
+   * via the `activate_skill` tool. Both blocks are scoped per-run via
+   * `state.data._activatedSkills`.
+   *
+   * Synthesizer nodes (`_isSynthesizer: true`) skip the metadata block — the
+   * synthesizer doesn't choose skills — but DO see active bodies so the
+   * final composition can match a skill's prescribed output format.
+   *
+   * @private
+   * @returns {Promise<string|null>}
+   */
+  async _buildSkillsBlock(profile, config, state) {
+    const isSynthesizer = config?._isSynthesizer === true;
+    const skillIds =
+      (Array.isArray(config?.skills) && config.skills.length > 0
+        ? config.skills
+        : Array.isArray(profile?.skills) && profile.skills.length > 0
+          ? profile.skills
+          : null) || null;
+
+    const activated =
+      state?.data?._activatedSkills && typeof state.data._activatedSkills === 'object'
+        ? state.data._activatedSkills
+        : {};
+
+    if (!skillIds && Object.keys(activated).length === 0) return null;
+
+    const parts = [];
+
+    // <available_skills>: only for non-synthesizer nodes that have a catalog.
+    if (skillIds && !isSynthesizer) {
+      try {
+        const platform = configCache.getPlatform()?.data || {};
+        // Profile is duck-typed against `getSkillsForApp`'s expected shape
+        // (just needs `.skills` array). Permission filtering is by user.
+        const filtered = await configCache.getSkillsForApp(
+          { skills: skillIds },
+          { id: profile?.id || 'agent', groups: profile?.serviceAccount?.groups || [] },
+          platform
+        );
+        if (Array.isArray(filtered) && filtered.length > 0) {
+          const entries = filtered
+            .map(
+              s =>
+                `  <skill>\n    <name>${s.name}</name>\n    <description>${s.description || ''}</description>\n  </skill>`
+            )
+            .join('\n');
+          parts.push(
+            `<available_skills>\n${entries}\n</available_skills>\n\nWhen a skill's description matches the current work, call activate_skill({skill_name: "..."}) to load its full instructions. The skill body will then guide HOW to perform the task.`
+          );
+        }
+      } catch (err) {
+        this.logger.warn('Failed to render available_skills block', {
+          component: 'PromptNodeExecutor',
+          error: err.message
+        });
+      }
+    }
+
+    // <active_skill>: include for every node when a skill is already
+    // activated in this run. Persisted across nodes via state.data.
+    const activeNames = Object.keys(activated);
+    if (activeNames.length > 0) {
+      const blocks = activeNames
+        .map(name => {
+          const entry = activated[name];
+          const body = typeof entry === 'string' ? entry : entry?.body || '';
+          if (!body) return '';
+          return `<active_skill name="${name}">\n${body}\n</active_skill>`;
+        })
+        .filter(Boolean);
+      if (blocks.length > 0) {
+        parts.push(blocks.join('\n\n'));
+      }
+    }
+
+    return parts.length > 0 ? parts.join('\n\n') : null;
+  }
+
+  /**
    * Parse structured output according to a JSON schema.
    *
    * @param {string} content - Raw LLM response content
@@ -1293,6 +1554,523 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       });
       return content;
     }
+  }
+
+  /**
+   * Auto-persist behavior the runtime owns now that the LLM no longer has
+   * lifecycle tools:
+   *
+   *   - Planner task nodes (`config._isPlannerTask: true`): the final
+   *     assistant text becomes a per-task artifact + `state.data._taskResults`
+   *     entry, and the matching task in `_taskQueue` is auto-marked done.
+   *
+   *   - Synthesizer nodes (`config._isSynthesizer: true`): the final
+   *     assistant text is persisted as `profile.artifacts.primary` (default
+   *     `report.md`). No LLM tool call is required.
+   *
+   * Failures here are logged but never fail the node — the LLM response
+   * already exists, and a transient disk error shouldn't abort the run.
+   *
+   * @private
+   */
+  async _autoPersistResult({
+    node,
+    config,
+    output,
+    response,
+    state,
+    context,
+    agentProfile,
+    executeStartedAt,
+    executeStartMs
+  }) {
+    const isPlannerTask = config?._isPlannerTask === true;
+    const isSynthesizer = config?._isSynthesizer === true;
+    if (!isPlannerTask && !isSynthesizer) return null;
+
+    // Resolve a usable string from `output` — could be a string, object, or
+    // null depending on outputSchema parsing. We need string content to
+    // write to disk and to put into _taskResults.
+    let textContent;
+    if (typeof output === 'string') {
+      textContent = output;
+    } else if (typeof response?.content === 'string') {
+      textContent = response.content;
+    } else if (output != null && typeof output === 'object') {
+      try {
+        textContent = JSON.stringify(output, null, 2);
+      } catch {
+        textContent = String(output);
+      }
+    } else {
+      textContent = '';
+    }
+
+    // Resolve the ROOT run id so child sub-workflow tasks write into the
+    // same `agent-artifacts/<rootId>/` directory the parent's artifact
+    // endpoint lists. The engine builds executor context without chatId,
+    // and state.executionId is the CURRENT (child) id — so we walk the
+    // parent chain via state.data._parentExecutionId. Top-level runs have
+    // no parent and use their own executionId.
+    const runId = await this._resolveRootRunId(state, context);
+    const profileId = context?.user?.profileId || agentProfile?.id;
+    const chatId = context?.chatId || runId;
+    const stateUpdates = {};
+
+    if (isPlannerTask) {
+      const taskId = config?._taskId || node.id;
+      const taskTitle = config?._taskTitle || node.name || node.id;
+      const completedAt = new Date().toISOString();
+
+      // Pull out the citations captured DURING this task. We tagged each
+      // citation with `taskId` in _captureCitationsFromToolResult and
+      // _captureCitationsFromGroundingMetadata. Filtering here gives every
+      // sub-task artifact its own focused Sources section instead of
+      // relying on the run-global ledger.
+      const allCitations = Array.isArray(state?.data?._citations)
+        ? state.data._citations
+        : [];
+      const taskCitations = allCitations.filter(c => c && c.taskId === taskId);
+
+      const completedAtMs = Date.now();
+      const startedAtIso = executeStartedAt ? executeStartedAt.toISOString() : null;
+      const durationMs = executeStartMs ? completedAtMs - executeStartMs : null;
+
+      const taskResults = { ...(state?.data?._taskResults || {}) };
+      taskResults[taskId] = {
+        taskId,
+        nodeId: node.id,
+        title: taskTitle,
+        content: textContent,
+        citations: taskCitations.map(c => ({ url: c.url, title: c.title })),
+        model: response?.model || null,
+        startedAt: startedAtIso || completedAt,
+        completedAt,
+        durationMs
+      };
+      stateUpdates._taskResults = taskResults;
+      // Side-channel: store latest task timing in _taskTimings keyed by id
+      // so the UI doesn't have to scan _taskResults (which can grow large
+      // with full content per task) just to render durations.
+      const taskTimings = { ...(state?.data?._taskTimings || {}) };
+      taskTimings[taskId] = {
+        startedAt: startedAtIso || completedAt,
+        completedAt,
+        durationMs
+      };
+      stateUpdates._taskTimings = taskTimings;
+
+      // Auto-mark the task in _taskQueue if present (planner tasks materialized
+      // into _taskQueue carry the same id; ones that don't will just no-op).
+      if (Array.isArray(state?.data?._taskQueue)) {
+        const queue = state.data._taskQueue.map(t =>
+          t && t.id === taskId
+            ? { ...t, status: 'done', result: textContent, updatedAt: completedAt }
+            : t
+        );
+        stateUpdates._taskQueue = queue;
+      }
+
+      // Write per-task artifact (best-effort).
+      if (runId) {
+        try {
+          const safeTaskSlug = String(taskId).replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 80);
+          await writeArtifactDirect({
+            runId,
+            name: `task_${safeTaskSlug}.md`,
+            content: this._formatTaskArtifact({
+              title: taskTitle,
+              content: textContent,
+              citations: taskCitations
+            }),
+            contentType: 'text/markdown',
+            profileId,
+            chatId,
+            state
+          });
+        } catch (err) {
+          this.logger.warn('Auto-persist of planner task artifact failed', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            taskId,
+            error: err.message
+          });
+        }
+      }
+
+      try {
+        actionTracker.emit('fire-sse', {
+          event: 'agent.task.completed',
+          chatId,
+          profileId,
+          taskId,
+          nodeId: node.id,
+          title: taskTitle,
+          // Carry the timing so the UI step-timeline updates live —
+          // without this the timing only appears after a state refetch.
+          startedAt: startedAtIso || completedAt,
+          completedAt,
+          durationMs
+        });
+      } catch {
+        // Best effort.
+      }
+    }
+
+    if (isSynthesizer) {
+      // Stash the synthesizer text as a state variable for downstream nodes
+      // (e.g. inbox-finalize uses it for the completion note).
+      stateUpdates._synthesizerOutput = textContent;
+      stateUpdates._synthesizerSummary = textContent.slice(0, 240);
+      // Record synthesizer timing in the same _taskTimings map keyed by
+      // node id so the step timeline can display it like any other step.
+      const synthCompletedMs = Date.now();
+      const synthStartedAtIso = executeStartedAt ? executeStartedAt.toISOString() : null;
+      const synthDurationMs = executeStartMs ? synthCompletedMs - executeStartMs : null;
+      stateUpdates._taskTimings = {
+        ...(state?.data?._taskTimings || {}),
+        [node.id]: {
+          startedAt: synthStartedAtIso || new Date(synthCompletedMs).toISOString(),
+          completedAt: new Date(synthCompletedMs).toISOString(),
+          durationMs: synthDurationMs
+        }
+      };
+      try {
+        actionTracker.emit('fire-sse', {
+          event: 'agent.step.completed',
+          chatId,
+          nodeId: node.id,
+          kind: 'synthesizer',
+          startedAt: synthStartedAtIso,
+          completedAt: new Date(synthCompletedMs).toISOString(),
+          durationMs: synthDurationMs
+        });
+      } catch {
+        // best effort
+      }
+
+      // Persist as the profile's primary artifact (default report.md).
+      const primaryName =
+        (agentProfile?.artifacts && typeof agentProfile.artifacts.primary === 'string'
+          ? agentProfile.artifacts.primary
+          : null) || 'report.md';
+
+      if (runId) {
+        try {
+          await writeArtifactDirect({
+            runId,
+            name: primaryName,
+            content: textContent,
+            contentType: 'text/markdown',
+            profileId,
+            chatId,
+            state
+          });
+        } catch (err) {
+          this.logger.error('Auto-persist of synthesizer artifact failed', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            primaryName,
+            error: err.message
+          });
+        }
+      }
+    }
+
+    return { stateUpdates };
+  }
+
+  /**
+   * Format the per-task result body so it reads well both as a standalone
+   * file and as a contribution to `{{previousTaskResults}}` in the
+   * synthesizer prompt. When per-task citations were captured (web search
+   * / extract / grounding URLs the task consulted), append a Sources
+   * section so each subtask artifact stands on its own — operators can
+   * audit each task in isolation without cross-referencing the run-wide
+   * ledger.
+   *
+   * @private
+   */
+  _formatTaskArtifact({ title, content, citations }) {
+    const safeTitle = (title || 'Task').toString().trim();
+    let body = `# ${safeTitle}\n\n${content || ''}`.trim();
+    if (Array.isArray(citations) && citations.length > 0) {
+      const seen = new Set();
+      const lines = [];
+      for (const c of citations) {
+        if (!c || typeof c.url !== 'string' || seen.has(c.url)) continue;
+        seen.add(c.url);
+        const label = c.title ? `[${c.title}](${c.url})` : c.url;
+        lines.push(`- ${label}`);
+      }
+      if (lines.length > 0) {
+        body += `\n\n## Sources\n\n${lines.join('\n')}`;
+      }
+    }
+    return body + '\n';
+  }
+
+  /**
+   * Extract URLs / titles / snippets from a search-or-extract tool result
+   * and append them to `state.data._citations`. The synthesizer reads this
+   * ledger to ground every fact with a citation.
+   *
+   * Naming note: `_citations` is the runtime ledger of URLs the agent
+   * actually consulted during this run. It is NOT the same as
+   * `profile.sources` (configured knowledge bases the agent can look up).
+   * Separating the names prevents the synthesizer from confusing
+   * "knowledge bases I could query" with "documents I cited".
+   *
+   * Recognised tool result shapes:
+   *   - Array of `{ url, title?, snippet? }` (typical webSearch)
+   *   - `{ results: [{ url, ... }, ...] }` (search wrappers)
+   *   - `{ url, content, ... }` (webContentExtractor and similar)
+   *   - `{ items: [...] }` / `{ sources: [...] }` (other variants)
+   *
+   * Tools whose IDs match the citation-producing allowlist below are
+   * scanned. Other tools (createTask, write_memory, …) are ignored.
+   *
+   * @private
+   */
+  _captureCitationsFromToolResult({ toolId, args, result, state, taskId }) {
+    if (!state || !state.data) return;
+    if (!this._isCitationProducingTool(toolId)) return;
+
+    const newEntries = [];
+    const seen = new Set((state.data._citations || []).map(s => s.url).filter(Boolean));
+    const push = entry => {
+      if (!entry || !entry.url || typeof entry.url !== 'string') return;
+      if (seen.has(entry.url)) return;
+      seen.add(entry.url);
+      newEntries.push(entry);
+    };
+
+    const harvest = items => {
+      if (!Array.isArray(items)) return;
+      for (const item of items) {
+        if (!item || typeof item !== 'object') continue;
+        const url = item.url || item.link || item.source || item.href;
+        if (!url || typeof url !== 'string') continue;
+        push({
+          url,
+          title: item.title || item.name || item.heading || undefined,
+          snippet:
+            typeof item.snippet === 'string'
+              ? item.snippet.slice(0, 400)
+              : typeof item.summary === 'string'
+                ? item.summary.slice(0, 400)
+                : typeof item.text === 'string'
+                  ? item.text.slice(0, 400)
+                  : undefined,
+          toolId,
+          taskId: taskId || undefined,
+          query: typeof args?.query === 'string' ? args.query : undefined,
+          capturedAt: new Date().toISOString()
+        });
+      }
+    };
+
+    if (Array.isArray(result)) {
+      harvest(result);
+    } else if (result && typeof result === 'object') {
+      if (Array.isArray(result.results)) harvest(result.results);
+      if (Array.isArray(result.items)) harvest(result.items);
+      if (Array.isArray(result.sources)) harvest(result.sources);
+      // Single-doc results like webContentExtractor: { url, content, ... }
+      if (typeof result.url === 'string') {
+        push({
+          url: result.url,
+          title: result.title || result.name || undefined,
+          snippet:
+            typeof result.content === 'string'
+              ? result.content.slice(0, 400)
+              : typeof result.snippet === 'string'
+                ? result.snippet.slice(0, 400)
+                : undefined,
+          toolId,
+          taskId: taskId || undefined,
+          query: typeof args?.url === 'string' ? args.url : undefined,
+          capturedAt: new Date().toISOString()
+        });
+      }
+    }
+
+    if (newEntries.length > 0) {
+      state.data._citations = [...(state.data._citations || []), ...newEntries];
+    }
+  }
+
+  /**
+   * Extract citation URLs from a Gemini grounding metadata block and
+   * append them to `state.data._citations`. Gemini's native googleSearch
+   * grounding produces a `groundingMetadata.groundingChunks[]` array
+   * where each entry has shape `{ web: { uri, title } }`. Optionally a
+   * `webSearchQueries: [string]` array carries the queries that produced
+   * the chunks — we use the first query as the captured `query` field.
+   *
+   * Without this, agents whose webSearch was auto-swapped to googleSearch
+   * (every Gemini run with webSearch configured) collect zero citations
+   * and the synthesizer's References section comes out empty.
+   *
+   * @private
+   */
+  _captureCitationsFromGroundingMetadata({ groundingMetadata, state, taskId }) {
+    if (!state || !state.data) return;
+    if (!groundingMetadata || typeof groundingMetadata !== 'object') return;
+
+    const chunks = Array.isArray(groundingMetadata.groundingChunks)
+      ? groundingMetadata.groundingChunks
+      : [];
+    if (chunks.length === 0) return;
+
+    const queries = Array.isArray(groundingMetadata.webSearchQueries)
+      ? groundingMetadata.webSearchQueries
+      : [];
+    const queryStr = queries.length > 0 ? queries.join(' | ') : undefined;
+
+    const seen = new Set((state.data._citations || []).map(c => c.url).filter(Boolean));
+    const newEntries = [];
+    for (const chunk of chunks) {
+      const web = chunk?.web || chunk?.retrievedContext?.web;
+      const url = web?.uri || web?.url;
+      if (typeof url !== 'string' || !url) continue;
+      if (seen.has(url)) continue;
+      seen.add(url);
+      newEntries.push({
+        url,
+        title: typeof web?.title === 'string' ? web.title : undefined,
+        toolId: 'googleSearch',
+        taskId: taskId || undefined,
+        query: queryStr,
+        capturedAt: new Date().toISOString()
+      });
+    }
+    if (newEntries.length > 0) {
+      state.data._citations = [...(state.data._citations || []), ...newEntries];
+    }
+  }
+
+  /**
+   * Heuristic for whether a tool call produces citable URLs. Used by
+   * citation capture to skip irrelevant tool calls (memory writes, task
+   * creation, etc.) so the ledger stays clean.
+   *
+   * Both web tools (webSearch, webContentExtractor) and configured
+   * knowledge-base lookups (`source_*`) qualify — when an agent consults
+   * one of its configured sources, the document URL becomes a citation
+   * just like a web search result.
+   *
+   * @private
+   */
+  _isCitationProducingTool(toolId) {
+    if (typeof toolId !== 'string') return false;
+    const id = toolId.toLowerCase();
+    if (id === 'websearch' || id === 'webcontentextractor') return true;
+    if (id.startsWith('source_')) return true;
+    // Provider-native grounding (googleSearch) doesn't appear in the tool
+    // call loop — Gemini emits it as grounding metadata in the assistant
+    // message — so we don't try to capture from a tool result here.
+    return false;
+  }
+
+  /**
+   * Render `state.data._taskResults` (a keyed map of per-task completion
+   * records) as a markdown block suitable for substituting into
+   * `{{previousTaskResults}}` in subsequent task prompts and the
+   * synthesizer prompt.
+   *
+   * Records are emitted in completion order so the synthesizer sees the
+   * planner's chosen sequence intact.
+   *
+   * @private
+   */
+  _formatPreviousTaskResults(state) {
+    const map = state?.data?._taskResults;
+    if (!map || typeof map !== 'object') return '';
+    const entries = Object.values(map)
+      .filter(r => r && typeof r === 'object')
+      .sort((a, b) => {
+        const ta = a.completedAt || '';
+        const tb = b.completedAt || '';
+        if (ta === tb) return 0;
+        return ta < tb ? -1 : 1;
+      });
+    if (entries.length === 0) return '';
+    return entries
+      .map(r => {
+        const title = (r.title || r.taskId || 'Task').toString().trim();
+        const body = typeof r.content === 'string' ? r.content : JSON.stringify(r.content || '');
+        return `### ${title}\n\n${body}`.trim();
+      })
+      .join('\n\n---\n\n');
+  }
+
+  /**
+   * Walk the sub-workflow parent chain to find the topmost run id. Used as
+   * the artifact directory key so files written from inside a planner
+   * sub-workflow co-locate with the user-facing run's artifacts.
+   *
+   * Each sub-workflow records its immediate parent at
+   * `state.data._parentExecutionId` (set by WorkflowEngine.executeSubWorkflow).
+   * Walking up that chain gives the root. We cap the walk at 5 hops so a
+   * cycle in the data can never lock the executor.
+   *
+   * @private
+   */
+  async _resolveRootRunId(state, context) {
+    let executionId = state?.executionId || context?.executionId;
+    let parentId = state?.data?._parentExecutionId;
+    if (!parentId) return executionId || context?.chatId || null;
+
+    try {
+      const { getStateManager } = await import('../StateManager.js');
+      const stateManager = getStateManager();
+      let hops = 0;
+      while (parentId && hops < 5) {
+        const parentState = await stateManager.get(parentId);
+        if (!parentState) break;
+        executionId = parentState.executionId || parentId;
+        parentId = parentState.data?._parentExecutionId;
+        hops++;
+      }
+    } catch (err) {
+      this.logger.warn('Failed to walk parent chain for artifact root', {
+        component: 'PromptNodeExecutor',
+        error: err.message
+      });
+    }
+    return executionId || context?.chatId || null;
+  }
+
+  /**
+   * Render `state.data._citations` as a numbered list the synthesizer can
+   * cite with `[N]`. Dedupe by URL while preserving insertion order —
+   * first occurrence wins so `[1]` is the earliest citation the agent
+   * collected during this run.
+   *
+   * @private
+   */
+  _formatCitations(state) {
+    const citations = state?.data?._citations;
+    if (!Array.isArray(citations) || citations.length === 0) return '';
+    const seen = new Set();
+    const ordered = [];
+    for (const c of citations) {
+      if (!c || typeof c !== 'object' || typeof c.url !== 'string') continue;
+      if (seen.has(c.url)) continue;
+      seen.add(c.url);
+      ordered.push(c);
+    }
+    if (ordered.length === 0) return '';
+    return ordered
+      .map((c, i) => {
+        const label = c.title ? `${c.title} — ${c.url}` : c.url;
+        const tail = c.snippet
+          ? `\n    ${String(c.snippet).replace(/\s+/g, ' ').slice(0, 240)}`
+          : '';
+        return `[${i + 1}] ${label}${tail}`;
+      })
+      .join('\n');
   }
 }
 

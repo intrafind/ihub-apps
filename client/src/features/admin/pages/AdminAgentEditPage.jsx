@@ -6,6 +6,7 @@ import AdminNavigation from '../components/AdminNavigation';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import IconPicker from '../../../shared/components/IconPicker';
 import ToolsSelector from '../../../shared/components/ToolsSelector';
+import SkillsSelector from '../../../shared/components/SkillsSelector';
 import SourcePicker from '../components/SourcePicker';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import { fetchAdminModels, fetchAdminApps } from '../../../api/adminApi';
@@ -29,10 +30,23 @@ const BLANK_PROFILE = {
   tools: [],
   sources: [],
   apps: [],
+  skills: [],
   memory: { enabled: true, autoInclude: true, maxBytes: 8192 },
   inboxId: '',
   hitl: { approverGroups: [] },
-  planner: { enabled: false, maxTasks: 10 },
+  planner: {
+    enabled: false,
+    maxTasks: 10,
+    system: { en: '' },
+    goal: { en: '' },
+    modelId: ''
+  },
+  synthesizer: {
+    enabled: true,
+    system: { en: '' },
+    prompt: { en: '' },
+    modelId: ''
+  },
   dynamicTasks: { enabled: false, maxDepth: 3 },
   budgets: { maxWallTimeSec: 600 },
   concurrency: { maxConcurrent: 1 },
@@ -56,10 +70,12 @@ const TOP_LEVEL_FIELDS = new Set([
   'tools',
   'sources',
   'apps',
+  'skills',
   'memory',
   'inboxId',
   'hitl',
   'planner',
+  'synthesizer',
   'dynamicTasks',
   'budgets',
   'concurrency',
@@ -124,6 +140,9 @@ export default function AdminAgentEditPage() {
 
   function handlePlanner(partial) {
     setProfile(prev => ({ ...prev, planner: { ...prev.planner, ...partial } }));
+  }
+  function handleSynthesizer(partial) {
+    setProfile(prev => ({ ...prev, synthesizer: { ...prev.synthesizer, ...partial } }));
   }
   function handleDynamicTasks(partial) {
     setProfile(prev => ({ ...prev, dynamicTasks: { ...prev.dynamicTasks, ...partial } }));
@@ -190,6 +209,31 @@ export default function AdminAgentEditPage() {
       const system = cleanLocalized(payload.system);
       if (system) payload.system = system;
       else delete payload.system;
+
+      // Clean nested localized fields on planner/synthesizer so empty strings
+      // don't reach the backend schema (which rejects empty localized maps).
+      if (payload.planner && typeof payload.planner === 'object') {
+        const plannerSystem = cleanLocalized(payload.planner.system);
+        if (plannerSystem) payload.planner.system = plannerSystem;
+        else delete payload.planner.system;
+        const plannerGoal = cleanLocalized(payload.planner.goal);
+        if (plannerGoal) payload.planner.goal = plannerGoal;
+        else delete payload.planner.goal;
+        if (typeof payload.planner.modelId === 'string' && !payload.planner.modelId.trim()) {
+          delete payload.planner.modelId;
+        }
+      }
+      if (payload.synthesizer && typeof payload.synthesizer === 'object') {
+        const synthSystem = cleanLocalized(payload.synthesizer.system);
+        if (synthSystem) payload.synthesizer.system = synthSystem;
+        else delete payload.synthesizer.system;
+        const synthPrompt = cleanLocalized(payload.synthesizer.prompt);
+        if (synthPrompt) payload.synthesizer.prompt = synthPrompt;
+        else delete payload.synthesizer.prompt;
+        if (typeof payload.synthesizer.modelId === 'string' && !payload.synthesizer.modelId.trim()) {
+          delete payload.synthesizer.modelId;
+        }
+      }
 
       if (isNew) {
         await createAgentProfile(payload);
@@ -363,22 +407,22 @@ export default function AdminAgentEditPage() {
                 </div>
               </Section>
 
-              {/* Brief — what the agent is and does */}
+              {/* Agent persona — used when executing planned tasks. */}
               <Section
-                title={t('admin.agents.edit.brief', 'Agent brief')}
+                title={t('admin.agents.edit.brief', 'Agent persona')}
                 hint={t(
                   'admin.agents.edit.briefHint',
-                  'The system prompt every step of the agent receives. Tell it who it is, what its job is, when to ask a human, and what it should leave behind (artifacts).'
+                  "The persona used when executing planned tasks. Describes the agent's role, voice, and domain expertise. Do NOT include workflow instructions (read inbox / write artifact / mark done) — the runtime handles those automatically."
                 )}
               >
                 <DynamicLanguageEditor
-                  label={t('admin.agents.edit.system', 'System Instructions')}
+                  label={t('admin.agents.edit.system', 'Agent persona system prompt')}
                   value={profile.system || {}}
                   onChange={v => handleField('system', v)}
                   type="textarea"
                   placeholder={{
-                    en: 'You are a TODO Worker. On each wake call read_inbox, pick the highest-priority item, do the work, call write_artifact, then write_inbox(mode=markDone).',
-                    de: 'Du bist ein TODO-Worker. Rufe bei jedem Wake read_inbox auf, wähle den wichtigsten Eintrag, erledige die Arbeit, rufe write_artifact und write_inbox(mode=markDone) auf.'
+                    en: 'You are a research analyst with deep knowledge of enterprise software. Be concise, cite sources, and prefer primary documentation over secondary commentary.',
+                    de: 'Du bist ein Research-Analyst mit fundierten Kenntnissen über Unternehmenssoftware. Fasse dich kurz, zitiere Quellen und bevorzuge Primärdokumentation gegenüber Sekundärkommentaren.'
                   }}
                   name="system"
                 />
@@ -456,10 +500,10 @@ export default function AdminAgentEditPage() {
 
               {/* Capabilities — tools, apps, sources */}
               <Section
-                title={t('admin.agents.edit.capabilities', 'Capabilities')}
+                title={t('admin.agents.edit.capabilities', 'Capabilities (task executors)')}
                 hint={t(
                   'admin.agents.edit.capabilitiesHint',
-                  'Memory/inbox/task/artifact tools are auto-registered for every agent. Add provider tools (e.g. webContentExtractor), iHub Apps (for App-as-tool), or knowledge sources here.'
+                  'Research tools available to each planned task — webSearch, calculators, apps, knowledge sources. Memory tools are auto-attached. Inbox and artifact lifecycle are owned by the runtime now, NOT exposed as LLM tools (add them here only as an opt-in escape hatch).'
                 )}
               >
                 <div className="space-y-4">
@@ -501,6 +545,22 @@ export default function AdminAgentEditPage() {
                       onChange={v => handleField('sources', v)}
                     />
                   </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      {t('admin.agents.edit.skills', 'Skills (instructional knowledge)')}
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                      {t(
+                        'admin.agents.edit.skillsHint',
+                        'Skills describe HOW to do something (e.g. "for person research, do these steps"). The planner sees the list and can pre-activate skills via the plan JSON; task workers can also activate them mid-run via the activate_skill tool. The runtime injects activated skill bodies into the system prompt so the agent follows them.'
+                      )}
+                    </p>
+                    <SkillsSelector
+                      selectedSkills={profile.skills || []}
+                      onSkillsChange={skills => handleField('skills', skills)}
+                    />
+                  </div>
                 </div>
               </Section>
 
@@ -533,19 +593,83 @@ export default function AdminAgentEditPage() {
                         </p>
                       </span>
                     </label>
-                    <div className="mt-2 pl-6">
-                      <label className="block text-xs text-gray-600 dark:text-gray-400">
-                        {t('admin.agents.edit.plannerMaxTasks', 'Max tasks in initial plan')}
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="50"
-                        disabled={!profile.planner?.enabled}
-                        value={profile.planner?.maxTasks ?? 10}
-                        onChange={e => handlePlanner({ maxTasks: Number(e.target.value) })}
-                        className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                    <div className="mt-2 pl-6 space-y-3">
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400">
+                          {t('admin.agents.edit.plannerMaxTasks', 'Max tasks in initial plan')}
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="50"
+                          disabled={!profile.planner?.enabled}
+                          value={profile.planner?.maxTasks ?? 10}
+                          onChange={e => handlePlanner({ maxTasks: Number(e.target.value) })}
+                          className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 dark:text-gray-400">
+                          {t('admin.agents.edit.plannerModel', 'Planner model (optional)')}
+                        </label>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                          {t(
+                            'admin.agents.edit.plannerModelHint',
+                            'Override the agent model for the decomposition LLM call. Useful when you want a stronger model for planning and a cheaper model for execution. Leave blank to inherit Preferred model.'
+                          )}
+                        </p>
+                        <select
+                          disabled={!profile.planner?.enabled}
+                          value={profile.planner?.modelId || ''}
+                          onChange={e => handlePlanner({ modelId: e.target.value })}
+                          className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                        >
+                          <option value="">
+                            {t('admin.agents.edit.plannerModelInherit', '(inherit Preferred model)')}
+                          </option>
+                          {models
+                            .filter(m => !m.supportsImageGeneration)
+                            .map(m => (
+                              <option key={m.id} value={m.id}>
+                                {getLocalizedContent(m.name, currentLanguage) || m.id}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <DynamicLanguageEditor
+                        label={t(
+                          'admin.agents.edit.plannerSystem',
+                          'Planner system prompt (instructions for decomposition)'
+                        )}
+                        value={profile.planner?.system || {}}
+                        onChange={v => handlePlanner({ system: v })}
+                        type="textarea"
+                        placeholder={{
+                          en: 'You are a planner. Given a brief, decompose it into independently-executable research/work tasks. Return a structured JSON plan.',
+                          de: 'Du bist ein Planer. Zerlege den Auftrag in unabhängig ausführbare Recherche-/Arbeitsschritte. Antworte mit einem strukturierten JSON-Plan.'
+                        }}
+                        name="planner-system"
                       />
+                      <DynamicLanguageEditor
+                        label={t(
+                          'admin.agents.edit.plannerGoal',
+                          'Planner goal template (what the planner is given)'
+                        )}
+                        value={profile.planner?.goal || {}}
+                        onChange={v => handlePlanner({ goal: v })}
+                        type="textarea"
+                        placeholder={{
+                          en: '## Item to process\n${$.data.currentInboxItem}\n\n## Original brief\n${$.data.brief}',
+                          de: '## Bearbeitungspunkt\n${$.data.currentInboxItem}\n\n## Ursprünglicher Auftrag\n${$.data.brief}'
+                        }}
+                        name="planner-goal"
+                      />
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.agents.edit.plannerVariables',
+                          'Available variables: ${$.data.currentInboxItem} — the item picked from the inbox; ${$.data.brief} — the original trigger brief.'
+                        )}
+                      </p>
                     </div>
                   </div>
 
@@ -590,6 +714,117 @@ export default function AdminAgentEditPage() {
                 </div>
               </Section>
 
+              {/* Synthesizer — final LLM step that composes the report */}
+              <Section
+                title={t('admin.agents.edit.synthesizer', 'Synthesizer (final report)')}
+                hint={t(
+                  'admin.agents.edit.synthesizerHint',
+                  'A single LLM call that composes the final markdown deliverable from the planned task results. The synthesizer has no tools — it is pure text-in/text-out, and the runtime persists its output as the primary artifact. Disable for cases where the last task is itself the final artifact.'
+                )}
+              >
+                <div className="space-y-4">
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={profile.synthesizer?.enabled !== false}
+                      onChange={e => handleSynthesizer({ enabled: e.target.checked })}
+                      className="h-4 w-4 mt-0.5 text-indigo-600 border-gray-300 rounded"
+                    />
+                    <span>
+                      <span className="text-sm font-medium text-gray-800 dark:text-gray-200">
+                        {t('admin.agents.edit.synthesizerEnabled', 'Synthesize final report')}
+                      </span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                        {t(
+                          'admin.agents.edit.synthesizerEnabledHint',
+                          'When enabled, after all planner tasks complete the synthesizer runs once and the runtime saves its output as the primary artifact (default report.md). Inbox lifecycle is closed by the runtime afterwards.'
+                        )}
+                      </p>
+                    </span>
+                  </label>
+                  <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-400">
+                      {t('admin.agents.edit.synthesizerModel', 'Synthesizer model (optional)')}
+                    </label>
+                    <select
+                      value={profile.synthesizer?.modelId || ''}
+                      onChange={e => handleSynthesizer({ modelId: e.target.value })}
+                      className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    >
+                      <option value="">
+                        {t(
+                          'admin.agents.edit.synthesizerModelInherit',
+                          '(inherit Preferred model)'
+                        )}
+                      </option>
+                      {models
+                        .filter(m => !m.supportsImageGeneration)
+                        .map(m => (
+                          <option key={m.id} value={m.id}>
+                            {getLocalizedContent(m.name, currentLanguage) || m.id}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm text-gray-600 dark:text-gray-400">
+                      {t('admin.agents.edit.synthesizerMaxTokens', 'Output token budget')}
+                    </label>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                      {t(
+                        'admin.agents.edit.synthesizerMaxTokensHint',
+                        'Hard cap on the synthesizer output. Provider defaults (4-8K) frequently truncate comprehensive research reports — raise this if you see the report cut off. Cost scales with the value.'
+                      )}
+                    </p>
+                    <input
+                      type="number"
+                      min="1000"
+                      max="32000"
+                      step="1000"
+                      value={profile.synthesizer?.maxTokens ?? 8000}
+                      onChange={e =>
+                        handleSynthesizer({ maxTokens: Number(e.target.value) || 8000 })
+                      }
+                      className="mt-1 block w-40 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
+                    />
+                  </div>
+                  <DynamicLanguageEditor
+                    label={t(
+                      'admin.agents.edit.synthesizerSystem',
+                      'Synthesizer system prompt'
+                    )}
+                    value={profile.synthesizer?.system || {}}
+                    onChange={v => handleSynthesizer({ system: v })}
+                    type="textarea"
+                    placeholder={{
+                      en: 'You are a synthesizer. Produce one cohesive markdown deliverable from the sub-task results. Do not invent facts. Do not call tools — just write the report.',
+                      de: 'Du bist ein Synthesizer. Erstelle aus den Teilaufgabenergebnissen ein zusammenhängendes Markdown-Dokument. Erfinde keine Fakten. Rufe keine Tools auf — schreibe den Bericht.'
+                    }}
+                    name="synthesizer-system"
+                  />
+                  <DynamicLanguageEditor
+                    label={t(
+                      'admin.agents.edit.synthesizerPrompt',
+                      'Synthesizer prompt template'
+                    )}
+                    value={profile.synthesizer?.prompt || {}}
+                    onChange={v => handleSynthesizer({ prompt: v })}
+                    type="textarea"
+                    placeholder={{
+                      en: '## Brief\n${$.data.brief}\n\n## Item being processed\n${$.data.currentInboxItem}\n\n## Sub-task results\n{{previousTaskResults}}\n\nProduce the final markdown report.',
+                      de: '## Auftrag\n${$.data.brief}\n\n## Bearbeitungspunkt\n${$.data.currentInboxItem}\n\n## Teilaufgabenergebnisse\n{{previousTaskResults}}\n\nErstelle den finalen Markdown-Bericht.'
+                    }}
+                    name="synthesizer-prompt"
+                  />
+                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                    {t(
+                      'admin.agents.edit.synthesizerVariables',
+                      'Available variables: ${$.data.brief}, ${$.data.currentInboxItem}, {{previousTaskResults}} — runtime-formatted markdown block of all completed task outputs in order.'
+                    )}
+                  </p>
+                </div>
+              </Section>
+
               {/* Schedule */}
               <Section
                 title={t('admin.agents.edit.schedule', 'Schedule')}
@@ -612,7 +847,7 @@ export default function AdminAgentEditPage() {
                 title={t('admin.agents.edit.inbox', 'Inbox')}
                 hint={t(
                   'admin.agents.edit.inboxHint',
-                  'Optional. ID of the inbox this agent reads work from via read_inbox. Create inboxes from Agents → Inboxes.'
+                  'Optional. ID of the inbox this agent reads work from. The runtime auto-picks the highest-priority open item at the start of each run and marks it done at the end — no LLM tool calls involved. Create inboxes from Agents → Inboxes.'
                 )}
               >
                 <input

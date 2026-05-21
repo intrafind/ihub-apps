@@ -8,7 +8,7 @@
 import fs from 'fs';
 import { promises as fsp } from 'fs';
 import path from 'path';
-import { authRequired } from '../../middleware/authRequired.js';
+import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import {
   sendBadRequest,
   sendNotFound,
@@ -49,11 +49,50 @@ function safeName(name) {
   return base;
 }
 
+function isAdminUser(user) {
+  if (!user) return false;
+  if (user.permissions?.adminAccess === true) return true;
+  const groups = Array.isArray(user.groups) ? user.groups : [];
+  return groups.includes('admin') || groups.includes('admins');
+}
+
+/**
+ * Per-run authorization check. The run was triggered by a specific human
+ * (recorded in `state.data._agent.triggeredBy.userId`); only that user —
+ * or an administrator — should be able to read its artifacts. Sends the
+ * appropriate response (404 if run doesn't exist, 403 if not allowed) and
+ * returns false; otherwise returns true.
+ */
+async function authorizeArtifactAccess(req, res, runId) {
+  if (isAdminUser(req.user)) return true;
+  try {
+    const state = await getEngine().getState(runId);
+    if (!state) {
+      sendNotFound(res, `Run ${runId} not found`);
+      return false;
+    }
+    const triggered = state.data?._agent?.triggeredBy?.userId;
+    const requesting = req.user?.id;
+    if (triggered && requesting && requesting !== 'anonymous' && triggered === requesting) {
+      return true;
+    }
+    res.status(403).json({
+      error: 'forbidden',
+      message: 'You are not allowed to access this run’s artifacts.'
+    });
+    return false;
+  } catch {
+    res.status(403).json({ error: 'forbidden', message: 'Authorization check failed.' });
+    return false;
+  }
+}
+
 export default function registerAgentArtifactRoutes(app) {
-  app.get(buildServerPath('/api/agents/runs/:runId/artifacts'), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/agents/runs/:runId/artifacts'), authRequired, authenticatedOnly, async (req, res) => {
     try {
       const { runId } = req.params;
       if (!validateIdForPath(runId, 'run', res)) return;
+      if (!(await authorizeArtifactAccess(req, res, runId))) return;
       const dir = await artifactsDirForRun(runId);
       if (!dir) return sendBadRequest(res, 'invalid run id');
       let entries = [];
@@ -86,11 +125,12 @@ export default function registerAgentArtifactRoutes(app) {
 
   app.get(
     buildServerPath('/api/agents/runs/:runId/artifacts/:name'),
-    authRequired,
+    authRequired, authenticatedOnly,
     async (req, res) => {
       try {
         const { runId, name } = req.params;
         if (!validateIdForPath(runId, 'run', res)) return;
+        if (!(await authorizeArtifactAccess(req, res, runId))) return;
         const safe = safeName(name);
         if (!safe) return sendBadRequest(res, 'invalid artifact name');
         const dir = await artifactsDirForRun(runId);
@@ -105,6 +145,12 @@ export default function registerAgentArtifactRoutes(app) {
           return sendNotFound(res, 'artifact');
         }
         res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+        // Honor ?download=1 to set Content-Disposition: attachment so the
+        // browser saves the file instead of rendering it inline. Safe to
+        // include the validated `safe` filename in the header.
+        if (req.query?.download === '1') {
+          res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
+        }
         // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
         fs.createReadStream(file).pipe(res);
       } catch (error) {
@@ -115,7 +161,7 @@ export default function registerAgentArtifactRoutes(app) {
 
   app.get(
     buildServerPath('/api/agents/profiles/:profileId/artifacts'),
-    authRequired,
+    authRequired, authenticatedOnly,
     async (req, res) => {
       try {
         const { profileId } = req.params;

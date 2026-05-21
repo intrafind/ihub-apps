@@ -20,6 +20,35 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import logger from '../../../utils/logger.js';
 
 /**
+ * Engine-managed state-data keys that must NEVER be propagated back via a
+ * node's `stateUpdates` payload. The engine writes these (and re-reads them)
+ * via `state.data` directly; including them in stateUpdates causes shared
+ * object references and circular JSON when the engine subsequently merges
+ * the executor's result into state (e.g. `nodeResults.<id>_iter<N> = result`
+ * creates a cycle when `result.stateUpdates.nodeResults` is the same object).
+ */
+const ENGINE_INTERNAL_STATE_KEYS = new Set([
+  'nodeResults',
+  'nodeInvocations',
+  'executionMetrics',
+  '_workflow',
+  '_workflowDefinition',
+  '_childExecutionIds',
+  '_executionDeadline',
+  '_pausedAt',
+  '_pausedAtMs',
+  '_pauseReason',
+  '_resumedAt',
+  '_resumeCount',
+  '_totalElapsedMs',
+  '_humanWaitMs',
+  '_nodeIterations',
+  '_currentNodeIteration',
+  '_currentStep',
+  '_totalNodes'
+]);
+
+/**
  * Executor that runs a list of body nodes repeatedly based on the configured loop mode.
  *
  * @extends BaseNodeExecutor
@@ -252,9 +281,23 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       delete currentState.data._loopItem;
       delete currentState.data._loopTotal;
 
+      // Build stateUpdates from body-produced data ONLY. We must NOT spread
+      // engine-internal keys (nodeResults, nodeInvocations, _workflow*, etc.)
+      // because they hold references that the engine mutates after this
+      // executor returns. Specifically, `markNodeCompleted` writes
+      // `nodeResults.<this-nodeId>_iter<N> = result` — and if our
+      // `stateUpdates.nodeResults` references the same object, the result
+      // ends up containing itself, producing
+      //   stateUpdates → nodeResults → drain_iter1 → result → stateUpdates
+      // which JSON.stringify chokes on inside _validateStateSize.
+      const propagatedData = {};
+      for (const [k, v] of Object.entries(currentState.data || {})) {
+        if (ENGINE_INTERNAL_STATE_KEYS.has(k)) continue;
+        propagatedData[k] = v;
+      }
       const stateUpdates = {
         ...(outputVariable ? { [outputVariable]: results } : {}),
-        ...currentState.data
+        ...propagatedData
       };
 
       return this.createSuccessResult({ results, iterations: results.length }, { stateUpdates });

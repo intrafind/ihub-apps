@@ -64,7 +64,34 @@ const hitlSchema = z
 const plannerSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
-    maxTasks: z.number().int().min(1).max(50).optional().default(10)
+    maxTasks: z.number().int().min(1).max(50).optional().default(10),
+    // Planner-specific instructions (separate from profile.system which is the
+    // agent persona used for task execution). The serializer wires this into
+    // the planner LLM call only.
+    system: optionalLocalizedStringSchema.optional(),
+    // Goal template — supports `${$.data.currentInboxItem}` / `${$.data.brief}`.
+    goal: optionalLocalizedStringSchema.optional(),
+    // Planner model can differ from the executor model (e.g. stronger model
+    // for decomposition, cheaper model for tasks).
+    modelId: z.string().optional()
+  })
+  .strict();
+
+// Synthesizer is the final LLM call that composes the report from sub-task
+// results. It has NO tools — pure text-in/text-out. The runtime persists its
+// output as the final artifact, so the LLM never needs to call write_artifact.
+const synthesizerSchema = z
+  .object({
+    enabled: z.boolean().optional().default(true),
+    system: optionalLocalizedStringSchema.optional(),
+    // Prompt template — supports `${$.data.brief}`, `${$.data.currentInboxItem}`,
+    // and `{{previousTaskResults}}` injected by the runtime.
+    prompt: optionalLocalizedStringSchema.optional(),
+    modelId: z.string().optional(),
+    // Output token budget for the one-shot synthesis call. Comprehensive
+    // research reports routinely exceed provider defaults (4-8K). Setting
+    // this higher trades cost for coverage. 0 → use the serializer default.
+    maxTokens: z.number().int().min(0).max(32000).optional().default(8000)
   })
   .strict();
 
@@ -131,11 +158,20 @@ const baseAgentProfileSchema = z.object({
   tools: z.array(z.string()).optional().default([]),
   sources: z.array(z.string()).optional().default([]),
   apps: z.array(z.string()).optional().default([]),
+  // Skills: instructional knowledge the agent can activate at runtime.
+  // Mirrors the same field on apps; the agent's planner / task executors /
+  // dynamic-task workers all see `<available_skills>` metadata in their
+  // system prompt and can activate a skill via the `activate_skill` tool to
+  // load its full procedural body. The planner can also pre-activate skills
+  // by listing them in its plan JSON (`skills_used`) and may re-plan once
+  // after activation (`activate_then_replan`).
+  skills: z.array(z.string()).optional().default([]),
 
   memory: memorySchema.optional().default({}),
   inboxId: z.string().optional(),
   hitl: hitlSchema.optional().default({}),
   planner: plannerSchema.optional().default({}),
+  synthesizer: synthesizerSchema.optional().default({}),
   dynamicTasks: dynamicTasksSchema.optional().default({}),
   budgets: budgetsSchema.optional().default({}),
   concurrency: concurrencySchema.optional().default({}),
