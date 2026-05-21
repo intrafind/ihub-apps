@@ -239,6 +239,7 @@ export function convertVLLMToolCallsToGeneric(vllmToolCalls = []) {
 
 /**
  * Convert vLLM streaming response to generic format (same as OpenAI with error handling)
+ * Handles reasoning/thinking content that vLLM may include in responses
  * @param {string} data - Raw vLLM response data
  * @param {string} streamId - Stream identifier for stateful processing
  * @returns {import('./GenericToolCalling.js').GenericStreamingResponse} Generic streaming response
@@ -252,7 +253,8 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
     streamingState.set(streamId, {
       finishReason: null,
       pendingToolCalls: new Map(),
-      toolCallIndex: 0
+      toolCallIndex: 0,
+      reasoning: [] // Track reasoning/thinking content
     });
   }
   const state = streamingState.get(streamId);
@@ -260,6 +262,11 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
   if (!data) return result;
   if (data === '[DONE]') {
     result.complete = true;
+
+    // Add accumulated reasoning to thinking array if any
+    if (state.reasoning.length > 0) {
+      result.thinking = state.reasoning;
+    }
 
     // Finalize any pending tool calls when stream ends without explicit finish reason
     if (state.pendingToolCalls.size > 0) {
@@ -273,7 +280,7 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
           } catch (error) {
             logger.warn('Failed to parse accumulated vLLM tool arguments on [DONE]', {
               component: 'VLLMConverter',
-              error: e
+              error
             });
             parsedArgs = { __raw_arguments: pending.arguments };
           }
@@ -327,6 +334,23 @@ export async function convertVLLMResponseToGeneric(data, streamId = 'default') {
       if (delta.content) {
         result.content.push(delta.content);
       }
+
+      // Handle reasoning/thinking content in delta
+      // vLLM may send reasoning in delta.reasoning or delta.thinking
+      if (delta.reasoning) {
+        const reasoningText =
+          typeof delta.reasoning === 'string' ? delta.reasoning : JSON.stringify(delta.reasoning);
+        state.reasoning.push(reasoningText);
+        result.thinking = [reasoningText]; // Add to current result for immediate display
+      }
+
+      if (delta.thinking) {
+        const thinkingText =
+          typeof delta.thinking === 'string' ? delta.thinking : JSON.stringify(delta.thinking);
+        state.reasoning.push(thinkingText);
+        result.thinking = [thinkingText]; // Add to current result for immediate display
+      }
+
       if (delta.tool_calls) {
         // Process each tool call delta - accumulate in state
         for (const toolCall of delta.tool_calls) {

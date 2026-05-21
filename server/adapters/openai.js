@@ -6,6 +6,8 @@ import { BaseAdapter } from './BaseAdapter.js';
 import logger from '../utils/logger.js';
 import { parseJsonAsync } from '../utils/asyncJson.js';
 import modelDiscoveryService from '../services/ModelDiscoveryService.js';
+import { getReadableStream } from '../utils/streamUtils.js';
+import { convertResponseToGeneric } from './toolCalling/index.js';
 
 class OpenAIAdapterClass extends BaseAdapter {
   /**
@@ -271,6 +273,132 @@ class OpenAIAdapterClass extends BaseAdapter {
     }
 
     return result;
+  }
+
+  /**
+   * Custom parseResponseStream for vLLM providers that may send malformed SSE headers
+   * Uses a lenient line-based parser instead of eventsource-parser to handle
+   * reasoning/thinking content that vLLM may include in SSE headers
+   * @param {Response} response - Fetch API response object
+   * @param {object} ctx - Context object with model and chatId
+   * @yields {object} Normalized result chunks
+   */
+  async *parseResponseStream(response, ctx) {
+    // Use lenient parser for vLLM models, strict parser for standard OpenAI
+    const isVLLM =
+      ctx.model.url?.includes('vllm') ||
+      ctx.model.id?.includes('vllm') ||
+      ctx.model.modelId?.includes('vllm');
+
+    if (isVLLM) {
+      logger.info('Using lenient SSE parser for vLLM provider', {
+        component: 'OpenAIAdapter',
+        modelId: ctx.model.id,
+        url: ctx.model.url
+      });
+      yield* this.parseVLLMSseStream(response, ctx.model.provider);
+    } else {
+      // Use default strict SSE parser for standard OpenAI
+      yield* this.parseSseStream(response, ctx.model.provider);
+    }
+  }
+
+  /**
+   * Lenient SSE parser for vLLM that handles malformed headers
+   * This parser is more forgiving with SSE format violations that may occur
+   * when vLLM sends reasoning/thinking content in headers
+   * @param {Response} response - Fetch API response object
+   * @param {string} provider - Provider name
+   * @yields {object} Normalized result chunks
+   */
+  async *parseVLLMSseStream(response, provider) {
+    const readable = getReadableStream(response);
+    const reader = readable.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // Split on double newline to get complete SSE events
+        while (buffer.includes('\n\n')) {
+          const doubleNewlineIndex = buffer.indexOf('\n\n');
+          const eventBlock = buffer.substring(0, doubleNewlineIndex);
+          buffer = buffer.substring(doubleNewlineIndex + 2);
+
+          if (!eventBlock.trim()) continue;
+
+          // Extract data from SSE event block (lenient parsing)
+          const lines = eventBlock.split('\n');
+          let data = null;
+
+          for (const line of lines) {
+            // Look for data: prefix (standard SSE format)
+            if (line.startsWith('data: ')) {
+              data = line.substring(6).trim();
+              break;
+            }
+            // Some malformed SSE may have data without prefix - try to parse as JSON
+            if (line.trim().startsWith('{')) {
+              try {
+                // Validate it's JSON before treating as data
+                JSON.parse(line.trim());
+                data = line.trim();
+                break;
+              } catch {
+                // Not valid JSON, skip this line
+                logger.debug('Skipping non-JSON line in vLLM SSE stream', {
+                  component: 'OpenAIAdapter',
+                  line: line.substring(0, 100)
+                });
+              }
+            }
+          }
+
+          if (data) {
+            const result = await convertResponseToGeneric(data, provider);
+            if (!result) continue;
+            yield result;
+            if (result.error || result.complete) return;
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.split('\n');
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.substring(6).trim();
+            const result = await convertResponseToGeneric(data, provider);
+            if (result) yield result;
+          }
+        }
+      }
+    } catch (error) {
+      logger.error('Error in vLLM SSE stream parsing', {
+        component: 'OpenAIAdapter',
+        error: error.message
+      });
+      yield {
+        content: [],
+        tool_calls: [],
+        complete: false,
+        error: true,
+        errorMessage: `vLLM SSE parsing error: ${error.message}`,
+        finishReason: 'error'
+      };
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch {
+        /* ignore */
+      }
+    }
   }
 }
 
