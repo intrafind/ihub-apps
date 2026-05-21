@@ -520,6 +520,20 @@ if (cluster.isPrimary && workerCount > 1) {
     });
   }
 
+  // Configure server timeouts for long-lived SSE connections
+  // Critical for preventing connection drops when accessed via SSL/reverse proxy
+  // Default Node.js keepAliveTimeout is 5s which causes SSE connections to drop
+  // after multiple messages (typically 3-7 messages)
+  server.keepAliveTimeout = 620000; // 620 seconds (10+ minutes) - must be > nginx timeout
+  server.headersTimeout = 630000; // 630 seconds - must be > keepAliveTimeout
+
+  logger.info({
+    component: 'Server',
+    message: 'Server timeout configuration',
+    keepAliveTimeout: `${server.keepAliveTimeout}ms`,
+    headersTimeout: `${server.headersTimeout}ms`
+  });
+
   if (cluster.isWorker) {
     // Inside a sticky cluster the primary owns the public port; this worker
     // only receives already-accepted connections via IPC.
