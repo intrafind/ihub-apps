@@ -356,7 +356,9 @@
     "chunkLoadDescription": "Eine benötigte Ressource konnte nicht geladen werden. Dies kann an einem Netzwerkproblem oder einem Anwendungsupdate liegen.",
     "reloadPage": "Seite neu laden",
     "tryAgain": "Erneut versuchen",
-    "backToHome": "Zurück zur Startseite"
+    "backToHome": "Zurück zur Startseite",
+    "malformedSseData": "Das Modell hat ungültige Daten gesendet, die nicht verarbeitet werden konnten. Dies kann auf ein Modellkonfigurationsproblem hinweisen. Bitte versuchen Sie es erneut oder kontaktieren Sie Ihren Administrator, wenn das Problem weiterhin besteht.",
+    "sseParsingError": "Fehler beim Verarbeiten der Serverantwort: {{error}}. Das Modell hat möglicherweise fehlerhafte Daten gesendet. Bitte versuchen Sie ein anderes Modell oder kontaktieren Sie den Support."
   },
   "network": {
     "offline": {

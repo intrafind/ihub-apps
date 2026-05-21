@@ -87,6 +87,12 @@ export async function parseSseStream(body, onEvent, signal) {
         ({ done, value } = await reader.read());
       } catch (err) {
         if (err.name === 'AbortError') break;
+
+        // Handle stream reading errors gracefully
+        console.error('Error reading SSE stream:', err);
+        onEvent('error', {
+          message: `Stream reading error: ${err.message}. The connection may have been interrupted.`
+        });
         throw err;
       }
 
@@ -94,7 +100,14 @@ export async function parseSseStream(body, onEvent, signal) {
         // Flush any remaining buffered line (stream ended without trailing newline)
         if (buffer) {
           const line = buffer.endsWith('\r') ? buffer.slice(0, -1) : buffer;
-          processLine(line);
+          try {
+            processLine(line);
+          } catch (err) {
+            console.error('Error processing final SSE line:', err);
+            onEvent('error', {
+              message: `Error processing final data: ${err.message}`
+            });
+          }
         }
         flushEvent();
         break;
@@ -107,10 +120,24 @@ export async function parseSseStream(body, onEvent, signal) {
         let line = buffer.slice(0, newlineIdx);
         buffer = buffer.slice(newlineIdx + 1);
         if (line.endsWith('\r')) line = line.slice(0, -1);
-        processLine(line);
+
+        try {
+          processLine(line);
+        } catch (err) {
+          // Log parsing errors but continue processing
+          console.error('Error processing SSE line:', err, 'Line:', line);
+          // Don't send error event for individual line failures - just log
+          // This prevents overwhelming the user with errors for minor parsing issues
+        }
       }
     }
     completedCleanly = true;
+  } catch (err) {
+    // Major parsing error - inform the user
+    console.error('Fatal SSE parsing error:', err);
+    onEvent('error', {
+      message: `Error parsing server events: ${err.message}. The server may have sent malformed data.`
+    });
   } finally {
     // If we exited via an exception (e.g. consumer's onEvent threw), the
     // underlying body stream is still flowing — releaseLock alone won't
