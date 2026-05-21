@@ -54,49 +54,101 @@ export class SubWorkflowMaterializer {
         ? `${task.title}\n\n${task.description || ''}`.trim()
         : task.description || `Execute task ${task.id || index}.`;
 
-      // Build the user prompt with three context blocks so each task sees
-      // (a) the agent's brief / inbox item / any state the orchestrator set
-      // up before the planner, and (b) what previous tasks produced. The
-      // `{{...}}` placeholders are resolved by PromptNodeExecutor against
-      // state.data at runtime — same pattern as iterative-research-auto's
-      // `{{findings}}` accumulator. Without this, each task starts blind
-      // and produces uncorrelated work.
+      // Build the user prompt with two context blocks so each task sees
+      // (a) the brief and inbox item the runtime loaded before the planner,
+      // and (b) what previous tasks produced (rendered from
+      // `state.data._taskResults`, populated by PromptNodeExecutor's runtime
+      // auto-persist after each planner task completes).
+      //
+      // `{{previousTaskResults}}` is a special template variable the prompt
+      // executor formats on-the-fly from the accumulated task results map.
+      // It renders empty on the first task and gracefully accumulates as
+      // later tasks complete — no more reliance on fragile `{{nodeResults}}`.
       const promptParts = [];
       if (index === 0) {
-        // First task: lead with the brief / inbox item context.
         promptParts.push(
           '## Context\n\n' +
             '- Original brief: {{brief}}\n' +
             '- Current inbox item (if any): {{currentInboxItem}}'
         );
       } else {
-        // Subsequent tasks: lead with prior task outputs.
+        // Earlier tasks have already produced findings. Make it explicit
+        // that this task BUILDS on top of them — extending, deepening, or
+        // analyzing the prior output rather than restarting the research
+        // from scratch. Without this nudge, an LLM may treat each task as
+        // independent and produce parallel/overlapping work.
         promptParts.push(
           '## Context\n\n' +
             '- Original brief: {{brief}}\n' +
             '- Current inbox item (if any): {{currentInboxItem}}\n\n' +
-            '## Previous task results\n\n' +
-            '{{nodeResults}}'
+            '## Previous task results — BUILD ON THESE\n\n' +
+            'The tasks below this one have already run. Their findings are ' +
+            'the foundation you extend in this step. DO NOT repeat work ' +
+            'they already did. DO NOT contradict facts they established ' +
+            'unless you have a verified source that overrides theirs. Your ' +
+            'job is to add NEW analysis, deeper detail, or fresh evidence ' +
+            'that complements what is here:\n\n' +
+            '{{previousTaskResults}}'
         );
       }
       promptParts.push(`## Current task\n\n${taskInstruction}`);
 
+      // Grounding discipline — the report generator at the end of the run
+      // can only cite what the task workers captured. Every task that has
+      // search/extract tools available should USE them, record source URLs
+      // per fact, and avoid fabricating. The runtime separately captures
+      // tool-call URLs into `state.data._citations` so the synthesizer has
+      // a ledger to cite from, but the task worker's own output should
+      // also include source URLs inline so the synthesizer can connect
+      // facts to citations cleanly.
+      const inheritedTools = Array.isArray(restTemplate.tools) ? restTemplate.tools : [];
+      const taskExtraTools = Array.isArray(task.tools) ? task.tools : [];
+      const allTaskTools = [...inheritedTools, ...taskExtraTools];
+      const hasSearchLikeTool = allTaskTools.some(t => {
+        if (typeof t !== 'string') return false;
+        const id = t.toLowerCase();
+        return id === 'websearch' || id === 'webcontentextractor' || id.startsWith('source_');
+      });
+      if (hasSearchLikeTool) {
+        promptParts.push(
+          '## Grounding rules\n\n' +
+            '1. Use the search/extract tools available to you to gather REAL information.\n' +
+            '   Do NOT invent facts. If you cannot find something, say so explicitly.\n' +
+            '2. For every concrete claim in your output, include the source URL inline\n' +
+            '   in parentheses, e.g. "Founded 2015 (https://example.com/about)".\n' +
+            '3. End your output with a "## Sources" section listing every URL you used\n' +
+            '   and the specific fact each one backs.\n' +
+            '4. Prefer multiple targeted searches over a single broad one — three focused\n' +
+            '   queries usually beat one vague one.'
+        );
+      }
+
+      const taskId = task.id || `task-${index}`;
+      const taskTitle = task.title || `Task ${index + 1}`;
+
       return {
-        id: task.id || `task-${index}`,
+        id: taskId,
         type: 'prompt',
-        name: { en: task.title || `Task ${index + 1}` },
+        name: { en: taskTitle },
         position: { x: 0, y: (index + 1) * 100 },
         config: {
           ...restTemplate,
-          // Marker the agent tool registrar uses to strip inbox tools from
-          // materialized tasks — the orchestrator owns inbox lifecycle, not
-          // individual plan tasks. Without this every task could re-read
-          // and re-mark the inbox, producing the "two items processed" bug.
+          // Marker the agent tool registrar uses to strip lifecycle tools
+          // (inbox/artifact/mark-done) from materialized tasks — the runtime
+          // owns inbox lifecycle and artifact persistence, not individual
+          // plan tasks. The PromptNodeExecutor also reads `_isPlannerTask`
+          // for its runtime auto-persist of per-task results.
           _isPlannerTask: true,
+          _taskId: taskId,
+          _taskTitle: taskTitle,
           // Bedrock (and other strict APIs) require at least one user message.
           prompt: promptParts.join('\n\n'),
+          // Research tools come from the profile's task template — no
+          // lifecycle tools layered on. Plan-task-level `tools` are
+          // additive (e.g. the planner can spotlight `webSearch` for a
+          // specific task) but must already exist in the tool catalog.
           tools: [...(task.tools || []), ...(templateTools || [])],
-          outputVariable: `task_${task.id || index}_result`
+          outputVariable: `task_${taskId}_result`
         }
       };
     });

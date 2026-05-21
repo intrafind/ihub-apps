@@ -124,7 +124,11 @@ function useWorkflowExecution(executionId, options = {}) {
       'agent.memory.read',
       'agent.memory.write',
       'agent.inbox.read',
+      'agent.inbox.empty',
       'agent.inbox.write',
+      'agent.inbox.marked_done',
+      'agent.skill.activated',
+      'agent.step.completed',
       'agent.tool.hallucinated',
       'agent.hitl.requested',
       'agent.hitl.approved',
@@ -157,9 +161,18 @@ function useWorkflowExecution(executionId, options = {}) {
           break;
 
         case 'workflow.node.start':
+          // Also push to history so the Steps table can derive
+          // in_progress status from history events. Without this only
+          // workflow.node.complete made it into history — and the UI
+          // ended up with rows that flipped straight from open to done,
+          // never showing in_progress.
           setState(prev => ({
             ...prev,
-            currentNodes: data.nodeId ? [data.nodeId] : prev?.currentNodes || []
+            currentNodes: data.nodeId ? [data.nodeId] : prev?.currentNodes || [],
+            history: [
+              ...(prev?.history || []),
+              { event: eventType, nodeId: data.nodeId, at: new Date().toISOString() }
+            ]
           }));
           break;
 
@@ -360,17 +373,33 @@ function useWorkflowExecution(executionId, options = {}) {
 
         case 'agent.task.completed':
         case 'agent.task.failed':
-          setState(prev => ({
-            ...prev,
-            data: {
-              ...prev?.data,
-              _taskQueue: (prev?.data?._taskQueue || []).map(t =>
-                t.id === data.taskId
-                  ? { ...t, status: eventType === 'agent.task.failed' ? 'failed' : 'done' }
-                  : t
-              )
+          setState(prev => {
+            const next = {
+              ...prev,
+              data: {
+                ...prev?.data,
+                _taskQueue: (prev?.data?._taskQueue || []).map(t =>
+                  t.id === data.taskId
+                    ? { ...t, status: eventType === 'agent.task.failed' ? 'failed' : 'done' }
+                    : t
+                )
+              }
+            };
+            // Mirror the timing into state.data._taskTimings so the step
+            // timeline shows Started + Duration the moment the task ends,
+            // without waiting for a refetch.
+            if (eventType === 'agent.task.completed' && data.taskId && data.durationMs != null) {
+              next.data._taskTimings = {
+                ...(prev?.data?._taskTimings || {}),
+                [data.taskId]: {
+                  startedAt: data.startedAt,
+                  completedAt: data.completedAt,
+                  durationMs: data.durationMs
+                }
+              };
             }
-          }));
+            return next;
+          });
           break;
 
         case 'agent.artifact.written':
@@ -411,9 +440,109 @@ function useWorkflowExecution(executionId, options = {}) {
           }));
           break;
 
+        case 'agent.inbox.read':
+          // The deterministic inbox-load executor includes a `picked` field
+          // with the item it injected into state. Mirror it into state.data
+          // live so the UI's Inbox-item card pops in without waiting for a
+          // full refetch. (The LLM read_inbox tool emits this event WITHOUT
+          // `picked` — we just append to history in that case.)
+          setState(prev => {
+            const next = {
+              ...prev,
+              history: [
+                ...(prev?.history || []),
+                { event: eventType, ...data, at: new Date().toISOString() }
+              ]
+            };
+            if (data?.picked && typeof data.picked === 'object') {
+              next.data = {
+                ...prev?.data,
+                currentInboxItem: {
+                  id: data.picked.line != null ? `line-${data.picked.line}` : null,
+                  line: data.picked.line,
+                  text: data.picked.text,
+                  priority: data.picked.priority,
+                  raw: data.picked.raw
+                },
+                _inboxMeta: {
+                  ...(prev?.data?._inboxMeta || {}),
+                  inboxId: data.inboxId
+                }
+              };
+            }
+            return next;
+          });
+          break;
+
+        case 'agent.step.completed':
+          // Live timing for orchestrator steps (planner LLM-only,
+          // synthesizer, inbox-load, inbox-finalize). Merges into
+          // state.data._taskTimings so the UI's Step timeline shows
+          // Started + Duration before the run completes.
+          if (data.nodeId && data.durationMs != null) {
+            setState(prev => ({
+              ...prev,
+              data: {
+                ...prev?.data,
+                _taskTimings: {
+                  ...(prev?.data?._taskTimings || {}),
+                  [data.nodeId]: {
+                    startedAt: data.startedAt,
+                    completedAt: data.completedAt,
+                    durationMs: data.durationMs
+                  }
+                }
+              }
+            }));
+          }
+          break;
+
+        case 'agent.skill.activated':
+          // Mirror the planner/tool-call activation into state so the run
+          // detail page can render an "Activated skills" card live. We only
+          // store metadata here — the body is server-side state.
+          setState(prev => ({
+            ...prev,
+            history: [
+              ...(prev?.history || []),
+              { event: eventType, ...data, at: new Date().toISOString() }
+            ],
+            data: {
+              ...prev?.data,
+              _activatedSkills: {
+                ...(prev?.data?._activatedSkills || {}),
+                [data.skillName]: {
+                  description: data.description || '',
+                  activatedAt: new Date().toISOString(),
+                  activatedBy: data.activatedBy || 'unknown'
+                }
+              }
+            }
+          }));
+          break;
+
+        case 'agent.inbox.marked_done':
+          // The inbox-finalize executor marks the picked item done. Keep the
+          // currentInboxItem visible in the UI but flag it as completed so
+          // the operator sees the lifecycle close.
+          setState(prev => ({
+            ...prev,
+            history: [
+              ...(prev?.history || []),
+              { event: eventType, ...data, at: new Date().toISOString() }
+            ],
+            data: {
+              ...prev?.data,
+              currentInboxItem: prev?.data?.currentInboxItem
+                ? { ...prev.data.currentInboxItem, _markedDone: true }
+                : prev?.data?.currentInboxItem
+            }
+          }));
+          break;
+
         case 'agent.memory.read':
         case 'agent.memory.write':
-        case 'agent.inbox.read':
+        case 'agent.inbox.empty':
         case 'agent.inbox.write':
         case 'agent.hitl.requested':
         case 'agent.hitl.approved':

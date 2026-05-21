@@ -8,7 +8,7 @@
  *   GET  /api/agents/approvals                — cross-profile pending queue
  */
 
-import { authRequired } from '../../middleware/authRequired.js';
+import { authRequired, authenticatedOnly } from '../../middleware/authRequired.js';
 import {
   sendBadRequest,
   sendNotFound,
@@ -20,6 +20,7 @@ import configCache from '../../configCache.js';
 import { WorkflowEngine, getExecutionRegistry } from '../../services/workflow/index.js';
 import { buildAgentPrincipal } from '../../utils/authorization.js';
 import { serializeProfile } from '../../agents/profile/profileWorkflowSerializer.js';
+import { generateRunTitleAsync } from '../../agents/runtime/titleGenerator.js';
 import { HumanNodeExecutor } from '../../services/workflow/executors/HumanNodeExecutor.js';
 import { actionTracker } from '../../actionTracker.js';
 import logger from '../../utils/logger.js';
@@ -49,11 +50,68 @@ function countRunningProfileRuns(profileId) {
   }
 }
 
+function isAdminUser(user) {
+  if (!user) return false;
+  if (user.permissions?.adminAccess === true) return true;
+  const groups = Array.isArray(user.groups) ? user.groups : [];
+  return groups.includes('admin') || groups.includes('admins');
+}
+
+/**
+ * Authorize the requesting user against a specific agent run. The run was
+ * triggered by a specific human (recorded in
+ * `state.data._agent.triggeredBy.userId`); only that user — or an
+ * administrator — should be able to read its state, stream its events, or
+ * download its artifacts. Anyone else gets 403 even though anonymous auth
+ * may be globally enabled for chat.
+ *
+ * Returns true when access is allowed. When denied, the response has
+ * already been sent (404 if the run doesn't exist, 403 otherwise) and the
+ * caller must return immediately.
+ */
+async function authorizeRunAccess(req, res, runId) {
+  if (isAdminUser(req.user)) return true;
+  try {
+    const state = await getEngine().getState(runId);
+    if (!state) {
+      sendNotFound(res, `Run ${runId} not found`);
+      return false;
+    }
+    const triggeredByUserId = state.data?._agent?.triggeredBy?.userId;
+    const requestingUserId = req.user?.id;
+    if (
+      triggeredByUserId &&
+      requestingUserId &&
+      requestingUserId !== 'anonymous' &&
+      triggeredByUserId === requestingUserId
+    ) {
+      return true;
+    }
+    res.status(403).json({
+      error: 'forbidden',
+      message: 'You are not allowed to access this run.'
+    });
+    return false;
+  } catch (err) {
+    logger.warn('Run authorization check failed', {
+      component: 'AgentRuns',
+      runId,
+      error: err.message
+    });
+    res.status(403).json({
+      error: 'forbidden',
+      message: 'Authorization check failed.'
+    });
+    return false;
+  }
+}
+
 export default function registerAgentRunRoutes(app) {
   // ── Manual trigger ────────────────────────────────────────────────────────
   app.post(
     buildServerPath('/api/agents/profiles/:profileId/runs'),
     authRequired,
+    authenticatedOnly,
     async (req, res) => {
       try {
         const { profileId } = req.params;
@@ -183,6 +241,74 @@ export default function registerAgentRunRoutes(app) {
         const state = await getEngine().start(workflow, initialData, {
           user: principal
         });
+
+        // Register the run in the ExecutionRegistry so the /api/agents/runs
+        // listing (and per-profile filter) actually finds it. Without this
+        // the registry only knows about runs started via workflowRoutes /
+        // workflowRunner — agent runs are invisible to GET /api/agents/runs
+        // and the "Runs" tab on the profile page comes up empty.
+        //
+        // userId follows the agent principal convention `agent:<profileId>`
+        // so the route's filter `r.userId === \`agent:${profileId}\`` matches.
+        try {
+          const registry = getExecutionRegistry();
+          registry.register(state.executionId, {
+            userId: principal.id, // `agent:${profileId}`
+            workflowId: workflow.id || `agent:${profileId}`,
+            workflowName: workflow.name || profile.name || profileId,
+            status: state.status,
+            startedAt: state.createdAt || state.startedAt || new Date().toISOString(),
+            source: 'agent',
+            inputPreview:
+              typeof resolvedBrief === 'string'
+                ? resolvedBrief.slice(0, 240)
+                : undefined,
+            models: profile.preferredModel ? [profile.preferredModel] : undefined,
+            // Carry the human who triggered the run so per-user filtering
+            // on the list endpoint doesn't need a separate state read.
+            triggeredBy: { userId: req.user?.id || 'anonymous', kind: 'manual' }
+          });
+        } catch (regErr) {
+          logger.warn('Failed to register agent run in ExecutionRegistry', {
+            component: 'AgentRuns',
+            profileId,
+            executionId: state.executionId,
+            error: regErr.message
+          });
+        }
+
+        // Fire-and-forget LLM title generation. Runs in background; never
+        // blocks the trigger response. Title appears in the UI header once
+        // the LLM call returns (typically <2s).
+        try {
+          let inboxTextHint;
+          if (profile.inboxId) {
+            try {
+              const { default: inboxStore } = await import(
+                '../../agents/inbox/inboxStore.js'
+              );
+              const inbox = await inboxStore.readInbox(profile.inboxId, { status: 'open' });
+              const top = (inbox.items || []).find(i => i.status === 'open');
+              if (top) inboxTextHint = top.text;
+            } catch {
+              // Title generator will fall back to the brief.
+            }
+          }
+          generateRunTitleAsync({
+            executionId: state.executionId,
+            brief: resolvedBrief,
+            inboxText: inboxTextHint,
+            preferredModelId: profile.preferredModel,
+            language: req.user?.language || 'en'
+          });
+        } catch (titleErr) {
+          logger.warn('Failed to kick off title generation', {
+            component: 'AgentRuns',
+            executionId: state.executionId,
+            error: titleErr.message
+          });
+        }
+
         logger.info('Started agent run', {
           component: 'AgentRuns',
           profileId,
@@ -202,14 +328,56 @@ export default function registerAgentRunRoutes(app) {
   );
 
   // ── List runs ─────────────────────────────────────────────────────────────
-  app.get(buildServerPath('/api/agents/runs'), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/agents/runs'), authRequired, authenticatedOnly, async (req, res) => {
     try {
       const registry = getExecutionRegistry();
       const all = registry.getAll ? registry.getAll() : [];
       const { profileId, status } = req.query;
-      let runs = all.filter(r => typeof r?.userId === 'string' && r.userId.startsWith('agent:'));
+      let runs = all.filter(r => {
+        if (typeof r?.userId !== 'string' || !r.userId.startsWith('agent:')) return false;
+        // Children inherit userId from the parent — the only reliable way
+        // to distinguish a parent agent run from a planner-spawned child
+        // sub-workflow is the executionId prefix (children start with
+        // `wf-child-`) plus the `source: 'agent'` tag the route writes
+        // when registering a fresh trigger. Drop everything else so the
+        // UI list shows only top-level runs.
+        if (typeof r.executionId === 'string' && r.executionId.startsWith('wf-child-')) {
+          return false;
+        }
+        if (r.source && r.source !== 'agent') return false;
+        return true;
+      });
       if (profileId) runs = runs.filter(r => r.userId === `agent:${profileId}`);
       if (status) runs = runs.filter(r => r.status === status);
+      // Per-user filter: a regular operator should only see runs they
+      // triggered. Admins see everything. The registry record's
+      // triggeredBy is mirrored from state.data._agent.triggeredBy, but
+      // we keep it on the registry too via the register payload below —
+      // legacy entries from before this commit may not have it, so we
+      // fall back to a state lookup for those.
+      if (!isAdminUser(req.user)) {
+        const myId = req.user?.id;
+        const filtered = [];
+        for (const r of runs) {
+          const trig = r.triggeredBy?.userId;
+          if (trig && myId && trig === myId) {
+            filtered.push(r);
+            continue;
+          }
+          // Fall back to checking state.data._agent.triggeredBy for runs
+          // registered before this filter shipped.
+          if (!trig) {
+            try {
+              const st = await getEngine().getState(r.executionId);
+              const stTrig = st?.data?._agent?.triggeredBy?.userId;
+              if (stTrig && myId && stTrig === myId) filtered.push(r);
+            } catch {
+              // Unknown run state — exclude on the safe side.
+            }
+          }
+        }
+        runs = filtered;
+      }
       res.json(runs);
     } catch (error) {
       sendFailedOperationError(res, 'list agent runs', error);
@@ -220,10 +388,11 @@ export default function registerAgentRunRoutes(app) {
   // Returns the enriched shape `useWorkflowExecution()` expects (canReconnect,
   // pendingCheckpoint, etc.) so the agent run detail page can reuse the
   // workflow execution hook without forking.
-  app.get(buildServerPath('/api/agents/runs/:runId'), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/agents/runs/:runId'), authRequired, authenticatedOnly, async (req, res) => {
     try {
       const { runId } = req.params;
       if (!validateIdForPath(runId, 'run', res)) return;
+      if (!(await authorizeRunAccess(req, res, runId))) return;
       const state = await getEngine().getState(runId);
       if (!state) return sendNotFound(res, `Run ${runId} not found`);
 
@@ -260,9 +429,10 @@ export default function registerAgentRunRoutes(app) {
   // workflows feature flag.
   const agentClients = new Map();
 
-  app.get(buildServerPath('/api/agents/runs/:runId/stream'), authRequired, (req, res) => {
+  app.get(buildServerPath('/api/agents/runs/:runId/stream'), authRequired, authenticatedOnly, async (req, res) => {
     const { runId } = req.params;
     if (!validateIdForPath(runId, 'run', res)) return;
+    if (!(await authorizeRunAccess(req, res, runId))) return;
 
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -372,10 +542,11 @@ export default function registerAgentRunRoutes(app) {
   });
 
   // ── Cancel ────────────────────────────────────────────────────────────────
-  app.post(buildServerPath('/api/agents/runs/:runId/cancel'), authRequired, async (req, res) => {
+  app.post(buildServerPath('/api/agents/runs/:runId/cancel'), authRequired, authenticatedOnly, async (req, res) => {
     try {
       const { runId } = req.params;
       if (!validateIdForPath(runId, 'run', res)) return;
+      if (!(await authorizeRunAccess(req, res, runId))) return;
       const state = await getEngine().cancel(runId, req.body?.reason || 'user_cancelled');
       res.json({ ok: true, status: state.status });
     } catch (error) {
@@ -384,10 +555,11 @@ export default function registerAgentRunRoutes(app) {
   });
 
   // ── HITL approval ─────────────────────────────────────────────────────────
-  app.post(buildServerPath('/api/agents/runs/:runId/approve'), authRequired, async (req, res) => {
+  app.post(buildServerPath('/api/agents/runs/:runId/approve'), authRequired, authenticatedOnly, async (req, res) => {
     try {
       const { runId } = req.params;
       if (!validateIdForPath(runId, 'run', res)) return;
+      if (!(await authorizeRunAccess(req, res, runId))) return;
       const { checkpointId, response, data, note } = req.body || {};
       if (!checkpointId || !response) {
         return sendBadRequest(res, 'checkpointId and response are required');
@@ -451,7 +623,7 @@ export default function registerAgentRunRoutes(app) {
   });
 
   // ── Cross-profile pending approvals queue ────────────────────────────────
-  app.get(buildServerPath('/api/agents/approvals'), authRequired, async (req, res) => {
+  app.get(buildServerPath('/api/agents/approvals'), authRequired, authenticatedOnly, async (req, res) => {
     try {
       const registry = getExecutionRegistry();
       const all = registry.getAll ? registry.getAll() : [];

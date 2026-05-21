@@ -2,54 +2,69 @@
  * Agent Tool Registrar
  *
  * Returns the list of tool IDs that should be auto-registered for an agent
- * run, based on the Profile's capabilities. The actual tool definitions live
- * in `config/tools.json` (added by migration V042) and the implementation
- * lives in `server/tools/agentTools.js`.
+ * run, based on the Profile's capabilities and the current node's role in
+ * the lifecycle. The actual tool definitions live in `config/tools.json`
+ * (added by migration V042 / V045 / V046) and the implementation lives in
+ * `server/tools/agentTools.js`.
  *
- * The registrar is consulted in PromptNodeExecutor.getAgentTools() before
+ * Lifecycle redesign (V047+): deterministic lifecycle operations are owned
+ * by the runtime, not the LLM. The registrar therefore no longer
+ * auto-attaches `read_inbox`, `write_inbox`, `write_artifact`, or
+ * `mark_task_done`. These tools still exist (and are still defined in
+ * tools.json) so profile authors can add them to `profile.tools[]` as an
+ * escape hatch — but they are no longer pushed into every agent prompt by
+ * default. That alone eliminates the planner-hallucination class of bugs
+ * we were defending against with `"DO NOT include orchestration steps"`
+ * prose in the planner system prompt.
+ *
+ * What IS auto-registered now:
+ *
+ *   - `read_memory` / `write_memory` — memory needs LLM agency by design.
+ *   - `create_task` / `list_tasks` — dynamic decomposition is a legitimate
+ *     planner-task power and the only way the agent can extend its own
+ *     work queue during a run. Only attached for `_isPlannerTask: true`
+ *     nodes when dynamicTasks is enabled.
+ *
+ * Synthesizer nodes (`_isSynthesizer: true`) get NO tools at all — they are
+ * pure text-in/text-out. The runtime persists their output as the final
+ * artifact, so the LLM never needs to call write_artifact.
+ *
+ * The registrar is consulted in `PromptNodeExecutor.getAgentTools()` before
  * resolution against the global tool catalog.
  */
 
-/**
- * Tool IDs surfaced for every agent run (memory + artifact).
- */
-const ALWAYS_ON = ['read_memory', 'write_memory', 'write_artifact'];
+/** Memory tools — always on for agent prompt nodes. */
+const MEMORY_TOOLS = ['read_memory', 'write_memory'];
 
-/**
- * Tool IDs surfaced when the Profile has an inboxId.
- */
-const INBOX_TOOLS = ['read_inbox', 'write_inbox'];
-
-/**
- * Tool IDs surfaced when dynamicTasks.enabled is true on the node.
- */
-const DYNAMIC_TASK_TOOLS = ['create_task', 'list_tasks', 'mark_task_done'];
+/** Dynamic decomposition tools — only on planner-task nodes when enabled. */
+const DYNAMIC_TASK_TOOLS = ['create_task', 'list_tasks'];
 
 /**
  * Return the list of agent tool IDs to inject for the current run/node.
  *
- * Materialized planner tasks (marked with `_isPlannerTask: true` by
- * SubWorkflowMaterializer) are workers — they do the work the planner
- * decomposed into. The inbox lifecycle (read once, mark done once) is owned
- * by the orchestrator nodes that sandwich the planner, NOT by individual
- * plan tasks. Giving plan tasks `read_inbox` / `write_inbox` causes each
- * stateless task to re-read the inbox and possibly mark different items —
- * exactly the "two items processed" bug the user hit. So we strip those
- * tools from materialized task nodes.
- *
  * @param {Object} profile - Resolved AgentProfile
- * @param {Object} nodeConfig - Current node config (may include dynamicTasks)
+ * @param {Object} nodeConfig - Current node config; runtime sets
+ *   `_isPlannerTask` on materialized planner task nodes and `_isSynthesizer`
+ *   on the synthesizer prompt node.
  * @returns {string[]} array of tool IDs (deduplicated)
  */
 export function getAgentToolIds(profile, nodeConfig = {}) {
-  const ids = new Set(ALWAYS_ON);
-  const isPlannerTask = nodeConfig?._isPlannerTask === true;
-  if (profile?.inboxId && !isPlannerTask) {
-    INBOX_TOOLS.forEach(id => ids.add(id));
+  // Synthesizer is pure text-in/text-out — runtime persists its output
+  // as the primary artifact. No LLM tools attached.
+  if (nodeConfig?._isSynthesizer === true) {
+    return [];
   }
-  if (nodeConfig?.dynamicTasks?.enabled || profile?.dynamicTasks?.enabled) {
+
+  const ids = new Set(MEMORY_TOOLS);
+
+  const isPlannerTask = nodeConfig?._isPlannerTask === true;
+  const dynamicEnabled =
+    nodeConfig?.dynamicTasks?.enabled === true || profile?.dynamicTasks?.enabled === true;
+
+  if (isPlannerTask && dynamicEnabled) {
     DYNAMIC_TASK_TOOLS.forEach(id => ids.add(id));
   }
+
   return Array.from(ids);
 }
 

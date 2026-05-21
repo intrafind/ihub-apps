@@ -41,6 +41,8 @@ export { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
 export { JoinNodeExecutor } from './JoinNodeExecutor.js';
 export { HttpNodeExecutor } from './HttpNodeExecutor.js';
 export { CodeNodeExecutor } from './CodeNodeExecutor.js';
+export { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
+export { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
 
 // Import classes for the factory
 import { StartNodeExecutor } from './StartNodeExecutor.js';
@@ -57,6 +59,8 @@ import { ParallelNodeExecutor } from './ParallelNodeExecutor.js';
 import { JoinNodeExecutor } from './JoinNodeExecutor.js';
 import { HttpNodeExecutor } from './HttpNodeExecutor.js';
 import { CodeNodeExecutor } from './CodeNodeExecutor.js';
+import { InboxLoadNodeExecutor } from './InboxLoadNodeExecutor.js';
+import { InboxFinalizeNodeExecutor } from './InboxFinalizeNodeExecutor.js';
 
 /**
  * Registry mapping node types to their executor classes.
@@ -76,7 +80,9 @@ const executorRegistry = {
   parallel: ParallelNodeExecutor,
   join: JoinNodeExecutor,
   http: HttpNodeExecutor,
-  code: CodeNodeExecutor
+  code: CodeNodeExecutor,
+  'inbox-load': InboxLoadNodeExecutor,
+  'inbox-finalize': InboxFinalizeNodeExecutor
 };
 
 /**

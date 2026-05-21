@@ -108,8 +108,17 @@ export class ExecutionRegistry {
    * });
    */
   register(executionId, metadata) {
-    const { userId, workflowId, workflowName, status, startedAt, source, inputPreview, models } =
-      metadata;
+    const {
+      userId,
+      workflowId,
+      workflowName,
+      status,
+      startedAt,
+      source,
+      inputPreview,
+      models,
+      triggeredBy
+    } = metadata;
 
     if (!executionId) {
       throw new Error('executionId is required');
@@ -137,6 +146,10 @@ export class ExecutionRegistry {
       source: source || 'ui',
       inputPreview: inputPreview || null,
       models: Array.isArray(models) ? models : [],
+      // Human who initiated the run — used by per-user authorization on
+      // the list/detail/artifact endpoints. Separate from `userId` which
+      // is the service-account principal for agent runs.
+      triggeredBy: triggeredBy && typeof triggeredBy === 'object' ? triggeredBy : null,
       archived: false
     };
 
@@ -334,6 +347,16 @@ export class ExecutionRegistry {
     return Array.from(this.executions.values())
       .filter(e => e.status === WorkflowStatus.RUNNING || e.status === WorkflowStatus.PAUSED)
       .map(e => ({ ...e }));
+  }
+
+  /**
+   * Get all executions regardless of status. Callers (e.g. the agent runs
+   * listing route) filter by userId / source afterwards. Returned objects
+   * are shallow copies so consumers can't mutate the internal index.
+   * @returns {Object[]}
+   */
+  getAll() {
+    return Array.from(this.executions.values()).map(e => ({ ...e }));
   }
 
   /**

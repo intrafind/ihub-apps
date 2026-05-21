@@ -377,8 +377,18 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
       }
     }
 
-    // Extract grounding metadata if present (for Google Search grounding)
-    if (parsed.groundingMetadata) {
+    // Extract grounding metadata if present (for Google Search grounding).
+    // Gemini puts this at `candidates[0].groundingMetadata` in real responses;
+    // the top-level `parsed.groundingMetadata` lookup we used before only
+    // matched a hypothetical shape and silently dropped every real grounding
+    // payload — which is why agent runs with webSearch (auto-swapped to
+    // googleSearch on Google models) never produced citations. Check the
+    // candidates[0] location first and fall back to top-level for forward
+    // compatibility.
+    const candidateGrounding = parsed.candidates?.[0]?.groundingMetadata;
+    if (candidateGrounding) {
+      result.groundingMetadata = candidateGrounding;
+    } else if (parsed.groundingMetadata) {
       result.groundingMetadata = parsed.groundingMetadata;
     }
 

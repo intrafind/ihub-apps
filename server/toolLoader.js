@@ -518,6 +518,34 @@ export async function runTool(toolId, params = {}) {
         description: content.description || ''
       });
     }
+
+    // Agent runs: persist the activated skill body to workflow state so
+    // subsequent prompt nodes (planner re-iterations, task workers, the
+    // synthesizer) automatically see it via the <active_skill> block.
+    // Apps that aren't running under an agent workflow keep the existing
+    // ephemeral tool-result-only behavior.
+    const workflowState = params.appConfig?._workflowState;
+    if (workflowState && workflowState.data) {
+      workflowState.data._activatedSkills = workflowState.data._activatedSkills || {};
+      workflowState.data._activatedSkills[skillName] = {
+        body: content.body,
+        description: content.description || '',
+        activatedAt: new Date().toISOString(),
+        activatedBy: params.user?.isAgent ? `agent:${params.user.profileId || 'unknown'}` : 'llm'
+      };
+      try {
+        actionTracker.emit('fire-sse', {
+          event: 'agent.skill.activated',
+          chatId,
+          skillName,
+          description: content.description || '',
+          activatedBy: 'llm'
+        });
+      } catch {
+        // Best effort.
+      }
+    }
+
     let result = content.body;
     // Include list of available resources if any exist
     const allResources = [...content.references, ...content.scripts, ...content.assets];
