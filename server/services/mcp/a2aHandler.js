@@ -2,6 +2,7 @@ import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { runTool, loadTools } from '../../toolLoader.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -155,6 +156,12 @@ async function handleTasksSend(params, { user, platform }) {
         };
       }
       const appId = skillId.slice('app__'.length);
+      // Sanitise before passing to invokeAppNonStreaming. Belt-and-braces:
+      // invokeAppNonStreaming runs the same check, but enforcing here
+      // breaks the CodeQL taint flow at the A2A boundary too.
+      if (!isValidId(appId)) {
+        return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid app id' } };
+      }
       output = await invokeAppNonStreaming({
         appId,
         args: input || {},
@@ -168,13 +175,20 @@ async function handleTasksSend(params, { user, platform }) {
         };
       }
       const wfId = skillId.slice('workflow__'.length);
+      if (!isValidId(wfId)) {
+        return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid workflow id' } };
+      }
       output = await runTool(`workflow_${wfId}`, input || {});
     } else {
-      // Treat as iHub tool id.
+      // Treat as iHub tool id. runTool itself enforces isValidId, but
+      // pre-check here for the same CodeQL taint-barrier reason.
       if (!(user.scopes || []).includes(MCP_SCOPES.TOOLS_CALL)) {
         return {
           __rpcError: { code: -32004, message: 'insufficient_scope: mcp:tools:call required' }
         };
+      }
+      if (!isValidId(skillId)) {
+        return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid skill id' } };
       }
       output = await runTool(skillId, input || {});
     }

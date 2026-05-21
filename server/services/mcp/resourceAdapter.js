@@ -1,6 +1,7 @@
 import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
-import { getSkillContent } from '../../services/skillLoader.js';
+import { getSkillContent, validateSkillName } from '../../services/skillLoader.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -117,9 +118,17 @@ export async function readMcpResource(uri, { user, language = 'en' }) {
   if (slash <= 0) throw new Error(`Malformed resource URI: ${uri}`);
 
   const kind = rest.slice(0, slash);
-  const id = decodeURIComponent(rest.slice(slash + 1));
+  const rawId = decodeURIComponent(rest.slice(slash + 1));
 
   if (kind === 'source') {
+    // Reject anything that doesn't match the source-id character set
+    // BEFORE we let the value reach any code path that builds a filesystem
+    // path. The downstream source handlers already sanity-check input,
+    // but a hard boundary here also breaks CodeQL's taint flow.
+    if (!isValidId(rawId)) {
+      throw new Error(`Source not found: ${rawId}`);
+    }
+    const id = rawId;
     const { data: sources = [] } = configCache.getSources();
     const source = sources.find(s => s.id === id);
     if (!source || !isSourceVisible(source)) {
@@ -138,6 +147,13 @@ export async function readMcpResource(uri, { user, language = 'en' }) {
   }
 
   if (kind === 'skill') {
+    // skillLoader applies validateSkillName internally, but enforce here
+    // too so CodeQL sees the sanitiser at the MCP boundary.
+    const nameCheck = validateSkillName(rawId);
+    if (!nameCheck.valid) {
+      throw new Error(`Skill not found: ${rawId}`);
+    }
+    const id = rawId;
     const { data: skills = [] } = configCache.getSkills();
     const skill = skills.find(s => s.name === id);
     if (!skill || !isSkillVisible(skill, user)) {

@@ -67,4 +67,38 @@ describe('A2A dispatcher', () => {
     );
     expect(r.error.message).toMatch(/mcp:workflows:run/);
   });
+
+  it('tasks/send rejects path-traversal in app skillId', async () => {
+    const r = await dispatchA2A(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tasks/send',
+        params: { skillId: 'app__../etc/passwd' }
+      },
+      { user: { id: 'u', scopes: ['mcp:apps:invoke'] }, platform }
+    );
+    expect(r.error.code).toBe(-32602);
+  });
+
+  it('tasks/send rejects path-traversal in workflow skillId', async () => {
+    const r = await dispatchA2A(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tasks/send',
+        params: { skillId: 'workflow__../wf' }
+      },
+      { user: { id: 'u', scopes: ['mcp:workflows:run'] }, platform }
+    );
+    expect(r.error.code).toBe(-32602);
+  });
+
+  it('tasks/send rejects path-traversal in raw tool skillId', async () => {
+    const r = await dispatchA2A(
+      { jsonrpc: '2.0', id: 1, method: 'tasks/send', params: { skillId: '../etc/passwd' } },
+      { user: { id: 'u', scopes: ['mcp:tools:call'] }, platform }
+    );
+    expect(r.error.code).toBe(-32602);
+  });
 });

@@ -32,4 +32,22 @@ describe('MCP resource adapter — URI parsing', () => {
       /not found/
     );
   });
+
+  it('rejects URL-encoded path-traversal in source ids', async () => {
+    await expect(readMcpResource('ihub://source/..%2Fconfig', { user: {} })).rejects.toThrow(
+      /Source not found/
+    );
+  });
+
+  it('rejects URL-encoded path-traversal in skill names', async () => {
+    await expect(readMcpResource('ihub://skill/..%2Fetc%2Fpasswd', { user: {} })).rejects.toThrow(
+      /Skill not found/
+    );
+  });
+
+  it('rejects skill names that fail the skillLoader name pattern', async () => {
+    await expect(readMcpResource('ihub://skill/Bad Name', { user: {} })).rejects.toThrow(
+      /Skill not found/
+    );
+  });
 });

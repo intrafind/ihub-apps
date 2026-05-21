@@ -1,6 +1,7 @@
 import RequestBuilder from '../chat/RequestBuilder.js';
 import { throttledFetch } from '../../requestThrottler.js';
 import { processMessageTemplates } from '../../serverHelpers.js';
+import { isValidId } from '../../utils/pathSecurity.js';
 import configCache from '../../configCache.js';
 import logger from '../../utils/logger.js';
 
@@ -21,6 +22,14 @@ import logger from '../../utils/logger.js';
  * or the streaming /api/chat endpoint.
  */
 export async function invokeAppNonStreaming({ appId, args, user, language, timeoutMs = 60000 }) {
+  // The caller (McpServerService) binds appId at MCP tool registration
+  // time from the trusted configCache list, but enforce a hard character
+  // check here so the function is safe to expose more broadly and so
+  // CodeQL sees a sanitiser before any downstream config lookup.
+  if (typeof appId !== 'string' || !isValidId(appId)) {
+    throw new Error(`Invalid app id: ${appId}`);
+  }
+
   const message = args?.message;
   if (typeof message !== 'string' || !message.trim()) {
     throw new Error("Missing required argument: 'message'");
