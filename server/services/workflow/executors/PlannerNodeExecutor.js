@@ -113,6 +113,15 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         return this.createErrorResult(`Invalid plan: ${validationError}`, { nodeId: node.id });
       }
 
+      // Global plan-task budget across the whole run. Per-node `maxTasks`
+      // bounds one planner call; nested planners (sub-workflow → planner) can
+      // multiply unbounded without this check. The budget lives in state.data
+      // so child sub-workflow planners share it with the parent.
+      const budgetError = this._checkAndUpdatePlanBudget(plan, state, node);
+      if (budgetError) {
+        return this.createErrorResult(budgetError, { nodeId: node.id });
+      }
+
       // Planning phase is DONE here — the LLM call returned a valid plan.
       // Capture the LLM-only duration NOW (not after _waitForChildCompletion,
       // which would conflate planning with the entire sub-workflow wait)
@@ -678,6 +687,32 @@ ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "ta
     }
 
     return null; // valid
+  }
+
+  /**
+   * Enforce a per-run total-tasks budget across all planner nodes.
+   *
+   * Per-node `maxTasks` caps one planner call; without this check, nested
+   * planners (e.g. planner → task → planner) can multiply task emission
+   * unbounded across the sub-workflow tree. The budget lives in
+   * `state.data._planBudget` (a `{ used, max }` record) and is shared by
+   * descendant planners through the workflow state.
+   *
+   * @param {Object} plan - The validated plan about to be materialized
+   * @param {Object} state - Current workflow execution state
+   * @param {Object} node - The planner node (used in the error message)
+   * @returns {string|null} Error message if budget exceeded, null otherwise
+   * @private
+   */
+  _checkAndUpdatePlanBudget(plan, state, _node) {
+    const data = (state.data ||= {});
+    const budget = (data._planBudget ||= { used: 0, max: 100 });
+    const incoming = Array.isArray(plan?.tasks) ? plan.tasks.length : 0;
+    if (budget.used + incoming > budget.max) {
+      return `Plan budget exceeded: this run has already emitted ${budget.used} task(s) and the planner is trying to add ${incoming} more (limit ${budget.max}).`;
+    }
+    budget.used += incoming;
+    return null;
   }
 
   /**

@@ -18,6 +18,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath, resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import { getRootDir } from '../../pathUtils.js';
 import { WorkflowEngine } from '../../services/workflow/index.js';
+import { buildContentDisposition } from '../../utils/safeContentDisposition.js';
 
 let _engine = null;
 function getEngine() {
@@ -39,11 +40,17 @@ async function artifactsDirForRun(runId) {
   return await resolveAndValidatePath(safeId, artifactsRootDir());
 }
 
+// Restrict artifact filenames to a conservative allowlist: alphanumerics,
+// dash, underscore, and dot. Rejects control characters (CR/LF/quote) that
+// would break Content-Disposition headers, path separators, leading dots,
+// double-dot traversal, and anything path.basename would normalize away.
+const SAFE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
 function safeName(name) {
   if (!name || typeof name !== 'string') return null;
-  if (name.includes('/') || name.includes('..') || name.startsWith('.')) return null;
-  if (name.length > 128) return null;
-  // path.basename strips any embedded separators (defense-in-depth + CodeQL).
+  if (!SAFE_ARTIFACT_NAME.test(name)) return null;
+  if (name.includes('..')) return null;
+  // path.basename is a CodeQL-recognized sanitizer for js/path-injection.
   const base = path.basename(name);
   if (base !== name) return null;
   return base;
@@ -152,10 +159,11 @@ export default function registerAgentArtifactRoutes(app) {
         }
         res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
         // Honor ?download=1 to set Content-Disposition: attachment so the
-        // browser saves the file instead of rendering it inline. Safe to
-        // include the validated `safe` filename in the header.
+        // browser saves the file instead of rendering it inline. Use the
+        // shared helper that escapes RFC 2183 unsafe chars and emits the
+        // RFC 5987 UTF-8 form alongside the ASCII fallback.
         if (req.query?.download === '1') {
-          res.setHeader('Content-Disposition', `attachment; filename="${safe}"`);
+          res.setHeader('Content-Disposition', buildContentDisposition(safe));
         }
         // lgtm[js/path-injection] -- file path canonicalized within artifacts root.
         fs.createReadStream(file).pipe(res);

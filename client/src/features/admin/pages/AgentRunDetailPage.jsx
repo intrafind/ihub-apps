@@ -1,10 +1,12 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
 import StepDetails from '../components/StepDetails';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
 import { approveAgentRun, cancelAgentRun, fetchRunArtifacts } from '../../../api/agentsAdminApi';
 
@@ -15,6 +17,7 @@ const AGENT_EXECUTION_OPTIONS = {
 };
 
 export default function AgentRunDetailPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { runId } = useParams();
   const {
@@ -27,6 +30,12 @@ export default function AgentRunDetailPage() {
 
   const [artifacts, setArtifacts] = useState([]);
   const [artifactsError, setArtifactsError] = useState(null);
+  // Local error banner state for action failures (cancel/approve).
+  const [actionError, setActionError] = useState(null);
+  // Controls the cancel-run confirmation dialog.
+  const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  // Live-updating clock for the run progress indicator (only ticks while running).
+  const [now, setNow] = useState(Date.now());
   // ArtifactViewer modal target: null when closed, artifact name when open.
   const [viewingArtifact, setViewingArtifact] = useState(null);
   // Long ledgers — start collapsed past N entries.
@@ -60,24 +69,35 @@ export default function AgentRunDetailPage() {
     };
   }, [runId, run?.data?._agent?.artifacts?.length, run?.status]);
 
-  async function handleCancel() {
-    if (!window.confirm('Cancel this run?')) return;
+  // Tick the local clock once a second while the run is in flight so the
+  // progress indicator's elapsed time stays current without depending on
+  // backend updates.
+  useEffect(() => {
+    if (run?.status !== 'running' || !run?.startedAt) return undefined;
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [run?.status, run?.startedAt]);
+
+  async function confirmCancel() {
+    setConfirmCancelOpen(false);
+    setActionError(null);
     try {
       await cancelAgentRun(runId, 'user_cancelled');
       refetch();
     } catch (err) {
-      alert(err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.message || err.message);
     }
   }
 
   async function handleApprove(response) {
     const checkpoint = run?.pendingCheckpoint || run?.data?.pendingCheckpoint;
     if (!checkpoint) return;
+    setActionError(null);
     try {
       await approveAgentRun(runId, { checkpointId: checkpoint.id, response });
       refetch();
     } catch (err) {
-      alert(err?.response?.data?.message || err.message);
+      setActionError(err?.response?.data?.message || err.message);
     }
   }
 
@@ -85,7 +105,7 @@ export default function AgentRunDetailPage() {
     return (
       <AdminAuth>
         <AdminNavigation />
-        <div className="p-8">Loading…</div>
+        <div className="p-8">{t('common.loading', 'Loading…')}</div>
       </AdminAuth>
     );
   }
@@ -460,6 +480,23 @@ export default function AgentRunDetailPage() {
   // double-bubble-ups don't produce duplicate rows.
   const stateArtifacts = run?.data?._agent?.artifacts || [];
   const rawArtifacts = artifacts.length > 0 ? artifacts : stateArtifacts;
+
+  // Run-level progress indicator: "{done}/{total} tasks · {elapsed}".
+  // Surfaced only when there's either a populated task queue or a recorded
+  // start time, so completed runs still show wall-clock and runs that never
+  // got a task queue (inbox-empty) just hide the line.
+  const progressTaskQueue = Array.isArray(run?.data?._taskQueue) ? run.data._taskQueue : [];
+  const progressTotal = progressTaskQueue.length;
+  const progressDone = progressTaskQueue.filter(tk => tk.status === 'done').length;
+  const progressStartedAt = run?.startedAt ? new Date(run.startedAt).getTime() : null;
+  const progressEndTs = run?.completedAt
+    ? new Date(run.completedAt).getTime()
+    : isInFlight
+      ? now
+      : null;
+  const progressElapsedMs =
+    progressStartedAt && progressEndTs ? progressEndTs - progressStartedAt : null;
+  const showProgress = progressTotal > 0 || !!progressStartedAt;
   const displayArtifacts = (() => {
     const seen = new Set();
     const out = [];
@@ -481,6 +518,15 @@ export default function AgentRunDetailPage() {
           <div className="flex justify-between items-start mb-6 gap-4">
             <div className="min-w-0 flex-1">
               <h1 className="text-2xl font-bold text-gray-900">{runTitle}</h1>
+              {showProgress && (
+                <div className="text-sm text-gray-500 mt-1" aria-live="polite">
+                  {t('admin.agents.runs.progress', '{{done}}/{{total}} tasks · {{elapsed}}', {
+                    done: progressDone,
+                    total: progressTotal,
+                    elapsed: formatDuration(progressElapsedMs)
+                  })}
+                </div>
+              )}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600">
                 <span className="font-mono">{profileId}</span>
                 <span className="text-gray-300">·</span>
@@ -534,10 +580,10 @@ export default function AgentRunDetailPage() {
               </button>
               {status === 'running' && (
                 <button
-                  onClick={handleCancel}
+                  onClick={() => setConfirmCancelOpen(true)}
                   className="px-3 py-2 bg-red-600 text-white rounded text-sm"
                 >
-                  Cancel
+                  {t('common.cancel', 'Cancel')}
                 </button>
               )}
             </div>
@@ -548,9 +594,16 @@ export default function AgentRunDetailPage() {
               {error}
             </div>
           )}
+          {actionError && (
+            <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+              {actionError}
+            </div>
+          )}
           {artifactsError && (
             <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
-              Artifacts: {artifactsError}
+              {t('admin.agents.runs.artifactsErrorPrefix', 'Artifacts: {{message}}', {
+                message: artifactsError
+              })}
             </div>
           )}
 
@@ -800,7 +853,17 @@ export default function AgentRunDetailPage() {
                           runId={runId}
                           name={a.name}
                           size="sm"
-                          onError={err => alert(`Download failed: ${err.message}`)}
+                          onError={err =>
+                            setActionError(
+                              t(
+                                'admin.agents.runs.downloadFailed',
+                                'Download failed: {{message}}',
+                                {
+                                  message: err.message
+                                }
+                              )
+                            )
+                          }
                         />
                         {typeof a.bytes === 'number' && (
                           <span className="text-xs text-gray-500">{a.bytes} bytes</span>
@@ -970,6 +1033,19 @@ export default function AgentRunDetailPage() {
           onClose={() => setViewingArtifact(null)}
         />
       )}
+      <ConfirmDialog
+        isOpen={confirmCancelOpen}
+        danger
+        title={t('admin.agents.runs.cancelTitle', 'Cancel run')}
+        message={t(
+          'admin.agents.runs.cancelMessage',
+          "Cancel this run? In-flight LLM calls won't be billed for completed turns."
+        )}
+        confirmLabel={t('admin.agents.runs.confirmCancel', 'Cancel run')}
+        denyLabel={t('admin.agents.runs.keepRunning', 'Keep running')}
+        onConfirm={confirmCancel}
+        onDeny={() => setConfirmCancelOpen(false)}
+      />
     </AdminAuth>
   );
 }

@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs';
 import { join, basename } from 'path';
 import { getRootDir } from '../../pathUtils.js';
-import { atomicWriteJSON } from '../../utils/atomicWrite.js';
+import { atomicWriteJSON, atomicCreateJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth } from '../../middleware/adminAuth.js';
 import {
@@ -80,15 +80,16 @@ export default function registerAdminAgentsRoutes(app) {
       await ensureProfilesDir();
       const target = await profileFilePath(profile.id);
       try {
-        // lgtm[js/path-injection] -- profile.id validated by AGENT_PROFILE_ID_PATTERN; path canonicalized.
-        await fs.access(target);
-        return sendBadRequest(res, `Profile ${profile.id} already exists`);
-      } catch {
-        // not found — good
+        // lgtm[js/path-injection] -- profile.id validated; path canonicalized.
+        await atomicCreateJSON(target, profile);
+      } catch (err) {
+        if (err.code === 'EEXIST') {
+          return res
+            .status(409)
+            .json({ error: 'CONFLICT', message: `Profile ${profile.id} already exists` });
+        }
+        throw err;
       }
-
-      // lgtm[js/path-injection] -- profile.id validated; path canonicalized by resolveAndValidatePath.
-      await atomicWriteJSON(target, profile);
       await configCache.refreshAgentProfilesCache();
       logger.info('Created agent profile', {
         component: 'AdminAgents',

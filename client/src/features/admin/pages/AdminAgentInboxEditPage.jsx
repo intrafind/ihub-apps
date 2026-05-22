@@ -249,6 +249,7 @@ export default function AdminAgentInboxEditPage() {
                   <select
                     value={newPriority}
                     onChange={e => setNewPriority(e.target.value)}
+                    aria-label={t('admin.agents.inbox.itemPriority', 'Item priority')}
                     className="rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100"
                   >
                     <option value="">{t('admin.agents.inbox.noPriority', 'No priority')}</option>
@@ -263,6 +264,7 @@ export default function AdminAgentInboxEditPage() {
                     onKeyDown={e => {
                       if (e.key === 'Enter') addItem();
                     }}
+                    aria-label={t('admin.agents.inbox.itemText', 'Item text')}
                     placeholder={t(
                       'admin.agents.inbox.itemPlaceholder',
                       'Describe a task the agent should do'
@@ -332,6 +334,7 @@ export default function AdminAgentInboxEditPage() {
                             onClick={() => moveItem(idx, -1)}
                             disabled={idx === 0}
                             title={t('common.moveUp', 'Move up')}
+                            aria-label={t('admin.agents.inbox.moveUp', 'Move item up')}
                             className="text-xs text-gray-500 hover:text-indigo-600 disabled:opacity-30"
                           >
                             ▲
@@ -341,6 +344,7 @@ export default function AdminAgentInboxEditPage() {
                             onClick={() => moveItem(idx, 1)}
                             disabled={idx === parsed.items.length - 1}
                             title={t('common.moveDown', 'Move down')}
+                            aria-label={t('admin.agents.inbox.moveDown', 'Move item down')}
                             className="text-xs text-gray-500 hover:text-indigo-600 disabled:opacity-30"
                           >
                             ▼

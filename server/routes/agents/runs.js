@@ -160,47 +160,6 @@ export default function registerAgentRunRoutes(app) {
         }
         workflow.id = workflow.id || `agent:${profileId}`;
 
-        // Defense in depth: planner nodes saved by older serializer versions
-        // may be missing a `goal` or have taskTemplate wrapped in a broken
-        // `{type, config: {...}}` shape (which the materializer then expands
-        // into a node whose `config.config` causes deepMerge to recurse
-        // forever). Fix both shapes at trigger time so legacy profiles run.
-        // Also fill in modelId / system / tools / apps / sources from the
-        // Profile root so legacy taskTemplates pick up the agent's choices.
-        if (Array.isArray(workflow.nodes)) {
-          workflow.nodes = workflow.nodes.map(n => {
-            if (!n || n.type !== 'planner') return n;
-            const cfg = { ...(n.config || {}) };
-            if (!cfg.goal) cfg.goal = '${$.data.brief}';
-            let tt = cfg.taskTemplate;
-            if (tt && typeof tt === 'object' && tt.config && typeof tt.config === 'object') {
-              const { type: _t, config: inner, ...rest } = tt;
-              tt = { ...rest, ...inner };
-            }
-            if (tt) {
-              const profileSystem =
-                profile.system && Object.keys(profile.system).length > 0 ? profile.system : null;
-              if (profileSystem && !tt.system) tt.system = profileSystem;
-              if (profile.preferredModel && !tt.modelId) tt.modelId = profile.preferredModel;
-              if (
-                Array.isArray(profile.tools) &&
-                (!Array.isArray(tt.tools) || tt.tools.length === 0)
-              )
-                tt.tools = profile.tools;
-              if (Array.isArray(profile.apps) && (!Array.isArray(tt.apps) || tt.apps.length === 0))
-                tt.apps = profile.apps;
-              if (
-                Array.isArray(profile.sources) &&
-                (!Array.isArray(tt.sources) || tt.sources.length === 0)
-              )
-                tt.sources = profile.sources;
-              cfg.taskTemplate = tt;
-            }
-            if (profile.preferredModel && !cfg.modelId) cfg.modelId = profile.preferredModel;
-            return { ...n, config: cfg };
-          });
-        }
-
         const principal = buildAgentPrincipal(profile, {
           userId: req.user?.id || 'anonymous',
           kind: 'manual'
@@ -370,23 +329,40 @@ export default function registerAgentRunRoutes(app) {
         if (!isAdminUser(req.user)) {
           const myId = req.user?.id;
           const filtered = [];
+          let unknownMetadataSkipped = 0;
           for (const r of runs) {
             const trig = r.triggeredBy?.userId;
             if (trig && myId && trig === myId) {
               filtered.push(r);
               continue;
             }
+            if (trig) {
+              // Belongs to another user — quietly exclude.
+              continue;
+            }
             // Fall back to checking state.data._agent.triggeredBy for runs
             // registered before this filter shipped.
-            if (!trig) {
-              try {
-                const st = await getEngine().getState(r.executionId);
-                const stTrig = st?.data?._agent?.triggeredBy?.userId;
-                if (stTrig && myId && stTrig === myId) filtered.push(r);
-              } catch {
-                // Unknown run state — exclude on the safe side.
+            try {
+              const st = await getEngine().getState(r.executionId);
+              const stTrig = st?.data?._agent?.triggeredBy?.userId;
+              if (stTrig && myId && stTrig === myId) {
+                filtered.push(r);
+              } else if (!stTrig) {
+                // No triggeredBy anywhere — quarantine this run; surface
+                // the count so operators notice broken metadata instead of
+                // wondering why their list is short.
+                unknownMetadataSkipped += 1;
               }
+            } catch {
+              unknownMetadataSkipped += 1;
             }
+          }
+          if (unknownMetadataSkipped > 0) {
+            logger.warn('Agent runs without triggeredBy metadata excluded from list', {
+              component: 'AgentRuns',
+              userId: myId,
+              count: unknownMetadataSkipped
+            });
           }
           runs = filtered;
         }

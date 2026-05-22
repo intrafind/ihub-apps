@@ -11,21 +11,31 @@
 
 import fs from 'fs/promises';
 import path from 'path';
-import { actionTracker } from '../../actionTracker.js';
 import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteFile } from '../../utils/atomicWrite.js';
 import { isValidId, resolveAndValidatePath } from '../../utils/pathSecurity.js';
-import logger from '../../utils/logger.js';
+import { createSseEmitter } from '../../utils/sseEmitter.js';
+
+const emit = createSseEmitter('ArtifactStore');
+
+// Conservative allowlist: alphanumerics, dash, underscore, and dot only.
+// Rejects control chars (CR/LF/quote) that could escape Content-Disposition
+// headers when the artifact is downloaded, plus any path traversal vector.
+const SAFE_ARTIFACT_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+
+// Per-run quota. write_artifact is LLM-callable; without these caps a buggy
+// or adversarial agent can fill the disk under contents/data/agent-artifacts.
+const MAX_ARTIFACTS_PER_RUN = 50;
+const MAX_TOTAL_BYTES_PER_RUN = 100 * 1024 * 1024; // 100 MB
 
 function safeArtifactName(name) {
   if (!name || typeof name !== 'string') {
     throw new Error('artifact name is required');
   }
-  if (name.includes('/') || name.includes('..') || name.startsWith('.')) {
-    throw new Error('artifact name must be a simple filename');
-  }
-  if (name.length > 128) {
-    throw new Error('artifact name too long');
+  if (!SAFE_ARTIFACT_NAME.test(name) || name.includes('..')) {
+    throw new Error(
+      'artifact name must be a simple filename (letters, digits, dot, dash, underscore; ≤128 chars; no control chars)'
+    );
   }
   const base = path.basename(name);
   if (base !== name) {
@@ -34,16 +44,17 @@ function safeArtifactName(name) {
   return base;
 }
 
-function emit(event, payload, chatId) {
-  try {
-    actionTracker.emit('fire-sse', { event, chatId, ...payload });
-  } catch (err) {
-    logger.warn('Artifact store event emit failed', {
-      component: 'ArtifactStore',
-      event,
-      error: err.message
-    });
+function checkArtifactQuota(state, incomingBytes) {
+  if (!state?.data) return null;
+  const existing = Array.isArray(state.data._agent?.artifacts) ? state.data._agent.artifacts : [];
+  if (existing.length >= MAX_ARTIFACTS_PER_RUN) {
+    return `artifact quota exceeded: this run has already written ${existing.length} artifact(s) (limit ${MAX_ARTIFACTS_PER_RUN})`;
   }
+  const usedBytes = existing.reduce((sum, a) => sum + (Number(a.bytes) || 0), 0);
+  if (usedBytes + incomingBytes > MAX_TOTAL_BYTES_PER_RUN) {
+    return `artifact byte quota exceeded: this run has written ${usedBytes} bytes and the new artifact would add ${incomingBytes} (limit ${MAX_TOTAL_BYTES_PER_RUN})`;
+  }
+  return null;
 }
 
 /**
@@ -101,13 +112,21 @@ export async function writeArtifactDirect(args) {
     throw new Error('writeArtifactDirect: content must be a string');
   }
   const safeName = safeArtifactName(name);
+  const bytes = Buffer.byteLength(content);
+
+  const quotaError = checkArtifactQuota(state, bytes);
+  if (quotaError) {
+    const err = new Error(quotaError);
+    err.code = 'ARTIFACT_QUOTA_EXCEEDED';
+    throw err;
+  }
+
   const { dir, safeRunId } = await resolveRunDir(runId);
   const file = await resolveAndValidatePath(safeName, dir);
   if (!file) {
     throw new Error(`writeArtifactDirect: invalid artifact path: ${safeName}`);
   }
   await atomicWriteFile(file, content);
-  const bytes = Buffer.byteLength(content);
 
   if (state && state.data) {
     state.data._agent = state.data._agent || {};

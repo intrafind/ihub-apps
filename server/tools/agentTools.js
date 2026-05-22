@@ -14,12 +14,14 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { actionTracker } from '../actionTracker.js';
 import logger from '../utils/logger.js';
+import { createSseEmitter } from '../utils/sseEmitter.js';
 import memoryFile from '../agents/memory/memoryFile.js';
 import inboxStore from '../agents/inbox/inboxStore.js';
 import { validateTaskRecord } from '../agents/runtime/taskRecord.js';
 import { writeArtifactDirect } from '../agents/runtime/artifactStore.js';
+
+const emit = createSseEmitter('AgentTools');
 
 function ensureAgent(user) {
   if (!user || user.isAgent !== true) {
@@ -29,18 +31,6 @@ function ensureAgent(user) {
     throw new Error('Agent principal missing profileId');
   }
   return user;
-}
-
-function emit(event, payload, chatId) {
-  try {
-    actionTracker.emit('fire-sse', { event, chatId, ...payload });
-  } catch (err) {
-    logger.warn('Agent tool event emit failed', {
-      component: 'AgentTools',
-      event,
-      error: err.message
-    });
-  }
 }
 
 // ─── Memory ───────────────────────────────────────────────────────────────
@@ -347,6 +337,13 @@ export async function writeArtifact(params = {}) {
     });
     return { ok: true, name: result.name, bytes: result.bytes };
   } catch (err) {
+    if (err.code === 'ARTIFACT_QUOTA_EXCEEDED') {
+      return {
+        error: true,
+        code: 'ARTIFACT_QUOTA_EXCEEDED',
+        message: `${err.message}. Stop writing more artifacts — the run has hit its quota.`
+      };
+    }
     return {
       error: true,
       code: 'WRITE_FAILED',

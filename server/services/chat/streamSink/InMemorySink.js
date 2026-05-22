@@ -21,6 +21,11 @@ import { actionTracker } from '../../../actionTracker.js';
 import { UnifiedEvents } from '../../../../shared/unifiedEventSchema.js';
 
 const DEFAULT_TIMEOUT_MS = 120_000;
+// Cap accumulated streamed bytes. App-as-tool gateway responses can be very
+// long, and nested agent-in-app recursion would otherwise pin unbounded
+// per-run heap. Past this threshold we mark the sink errored so the caller
+// returns to the LLM with a clean failure instead of OOMing the process.
+const MAX_SINK_BYTES = 10 * 1024 * 1024;
 
 export class InMemorySink {
   constructor({ chatId } = {}) {
@@ -37,10 +42,31 @@ export class InMemorySink {
     this.finishReason = null;
     this.errorPayload = null;
     this.done = false;
+    this._byteCount = 0;
 
     this._listener = null;
     this._donePromise = null;
     this._doneResolver = null;
+  }
+
+  /**
+   * Returns true if the append should be rejected because the sink is full.
+   * On overflow the sink is marked errored and `_markDone` is called so the
+   * pending `getResult()` promise resolves immediately.
+   */
+  _wouldOverflow(bytes) {
+    this._byteCount += bytes;
+    if (this._byteCount > MAX_SINK_BYTES) {
+      if (!this.errorPayload) {
+        this.errorPayload = {
+          message: 'sink overflow',
+          details: { bytes: this._byteCount, limit: MAX_SINK_BYTES }
+        };
+      }
+      this._markDone();
+      return true;
+    }
+    return false;
   }
 
   // ─── Express-res shim ──────────────────────────────────────────────────
@@ -82,16 +108,25 @@ export class InMemorySink {
     });
     this._listener = step => {
       if (!step || step.chatId !== this.chatId) return;
+      if (this.done) return;
       const event = step.event;
       if (event === UnifiedEvents.CHUNK || event === 'chunk') {
-        if (typeof step.content === 'string') this.chunks.push(step.content);
+        if (typeof step.content === 'string') {
+          if (this._wouldOverflow(step.content.length)) return;
+          this.chunks.push(step.content);
+        }
       } else if (event === UnifiedEvents.TOOL_CALL_END || event === 'tool-call-end') {
-        this.toolCalls.push({
+        const entry = {
           toolName: step.toolName,
           toolInput: step.toolInput,
           toolOutput: step.toolOutput
-        });
+        };
+        const size = JSON.stringify(entry).length;
+        if (this._wouldOverflow(size)) return;
+        this.toolCalls.push(entry);
       } else if (event === UnifiedEvents.CITATION || event === 'citation') {
+        const size = JSON.stringify(step).length;
+        if (this._wouldOverflow(size)) return;
         this.citations.push(step);
       } else if (event === UnifiedEvents.DONE || event === 'done') {
         this.finishReason = step.finishReason || step.reason || null;
