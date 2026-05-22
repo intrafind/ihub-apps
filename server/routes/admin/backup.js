@@ -11,6 +11,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { runConfigMigrations } from '../../migrations/runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -56,15 +57,30 @@ async function ensureDir(dirPath) {
 }
 
 /**
- * Extract ZIP file to destination directory
+ * Extract ZIP file to destination directory.
+ * Returns the number of contents files successfully extracted.
  */
 function extractZip(zipPath, extractPath) {
   return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+    yauzl.open(zipPath, { lazyEntries: true }, async (err, zipfile) => {
       if (err) {
         reject(err);
         return;
       }
+
+      // The path validator (resolveAndValidatePath) calls fs.realpath() on the
+      // base directory, so the contents/ base must exist before we start
+      // validating entries — otherwise every entry is rejected as a path
+      // traversal and the import silently extracts nothing.
+      const contentsBase = path.join(extractPath, 'contents');
+      try {
+        await ensureDir(contentsBase);
+      } catch (mkdirErr) {
+        reject(mkdirErr);
+        return;
+      }
+
+      let extractedCount = 0;
 
       zipfile.readEntry();
 
@@ -102,7 +118,6 @@ function extractZip(zipPath, extractPath) {
 
         // Extract the relative path within contents/
         const relativePath = contentsMatch[1];
-        const contentsBase = path.join(extractPath, 'contents');
         const entryPath = await resolveAndValidatePath(relativePath, contentsBase);
 
         // Prevent ZIP slip: skip entries that would escape the extract directory
@@ -135,6 +150,7 @@ function extractZip(zipPath, extractPath) {
           readStream.pipe(writeStream);
 
           writeStream.on('close', () => {
+            extractedCount++;
             zipfile.readEntry();
           });
 
@@ -145,7 +161,7 @@ function extractZip(zipPath, extractPath) {
       });
 
       zipfile.on('end', () => {
-        resolve();
+        resolve(extractedCount);
       });
 
       zipfile.on('error', err => {
@@ -252,21 +268,19 @@ export async function importConfig(req, res) {
 
     // Extract ZIP file
     await fs.mkdir(tempExtractPath, { recursive: true });
-    await extractZip(tempZipPath, tempExtractPath);
+    const extractedCount = await extractZip(tempZipPath, tempExtractPath);
 
     // Debug: List what was actually extracted
     const extractedItems = await fs.readdir(tempExtractPath, { withFileTypes: true });
     logger.info('Extracted items from ZIP', {
       component: 'AdminBackup',
-      items: extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`)
+      items: extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`),
+      extractedCount
     });
 
-    // Verify the extracted content has a contents directory
+    // Verify the ZIP actually contained contents/ files
     const extractedContentsPath = path.join(tempExtractPath, 'contents');
-
-    try {
-      await fs.access(extractedContentsPath);
-    } catch {
+    if (extractedCount === 0) {
       return sendBadRequest(res, 'Invalid backup file: No contents directory found');
     }
 
@@ -314,6 +328,24 @@ export async function importConfig(req, res) {
 
     logger.info('Configuration files replaced', { component: 'AdminBackup' });
 
+    // Run pending migrations against the imported configuration. The backup
+    // carries contents/.migration-history.json, so the runner only applies the
+    // delta between the backup's version and this server's available migrations.
+    let migrationResult = null;
+    let migrationError = null;
+    try {
+      logger.info('Running configuration migrations on imported files', {
+        component: 'AdminBackup'
+      });
+      migrationResult = await runConfigMigrations();
+      logger.info('Migrations complete', { component: 'AdminBackup', migrationResult });
+    } catch (error) {
+      migrationError = error.message;
+      logger.error('Migration failed during import', { component: 'AdminBackup', error });
+      // Continue with cache reload — the contents are already replaced, and the
+      // admin needs to see the partial state plus the error in the response.
+    }
+
     // Reload configuration cache
     logger.info('Reloading configuration cache', { component: 'AdminBackup' });
     await configCache.clear();
@@ -325,10 +357,14 @@ export async function importConfig(req, res) {
 
     res.json({
       success: true,
-      message: 'Configuration imported successfully',
+      message: migrationError
+        ? 'Configuration imported, but one or more migrations failed. See server logs and the migrations field for details.'
+        : 'Configuration imported successfully',
       importedFiles: importedFiles.length,
       backupPath: path.basename(currentBackupPath),
       metadata: metadata,
+      migrations: migrationResult,
+      migrationError,
       note: 'All configurations have been replaced and cache has been reloaded. Frontend customizations (CSS, HTML, etc.) are included if they were in the backup.'
     });
 
