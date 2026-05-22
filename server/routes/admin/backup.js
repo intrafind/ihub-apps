@@ -56,15 +56,30 @@ async function ensureDir(dirPath) {
 }
 
 /**
- * Extract ZIP file to destination directory
+ * Extract ZIP file to destination directory.
+ * Returns the number of contents files successfully extracted.
  */
 function extractZip(zipPath, extractPath) {
   return new Promise((resolve, reject) => {
-    yauzl.open(zipPath, { lazyEntries: true }, (err, zipfile) => {
+    yauzl.open(zipPath, { lazyEntries: true }, async (err, zipfile) => {
       if (err) {
         reject(err);
         return;
       }
+
+      // The path validator (resolveAndValidatePath) calls fs.realpath() on the
+      // base directory, so the contents/ base must exist before we start
+      // validating entries — otherwise every entry is rejected as a path
+      // traversal and the import silently extracts nothing.
+      const contentsBase = path.join(extractPath, 'contents');
+      try {
+        await ensureDir(contentsBase);
+      } catch (mkdirErr) {
+        reject(mkdirErr);
+        return;
+      }
+
+      let extractedCount = 0;
 
       zipfile.readEntry();
 
@@ -102,7 +117,6 @@ function extractZip(zipPath, extractPath) {
 
         // Extract the relative path within contents/
         const relativePath = contentsMatch[1];
-        const contentsBase = path.join(extractPath, 'contents');
         const entryPath = await resolveAndValidatePath(relativePath, contentsBase);
 
         // Prevent ZIP slip: skip entries that would escape the extract directory
@@ -135,6 +149,7 @@ function extractZip(zipPath, extractPath) {
           readStream.pipe(writeStream);
 
           writeStream.on('close', () => {
+            extractedCount++;
             zipfile.readEntry();
           });
 
@@ -145,7 +160,7 @@ function extractZip(zipPath, extractPath) {
       });
 
       zipfile.on('end', () => {
-        resolve();
+        resolve(extractedCount);
       });
 
       zipfile.on('error', err => {
@@ -252,21 +267,19 @@ export async function importConfig(req, res) {
 
     // Extract ZIP file
     await fs.mkdir(tempExtractPath, { recursive: true });
-    await extractZip(tempZipPath, tempExtractPath);
+    const extractedCount = await extractZip(tempZipPath, tempExtractPath);
 
     // Debug: List what was actually extracted
     const extractedItems = await fs.readdir(tempExtractPath, { withFileTypes: true });
     logger.info('Extracted items from ZIP', {
       component: 'AdminBackup',
-      items: extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`)
+      items: extractedItems.map(item => `${item.name}${item.isDirectory() ? '/' : ''}`),
+      extractedCount
     });
 
-    // Verify the extracted content has a contents directory
+    // Verify the ZIP actually contained contents/ files
     const extractedContentsPath = path.join(tempExtractPath, 'contents');
-
-    try {
-      await fs.access(extractedContentsPath);
-    } catch {
+    if (extractedCount === 0) {
       return sendBadRequest(res, 'Invalid backup file: No contents directory found');
     }
 
