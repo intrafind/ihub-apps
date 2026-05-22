@@ -57,30 +57,38 @@ To force a language from the embedding page, you have two options:
 <iframe src="https://ihub.example.com/?language=de"></iframe>
 ```
 
-**2. `postMessage` (runtime, overwrites localStorage):**
+**2. `BroadcastChannel` (runtime, cross-product):**
 
-The parent window can send a `postMessage` to the iframe at any time. The iframe listens for messages of type `ihub:setLanguage` and changes the UI language immediately. The new language is persisted to `localStorage.i18nextLng`, so it survives reloads.
+iHub publishes and listens on a same-origin [`BroadcastChannel`](https://developer.mozilla.org/en-US/docs/Web/API/BroadcastChannel) named `intrafind`. The channel is shared with other IntraFind products (iFinder, iAssistant, …), so changing the language anywhere keeps every product in sync.
 
-> **Origin requirement:** Only messages whose `event.origin` matches the iframe's own origin are processed. Cross-origin parent pages must reach iHub through the same domain — for example, by serving the iHub iframe and the host page from the same hostname (different paths) or by exposing iHub at `/ihub` behind a reverse proxy. This matches the origin policy used by the Nextcloud OAuth callback bridge.
+Event shape:
 
 ```javascript
-// In the parent page (must be served from the same origin as the iframe)
-const iframe = document.getElementById('ihub-iframe');
-iframe.contentWindow.postMessage(
-  { type: 'ihub:setLanguage', language: 'de' },
-  window.location.origin
-);
+{ type: 'language-changed', language: '<locale>' }
 ```
 
-The iframe responds with an acknowledgement once the change is applied:
+The `type` field is **unprefixed** because the channel name already provides the namespace; future cross-product events will use the same channel and discriminate via `type`.
+
+Behaviour:
+
+- **iHub publishes** `language-changed` whenever its UI language changes (URL parameter, the in-app selector, or an inbound channel message).
+- **iHub listens** for `language-changed` and switches its UI to the requested locale, persisting it to `localStorage.i18nextLng`.
+- An inbound change does not bounce back onto the channel, so two products cannot loop on each other.
+- BroadcastChannel is **same-origin by design**, so cross-origin host pages must reach iHub through the same domain — for example, by exposing iHub at `/ihub` behind a reverse proxy that also serves the host application.
+
+Parent / sibling product example:
 
 ```javascript
-window.addEventListener('message', event => {
-  if (event.origin !== window.location.origin) return;
-  if (event.data?.type === 'ihub:languageChanged') {
-    console.log('iHub now in', event.data.language);
+// Send (host page or another IntraFind product on the same origin)
+const channel = new BroadcastChannel('intrafind');
+channel.postMessage({ type: 'language-changed', language: 'de' });
+
+// Listen for changes from iHub or any other product on the channel
+channel.addEventListener('message', event => {
+  if (event.data?.type === 'language-changed') {
+    console.log('IntraFind UI language is now', event.data.language);
   }
 });
 ```
 
-**Accepted language codes** follow the BCP 47 basic form: `en`, `de`, `en-US`, `pt-BR`. Invalid values are ignored with a console warning. Anything other than the `ihub:setLanguage` message type — or messages from a different origin — is silently ignored, so the listener is safe to leave in place even on pages that exchange other postMessage traffic.
+**Accepted language codes** follow the BCP 47 basic form: `en`, `de`, `en-US`, `pt-BR`. Invalid values are ignored with a console warning. Messages with any other `type` are passed through silently, so unrelated cross-product events on the same channel will not affect the language.

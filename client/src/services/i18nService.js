@@ -15,6 +15,8 @@ class I18nService {
     this.pendingTranslations = new Map();
     this.platformConfig = null;
     this.languageChangeInProgress = false;
+    this.broadcastChannel = null;
+    this.suppressBroadcast = false;
 
     // Initialize synchronously with minimal setup
     this.initializeSync();
@@ -51,17 +53,19 @@ class I18nService {
           }
         });
 
+      // Open the cross-product broadcast channel before wiring the
+      // languageChanged handler so publishes from that handler land here.
+      this.setupBroadcastChannel();
+
       // Set up language change listener with race condition protection
       i18n.on('languageChanged', newLanguage => {
         if (!this.languageChangeInProgress) {
           this.loadFullTranslations(newLanguage);
         }
+        this.broadcastLanguageChange(newLanguage);
       });
 
       this.isInitialized = true;
-
-      // Allow parent frames to drive the language via postMessage
-      this.setupPostMessageListener();
 
       // Load full setup asynchronously
       this.initializeAsync();
@@ -71,58 +75,60 @@ class I18nService {
     }
   }
 
-  setupPostMessageListener() {
-    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+  // Cross-product (iHub, iFinder, iAssistant, …) language sync uses a
+  // same-origin BroadcastChannel named "intrafind". The channel is shared by
+  // all IntraFind products; events are discriminated by their `type` field.
+  setupBroadcastChannel() {
+    if (typeof window === 'undefined' || typeof BroadcastChannel === 'undefined') {
       return;
     }
 
-    window.addEventListener('message', event => this.handlePostMessage(event));
+    try {
+      this.broadcastChannel = new BroadcastChannel('intrafind');
+      this.broadcastChannel.addEventListener('message', event =>
+        this.handleBroadcastMessage(event)
+      );
+    } catch (err) {
+      console.warn('[i18n] BroadcastChannel unavailable, cross-product sync disabled:', err);
+      this.broadcastChannel = null;
+    }
   }
 
-  handlePostMessage(event) {
-    // Only accept messages from the same origin iHub itself is served from.
-    // Iframes embedded under a different origin must reach the same domain
-    // (e.g. via a reverse proxy at /ihub) to use this channel.
-    if (!event || event.origin !== window.location.origin) return;
-
-    const data = event.data;
+  handleBroadcastMessage(event) {
+    const data = event?.data;
     if (!data || typeof data !== 'object') return;
-    if (data.type !== 'ihub:setLanguage') return;
+    if (data.type !== 'language-changed') return;
 
-    const requestedLanguage = data.language;
-    if (typeof requestedLanguage !== 'string' || !requestedLanguage.trim()) {
-      console.warn('[i18n] postMessage ihub:setLanguage ignored: missing language');
-      return;
-    }
+    const requested = data.language;
+    if (typeof requested !== 'string') return;
 
-    // Accept BCP 47 basic forms (e.g. "en", "de", "en-US", "pt-BR")
-    const language = requestedLanguage.trim();
+    const language = requested.trim();
     if (!/^[A-Za-z]{2,3}(-[A-Za-z]{2,4})?$/.test(language)) {
-      // JSON.stringify escapes newlines/control chars so a malformed value
-      // can't inject fake log lines when surfaced in dev tools.
       console.warn(
-        `[i18n] postMessage ihub:setLanguage ignored: invalid language code ${JSON.stringify(language.slice(0, 32))}`
+        `[i18n] intrafind channel language-changed ignored: invalid language code ${JSON.stringify(language.slice(0, 32))}`
       );
       return;
     }
 
-    console.log(`[i18n] Changing language via postMessage to: ${language}`);
+    if (i18n.language === language) return;
 
-    this.changeLanguage(language)
-      .then(() => {
-        if (event.source && typeof event.source.postMessage === 'function') {
-          try {
-            // event.origin is the same-origin value we already gated on, so
-            // we never need a wildcard target here.
-            event.source.postMessage({ type: 'ihub:languageChanged', language }, event.origin);
-          } catch (err) {
-            console.warn('[i18n] Failed to acknowledge language change to parent:', err);
-          }
-        }
-      })
-      .catch(err => {
-        console.error('[i18n] Failed to change language via postMessage:', err);
-      });
+    // Avoid bouncing the same change back onto the channel.
+    this.suppressBroadcast = true;
+    this.changeLanguage(language).finally(() => {
+      this.suppressBroadcast = false;
+    });
+  }
+
+  broadcastLanguageChange(language) {
+    if (this.suppressBroadcast) return;
+    if (!this.broadcastChannel) return;
+    if (typeof language !== 'string' || !language) return;
+
+    try {
+      this.broadcastChannel.postMessage({ type: 'language-changed', language });
+    } catch (err) {
+      console.warn('[i18n] Failed to publish language change on intrafind channel:', err);
+    }
   }
 
   async initializeAsync() {
