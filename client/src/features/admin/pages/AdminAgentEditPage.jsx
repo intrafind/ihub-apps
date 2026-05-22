@@ -144,6 +144,18 @@ export default function AdminAgentEditPage() {
   function handleSynthesizer(partial) {
     setProfile(prev => ({ ...prev, synthesizer: { ...prev.synthesizer, ...partial } }));
   }
+
+  // Pre-compute the Google+webSearch+apps incompatibility flag so the JSX
+  // doesn't need an IIFE (which trips the React-compiler-aware lint rule).
+  const incompatibleAppGroundingCombo = (() => {
+    const modelId = profile.preferredModel || '';
+    const selectedModel = models.find(m => m.id === modelId);
+    const isGoogle = selectedModel?.provider === 'google';
+    const hasWebSearch = (profile.tools || []).includes('webSearch');
+    const hasApps = (profile.apps || []).length > 0;
+    if (isGoogle && hasWebSearch && hasApps) return modelId;
+    return null;
+  })();
   function handleDynamicTasks(partial) {
     setProfile(prev => ({ ...prev, dynamicTasks: { ...prev.dynamicTasks, ...partial } }));
   }
@@ -230,7 +242,10 @@ export default function AdminAgentEditPage() {
         const synthPrompt = cleanLocalized(payload.synthesizer.prompt);
         if (synthPrompt) payload.synthesizer.prompt = synthPrompt;
         else delete payload.synthesizer.prompt;
-        if (typeof payload.synthesizer.modelId === 'string' && !payload.synthesizer.modelId.trim()) {
+        if (
+          typeof payload.synthesizer.modelId === 'string' &&
+          !payload.synthesizer.modelId.trim()
+        ) {
           delete payload.synthesizer.modelId;
         }
       }
@@ -534,6 +549,16 @@ export default function AdminAgentEditPage() {
                       currentLanguage={currentLanguage}
                       t={t}
                     />
+                    {incompatibleAppGroundingCombo && (
+                      <div className="mt-2 text-xs bg-amber-50 border border-amber-300 rounded p-2 text-amber-900">
+                        <span className="font-medium">⚠ App tools won’t run on this profile.</span>{' '}
+                        {incompatibleAppGroundingCombo} (Google) uses native grounding when{' '}
+                        <span className="font-mono">webSearch</span> is configured, and Google
+                        models can’t combine native grounding with function calling. To use apps:
+                        remove <span className="font-mono">webSearch</span> from Tools, or pick a
+                        non-Google model.
+                      </div>
+                    )}
                   </div>
 
                   <div>
@@ -625,7 +650,10 @@ export default function AdminAgentEditPage() {
                           className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                         >
                           <option value="">
-                            {t('admin.agents.edit.plannerModelInherit', '(inherit Preferred model)')}
+                            {t(
+                              'admin.agents.edit.plannerModelInherit',
+                              '(inherit Preferred model)'
+                            )}
                           </option>
                           {models
                             .filter(m => !m.supportsImageGeneration)
@@ -710,6 +738,38 @@ export default function AdminAgentEditPage() {
                         className="mt-1 block w-32 rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
                       />
                     </div>
+                    <div>
+                      <label className="block text-xs text-gray-600 dark:text-gray-400">
+                        {t(
+                          'admin.agents.edit.dynamicTasksModel',
+                          'Preferred model for sub-task executions'
+                        )}
+                      </label>
+                      <select
+                        disabled={!profile.dynamicTasks?.enabled}
+                        value={profile.dynamicTasks?.modelId || ''}
+                        onChange={e => handleDynamicTasks({ modelId: e.target.value || undefined })}
+                        className="mt-1 block w-full rounded-lg border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-gray-100 disabled:opacity-50"
+                      >
+                        <option value="">
+                          {t(
+                            'admin.agents.edit.dynamicTasksModelDefault',
+                            '(use agent preferred model)'
+                          )}
+                        </option>
+                        {(models || []).map(m => (
+                          <option key={m.id} value={m.id}>
+                            {m.name?.en || m.name || m.id}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        {t(
+                          'admin.agents.edit.dynamicTasksModelHint',
+                          'Optional: pick a cheaper / faster model for the per-task workers while the orchestrating agent keeps a stronger model. The selected model is also propagated to any app__* invocations.'
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </Section>
@@ -789,10 +849,7 @@ export default function AdminAgentEditPage() {
                     />
                   </div>
                   <DynamicLanguageEditor
-                    label={t(
-                      'admin.agents.edit.synthesizerSystem',
-                      'Synthesizer system prompt'
-                    )}
+                    label={t('admin.agents.edit.synthesizerSystem', 'Synthesizer system prompt')}
                     value={profile.synthesizer?.system || {}}
                     onChange={v => handleSynthesizer({ system: v })}
                     type="textarea"
@@ -803,10 +860,7 @@ export default function AdminAgentEditPage() {
                     name="synthesizer-system"
                   />
                   <DynamicLanguageEditor
-                    label={t(
-                      'admin.agents.edit.synthesizerPrompt',
-                      'Synthesizer prompt template'
-                    )}
+                    label={t('admin.agents.edit.synthesizerPrompt', 'Synthesizer prompt template')}
                     value={profile.synthesizer?.prompt || {}}
                     onChange={v => handleSynthesizer({ prompt: v })}
                     type="textarea"

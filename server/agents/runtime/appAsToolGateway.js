@@ -13,6 +13,7 @@
  */
 
 import configCache from '../../configCache.js';
+import { isFeatureEnabled } from '../../featureRegistry.js';
 import logger from '../../utils/logger.js';
 import ChatService from '../../services/chat/ChatService.js';
 
@@ -85,10 +86,18 @@ export async function getAppAsTools(appIds, language = 'en') {
       continue;
     }
     if (app.enabled === false) continue;
+    // name / description MUST be plain strings — Google's function_declarations
+    // schema rejects nested objects ("Starting an object on a scalar field").
+    // Other adapters' converters also pass these straight through. Resolve
+    // locale here, do NOT re-wrap as a localized object.
+    const appName =
+      typeof app.name === 'string'
+        ? app.name
+        : app.name?.[language] || app.name?.en || Object.values(app.name || {})[0] || app.id;
     tools.push({
       id: `app__${appId}`,
-      name: { en: `App: ${app.name?.en || app.id}` },
-      description: { en: localizedDescription(app, language) },
+      name: `App: ${appName}`,
+      description: localizedDescription(app, language),
       parameters: buildToolParameters(app),
       isAppAsTool: true,
       _appId: appId
@@ -124,7 +133,15 @@ export function stripAppToolsForAgent(tools, user) {
  * @param {string} opts.executionId
  * @param {AbortSignal} [opts.abortSignal]
  */
-export async function invokeAppTool({ toolId, args = {}, user, chatId, executionId, abortSignal }) {
+export async function invokeAppTool({
+  toolId,
+  args = {},
+  user,
+  chatId,
+  executionId,
+  abortSignal,
+  modelOverride
+}) {
   if (!toolId || !toolId.startsWith('app__')) {
     throw new Error(`Invalid app tool id: ${toolId}`);
   }
@@ -137,8 +154,10 @@ export async function invokeAppTool({ toolId, args = {}, user, chatId, execution
     return { error: true, message: `App ${appId} is disabled` };
   }
 
-  const platform = configCache.getPlatform()?.data || {};
-  if (!platform?.features?.appAsTool) {
+  // Features live in features.json (configCache.getFeatures), not in
+  // platform.json — the latter only held a stale leftover that never
+  // tracked the canonical state.
+  if (!isFeatureEnabled('appAsTool', configCache.getFeatures())) {
     return { error: true, message: 'features.appAsTool is disabled on this platform' };
   }
 
@@ -154,7 +173,8 @@ export async function invokeAppTool({ toolId, args = {}, user, chatId, execution
     component: 'AppAsToolGateway',
     appId,
     callerUserId: user?.id,
-    runId: executionId
+    runId: executionId,
+    modelOverride: modelOverride || null
   });
 
   try {
@@ -164,9 +184,44 @@ export async function invokeAppTool({ toolId, args = {}, user, chatId, execution
       messages,
       variables,
       abortSignal,
-      runId: executionId || chatId
+      runId: executionId || chatId,
+      // Propagate the calling agent's model into the app so the operator's
+      // model choice flows through the whole call tree instead of every
+      // app silently running on whatever bedrock-nova-* the app config
+      // shipped with. App authors can still override per-app if needed
+      // by leaving their own modelId in the config and not setting one
+      // on the calling profile, but with a modelId set here it wins.
+      ...(modelOverride ? { modelOverride } : {})
     });
-    return result;
+
+    // Return a SLIM payload to the caller. The internal result from
+    // `invokeAppInternal` can carry adapter-specific debug fields, full raw
+    // responses with chain-of-thought, and other large extras. Agents call
+    // this gateway from inside an LLM tool loop, so whatever we return
+    // gets JSON.stringify'd into a tool message and fed back to the model.
+    // Returning the unfiltered object blows up the agent's context (the
+    // user observed 10KB+ of Gemini thought text leaking in). Keep only:
+    //   - content: the actual answer the app produced
+    //   - citations: any source URLs the app cited
+    //   - usage: token counts (optional, useful for audit)
+    //   - finishReason: brief stop reason
+    if (result?.status === 'error') {
+      return {
+        error: true,
+        message: result.error?.message || result.error || 'app invocation failed'
+      };
+    }
+    const content =
+      (result?.finalMessage && typeof result.finalMessage.content === 'string'
+        ? result.finalMessage.content.trim()
+        : '') || '';
+    const citations = Array.isArray(result?.citations) ? result.citations : [];
+    return {
+      content,
+      ...(citations.length > 0 ? { citations } : {}),
+      ...(result?.usage ? { usage: result.usage } : {}),
+      ...(result?.finishReason ? { finishReason: result.finishReason } : {})
+    };
   } catch (err) {
     logger.error('App-as-tool invocation failed', {
       component: 'AppAsToolGateway',

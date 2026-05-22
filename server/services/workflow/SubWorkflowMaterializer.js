@@ -111,15 +111,36 @@ export class SubWorkflowMaterializer {
       });
       if (hasSearchLikeTool) {
         promptParts.push(
-          '## Grounding rules\n\n' +
-            '1. Use the search/extract tools available to you to gather REAL information.\n' +
-            '   Do NOT invent facts. If you cannot find something, say so explicitly.\n' +
-            '2. For every concrete claim in your output, include the source URL inline\n' +
-            '   in parentheses, e.g. "Founded 2015 (https://example.com/about)".\n' +
-            '3. End your output with a "## Sources" section listing every URL you used\n' +
-            '   and the specific fact each one backs.\n' +
-            '4. Prefer multiple targeted searches over a single broad one — three focused\n' +
-            '   queries usually beat one vague one.'
+          '## Grounding rules — MULTI-SOURCE REQUIRED\n\n' +
+            'Quality bar: do not stop after the first hit. A research task is ' +
+            'not complete until you have triangulated facts across multiple ' +
+            'independent sources.\n\n' +
+            '1. Run AT LEAST 3 distinct searches with different query angles ' +
+            'before drafting your output. Vary phrasing, vary the angle. For ' +
+            'a person: try `"<name> <known company>"`, `"<name> LinkedIn"`, ' +
+            '`"<name> GitHub"`, `"<name> interview"`, `"<name> conference talk"`, ' +
+            '`"<name> publication"`. For a company: `"<company> about"`, ' +
+            '`"<company> founded"`, `"<company> press"`, `"<company> careers"`. ' +
+            'For a topic: try the term, a synonym, and a related concept.\n' +
+            '2. CROSS-REFERENCE every concrete claim against AT LEAST 2 ' +
+            'independent sources. State which sources back each fact. When ' +
+            'sources disagree, SURFACE THE DISAGREEMENT explicitly — do not ' +
+            'silently pick one.\n' +
+            '3. If the first search returns generic / SEO-spam / wikipedia-only ' +
+            'results, that is a SIGNAL TO SEARCH MORE — try narrower, more ' +
+            'specific queries. Don\'t accept thin evidence.\n' +
+            '4. For every claim in your output, include the source URL inline ' +
+            'in parentheses, e.g. `"Founded 2015 (https://example.com/about)"`. ' +
+            'If a fact is grounded in multiple sources, list all of them.\n' +
+            '5. End with a "## Sources" section listing every URL you actually ' +
+            'consulted, ordered by relevance. Note next to each which facts it ' +
+            'backs.\n' +
+            '6. DO NOT invent facts. Do NOT extrapolate. If something cannot ' +
+            'be verified after 3+ searches, say so explicitly: ' +
+            '`"[unverified — no source found despite searches X, Y, Z]"`.\n' +
+            '7. If your current task title implies depth ("research", ' +
+            '"analyze", "find out"), aim for 5+ sources rather than 3. Trust ' +
+            'is built by thoroughness.'
         );
       }
 

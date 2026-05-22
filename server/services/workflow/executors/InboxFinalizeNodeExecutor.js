@@ -108,6 +108,25 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
       } catch {
         // best effort
       }
+      const stepLog = {
+        nodeId: node.id,
+        kind: 'inbox-finalize',
+        startedAt: startedAt.toISOString(),
+        completedAt: completedAtIso,
+        durationMs,
+        tools: [
+          { id: 'inbox-store.markInboxItemDone', description: 'Deterministic inbox markDone' }
+        ],
+        toolCalls: [
+          {
+            name: 'inbox-store.markInboxItemDone',
+            args: this._previewToolValue({ inboxId, item: item.text, note }),
+            result: this._previewToolValue({ ok: true, version: result.version }),
+            durationMs
+          }
+        ],
+        messages: []
+      };
       return this.createSuccessResult(
         { ok: true, inboxId, version: result.version, item: item.text },
         {
@@ -119,6 +138,10 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
                 completedAt: completedAtIso,
                 durationMs
               }
+            },
+            _stepLogs: {
+              ...(state?.data?._stepLogs || {}),
+              [node.id]: stepLog
             }
           }
         }
@@ -153,6 +176,15 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
       return this.createErrorResult(`Failed to mark inbox item done: ${err.message}`, {
         nodeId: node.id
       });
+    }
+  }
+
+  _previewToolValue(value) {
+    try {
+      const json = JSON.stringify(value);
+      return json.length > 1024 ? `${json.slice(0, 1024)}…` : json;
+    } catch {
+      return null;
     }
   }
 }

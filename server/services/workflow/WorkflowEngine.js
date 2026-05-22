@@ -291,8 +291,14 @@ export class WorkflowEngine {
         ? workflowDefinition.nodes.map(n => ({
             id: n?.id,
             type: n?.type,
-            // Carry only the markers the UI inspects.
-            ...(n?.config?._isSynthesizer === true ? { _isSynthesizer: true } : {})
+            // Carry only the markers the UI inspects. _isSynthesizer flags
+            // the final composer; _persistAsArtifact flags a prompt node
+            // that IS the primary answer producer (simple-agent or
+            // inbox-worker without a separate synthesizer) — the UI uses
+            // this to render a step row for it even though no planner
+            // materialized it as a task.
+            ...(n?.config?._isSynthesizer === true ? { _isSynthesizer: true } : {}),
+            ...(n?.config?._persistAsArtifact === true ? { _persistAsArtifact: true } : {})
           }))
         : []
     };
@@ -583,15 +589,30 @@ export class WorkflowEngine {
               return;
             }
 
-            // Determine next nodes based on result
+            // Determine next nodes based on result.
+            //
+            // `isTerminal: true` on a node's result short-circuits the rest
+            // of the workflow. Used by InboxLoadNodeExecutor when the inbox
+            // is empty — there's nothing to plan or synthesize, so we don't
+            // burn an LLM call (and the planner's wall-time budget) on a
+            // no-op run. The currentNodes list is cleared so the execution
+            // loop's "no more nodes" check terminates the run cleanly.
             const currentState = await this.stateManager.get(executionId);
-            const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
-
-            // Update current nodes (remove completed, add next)
-            const newCurrentNodes = [
-              ...currentState.currentNodes.filter(id => id !== nodeId),
-              ...nextNodes
-            ];
+            let newCurrentNodes;
+            if (result && result.isTerminal === true) {
+              logger.info('Workflow short-circuited by terminal node', {
+                component: 'WorkflowEngine',
+                executionId,
+                nodeId
+              });
+              newCurrentNodes = currentState.currentNodes.filter(id => id !== nodeId);
+            } else {
+              const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
+              newCurrentNodes = [
+                ...currentState.currentNodes.filter(id => id !== nodeId),
+                ...nextNodes
+              ];
+            }
 
             await this.stateManager.update(executionId, {
               currentNodes: newCurrentNodes

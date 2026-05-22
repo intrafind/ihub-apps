@@ -179,7 +179,11 @@ export class InMemorySink {
         finalMessage: null
       };
     }
-    // OpenAI-compatible shape: {choices: [{message: {content}}], usage}
+    // OpenAI-compatible shape: {choices: [{message: {content}}], usage}.
+    // Provider-specific shapes (Google candidates[], Anthropic content[], …)
+    // must be normalised by the adapter layer BEFORE they reach this sink —
+    // adapters own the model-specific knowledge. Do not parse raw provider
+    // bodies here.
     const body = this.jsonBody || {};
     let assistantContent = '';
     if (Array.isArray(body.choices) && body.choices.length > 0) {
@@ -194,8 +198,10 @@ export class InMemorySink {
       toolCalls: [],
       citations: [],
       usage: body.usage || null,
-      finishReason: body.choices?.[0]?.finish_reason || null,
-      raw: body
+      finishReason: body.choices?.[0]?.finish_reason || null
+      // NOTE: do NOT include the raw response body here. Callers that go
+      // through the App-as-tool gateway feed this object back into an LLM
+      // tool message, and the raw shape blows up the context.
     };
   }
 }

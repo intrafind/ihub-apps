@@ -55,13 +55,27 @@ export function getAgentToolIds(profile, nodeConfig = {}) {
     return [];
   }
 
-  const ids = new Set(MEMORY_TOOLS);
+  const ids = new Set();
 
-  const isPlannerTask = nodeConfig?._isPlannerTask === true;
+  // Memory tools: only attached when the profile has memory enabled.
+  // Default is enabled (matches the schema default), so omitting the
+  // memory block keeps the previous behavior. Profiles that explicitly
+  // set memory.enabled=false get no read_memory / write_memory tools.
+  const memoryEnabled = profile?.memory?.enabled !== false;
+  if (memoryEnabled) {
+    MEMORY_TOOLS.forEach(id => ids.add(id));
+  }
+
+  // Dynamic decomposition: any prompt node attached to a dynamicTasks-enabled
+  // profile (or node) gets create_task / list_tasks. Whether a *drain loop*
+  // is present to process created tasks is a workflow-shape question — an
+  // agent should always be ABLE to call create_task when configured for
+  // dynamic work; the workflow either drains the queue or leaves it as a
+  // record of intent.
   const dynamicEnabled =
     nodeConfig?.dynamicTasks?.enabled === true || profile?.dynamicTasks?.enabled === true;
 
-  if (isPlannerTask && dynamicEnabled) {
+  if (dynamicEnabled) {
     DYNAMIC_TASK_TOOLS.forEach(id => ids.add(id));
   }
 

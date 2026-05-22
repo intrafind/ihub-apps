@@ -326,10 +326,12 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     const { getExecutor } = await import('./index.js');
 
     let currentState = { ...iterationState, data: { ...iterationState.data } };
+    let lastOutput;
 
     for (const bodyNode of bodyNodes) {
       const executor = getExecutor(bodyNode.type);
       const result = await executor.execute(bodyNode, currentState, context);
+      lastOutput = result.output;
 
       if (result.stateUpdates) {
         currentState.data = { ...currentState.data, ...result.stateUpdates };
@@ -340,7 +342,16 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       }
     }
 
-    return { output: currentState.data, state: currentState, failed: false };
+    // CRITICAL: must NOT return currentState.data here. currentState.data
+    // contains `nodeResults`, and the loop body's caller pushes this output
+    // into `results[]`. When the engine then stores the loop's result under
+    // state.data.nodeResults.<loopId>_iter1, we get a cycle:
+    //   state.data.nodeResults.<loopId>_iter1.output.results[0] === state.data
+    //     → which has .nodeResults → which has the loop result → cycle.
+    // JSON.stringify chokes inside _validateStateSize and the whole drain
+    // fails. Return only the last body node's output (already filtered to
+    // safe content/model/tokens fields by createSuccessResult).
+    return { output: lastOutput, state: currentState, failed: false };
   }
 
   /**

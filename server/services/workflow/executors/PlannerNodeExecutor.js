@@ -81,10 +81,21 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       // the LLM-only time so "Planning" shows ~8s instead of ~5min.
       const planningStartedAt = new Date();
       const planningStartMs = planningStartedAt.getTime();
+
+      // Step log for the planner LLM call. Filled in by _generatePlan and
+      // persisted at the end of execute() so operators can see the model,
+      // the resolved goal/system prompt, and the resulting plan reasoning.
+      const stepLog = {
+        nodeId: node.id,
+        kind: 'planner',
+        startedAt: planningStartedAt.toISOString(),
+        toolCalls: []
+      };
+
       let plan;
       const maxReplans = 1;
       for (let attempt = 0; attempt <= maxReplans; attempt++) {
-        plan = await this._generatePlan(goal, config, state, context);
+        plan = await this._generatePlan(goal, config, state, context, stepLog);
 
         const requested = Array.isArray(plan?.activate_then_replan)
           ? plan.activate_then_replan.filter(s => typeof s === 'string')
@@ -110,6 +121,9 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
       const planningCompletedMs = Date.now();
       const planningDurationMs = planningCompletedMs - planningStartMs;
       const planningCompletedAtIso = new Date(planningCompletedMs).toISOString();
+      stepLog.completedAt = planningCompletedAtIso;
+      stepLog.durationMs = planningDurationMs;
+      stepLog.plannedTaskCount = Array.isArray(plan?.tasks) ? plan.tasks.length : 0;
       try {
         actionTracker.emit('fire-sse', {
           event: 'agent.step.completed',
@@ -122,6 +136,29 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
         });
       } catch {
         // best effort
+      }
+
+      // Persist the planner step log right away. We can't wait for the
+      // bubble-up at the end of the sub-workflow — if the run times out
+      // there, the audit trail for the planner's own LLM call would be
+      // lost.
+      try {
+        const { getStateManager } = await import('../StateManager.js');
+        const stateManager = getStateManager();
+        await stateManager.update(state.executionId, {
+          data: {
+            _stepLogs: {
+              ...(state?.data?._stepLogs || {}),
+              [node.id]: stepLog
+            }
+          }
+        });
+      } catch (writeErr) {
+        this.logger.warn('Failed to persist planner step log', {
+          component: 'PlannerNodeExecutor',
+          nodeId: node.id,
+          error: writeErr.message
+        });
       }
 
       // Pre-activate `skills_used` from the final plan so each materialized
@@ -305,6 +342,16 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
           };
         }
 
+        // Bubble up step transcripts so the parent's audit trail covers
+        // every step in the run — including the per-task LLM calls that
+        // happened inside the child sub-workflow.
+        if (childData._stepLogs && typeof childData._stepLogs === 'object') {
+          bubbledUpdates._stepLogs = {
+            ...(state?.data?._stepLogs || {}),
+            ...childData._stepLogs
+          };
+        }
+
         // Artifact metadata (file write log). The actual files are written
         // to the root run's artifacts directory (see _resolveRootRunId in
         // PromptNodeExecutor) so the parent's artifact endpoint can list
@@ -393,7 +440,7 @@ export class PlannerNodeExecutor extends BaseNodeExecutor {
    * @throws {Error} If no model is available or LLM response cannot be parsed
    * @private
    */
-  async _generatePlan(goal, config, state, context) {
+  async _generatePlan(goal, config, state, context, stepLog) {
     const { language = 'en' } = context;
 
     // Resolve which model to use for planning
@@ -518,6 +565,22 @@ ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "ta
       { role: 'user', content: userPrompt }
     ];
 
+    // Record what the planner sees on this iteration so operators can
+    // audit the resolved goal, the skills folded in, the model picked.
+    if (stepLog) {
+      stepLog.model = model.id;
+      // Truncate per-message body to keep state size manageable.
+      const cap = 6000;
+      stepLog.messages = messages.map(m => ({
+        role: m.role,
+        content:
+          typeof m.content === 'string' && m.content.length > cap
+            ? `${m.content.slice(0, cap)}…[truncated ${m.content.length - cap} chars]`
+            : m.content
+      }));
+      stepLog.tools = []; // planner has no tools by design
+    }
+
     const response = await this.llmHelper.executeStreamingRequest({
       model,
       messages,
@@ -526,12 +589,22 @@ ${hasSkills ? '  "activate_then_replan": [],\n  "skills_used": [],\n' : ''}  "ta
       language
     });
 
+    if (stepLog) {
+      stepLog.tokens = response.usage || null;
+      stepLog.responseLength =
+        typeof response.content === 'string' ? response.content.length : 0;
+    }
+
     // Extract and parse JSON from the LLM response
     const content = response.content || '';
     try {
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (stepLog) {
+          stepLog.reasoning = parsed.reasoning || null;
+        }
+        return parsed;
       }
       throw new Error('No JSON found in LLM response');
     } catch (e) {
