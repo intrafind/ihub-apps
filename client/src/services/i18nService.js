@@ -96,24 +96,25 @@ class I18nService {
     }
 
     // Accept BCP 47 basic forms (e.g. "en", "de", "en-US", "pt-BR")
-    if (!/^[A-Za-z]{2,3}(-[A-Za-z]{2,4})?$/.test(requestedLanguage.trim())) {
+    const language = requestedLanguage.trim();
+    if (!/^[A-Za-z]{2,3}(-[A-Za-z]{2,4})?$/.test(language)) {
+      // JSON.stringify escapes newlines/control chars so a malformed value
+      // can't inject fake log lines when surfaced in dev tools.
       console.warn(
-        `[i18n] postMessage ihub:setLanguage ignored: invalid language code "${requestedLanguage}"`
+        `[i18n] postMessage ihub:setLanguage ignored: invalid language code ${JSON.stringify(language.slice(0, 32))}`
       );
       return;
     }
 
-    const language = requestedLanguage.trim();
     console.log(`[i18n] Changing language via postMessage to: ${language}`);
 
     this.changeLanguage(language)
       .then(() => {
         if (event.source && typeof event.source.postMessage === 'function') {
           try {
-            event.source.postMessage(
-              { type: 'ihub:languageChanged', language },
-              event.origin || '*'
-            );
+            // event.origin is the same-origin value we already gated on, so
+            // we never need a wildcard target here.
+            event.source.postMessage({ type: 'ihub:languageChanged', language }, event.origin);
           } catch (err) {
             console.warn('[i18n] Failed to acknowledge language change to parent:', err);
           }
