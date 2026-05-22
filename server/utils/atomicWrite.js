@@ -54,3 +54,28 @@ export async function atomicWriteJSON(filePath, data) {
   const jsonData = JSON.stringify(data, null, 2);
   await atomicWriteFile(filePath, jsonData, 'utf8');
 }
+
+/**
+ * Atomically create a new JSON file, failing if it already exists.
+ *
+ * Used by admin "create" handlers (agent profiles, etc.) where two
+ * concurrent POSTs could otherwise race past an `fs.access` existence
+ * check and the second write would silently overwrite the first.
+ * Throws an Error whose `.code === 'EEXIST'` when the file already
+ * exists; callers should map that to HTTP 409 Conflict.
+ *
+ * NOTE: `filePath` is trusted — caller-validated path (same contract as
+ * `atomicWriteFile`).
+ *
+ * @param {string} filePath - The target file path (must be caller-validated)
+ * @param {any} data - The data to serialize as JSON
+ * @returns {Promise<void>}
+ */
+export async function atomicCreateJSON(filePath, data) {
+  const jsonData = JSON.stringify(data, null, 2);
+  // `wx` opens the file for writing only if it does not already exist —
+  // Node's fs maps it to O_CREAT|O_EXCL so the create-or-fail check is
+  // atomic at the filesystem level.
+  // lgtm[js/path-injection] -- caller-validated path; see function doc.
+  await fs.writeFile(filePath, jsonData, { encoding: 'utf8', flag: 'wx' });
+}

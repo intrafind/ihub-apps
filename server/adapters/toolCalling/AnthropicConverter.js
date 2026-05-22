@@ -12,6 +12,7 @@ import {
   normalizeFinishReason,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import { validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -93,12 +94,17 @@ export function convertGenericToolCallsToAnthropic(genericToolCalls = []) {
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
  */
 export function convertAnthropicToolUseToGeneric(anthropicToolUse = []) {
-  return anthropicToolUse.map((toolUse, index) =>
-    createGenericToolCall(toolUse.id, toolUse.name, toolUse.input || {}, index, {
-      originalFormat: 'anthropic',
-      type: 'tool_use'
+  return anthropicToolUse
+    .map((toolUse, index) => {
+      if (!validateProviderToolName({ name: toolUse.name, provider: 'Anthropic', log: logger })) {
+        return null;
+      }
+      return createGenericToolCall(toolUse.id, toolUse.name, toolUse.input || {}, index, {
+        originalFormat: 'anthropic',
+        type: 'tool_use'
+      });
     })
-  );
+    .filter(Boolean);
 }
 
 /**
@@ -204,15 +210,24 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
         if (contentBlock.type === 'text' && contentBlock.text) {
           result.content.push(contentBlock.text);
         } else if (contentBlock.type === 'tool_use') {
-          result.tool_calls.push(
-            createGenericToolCall(
-              contentBlock.id,
-              contentBlock.name,
-              contentBlock.input || {},
-              result.tool_calls.length,
-              { originalFormat: 'anthropic', type: 'tool_use' }
-            )
-          );
+          if (
+            validateProviderToolName({
+              name: contentBlock.name,
+              provider: 'Anthropic',
+              log: logger,
+              result
+            })
+          ) {
+            result.tool_calls.push(
+              createGenericToolCall(
+                contentBlock.id,
+                contentBlock.name,
+                contentBlock.input || {},
+                result.tool_calls.length,
+                { originalFormat: 'anthropic', type: 'tool_use' }
+              )
+            );
+          }
         }
       }
       result.complete = true;
@@ -266,18 +281,27 @@ export async function convertAnthropicResponseToGeneric(data, streamId = 'defaul
         parsedArgs = { __raw_arguments: toolCall.arguments };
       }
 
-      result.tool_calls.push(
-        createGenericToolCall(
-          toolCall.id,
-          toolCall.name,
-          parsedArgs,
-          state.toolCallIndex++, // Use our own index counter starting at 0
-          {
-            originalFormat: 'anthropic',
-            type: 'tool_use'
-          }
-        )
-      );
+      if (
+        validateProviderToolName({
+          name: toolCall.name,
+          provider: 'Anthropic',
+          log: logger,
+          result
+        })
+      ) {
+        result.tool_calls.push(
+          createGenericToolCall(
+            toolCall.id,
+            toolCall.name,
+            parsedArgs,
+            state.toolCallIndex++, // Use our own index counter starting at 0
+            {
+              originalFormat: 'anthropic',
+              type: 'tool_use'
+            }
+          )
+        );
+      }
 
       // Clear the pending tool call from state
       state.pendingToolCall = null;

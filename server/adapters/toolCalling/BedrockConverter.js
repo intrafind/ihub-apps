@@ -12,6 +12,7 @@ import {
   createGenericStreamingResponse,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import { validateProviderToolName } from './toolNameValidator.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 import logger from '../../utils/logger.js';
 
@@ -96,12 +97,17 @@ export function convertGenericToolCallsToBedrock(genericToolCalls = []) {
  * @returns {import('./GenericToolCalling.js').GenericToolCall[]} Generic tool calls
  */
 export function convertBedrockToolUseToGeneric(bedrockToolUse = []) {
-  return bedrockToolUse.map((tu, index) =>
-    createGenericToolCall(tu.toolUseId, tu.name, tu.input || {}, index, {
-      originalFormat: 'bedrock',
-      type: 'tool_use'
+  return bedrockToolUse
+    .map((tu, index) => {
+      if (!validateProviderToolName({ name: tu.name, provider: 'Bedrock', log: logger })) {
+        return null;
+      }
+      return createGenericToolCall(tu.toolUseId, tu.name, tu.input || {}, index, {
+        originalFormat: 'bedrock',
+        type: 'tool_use'
+      });
     })
-  );
+    .filter(Boolean);
 }
 
 /**
@@ -182,12 +188,27 @@ export async function convertBedrockResponseToGeneric(data) {
         }
         if (block.toolUse) {
           const tu = block.toolUse;
-          result.tool_calls.push(
-            createGenericToolCall(tu.toolUseId, tu.name, tu.input || {}, result.tool_calls.length, {
-              originalFormat: 'bedrock',
-              type: 'tool_use'
+          if (
+            validateProviderToolName({
+              name: tu.name,
+              provider: 'Bedrock',
+              log: logger,
+              result
             })
-          );
+          ) {
+            result.tool_calls.push(
+              createGenericToolCall(
+                tu.toolUseId,
+                tu.name,
+                tu.input || {},
+                result.tool_calls.length,
+                {
+                  originalFormat: 'bedrock',
+                  type: 'tool_use'
+                }
+              )
+            );
+          }
           continue;
         }
         if (block.reasoningContent?.reasoningText?.text) {

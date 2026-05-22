@@ -30,6 +30,7 @@ import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
+import registerAgentRoutes from './routes/agents/index.js';
 import { registerTriggerRoutes } from './routes/workflow/triggerRoutes.js';
 import { authRequired } from './middleware/authRequired.js';
 import { adminAuth } from './middleware/adminAuth.js';
@@ -436,6 +437,7 @@ if (cluster.isPrimary && workerCount > 1) {
   await registerSwaggerRoutes(app);
   registerWorkflowRoutes(app, { getLocalizedError });
   registerTriggerRoutes(app, { authRequired, adminAuth });
+  registerAgentRoutes(app);
   registerSetupRoutes(app);
 
   // --- Integration Routes ---

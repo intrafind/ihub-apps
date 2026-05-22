@@ -178,11 +178,16 @@ export class WorkflowEngine {
       });
     }
 
-    // Emit SSE event for UI tracking
+    // Emit SSE event for UI tracking. Flat payload to match the rest of
+    // the workflow/agent event surface (the client handler reads top-level
+    // fields, not a nested `data:` envelope).
     actionTracker.emit('fire-sse', {
       event: 'workflow.subworkflow.start',
       chatId: parentExecutionId,
-      data: { executionId: childExecutionId, depth, taskCount: workflowDef.nodes?.length }
+      executionId: childExecutionId,
+      parentExecutionId,
+      depth,
+      taskCount: workflowDef.nodes?.length
     });
 
     // Start child execution (non-blocking)
@@ -273,7 +278,31 @@ export class WorkflowEngine {
     const maxExecutionTime = workflowDefinition.config?.maxExecutionTime || 300000;
     const executionDeadline = Date.now() + maxExecutionTime;
 
-    // 4. Create execution state
+    // 4. Create execution state. We persist a SUMMARY of the workflow
+    // definition (just the node shape — id / type / config._isSynthesizer)
+    // so the UI can render orchestrator rows ("Planning", "Composing
+    // final report") with stable visibility before those nodes actually
+    // run. We don't store the full definition (with prompts, model ids,
+    // etc.) because it can be tens of KB per state save.
+    const workflowSummary = {
+      id: workflowDefinition.id,
+      name: workflowDefinition.name,
+      nodes: Array.isArray(workflowDefinition.nodes)
+        ? workflowDefinition.nodes.map(n => ({
+            id: n?.id,
+            type: n?.type,
+            // Carry only the markers the UI inspects. _isSynthesizer flags
+            // the final composer; _persistAsArtifact flags a prompt node
+            // that IS the primary answer producer (simple-agent or
+            // inbox-worker without a separate synthesizer) — the UI uses
+            // this to render a step row for it even though no planner
+            // materialized it as a task.
+            ...(n?.config?._isSynthesizer === true ? { _isSynthesizer: true } : {}),
+            ...(n?.config?._persistAsArtifact === true ? { _persistAsArtifact: true } : {})
+          }))
+        : []
+    };
+
     const state = await this.stateManager.create({
       executionId,
       workflowId,
@@ -283,7 +312,8 @@ export class WorkflowEngine {
           startedBy: options.user?.id || 'anonymous',
           startedAt: new Date().toISOString()
         },
-        _executionDeadline: executionDeadline
+        _executionDeadline: executionDeadline,
+        _workflowSummary: workflowSummary
       },
       currentNodes: startNodes
     });
@@ -559,15 +589,30 @@ export class WorkflowEngine {
               return;
             }
 
-            // Determine next nodes based on result
+            // Determine next nodes based on result.
+            //
+            // `isTerminal: true` on a node's result short-circuits the rest
+            // of the workflow. Used by InboxLoadNodeExecutor when the inbox
+            // is empty — there's nothing to plan or synthesize, so we don't
+            // burn an LLM call (and the planner's wall-time budget) on a
+            // no-op run. The currentNodes list is cleared so the execution
+            // loop's "no more nodes" check terminates the run cleanly.
             const currentState = await this.stateManager.get(executionId);
-            const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
-
-            // Update current nodes (remove completed, add next)
-            const newCurrentNodes = [
-              ...currentState.currentNodes.filter(id => id !== nodeId),
-              ...nextNodes
-            ];
+            let newCurrentNodes;
+            if (result && result.isTerminal === true) {
+              logger.info('Workflow short-circuited by terminal node', {
+                component: 'WorkflowEngine',
+                executionId,
+                nodeId
+              });
+              newCurrentNodes = currentState.currentNodes.filter(id => id !== nodeId);
+            } else {
+              const nextNodes = this.scheduler.getNextNodes(nodeId, result, workflow, currentState);
+              newCurrentNodes = [
+                ...currentState.currentNodes.filter(id => id !== nodeId),
+                ...nextNodes
+              ];
+            }
 
             await this.stateManager.update(executionId, {
               currentNodes: newCurrentNodes
@@ -758,6 +803,15 @@ export class WorkflowEngine {
     // 6. Build execution context
     const context = {
       executionId,
+      // ChatId is the ROOT run id — used as the SSE channel key by every
+      // event the executors emit (planner workflow.plan.created, task
+      // workers' agent.task.created, activate_skill, etc.). Without this
+      // those events fire with chatId=undefined and the route's SSE
+      // forwarder drops them — so tasks only show up in the UI AFTER the
+      // run completes (via API refetch). For top-level runs this equals
+      // the executionId; sub-workflows inherit it from options.chatId
+      // (PlannerNodeExecutor passes context.chatId when spawning the child).
+      chatId: options.chatId || executionId,
       nodeId,
       workflow,
       initialData: updatedState.data, // Initial data stored in state.data

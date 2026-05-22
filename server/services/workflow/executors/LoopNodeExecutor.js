@@ -20,6 +20,35 @@ import { BaseNodeExecutor } from './BaseNodeExecutor.js';
 import logger from '../../../utils/logger.js';
 
 /**
+ * Engine-managed state-data keys that must NEVER be propagated back via a
+ * node's `stateUpdates` payload. The engine writes these (and re-reads them)
+ * via `state.data` directly; including them in stateUpdates causes shared
+ * object references and circular JSON when the engine subsequently merges
+ * the executor's result into state (e.g. `nodeResults.<id>_iter<N> = result`
+ * creates a cycle when `result.stateUpdates.nodeResults` is the same object).
+ */
+const ENGINE_INTERNAL_STATE_KEYS = new Set([
+  'nodeResults',
+  'nodeInvocations',
+  'executionMetrics',
+  '_workflow',
+  '_workflowDefinition',
+  '_childExecutionIds',
+  '_executionDeadline',
+  '_pausedAt',
+  '_pausedAtMs',
+  '_pauseReason',
+  '_resumedAt',
+  '_resumeCount',
+  '_totalElapsedMs',
+  '_humanWaitMs',
+  '_nodeIterations',
+  '_currentNodeIteration',
+  '_currentStep',
+  '_totalNodes'
+]);
+
+/**
  * Executor that runs a list of body nodes repeatedly based on the configured loop mode.
  *
  * @extends BaseNodeExecutor
@@ -172,6 +201,75 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
           break;
         }
 
+        case 'drain': {
+          // Drain mode: pop the next open task from `state.data[queueKey]` on
+          // every iteration, run the body node(s) with `state.data._currentTask`
+          // populated, then mark the task done/failed. The body itself may
+          // call `create_task` to push more work onto the queue — that's the
+          // V1 dynamic-task primitive.
+          const queueKey = config.queueKey || '_taskQueue';
+          // Resolve the body: prefer inline `body`, else single node id via `child`.
+          let resolvedBody = Array.isArray(body) && body.length > 0 ? body : null;
+          if (!resolvedBody && config.child && context?.workflow?.nodes) {
+            const child = context.workflow.nodes.find(n => n.id === config.child);
+            if (child) resolvedBody = [child];
+          }
+          if (!resolvedBody || resolvedBody.length === 0) {
+            return this.createErrorResult(`drain mode requires either body or config.child`, {
+              nodeId: node.id
+            });
+          }
+
+          let i = 0;
+          let bounded = false;
+          while (i < hardCap) {
+            if (context.abortSignal?.aborted) break;
+            const queue = Array.isArray(currentState.data[queueKey])
+              ? currentState.data[queueKey]
+              : [];
+            const nextTask = queue.find(t => t?.status === 'open');
+            if (!nextTask) break;
+
+            // Mutate task to in_progress directly on currentState.data.
+            nextTask.status = 'in_progress';
+            nextTask.updatedAt = new Date().toISOString();
+            currentState.data._currentTask = nextTask;
+            currentState.data._loopIndex = i;
+
+            const bodyResult = await this.executeBodyNodes(resolvedBody, currentState, context);
+            results.push(bodyResult.output);
+            currentState = bodyResult.state;
+
+            // Resolve the task object in the new state (executeBodyNodes
+            // shallow-copies state.data, so we have to look it up again).
+            const queueAfter = Array.isArray(currentState.data[queueKey])
+              ? currentState.data[queueKey]
+              : [];
+            const refreshedTask = queueAfter.find(t => t.id === nextTask.id) || nextTask;
+
+            if (bodyResult.failed) {
+              refreshedTask.status = 'failed';
+              refreshedTask.updatedAt = new Date().toISOString();
+            } else if (refreshedTask.status === 'in_progress') {
+              // The body did not explicitly mark it via mark_task_done — auto-complete.
+              refreshedTask.status = 'done';
+              refreshedTask.updatedAt = new Date().toISOString();
+            }
+
+            i++;
+          }
+          if (i >= hardCap) bounded = true;
+          delete currentState.data._currentTask;
+          if (bounded) {
+            logger.warn('Drain loop hit hard cap', {
+              component: 'LoopNodeExecutor',
+              nodeId: node.id,
+              hardCap
+            });
+          }
+          break;
+        }
+
         default:
           return this.createErrorResult(`Unknown loop mode: ${mode}`, {
             nodeId: node.id
@@ -183,9 +281,23 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       delete currentState.data._loopItem;
       delete currentState.data._loopTotal;
 
+      // Build stateUpdates from body-produced data ONLY. We must NOT spread
+      // engine-internal keys (nodeResults, nodeInvocations, _workflow*, etc.)
+      // because they hold references that the engine mutates after this
+      // executor returns. Specifically, `markNodeCompleted` writes
+      // `nodeResults.<this-nodeId>_iter<N> = result` — and if our
+      // `stateUpdates.nodeResults` references the same object, the result
+      // ends up containing itself, producing
+      //   stateUpdates → nodeResults → drain_iter1 → result → stateUpdates
+      // which JSON.stringify chokes on inside _validateStateSize.
+      const propagatedData = {};
+      for (const [k, v] of Object.entries(currentState.data || {})) {
+        if (ENGINE_INTERNAL_STATE_KEYS.has(k)) continue;
+        propagatedData[k] = v;
+      }
       const stateUpdates = {
         ...(outputVariable ? { [outputVariable]: results } : {}),
-        ...currentState.data
+        ...propagatedData
       };
 
       return this.createSuccessResult({ results, iterations: results.length }, { stateUpdates });
@@ -214,10 +326,12 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
     const { getExecutor } = await import('./index.js');
 
     let currentState = { ...iterationState, data: { ...iterationState.data } };
+    let lastOutput;
 
     for (const bodyNode of bodyNodes) {
       const executor = getExecutor(bodyNode.type);
       const result = await executor.execute(bodyNode, currentState, context);
+      lastOutput = result.output;
 
       if (result.stateUpdates) {
         currentState.data = { ...currentState.data, ...result.stateUpdates };
@@ -228,7 +342,16 @@ export class LoopNodeExecutor extends BaseNodeExecutor {
       }
     }
 
-    return { output: currentState.data, state: currentState, failed: false };
+    // CRITICAL: must NOT return currentState.data here. currentState.data
+    // contains `nodeResults`, and the loop body's caller pushes this output
+    // into `results[]`. When the engine then stores the loop's result under
+    // state.data.nodeResults.<loopId>_iter1, we get a cycle:
+    //   state.data.nodeResults.<loopId>_iter1.output.results[0] === state.data
+    //     → which has .nodeResults → which has the loop result → cycle.
+    // JSON.stringify chokes inside _validateStateSize and the whole drain
+    // fails. Return only the last body node's output (already filtered to
+    // safe content/model/tokens fields by createSuccessResult).
+    return { output: lastOutput, state: currentState, failed: false };
   }
 
   /**

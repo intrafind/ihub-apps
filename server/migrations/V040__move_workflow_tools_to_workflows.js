@@ -1,4 +1,4 @@
-export const version = '039';
+export const version = '040';
 export const description = 'move_workflow_tools_to_workflows';
 
 export async function precondition(ctx) {

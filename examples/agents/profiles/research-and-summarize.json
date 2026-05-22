@@ -1,0 +1,48 @@
+{
+  "id": "research-and-summarize",
+  "name": { "en": "Research & Summarize", "de": "Recherche & Zusammenfassung" },
+  "description": {
+    "en": "Planner-driven research agent. Receives a topic brief, plans 3-5 research tasks, runs each, and produces a sectioned summary artifact. Dynamic-tasks enabled so individual researchers can fan out further."
+  },
+  "color": "#10B981",
+  "icon": "magnifying-glass",
+  "workflow": {
+    "ref": "embedded",
+    "definition": {
+      "nodes": [
+        { "id": "start", "type": "start" },
+        {
+          "id": "planner",
+          "type": "planner",
+          "config": {
+            "goal": "${$.data.brief}",
+            "maxTasks": 5,
+            "synthesize": true,
+            "dynamicTasks": { "enabled": true, "maxDepth": 2 },
+            "taskTemplate": {
+              "maxIterations": 10,
+              "tools": [],
+              "apps": [],
+              "dynamicTasks": { "enabled": true, "maxDepth": 2 }
+            }
+          }
+        },
+        { "id": "end", "type": "end" }
+      ],
+      "edges": [
+        { "from": "start", "to": "planner" },
+        { "from": "planner", "to": "end" }
+      ]
+    }
+  },
+  "memory": { "enabled": true, "autoInclude": true, "maxBytes": 8192 },
+  "hitl": { "approverGroups": ["agent-operators"] },
+  "planner": { "enabled": true, "maxTasks": 5 },
+  "dynamicTasks": { "enabled": true, "maxDepth": 2 },
+  "budgets": { "maxWallTimeSec": 900 },
+  "concurrency": { "maxConcurrent": 1 },
+  "artifacts": { "outputDir": "auto", "primary": "summary.md" },
+  "groups": ["agent-operators"],
+  "serviceAccount": { "groups": ["agents", "authenticated"] },
+  "enabled": false
+}

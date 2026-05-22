@@ -12,6 +12,7 @@ import {
   normalizeFinishReason,
   sanitizeSchemaForProvider
 } from './GenericToolCalling.js';
+import { isPlausibleToolName, validateProviderToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
 
@@ -211,6 +212,19 @@ export function convertOpenAIToolCallsToGeneric(openaiToolCalls = []) {
       });
     })
     .filter(toolCall => {
+      // Drop calls whose name is fully populated but malformed (chain-of-thought
+      // leaked into the name field). Streaming chunks with empty names pass
+      // through; the final accumulated call is re-validated below.
+      if (toolCall.name && !isPlausibleToolName(toolCall.name)) {
+        logger.warn('Dropping OpenAI tool call with malformed name', {
+          component: 'OpenAIConverter',
+          name:
+            typeof toolCall.name === 'string' && toolCall.name.length > 80
+              ? `${toolCall.name.slice(0, 80)}…(${toolCall.name.length})`
+              : toolCall.name
+        });
+        return false;
+      }
       // Filter out tool calls that are completely empty (likely malformed streaming chunks)
       // Keep tool calls that have at least a name, ID, or meaningful content
       // Also keep streaming chunks that have arguments
@@ -367,12 +381,21 @@ export async function convertOpenAIResponseToGeneric(data, streamId = 'default')
               toolName: pending.name,
               parsedArgs
             });
-            result.tool_calls.push(
-              createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
-                originalFormat: 'openai',
-                type: 'function'
+            if (
+              validateProviderToolName({
+                name: pending.name,
+                provider: 'OpenAI',
+                log: logger,
+                result
               })
-            );
+            ) {
+              result.tool_calls.push(
+                createGenericToolCall(pending.id, pending.name, parsedArgs, index, {
+                  originalFormat: 'openai',
+                  type: 'function'
+                })
+              );
+            }
           }
         }
       }

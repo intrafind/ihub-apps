@@ -44,18 +44,163 @@ export class SubWorkflowMaterializer {
     // CRITICAL: Destructure tools from taskTemplate before spreading to prevent overwrite.
     const { tools: templateTools, ...restTemplate } = parentConfig.taskTemplate || {};
 
-    const taskNodes = plan.tasks.map((task, index) => ({
-      id: task.id || `task-${index}`,
-      type: 'prompt',
-      name: { en: task.title || `Task ${index + 1}` },
-      position: { x: 0, y: (index + 1) * 100 },
-      config: {
-        ...restTemplate,
-        system: task.description,
-        tools: [...(task.tools || []), ...(templateTools || [])],
-        outputVariable: `task_${task.id || index}_result`
+    const taskNodes = plan.tasks.map((task, index) => {
+      // The agent's persona system prompt lives on the profile (carried via
+      // restTemplate.system). Earlier versions of this materializer
+      // overrode that with task.description, which erased the agent's
+      // instructions on every task. Now we keep the profile system and put
+      // the task instruction in the user prompt.
+      const taskInstruction = task.title
+        ? `${task.title}\n\n${task.description || ''}`.trim()
+        : task.description || `Execute task ${task.id || index}.`;
+
+      // Build the user prompt with two context blocks so each task sees
+      // (a) the brief and inbox item the runtime loaded before the planner,
+      // and (b) what previous tasks produced (rendered from
+      // `state.data._taskResults`, populated by PromptNodeExecutor's runtime
+      // auto-persist after each planner task completes).
+      //
+      // `{{previousTaskResults}}` is a special template variable the prompt
+      // executor formats on-the-fly from the accumulated task results map.
+      // It renders empty on the first task and gracefully accumulates as
+      // later tasks complete — no more reliance on fragile `{{nodeResults}}`.
+      const promptParts = [];
+      if (index === 0) {
+        promptParts.push(
+          '## Context\n\n' +
+            '- Original brief: {{brief}}\n' +
+            '- Current inbox item (if any): {{currentInboxItem}}'
+        );
+      } else {
+        // Earlier tasks have already produced findings. Make it explicit
+        // that this task BUILDS on top of them — extending, deepening, or
+        // analyzing the prior output rather than restarting the research
+        // from scratch. Without this nudge, an LLM may treat each task as
+        // independent and produce parallel/overlapping work.
+        promptParts.push(
+          '## Context\n\n' +
+            '- Original brief: {{brief}}\n' +
+            '- Current inbox item (if any): {{currentInboxItem}}\n\n' +
+            '## Previous task results — BUILD ON THESE\n\n' +
+            'The tasks below this one have already run. Their findings are ' +
+            'the foundation you extend in this step. DO NOT repeat work ' +
+            'they already did. DO NOT contradict facts they established ' +
+            'unless you have a verified source that overrides theirs. Your ' +
+            'job is to add NEW analysis, deeper detail, or fresh evidence ' +
+            'that complements what is here:\n\n' +
+            '{{previousTaskResults}}'
+        );
       }
-    }));
+      promptParts.push(`## Current task\n\n${taskInstruction}`);
+
+      // Grounding discipline — the report generator at the end of the run
+      // can only cite what the task workers captured. Every task that has
+      // search/extract tools available should USE them, record source URLs
+      // per fact, and avoid fabricating. The runtime separately captures
+      // tool-call URLs into `state.data._citations` so the synthesizer has
+      // a ledger to cite from, but the task worker's own output should
+      // also include source URLs inline so the synthesizer can connect
+      // facts to citations cleanly.
+      const inheritedTools = Array.isArray(restTemplate.tools) ? restTemplate.tools : [];
+      const taskExtraTools = Array.isArray(task.tools) ? task.tools : [];
+      const allTaskTools = [...inheritedTools, ...taskExtraTools];
+      const hasSearchLikeTool = allTaskTools.some(t => {
+        if (typeof t !== 'string') return false;
+        const id = t.toLowerCase();
+        return id === 'websearch' || id === 'webcontentextractor' || id.startsWith('source_');
+      });
+      if (hasSearchLikeTool) {
+        promptParts.push(
+          '## Grounding rules — MULTI-SOURCE REQUIRED\n\n' +
+            'Quality bar: do not stop after the first hit. A research task is ' +
+            'not complete until you have triangulated facts across multiple ' +
+            'independent sources.\n\n' +
+            '1. Run AT LEAST 3 distinct searches with different query angles ' +
+            'before drafting your output. Vary phrasing, vary the angle. For ' +
+            'a person: try `"<name> <known company>"`, `"<name> LinkedIn"`, ' +
+            '`"<name> GitHub"`, `"<name> interview"`, `"<name> conference talk"`, ' +
+            '`"<name> publication"`. For a company: `"<company> about"`, ' +
+            '`"<company> founded"`, `"<company> press"`, `"<company> careers"`. ' +
+            'For a topic: try the term, a synonym, and a related concept.\n' +
+            '2. CROSS-REFERENCE every concrete claim against AT LEAST 2 ' +
+            'independent sources. State which sources back each fact. When ' +
+            'sources disagree, SURFACE THE DISAGREEMENT explicitly — do not ' +
+            'silently pick one.\n' +
+            '3. If the first search returns generic / SEO-spam / wikipedia-only ' +
+            'results, that is a SIGNAL TO SEARCH MORE — try narrower, more ' +
+            "specific queries. Don't accept thin evidence.\n" +
+            '4. For every claim in your output, include the source URL inline ' +
+            'in parentheses, e.g. `"Founded 2015 (https://example.com/about)"`. ' +
+            'If a fact is grounded in multiple sources, list all of them.\n' +
+            '5. End with a "## Sources" section listing every URL you actually ' +
+            'consulted, ordered by relevance. Note next to each which facts it ' +
+            'backs.\n' +
+            '6. DO NOT invent facts. Do NOT extrapolate. If something cannot ' +
+            'be verified after 3+ searches, say so explicitly: ' +
+            '`"[unverified — no source found despite searches X, Y, Z]"`.\n' +
+            '7. If your current task title implies depth ("research", ' +
+            '"analyze", "find out"), aim for 5+ sources rather than 3. Trust ' +
+            'is built by thoroughness.'
+        );
+      }
+
+      const taskId = task.id || `task-${index}`;
+      const taskTitle = task.title || `Task ${index + 1}`;
+
+      return {
+        id: taskId,
+        type: 'prompt',
+        name: { en: taskTitle },
+        position: { x: 0, y: (index + 1) * 100 },
+        config: {
+          ...restTemplate,
+          // Marker the agent tool registrar uses to strip lifecycle tools
+          // (inbox/artifact/mark-done) from materialized tasks — the runtime
+          // owns inbox lifecycle and artifact persistence, not individual
+          // plan tasks. The PromptNodeExecutor also reads `_isPlannerTask`
+          // for its runtime auto-persist of per-task results.
+          _isPlannerTask: true,
+          _taskId: taskId,
+          _taskTitle: taskTitle,
+          // Bedrock (and other strict APIs) require at least one user message.
+          prompt: promptParts.join('\n\n'),
+          // Research tools come from the profile's task template — no
+          // lifecycle tools layered on. Plan-task-level `tools` are
+          // additive (e.g. the planner can spotlight `webSearch` for a
+          // specific task) but must already exist in the tool catalog.
+          tools: [...(task.tools || []), ...(templateTools || [])],
+          outputVariable: `task_${taskId}_result`
+        }
+      };
+    });
+
+    // Assert every materialized prompt task has both a system message and a
+    // user/prompt content. A node with only a system message would be
+    // rejected by stricter providers (e.g. Bedrock: "conversation must start
+    // with a user message"). Fail fast at materialize time with a helpful
+    // diagnostic instead of failing 30 seconds later inside the provider
+    // adapter with a opaque error.
+    for (const tn of taskNodes) {
+      const hasSystem =
+        tn.config?.system &&
+        (typeof tn.config.system === 'string'
+          ? tn.config.system.trim().length > 0
+          : Object.values(tn.config.system).some(
+              v => typeof v === 'string' && v.trim().length > 0
+            ));
+      const hasPrompt = typeof tn.config?.prompt === 'string' && tn.config.prompt.trim().length > 0;
+      if (!hasSystem || !hasPrompt) {
+        const reason = !hasSystem ? 'missing system message' : 'missing user prompt content';
+        throw new Error(
+          `SubWorkflowMaterializer: task node ${tn.id} is malformed (${reason}). ` +
+            `Each task must carry both a system message and a user prompt. ` +
+            `Source plan task: ${JSON.stringify({
+              id: plan.tasks[taskNodes.indexOf(tn)]?.id,
+              title: plan.tasks[taskNodes.indexOf(tn)]?.title
+            })}`
+        );
+      }
+    }
 
     nodes.push(...taskNodes);
 
@@ -72,6 +217,46 @@ export class SubWorkflowMaterializer {
             'Synthesize all task results into a coherent final output. ' +
             'Review and combine the outputs from all previous tasks.',
           outputVariable: 'synthesized_result'
+        }
+      });
+    }
+
+    // Optional dynamic-tasks drain tail. When the parent planner is configured
+    // with `dynamicTasks.enabled`, agents executing the materialized tasks can
+    // push more tasks onto `_taskQueue`; the drain loop processes them after
+    // the planned tasks are done. This is the V1 Planner+drain mechanic.
+    const dynamicTasksEnabled = !!parentConfig.dynamicTasks?.enabled;
+    const dynamicTasksMaxDepth = parentConfig.dynamicTasks?.maxDepth ?? 3;
+    let drainNodeId = null;
+    if (dynamicTasksEnabled && taskNodes.length > 0) {
+      drainNodeId = 'drain';
+      const taskRunnerBody = {
+        id: 'drain-task-runner',
+        type: 'prompt',
+        name: { en: 'Drain task runner' },
+        position: { x: 0, y: (nodes.length + 1) * 100 },
+        config: {
+          ...restTemplate,
+          system: parentConfig.taskTemplate?.system || {
+            en: 'Process the current task in `_currentTask`.'
+          },
+          tools: templateTools || [],
+          // Same as the planner-generated tasks above: drain workers should
+          // not own inbox lifecycle. The orchestrator reads/marks the inbox.
+          _isPlannerTask: true,
+          dynamicTasks: { enabled: true, maxDepth: dynamicTasksMaxDepth }
+        }
+      };
+      nodes.push({
+        id: drainNodeId,
+        type: 'loop',
+        name: { en: 'Drain Dynamic Tasks' },
+        position: { x: 0, y: (nodes.length + 1) * 100 },
+        config: {
+          mode: 'drain',
+          queueKey: '_taskQueue',
+          body: [taskRunnerBody],
+          maxIterations: 50
         }
       });
     }
@@ -114,26 +299,19 @@ export class SubWorkflowMaterializer {
         }
       }
 
-      // Last task -> synthesizer or end
+      // Build the tail chain: lastTask → [synthesizer?] → [drain?] → sub-end.
+      // Each step writes one edge; the final hop targets sub-end.
       const lastTask = taskNodes[taskNodes.length - 1];
+      let prev = lastTask.id;
       if (parentConfig.synthesize) {
-        edges.push({
-          id: 'edge-last-synth',
-          source: lastTask.id,
-          target: 'synthesizer'
-        });
-        edges.push({
-          id: 'edge-synth-end',
-          source: 'synthesizer',
-          target: 'sub-end'
-        });
-      } else {
-        edges.push({
-          id: 'edge-last-end',
-          source: lastTask.id,
-          target: 'sub-end'
-        });
+        edges.push({ id: `edge-${prev}-synth`, source: prev, target: 'synthesizer' });
+        prev = 'synthesizer';
       }
+      if (drainNodeId) {
+        edges.push({ id: `edge-${prev}-drain`, source: prev, target: drainNodeId });
+        prev = drainNodeId;
+      }
+      edges.push({ id: `edge-${prev}-end`, source: prev, target: 'sub-end' });
     } else {
       // No tasks - connect start directly to end
       edges.push({
