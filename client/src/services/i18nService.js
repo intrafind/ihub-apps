@@ -80,7 +80,12 @@ class I18nService {
   }
 
   handlePostMessage(event) {
-    const data = event?.data;
+    // Only accept messages from the same origin iHub itself is served from.
+    // Iframes embedded under a different origin must reach the same domain
+    // (e.g. via a reverse proxy at /ihub) to use this channel.
+    if (!event || event.origin !== window.location.origin) return;
+
+    const data = event.data;
     if (!data || typeof data !== 'object') return;
     if (data.type !== 'ihub:setLanguage') return;
 

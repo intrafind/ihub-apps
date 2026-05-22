@@ -61,12 +61,14 @@ To force a language from the embedding page, you have two options:
 
 The parent window can send a `postMessage` to the iframe at any time. The iframe listens for messages of type `ihub:setLanguage` and changes the UI language immediately. The new language is persisted to `localStorage.i18nextLng`, so it survives reloads.
 
+> **Origin requirement:** Only messages whose `event.origin` matches the iframe's own origin are processed. Cross-origin parent pages must reach iHub through the same domain — for example, by serving the iHub iframe and the host page from the same hostname (different paths) or by exposing iHub at `/ihub` behind a reverse proxy. This matches the origin policy used by the Nextcloud OAuth callback bridge.
+
 ```javascript
-// In the parent page
+// In the parent page (must be served from the same origin as the iframe)
 const iframe = document.getElementById('ihub-iframe');
 iframe.contentWindow.postMessage(
   { type: 'ihub:setLanguage', language: 'de' },
-  'https://ihub.example.com'
+  window.location.origin
 );
 ```
 
@@ -74,10 +76,11 @@ The iframe responds with an acknowledgement once the change is applied:
 
 ```javascript
 window.addEventListener('message', event => {
+  if (event.origin !== window.location.origin) return;
   if (event.data?.type === 'ihub:languageChanged') {
     console.log('iHub now in', event.data.language);
   }
 });
 ```
 
-**Accepted language codes** follow the BCP 47 basic form: `en`, `de`, `en-US`, `pt-BR`. Invalid values are ignored with a console warning. Anything other than the `ihub:setLanguage` message type is ignored, so the listener is safe to leave in place even on pages that exchange other postMessage traffic.
+**Accepted language codes** follow the BCP 47 basic form: `en`, `de`, `en-US`, `pt-BR`. Invalid values are ignored with a console warning. Anything other than the `ihub:setLanguage` message type — or messages from a different origin — is silently ignored, so the listener is safe to leave in place even on pages that exchange other postMessage traffic.
