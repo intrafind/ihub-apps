@@ -11,6 +11,7 @@ import { buildServerPath } from '../../utils/basePath.js';
 import { resolveAndValidatePath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { runConfigMigrations } from '../../migrations/runner.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -327,6 +328,24 @@ export async function importConfig(req, res) {
 
     logger.info('Configuration files replaced', { component: 'AdminBackup' });
 
+    // Run pending migrations against the imported configuration. The backup
+    // carries contents/.migration-history.json, so the runner only applies the
+    // delta between the backup's version and this server's available migrations.
+    let migrationResult = null;
+    let migrationError = null;
+    try {
+      logger.info('Running configuration migrations on imported files', {
+        component: 'AdminBackup'
+      });
+      migrationResult = await runConfigMigrations();
+      logger.info('Migrations complete', { component: 'AdminBackup', migrationResult });
+    } catch (error) {
+      migrationError = error.message;
+      logger.error('Migration failed during import', { component: 'AdminBackup', error });
+      // Continue with cache reload — the contents are already replaced, and the
+      // admin needs to see the partial state plus the error in the response.
+    }
+
     // Reload configuration cache
     logger.info('Reloading configuration cache', { component: 'AdminBackup' });
     await configCache.clear();
@@ -338,10 +357,14 @@ export async function importConfig(req, res) {
 
     res.json({
       success: true,
-      message: 'Configuration imported successfully',
+      message: migrationError
+        ? 'Configuration imported, but one or more migrations failed. See server logs and the migrations field for details.'
+        : 'Configuration imported successfully',
       importedFiles: importedFiles.length,
       backupPath: path.basename(currentBackupPath),
       metadata: metadata,
+      migrations: migrationResult,
+      migrationError,
       note: 'All configurations have been replaced and cache has been reloaded. Frontend customizations (CSS, HTML, etc.) are included if they were in the backup.'
     });
 
