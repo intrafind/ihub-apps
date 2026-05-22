@@ -99,7 +99,10 @@ function scrubOrchestrationFromString(value) {
     if (next !== before) changed = true;
   }
   // Collapse repeated whitespace introduced by removals.
-  const collapsed = next.replace(/\s+/g, ' ').replace(/\s+([.,;])/g, '$1').trim();
+  const collapsed = next
+    .replace(/\s+/g, ' ')
+    .replace(/\s+([.,;])/g, '$1')
+    .trim();
   if (collapsed !== value) changed = true;
   return { value: collapsed, changed };
 }

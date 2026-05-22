@@ -128,7 +128,7 @@ export class SubWorkflowMaterializer {
             'silently pick one.\n' +
             '3. If the first search returns generic / SEO-spam / wikipedia-only ' +
             'results, that is a SIGNAL TO SEARCH MORE — try narrower, more ' +
-            'specific queries. Don\'t accept thin evidence.\n' +
+            "specific queries. Don't accept thin evidence.\n" +
             '4. For every claim in your output, include the source URL inline ' +
             'in parentheses, e.g. `"Founded 2015 (https://example.com/about)"`. ' +
             'If a fact is grounded in multiple sources, list all of them.\n' +

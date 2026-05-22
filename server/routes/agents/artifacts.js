@@ -88,44 +88,50 @@ async function authorizeArtifactAccess(req, res, runId) {
 }
 
 export default function registerAgentArtifactRoutes(app) {
-  app.get(buildServerPath('/api/agents/runs/:runId/artifacts'), authRequired, authenticatedOnly, async (req, res) => {
-    try {
-      const { runId } = req.params;
-      if (!validateIdForPath(runId, 'run', res)) return;
-      if (!(await authorizeArtifactAccess(req, res, runId))) return;
-      const dir = await artifactsDirForRun(runId);
-      if (!dir) return sendBadRequest(res, 'invalid run id');
-      let entries = [];
+  app.get(
+    buildServerPath('/api/agents/runs/:runId/artifacts'),
+    authRequired,
+    authenticatedOnly,
+    async (req, res) => {
       try {
-        // lgtm[js/path-injection] -- runId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
-        entries = await fsp.readdir(dir);
-      } catch (err) {
-        if (err.code !== 'ENOENT') throw err;
-      }
-      const list = [];
-      for (const entry of entries) {
-        // entry comes from a directory listing of `dir` (already validated);
-        // any traversal would require the OS to return `..` which fsp.readdir
-        // does not. Still, validate the filename shape.
-        const safeEntry = safeName(entry);
-        if (!safeEntry) continue;
-        const entryPath = await resolveAndValidatePath(safeEntry, dir);
-        if (!entryPath) continue;
-        // lgtm[js/path-injection] -- entry validated by safeName; path canonicalized.
-        const stat = await fsp.stat(entryPath).catch(() => null);
-        if (stat && stat.isFile()) {
-          list.push({ name: safeEntry, bytes: stat.size, mtime: stat.mtime });
+        const { runId } = req.params;
+        if (!validateIdForPath(runId, 'run', res)) return;
+        if (!(await authorizeArtifactAccess(req, res, runId))) return;
+        const dir = await artifactsDirForRun(runId);
+        if (!dir) return sendBadRequest(res, 'invalid run id');
+        let entries = [];
+        try {
+          // lgtm[js/path-injection] -- runId validated by validateIdForPath; path canonicalized via resolveAndValidatePath.
+          entries = await fsp.readdir(dir);
+        } catch (err) {
+          if (err.code !== 'ENOENT') throw err;
         }
+        const list = [];
+        for (const entry of entries) {
+          // entry comes from a directory listing of `dir` (already validated);
+          // any traversal would require the OS to return `..` which fsp.readdir
+          // does not. Still, validate the filename shape.
+          const safeEntry = safeName(entry);
+          if (!safeEntry) continue;
+          const entryPath = await resolveAndValidatePath(safeEntry, dir);
+          if (!entryPath) continue;
+          // lgtm[js/path-injection] -- entry validated by safeName; path canonicalized.
+          const stat = await fsp.stat(entryPath).catch(() => null);
+          if (stat && stat.isFile()) {
+            list.push({ name: safeEntry, bytes: stat.size, mtime: stat.mtime });
+          }
+        }
+        res.json(list);
+      } catch (error) {
+        sendFailedOperationError(res, 'list artifacts', error);
       }
-      res.json(list);
-    } catch (error) {
-      sendFailedOperationError(res, 'list artifacts', error);
     }
-  });
+  );
 
   app.get(
     buildServerPath('/api/agents/runs/:runId/artifacts/:name'),
-    authRequired, authenticatedOnly,
+    authRequired,
+    authenticatedOnly,
     async (req, res) => {
       try {
         const { runId, name } = req.params;
@@ -161,7 +167,8 @@ export default function registerAgentArtifactRoutes(app) {
 
   app.get(
     buildServerPath('/api/agents/profiles/:profileId/artifacts'),
-    authRequired, authenticatedOnly,
+    authRequired,
+    authenticatedOnly,
     async (req, res) => {
       try {
         const { profileId } = req.params;

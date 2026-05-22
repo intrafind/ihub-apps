@@ -44,9 +44,7 @@ export class InboxFinalizeNodeExecutor extends BaseNodeExecutor {
     const startMs = startedAt.getTime();
     const config = node.config || {};
     const inboxId =
-      config.inboxId ||
-      state?.data?._inboxMeta?.inboxId ||
-      state?.data?._agentProfile?.inboxId;
+      config.inboxId || state?.data?._inboxMeta?.inboxId || state?.data?._agentProfile?.inboxId;
 
     if (!inboxId) {
       return this.createErrorResult(
