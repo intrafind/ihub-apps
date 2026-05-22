@@ -60,12 +60,63 @@ class I18nService {
 
       this.isInitialized = true;
 
+      // Allow parent frames to drive the language via postMessage
+      this.setupPostMessageListener();
+
       // Load full setup asynchronously
       this.initializeAsync();
     } catch (error) {
       console.error('Failed to initialize i18n service synchronously:', error);
       this.isInitialized = true;
     }
+  }
+
+  setupPostMessageListener() {
+    if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') {
+      return;
+    }
+
+    window.addEventListener('message', event => this.handlePostMessage(event));
+  }
+
+  handlePostMessage(event) {
+    const data = event?.data;
+    if (!data || typeof data !== 'object') return;
+    if (data.type !== 'ihub:setLanguage') return;
+
+    const requestedLanguage = data.language;
+    if (typeof requestedLanguage !== 'string' || !requestedLanguage.trim()) {
+      console.warn('[i18n] postMessage ihub:setLanguage ignored: missing language');
+      return;
+    }
+
+    // Accept BCP 47 basic forms (e.g. "en", "de", "en-US", "pt-BR")
+    if (!/^[A-Za-z]{2,3}(-[A-Za-z]{2,4})?$/.test(requestedLanguage.trim())) {
+      console.warn(
+        `[i18n] postMessage ihub:setLanguage ignored: invalid language code "${requestedLanguage}"`
+      );
+      return;
+    }
+
+    const language = requestedLanguage.trim();
+    console.log(`[i18n] Changing language via postMessage to: ${language}`);
+
+    this.changeLanguage(language)
+      .then(() => {
+        if (event.source && typeof event.source.postMessage === 'function') {
+          try {
+            event.source.postMessage(
+              { type: 'ihub:languageChanged', language },
+              event.origin || '*'
+            );
+          } catch (err) {
+            console.warn('[i18n] Failed to acknowledge language change to parent:', err);
+          }
+        }
+      })
+      .catch(err => {
+        console.error('[i18n] Failed to change language via postMessage:', err);
+      });
   }
 
   async initializeAsync() {
