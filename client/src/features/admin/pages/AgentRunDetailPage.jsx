@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AdminAuth from '../components/AdminAuth';
 import AdminNavigation from '../components/AdminNavigation';
 import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
+import StepDetails from '../components/StepDetails';
 import useWorkflowExecution from '../../workflows/hooks/useWorkflowExecution';
 import { approveAgentRun, cancelAgentRun, fetchRunArtifacts } from '../../../api/agentsAdminApi';
 
@@ -31,6 +32,16 @@ export default function AgentRunDetailPage() {
   // Long ledgers — start collapsed past N entries.
   const [citationsExpanded, setCitationsExpanded] = useState(false);
   const CITATIONS_VISIBLE = 5;
+  // Per-step transcript expansion state: Set of nodeIds currently expanded.
+  const [expandedSteps, setExpandedSteps] = useState(() => new Set());
+  function toggleStep(nodeId) {
+    setExpandedSteps(prev => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  }
 
   // Artifacts list is its own endpoint; refresh whenever the SSE indicates a
   // new one was written (we re-fetch on state changes that touch artifacts).
@@ -194,8 +205,53 @@ export default function AgentRunDetailPage() {
   function timingFor(nodeId) {
     return taskTimings[nodeId] || null;
   }
+  // Per-step transcripts: model, prompts, tools, tool calls, tokens. Used
+  // by the expandable detail panel under each step row so operators can
+  // audit exactly what the agent saw and did at each step.
+  const stepLogs = run?.data?._stepLogs || {};
+  function logFor(nodeId) {
+    return stepLogs[nodeId] || null;
+  }
+
+  // Inbox load / finalize are deterministic runtime steps that produce
+  // step logs (which tools they called, what they read / wrote). Surface
+  // them so operators get full transparency, not just the LLM steps.
+  const hasInboxLoad = wfSummaryNodes.some(n => n?.type === 'inbox-load');
+  const hasInboxFinalize = wfSummaryNodes.some(n => n?.type === 'inbox-finalize');
+  // Primary-producer prompt nodes: simple-agent / inbox-worker-without-synth
+  // mark their answer-producing prompt node with `_persistAsArtifact: true`.
+  // Surface those nodes so the operator sees what the agent actually did,
+  // even when there's no planner to materialize tasks. Fall back to type-
+  // based detection for runs whose summary was written before the
+  // `_persistAsArtifact` marker existed — any top-level prompt node that
+  // isn't the synthesizer is treated as an agent step.
+  const primaryProducerNodes = wfSummaryNodes.filter(
+    n =>
+      n?._persistAsArtifact === true ||
+      (n?.type === 'prompt' && n?._isSynthesizer !== true && n?.id !== 'synthesize')
+  );
+  // When a drain loop is present, the agent prompt node is a DECOMPOSER —
+  // its job is to enqueue sub-tasks via create_task, not produce the final
+  // answer directly. Distinguish this from the simple-agent shape so the
+  // UI label matches what's actually happening on this step.
+  const hasDrain = wfSummaryNodes.some(n => n?.type === 'loop' && n?.id === 'drain');
 
   const unifiedTasks = [
+    ...(hasInboxLoad
+      ? [
+          {
+            key: 'orch:inbox-load',
+            nodeId: 'inbox-load',
+            kind: 'orchestrator',
+            title: 'Reading inbox',
+            description: 'Picking the highest-priority open inbox item',
+            status: orchestratorStatus('inbox-load'),
+            timing: timingFor('inbox-load'),
+            log: logFor('inbox-load'),
+            depth: 0
+          }
+        ]
+      : []),
     ...(hasPlanner
       ? [
           {
@@ -206,6 +262,7 @@ export default function AgentRunDetailPage() {
             description: 'Decomposing the brief into sub-tasks',
             status: plannerStatus,
             timing: timingFor('planner'),
+            log: logFor('planner'),
             depth: 0
           }
         ]
@@ -222,6 +279,30 @@ export default function AgentRunDetailPage() {
         description: t.description,
         status: s || 'open',
         timing: timingFor(taskId),
+        log: logFor(taskId),
+        depth: 0
+      };
+    }),
+    ...primaryProducerNodes.map(n => {
+      const isAgentNode = n.id === 'agent';
+      // Agent in a drain workflow = planner / decomposer; agent in a
+      // simple-agent or inbox-worker-without-drain = direct answerer.
+      const isDecomposer = isAgentNode && hasDrain;
+      return {
+        key: `agent:${n.id}`,
+        nodeId: n.id,
+        kind: 'agent',
+        title: isDecomposer
+          ? 'Planning sub-tasks'
+          : isAgentNode
+            ? 'Agent answering'
+            : `Running ${n.id}`,
+        description: isDecomposer
+          ? 'Analysing the request and queueing sub-tasks for the drain loop to execute'
+          : 'Generating the answer for this run',
+        status: orchestratorStatus(n.id),
+        timing: timingFor(n.id),
+        log: logFor(n.id),
         depth: 0
       };
     }),
@@ -235,6 +316,7 @@ export default function AgentRunDetailPage() {
             description: 'Synthesizing all sub-task results into the final artifact',
             status: synthesizerStatus,
             timing: timingFor('synthesize'),
+            log: logFor('synthesize'),
             depth: 0
           }
         ]
@@ -247,8 +329,24 @@ export default function AgentRunDetailPage() {
       description: t.description || t.brief,
       status: t.status || 'open',
       timing: timingFor(t.id),
+      log: logFor(t.id),
       depth: t.depth ?? 0
-    }))
+    })),
+    ...(hasInboxFinalize
+      ? [
+          {
+            key: 'orch:inbox-finalize',
+            nodeId: 'inbox-finalize',
+            kind: 'orchestrator',
+            title: 'Marking inbox item done',
+            description: 'Writing the completion note back to the inbox file',
+            status: orchestratorStatus('inbox-finalize'),
+            timing: timingFor('inbox-finalize'),
+            log: logFor('inbox-finalize'),
+            depth: 0
+          }
+        ]
+      : [])
   ];
   const isPaused = status === 'paused';
   const pendingCheckpoint = run?.pendingCheckpoint || run?.data?.pendingCheckpoint;
@@ -405,7 +503,10 @@ export default function AgentRunDetailPage() {
                   <>
                     <span className="text-gray-300">·</span>
                     <span>
-                      total <span className="font-medium text-gray-800">{formatDuration(totalDurationMs)}</span>
+                      total{' '}
+                      <span className="font-medium text-gray-800">
+                        {formatDuration(totalDurationMs)}
+                      </span>
                     </span>
                   </>
                 )}
@@ -450,6 +551,14 @@ export default function AgentRunDetailPage() {
           {artifactsError && (
             <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
               Artifacts: {artifactsError}
+            </div>
+          )}
+
+          {run?.data?._inboxEmpty === true && (
+            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700">
+              <span className="font-medium">No work to do.</span> The inbox was empty when this run
+              started, so the planner and synthesizer were skipped. The next trigger will pick up
+              new items.
             </div>
           )}
 
@@ -578,6 +687,7 @@ export default function AgentRunDetailPage() {
                   <table className="min-w-full text-sm">
                     <thead>
                       <tr className="text-xs text-gray-500 uppercase">
+                        <th className="text-left py-1 w-6"></th>
                         <th className="text-left py-1">Step</th>
                         <th className="text-left py-1">Source</th>
                         <th className="text-left py-1">Status</th>
@@ -597,47 +707,65 @@ export default function AgentRunDetailPage() {
                               : t.status === 'in_progress'
                                 ? 'text-blue-700'
                                 : 'text-gray-600';
+                        const isExpanded = expandedSteps.has(t.nodeId);
+                        const hasDetails = !!t.log;
                         return (
-                          <tr
-                            key={t.key}
-                            className={`border-t align-top ${isCurrent ? 'bg-indigo-50' : ''}`}
-                          >
-                            <td className="py-2 pr-3">
-                              {(isCurrent || t.status === 'in_progress') && (
-                                <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse" />
-                              )}
-                              <span className="font-medium">{t.title}</span>
-                              {t.description && (
-                                <div className="text-xs text-gray-500 mt-0.5">
-                                  {t.description.length > 200
-                                    ? `${t.description.slice(0, 200)}…`
-                                    : t.description}
-                                </div>
-                              )}
-                            </td>
-                            <td className="py-2 pr-3 text-xs">
-                              <span
-                                className={`px-2 py-0.5 rounded ${
-                                  t.kind === 'planner'
-                                    ? 'bg-purple-100 text-purple-800'
-                                    : t.kind === 'orchestrator'
-                                      ? 'bg-slate-100 text-slate-700'
-                                      : 'bg-orange-100 text-orange-800'
-                                }`}
-                              >
-                                {t.kind}
-                              </span>
-                            </td>
-                            <td className={`py-2 pr-3 ${statusColor}`}>{t.status}</td>
-                            <td className="py-2 pr-3 text-xs text-gray-600 whitespace-nowrap">
-                              {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
-                            </td>
-                            <td className="py-2 text-xs text-gray-700 whitespace-nowrap">
-                              {typeof t.timing?.durationMs === 'number'
-                                ? formatDuration(t.timing.durationMs)
-                                : '—'}
-                            </td>
-                          </tr>
+                          <Fragment key={t.key}>
+                            <tr
+                              className={`border-t align-top ${isCurrent ? 'bg-indigo-50' : ''} ${
+                                hasDetails ? 'cursor-pointer hover:bg-gray-50' : ''
+                              }`}
+                              onClick={hasDetails ? () => toggleStep(t.nodeId) : undefined}
+                            >
+                              <td className="py-2 pr-1 text-xs text-gray-400 select-none">
+                                {hasDetails ? (isExpanded ? '▾' : '▸') : ''}
+                              </td>
+                              <td className="py-2 pr-3">
+                                {(isCurrent || t.status === 'in_progress') && (
+                                  <span className="inline-block w-2 h-2 rounded-full bg-indigo-500 mr-2 animate-pulse" />
+                                )}
+                                <span className="font-medium">{t.title}</span>
+                                {t.description && (
+                                  <div className="text-xs text-gray-500 mt-0.5">
+                                    {t.description.length > 200
+                                      ? `${t.description.slice(0, 200)}…`
+                                      : t.description}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 pr-3 text-xs">
+                                <span
+                                  className={`px-2 py-0.5 rounded ${
+                                    t.kind === 'planner'
+                                      ? 'bg-purple-100 text-purple-800'
+                                      : t.kind === 'orchestrator'
+                                        ? 'bg-slate-100 text-slate-700'
+                                        : t.kind === 'agent'
+                                          ? 'bg-emerald-100 text-emerald-800'
+                                          : 'bg-orange-100 text-orange-800'
+                                  }`}
+                                >
+                                  {t.kind}
+                                </span>
+                              </td>
+                              <td className={`py-2 pr-3 ${statusColor}`}>{t.status}</td>
+                              <td className="py-2 pr-3 text-xs text-gray-600 whitespace-nowrap">
+                                {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
+                              </td>
+                              <td className="py-2 text-xs text-gray-700 whitespace-nowrap">
+                                {typeof t.timing?.durationMs === 'number'
+                                  ? formatDuration(t.timing.durationMs)
+                                  : '—'}
+                              </td>
+                            </tr>
+                            {hasDetails && isExpanded && (
+                              <tr className="bg-gray-50/50">
+                                <td colSpan={6} className="px-0 pt-0 pb-2">
+                                  <StepDetails log={t.log} />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         );
                       })}
                     </tbody>
@@ -659,10 +787,7 @@ export default function AgentRunDetailPage() {
                 ) : (
                   <ul className="text-sm space-y-1">
                     {displayArtifacts.map((a, i) => (
-                      <li
-                        key={`${a.name}-${i}`}
-                        className="flex items-center gap-2 flex-wrap"
-                      >
+                      <li key={`${a.name}-${i}`} className="flex items-center gap-2 flex-wrap">
                         <button
                           type="button"
                           onClick={() => setViewingArtifact(a.name)}
@@ -693,16 +818,12 @@ export default function AgentRunDetailPage() {
 
               {dedupedCitations.length > 0 && (
                 <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2">
-                    Citations ({dedupedCitations.length})
-                  </h2>
+                  <h2 className="font-semibold mb-2">Citations ({dedupedCitations.length})</h2>
                   <p className="text-xs text-gray-500 mb-2">
-                    URLs the agent actually consulted during this run,
-                    captured from every search / extract tool call. The
-                    synthesizer cites these by number in the final report.
-                    Distinct from the profile's configured knowledge-base
-                    sources — citations are what was visited, sources are
-                    what could be queried.
+                    URLs the agent actually consulted during this run, captured from every search /
+                    extract tool call. The synthesizer cites these by number in the final report.
+                    Distinct from the profile's configured knowledge-base sources — citations are
+                    what was visited, sources are what could be queried.
                   </p>
                   <ol className="text-sm space-y-1 list-decimal list-inside">
                     {(citationsExpanded
@@ -719,9 +840,7 @@ export default function AgentRunDetailPage() {
                           {c.title || c.url}
                         </a>
                         {c.title && (
-                          <span className="text-xs text-gray-400 ml-2 break-all">
-                            {c.url}
-                          </span>
+                          <span className="text-xs text-gray-400 ml-2 break-all">{c.url}</span>
                         )}
                         {c.toolId && (
                           <span className="text-xs text-gray-500 ml-2">
@@ -757,9 +876,9 @@ export default function AgentRunDetailPage() {
                     Activated skills ({activatedSkillNames.length})
                   </h2>
                   <p className="text-xs text-gray-500 mb-2">
-                    Skills loaded into the agent's context during this run. The
-                    full SKILL.md body of each activated skill is folded into the
-                    system prompt of every subsequent prompt node.
+                    Skills loaded into the agent's context during this run. The full SKILL.md body
+                    of each activated skill is folded into the system prompt of every subsequent
+                    prompt node.
                   </p>
                   <ul className="text-sm space-y-2">
                     {activatedSkillNames.map(name => {
@@ -797,12 +916,10 @@ export default function AgentRunDetailPage() {
 
               {childExecutionIds.length > 0 && (
                 <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2">
-                    Child runs ({childExecutionIds.length})
-                  </h2>
+                  <h2 className="font-semibold mb-2">Child runs ({childExecutionIds.length})</h2>
                   <p className="text-xs text-gray-500 mb-2">
-                    Sub-workflow executions spawned by this run (one per planner
-                    decomposition). Open one to see its per-task LLM history.
+                    Sub-workflow executions spawned by this run (one per planner decomposition).
+                    Open one to see its per-task LLM history.
                   </p>
                   <ul className="text-sm space-y-1">
                     {childExecutionIds.map(childId => (
@@ -842,7 +959,6 @@ export default function AgentRunDetailPage() {
                   </ul>
                 </div>
               )}
-
             </div>
           </div>
         </div>

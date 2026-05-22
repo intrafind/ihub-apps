@@ -155,6 +155,30 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
     } catch {
       // best effort
     }
+    const stepLog = {
+      nodeId: node.id,
+      kind: 'inbox-load',
+      startedAt: startedAt.toISOString(),
+      completedAt: completedAtIso,
+      durationMs,
+      // No LLM here — this is a deterministic step. Show the operator
+      // what was read and what was picked.
+      tools: [{ id: 'inbox-store.readInbox', description: 'Deterministic inbox file read' }],
+      toolCalls: [
+        {
+          name: 'inbox-store.readInbox',
+          args: this._previewToolValue({ inboxId, status: 'all' }),
+          result: this._previewToolValue({
+            inboxId,
+            version: inbox.version,
+            totalItems: inbox.items.length,
+            picked: { text: top.text, priority: top.priority, line: top.line }
+          }),
+          durationMs
+        }
+      ],
+      messages: []
+    };
     return this.createSuccessResult(currentInboxItem, {
       stateUpdates: {
         currentInboxItem,
@@ -172,9 +196,22 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
             completedAt: completedAtIso,
             durationMs
           }
+        },
+        _stepLogs: {
+          ...(state?.data?._stepLogs || {}),
+          [node.id]: stepLog
         }
       }
     });
+  }
+
+  _previewToolValue(value) {
+    try {
+      const json = JSON.stringify(value);
+      return json.length > 1024 ? `${json.slice(0, 1024)}…` : json;
+    } catch {
+      return null;
+    }
   }
 }
 

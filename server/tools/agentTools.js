@@ -281,8 +281,7 @@ export async function writeArtifact(params = {}) {
       ? profile.artifacts.primary
       : null) || 'report.md';
 
-  const effectiveName =
-    !name || typeof name !== 'string' ? primaryFilename : name;
+  const effectiveName = !name || typeof name !== 'string' ? primaryFilename : name;
 
   let effectiveContent = content;
   if (typeof effectiveContent !== 'string') {

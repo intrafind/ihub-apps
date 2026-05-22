@@ -33,6 +33,7 @@ import { getAgentToolIds } from '../../../agents/runtime/agentToolRegistrar.js';
 import { readMemoryBodyForPrompt } from '../../../agents/memory/memoryFile.js';
 import { getAppAsTools, stripAppToolsForAgent } from '../../../agents/runtime/appAsToolGateway.js';
 import { writeArtifactDirect } from '../../../agents/runtime/artifactStore.js';
+import { isFeatureEnabled } from '../../../featureRegistry.js';
 
 /**
  * Agent node configuration
@@ -114,22 +115,56 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const executeStartedAt = new Date();
     const executeStartMs = executeStartedAt.getTime();
 
+    // Drain-mode body nodes keep the same node.id ("task_runner") across
+    // every iteration of the loop. If we keyed transcripts / artifacts /
+    // task results by node.id alone, each iteration would overwrite the
+    // previous one's records and operators would only ever see the LAST
+    // task. Detect the currently-running task from `state.data._currentTask`
+    // (set by LoopNodeExecutor before each drain iteration) and treat its
+    // id as the effective task id. SubWorkflowMaterializer-emitted planner
+    // tasks still set config._taskId directly, so those win.
+    const currentTaskFromState = state?.data?._currentTask;
+    const effectiveTaskId =
+      config?._taskId ||
+      (currentTaskFromState && typeof currentTaskFromState.id === 'string'
+        ? currentTaskFromState.id
+        : null);
+    const effectiveTaskTitle =
+      config?._taskTitle ||
+      (currentTaskFromState && typeof currentTaskFromState.title === 'string'
+        ? currentTaskFromState.title
+        : null);
+    // If we're driving a dequeued dynamic task, treat this node as a
+    // planner-task for auto-persist (per-task artifact + _taskResults +
+    // _taskQueue markDone) even though config._isPlannerTask wasn't set
+    // statically. Use a unique key per task for _stepLogs / _taskTimings
+    // so iterations don't clobber each other.
+    const isDynamicTaskIteration =
+      !config?._taskId && currentTaskFromState && typeof currentTaskFromState.id === 'string';
+    const effectiveLogKey = effectiveTaskId || node.id;
+
     this.logger.info('Executing agent node', {
       component: 'PromptNodeExecutor',
       nodeId: node.id,
-      hasTools: (config.tools || []).length > 0
+      hasTools: (config.tools || []).length > 0,
+      ...(effectiveTaskId && effectiveTaskId !== node.id ? { taskId: effectiveTaskId } : {})
     });
 
     try {
       // Resolve and load sources (node-level overrides workflow-level)
-      const { content: sourceContent, cacheUpdates } = await this.loadSourceContent(
-        config,
-        state,
-        context
-      );
+      const {
+        content: sourceContent,
+        cacheUpdates,
+        sourcesMetadata
+      } = await this.loadSourceContent(config, state, context);
       if (sourceContent) {
         context = { ...context, sourceContent };
       }
+      // Hold onto the resolved sources metadata so we can put it on the
+      // step log after model/tools are sorted out. Even when no content
+      // came back (errors, all unresolved), still recording the IDs the
+      // node WAS configured with makes it visible in the audit.
+      const stepSourceMetadata = Array.isArray(sourcesMetadata) ? sourcesMetadata : [];
 
       // Auto-summarize context if configured and needed
       if (config.autoSummarize === true && this.contextSummarizer.needsSummarization(state)) {
@@ -223,11 +258,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Auto-attach `activate_skill` / `read_skill_resource` whenever the
       // node has skills available (either on the profile or override on the
       // node config). Synthesizer nodes skip this — they're text-out only.
-      const nodeSkillIds = Array.isArray(config.skills) && config.skills.length > 0
-        ? config.skills
-        : Array.isArray(agentProfile?.skills) && agentProfile.skills.length > 0
-          ? agentProfile.skills
-          : [];
+      const nodeSkillIds =
+        Array.isArray(config.skills) && config.skills.length > 0
+          ? config.skills
+          : Array.isArray(agentProfile?.skills) && agentProfile.skills.length > 0
+            ? agentProfile.skills
+            : [];
       if (nodeSkillIds.length > 0 && config._isSynthesizer !== true) {
         if (!configuredToolIds.includes('activate_skill')) {
           configuredToolIds.push('activate_skill');
@@ -257,11 +293,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       //   - Other (non-agent) nodes that explicitly list webSearch on
       //     Google get the same search-only swap. Authors who want both
       //     should split into separate nodes.
+      // Track the swap so we can record it on the step log (and tell
+      // operators why function tools + apps didn't run on this step).
+      let groundingSwapDropped = null;
       if (model?.provider === 'google' && configuredToolIds.includes('webSearch')) {
         const droppedFunctionTools = configuredToolIds.filter(
           id => id !== 'webSearch' && id !== 'googleSearch'
         );
         configuredToolIds = ['googleSearch'];
+        groundingSwapDropped = droppedFunctionTools;
         this.logger.info('Swapped webSearch → googleSearch (Google native grounding)', {
           component: 'PromptNodeExecutor',
           modelId: model.id,
@@ -274,26 +314,90 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         tools = await this.getAgentTools(configuredToolIds, language, context);
       }
 
-      // Append App-as-tool synthetic tools when enabled.
+      // Append App-as-tool synthetic tools when enabled — BUT NOT after the
+      // googleSearch swap fired. Gemini cannot combine native grounding
+      // with function calling; if we re-add the app__* tools here, the
+      // Google adapter silently drops them anyway, the model never sees
+      // them, and operators are left wondering why their apps were never
+      // invoked. Skip the append, record the dropped apps on the step
+      // log, and surface a clear warning in the UI.
+      const droppedApps = [];
+      // Per-app status for the step log: every app the profile/node
+      // configured gets a row, even when it never got registered. Without
+      // this the UI shows "no apps used" and the operator has no idea
+      // whether (a) apps weren't configured, (b) the feature flag is off,
+      // (c) the grounding swap stripped them, or (d) the model just chose
+      // not to call them. Each row tells them exactly which case applies.
+      const appsMetadata = [];
       if (agentProfile) {
         const appsForNode = Array.isArray(config.apps) ? config.apps : [];
         if (appsForNode.length > 0) {
-          const platform = configCache.getPlatform()?.data || {};
-          const appAsToolEnabled = !!platform?.features?.appAsTool;
-          if (appAsToolEnabled) {
-            const appTools = await getAppAsTools(appsForNode, language);
-            tools = tools.concat(appTools);
+          // Feature flag lives in features.json (configCache.getFeatures),
+          // NOT in platform.json — the stale `platform.features.appAsTool`
+          // entry was a leftover that never tracked the canonical state.
+          const appAsToolEnabled = isFeatureEnabled('appAsTool', configCache.getFeatures());
+          if (!appAsToolEnabled) {
+            this.logger.warn(
+              'App-as-tool feature flag is OFF — configured apps will NOT be registered as tools',
+              {
+                component: 'PromptNodeExecutor',
+                nodeId: node.id,
+                requestedApps: appsForNode
+              }
+            );
+            for (const id of appsForNode) {
+              appsMetadata.push({ id, registered: false, reason: 'feature-flag-off' });
+            }
+          } else if (groundingSwapDropped) {
+            // Apps configured but the grounding swap means they can't
+            // co-exist with native search on this model. Don't register
+            // them — they would be silently dropped downstream anyway.
+            droppedApps.push(...appsForNode.map(a => `app__${a}`));
+            this.logger.warn(
+              'Apps not registered: Google native grounding is mutually exclusive with function tools',
+              {
+                component: 'PromptNodeExecutor',
+                modelId: model.id,
+                nodeId: node.id,
+                requestedApps: appsForNode
+              }
+            );
+            for (const id of appsForNode) {
+              appsMetadata.push({ id, registered: false, reason: 'grounding-swap' });
+            }
           } else {
-            this.logger.debug('App-as-tool feature flag is OFF — not registering app tools', {
-              component: 'PromptNodeExecutor',
-              nodeId: node.id,
-              requestedApps: appsForNode
-            });
+            const appTools = await getAppAsTools(appsForNode, language);
+            const registeredAppToolIds = new Set(
+              appTools.map(t => t?.id || t?.function?.name).filter(Boolean)
+            );
+            tools = tools.concat(appTools);
+            for (const id of appsForNode) {
+              const registered = registeredAppToolIds.has(`app__${id}`);
+              appsMetadata.push(
+                registered
+                  ? { id, registered: true }
+                  : { id, registered: false, reason: 'resolve-failed' }
+              );
+            }
           }
         }
         // App→App nesting guard: when an agent calls an app internally, strip
-        // any synthetic `app__*` tools that would otherwise be forwarded.
+        // any synthetic `app__*` tools that would otherwise be forwarded. If
+        // the guard dropped any apps we already registered, downgrade their
+        // status to reflect that.
+        const toolsBeforeNestingStrip = tools;
         tools = stripAppToolsForAgent(tools, context?.user);
+        if (tools !== toolsBeforeNestingStrip && tools.length < toolsBeforeNestingStrip.length) {
+          const survivingAppToolIds = new Set(
+            tools.map(t => t?.id || t?.function?.name).filter(Boolean)
+          );
+          for (const row of appsMetadata) {
+            if (row.registered && !survivingAppToolIds.has(`app__${row.id}`)) {
+              row.registered = false;
+              row.reason = 'app-in-app-guard';
+            }
+          }
+        }
       }
 
       // Thread the workflow state into the context so agent tools
@@ -305,8 +409,80 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       const contextForLLM = {
         ...context,
         _workflowState: state,
-        _taskId: config?._taskId || null
+        _taskId: effectiveTaskId,
+        // Carry the resolved model id so app-as-tool invocations (and any
+        // other tools that want to mirror the operator's model choice)
+        // can propagate it instead of falling back to the app's own
+        // configured model.
+        modelId: model?.id || null
       };
+
+      // Build a step transcript so operators can audit exactly what the
+      // agent saw and did at this step: the resolved prompts, the model,
+      // the tools made available, every tool call with its args + result
+      // preview, token usage, and which citations / skills the step
+      // produced. Persisted to state.data._stepLogs[node.id] after the
+      // LLM call returns; bubbled up from child sub-workflows.
+      const citationsBefore = Array.isArray(state?.data?._citations)
+        ? state.data._citations.length
+        : 0;
+      const skillsBefore = Object.keys(state?.data?._activatedSkills || {});
+      const stepLog = {
+        nodeId: node.id,
+        kind: config?._isSynthesizer
+          ? 'synthesizer'
+          : config?._isPlannerTask || isDynamicTaskIteration
+            ? 'planner-task'
+            : 'prompt',
+        taskId: effectiveTaskId,
+        taskTitle: effectiveTaskTitle,
+        startedAt: executeStartedAt.toISOString(),
+        model: model?.id || null,
+        // Truncate to keep state size sane — full prompts can be several
+        // KB once templates and skills are folded in.
+        messages: messages.map(m => ({
+          role: m.role,
+          content:
+            typeof m.content === 'string'
+              ? m.content.length > 6000
+                ? `${m.content.slice(0, 6000)}…[truncated ${m.content.length - 6000} chars]`
+                : m.content
+              : m.content
+        })),
+        tools: tools.map(t => ({
+          id: t.id || t.function?.name || null,
+          description: t.description || t.function?.description || null
+        })),
+        // Sources the runtime pre-loaded into the system prompt for this
+        // step. NOT tool calls — sources are injected as <sources>…</sources>
+        // blocks. Recording them here is the only way the operator can see
+        // which configured sources the agent actually saw.
+        sources: stepSourceMetadata,
+        // Apps the profile/node configured, with per-app registration
+        // status. Apps that were registered show up as available tools
+        // above; the value of THIS field is making the *missing* ones
+        // visible — feature-flag-off, grounding-swap stripped, etc.
+        apps: appsMetadata,
+        toolCalls: []
+      };
+      // Record any tools that got dropped before the LLM call so operators
+      // can see *why* their apps / function tools didn't run. The grounding
+      // swap is the common case: on Gemini, configuring webSearch knocks
+      // every other tool off the request because google_search can't be
+      // combined with function calling.
+      if (groundingSwapDropped && groundingSwapDropped.length > 0) {
+        stepLog.groundingSwap = {
+          from: 'webSearch + function tools',
+          to: 'googleSearch (native grounding)',
+          droppedToolIds: groundingSwapDropped,
+          reason:
+            'Google models cannot combine native googleSearch with function calling — function tools were not registered for this call.'
+        };
+      }
+      if (droppedApps && droppedApps.length > 0) {
+        stepLog.droppedApps = droppedApps;
+      }
+      contextForLLM._stepLog = stepLog;
 
       // Execute LLM call (with tool loop if tools are available)
       const response = await this.executeLLMWithTools({
@@ -317,6 +493,20 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         context: contextForLLM,
         nodeId: node.id
       });
+
+      // Finalise the step transcript with timing + outcome.
+      const stepCompletedMs = Date.now();
+      stepLog.completedAt = new Date(stepCompletedMs).toISOString();
+      stepLog.durationMs = executeStartMs ? stepCompletedMs - executeStartMs : null;
+      stepLog.iterations = response.iterations || null;
+      stepLog.tokens = response.tokens || null;
+      stepLog.responseLength = typeof response.content === 'string' ? response.content.length : 0;
+      const citationsAfter = Array.isArray(context._workflowState?.data?._citations)
+        ? context._workflowState.data._citations.length
+        : citationsBefore;
+      stepLog.citationsAdded = Math.max(0, citationsAfter - citationsBefore);
+      const skillsAfter = Object.keys(context._workflowState?.data?._activatedSkills || {});
+      stepLog.skillsActivated = skillsAfter.filter(s => !skillsBefore.includes(s));
 
       // Parse output according to schema if defined
       let output = response.content;
@@ -349,7 +539,12 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         context,
         agentProfile,
         executeStartedAt,
-        executeStartMs
+        executeStartMs,
+        stepLog,
+        effectiveTaskId,
+        effectiveTaskTitle,
+        effectiveLogKey,
+        isDynamicTaskIteration
       });
       if (autoPersist?.stateUpdates) {
         Object.assign(stateUpdates, autoPersist.stateUpdates);
@@ -722,9 +917,10 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         if (typeof item === 'string') return item;
         const text = (item.text || '').toString().trim();
         if (!text) return '';
-        const priority = item.priority && item.priority !== 'unprioritized'
-          ? `(${item.priority.toUpperCase()}) `
-          : '';
+        const priority =
+          item.priority && item.priority !== 'unprioritized'
+            ? `(${item.priority.toUpperCase()}) `
+            : '';
         return `${priority}${text}`;
       }
 
@@ -975,7 +1171,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     // Determine which sources to load (node-level overrides workflow-level)
     const sourceIds = nodeConfig.sources || context.workflow?.sources;
     if (!sourceIds || !Array.isArray(sourceIds) || sourceIds.length === 0) {
-      return { content: null, cacheUpdates: null };
+      return { content: null, cacheUpdates: null, sourcesMetadata: [] };
     }
 
     // Check cache in state first (keyed by sorted source IDs)
@@ -986,7 +1182,11 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         component: 'PromptNodeExecutor',
         sourceIds
       });
-      return { content: cachedContent, cacheUpdates: null };
+      return {
+        content: cachedContent,
+        cacheUpdates: null,
+        sourcesMetadata: sourceIds.map(id => ({ id, status: 'cached' }))
+      };
     }
 
     try {
@@ -1004,8 +1204,16 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         sourceContext
       );
 
+      const resolvedIds = new Set(
+        Array.isArray(resolvedSources) ? resolvedSources.map(s => s?.id).filter(Boolean) : []
+      );
+
       if (resolvedSources.length === 0) {
-        return { content: null, cacheUpdates: null };
+        return {
+          content: null,
+          cacheUpdates: null,
+          sourcesMetadata: sourceIds.map(id => ({ id, status: 'unresolved' }))
+        };
       }
 
       // Load content from resolved sources
@@ -1024,18 +1232,40 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         });
       }
 
+      // Build per-source metadata for the step log. We can only see byte
+      // counts at the aggregate level via result.metadata, so per-source
+      // size is approximate; status however is precise.
+      const errorIds = new Set(
+        Array.isArray(result?.metadata?.errors)
+          ? result.metadata.errors.map(e => e?.sourceId || e?.id).filter(Boolean)
+          : []
+      );
+      const totalBytes =
+        typeof result?.content === 'string' ? Buffer.byteLength(result.content, 'utf8') : 0;
+      const loadedIds = sourceIds.filter(id => resolvedIds.has(id) && !errorIds.has(id));
+      const perSourceBytes = loadedIds.length > 0 ? Math.round(totalBytes / loadedIds.length) : 0;
+      const sourcesMetadata = sourceIds.map(id => {
+        if (errorIds.has(id)) return { id, status: 'error' };
+        if (!resolvedIds.has(id)) return { id, status: 'unresolved' };
+        return { id, status: 'loaded', bytesApprox: perSourceBytes };
+      });
+
       // Return content and cache updates for state persistence
       const existingCache = state.data?._sourceContent || {};
       const cacheUpdates = result.content ? { ...existingCache, [cacheKey]: result.content } : null;
 
-      return { content: result.content || null, cacheUpdates };
+      return { content: result.content || null, cacheUpdates, sourcesMetadata };
     } catch (error) {
       this.logger.error('Failed to load sources', {
         component: 'PromptNodeExecutor',
         sourceIds,
         error
       });
-      return { content: null, cacheUpdates: null };
+      return {
+        content: null,
+        cacheUpdates: null,
+        sourcesMetadata: sourceIds.map(id => ({ id, status: 'error', error: error.message }))
+      };
     }
   }
 
@@ -1242,6 +1472,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
 
       const safeMessage = `Tool '${typeof requestedName === 'string' ? requestedName.slice(0, 80) : String(requestedName)}' is not registered for this agent. Available tools: ${availableToolIds.join(', ') || '(none)'}. Pick one of those or stop calling tools.`;
+      // Record hallucinated tool attempts so the audit shows what the
+      // model tried to do — important for trust analysis.
+      if (context._stepLog && Array.isArray(context._stepLog.toolCalls)) {
+        context._stepLog.toolCalls.push({
+          name: typeof requestedName === 'string' ? requestedName : 'unknown',
+          error: 'hallucinated',
+          message: safeMessage
+        });
+      }
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -1256,32 +1495,84 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
 
     const toolId = matchedTool.id;
 
-    // Parse arguments
+    // Parse arguments. Gemini (and occasionally other providers) sometimes
+    // emits tool args with extra content after the closing brace — e.g.
+    // `{"message":"…"}{"message":"…"}` from streaming fragments that
+    // weren't merged cleanly. Strict JSON.parse rejects that, leaves args
+    // empty, and the app gets invoked with no input. Try strict parse first;
+    // on failure, walk the string to extract the first balanced JSON object.
     let args = {};
-    try {
-      if (toolCall.function.arguments) {
-        args = JSON.parse(toolCall.function.arguments);
+    if (toolCall.function.arguments) {
+      const raw = toolCall.function.arguments;
+      try {
+        args = JSON.parse(raw);
+      } catch (strictErr) {
+        const prefix = this._extractFirstJsonObject(raw);
+        if (prefix !== null) {
+          try {
+            args = JSON.parse(prefix);
+            this.logger.warn('Recovered tool arguments from malformed JSON prefix', {
+              component: 'PromptNodeExecutor',
+              toolId,
+              originalLength: raw.length,
+              parsedLength: prefix.length
+            });
+          } catch (lenientErr) {
+            this.logger.warn('Failed to parse tool arguments (lenient also failed)', {
+              component: 'PromptNodeExecutor',
+              toolId,
+              strictError: strictErr.message,
+              lenientError: lenientErr.message
+            });
+          }
+        } else {
+          this.logger.warn('Failed to parse tool arguments', {
+            component: 'PromptNodeExecutor',
+            toolId,
+            error: strictErr
+          });
+        }
       }
-    } catch (e) {
-      this.logger.warn('Failed to parse tool arguments', {
-        component: 'PromptNodeExecutor',
-        toolId,
-        error: e
-      });
     }
 
     // App-as-tool synthetic dispatch: handled by gateway, not by global runTool.
     if (typeof toolId === 'string' && toolId.startsWith('app__')) {
+      const appCallStartMs = Date.now();
       try {
         const { invokeAppTool } = await import('../../../agents/runtime/appAsToolGateway.js');
+        // Propagate the calling node's model to the app so the operator's
+        // model choice flows down. Without this every app silently runs on
+        // whatever bedrock-nova-* it was configured with, regardless of
+        // the agent's preferredModel.
+        const callerModelId = context?.model?.id || context?.modelId || null;
         const result = await invokeAppTool({
           toolId,
           args,
           user,
           chatId,
           executionId: context.executionId,
-          abortSignal: context.abortSignal
+          abortSignal: context.abortSignal,
+          ...(callerModelId ? { modelOverride: callerModelId } : {})
         });
+        const appCallDurationMs = Date.now() - appCallStartMs;
+        // CRITICAL: previously the app__* branch returned BEFORE the step
+        // log push below, so app invocations executed correctly but never
+        // showed up in the transcript — operators saw "Apps available" but
+        // empty Tool calls. Record the call here with the resolved app id,
+        // args, response preview, and duration so the audit trail matches
+        // what actually happened.
+        const appId = toolId.slice('app__'.length);
+        if (context._stepLog && Array.isArray(context._stepLog.toolCalls)) {
+          context._stepLog.toolCalls.push({
+            name: toolCall.function.name,
+            toolId,
+            appId,
+            modelOverride: callerModelId,
+            args: this._previewToolValue(args),
+            result: this._previewToolValue(result),
+            durationMs: appCallDurationMs
+          });
+        }
         return {
           role: 'tool',
           tool_call_id: toolCall.id,
@@ -1289,11 +1580,23 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
           content: JSON.stringify(result)
         };
       } catch (error) {
+        const appCallDurationMs = Date.now() - appCallStartMs;
         this.logger.error('App-as-tool invocation failed', {
           component: 'PromptNodeExecutor',
           toolId,
           error
         });
+        if (context._stepLog && Array.isArray(context._stepLog.toolCalls)) {
+          context._stepLog.toolCalls.push({
+            name: toolCall.function.name,
+            toolId,
+            appId: toolId.slice('app__'.length),
+            error: 'app_invocation_failed',
+            message: error.message,
+            args: this._previewToolValue(args),
+            durationMs: appCallDurationMs
+          });
+        }
         return {
           role: 'tool',
           tool_call_id: toolCall.id,
@@ -1313,12 +1616,14 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         ...(context._workflowState ? { _workflowState: context._workflowState } : {})
       };
 
+      const toolCallStartMs = Date.now();
       const result = await runTool(toolId, {
         ...args,
         chatId,
         user,
         appConfig: enrichedAppConfig
       });
+      const toolCallDurationMs = Date.now() - toolCallStartMs;
 
       // Auto-capture citations from search/extract tool results so the
       // synthesizer can cite each fact back to a URL. Without this, agents
@@ -1344,6 +1649,21 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         });
       }
 
+      // Record on the step transcript so operators can audit every tool
+      // call the agent made: name, args, a result preview, duration. App
+      // invocations (synthetic `app__*` tools) carry their app id.
+      if (context._stepLog && Array.isArray(context._stepLog.toolCalls)) {
+        const isApp = typeof toolId === 'string' && toolId.startsWith('app__');
+        context._stepLog.toolCalls.push({
+          name: toolCall.function.name,
+          toolId,
+          ...(isApp ? { appId: toolId.slice('app__'.length) } : {}),
+          args: this._previewToolValue(args),
+          result: this._previewToolValue(result),
+          durationMs: toolCallDurationMs
+        });
+      }
+
       return {
         role: 'tool',
         tool_call_id: toolCall.id,
@@ -1356,6 +1676,15 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
         toolId,
         error
       });
+
+      if (context._stepLog && Array.isArray(context._stepLog.toolCalls)) {
+        context._stepLog.toolCalls.push({
+          name: toolCall.function.name,
+          toolId,
+          error: 'execution_failed',
+          message: error.message
+        });
+      }
 
       return {
         role: 'tool',
@@ -1582,11 +1911,28 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     context,
     agentProfile,
     executeStartedAt,
-    executeStartMs
+    executeStartMs,
+    stepLog,
+    effectiveTaskId,
+    effectiveTaskTitle,
+    effectiveLogKey,
+    isDynamicTaskIteration
   }) {
-    const isPlannerTask = config?._isPlannerTask === true;
+    // isDynamicTaskIteration: drain dequeued a task and the body node is
+    // running for that task. Treat it as a planner-task for persistence
+    // (per-task artifact + _taskResults + _taskTimings + _taskQueue
+    // markDone) so dynamic tasks behave identically to materialized planner
+    // tasks from the operator's perspective.
+    const isPlannerTask = config?._isPlannerTask === true || isDynamicTaskIteration === true;
     const isSynthesizer = config?._isSynthesizer === true;
-    if (!isPlannerTask && !isSynthesizer) return null;
+    // EVERY agent prompt — planner task, synthesizer, simple agent, inbox
+    // worker — needs its step transcript persisted so the run detail page
+    // can show what happened. Previously this method early-returned for
+    // anything that wasn't a planner-task or synthesizer, which made
+    // inbox-worker and simple-agent runs look like nothing happened in the
+    // UI (the LLM call ran but its trace was discarded). The artifact +
+    // task-result writes below remain gated on planner-task / synthesizer
+    // because those are the only two roles that should produce artifacts.
 
     // Resolve a usable string from `output` — could be a string, object, or
     // null depending on outputSchema parsing. We need string content to
@@ -1617,9 +1963,64 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
     const chatId = context?.chatId || runId;
     const stateUpdates = {};
 
+    // Persist the step transcript on every prompt-style execution (task
+    // worker, synthesizer, simple agent). This gives operators a complete
+    // audit trail per step. Keyed by effectiveLogKey so drain-mode iterations
+    // (which share node.id="task_runner") each get their own transcript
+    // under the task's id, rather than overwriting each other.
+    const logKey = effectiveLogKey || node.id;
+    if (stepLog) {
+      stateUpdates._stepLogs = {
+        ...(state?.data?._stepLogs || {}),
+        [logKey]: stepLog
+      };
+    }
+
+    // Concurrency safety: re-publish state slots that tools may have
+    // mutated in-place during the LLM iteration loop. Fire-and-forget
+    // updaters (e.g. titleGenerator) can replace activeStates.entry.data
+    // mid-execution; the executor still holds a reference to the OLD data
+    // object and its tool mutations end up orphaned. Including these
+    // slots in stateUpdates lets the engine's deepMerge resync them into
+    // the live entry — even if the entry was replaced under us.
+    if (Array.isArray(state?.data?._taskQueue)) {
+      stateUpdates._taskQueue = state.data._taskQueue;
+    }
+    if (Array.isArray(state?.data?._citations)) {
+      stateUpdates._citations = state.data._citations;
+    }
+    if (state?.data?._activatedSkills && typeof state.data._activatedSkills === 'object') {
+      stateUpdates._activatedSkills = state.data._activatedSkills;
+    }
+    if (state?.data?._agent && typeof state.data._agent === 'object') {
+      stateUpdates._agent = state.data._agent;
+    }
+
+    // Generic timing entry for the step timeline. Planner tasks and
+    // synthesizer have their own (richer) _taskTimings updates further
+    // below; this is the fallback path for simple-agent / inbox-worker /
+    // any other prompt node so they don't appear timing-less in the UI.
+    if (!isPlannerTask && !isSynthesizer) {
+      const completedAtMs = Date.now();
+      const startedAtIso = executeStartedAt ? executeStartedAt.toISOString() : null;
+      const durationMs = executeStartMs ? completedAtMs - executeStartMs : null;
+      stateUpdates._taskTimings = {
+        ...(state?.data?._taskTimings || {}),
+        [logKey]: {
+          startedAt: startedAtIso || new Date(completedAtMs).toISOString(),
+          completedAt: new Date(completedAtMs).toISOString(),
+          durationMs
+        }
+      };
+    }
+
     if (isPlannerTask) {
-      const taskId = config?._taskId || node.id;
-      const taskTitle = config?._taskTitle || node.name || node.id;
+      // Prefer effectiveTaskId/Title — they fold in the per-iteration task
+      // from drain mode (_currentTask) when the body node config doesn't
+      // carry _taskId statically. For materialized planner-task nodes from
+      // SubWorkflowMaterializer, these match config._taskId / _taskTitle.
+      const taskId = effectiveTaskId || config?._taskId || node.id;
+      const taskTitle = effectiveTaskTitle || config?._taskTitle || node.name || node.id;
       const completedAt = new Date().toISOString();
 
       // Pull out the citations captured DURING this task. We tagged each
@@ -1627,9 +2028,7 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // _captureCitationsFromGroundingMetadata. Filtering here gives every
       // sub-task artifact its own focused Sources section instead of
       // relying on the run-global ledger.
-      const allCitations = Array.isArray(state?.data?._citations)
-        ? state.data._citations
-        : [];
+      const allCitations = Array.isArray(state?.data?._citations) ? state.data._citations : [];
       const taskCitations = allCitations.filter(c => c && c.taskId === taskId);
 
       const completedAtMs = Date.now();
@@ -1674,7 +2073,9 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       // Write per-task artifact (best-effort).
       if (runId) {
         try {
-          const safeTaskSlug = String(taskId).replace(/[^a-zA-Z0-9_-]+/g, '_').slice(0, 80);
+          const safeTaskSlug = String(taskId)
+            .replace(/[^a-zA-Z0-9_-]+/g, '_')
+            .slice(0, 80);
           await writeArtifactDirect({
             runId,
             name: `task_${safeTaskSlug}.md`,
@@ -1777,7 +2178,118 @@ export class PromptNodeExecutor extends BaseNodeExecutor {
       }
     }
 
+    // Primary-producer prompts (simple agent, inbox-worker WITHOUT a
+    // synthesizer): the runtime persists their output as the run's primary
+    // artifact and stashes the text in _synthesizerOutput so inbox-finalize
+    // can use it as the completion note — same downstream behavior as the
+    // synthesizer path, but emitted from the agent node itself. Skipped
+    // when a real synthesizer ran (it already wrote the artifact).
+    if (config?._persistAsArtifact === true && !isPlannerTask && !isSynthesizer) {
+      stateUpdates._synthesizerOutput = textContent;
+      stateUpdates._synthesizerSummary = textContent.slice(0, 240);
+      const primaryName =
+        (agentProfile?.artifacts && typeof agentProfile.artifacts.primary === 'string'
+          ? agentProfile.artifacts.primary
+          : null) || 'report.md';
+      if (runId && textContent) {
+        try {
+          await writeArtifactDirect({
+            runId,
+            name: primaryName,
+            content: textContent,
+            contentType: 'text/markdown',
+            profileId,
+            chatId,
+            state
+          });
+        } catch (err) {
+          this.logger.error('Auto-persist of primary-producer artifact failed', {
+            component: 'PromptNodeExecutor',
+            nodeId: node.id,
+            primaryName,
+            error: err.message
+          });
+        }
+      }
+    }
+
     return { stateUpdates };
+  }
+
+  /**
+   * Build a compact preview of a tool-call value (args or result) for the
+   * step transcript. Caps strings at 1 KB and JSON-stringifies objects
+   * with the same cap so a noisy webSearch result doesn't blow up state
+   * size. The original full result is still passed back to the LLM —
+   * this is purely for the audit log.
+   *
+   * @private
+   */
+  /**
+   * Walk a string and return the substring covering the first balanced
+   * top-level JSON object (or array). Returns null if no balanced object
+   * can be found. Used to recover from providers that emit concatenated
+   * tool-args fragments like `{"a":1}{"b":2}` after streaming.
+   *
+   * Tracks brace depth, skips characters inside strings, and respects
+   * backslash escapes inside strings. No JSON-correctness validation — the
+   * caller still has to JSON.parse the returned prefix.
+   * @private
+   */
+  _extractFirstJsonObject(raw) {
+    if (typeof raw !== 'string') return null;
+    const trimmed = raw.trimStart();
+    const startOffset = raw.length - trimmed.length;
+    if (trimmed.length === 0) return null;
+    const opener = trimmed[0];
+    if (opener !== '{' && opener !== '[') return null;
+    const closer = opener === '{' ? '}' : ']';
+    let depth = 0;
+    let inString = false;
+    let escape = false;
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (escape) {
+        escape = false;
+        continue;
+      }
+      if (ch === '\\' && inString) {
+        escape = true;
+        continue;
+      }
+      if (ch === '"') {
+        inString = !inString;
+        continue;
+      }
+      if (inString) continue;
+      if (ch === opener) depth++;
+      else if (ch === closer) {
+        depth--;
+        if (depth === 0) {
+          return raw.slice(startOffset, startOffset + i + 1);
+        }
+      }
+    }
+    return null;
+  }
+
+  _previewToolValue(value) {
+    const MAX_LEN = 1024;
+    if (value == null) return null;
+    if (typeof value === 'string') {
+      return value.length > MAX_LEN
+        ? `${value.slice(0, MAX_LEN)}…[truncated ${value.length - MAX_LEN} chars]`
+        : value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') return value;
+    try {
+      const json = JSON.stringify(value);
+      return json.length > MAX_LEN
+        ? `${json.slice(0, MAX_LEN)}…[truncated ${json.length - MAX_LEN} chars]`
+        : json;
+    } catch {
+      return '[unserialisable]';
+    }
   }
 
   /**

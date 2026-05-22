@@ -40,11 +40,20 @@ import configCache from '../../configCache.js';
 
 const DEFAULT_PLANNER_SYSTEM =
   'You are a planner. Given a brief, decompose it into independently-' +
-  'executable research or work tasks. Return a structured JSON plan. Each ' +
-  'task should describe ONE substantive piece of work — gathering ' +
-  'information, analyzing data, drafting content. Do NOT include workflow ' +
-  'plumbing steps (reading the inbox, marking items done, writing ' +
-  'artifacts); those are handled outside the plan by the runtime.';
+  'executable research or work tasks. Return a structured JSON plan.\n\n' +
+  'DECOMPOSITION QUALITY BAR:\n' +
+  '- Each task does ONE substantive piece of work — gathering information ' +
+  'about ONE angle, analyzing ONE dimension, drafting ONE section. Avoid ' +
+  '"research everything" tasks; instead split into multiple angle-specific ' +
+  'tasks (e.g. "professional history", "publications", "open-source ' +
+  'contributions", "public speaking", "current role detail").\n' +
+  '- Prefer 3–6 narrowly-scoped tasks over 1–2 broad ones. Each task should ' +
+  'have a clear, falsifiable deliverable.\n' +
+  '- Later tasks may build on earlier ones — sequence accordingly. Use the ' +
+  '`dependsOn` array when a task genuinely requires another to complete first.\n' +
+  '- DO NOT include workflow plumbing steps (reading the inbox, marking ' +
+  'items done, writing artifacts); those are handled outside the plan by ' +
+  'the runtime.';
 
 // Use the .text accessor so the planner sees just the user's question, not
 // the whole parsed inbox object (which includes .raw — a polluted line that
@@ -189,10 +198,16 @@ function buildSimpleWorkflow(profile) {
       {
         id: 'agent',
         type: 'prompt',
-        config: basePromptConfig(profile, {
-          systemFallbackKey: 'You are a helpful agent.',
-          fallbackIterations: 10
-        })
+        config: {
+          ...basePromptConfig(profile, {
+            systemFallbackKey: 'You are a helpful agent.',
+            fallbackIterations: 10
+          }),
+          // Simple-agent shape: this one node IS the producer. Persist its
+          // output as the run's primary artifact so the UI has something to
+          // show after the run completes.
+          _persistAsArtifact: true
+        }
       },
       { id: 'end', type: 'end' }
     ],
@@ -386,6 +401,8 @@ function buildInboxWorkerWorkflow(profile) {
   // single task's output should be the artifact directly, synthesizer just
   // pipes that through; the runtime persists the synthesizer text either way.
   const useSynth = profile.synthesizer?.enabled !== false;
+  const useDynamic = profile.dynamicTasks?.enabled === true;
+  const maxDepth = profile.dynamicTasks?.maxDepth ?? 3;
 
   const nodes = [
     { id: 'start', type: 'start' },
@@ -397,10 +414,73 @@ function buildInboxWorkerWorkflow(profile) {
     {
       id: 'agent',
       type: 'prompt',
-      config: basePromptConfig(profile, {
-        systemFallbackKey: 'You are an autonomous agent processing inbox items.',
-        fallbackIterations: 10
-      })
+      config: {
+        ...basePromptConfig(profile, {
+          systemFallbackKey: 'You are an autonomous agent processing inbox items.',
+          fallbackIterations: 10
+        }),
+        // When dynamicTasks is enabled the agent's job is decomposition,
+        // not direct app calls. Strip apps from THIS node so the LLM can't
+        // "helpfully" call them in addition to queueing tasks that also
+        // call them. The drain task_runner still has apps registered and
+        // executes the queued questions.
+        ...(useDynamic ? { apps: [] } : {}),
+        // The runtime puts the picked inbox item into state.data.currentInboxItem
+        // (see InboxLoadNodeExecutor). Without an explicit prompt template the
+        // PromptNodeExecutor would fall through to state.data.brief — which on
+        // runs without an operator brief is empty or the system prompt itself,
+        // leaving the agent with no actual question to answer.
+        prompt: {
+          en: useDynamic
+            ? [
+                'You have been assigned this inbox item to handle:',
+                '',
+                '{{currentInboxItem}}',
+                '',
+                'Your role on THIS step is to DECOMPOSE the request into sub-tasks that other workers will execute. The drain loop will then process each queued task with the configured apps / tools.',
+                '',
+                'Plan and enqueue sub-tasks using `create_task`:',
+                '- One task per concrete question to a specific app / source.',
+                '- Title each task with the app / source it should consult (e.g. "Ask ihub-support-bot: <question>").',
+                '- Keep questions short and self-contained.',
+                '- Do NOT call apps yourself on this step — the tasks will. Calling them here and queueing the same call duplicates work and wastes tokens.',
+                '',
+                'After enqueuing the sub-tasks, write a brief plan summary as your answer. The drain loop will then run each task, and the per-task artifacts will be available to the operator.'
+              ].join('\n')
+            : [
+                'You have been assigned this inbox item to handle:',
+                '',
+                '{{currentInboxItem}}',
+                '',
+                'Before drafting an answer, consult the tools available to you in this turn:',
+                '- If apps (app__*) are configured, call them with a concrete question — they are the authoritative voice for their domain.',
+                '- If sources are configured, they are already injected into the system prompt; quote / cite them directly.',
+                '- If web search is available, use it for facts you are not certain of.',
+                '',
+                'Do NOT answer from your own training memory alone. Cite the tool / app / source you used. If after consulting the available tools you still cannot answer, explicitly say so and point the user at IT support.'
+              ].join('\n')
+        },
+        // When there is no synthesizer, this agent IS the final answer
+        // producer for the run. Its output must be persisted as the primary
+        // artifact, otherwise the run finishes with a step log but no
+        // visible deliverable in the UI. With synthesizer enabled, the
+        // synthesizer node owns persistence and this flag stays off so we
+        // don't write two competing artifacts.
+        // Drain-mode integration: when dynamicTasks is on, the agent's own
+        // create_task calls feed _taskQueue, and the drain node below
+        // processes them one by one. Without that the agent could call
+        // create_task but nothing would execute the result. Pass
+        // dynamicTasks on the node config so the registrar attaches
+        // create_task / list_tasks here too.
+        ...(useDynamic ? { dynamicTasks: { enabled: true, maxDepth } } : {}),
+        // The agent is the primary producer for inbox-worker shapes
+        // (with or without dynamicTasks). Its answer becomes report.md.
+        // Tasks queued via create_task get processed afterwards by the
+        // drain loop and produce per-task artifacts, but they don't
+        // replace the agent's report. When synthesizer is enabled, the
+        // synthesizer owns the primary artifact instead.
+        ...(useSynth ? {} : { _persistAsArtifact: true })
+      }
     }
   ];
   const edges = [
@@ -409,9 +489,64 @@ function buildInboxWorkerWorkflow(profile) {
   ];
 
   let lastId = 'agent';
+  if (useDynamic) {
+    // Drain loop that runs each dynamically-created task. The body is a
+    // single prompt node that processes `state.data._currentTask`. When the
+    // synthesizer is OFF, the LAST task_runner output becomes the primary
+    // artifact (we tag every iteration, so the latest one wins).
+    const taskRunnerConfig = {
+      ...basePromptConfig(profile, {
+        systemFallbackKey: 'Process the current task.',
+        fallbackIterations: 10
+      }),
+      // Allow operators to pin a different model for dynamic task runners
+      // (e.g. cheaper / faster model for the high-volume sub-task path
+      // while the orchestrating agent uses a stronger one).
+      ...(profile.dynamicTasks?.modelId ? { modelId: profile.dynamicTasks.modelId } : {}),
+      prompt: {
+        en: [
+          'You are processing one dequeued sub-task from the dynamic-task queue.',
+          '',
+          'Title: {{_currentTask.title}}',
+          'Brief: {{_currentTask.brief}}',
+          '',
+          'If the title or brief mentions an app, source, or tool by name (for example "Ask intrafind-websites-bot ...", "Consult ihub-support-bot ..."), you MUST call that app/tool. Do not paraphrase the question and answer it from memory — call the named tool, wait for its response, and use that response as the basis of your answer.',
+          '',
+          'Rules for this sub-task:',
+          '- Call each named app / tool AT MOST ONCE. If the answer is insufficient, note that in your output — do NOT re-ask the same app with a rephrased question.',
+          '- If sources are configured, they are already in the system prompt — quote / cite them directly. Do not invent additional sources.',
+          '- If web search is available, use it for facts you are not certain of.',
+          '- Do NOT answer from your own training memory alone. Cite the tool / app / source you used.',
+          '- Do NOT enqueue further sub-tasks via create_task. This task is one leaf in a plan; just produce its answer.',
+          '',
+          'When you have gathered the information, produce a focused answer for THIS sub-task only — the orchestrating agent will compose the overall response.'
+        ].join('\n')
+      },
+      dynamicTasks: { enabled: true, maxDepth },
+      // Each task this node executes was just dequeued from _taskQueue;
+      // tagging it as a planner-task lets _autoPersistResult mark it done
+      // in the queue and write a per-task artifact. We do NOT set
+      // _persistAsArtifact here — the agent's answer above is the
+      // primary artifact; task_runner outputs are saved as per-task
+      // markdown files (task_*.md) via the planner-task auto-persist path.
+      _isPlannerTask: true
+    };
+    nodes.push({
+      id: 'drain',
+      type: 'loop',
+      config: {
+        mode: 'drain',
+        queueKey: '_taskQueue',
+        body: [{ id: 'task_runner', type: 'prompt', config: taskRunnerConfig }],
+        maxIterations: 50
+      }
+    });
+    edges.push({ from: 'agent', to: 'drain' });
+    lastId = 'drain';
+  }
   if (useSynth) {
     nodes.push(buildSynthesizerNode(profile));
-    edges.push({ from: 'agent', to: 'synthesize' });
+    edges.push({ from: lastId, to: 'synthesize' });
     lastId = 'synthesize';
   }
   nodes.push({
@@ -437,14 +572,16 @@ export function buildDefaultWorkflowForProfile(profile) {
 }
 
 /**
- * Take a Profile config and ensure it has a complete, valid embedded workflow
- * definition. Returns a NEW profile object (does not mutate).
+ * Take a Profile config and rebuild its embedded workflow definition from
+ * scratch. Returns a NEW profile object (does not mutate).
  *
- *  - If profile.workflow.ref === 'external', leave it untouched.
- *  - If profile.workflow.definition has nodes, leave it untouched (but
- *    still propagate the Profile-level convenience fields into existing
- *    prompt nodes whose config doesn't already specify them).
- *  - Otherwise, fill in a default workflow definition.
+ *  - If profile.workflow.ref === 'external', leave it untouched (caller owns
+ *    the workflow shape).
+ *  - Otherwise, derive the workflow definition purely from the profile flags
+ *    (inboxId, planner.enabled, synthesizer.enabled, dynamicTasks.enabled)
+ *    and resource arrays. Any previously cached embedded definition is
+ *    discarded — this is what lets toggling planner / synthesizer off
+ *    actually remove those nodes from the next run.
  */
 export function serializeProfile(profile) {
   if (!profile || typeof profile !== 'object') {
@@ -455,163 +592,29 @@ export function serializeProfile(profile) {
   if (!next.workflow) next.workflow = { ref: 'embedded' };
   if (next.workflow.ref === 'external') return next;
 
-  const hasDefinition =
-    next.workflow.definition &&
-    Array.isArray(next.workflow.definition.nodes) &&
-    next.workflow.definition.nodes.length > 0;
-
-  if (!hasDefinition) {
-    next.workflow.ref = 'embedded';
-    next.workflow.definition = buildDefaultWorkflowForProfile(next);
-    logger.info('Filled in default workflow definition for profile', {
-      component: 'ProfileWorkflowSerializer',
-      profileId: next.id,
-      shape: next.planner?.enabled
-        ? 'planner+synth'
-        : next.inboxId
-          ? 'inbox-worker'
-          : next.dynamicTasks?.enabled
-            ? 'drain-only'
-            : 'simple'
-    });
-  } else {
-    // Workflow already authored. Propagate Profile-level convenience fields
-    // into prompt nodes that haven't explicitly set them. Authors who want
-    // per-node overrides simply set the field on the node and it wins.
-    const propagated = propagateProfileFields(next, next.workflow.definition.nodes);
-    next.workflow.definition.nodes = propagated;
-  }
+  // Embedded workflow definitions are PURELY derived from the profile flags
+  // (inboxId, planner.enabled, synthesizer.enabled, dynamicTasks.enabled) and
+  // the resource arrays (sources, apps, tools, skills). Always rebuild from
+  // scratch so toggling planner or synthesizer off actually removes those
+  // nodes — previously the cached definition stuck and only field values
+  // got propagated, which left planner/synth nodes in the workflow
+  // regardless of the flags. Custom workflows bypass this by setting
+  // workflow.ref = 'external'.
+  next.workflow.ref = 'embedded';
+  next.workflow.definition = buildDefaultWorkflowForProfile(next);
+  logger.info('Rebuilt embedded workflow definition for profile', {
+    component: 'ProfileWorkflowSerializer',
+    profileId: next.id,
+    shape: next.planner?.enabled
+      ? 'planner' + (next.synthesizer?.enabled !== false ? '+synth' : '')
+      : next.inboxId
+        ? 'inbox-worker' + (next.synthesizer?.enabled !== false ? '+synth' : '')
+        : next.dynamicTasks?.enabled
+          ? 'drain-only'
+          : 'simple'
+  });
 
   return next;
-}
-
-function propagateProfileFields(profile, nodes) {
-  const sys = isLocalizedNonEmpty(profile.system) ? profile.system : null;
-  const model = profile.preferredModel || null;
-  const temp = profile.preferredTemperature;
-  const tools = Array.isArray(profile.tools) ? profile.tools : null;
-  const apps = Array.isArray(profile.apps) ? profile.apps : null;
-  const sources = Array.isArray(profile.sources) ? profile.sources : null;
-  const skills = Array.isArray(profile.skills) ? profile.skills : null;
-
-  return nodes.map(node => {
-    if (!node) return node;
-
-    if (node.type === 'prompt') {
-      const cfg = node.config || {};
-      // Synthesizer nodes have their OWN system/prompt — never overwrite
-      // with the agent persona; that would re-introduce the orchestration
-      // leak. But DO refresh the synthesizer's own system/prompt from the
-      // profile (or from the latest in-code defaults if the profile didn't
-      // override them). Without this, an embedded workflow.definition
-      // freezes the synthesizer prompt at whatever the defaults were when
-      // the profile was first serialized — so a default-prompt update
-      // (e.g. new citation rules, anti-drift guards) never reaches an
-      // existing profile.
-      if (cfg._isSynthesizer === true) {
-        const synthSystem = isLocalizedNonEmpty(profile.synthesizer?.system)
-          ? profile.synthesizer.system
-          : DEFAULT_SYNTHESIZER_SYSTEM;
-        const synthPrompt = isLocalizedNonEmpty(profile.synthesizer?.prompt)
-          ? profile.synthesizer.prompt
-          : DEFAULT_SYNTHESIZER_PROMPT;
-        const synthModel = profile.synthesizer?.modelId || cfg.modelId;
-        return {
-          ...node,
-          config: {
-            ...cfg,
-            system: synthSystem,
-            prompt: synthPrompt,
-            ...(synthModel ? { modelId: synthModel } : {}),
-            // Always (re)apply the configured token budget so a previously
-            // serialized profile picks up admin updates without needing a
-            // workflow.definition wipe.
-            maxTokens:
-              typeof profile.synthesizer?.maxTokens === 'number' &&
-              profile.synthesizer.maxTokens > 0
-                ? profile.synthesizer.maxTokens
-                : 8000
-          }
-        };
-      }
-
-      const merged = {
-        ...cfg,
-        ...(sys && !cfg.system ? { system: sys } : {}),
-        ...(model && !cfg.modelId ? { modelId: model } : {}),
-        ...(typeof temp === 'number' && cfg.temperature === undefined ? { temperature: temp } : {}),
-        ...(tools && (!Array.isArray(cfg.tools) || cfg.tools.length === 0) ? { tools } : {}),
-        ...(apps && (!Array.isArray(cfg.apps) || cfg.apps.length === 0) ? { apps } : {}),
-        ...(sources && (!Array.isArray(cfg.sources) || cfg.sources.length === 0)
-          ? { sources }
-          : {}),
-        ...(skills && (!Array.isArray(cfg.skills) || cfg.skills.length === 0)
-          ? { skills }
-          : {})
-      };
-      return { ...node, config: merged };
-    }
-
-    if (node.type === 'planner') {
-      const cfg = node.config || {};
-      // Flatten legacy nested taskTemplate.config shape if still present.
-      let taskTemplate = cfg.taskTemplate;
-      if (
-        taskTemplate &&
-        typeof taskTemplate === 'object' &&
-        taskTemplate.config &&
-        typeof taskTemplate.config === 'object'
-      ) {
-        const { type: _t, config: inner, ...rest } = taskTemplate;
-        taskTemplate = { ...rest, ...inner };
-      }
-      if (taskTemplate) {
-        const tt = { ...taskTemplate };
-        if (sys && !tt.system) tt.system = sys;
-        if (model && !tt.modelId) tt.modelId = model;
-        if (typeof temp === 'number' && tt.temperature === undefined) tt.temperature = temp;
-        if (tools && (!Array.isArray(tt.tools) || tt.tools.length === 0)) tt.tools = tools;
-        if (apps && (!Array.isArray(tt.apps) || tt.apps.length === 0)) tt.apps = apps;
-        if (sources && (!Array.isArray(tt.sources) || tt.sources.length === 0))
-          tt.sources = sources;
-        if (skills && (!Array.isArray(tt.skills) || tt.skills.length === 0)) tt.skills = skills;
-        taskTemplate = tt;
-      }
-      // Planner-specific system/goal come from profile.planner.*, NOT
-      // profile.system. Fall back to defaults if missing.
-      const hasInboxOnPlannerGoal =
-        typeof profile.inboxId === 'string' && profile.inboxId.length > 0;
-      const plannerSystem = isLocalizedNonEmpty(profile.planner?.system)
-        ? localizedToString(profile.planner.system, DEFAULT_PLANNER_SYSTEM)
-        : cfg.system || DEFAULT_PLANNER_SYSTEM;
-      const plannerGoal = isLocalizedNonEmpty(profile.planner?.goal)
-        ? localizedToString(
-            profile.planner.goal,
-            hasInboxOnPlannerGoal ? DEFAULT_PLANNER_GOAL : DEFAULT_PLANNER_GOAL_NO_INBOX
-          )
-        : cfg.goal ||
-          (hasInboxOnPlannerGoal ? DEFAULT_PLANNER_GOAL : DEFAULT_PLANNER_GOAL_NO_INBOX);
-
-      const merged = {
-        ...cfg,
-        system: plannerSystem,
-        goal: plannerGoal,
-        ...(profile.planner?.modelId
-          ? { modelId: profile.planner.modelId }
-          : model && !cfg.modelId
-            ? { modelId: model }
-            : {}),
-        ...(taskTemplate ? { taskTemplate } : {})
-      };
-      // Always (re)apply the planner node timeout. Re-derived from the
-      // current profile budget so operators get the new value the next time
-      // they save, without having to wipe the embedded definition.
-      const execution = { ...(node.execution || {}), timeout: plannerNodeTimeoutMs(profile) };
-      return { ...node, execution, config: merged };
-    }
-
-    return node;
-  });
 }
 
 export default { serializeProfile, buildDefaultWorkflowForProfile };

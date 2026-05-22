@@ -7,6 +7,7 @@ import { processMessageTemplates } from '../../serverHelpers.js';
 import logger from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { InMemorySink } from './streamSink/InMemorySink.js';
+import { processResponseBuffer } from '../../adapters/index.js';
 
 class ChatService {
   constructor(options = {}) {
@@ -325,6 +326,46 @@ class ChatService {
       const result = await sink.getResult({
         timeoutMs: 180_000
       });
+      // Provider-normalized content: the non-streaming path of the chat
+      // pipeline writes the RAW provider response into res.json() — so the
+      // sink hands us a body in the provider's native shape (Gemini's
+      // candidates[], Anthropic's content[], etc). The OpenAI-shape parser
+      // inside the sink only catches OpenAI-shaped bodies. Run the body
+      // through the adapter's normalisation if we got nothing usable —
+      // adapters own the model-specific knowledge (including separating
+      // thinking text from answer text). Without this, App-as-tool calls
+      // either return empty content OR end up returning the raw body with
+      // chain-of-thought leaking into the agent's context.
+      const empty =
+        !result?.finalMessage?.content || result.finalMessage.content.trim().length === 0;
+      const rawBody = sink.jsonBody;
+      if (empty && rawBody && model?.provider) {
+        try {
+          const normalized = await processResponseBuffer(model.provider, JSON.stringify(rawBody));
+          if (normalized) {
+            const contentParts = Array.isArray(normalized.content)
+              ? normalized.content
+                  .map(c => (typeof c === 'string' ? c : c?.text || ''))
+                  .filter(Boolean)
+              : typeof normalized.content === 'string'
+                ? [normalized.content]
+                : [];
+            const normalizedContent = contentParts.join('').trim();
+            if (normalizedContent) {
+              result.finalMessage = { role: 'assistant', content: normalizedContent };
+            }
+            if (normalized.finishReason) result.finishReason = normalized.finishReason;
+            if (normalized.usage) result.usage = normalized.usage;
+          }
+        } catch (normErr) {
+          logger.warn('invokeAppInternal: adapter normalisation failed', {
+            component: 'ChatService',
+            appId,
+            provider: model.provider,
+            error: normErr.message
+          });
+        }
+      }
       return result;
     } catch (error) {
       sink.stopListening();

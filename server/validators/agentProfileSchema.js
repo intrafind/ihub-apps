@@ -98,7 +98,13 @@ const synthesizerSchema = z
 const dynamicTasksSchema = z
   .object({
     enabled: z.boolean().optional().default(false),
-    maxDepth: z.number().int().min(0).max(10).optional().default(3)
+    maxDepth: z.number().int().min(0).max(10).optional().default(3),
+    // Preferred model for dynamic task_runner executions. Falls back to
+    // profile.preferredModel when omitted. Different from the agent's
+    // model so operators can use a cheaper / faster model for the
+    // decomposed sub-tasks while keeping the orchestrating agent on a
+    // stronger model (or vice versa).
+    modelId: z.string().optional()
   })
   .strict();
 
