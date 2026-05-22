@@ -50,10 +50,7 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
     const startedAt = new Date();
     const startMs = startedAt.getTime();
     const config = node.config || {};
-    const inboxId =
-      config.inboxId ||
-      state?.data?._agentProfile?.inboxId ||
-      context?.user?.inboxId;
+    const inboxId = config.inboxId || state?.data?._agentProfile?.inboxId || context?.user?.inboxId;
 
     if (!inboxId) {
       return this.createErrorResult(
@@ -83,11 +80,7 @@ export class InboxLoadNodeExecutor extends BaseNodeExecutor {
     const top = pickTopItem(inbox.items);
 
     if (!top) {
-      emit(
-        'agent.inbox.empty',
-        { inboxId, profileId, total: inbox.items.length },
-        chatId
-      );
+      emit('agent.inbox.empty', { inboxId, profileId, total: inbox.items.length }, chatId);
       this.logger.info('inbox-load: no open items, terminating workflow', {
         component: 'InboxLoadNodeExecutor',
         nodeId: node.id,

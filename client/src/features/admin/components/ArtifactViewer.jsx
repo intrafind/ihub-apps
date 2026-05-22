@@ -22,10 +22,9 @@ function ArtifactViewer({ runId, name, onClose }) {
     setLoading(true);
     setError(null);
     setHtmlContent('');
-    fetch(
-      `/api/agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`,
-      { credentials: 'include' }
-    )
+    fetch(`/api/agents/runs/${encodeURIComponent(runId)}/artifacts/${encodeURIComponent(name)}`, {
+      credentials: 'include'
+    })
       .then(async res => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.text();

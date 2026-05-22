@@ -115,7 +115,7 @@ export function generateRunTitleAsync({
             '  "Title:" prefix.\n' +
             '- No filler verbs like "Research", "Investigate", "Find out" ' +
             '  unless they are the actual core action.\n' +
-            '- Match the source\'s language (German source → German title).\n' +
+            "- Match the source's language (German source → German title).\n" +
             '- Lead with the subject (person, topic, system, …), not the verb.\n' +
             'Examples:\n' +
             '  Source: "Recherchiere wer Daniel Manzke ist?"\n' +
