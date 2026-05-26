@@ -690,7 +690,13 @@ function ChatMessage({
           const parsedData =
             typeof message.content === 'string' ? JSON.parse(message.content) : message.content;
 
-          return <CustomResponseRenderer componentName={customRendererName} data={parsedData} />;
+          return (
+            <CustomResponseRenderer
+              componentName={customRendererName}
+              data={parsedData}
+              rendererConfig={app?.rendererConfig}
+            />
+          );
         } catch (error) {
           console.error('Error parsing JSON for custom renderer:', error);
           // Fall through to default JSON rendering on parse error

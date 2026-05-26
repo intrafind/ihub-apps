@@ -2194,5 +2194,22 @@
     "clearChat_de": "chat löschen",
     "sendMessage": "send message",
     "sendMessage_de": "nachricht senden"
+  },
+  "parliamentaryQuestions": {
+    "noData": "No questions could be extracted from the document.",
+    "headerFallback": "Parliamentary Questions",
+    "documentTitle": "Document",
+    "questionsCount": "{count} questions detected",
+    "tableNumber": "#",
+    "tableQuestion": "Question",
+    "tableTopic": "Topic",
+    "tableActions": "Actions",
+    "searchQueryLabel": "Search query",
+    "searchInIFinder": "Search in iFinder",
+    "askInIAssistant": "Ask iAssistant",
+    "askInIAssistantExternal": "Open in external iAssistant",
+    "showMore": "Show more",
+    "showLess": "Show less",
+    "configMissing": "No iFinder or iAssistant targets are configured. Set rendererConfig in the app JSON to enable the action buttons."
   }
 }
