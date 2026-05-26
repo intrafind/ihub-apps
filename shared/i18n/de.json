@@ -2159,5 +2159,24 @@
     "clearChat_de": "chat löschen",
     "sendMessage": "send message",
     "sendMessage_de": "nachricht senden"
+  },
+  "parliamentaryQuestions": {
+    "noData": "Aus dem Dokument konnten keine Fragen extrahiert werden.",
+    "headerFallback": "Parlamentarische Anfragen",
+    "documentTitle": "Dokument",
+    "questionsCount": "{count} Fragen erkannt",
+    "tableNumber": "Nr.",
+    "tableQuestion": "Frage",
+    "tableTopic": "Thema",
+    "tableActions": "Aktionen",
+    "searchQueryLabel": "Suchanfrage",
+    "searchInIFinder": "In iFinder suchen",
+    "askInIAssistant": "iAssistant fragen",
+    "askInIAssistantExternal": "In externem iAssistant öffnen",
+    "iFinderShort": "iFinder",
+    "iAssistantShort": "iAssistant",
+    "showMore": "Mehr anzeigen",
+    "showLess": "Weniger anzeigen",
+    "configMissing": "Es sind keine iFinder- oder iAssistant-Ziele konfiguriert. Setzen Sie rendererConfig in der App-JSON, um die Aktionsschaltflächen zu aktivieren."
   }
 }

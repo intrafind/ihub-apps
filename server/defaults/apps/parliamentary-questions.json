@@ -1,0 +1,147 @@
+{
+  "id": "parliamentary-questions",
+  "order": 16,
+  "category": "government",
+  "name": {
+    "en": "Parliamentary Questions Analyzer",
+    "de": "Parlamentarische Anfragen Analysator"
+  },
+  "description": {
+    "en": "Extract individual questions from parliamentary inquiry documents (e.g. German Bundestag Kleine Anfragen) and search them in iFinder or ask iAssistant.",
+    "de": "Extrahiere einzelne Fragen aus parlamentarischen Anfragen (z. B. Kleinen Anfragen des Bundestags) und durchsuche sie in iFinder oder frage iAssistant."
+  },
+  "color": "#2563EB",
+  "icon": "document-text",
+  "system": {
+    "en": "You are an expert document analyst. Your task is to extract every distinct question from a parliamentary inquiry document (such as a Bundestag Kleine Anfrage) and return them as structured data.\n\n**Extraction rules:**\n- Identify each individual question, including sub-questions (e.g. '7', '7a', '9.8').\n- Preserve the original numbering exactly as it appears in the document, including dots and letters (e.g. '7', '9.8', '12a').\n- Return the full text of each question verbatim, without summarizing or paraphrasing.\n- For each question, provide an optional short topic label (1–3 words, in the same language as the question) that captures the subject (e.g. 'MAD-Prüfverfahren', 'Waffenzugang').\n- For each question, provide a concise search_query (5–12 keywords, no full sentences, no question marks) optimized for an enterprise document search engine. Strip filler words. Include named entities, dates, organizations, and key concepts.\n- If the document has a clear title or reference (e.g. 'Drucksache 19/30574'), include it in document_title.\n- If the user provides a topic_hint, weight your search_query toward that topic, but do NOT drop questions that fall outside the hint.\n\n**Output format:** Return strictly the JSON object defined by the schema. Do not wrap it in markdown code fences. Do not add commentary before or after the JSON.",
+    "de": "Du bist ein Experte für Dokumentenanalyse. Deine Aufgabe ist es, jede einzelne Frage aus einem parlamentarischen Anfragedokument (z. B. einer Kleinen Anfrage des Bundestags) zu extrahieren und als strukturierte Daten zurückzugeben.\n\n**Extraktionsregeln:**\n- Identifiziere jede einzelne Frage, einschließlich Unterfragen (z. B. '7', '7a', '9.8').\n- Behalte die ursprüngliche Nummerierung genau so bei, wie sie im Dokument erscheint, einschließlich Punkten und Buchstaben (z. B. '7', '9.8', '12a').\n- Gib den vollständigen Wortlaut jeder Frage wörtlich zurück, ohne zu zusammenfassen oder zu paraphrasieren.\n- Gib für jede Frage ein optionales kurzes Themen-Label an (1–3 Wörter, in der Sprache der Frage), das den Gegenstand beschreibt (z. B. 'MAD-Prüfverfahren', 'Waffenzugang').\n- Gib für jede Frage eine prägnante search_query an (5–12 Schlüsselwörter, keine vollständigen Sätze, keine Fragezeichen), die für eine Unternehmenssuchmaschine optimiert ist. Entferne Füllwörter. Füge Eigennamen, Datumsangaben, Organisationen und Schlüsselkonzepte ein.\n- Wenn das Dokument einen klaren Titel oder eine Referenz hat (z. B. 'Drucksache 19/30574'), gib sie in document_title an.\n- Wenn der Benutzer einen topic_hint angibt, gewichte deine search_query in Richtung dieses Themas, lasse aber KEINE Fragen weg, die außerhalb des Hinweises liegen.\n\n**Ausgabeformat:** Gib ausschließlich das JSON-Objekt zurück, das durch das Schema definiert ist. Verpacke es NICHT in Markdown-Codeblöcke. Füge weder vor noch nach dem JSON Kommentare hinzu."
+  },
+  "prompt": {
+    "en": "**Topic hint (optional):**\n{{topic_hint}}\n\n**Document to analyze:**\n{{content}}",
+    "de": "**Themenhinweis (optional):**\n{{topic_hint}}\n\n**Zu analysierendes Dokument:**\n{{content}}"
+  },
+  "tokenLimit": 16000,
+  "preferredOutputFormat": "json",
+  "preferredStyle": "professional",
+  "sendChatHistory": false,
+  "customResponseRenderer": "parliamentary-questions-results",
+  "rendererConfig": {
+    "iFinderUrlTemplate": "https://ifinder.example.com/?q={query}",
+    "iAssistantAppId": "ifinder-document-actions",
+    "iAssistantUrlTemplate": "https://iassistant.example.com/?q={query}"
+  },
+  "messagePlaceholder": {
+    "en": "Paste the questions here or upload a PDF...",
+    "de": "Fragen hier einfügen oder PDF hochladen..."
+  },
+  "greeting": {
+    "en": {
+      "title": "🏛️ Parliamentary Questions Analyzer",
+      "subtitle": "Upload a parliamentary inquiry PDF (e.g. Kleine Anfrage) to extract all questions into a searchable table. Each question gets one-click links to iFinder search and iAssistant."
+    },
+    "de": {
+      "title": "🏛️ Parlamentarische Anfragen Analysator",
+      "subtitle": "Laden Sie eine parlamentarische Anfrage als PDF hoch (z. B. Kleine Anfrage), um alle Fragen in eine durchsuchbare Tabelle zu extrahieren. Jede Frage erhält Ein-Klick-Links zur iFinder-Suche und zu iAssistant."
+    }
+  },
+  "outputSchema": {
+    "type": "object",
+    "properties": {
+      "document_title": {
+        "type": "string",
+        "description": "Title or reference of the document (e.g. 'Drucksache 19/30574'), empty if not present"
+      },
+      "questions": {
+        "type": "array",
+        "description": "List of every distinct question extracted from the document",
+        "items": {
+          "type": "object",
+          "properties": {
+            "number": {
+              "type": "string",
+              "description": "Original numbering as in the document (e.g. '7', '9.8', '12a')"
+            },
+            "text": {
+              "type": "string",
+              "description": "Full verbatim text of the question"
+            },
+            "topic": {
+              "type": "string",
+              "description": "Short topic label of 1-3 words, empty if not applicable"
+            },
+            "search_query": {
+              "type": "string",
+              "description": "Concise 5-12 keyword search query optimized for enterprise search"
+            }
+          },
+          "required": ["number", "text", "topic", "search_query"],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": ["document_title", "questions"],
+    "additionalProperties": false
+  },
+  "upload": {
+    "enabled": true,
+    "fileUpload": {
+      "enabled": true,
+      "maxFileSizeMB": 20,
+      "supportedFormats": ["text/plain", "text/markdown", "application/pdf"]
+    },
+    "imageUpload": {
+      "enabled": false
+    }
+  },
+  "settings": {
+    "enabled": true,
+    "model": {
+      "enabled": true
+    },
+    "temperature": {
+      "enabled": false
+    },
+    "outputFormat": {
+      "enabled": false
+    },
+    "chatHistory": {
+      "enabled": false
+    },
+    "style": {
+      "enabled": false
+    }
+  },
+  "inputMode": {
+    "type": "multiline",
+    "rows": 6,
+    "microphone": {
+      "enabled": false
+    }
+  },
+  "variables": [
+    {
+      "name": "topic_hint",
+      "label": {
+        "en": "Topic hint (optional)",
+        "de": "Themenhinweis (optional)"
+      },
+      "type": "string",
+      "defaultValue": {
+        "en": "",
+        "de": ""
+      },
+      "description": {
+        "en": "Optional topic or context to focus the extracted search queries (e.g. 'MAD, Bundeswehr').",
+        "de": "Optionales Thema oder Kontext, um die extrahierten Suchanfragen zu fokussieren (z. B. 'MAD, Bundeswehr')."
+      },
+      "placeholder": {
+        "en": "e.g. MAD, Bundeswehr, Rechtsextremismus",
+        "de": "z. B. MAD, Bundeswehr, Rechtsextremismus"
+      },
+      "required": false
+    }
+  ],
+  "allowEmptyContent": false,
+  "disallowModelSelection": false,
+  "enabled": true
+}
