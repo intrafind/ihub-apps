@@ -2208,8 +2208,6 @@
     "searchInIFinder": "Search in iFinder",
     "askInIAssistant": "Ask iAssistant",
     "askInIAssistantExternal": "Open in external iAssistant",
-    "iFinderShort": "iFinder",
-    "iAssistantShort": "iAssistant",
     "showMore": "Show more",
     "showLess": "Show less",
     "configMissing": "No iFinder or iAssistant targets are configured. Set rendererConfig in the app JSON to enable the action buttons."

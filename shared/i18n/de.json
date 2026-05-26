@@ -2173,8 +2173,6 @@
     "searchInIFinder": "In iFinder suchen",
     "askInIAssistant": "iAssistant fragen",
     "askInIAssistantExternal": "In externem iAssistant öffnen",
-    "iFinderShort": "iFinder",
-    "iAssistantShort": "iAssistant",
     "showMore": "Mehr anzeigen",
     "showLess": "Weniger anzeigen",
     "configMissing": "Es sind keine iFinder- oder iAssistant-Ziele konfiguriert. Setzen Sie rendererConfig in der App-JSON, um die Aktionsschaltflächen zu aktivieren."

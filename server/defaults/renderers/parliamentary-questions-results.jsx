@@ -103,7 +103,7 @@ const UserComponent = ({ data, t, rendererConfig, navigate, useState }) => {
               <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide w-40">
                 {safeT('parliamentaryQuestions.tableTopic', 'Topic')}
               </th>
-              <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide w-56">
+              <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wide w-32">
                 {safeT('parliamentaryQuestions.tableActions', 'Actions')}
               </th>
             </tr>
@@ -202,13 +202,14 @@ const QuestionRow = ({
 
       {/* Actions */}
       <td className="px-3 py-4 align-top">
-        <div className="flex items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-1">
           {/* iFinder */}
           <ActionButton
             onClick={() => onOpenIFinder(question)}
             disabled={!canIFinder}
             tooltip={safeT('parliamentaryQuestions.searchInIFinder', 'Search in iFinder')}
             variant="secondary"
+            iconOnly
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -218,9 +219,6 @@ const QuestionRow = ({
                 d="M21 21l-4.35-4.35M16 10a6 6 0 11-12 0 6 6 0 0112 0z"
               />
             </svg>
-            <span className="ml-1.5">
-              {safeT('parliamentaryQuestions.iFinderShort', 'iFinder')}
-            </span>
           </ActionButton>
 
           {/* iAssistant (in-app, primary) */}
@@ -229,6 +227,7 @@ const QuestionRow = ({
             disabled={!canIAssistantApp}
             tooltip={safeT('parliamentaryQuestions.askInIAssistant', 'Ask iAssistant')}
             variant="primary"
+            iconOnly
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
@@ -238,9 +237,6 @@ const QuestionRow = ({
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
               />
             </svg>
-            <span className="ml-1.5">
-              {safeT('parliamentaryQuestions.iAssistantShort', 'iAssistant')}
-            </span>
           </ActionButton>
 
           {/* iAssistant external (icon-only) */}
@@ -271,7 +267,8 @@ const QuestionRow = ({
 
 const ActionButton = ({ onClick, disabled, tooltip, variant, iconOnly, children }) => {
   const base =
-    'inline-flex items-center px-2.5 py-1.5 rounded-md text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
+    'inline-flex items-center justify-center rounded-md text-xs font-medium border transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1';
+  const sizing = iconOnly ? 'p-1.5' : 'px-2.5 py-1.5';
   const variants = {
     primary:
       'bg-blue-600 text-white border-blue-600 hover:bg-blue-700 focus:ring-blue-500 disabled:bg-gray-200 disabled:text-gray-400 disabled:border-gray-200 disabled:cursor-not-allowed',
@@ -287,7 +284,7 @@ const ActionButton = ({ onClick, disabled, tooltip, variant, iconOnly, children 
       disabled={disabled}
       title={tooltip}
       aria-label={tooltip}
-      className={`${base} ${variants[variant] || variants.secondary} ${iconOnly ? 'px-2' : ''}`}
+      className={`${base} ${sizing} ${variants[variant] || variants.secondary}`}
     >
       {children}
     </button>
