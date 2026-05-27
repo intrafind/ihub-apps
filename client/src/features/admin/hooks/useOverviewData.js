@@ -37,14 +37,12 @@ export function useOverviewData() {
       const enabledApps = Array.isArray(apps) ? apps.filter(a => a.enabled !== false).length : 0;
 
       // Unique users active in last 30d
-      const totalUsers =
-        usersData?.users != null ? Object.keys(usersData.users).length : null;
+      const totalUsers = usersData?.users != null ? Object.keys(usersData.users).length : null;
 
       // Total chat requests summed across all timeline rollups
-      const totalChats =
-        Array.isArray(timelineData?.data)
-          ? timelineData.data.reduce((sum, d) => sum + (d.totals?.chatRequests ?? 0), 0)
-          : null;
+      const totalChats = Array.isArray(timelineData?.data)
+        ? timelineData.data.reduce((sum, d) => sum + (d.totals?.chatRequests ?? 0), 0)
+        : null;
 
       setStats({
         apps: { value: appCount, sub: `${enabledApps} enabled`, href: '/admin/apps' },
