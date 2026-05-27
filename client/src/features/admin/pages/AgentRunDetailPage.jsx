@@ -1,8 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import ArtifactViewer from '../components/ArtifactViewer';
 import ArtifactDownloadMenu from '../components/ArtifactDownloadMenu';
 import StepDetails from '../components/StepDetails';
@@ -102,12 +100,7 @@ export default function AgentRunDetailPage() {
   }
 
   if (loading && !run) {
-    return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="p-8">{t('common.loading', 'Loading…')}</div>
-      </AdminAuth>
-    );
+    return <div className="p-8">{t('common.loading', 'Loading…')}</div>;
   }
 
   const status = run?.status;
@@ -511,9 +504,8 @@ export default function AgentRunDetailPage() {
   })();
 
   return (
-    <AdminAuth>
+    <>
       <div className="bg-gray-50 min-h-screen">
-        <AdminNavigation />
         <div className="max-w-6xl mx-auto py-8 px-4">
           <div className="flex justify-between items-start mb-6 gap-4">
             <div className="min-w-0 flex-1">
@@ -1046,6 +1038,6 @@ export default function AgentRunDetailPage() {
         onConfirm={confirmCancel}
         onDeny={() => setConfirmCancelOpen(false)}
       />
-    </AdminAuth>
+    </>
   );
 }

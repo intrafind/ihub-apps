@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import HeaderCustomization from '../components/HeaderCustomization';
 import FooterCustomization from '../components/FooterCustomization';
 import AssetManager from '../components/AssetManager';
@@ -123,200 +121,187 @@ function AdminUICustomization() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-            <p className="mt-2 text-gray-600 dark:text-gray-400">
-              {t('admin.ui.loading', 'Loading UI configuration...')}
-            </p>
-          </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600 dark:text-gray-400">
+            {t('admin.ui.loading', 'Loading UI configuration...')}
+          </p>
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   if (!config) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-          <div className="text-center">
-            <p className="text-red-600 dark:text-red-400">
-              {error || t('admin.ui.error', 'Failed to load configuration')}
-            </p>
-          </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 dark:text-red-400">
+            {error || t('admin.ui.error', 'Failed to load configuration')}
+          </p>
         </div>
-      </AdminAuth>
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        {/* Header */}
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <div className="sm:flex sm:items-center sm:justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-                  {t('admin.ui.title', 'UI Customization')}
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 mt-1">
-                  {t(
-                    'admin.ui.description',
-                    'Customize the appearance and branding of your iHub Apps'
-                  )}
-                </p>
-              </div>
-              <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
-                <button
-                  onClick={handleBackup}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                  {t('admin.ui.backup', 'Backup Config')}
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
-                    saving
-                      ? 'bg-indigo-400 cursor-not-allowed'
-                      : 'bg-indigo-600 hover:bg-indigo-700'
-                  } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
-                >
-                  {saving ? t('admin.ui.saving', 'Saving...') : t('admin.ui.save', 'Save Changes')}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Status Messages */}
-        {error && (
-          <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4 mx-4 mt-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-              </div>
-              <div className="ml-auto pl-3">
-                <button
-                  onClick={() => setError(null)}
-                  className="inline-flex text-red-400 hover:text-red-600 dark:hover:text-red-300"
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {successMessage && (
-          <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 mx-4 mt-4">
-            <div className="flex">
-              <div className="flex-shrink-0">
-                <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
-                  <path
-                    fillRule="evenodd"
-                    d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
-                    clipRule="evenodd"
-                  />
-                </svg>
-              </div>
-              <div className="ml-3">
-                <p className="text-sm text-green-800 dark:text-green-200">{successMessage}</p>
-              </div>
-              <div className="ml-auto pl-3">
-                <button
-                  onClick={() => setSuccessMessage('')}
-                  className="inline-flex text-green-400 hover:text-green-600 dark:hover:text-green-300"
-                >
-                  <span className="sr-only">Dismiss</span>
-                  <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-                    <path
-                      fillRule="evenodd"
-                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
-                      clipRule="evenodd"
-                    />
-                  </svg>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Content */}
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Header */}
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Tab Navigation */}
-          <div className="border-b border-gray-200 dark:border-gray-700 mb-8">
-            <nav className="flex space-x-8" aria-label="Tabs">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
-                    activeTab === tab.id
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                  }`}
-                >
-                  <span>{tab.icon}</span>
-                  <span>{tab.label}</span>
-                </button>
-              ))}
-            </nav>
-          </div>
-
-          {/* Tab Content */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
-            {activeTab === 'header' && (
-              <HeaderCustomization
-                config={config.header || {}}
-                onUpdate={updates => updateConfig('header', updates)}
-                t={t}
-              />
-            )}
-            {activeTab === 'footer' && (
-              <FooterCustomization
-                config={config.footer || {}}
-                onUpdate={updates => updateConfig('footer', updates)}
-                t={t}
-              />
-            )}
-            {activeTab === 'assets' && <AssetManager t={t} />}
-            {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
-            {activeTab === 'content' && (
-              <ContentEditor config={config} onUpdate={setConfig} t={t} />
-            )}
-            {activeTab === 'pwa' && (
-              <PwaCustomization
-                config={config.pwa || {}}
-                onUpdate={updates => updateConfig('pwa', updates)}
-                t={t}
-              />
-            )}
+          <div className="sm:flex sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+                {t('admin.ui.title', 'UI Customization')}
+              </h1>
+              <p className="text-gray-600 dark:text-gray-400 mt-1">
+                {t(
+                  'admin.ui.description',
+                  'Customize the appearance and branding of your iHub Apps'
+                )}
+              </p>
+            </div>
+            <div className="mt-4 sm:mt-0 sm:flex sm:space-x-3">
+              <button
+                onClick={handleBackup}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                {t('admin.ui.backup', 'Backup Config')}
+              </button>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ${
+                  saving ? 'bg-indigo-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-700'
+                } focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+              >
+                {saving ? t('admin.ui.saving', 'Saving...') : t('admin.ui.save', 'Save Changes')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </AdminAuth>
+
+      {/* Status Messages */}
+      {error && (
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4 mx-4 mt-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setError(null)}
+                className="inline-flex text-red-400 hover:text-red-600 dark:hover:text-red-300"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {successMessage && (
+        <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-md p-4 mx-4 mt-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+                <path
+                  fillRule="evenodd"
+                  d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                  clipRule="evenodd"
+                />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-800 dark:text-green-200">{successMessage}</p>
+            </div>
+            <div className="ml-auto pl-3">
+              <button
+                onClick={() => setSuccessMessage('')}
+                className="inline-flex text-green-400 hover:text-green-600 dark:hover:text-green-300"
+              >
+                <span className="sr-only">Dismiss</span>
+                <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                  <path
+                    fillRule="evenodd"
+                    d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                    clipRule="evenodd"
+                  />
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Content */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab Navigation */}
+        <div className="border-b border-gray-200 dark:border-gray-700 mb-8">
+          <nav className="flex space-x-8" aria-label="Tabs">
+            {tabs.map(tab => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center space-x-2 ${
+                  activeTab === tab.id
+                    ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                }`}
+              >
+                <span>{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            ))}
+          </nav>
+        </div>
+
+        {/* Tab Content */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
+          {activeTab === 'header' && (
+            <HeaderCustomization
+              config={config.header || {}}
+              onUpdate={updates => updateConfig('header', updates)}
+              t={t}
+            />
+          )}
+          {activeTab === 'footer' && (
+            <FooterCustomization
+              config={config.footer || {}}
+              onUpdate={updates => updateConfig('footer', updates)}
+              t={t}
+            />
+          )}
+          {activeTab === 'assets' && <AssetManager t={t} />}
+          {activeTab === 'styles' && <StyleEditor config={config} onUpdate={setConfig} t={t} />}
+          {activeTab === 'content' && <ContentEditor config={config} onUpdate={setConfig} t={t} />}
+          {activeTab === 'pwa' && (
+            <PwaCustomization
+              config={config.pwa || {}}
+              onUpdate={updates => updateConfig('pwa', updates)}
+              t={t}
+            />
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 

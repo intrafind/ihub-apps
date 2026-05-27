@@ -2,8 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -246,18 +244,14 @@ function AdminOAuthClientEditPage() {
 
   if (loading) {
     return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-          <LoadingSpinner size="lg" />
-        </div>
-      </AdminAuth>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <LoadingSpinner size="lg" />
+      </div>
     );
   }
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
+    <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
@@ -792,7 +786,7 @@ function AdminOAuthClientEditPage() {
           </div>
         </div>
       )}
-    </AdminAuth>
+    </>
   );
 }
 

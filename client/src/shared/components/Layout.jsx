@@ -92,8 +92,8 @@ function Layout() {
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
       )}
 
-      {/* Global smart search overlay */}
-      <SmartSearch />
+      {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
+      {!pathnameStartsWith(location.pathname, '/admin') && <SmartSearch />}
 
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
@@ -212,11 +212,22 @@ function Layout() {
         </header>
       )}
 
-      <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
-        <div className="container mx-auto px-4">
+      {/* Admin routes handle their own layout (sidebar + content); other routes use container */}
+      {pathnameStartsWith(location.pathname, '/admin') ? (
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex flex-col flex-1 min-h-0 overflow-hidden w-full"
+        >
           <Outlet />
-        </div>
-      </main>
+        </main>
+      ) : (
+        <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
+          <div className="container mx-auto px-4">
+            <Outlet />
+          </div>
+        </main>
+      )}
 
       {/* Footer - Only render if enabled (defaults to true) and not on an app page */}
       {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (

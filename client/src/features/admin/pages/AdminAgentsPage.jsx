@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   fetchAgentProfiles,
@@ -81,9 +79,8 @@ export default function AdminAgentsPage() {
   }
 
   return (
-    <AdminAuth>
+    <>
       <div className="bg-gray-50 min-h-screen">
-        <AdminNavigation />
         <div className="max-w-7xl mx-auto py-8 px-4">
           <div className="flex justify-between items-center mb-6">
             <div>
@@ -250,6 +247,6 @@ export default function AdminAgentsPage() {
         onConfirm={confirmDelete}
         onDeny={() => setPendingDeleteId(null)}
       />
-    </AdminAuth>
+    </>
   );
 }

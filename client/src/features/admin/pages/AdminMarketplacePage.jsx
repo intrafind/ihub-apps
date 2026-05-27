@@ -1,8 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import { browseMarketplace, fetchMarketplaceRegistries } from '../../../api/adminApi';
 import MarketplaceItemCard from '../components/marketplace/MarketplaceItemCard';
 import MarketplaceTypeTabs from '../components/marketplace/MarketplaceTypeTabs';
@@ -139,9 +137,8 @@ function AdminMarketplacePage() {
   const noRegistries = !loading && registries.length === 0;
 
   return (
-    <AdminAuth>
+    <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <AdminNavigation />
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Page header */}
           <div className="flex items-center justify-between mb-6">
@@ -314,7 +311,7 @@ function AdminMarketplacePage() {
           onAction={handleItemAction}
         />
       )}
-    </AdminAuth>
+    </>
   );
 }
 

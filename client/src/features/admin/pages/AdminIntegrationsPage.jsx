@@ -1,6 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import AdminSectionCard from '../components/AdminSectionCard';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
 
@@ -103,41 +101,38 @@ function AdminIntegrationsPage() {
   ].filter(Boolean);
 
   return (
-    <AdminAuth>
-      <AdminNavigation />
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {t('admin.integrations.title', 'Integrations')}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
-              {t(
-                'admin.integrations.subtitle',
-                'Connect iHub to the systems your users already work with — mail, docs, ticketing — and ship the iHub UI inside their browser.'
-              )}
-            </p>
-          </div>
-        </div>
-
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {!integrationsEnabled && (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 mb-6 text-sm text-amber-800 dark:text-amber-200">
-              {t(
-                'admin.integrations.featureFlagOff',
-                'The "integrations" feature flag is off. Enable it under Admin → Features to surface integration endpoints to clients.'
-              )}
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {sections.map(section => (
-              <AdminSectionCard key={section.key} section={section} />
-            ))}
-          </div>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+            {t('admin.integrations.title', 'Integrations')}
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400 mt-2">
+            {t(
+              'admin.integrations.subtitle',
+              'Connect iHub to the systems your users already work with — mail, docs, ticketing — and ship the iHub UI inside their browser.'
+            )}
+          </p>
         </div>
       </div>
-    </AdminAuth>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {!integrationsEnabled && (
+          <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 p-4 mb-6 text-sm text-amber-800 dark:text-amber-200">
+            {t(
+              'admin.integrations.featureFlagOff',
+              'The "integrations" feature flag is off. Enable it under Admin → Features to surface integration endpoints to clients.'
+            )}
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {sections.map(section => (
+            <AdminSectionCard key={section.key} section={section} />
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 

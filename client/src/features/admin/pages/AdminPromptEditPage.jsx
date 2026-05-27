@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
-import AdminNavigation from '../components/AdminNavigation';
 import {
   fetchAdminPrompts,
   createPrompt,
@@ -190,7 +189,6 @@ function AdminPromptEditPage() {
 
   return (
     <div>
-      <AdminNavigation />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex items-center justify-between">

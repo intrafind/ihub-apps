@@ -2,8 +2,6 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ShortLinkDetailsPopup from '../../../shared/components/ShortLinkDetailsPopup';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
@@ -134,9 +132,8 @@ function AdminShortLinks() {
   }
 
   return (
-    <AdminAuth>
+    <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <AdminNavigation />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="sm:flex sm:items-center">
             <div className="sm:flex-auto">
@@ -383,7 +380,7 @@ function AdminShortLinks() {
         isOpen={showDetails}
         onClose={() => setShowDetails(false)}
       />
-    </AdminAuth>
+    </>
   );
 }
 

@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import { fetchAgentMemory, writeAgentMemory } from '../../../api/agentsAdminApi';
 
 export default function AdminAgentMemoryPage() {
@@ -59,57 +57,49 @@ export default function AdminAgentMemoryPage() {
   }
 
   if (loading) {
-    return (
-      <AdminAuth>
-        <AdminNavigation />
-        <div className="p-8">{t('common.loading', 'Loading…')}</div>
-      </AdminAuth>
-    );
+    return <div className="p-8">{t('common.loading', 'Loading…')}</div>;
   }
 
   return (
-    <AdminAuth>
-      <div className="bg-gray-50 min-h-screen">
-        <AdminNavigation />
-        <div className="max-w-4xl mx-auto py-8 px-4">
-          <div className="flex justify-between items-center mb-4">
-            <h1 className="text-2xl font-bold">
-              {t('admin.agents.memory.title', 'Memory — {{profileId}}', { profileId })}
-            </h1>
-            <div className="flex gap-2">
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-4 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
-              >
-                {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
-              </button>
-              <button
-                onClick={() => navigate(`/admin/agents/${profileId}`)}
-                className="px-4 py-2 border bg-white rounded"
-              >
-                {t('admin.agents.memory.backToProfile', 'Back to profile')}
-              </button>
-            </div>
+    <div className="bg-gray-50 min-h-screen">
+      <div className="max-w-4xl mx-auto py-8 px-4">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">
+            {t('admin.agents.memory.title', 'Memory — {{profileId}}', { profileId })}
+          </h1>
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 bg-indigo-600 text-white rounded disabled:opacity-50"
+            >
+              {saving ? t('common.saving', 'Saving…') : t('common.save', 'Save')}
+            </button>
+            <button
+              onClick={() => navigate(`/admin/agents/${profileId}`)}
+              className="px-4 py-2 border bg-white rounded"
+            >
+              {t('admin.agents.memory.backToProfile', 'Back to profile')}
+            </button>
           </div>
-          <div className="text-xs text-gray-500 mb-2">
-            {t('admin.agents.memory.versionLine', 'Version {{version}}{{updatedSuffix}}', {
-              version,
-              updatedSuffix: updatedAt ? ` · updated ${updatedAt}` : ''
-            })}
-          </div>
-          {error && (
-            <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
-              {error}
-            </div>
-          )}
-          <textarea
-            className="w-full h-[500px] font-mono text-sm p-3 border rounded"
-            value={body}
-            onChange={e => setBody(e.target.value)}
-          />
         </div>
+        <div className="text-xs text-gray-500 mb-2">
+          {t('admin.agents.memory.versionLine', 'Version {{version}}{{updatedSuffix}}', {
+            version,
+            updatedSuffix: updatedAt ? ` · updated ${updatedAt}` : ''
+          })}
+        </div>
+        {error && (
+          <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+            {error}
+          </div>
+        )}
+        <textarea
+          className="w-full h-[500px] font-mono text-sm p-3 border rounded"
+          value={body}
+          onChange={e => setBody(e.target.value)}
+        />
       </div>
-    </AdminAuth>
+    </div>
   );
 }
