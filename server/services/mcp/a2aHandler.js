@@ -2,9 +2,21 @@ import path from 'path';
 import configCache from '../../configCache.js';
 import { MCP_SCOPES } from './scopes.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
-import { runTool, loadTools } from '../../toolLoader.js';
+import { runTool, loadConfiguredTools } from '../../toolLoader.js';
+import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { isValidId } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+
+// Tools that are surfaced as their own A2A skill kinds (apps/workflows) or
+// that wrap filesystem access (skill meta-tools) must never be invocable as
+// a raw tool via A2A. Mirrors McpServerService.isToolAllowed.
+function isRawToolExposable(tool) {
+  if (!tool || tool._mcp) return false;
+  if (tool.id?.startsWith('workflow_')) return false;
+  if (tool.id?.startsWith('source_')) return false;
+  if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;
+  return true;
+}
 
 /**
  * Agent-to-Agent (A2A) protocol handler.
@@ -82,12 +94,12 @@ async function handleAgentSkills(_params, { user, platform }) {
   const skills = [];
 
   if (expose.tools && scopes.includes(MCP_SCOPES.TOOLS_READ)) {
-    const tools = await loadTools(platform?.defaultLanguage || 'en');
+    // local-only tools, gated by the apps the caller can access (default-deny)
+    const visibleToolIds = await getVisibleToolIds(user, platform);
+    const tools = await loadConfiguredTools(platform?.defaultLanguage || 'en');
     for (const t of tools) {
-      if (t.id?.startsWith('workflow_') || t.id?.startsWith('source_')) continue;
-      if (t.id === 'activate_skill' || t.id === 'read_skill_resource') continue;
-      const allowed = user?.permissions?.tools;
-      if (allowed instanceof Set && !allowed.has('*') && !allowed.has(t.id)) continue;
+      if (!isRawToolExposable(t)) continue;
+      if (!toolVisibleInSet(t.id, visibleToolIds)) continue;
       skills.push({
         id: t.id,
         kind: 'tool',
@@ -185,10 +197,14 @@ async function handleTasksSend(params, { user, platform }) {
       if (safeWfId !== wfId || !isValidId(safeWfId)) {
         return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid workflow id' } };
       }
+      // Gate by the caller's workflow permission (group-based).
+      const allowedWf = user?.permissions?.workflows;
+      if (!(allowedWf instanceof Set) || (!allowedWf.has('*') && !allowedWf.has(safeWfId))) {
+        return { __rpcError: { code: -32004, message: 'access_denied: workflow not permitted' } };
+      }
       output = await runTool(`workflow_${safeWfId}`, input || {});
     } else {
-      // Treat as iHub tool id. runTool itself enforces isValidId, but
-      // pre-check here for the same CodeQL taint-barrier reason.
+      // Treat as a raw iHub tool id.
       if (!(user.scopes || []).includes(MCP_SCOPES.TOOLS_CALL)) {
         return {
           __rpcError: { code: -32004, message: 'insufficient_scope: mcp:tools:call required' }
@@ -196,6 +212,20 @@ async function handleTasksSend(params, { user, platform }) {
       }
       if (!isValidId(safeSkillId)) {
         return { __rpcError: { code: JSONRPC_INVALID_PARAMS, message: 'Invalid skill id' } };
+      }
+      // Gate by the apps the caller can access — same default-deny model as
+      // the MCP gateway. This also prevents reaching workflow_/source_/skill
+      // meta-tools (e.g. read_skill_resource) via A2A, which would otherwise
+      // pass user-controlled paths into the skill loader.
+      const visibleToolIds = await getVisibleToolIds(user, platform);
+      const configuredTools = await loadConfiguredTools(platform?.defaultLanguage || 'en');
+      const toolDef = configuredTools.find(tdef => tdef.id === safeSkillId);
+      if (
+        !toolDef ||
+        !isRawToolExposable(toolDef) ||
+        !toolVisibleInSet(safeSkillId, visibleToolIds)
+      ) {
+        return { __rpcError: { code: -32004, message: 'access_denied: tool not permitted' } };
       }
       output = await runTool(safeSkillId, input || {});
     }

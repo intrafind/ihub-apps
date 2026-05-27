@@ -101,4 +101,58 @@ describe('A2A dispatcher', () => {
     );
     expect(r.error.code).toBe(-32602);
   });
+
+  it('tasks/send refuses the read_skill_resource meta-tool (no app grants it)', async () => {
+    const r = await dispatchA2A(
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tasks/send',
+        params: {
+          skillId: 'read_skill_resource',
+          input: { skill_name: 'x', file_path: '../../etc/passwd' }
+        }
+      },
+      {
+        user: {
+          id: 'u',
+          scopes: ['mcp:tools:call'],
+          permissions: { apps: new Set(), workflows: new Set() }
+        },
+        platform
+      }
+    );
+    expect(r.error.code).toBe(-32004);
+    expect(r.error.message).toMatch(/not permitted/);
+  });
+
+  it('tasks/send denies a tool not granted by any accessible app', async () => {
+    const r = await dispatchA2A(
+      { jsonrpc: '2.0', id: 1, method: 'tasks/send', params: { skillId: 'braveSearch' } },
+      {
+        user: {
+          id: 'u',
+          scopes: ['mcp:tools:call'],
+          permissions: { apps: new Set(), workflows: new Set() }
+        },
+        platform
+      }
+    );
+    expect(r.error.code).toBe(-32004);
+  });
+
+  it('tasks/send denies a workflow the caller has no permission for', async () => {
+    const r = await dispatchA2A(
+      { jsonrpc: '2.0', id: 1, method: 'tasks/send', params: { skillId: 'workflow__secret' } },
+      {
+        user: {
+          id: 'u',
+          scopes: ['mcp:workflows:run'],
+          permissions: { workflows: new Set() }
+        },
+        platform
+      }
+    );
+    expect(r.error.code).toBe(-32004);
+  });
 });
