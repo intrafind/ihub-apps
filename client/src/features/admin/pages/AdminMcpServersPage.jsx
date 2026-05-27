@@ -19,7 +19,7 @@ const BLANK_FORM = {
   timeoutMs: 30000
 };
 
-function transportFields(transport, onChange) {
+function transportFields(transport, onChange, t) {
   if (
     transport.type === 'streamableHttp' ||
     transport.type === 'sse' ||
@@ -28,7 +28,7 @@ function transportFields(transport, onChange) {
     return (
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          URL
+          {t('admin.mcp.servers.form.url', 'URL')}
         </label>
         <input
           type="url"
@@ -46,7 +46,7 @@ function transportFields(transport, onChange) {
       <div className="space-y-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Command
+            {t('admin.mcp.servers.form.command', 'Command')}
           </label>
           <input
             type="text"
@@ -59,7 +59,7 @@ function transportFields(transport, onChange) {
         </div>
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Args (one per line)
+            {t('admin.mcp.servers.form.args', 'Args (one per line)')}
           </label>
           <textarea
             rows={3}
@@ -82,35 +82,37 @@ function transportFields(transport, onChange) {
   return null;
 }
 
-function authFields(auth, onChange) {
+function authFields(auth, onChange, t) {
   return (
     <div className="space-y-3">
       <div>
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          Authentication type
+          {t('admin.mcp.servers.form.authType', 'Authentication type')}
         </label>
         <select
           value={auth?.type || 'none'}
           onChange={e => {
-            const t = e.target.value;
-            if (t === 'none') return onChange({ type: 'none' });
-            if (t === 'bearer') return onChange({ type: 'bearer', token: '' });
-            if (t === 'basic') return onChange({ type: 'basic', username: '', password: '' });
-            if (t === 'oauth')
+            const v = e.target.value;
+            if (v === 'none') return onChange({ type: 'none' });
+            if (v === 'bearer') return onChange({ type: 'bearer', token: '' });
+            if (v === 'basic') return onChange({ type: 'basic', username: '', password: '' });
+            if (v === 'oauth')
               return onChange({ type: 'oauth', tokenUrl: '', clientId: '', clientSecret: '' });
           }}
           className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
         >
-          <option value="none">None</option>
-          <option value="bearer">Bearer token</option>
-          <option value="basic">Basic</option>
-          <option value="oauth">OAuth (client credentials)</option>
+          <option value="none">{t('admin.mcp.servers.form.authNone', 'None')}</option>
+          <option value="bearer">{t('admin.mcp.servers.form.authBearer', 'Bearer token')}</option>
+          <option value="basic">{t('admin.mcp.servers.form.authBasic', 'Basic')}</option>
+          <option value="oauth">
+            {t('admin.mcp.servers.form.authOauth', 'OAuth (client credentials)')}
+          </option>
         </select>
       </div>
       {auth?.type === 'bearer' && (
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Token
+            {t('admin.mcp.servers.form.token', 'Token')}
           </label>
           <input
             type="password"
@@ -120,7 +122,10 @@ function authFields(auth, onChange) {
             placeholder="ghp_..."
           />
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Encrypted at rest. Submitted plaintext is encrypted before saving.
+            {t(
+              'admin.mcp.servers.form.tokenHint',
+              'Encrypted at rest. Submitted plaintext is encrypted before saving.'
+            )}
           </p>
         </div>
       )}
@@ -128,7 +133,7 @@ function authFields(auth, onChange) {
         <>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Username
+              {t('admin.mcp.servers.form.username', 'Username')}
             </label>
             <input
               type="text"
@@ -139,7 +144,7 @@ function authFields(auth, onChange) {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Password
+              {t('admin.mcp.servers.form.password', 'Password')}
             </label>
             <input
               type="password"
@@ -154,31 +159,33 @@ function authFields(auth, onChange) {
   );
 }
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, t }) {
   if (!status) {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
-        unknown
+        {t('admin.mcp.servers.status.unknown', 'unknown')}
       </span>
     );
   }
   if (status.unhealthy) {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">
-        unhealthy
+        {t('admin.mcp.servers.status.unhealthy', 'unhealthy')}
       </span>
     );
   }
   if (status.connected) {
     return (
       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">
-        connected ({status.toolCount ?? '?'} tools)
+        {t('admin.mcp.servers.status.connected', 'connected ({{count}} tools)', {
+          count: status.toolCount ?? '?'
+        })}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
-      idle
+      {t('admin.mcp.servers.status.idle', 'idle')}
     </span>
   );
 }
@@ -198,7 +205,12 @@ function AdminMcpServersPage() {
       const { data } = await makeAdminApiCall('/admin/mcp/servers');
       setServers(data.servers || []);
     } catch (err) {
-      setMessage({ type: 'error', text: `Failed to load MCP servers: ${err.message}` });
+      setMessage({
+        type: 'error',
+        text: t('admin.mcp.servers.loadError', 'Failed to load MCP servers: {{error}}', {
+          error: err.message
+        })
+      });
     } finally {
       setLoading(false);
     }
@@ -206,6 +218,7 @@ function AdminMcpServersPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   const startCreate = () => {
@@ -248,43 +261,55 @@ function AdminMcpServersPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
       });
-      setMessage({ type: 'success', text: 'Saved' });
+      setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
       setEditing(null);
       await load();
     } catch (err) {
       setMessage({
         type: 'error',
-        text: `Save failed: ${err.response?.data?.error || err.message}`
+        text: t('admin.mcp.servers.saveError', 'Save failed: {{error}}', {
+          error: err.response?.data?.error || err.message
+        })
       });
     }
   };
 
   const remove = async id => {
-    if (!window.confirm(`Delete MCP server "${id}"?`)) return;
+    if (
+      !window.confirm(t('admin.mcp.servers.deleteConfirm', 'Delete MCP server "{{id}}"?', { id }))
+    )
+      return;
     try {
       await makeAdminApiCall(`/admin/mcp/servers/${encodeURIComponent(id)}`, { method: 'DELETE' });
-      setMessage({ type: 'success', text: 'Deleted' });
+      setMessage({ type: 'success', text: t('admin.mcp.common.deleted', 'Deleted') });
       await load();
     } catch (err) {
-      setMessage({ type: 'error', text: `Delete failed: ${err.message}` });
+      setMessage({
+        type: 'error',
+        text: t('admin.mcp.servers.deleteError', 'Delete failed: {{error}}', { error: err.message })
+      });
     }
   };
 
   const test = async id => {
-    setMessage({ type: 'info', text: `Testing ${id}...` });
+    setMessage({ type: 'info', text: t('admin.mcp.common.testing', 'Testing {{id}}...', { id }) });
     try {
       const { data } = await makeAdminApiCall(`/admin/mcp/servers/${encodeURIComponent(id)}/test`, {
         method: 'POST'
       });
       setMessage({
         type: 'success',
-        text: `OK — ${data.status.toolCount ?? 0} tools discovered`
+        text: t('admin.mcp.common.testOk', 'OK — {{count}} tools discovered', {
+          count: data.status.toolCount ?? 0
+        })
       });
       await load();
     } catch (err) {
       setMessage({
         type: 'error',
-        text: `Test failed: ${err.response?.data?.error || err.message}`
+        text: t('admin.mcp.servers.testError', 'Test failed: {{error}}', {
+          error: err.response?.data?.error || err.message
+        })
       });
     }
   };
@@ -367,13 +392,13 @@ function AdminMcpServersPage() {
                           <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 truncate">
                             {typeof s.name === 'string' ? s.name : s.name?.en || s.id}
                           </h3>
-                          <StatusBadge status={s.status} />
+                          <StatusBadge status={s.status} t={t} />
                           <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
                             {s.transport?.type}
                           </span>
                           {!s.enabled && (
                             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
-                              disabled
+                              {t('admin.mcp.servers.status.disabled', 'disabled')}
                             </span>
                           )}
                         </div>
@@ -390,7 +415,7 @@ function AdminMcpServersPage() {
                         <button
                           onClick={() => test(s.id)}
                           className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-                          title="Test connection"
+                          title={t('admin.mcp.servers.actions.test', 'Test connection')}
                         >
                           <Icon name="play" size="sm" />
                         </button>
@@ -421,12 +446,14 @@ function AdminMcpServersPage() {
               <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" />
               <div className="relative bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
                 <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {editing === 'new' ? 'Create MCP server' : `Edit ${editing}`}
+                  {editing === 'new'
+                    ? t('admin.mcp.servers.createTitle', 'Create MCP server')
+                    : t('admin.mcp.servers.editTitle', 'Edit {{id}}', { id: editing })}
                 </h2>
                 {editing === 'new' && (
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      ID
+                      {t('admin.mcp.servers.form.id', 'ID')}
                     </label>
                     <input
                       type="text"
@@ -440,7 +467,7 @@ function AdminMcpServersPage() {
                 )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Name
+                    {t('admin.mcp.servers.form.name', 'Name')}
                   </label>
                   <input
                     type="text"
@@ -451,7 +478,7 @@ function AdminMcpServersPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Description
+                    {t('admin.mcp.servers.form.description', 'Description')}
                   </label>
                   <textarea
                     rows={2}
@@ -468,13 +495,13 @@ function AdminMcpServersPage() {
                     onChange={e => setForm({ ...form, enabled: e.target.checked })}
                   />
                   <label htmlFor="enabled" className="text-sm text-gray-700 dark:text-gray-300">
-                    Enabled
+                    {t('admin.mcp.servers.form.enabled', 'Enabled')}
                   </label>
                 </div>
 
                 <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
                   <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
-                    Transport
+                    {t('admin.mcp.servers.form.transport', 'Transport')}
                   </legend>
                   <div className="space-y-3">
                     <select
@@ -487,26 +514,41 @@ function AdminMcpServersPage() {
                       }}
                       className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
                     >
-                      <option value="streamableHttp">Streamable HTTP (recommended)</option>
-                      <option value="sse">SSE (legacy)</option>
-                      <option value="stdio">stdio</option>
-                      <option value="websocket">WebSocket</option>
+                      <option value="streamableHttp">
+                        {t(
+                          'admin.mcp.servers.form.transportStreamableHttp',
+                          'Streamable HTTP (recommended)'
+                        )}
+                      </option>
+                      <option value="sse">
+                        {t('admin.mcp.servers.form.transportSse', 'SSE (legacy)')}
+                      </option>
+                      <option value="stdio">
+                        {t('admin.mcp.servers.form.transportStdio', 'stdio')}
+                      </option>
+                      <option value="websocket">
+                        {t('admin.mcp.servers.form.transportWebsocket', 'WebSocket')}
+                      </option>
                     </select>
-                    {transportFields(form.transport, t => setForm({ ...form, transport: t }))}
+                    {transportFields(
+                      form.transport,
+                      next => setForm({ ...form, transport: next }),
+                      t
+                    )}
                   </div>
                 </fieldset>
 
                 <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
                   <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
-                    Authentication
+                    {t('admin.mcp.servers.form.authType', 'Authentication')}
                   </legend>
-                  {authFields(form.auth, a => setForm({ ...form, auth: a }))}
+                  {authFields(form.auth, a => setForm({ ...form, auth: a }), t)}
                 </fieldset>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Tool prefix
+                      {t('admin.mcp.servers.form.toolPrefix', 'Tool prefix')}
                     </label>
                     <input
                       type="text"
@@ -518,7 +560,7 @@ function AdminMcpServersPage() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      Timeout (ms)
+                      {t('admin.mcp.servers.form.timeout', 'Timeout (ms)')}
                     </label>
                     <input
                       type="number"
@@ -533,7 +575,10 @@ function AdminMcpServersPage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Allowed tools (comma-separated, or *)
+                    {t(
+                      'admin.mcp.servers.form.allowedTools',
+                      'Allowed tools (comma-separated, or *)'
+                    )}
                   </label>
                   <input
                     type="text"
@@ -552,13 +597,13 @@ function AdminMcpServersPage() {
                     onClick={() => setEditing(null)}
                     className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
                   >
-                    Cancel
+                    {t('common.cancel', 'Cancel')}
                   </button>
                   <button
                     onClick={save}
                     className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
                   >
-                    Save
+                    {t('common.save', 'Save')}
                   </button>
                 </div>
               </div>

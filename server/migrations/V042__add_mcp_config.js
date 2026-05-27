@@ -62,7 +62,8 @@ export async function up(ctx) {
   ctx.setDefault(platform, 'mcpServer.expose.tools', true);
   ctx.setDefault(platform, 'mcpServer.expose.apps', true);
   ctx.setDefault(platform, 'mcpServer.expose.workflows', true);
-  ctx.setDefault(platform, 'mcpServer.expose.resources', true);
+  // Resources are opt-in (data-exposure surface): admin enables explicitly.
+  ctx.setDefault(platform, 'mcpServer.expose.resources', false);
   ctx.setDefault(platform, 'mcpServer.a2a.enabled', false);
 
   await ctx.writeJson('config/platform.json', platform);

@@ -1175,15 +1175,67 @@
       "telemetry": "Telemetry"
     },
     "mcp": {
+      "common": {
+        "saved": "Saved",
+        "saving": "Saving...",
+        "deleted": "Deleted",
+        "testing": "Testing {{id}}...",
+        "testOk": "OK — {{count}} tools discovered"
+      },
       "servers": {
         "title": "MCP servers (outbound)",
         "subtitle": "External MCP servers iHub connects to. Their tools are merged into the tool catalog with per-server prefixing.",
         "create": "Add MCP server",
-        "empty": "No MCP servers configured"
+        "empty": "No MCP servers configured",
+        "loadError": "Failed to load MCP servers: {{error}}",
+        "saveError": "Save failed: {{error}}",
+        "deleteConfirm": "Delete MCP server \"{{id}}\"?",
+        "deleteError": "Delete failed: {{error}}",
+        "testError": "Test failed: {{error}}",
+        "createTitle": "Create MCP server",
+        "editTitle": "Edit {{id}}",
+        "actions": {
+          "test": "Test connection"
+        },
+        "status": {
+          "unknown": "unknown",
+          "unhealthy": "unhealthy",
+          "connected": "connected ({{count}} tools)",
+          "idle": "idle",
+          "disabled": "disabled"
+        },
+        "form": {
+          "id": "ID",
+          "name": "Name",
+          "description": "Description",
+          "enabled": "Enabled",
+          "transport": "Transport",
+          "url": "URL",
+          "command": "Command",
+          "args": "Args (one per line)",
+          "authType": "Authentication type",
+          "authNone": "None",
+          "authBearer": "Bearer token",
+          "authBasic": "Basic",
+          "authOauth": "OAuth (client credentials)",
+          "token": "Token",
+          "tokenHint": "Encrypted at rest. Submitted plaintext is encrypted before saving.",
+          "username": "Username",
+          "password": "Password",
+          "toolPrefix": "Tool prefix",
+          "timeout": "Timeout (ms)",
+          "allowedTools": "Allowed tools (comma-separated, or *)",
+          "transportStreamableHttp": "Streamable HTTP (recommended)",
+          "transportSse": "SSE (legacy)",
+          "transportStdio": "stdio",
+          "transportWebsocket": "WebSocket"
+        }
       },
       "gateway": {
         "title": "MCP gateway (inbound)",
         "subtitle": "Expose iHub tools, apps, and workflows over the Model Context Protocol so MCP-aware clients (Claude Desktop, Cursor, agents) can use them as tools.",
+        "loadError": "Failed to load platform config: {{error}}",
+        "saveError": "Save failed: {{error}}",
         "enable": "Enable MCP gateway",
         "enableDesc": "When enabled, /mcp accepts OAuth-authenticated requests from external MCP clients. The endpoint is always 404 when disabled.",
         "consent": "Require user consent",
@@ -1191,8 +1243,22 @@
         "publicUrl": "Public URL",
         "publicUrlDesc": "Announced in .well-known metadata so MCP-aware clients can auto-discover the endpoint. Leave empty to derive it from the request origin.",
         "transports": "Transports",
+        "transportStreamableHttp": "Streamable HTTP (recommended)",
+        "transportStreamableHttpDesc": "Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.",
+        "transportSse": "SSE (legacy)",
+        "transportSseDesc": "Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency.",
+        "transportA2a": "A2A (experimental)",
+        "transportA2aDesc": "Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises.",
         "expose": "Exposed resources",
         "exposeDesc": "Resource families surfaced via MCP. Per-OAuth-client allowlists further restrict what an individual caller sees.",
+        "exposeTools": "iHub tools",
+        "exposeToolsDesc": "Requires scope mcp:tools:read + mcp:tools:call",
+        "exposeApps": "iHub apps",
+        "exposeAppsDesc": "Requires scope mcp:apps:invoke",
+        "exposeWorkflows": "Workflows",
+        "exposeWorkflowsDesc": "Requires scope mcp:workflows:run",
+        "exposeResources": "Resources",
+        "exposeResourcesDesc": "Sources / skills surfaced as MCP resources (resources/list + resources/read). Requires scope mcp:resources:read.",
         "connection": "Connection examples"
       }
     },

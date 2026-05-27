@@ -210,19 +210,35 @@ export default function registerMcpServerRoutes(app) {
       baseUrl = baseUrl.slice(0, -1);
     }
     const a2aEnabled = cfg.a2a?.enabled === true;
+    // Only advertise transports the operator has actually enabled so clients
+    // don't pick a disabled one.
+    const streamableHttpEnabled = cfg.transports?.streamableHttp?.enabled !== false;
+    const sseEnabled = cfg.transports?.sse?.enabled !== false;
+    const transports = [];
+    if (streamableHttpEnabled) transports.push('streamableHttp');
+    if (sseEnabled) transports.push('sse');
+    if (a2aEnabled) transports.push('a2a');
+
+    const allScopes = [
+      'mcp:tools:read',
+      'mcp:tools:call',
+      'mcp:apps:invoke',
+      'mcp:workflows:run',
+      'mcp:resources:read'
+    ];
+
     res.json({
       issuer: baseUrl,
-      mcp_endpoint: `${baseUrl}/mcp`,
-      mcp_sse_endpoint: `${baseUrl}/mcp/sse`,
+      mcp_endpoint: streamableHttpEnabled ? `${baseUrl}/mcp` : null,
+      mcp_sse_endpoint: sseEnabled ? `${baseUrl}/mcp/sse` : null,
       a2a_endpoint: a2aEnabled ? `${baseUrl}/a2a` : null,
-      transports: ['streamableHttp', 'sse', ...(a2aEnabled ? ['a2a'] : [])],
-      scopes_supported: [
-        'mcp:tools:read',
-        'mcp:tools:call',
-        'mcp:apps:invoke',
-        'mcp:workflows:run',
-        'mcp:resources:read'
-      ],
+      transports,
+      scopes_supported: allScopes,
+      // Recommended scopes an MCP-aware client should request by default
+      // (admin-configurable via platform.mcpServer.defaultScopes).
+      default_scopes: Array.isArray(cfg.defaultScopes)
+        ? cfg.defaultScopes
+        : ['mcp:tools:read', 'mcp:tools:call'],
       oauth_authorization_server: `${baseUrl}/.well-known/oauth-authorization-server`
     });
   });

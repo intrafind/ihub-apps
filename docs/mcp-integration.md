@@ -77,10 +77,11 @@ The `auth` block on a server entry supports:
 
 Secrets are **encrypted at rest** with `TokenStorageService` (AES-256-GCM):
 
-- Admin saves go through `encryptIfNeeded()` before disk write.
+- Admin saves go through `encryptSecrets()` before disk write.
 - Admin reads return `***REDACTED***` so secrets never leave the server.
-- `configCache` decrypts when loading into memory, so connection code
-  always sees plaintext.
+- Unlike `platform.json` secrets (which `configCache` decrypts on load),
+  `mcpServers.json` secrets stay encrypted in the cache. `McpServerConnection._decryptAuth()`
+  decrypts them at connect time, so only the connection code sees plaintext.
 
 Environment-variable placeholders (`${MY_TOKEN}`) work too and are left
 unencrypted.

@@ -20,8 +20,9 @@ const authSchema = z
     z.object({
       type: z.literal('bearer'),
       // Plaintext value (`secret`), env-var placeholder (`${VAR}`), or
-      // ENC[...] ciphertext. configCache decrypts encrypted values at load
-      // time so consumers always see plaintext.
+      // ENC[...] ciphertext. mcpServers.json secrets are NOT decrypted by
+      // configCache; McpServerConnection._decryptAuth() decrypts them at
+      // connect time, so persisted values may be ENC[...] on disk.
       token: z.string().min(1)
     }),
     z.object({
@@ -126,12 +127,15 @@ export const mcpGatewayConfigSchema = z.object({
     .default({}),
   // Resource exposure flags. When false the corresponding adapter is skipped
   // even if the OAuth client has the scope.
+  // Resource exposure is opt-in: sources/skills are only surfaced over MCP
+  // when an admin explicitly enables it, even though per-caller filtering
+  // (apps the caller can access) also applies.
   expose: z
     .object({
       tools: z.boolean().default(true),
       apps: z.boolean().default(true),
       workflows: z.boolean().default(true),
-      resources: z.boolean().default(true)
+      resources: z.boolean().default(false)
     })
     .default({}),
   // Optional Agent-to-Agent (A2A) endpoint alongside /mcp. The wire

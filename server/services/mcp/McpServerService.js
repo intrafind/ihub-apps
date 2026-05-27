@@ -1,10 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import configCache from '../../configCache.js';
-import { loadTools, runTool } from '../../toolLoader.js';
+import { loadConfiguredTools, runTool } from '../../toolLoader.js';
 import { actionTracker } from '../../actionTracker.js';
 import { invokeAppNonStreaming } from './appInvoker.js';
 import { listMcpResources, readMcpResource } from './resourceAdapter.js';
+import { getVisibleToolIds, toolVisibleInSet } from './permissions.js';
 import { MCP_SCOPES } from './scopes.js';
 import logger from '../../utils/logger.js';
 
@@ -70,27 +71,27 @@ function buildAppInputSchema(app) {
 }
 
 /**
- * Determine whether a user/client is permitted to see a given iHub tool.
- * Permissions for iHub-native tools are governed by group ACLs; OAuth
- * clients further narrow by their token scope and the platform.mcpServer
- * exposure flags.
+ * Determine whether a caller may see a given iHub tool. iHub scopes tools
+ * through the apps that reference them, so `visibleToolIds` is the union of
+ * tool ids across the apps this caller can access (see ./permissions.js).
+ *
+ * Default-deny: a tool the caller has no app-granted access to is never
+ * exposed, even with the `mcp:tools:*` scopes. This closes the gap where
+ * OAuth client-credentials tokens (which carry no group `tools` permission)
+ * would otherwise see every tool on the platform.
  */
-function isToolAllowed(tool, user, expose) {
+function isToolAllowed(tool, expose, visibleToolIds) {
   if (!expose.tools) return false;
-  // tool.permissions / tool.allowedGroups are honoured by the existing
-  // configCache.getToolsForUser flow; here we trust the manager to have
-  // pre-filtered. We still skip workflow_/source_/activate_skill since those
-  // are surfaced as their own MCP tool types.
+  // workflow_/source_/skill tools are surfaced as their own MCP tool/resource
+  // types, not as raw tools.
   if (tool.id?.startsWith('workflow_')) return false;
   if (tool.id?.startsWith('source_')) return false;
   if (tool.id === 'activate_skill' || tool.id === 'read_skill_resource') return false;
-  // Honour user permissions if present
-  if (user?.permissions?.tools instanceof Set) {
-    if (!user.permissions.tools.has('*') && !user.permissions.tools.has(tool.id)) {
-      return false;
-    }
-  }
-  return true;
+  // Never re-expose tools discovered from external (outbound) MCP servers —
+  // that would proxy another server's tools (and their credentials) to inbound
+  // callers. loadConfiguredTools already excludes these, but guard anyway.
+  if (tool._mcp) return false;
+  return toolVisibleInSet(tool.id, visibleToolIds);
 }
 
 function isAppAllowed(app, user, expose) {
@@ -134,11 +135,14 @@ export async function buildMcpServer({ user, platform }) {
     { capabilities: { tools: { listChanged: false }, resources: { listChanged: false } } }
   );
 
-  // ---- Tools (iHub-native) -------------------------------------------------
+  // ---- Tools (iHub-native, local-only) ------------------------------------
+  // loadConfiguredTools excludes outbound MCP-discovered tools so the gateway
+  // never re-proxies another server's tools to inbound callers.
   if (expose.tools && tokenScopes.includes(MCP_SCOPES.TOOLS_READ)) {
-    const tools = await loadTools(platform?.defaultLanguage || 'en');
+    const visibleToolIds = await getVisibleToolIds(user, platform);
+    const tools = await loadConfiguredTools(platform?.defaultLanguage || 'en');
     for (const tool of tools) {
-      if (!isToolAllowed(tool, user, expose)) continue;
+      if (!isToolAllowed(tool, expose, visibleToolIds)) continue;
       server.registerTool(
         tool.id,
         {
@@ -148,6 +152,11 @@ export async function buildMcpServer({ user, platform }) {
         async args => {
           if (!tokenScopes.includes(MCP_SCOPES.TOOLS_CALL)) {
             return toolErrorResult('insufficient_scope: mcp:tools:call required');
+          }
+          // Re-check visibility at call time so a permission change between
+          // list and call can't be exploited.
+          if (!toolVisibleInSet(tool.id, visibleToolIds)) {
+            return toolErrorResult('access_denied: tool not permitted for this caller');
           }
           try {
             const result = await runTool(tool.id, args || {});
@@ -236,7 +245,7 @@ export async function buildMcpServer({ user, platform }) {
 
   // ---- Resources (sources + skills as MCP resources) ----------------------
   if (expose.resources && tokenScopes.includes(MCP_SCOPES.RESOURCES_READ)) {
-    const resources = listMcpResources({ user, expose });
+    const resources = await listMcpResources({ user, platform, expose });
     for (const r of resources) {
       // registerResource binds a single URI to a read callback. The SDK's
       // `resources/list` is served from the union of registered entries.
@@ -248,6 +257,7 @@ export async function buildMcpServer({ user, platform }) {
           try {
             return await readMcpResource(uriObj.href || String(uriObj), {
               user,
+              platform,
               language: platform?.defaultLanguage || 'en'
             });
           } catch (err) {

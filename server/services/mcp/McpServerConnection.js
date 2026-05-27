@@ -60,6 +60,11 @@ export class McpServerConnection {
     return out;
   }
 
+  /**
+   * Build static auth headers for bearer/basic. OAuth is handled separately
+   * (async, per-request, with caching) in _getAuthHeaders so token refresh
+   * works without rebuilding the transport.
+   */
   _buildAuthHeaders(auth) {
     if (!auth || auth.type === 'none') return {};
     if (auth.type === 'bearer') return { Authorization: `Bearer ${auth.token}` };
@@ -67,36 +72,85 @@ export class McpServerConnection {
       const creds = Buffer.from(`${auth.username}:${auth.password}`).toString('base64');
       return { Authorization: `Basic ${creds}` };
     }
-    // OAuth client_credentials is handled inside the transport via SDK's
-    // OAuthClientProvider — not implemented in this initial cut. Operators
-    // can supply a pre-issued bearer token instead.
     return {};
+  }
+
+  /**
+   * Resolve the auth headers for a single request, fetching/refreshing an
+   * OAuth client-credentials token when auth.type === 'oauth'. The token is
+   * cached until shortly before expiry. The token endpoint goes through the
+   * same SSRF-guarded fetch as every other outbound call.
+   */
+  async _getAuthHeaders(auth) {
+    if (auth?.type !== 'oauth') return this._buildAuthHeaders(auth);
+
+    const now = Date.now();
+    if (this._oauthToken && this._oauthTokenExpiry > now + 5000) {
+      return { Authorization: `Bearer ${this._oauthToken}` };
+    }
+
+    const body = new URLSearchParams({
+      grant_type: 'client_credentials',
+      client_id: auth.clientId,
+      client_secret: auth.clientSecret
+    });
+    if (auth.scope) body.set('scope', auth.scope);
+
+    const resp = await safeFetch(
+      auth.tokenUrl,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: body.toString()
+      },
+      {
+        allowHosts: this.security.allowedHosts,
+        blockPrivateIps: this.security.blockPrivateIps !== false
+      }
+    );
+    if (!resp.ok) {
+      throw new Error(`OAuth token request to ${auth.tokenUrl} failed: ${resp.status}`);
+    }
+    const data = await resp.json();
+    if (!data.access_token) {
+      throw new Error('OAuth token response missing access_token');
+    }
+    this._oauthToken = data.access_token;
+    this._oauthTokenExpiry = now + (data.expires_in ? data.expires_in * 1000 : 3600 * 1000);
+    return { Authorization: `Bearer ${this._oauthToken}` };
   }
 
   async _buildTransport() {
     const t = this.config.transport;
     const auth = this._decryptAuth(this.config.auth);
 
+    const blockPrivateIps = this.security.blockPrivateIps !== false;
+
     if (t.type === 'streamableHttp' || t.type === 'sse') {
       const url = new URL(t.url);
       // SSRF guard up-front. The transport will re-resolve later but our
       // pinned-IP fetch (safeFetch) refuses the connect if the resolved
       // address has shifted to a private range.
-      await assertSafeHost(url.hostname, this.security.allowedHosts);
+      await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
 
       const requestInit = { headers: this._buildAuthHeaders(auth) };
       const allowHosts = this.security.allowedHosts;
 
       // Use our DNS-pinned fetch as the SDK's underlying transport so the
       // socket can't be steered to a private IP between validation and connect.
-      const pinnedFetch = (input, init = {}) =>
-        safeFetch(
+      // Auth headers are resolved per request so OAuth client-credentials
+      // tokens refresh transparently without rebuilding the transport.
+      const pinnedFetch = async (input, init = {}) => {
+        const authHeaders = await this._getAuthHeaders(auth);
+        return safeFetch(
           input,
-          { ...init, headers: { ...(init.headers || {}), ...requestInit.headers } },
+          { ...init, headers: { ...(init.headers || {}), ...authHeaders } },
           {
-            allowHosts
+            allowHosts,
+            blockPrivateIps
           }
         );
+      };
 
       if (t.type === 'streamableHttp') {
         const r = this.config.reconnect || {};
@@ -122,7 +176,7 @@ export class McpServerConnection {
 
     if (t.type === 'websocket') {
       const url = new URL(t.url);
-      await assertSafeHost(url.hostname, this.security.allowedHosts);
+      await assertSafeHost(url.hostname, this.security.allowedHosts, blockPrivateIps);
       return new WebSocketClientTransport(url);
     }
 

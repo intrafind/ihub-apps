@@ -1424,15 +1424,67 @@
       "telemetry": "Telemetrie"
     },
     "mcp": {
+      "common": {
+        "saved": "Gespeichert",
+        "saving": "Speichern...",
+        "deleted": "Gelöscht",
+        "testing": "{{id}} wird getestet...",
+        "testOk": "OK — {{count}} Tools gefunden"
+      },
       "servers": {
         "title": "MCP-Server (ausgehend)",
         "subtitle": "Externe MCP-Server, mit denen iHub sich verbindet. Deren Tools werden mit serverabhängigem Präfix in den Tool-Katalog gemischt.",
         "create": "MCP-Server hinzufügen",
-        "empty": "Keine MCP-Server konfiguriert"
+        "empty": "Keine MCP-Server konfiguriert",
+        "loadError": "MCP-Server konnten nicht geladen werden: {{error}}",
+        "saveError": "Speichern fehlgeschlagen: {{error}}",
+        "deleteConfirm": "MCP-Server \"{{id}}\" löschen?",
+        "deleteError": "Löschen fehlgeschlagen: {{error}}",
+        "testError": "Test fehlgeschlagen: {{error}}",
+        "createTitle": "MCP-Server erstellen",
+        "editTitle": "{{id}} bearbeiten",
+        "actions": {
+          "test": "Verbindung testen"
+        },
+        "status": {
+          "unknown": "unbekannt",
+          "unhealthy": "fehlerhaft",
+          "connected": "verbunden ({{count}} Tools)",
+          "idle": "inaktiv",
+          "disabled": "deaktiviert"
+        },
+        "form": {
+          "id": "ID",
+          "name": "Name",
+          "description": "Beschreibung",
+          "enabled": "Aktiviert",
+          "transport": "Transport",
+          "url": "URL",
+          "command": "Befehl",
+          "args": "Argumente (eines pro Zeile)",
+          "authType": "Authentifizierungstyp",
+          "authNone": "Keine",
+          "authBearer": "Bearer-Token",
+          "authBasic": "Basic",
+          "authOauth": "OAuth (Client Credentials)",
+          "token": "Token",
+          "tokenHint": "Verschlüsselt gespeichert. Eingegebener Klartext wird vor dem Speichern verschlüsselt.",
+          "username": "Benutzername",
+          "password": "Passwort",
+          "toolPrefix": "Tool-Präfix",
+          "timeout": "Timeout (ms)",
+          "allowedTools": "Erlaubte Tools (kommagetrennt oder *)",
+          "transportStreamableHttp": "Streamable HTTP (empfohlen)",
+          "transportSse": "SSE (veraltet)",
+          "transportStdio": "stdio",
+          "transportWebsocket": "WebSocket"
+        }
       },
       "gateway": {
         "title": "MCP-Gateway (eingehend)",
         "subtitle": "Stellt iHub-Tools, -Apps und -Workflows über das Model Context Protocol bereit, sodass MCP-fähige Clients (Claude Desktop, Cursor, Agenten) sie als Tools nutzen können.",
+        "loadError": "Plattformkonfiguration konnte nicht geladen werden: {{error}}",
+        "saveError": "Speichern fehlgeschlagen: {{error}}",
         "enable": "MCP-Gateway aktivieren",
         "enableDesc": "Wenn aktiviert, akzeptiert /mcp OAuth-authentifizierte Anfragen externer MCP-Clients. Der Endpunkt liefert immer 404, solange er deaktiviert ist.",
         "consent": "Nutzerzustimmung erforderlich",
@@ -1440,8 +1492,22 @@
         "publicUrl": "Öffentliche URL",
         "publicUrlDesc": "Wird in den .well-known-Metadaten veröffentlicht, damit MCP-fähige Clients den Endpunkt automatisch erkennen. Leer lassen, um ihn aus dem Request-Origin abzuleiten.",
         "transports": "Transporte",
+        "transportStreamableHttp": "Streamable HTTP (empfohlen)",
+        "transportStreamableHttpDesc": "Kanonischer MCP-HTTP-Transport gemäß Spezifikation 2025-03-26+. Unterstützt Session-Resumption über Mcp-Session-Id + Last-Event-ID.",
+        "transportSse": "SSE (veraltet)",
+        "transportSseDesc": "Älterer Transport zur Abwärtskompatibilität mit MCP-Clients, die noch nicht auf Streamable HTTP umgestellt haben. Wiederholt laufende Anfragen statt sie fortzusetzen — deaktivieren, wenn Idempotenz wichtig ist.",
+        "transportA2a": "A2A (experimentell)",
+        "transportA2aDesc": "Stellt /a2a neben /mcp bereit, mit demselben OAuth- + mcp:*-Scope-Gate. Implementiert die definierte Teilmenge des A2A-Entwurfs (agent/info, agent/skills, tasks/send). Zustandsbehaftete Tasks liefern method-not-found, bis die Spezifikation stabil ist.",
         "expose": "Bereitgestellte Ressourcen",
         "exposeDesc": "Über MCP veröffentlichte Ressourcenfamilien. Pro-OAuth-Client-Allowlists schränken weiter ein, was ein einzelner Aufrufer sieht.",
+        "exposeTools": "iHub-Tools",
+        "exposeToolsDesc": "Erfordert Scope mcp:tools:read + mcp:tools:call",
+        "exposeApps": "iHub-Apps",
+        "exposeAppsDesc": "Erfordert Scope mcp:apps:invoke",
+        "exposeWorkflows": "Workflows",
+        "exposeWorkflowsDesc": "Erfordert Scope mcp:workflows:run",
+        "exposeResources": "Ressourcen",
+        "exposeResourcesDesc": "Quellen / Skills als MCP-Ressourcen (resources/list + resources/read). Erfordert Scope mcp:resources:read.",
         "connection": "Verbindungsbeispiele"
       }
     },

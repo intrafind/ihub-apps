@@ -3,6 +3,7 @@ import configCache from '../../configCache.js';
 import { createSourceManager } from '../../sources/index.js';
 import { getSkillContent, validateSkillName } from '../../services/skillLoader.js';
 import { isValidId } from '../../utils/pathSecurity.js';
+import { getVisibleSourceIds } from './permissions.js';
 import logger from '../../utils/logger.js';
 
 /**
@@ -13,10 +14,11 @@ import logger from '../../utils/logger.js';
  *   ihub://skill/<skillName>      – skill SKILL.md body
  *
  * The MCP SDK's `McpServer.registerResource` requires a fixed URI per call;
- * we register each user-visible source/skill individually at gateway build
- * time so per-OAuth-client allowlisting stays tight. Resource lists are
- * filtered against `req.user.permissions` (apps for source visibility,
- * skills for skill visibility) the same way the web UI filters them.
+ * we register each visible source/skill individually at gateway build time.
+ * Visibility is scoped per caller: sources are limited to those referenced
+ * by apps the caller can access (getVisibleSourceIds), and skills are
+ * filtered against the caller's group `skills` permission — the same model
+ * the web UI applies.
  */
 
 function extractText(value) {
@@ -29,14 +31,17 @@ function extractText(value) {
 }
 
 /**
- * Decide whether a source is visible to a given user. Sources are not
- * tied to group permissions directly today — they're scoped via the apps
- * that reference them. For MCP we expose all enabled sources to any user
- * who carries the `mcp:resources:read` scope; per-OAuth-client narrowing
- * happens later via allowlist (future work).
+ * Decide whether a source is visible to a given caller. Sources are scoped
+ * through the apps that reference them, so a source is only visible if it is
+ * enabled AND referenced by an app the caller can access. `visibleSourceIds`
+ * is the union of `app.sources` across the caller's accessible apps (built by
+ * ./permissions.js getVisibleSourceIds). Without this filter, any caller with
+ * `mcp:resources:read` would see every source on the platform.
  */
-function isSourceVisible(source) {
-  return source && source.enabled !== false;
+function isSourceVisible(source, visibleSourceIds) {
+  if (!source || source.enabled === false) return false;
+  if (!(visibleSourceIds instanceof Set)) return false;
+  return visibleSourceIds.has('*') || visibleSourceIds.has(source.id);
 }
 
 function isSkillVisible(skill, user) {
@@ -56,15 +61,16 @@ function isSkillVisible(skill, user) {
  *   - ref: the underlying source / skill object (so the read callback
  *     can use it without re-resolving by id)
  */
-export function listMcpResources({ user, expose }) {
+export async function listMcpResources({ user, platform, expose }) {
   if (!expose?.resources) return [];
 
   const resources = [];
+  const visibleSourceIds = await getVisibleSourceIds(user, platform);
 
   try {
     const { data: sources = [] } = configCache.getSources();
     for (const s of sources) {
-      if (!isSourceVisible(s)) continue;
+      if (!isSourceVisible(s, visibleSourceIds)) continue;
       resources.push({
         uri: `ihub://source/${encodeURIComponent(s.id)}`,
         name: extractText(s.name) || s.id,
@@ -110,7 +116,7 @@ export function listMcpResources({ user, expose }) {
  *
  * Throws if the URI doesn't resolve to a visible resource.
  */
-export async function readMcpResource(uri, { user, language = 'en' }) {
+export async function readMcpResource(uri, { user, platform, language = 'en' }) {
   if (typeof uri !== 'string' || !uri.startsWith('ihub://')) {
     throw new Error(`Unsupported resource URI: ${uri}`);
   }
@@ -133,9 +139,12 @@ export async function readMcpResource(uri, { user, language = 'en' }) {
     if (!isValidId(safeId)) {
       throw new Error(`Source not found: ${safeId}`);
     }
+    // Recompute the caller's visible source set so a read can't reach a
+    // source outside the apps they can access (same check as list).
+    const visibleSourceIds = await getVisibleSourceIds(user, platform);
     const { data: sources = [] } = configCache.getSources();
     const source = sources.find(s => s.id === safeId);
-    if (!source || !isSourceVisible(source)) {
+    if (!source || !isSourceVisible(source, visibleSourceIds)) {
       throw new Error(`Source not found: ${safeId}`);
     }
     // From this point on, only properties of the admin-managed `source`

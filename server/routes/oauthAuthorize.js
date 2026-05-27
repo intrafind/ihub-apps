@@ -367,8 +367,18 @@ export default function registerOAuthAuthorizeRoutes(app) {
         return res.status(403).send(renderGroupDeniedPage({ client, lang: safeLang }));
       }
 
-      // User is authenticated — skip consent for trusted clients
-      if (client.trusted || !client.consentRequired) {
+      // When the request carries MCP scopes and the platform mandates
+      // consent for the gateway (mcpServer.requireConsent), force the consent
+      // screen even for trusted clients — a delegated MCP token grants an
+      // external agent access to the user's tools/apps/workflows, so explicit
+      // per-grant consent is warranted.
+      const mcpRequireConsent = platform.mcpServer?.requireConsent === true;
+      const requestHasMcpScope = requestedScopes.some(s => s.startsWith('mcp:'));
+      const forceConsent = mcpRequireConsent && requestHasMcpScope;
+
+      // User is authenticated — skip consent for trusted clients (unless an
+      // MCP-scoped request forces it).
+      if (!forceConsent && (client.trusted || !client.consentRequired)) {
         const code = generateCode();
         storeCode(code, {
           clientId: client_id,

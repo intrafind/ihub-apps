@@ -31,20 +31,12 @@ function isPrivateIp(ip) {
  * private/internal range. Unlike a string-blocklist guard this can't be bypassed
  * by a public DNS record pointing at 127.0.0.1.
  */
-async function resolveAndCheck(hostname, allowList) {
-  if (allowList?.includes(hostname)) {
-    // Explicit operator allowance (e.g. internal MCP server). Still resolve so
-    // the caller gets an address to pin against — we just skip the private-range
-    // veto for this hostname.
-    try {
-      const { address, family } = await dnsLookupAsync(hostname);
-      return { address, family };
-    } catch (err) {
-      const e = new Error(`DNS resolution failed for ${hostname}: ${err.message}`);
-      e.code = 'DNS_RESOLUTION_FAILED';
-      throw e;
-    }
-  }
+async function resolveAndCheck(hostname, allowList, blockPrivateIps = true) {
+  // The private-IP veto is skipped when the hostname is explicitly
+  // allow-listed OR when the operator has globally disabled the check
+  // (security.blockPrivateIps: false). DNS is still resolved once so the
+  // socket can be pinned to the resolved address either way.
+  const skipPrivateVeto = !blockPrivateIps || allowList?.includes(hostname);
 
   let result;
   try {
@@ -54,7 +46,7 @@ async function resolveAndCheck(hostname, allowList) {
     e.code = 'DNS_RESOLUTION_FAILED';
     throw e;
   }
-  if (isPrivateIp(result.address)) {
+  if (!skipPrivateVeto && isPrivateIp(result.address)) {
     const e = new Error(
       `SSRF guard: hostname ${hostname} resolves to private IP ${result.address}`
     );
@@ -98,7 +90,11 @@ export async function safeFetch(input, init = {}, opts = {}) {
     throw e;
   }
 
-  const { address, family } = await resolveAndCheck(url.hostname, opts.allowHosts);
+  const { address, family } = await resolveAndCheck(
+    url.hostname,
+    opts.allowHosts,
+    opts.blockPrivateIps !== false
+  );
   const agent = makePinnedAgent(address, family, url.protocol === 'https:');
 
   // Node 18+ `fetch` (undici) does not accept the legacy `agent` option, so
@@ -161,8 +157,8 @@ function nodeHttpFetch(url, init, agent) {
  * Standalone hostname check for code paths that don't go through fetch
  * (e.g. WebSocket transport, stdio command resolution).
  */
-export async function assertSafeHost(hostname, allowList) {
-  await resolveAndCheck(hostname, allowList);
+export async function assertSafeHost(hostname, allowList, blockPrivateIps = true) {
+  await resolveAndCheck(hostname, allowList, blockPrivateIps);
 }
 
 export { isPrivateIp };

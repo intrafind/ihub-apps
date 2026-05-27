@@ -18,6 +18,9 @@ function Toggle({ checked, onChange, label, description }) {
       </div>
       <button
         type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={typeof label === 'string' ? label : undefined}
         onClick={() => onChange(!checked)}
         className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
           checked ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
@@ -47,7 +50,12 @@ function AdminMcpGatewayPage() {
       const { data } = await makeAdminApiCall('/admin/configs/platform');
       setPlatform(data || {});
     } catch (err) {
-      setMessage({ type: 'error', text: `Failed to load platform config: ${err.message}` });
+      setMessage({
+        type: 'error',
+        text: t('admin.mcp.gateway.loadError', 'Failed to load platform config: {{error}}', {
+          error: err.message
+        })
+      });
     } finally {
       setLoading(false);
     }
@@ -55,6 +63,7 @@ function AdminMcpGatewayPage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, []);
 
   const gateway = platform?.mcpServer || {};
@@ -85,11 +94,13 @@ function AdminMcpGatewayPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(platform)
       });
-      setMessage({ type: 'success', text: 'Saved' });
+      setMessage({ type: 'success', text: t('admin.mcp.common.saved', 'Saved') });
     } catch (err) {
       setMessage({
         type: 'error',
-        text: `Save failed: ${err.response?.data?.error || err.message}`
+        text: t('admin.mcp.gateway.saveError', 'Save failed: {{error}}', {
+          error: err.response?.data?.error || err.message
+        })
       });
     } finally {
       setSaving(false);
@@ -197,8 +208,14 @@ function AdminMcpGatewayPage() {
                     transports: { streamableHttp: { enabled: v } }
                   })
                 }
-                label="Streamable HTTP (recommended)"
-                description="Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID."
+                label={t(
+                  'admin.mcp.gateway.transportStreamableHttp',
+                  'Streamable HTTP (recommended)'
+                )}
+                description={t(
+                  'admin.mcp.gateway.transportStreamableHttpDesc',
+                  'Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.'
+                )}
               />
               <Toggle
                 checked={transports.sse?.enabled !== false}
@@ -207,8 +224,11 @@ function AdminMcpGatewayPage() {
                     transports: { sse: { enabled: v, deprecated: true } }
                   })
                 }
-                label="SSE (legacy)"
-                description="Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency."
+                label={t('admin.mcp.gateway.transportSse', 'SSE (legacy)')}
+                description={t(
+                  'admin.mcp.gateway.transportSseDesc',
+                  'Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency.'
+                )}
               />
               <Toggle
                 checked={!!gateway.a2a?.enabled}
@@ -221,8 +241,11 @@ function AdminMcpGatewayPage() {
                     }
                   }))
                 }
-                label="A2A (experimental)"
-                description="Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises."
+                label={t('admin.mcp.gateway.transportA2a', 'A2A (experimental)')}
+                description={t(
+                  'admin.mcp.gateway.transportA2aDesc',
+                  'Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises.'
+                )}
               />
             </div>
           </section>
@@ -241,26 +264,38 @@ function AdminMcpGatewayPage() {
               <Toggle
                 checked={expose.tools !== false}
                 onChange={v => update({ expose: { tools: v } })}
-                label="iHub tools"
-                description="Requires scope mcp:tools:read + mcp:tools:call"
+                label={t('admin.mcp.gateway.exposeTools', 'iHub tools')}
+                description={t(
+                  'admin.mcp.gateway.exposeToolsDesc',
+                  'Requires scope mcp:tools:read + mcp:tools:call'
+                )}
               />
               <Toggle
                 checked={expose.apps !== false}
                 onChange={v => update({ expose: { apps: v } })}
-                label="iHub apps"
-                description="Requires scope mcp:apps:invoke"
+                label={t('admin.mcp.gateway.exposeApps', 'iHub apps')}
+                description={t(
+                  'admin.mcp.gateway.exposeAppsDesc',
+                  'Requires scope mcp:apps:invoke'
+                )}
               />
               <Toggle
                 checked={expose.workflows !== false}
                 onChange={v => update({ expose: { workflows: v } })}
-                label="Workflows"
-                description="Requires scope mcp:workflows:run"
+                label={t('admin.mcp.gateway.exposeWorkflows', 'Workflows')}
+                description={t(
+                  'admin.mcp.gateway.exposeWorkflowsDesc',
+                  'Requires scope mcp:workflows:run'
+                )}
               />
               <Toggle
                 checked={!!expose.resources}
                 onChange={v => update({ expose: { resources: v } })}
-                label="Resources"
-                description="Sources / skills surfaced as MCP resources (resources/list + resources/read). Requires scope mcp:resources:read."
+                label={t('admin.mcp.gateway.exposeResources', 'Resources')}
+                description={t(
+                  'admin.mcp.gateway.exposeResourcesDesc',
+                  'Sources / skills surfaced as MCP resources (resources/list + resources/read). Requires scope mcp:resources:read.'
+                )}
               />
             </div>
           </section>
@@ -298,7 +333,7 @@ function AdminMcpGatewayPage() {
               {saving ? (
                 <>
                   <LoadingSpinner size="sm" className="mr-2" />
-                  Saving...
+                  {t('admin.mcp.common.saving', 'Saving...')}
                 </>
               ) : (
                 t('common.save', 'Save')
