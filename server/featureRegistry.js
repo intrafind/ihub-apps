@@ -133,6 +133,28 @@ export const featureRegistry = [
     category: 'preview',
     default: false,
     preview: true
+  },
+  {
+    id: 'agentFactory',
+    name: { en: 'Agent Factory', de: 'Agent-Fabrik' },
+    description: {
+      en: 'Autonomous agent profiles with cron/webhook/manual triggers, long-term memory, inboxes, and HITL approval',
+      de: 'Autonome Agentenprofile mit Cron-/Webhook-/Manuelle Trigger, Langzeitgedächtnis, Inboxes und HITL-Freigabe'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
+  },
+  {
+    id: 'appAsTool',
+    name: { en: 'App-as-Tool', de: 'App-als-Tool' },
+    description: {
+      en: 'Allow agents to invoke iHub apps as synthetic tools (app__<id>). Requires Agent Factory.',
+      de: 'Agenten erlauben, iHub-Apps als synthetische Tools (app__<id>) aufzurufen. Erfordert Agent Factory.'
+    },
+    category: 'preview',
+    default: false,
+    preview: true
   }
 ];
 

@@ -176,6 +176,7 @@ export class WorkflowLLMHelper {
     const toolCalls = [];
     const thoughtSignatures = [];
     let usage = null;
+    let groundingMetadata = null;
     let done = false;
 
     while (!done) {
@@ -213,6 +214,28 @@ export class WorkflowLLMHelper {
           usage = result.usage;
         }
 
+        // Capture grounding metadata (Gemini native googleSearch). Each
+        // chunk may carry partial metadata; merge groundingChunks across
+        // chunks so we don't drop URLs.
+        if (result.groundingMetadata) {
+          if (!groundingMetadata) {
+            groundingMetadata = { ...result.groundingMetadata };
+          } else {
+            if (Array.isArray(result.groundingMetadata.groundingChunks)) {
+              groundingMetadata.groundingChunks = [
+                ...(groundingMetadata.groundingChunks || []),
+                ...result.groundingMetadata.groundingChunks
+              ];
+            }
+            if (Array.isArray(result.groundingMetadata.webSearchQueries)) {
+              groundingMetadata.webSearchQueries = [
+                ...(groundingMetadata.webSearchQueries || []),
+                ...result.groundingMetadata.webSearchQueries
+              ];
+            }
+          }
+        }
+
         if (result.complete) {
           done = true;
           break;
@@ -220,7 +243,7 @@ export class WorkflowLLMHelper {
       }
     }
 
-    return { content, toolCalls, thoughtSignatures, usage };
+    return { content, toolCalls, thoughtSignatures, usage, groundingMetadata };
   }
 
   /**

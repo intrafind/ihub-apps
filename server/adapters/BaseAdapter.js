@@ -157,6 +157,8 @@ export class BaseAdapter {
     const reader = readable.getReader();
     const decoder = new TextDecoder();
     const queue = [];
+    let parsingError = null;
+
     const parser = createParser({
       onEvent: event => {
         if (event.type === 'event' || !event.type) {
@@ -169,14 +171,68 @@ export class BaseAdapter {
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        parser.feed(decoder.decode(value, { stream: true }));
+
+        try {
+          const chunk = decoder.decode(value, { stream: true });
+          parser.feed(chunk);
+        } catch (parseErr) {
+          // Catch parsing errors from eventsource-parser (e.g., malformed SSE data)
+          logger.error('SSE parsing error', {
+            component: 'BaseAdapter',
+            provider,
+            error: parseErr.message,
+            errorDetails: parseErr.toString()
+          });
+
+          // Store the error but continue processing queued events
+          parsingError = parseErr;
+
+          // If the error is about unexpected tokens (common with vLLM/gpt-oss),
+          // yield an error result to inform the user
+          yield {
+            content: [],
+            complete: false,
+            finishReason: 'error',
+            error: true,
+            errorMessage: `The model sent malformed data: ${parseErr.message}. This may be due to a model configuration issue. Please try a different model or contact your administrator.`
+          };
+          return;
+        }
+
         while (queue.length > 0) {
           const evt = queue.shift();
-          const result = await convertResponseToGeneric(evt.data, provider);
-          if (!result) continue;
-          yield result;
-          if (result.error || result.complete) return;
+          try {
+            const result = await convertResponseToGeneric(evt.data, provider);
+            if (!result) continue;
+            yield result;
+            if (result.error || result.complete) return;
+          } catch (conversionErr) {
+            logger.error('Error converting SSE event to generic format', {
+              component: 'BaseAdapter',
+              provider,
+              error: conversionErr.message
+            });
+            // Yield error but don't stop processing other events
+            yield {
+              content: [],
+              complete: false,
+              finishReason: 'error',
+              error: true,
+              errorMessage: `Error processing response: ${conversionErr.message}`
+            };
+          }
         }
+      }
+
+      // If we had parsing errors but no events were processed, yield a final error
+      if (parsingError && queue.length === 0) {
+        yield {
+          content: [],
+          complete: true,
+          finishReason: 'error',
+          error: true,
+          errorMessage: `Stream parsing failed: ${parsingError.message}. The model may have sent invalid data.`
+        };
       }
     } finally {
       try {

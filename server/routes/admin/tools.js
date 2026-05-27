@@ -134,9 +134,21 @@ function loadRawTools() {
     const fileContent = readFileSync(toolsFilePath, 'utf-8');
     const allTools = JSON.parse(fileContent);
 
-    // Filter out expanded tools (those with 'method' property)
-    // This handles legacy cases where expanded tools were saved to the config file
-    tools = allTools.filter(tool => !tool.method);
+    // Filter out expanded tools (those with 'method' property) — but PRESERVE
+    // intentionally script-bound tools like the agent tools registered by
+    // V042/V045 (`script: 'agentTools.js'` + `method: '...'` + `isAgentTool:
+    // true`). The original "expanded tools" filter targets accidentally
+    // persisted runtime expansions; for script-bound tools, `method` is the
+    // canonical reference to the exported function and must survive admin
+    // round-trips. Without this carve-out, every GET on this endpoint wipes
+    // the agent tools from disk via the needsCleanup write below.
+    tools = allTools.filter(tool => {
+      if (!tool.method) return true;
+      // Keep script-bound tools (explicit author-defined method reference)
+      if (tool.isAgentTool === true) return true;
+      if (typeof tool.script === 'string' && tool.script.length > 0) return true;
+      return false;
+    });
 
     // Check if we filtered any tools out
     if (tools.length !== allTools.length) {

@@ -134,7 +134,7 @@ To enable HTTPS you must provide certificate files via environment variables:
 | `SSL_CERT` | Path to the certificate file       |
 | `SSL_CA`   | Path to an optional CA certificate |
 
-When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode.
+When `SSL_KEY` and `SSL_CERT` are set the server starts in HTTPS mode. For a complete walkthrough of serving iHub Apps over HTTPS — native TLS, reverse proxy termination, secure cookies, Docker, and troubleshooting — see [Running with SSL/HTTPS](ssl-https-setup.md).
 
 ### External Services with Self-Signed Certificates
 

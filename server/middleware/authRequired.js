@@ -128,6 +128,32 @@ export const appAccessRequired = resourceAccessRequired('app');
 export const modelAccessRequired = resourceAccessRequired('model');
 
 /**
+ * Stricter guard than `authRequired`: rejects anonymous principals even
+ * when `anonymousAuth.enabled === true`. Use for endpoints that surface
+ * run data, artifacts, or anything not safe to leak to drive-by traffic.
+ *
+ * Behavior:
+ *  - Passes through if there is an authenticated user with a non-anonymous id.
+ *  - Otherwise responds 401 with a clear message.
+ */
+export function authenticatedOnly(req, res, next) {
+  if (req.user && req.user.id && req.user.id !== 'anonymous') {
+    return next();
+  }
+  authDebugService.log(
+    'authenticated-only',
+    'info',
+    'Rejecting anonymous request — endpoint requires a signed-in user',
+    { url: req.url, method: req.method, userId: req.user?.id }
+  );
+  // Generic message — do NOT leak which endpoints are reachable anonymously.
+  // That hint would help an attacker map the platform's allowed surface.
+  return res.status(401).json({
+    error: 'authentication required'
+  });
+}
+
+/**
  * Combined middleware for chat endpoints that enforces authentication and app access
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object

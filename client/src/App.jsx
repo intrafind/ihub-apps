@@ -49,6 +49,22 @@ const AdminToolEditPage = lazyWithRetry(() => import('./features/admin/pages/Adm
 const AdminSkillsPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillsPage'));
 const AdminSkillEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminSkillEditPage'));
 const AdminWorkflowsPage = lazyWithRetry(() => import('./features/admin/pages/AdminWorkflowsPage'));
+const AdminAgentsPage = lazyWithRetry(() => import('./features/admin/pages/AdminAgentsPage'));
+const AdminAgentEditPage = lazyWithRetry(() => import('./features/admin/pages/AdminAgentEditPage'));
+const AdminAgentMemoryPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminAgentMemoryPage')
+);
+const AdminAgentInboxesPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminAgentInboxesPage')
+);
+const AdminAgentInboxEditPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminAgentInboxEditPage')
+);
+const AgentRunsPage = lazyWithRetry(() => import('./features/admin/pages/AgentRunsPage'));
+const AgentRunDetailPage = lazyWithRetry(() => import('./features/admin/pages/AgentRunDetailPage'));
+const AdminAgentApprovalsPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminAgentApprovalsPage')
+);
 const AdminWorkflowEditPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminWorkflowEditPage')
 );
@@ -476,6 +492,42 @@ function App() {
               element={<LazyAdminRoute component={WorkflowEditorPage} />}
             />
           )}
+          {/* Agents */}
+          <Route path="admin/agents" element={<LazyAdminRoute component={AdminAgentsPage} />} />
+          <Route
+            path="admin/agents/new"
+            element={<LazyAdminRoute component={AdminAgentEditPage} />}
+          />
+          <Route
+            path="admin/agents/approvals"
+            element={<LazyAdminRoute component={AdminAgentApprovalsPage} />}
+          />
+          <Route
+            path="admin/agents/inboxes"
+            element={<LazyAdminRoute component={AdminAgentInboxesPage} />}
+          />
+          <Route
+            path="admin/agents/inboxes/:inboxId"
+            element={<LazyAdminRoute component={AdminAgentInboxEditPage} />}
+          />
+          <Route path="admin/agents/runs" element={<LazyAdminRoute component={AgentRunsPage} />} />
+          <Route
+            path="admin/agents/runs/:runId"
+            element={<LazyAdminRoute component={AgentRunDetailPage} />}
+          />
+          <Route
+            path="admin/agents/:profileId"
+            element={<LazyAdminRoute component={AdminAgentEditPage} />}
+          />
+          <Route
+            path="admin/agents/:profileId/memory"
+            element={<LazyAdminRoute component={AdminAgentMemoryPage} />}
+          />
+          <Route
+            path="admin/agents/:profileId/runs"
+            element={<LazyAdminRoute component={AgentRunsPage} />}
+          />
+
           {showAdminPage('sources') && (
             <Route path="admin/sources" element={<LazyAdminRoute component={AdminSourcesPage} />} />
           )}

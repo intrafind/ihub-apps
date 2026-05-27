@@ -214,6 +214,16 @@ function AdminNavigation() {
               }
             ]
           : []),
+        ...(featureFlags.isEnabled('agentFactory', false)
+          ? [
+              {
+                key: 'agents',
+                name: t('admin.nav.agents', 'Agents'),
+                href: '/admin/agents',
+                current: location.pathname.startsWith('/admin/agents')
+              }
+            ]
+          : []),
         ...(featureFlags.isEnabled('marketplace', false)
           ? [
               {

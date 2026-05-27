@@ -361,6 +361,7 @@ const baseAppConfigSchema = z.object({
     .optional(),
   outputSchema: z.union([z.object({}).passthrough(), z.string()]).optional(),
   customResponseRenderer: z.string().optional(),
+  rendererConfig: z.object({}).passthrough().optional(),
   category: z.string().optional(),
   enabled: z.boolean().optional().default(true),
 

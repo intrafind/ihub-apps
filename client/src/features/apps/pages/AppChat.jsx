@@ -1923,6 +1923,7 @@ function AppChat({ preloadedApp = null }) {
                   canvasEnabled={app?.features?.canvas === true}
                   requiredIntegrations={requiredIntegrations}
                   onConnectIntegration={connectIntegration}
+                  app={app}
                   models={models}
                   onClarificationSubmit={handleClarificationSubmit}
                   onClarificationSkip={handleClarificationSkip}

@@ -1,4 +1,4 @@
-export const version = '042';
+export const version = '043';
 export const description = 'add_mcp_config';
 
 /**

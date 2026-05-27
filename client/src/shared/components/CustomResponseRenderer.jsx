@@ -1,5 +1,6 @@
 import React, { useState, useEffect, Suspense, useMemo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import ReactComponentRenderer from './ReactComponentRenderer';
 
 /**
@@ -14,13 +15,15 @@ import ReactComponentRenderer from './ReactComponentRenderer';
  *
  * @param {string} componentName - Name of the renderer component (e.g., 'nda-results')
  * @param {object} data - Parsed JSON data to pass to the component
+ * @param {object} rendererConfig - Optional renderer-specific config from the app JSON (passthrough)
  * @param {string} className - Optional CSS classes for the container
  */
-function CustomResponseRenderer({ componentName, data, className = '' }) {
+function CustomResponseRenderer({ componentName, data, rendererConfig, className = '' }) {
   const [rendererCode, setRendererCode] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { t } = useTranslation();
+  const navigate = useNavigate();
 
   useEffect(() => {
     const loadRendererFromAPI = async () => {
@@ -65,6 +68,8 @@ function CustomResponseRenderer({ componentName, data, className = '' }) {
     () => ({
       data,
       t,
+      rendererConfig,
+      navigate,
       // Add React and hooks that the renderer might need
       React,
       useState,
@@ -73,7 +78,7 @@ function CustomResponseRenderer({ componentName, data, className = '' }) {
       useCallback,
       useRef
     }),
-    [data, t]
+    [data, t, rendererConfig, navigate]
   );
 
   if (loading) {

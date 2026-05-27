@@ -595,9 +595,11 @@ export function enhanceUserWithPermissions(user, authConfig, platform) {
 
   // Check admin access. Both OAuth client-credentials and OAuth authorization-code tokens
   // are denied admin access regardless of the underlying user's groups.
+  // Agent service-account principals also never get admin: they are
+  // identified solely by `isAgent === true`.
   const isOAuthDelegated = user.authMode === 'oauth_authorization_code';
   user.isAdmin =
-    user.isOAuthClient || isOAuthDelegated
+    user.isOAuthClient || isOAuthDelegated || user.isAgent === true
       ? false
       : hasAdminAccess(user.groups) || user.permissions.adminAccess;
 
@@ -770,4 +772,34 @@ export function enhanceUserGroups(user, authConfig, providerConfig = null) {
  */
 export function getAuthenticatedGroup(authConfig) {
   return authConfig?.authenticatedGroup || 'authenticated';
+}
+
+/**
+ * Build a service-account principal for an agent run.
+ *
+ * The principal's id is `agent:<profileId>`. The configured
+ * `serviceAccount.groups` determine what apps/tools/models the agent can access
+ * via the normal group permission system. `isAgent: true` forces `isAdmin =
+ * false` in `enhanceUserWithPermissions`.
+ *
+ * @param {Object} profile - Resolved AgentProfile
+ * @param {Object} [triggeredBy] - `{ userId, kind }` describing the trigger
+ * @returns {Object} bare principal (call enhanceUserWithPermissions to expand)
+ */
+export function buildAgentPrincipal(profile, triggeredBy = null) {
+  if (!profile || !profile.id) {
+    throw new Error('buildAgentPrincipal requires a profile with an id');
+  }
+  const localizedName =
+    typeof profile.name === 'string' ? profile.name : profile.name?.en || profile.id;
+  const groups = Array.from(new Set(profile.serviceAccount?.groups || ['agents', 'authenticated']));
+  return {
+    id: `agent:${profile.id}`,
+    name: localizedName,
+    email: null,
+    groups,
+    isAgent: true,
+    profileId: profile.id,
+    triggeredBy: triggeredBy || null
+  };
 }

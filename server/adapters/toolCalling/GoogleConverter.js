@@ -13,8 +13,16 @@ import {
   sanitizeSchemaForProvider,
   normalizeToolName
 } from './GenericToolCalling.js';
+import { isPlausibleToolName, describeInvalidToolName } from './toolNameValidator.js';
 import logger from '../../utils/logger.js';
 import { parseJsonAsync } from '../../utils/asyncJson.js';
+
+const HALLUCINATION_NOTICE_PREFIX = '[provider:google dropped malformed function call]';
+
+function truncateForLog(value, max = 200) {
+  if (typeof value !== 'string') return value;
+  return value.length > max ? `${value.slice(0, max)}…(${value.length})` : value;
+}
 
 /**
  * Convert generic tools to Google format
@@ -137,16 +145,22 @@ export function convertGenericToolCallsToGoogle(genericToolCalls = []) {
 export function convertGoogleFunctionCallsToGeneric(googleFunctionCalls = []) {
   return googleFunctionCalls
     .map((part, index) => {
-      if (part.functionCall) {
-        return createGenericToolCall(
-          `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
-          part.functionCall.name,
-          part.functionCall.args || {},
-          index,
-          { originalFormat: 'google' }
-        );
+      if (!part.functionCall) return null;
+      if (!isPlausibleToolName(part.functionCall.name)) {
+        logger.warn('Dropping Google function call with malformed name', {
+          component: 'GoogleConverter',
+          reason: describeInvalidToolName(part.functionCall.name),
+          name: truncateForLog(part.functionCall.name)
+        });
+        return null;
       }
-      return null;
+      return createGenericToolCall(
+        `call_${index}_${Date.now()}`, // Generate ID since Google doesn't provide one
+        part.functionCall.name,
+        part.functionCall.args || {},
+        index,
+        { originalFormat: 'google' }
+      );
     })
     .filter(Boolean);
 }
@@ -246,22 +260,33 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
           });
         }
         if (part.functionCall && part.functionCall.name) {
-          // Only create tool call if we have a valid name
-          // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
-          const metadata = { originalFormat: 'google' };
-          if (part.thoughtSignature) {
-            metadata.thoughtSignature = part.thoughtSignature;
+          if (!isPlausibleToolName(part.functionCall.name)) {
+            const reason = describeInvalidToolName(part.functionCall.name);
+            logger.warn('Google emitted malformed function call name; dropping', {
+              component: 'GoogleConverter',
+              reason,
+              name: truncateForLog(part.functionCall.name)
+            });
+            result.content.push(
+              `${HALLUCINATION_NOTICE_PREFIX} ${reason}: ${truncateForLog(part.functionCall.name, 80)}`
+            );
+          } else {
+            // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
+            const metadata = { originalFormat: 'google' };
+            if (part.thoughtSignature) {
+              metadata.thoughtSignature = part.thoughtSignature;
+            }
+            result.tool_calls.push(
+              createGenericToolCall(
+                `call_${result.tool_calls.length}_${Date.now()}`,
+                part.functionCall.name,
+                part.functionCall.args || {},
+                result.tool_calls.length,
+                metadata
+              )
+            );
+            if (!result.finishReason) result.finishReason = 'tool_calls';
           }
-          result.tool_calls.push(
-            createGenericToolCall(
-              `call_${result.tool_calls.length}_${Date.now()}`,
-              part.functionCall.name,
-              part.functionCall.args || {},
-              result.tool_calls.length,
-              metadata
-            )
-          );
-          if (!result.finishReason) result.finishReason = 'tool_calls';
         }
         // Collect thought signatures for multi-turn conversations (for backward compatibility)
         if (part.thoughtSignature) {
@@ -308,24 +333,33 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
           });
         }
         if (part.functionCall && part.functionCall.name) {
-          // Only create tool call if we have a valid name (non-empty)
-          // This prevents creating tool calls with empty names during streaming
-
-          // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
-          const metadata = { originalFormat: 'google' };
-          if (part.thoughtSignature) {
-            metadata.thoughtSignature = part.thoughtSignature;
+          if (!isPlausibleToolName(part.functionCall.name)) {
+            const reason = describeInvalidToolName(part.functionCall.name);
+            logger.warn('Google streaming emitted malformed function call name; dropping', {
+              component: 'GoogleConverter',
+              reason,
+              name: truncateForLog(part.functionCall.name)
+            });
+            result.content.push(
+              `${HALLUCINATION_NOTICE_PREFIX} ${reason}: ${truncateForLog(part.functionCall.name, 80)}`
+            );
+          } else {
+            // Include thoughtSignature in metadata for multi-turn conversations with thinking enabled
+            const metadata = { originalFormat: 'google' };
+            if (part.thoughtSignature) {
+              metadata.thoughtSignature = part.thoughtSignature;
+            }
+            result.tool_calls.push(
+              createGenericToolCall(
+                `call_${result.tool_calls.length}_${Date.now()}`,
+                part.functionCall.name,
+                part.functionCall.args || {},
+                result.tool_calls.length,
+                metadata
+              )
+            );
+            if (!result.finishReason) result.finishReason = 'tool_calls';
           }
-          result.tool_calls.push(
-            createGenericToolCall(
-              `call_${result.tool_calls.length}_${Date.now()}`,
-              part.functionCall.name,
-              part.functionCall.args || {},
-              result.tool_calls.length,
-              metadata
-            )
-          );
-          if (!result.finishReason) result.finishReason = 'tool_calls';
         }
         // Handle partial function calls during streaming - ignore incomplete ones
         else if (part.functionCall && !part.functionCall.name) {
@@ -343,8 +377,18 @@ export async function convertGoogleResponseToGeneric(data, _streamId = 'default'
       }
     }
 
-    // Extract grounding metadata if present (for Google Search grounding)
-    if (parsed.groundingMetadata) {
+    // Extract grounding metadata if present (for Google Search grounding).
+    // Gemini puts this at `candidates[0].groundingMetadata` in real responses;
+    // the top-level `parsed.groundingMetadata` lookup we used before only
+    // matched a hypothetical shape and silently dropped every real grounding
+    // payload — which is why agent runs with webSearch (auto-swapped to
+    // googleSearch on Google models) never produced citations. Check the
+    // candidates[0] location first and fall back to top-level for forward
+    // compatibility.
+    const candidateGrounding = parsed.candidates?.[0]?.groundingMetadata;
+    if (candidateGrounding) {
+      result.groundingMetadata = candidateGrounding;
+    } else if (parsed.groundingMetadata) {
       result.groundingMetadata = parsed.groundingMetadata;
     }
 

@@ -299,7 +299,7 @@ export async function runConfigMigrations() {
   const migrationConfig = await loadMigrationConfig(contentsDir);
   if (!migrationConfig.enabled) {
     logger.info('Configuration migrations are disabled', { component: 'Migration' });
-    return;
+    return { applied: 0, skipped: 0, failed: 0, disabled: true };
   }
 
   // Acquire lock
@@ -310,7 +310,7 @@ export async function runConfigMigrations() {
     const migrationFiles = await scanMigrationFiles(migrationsDir);
     if (migrationFiles.length === 0) {
       logger.info('No migration files found', { component: 'Migration' });
-      return;
+      return { applied: 0, skipped: 0, failed: 0 };
     }
 
     // Load history
@@ -358,7 +358,7 @@ export async function runConfigMigrations() {
         component: 'Migration',
         count: migrationFiles.length
       });
-      return;
+      return { applied: 0, skipped: 0, failed: 0 };
     }
 
     logger.info('Found pending migrations to apply', {
@@ -462,6 +462,7 @@ export async function runConfigMigrations() {
       skipped,
       failed
     });
+    return { applied, skipped, failed };
   } finally {
     await releaseLock(contentsDir);
   }
