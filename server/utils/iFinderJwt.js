@@ -141,15 +141,16 @@ function resolveJwtSubject(user, config) {
       //
       // Two accepted forms:
       //   ${user.field}  — preferred, self-documenting.
-      //   ${field}       — legacy. configCache skips env var resolution for
-      //                    `iFinder.jwtSubjectField` (see
-      //                    ENV_VAR_RESOLUTION_SKIP_PATHS), so this is now
-      //                    safe; before that skip was added it could collide
-      //                    with `process.env.field` (notably
-      //                    `process.env.username` on Windows = the OS service
-      //                    account running the server), leaking that account
-      //                    into every JWT subject. We still warn so admins
-      //                    migrate to the explicit `${user.field}` form.
+      //   ${field}       — legacy. configCache opts this path out of env var
+      //                    resolution via the `ENV_VAR_SKIP_PATHS_BY_KEY`
+      //                    entry for `config/platform.json`, so this form
+      //                    is now safe; before that skip was added it could
+      //                    collide with `process.env.field` (notably
+      //                    `process.env.username` on Windows = the OS
+      //                    service account running the server), leaking
+      //                    that account into every JWT subject. We still
+      //                    warn so admins migrate to the explicit
+      //                    `${user.field}` form.
       if (/\$\{(?!user\.)\w+\}/.test(field)) {
         logger.warn(
           'iFinder jwtSubjectField uses legacy ${field} placeholder syntax. ' +

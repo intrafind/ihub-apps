@@ -24,6 +24,11 @@ import { resolveEnvVarsInObject } from '../configCache.js';
 import { up as migrationUp } from '../migrations/V043__fix_ifinder_jwt_subject_template.js';
 
 describe('iFinder JWT subject — env var resolution skip', () => {
+  // configCache passes this skipPaths list when caching the platform config.
+  // Tests reproduce that contract directly so we exercise the resolver the
+  // same way `setCacheEntry` does.
+  const platformSkipPaths = ['iFinder.jwtSubjectField'];
+
   let originalUsername;
 
   before(() => {
@@ -39,17 +44,17 @@ describe('iFinder JWT subject — env var resolution skip', () => {
     }
   });
 
-  it('preserves iFinder.jwtSubjectField when process.env.username is set', () => {
+  it('preserves iFinder.jwtSubjectField when caller skips it and env var is set', () => {
     const platform = {
       iFinder: { jwtSubjectField: 'BMG\\${username}', baseUrl: 'https://x/' }
     };
-    const resolved = resolveEnvVarsInObject(platform);
+    const resolved = resolveEnvVarsInObject(platform, { skipPaths: platformSkipPaths });
     assert.equal(resolved.iFinder.jwtSubjectField, 'BMG\\${username}');
   });
 
-  it('preserves ${user.field} verbatim', () => {
+  it('preserves ${user.field} verbatim regardless of skip list', () => {
     const platform = { iFinder: { jwtSubjectField: 'BMG\\${user.username}' } };
-    const resolved = resolveEnvVarsInObject(platform);
+    const resolved = resolveEnvVarsInObject(platform, { skipPaths: platformSkipPaths });
     assert.equal(resolved.iFinder.jwtSubjectField, 'BMG\\${user.username}');
   });
 
@@ -62,7 +67,7 @@ describe('iFinder JWT subject — env var resolution skip', () => {
           baseUrl: 'https://${MY_TEST_VAR}/'
         }
       };
-      const resolved = resolveEnvVarsInObject(platform);
+      const resolved = resolveEnvVarsInObject(platform, { skipPaths: platformSkipPaths });
       assert.equal(resolved.iFinder.jwtSubjectField, 'BMG\\${username}');
       assert.equal(resolved.iFinder.baseUrl, 'https://replaced/');
     } finally {
@@ -77,11 +82,25 @@ describe('iFinder JWT subject — env var resolution skip', () => {
         iFinder: { jwtSubjectField: 'BMG\\${username}' },
         elsewhere: '${MY_TEST_VAR}'
       };
-      const resolved = resolveEnvVarsInObject(platform);
+      const resolved = resolveEnvVarsInObject(platform, { skipPaths: platformSkipPaths });
       assert.equal(resolved.elsewhere, 'replaced');
     } finally {
       delete process.env.MY_TEST_VAR;
     }
+  });
+
+  it('without skipPaths the field IS env-resolved (proves the bug returns if caller forgets)', () => {
+    const platform = { iFinder: { jwtSubjectField: 'BMG\\${username}' } };
+    const resolved = resolveEnvVarsInObject(platform);
+    assert.equal(resolved.iFinder.jwtSubjectField, 'BMG\\svc_ifinder-indexer');
+  });
+
+  it('accepts skipPaths as a Set', () => {
+    const platform = { iFinder: { jwtSubjectField: 'BMG\\${username}' } };
+    const resolved = resolveEnvVarsInObject(platform, {
+      skipPaths: new Set(['iFinder.jwtSubjectField'])
+    });
+    assert.equal(resolved.iFinder.jwtSubjectField, 'BMG\\${username}');
   });
 });
 
