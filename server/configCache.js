@@ -48,24 +48,48 @@ function resolveEnvVars(value) {
 }
 
 /**
+ * Config paths whose string values must NEVER go through env var substitution.
+ *
+ * Required when a field is a *user-data* template (e.g. `${user.username}` is a
+ * placeholder for the authenticated user's username, NOT for an OS env var).
+ * Without this skip list, `${username}` would be eaten by `resolveEnvVars`
+ * because Windows sets `process.env.username` to the OS user running the
+ * process — silently leaking the service account into every templated value.
+ *
+ * Use dot-paths (e.g. "iFinder.jwtSubjectField"). Wildcards are not supported.
+ */
+const ENV_VAR_RESOLUTION_SKIP_PATHS = new Set(['iFinder.jwtSubjectField']);
+
+/**
  * Recursively resolve environment variables in an object. Exported so other
  * subsystems (e.g. server/telemetry.js) that read raw JSON before configCache
  * is up can perform the same `${VAR}` / `${VAR:-default}` substitution the
  * rest of the platform expects.
+ *
+ * Paths listed in `ENV_VAR_RESOLUTION_SKIP_PATHS` are passed through verbatim;
+ * the consumer of that value is responsible for any template substitution.
+ *
+ * @param {*} obj - Object/array/primitive to recursively resolve
+ * @param {string} [path] - Internal: current dot-path used for skip-list checks
  */
-export function resolveEnvVarsInObject(obj) {
+export function resolveEnvVarsInObject(obj, path = '') {
   if (!obj || typeof obj !== 'object') return obj;
 
   if (Array.isArray(obj)) {
-    return obj.map(item => resolveEnvVarsInObject(item));
+    return obj.map((item, idx) => resolveEnvVarsInObject(item, `${path}[${idx}]`));
   }
 
   const resolved = {};
   for (const [key, value] of Object.entries(obj)) {
+    const childPath = path ? `${path}.${key}` : key;
+    if (ENV_VAR_RESOLUTION_SKIP_PATHS.has(childPath)) {
+      resolved[key] = value;
+      continue;
+    }
     if (typeof value === 'string') {
       resolved[key] = resolveEnvVars(value);
     } else if (typeof value === 'object') {
-      resolved[key] = resolveEnvVarsInObject(value);
+      resolved[key] = resolveEnvVarsInObject(value, childPath);
     } else {
       resolved[key] = value;
     }
