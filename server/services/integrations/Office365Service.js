@@ -79,6 +79,56 @@ class Office365Service {
   }
 
   /**
+   * Build the minimal set of Microsoft Graph scopes required for the
+   * provider's enabled sources.
+   *
+   * Microsoft Entra ID classifies many Graph scopes as "admin consent
+   * required" (Files.Read.All, Sites.Read.All, Team.ReadBasic.All,
+   * Channel.ReadBasic.All). Requesting them forces every user through a
+   * tenant admin even when they only need their own OneDrive. We only
+   * ask for those when the corresponding source toggle is enabled.
+   *
+   * @param {Object} provider - Office 365 provider configuration
+   * @returns {string} Space-separated scope string
+   */
+  _buildScopes(provider) {
+    const sources = provider.sources || {
+      personalDrive: true,
+      followedSites: true,
+      teams: true
+    };
+
+    const personalDrive = sources.personalDrive !== false;
+    const followedSites = sources.followedSites !== false;
+    const teams = sources.teams !== false;
+
+    // User.Read and offline_access are delegated user-consent scopes
+    // and do not require admin consent.
+    const scopes = ['User.Read', 'offline_access'];
+
+    if (followedSites) {
+      scopes.push('Sites.Read.All');
+    }
+
+    if (teams) {
+      scopes.push('Team.ReadBasic.All', 'Channel.ReadBasic.All');
+    }
+
+    // For file content access:
+    // - If SharePoint or Teams is enabled we need Files.Read.All to read
+    //   drive items across all the sources the user can reach.
+    // - If only personal OneDrive is enabled, Files.Read is sufficient
+    //   AND avoids admin consent entirely.
+    if (followedSites || teams) {
+      scopes.push('Files.Read.All');
+    } else if (personalDrive) {
+      scopes.push('Files.Read');
+    }
+
+    return scopes.join(' ');
+  }
+
+  /**
    * Generate OAuth 2.0 authorization URL with PKCE
    * @param {string} providerId - The provider ID
    * @param {string} state - CSRF protection state
@@ -113,15 +163,14 @@ class Office365Service {
 
     const authUrl = `${this.authBaseUrl}/${provider.tenantId}/oauth2/v2.0/authorize`;
 
-    // Microsoft Graph API scopes for file access
-    const scopes = [
-      'User.Read', // Basic user info
-      'Files.Read.All', // Read files in all site collections
-      'Sites.Read.All', // Read items in all site collections
-      'Team.ReadBasic.All', // Read Teams information
-      'Channel.ReadBasic.All', // Read Teams channel information
-      'offline_access' // Refresh token
-    ].join(' ');
+    const scopes = this._buildScopes(provider);
+
+    logger.info('Office 365 OAuth scopes selected from enabled sources', {
+      component: 'Office365Service',
+      providerId,
+      scopes,
+      sources: provider.sources
+    });
 
     const params = new URLSearchParams({
       client_id: provider.clientId,
@@ -241,8 +290,7 @@ class Office365Service {
         client_secret: provider.clientSecret,
         refresh_token: refreshToken,
         grant_type: 'refresh_token',
-        scope:
-          'User.Read Files.Read.All Sites.Read.All Team.ReadBasic.All Channel.ReadBasic.All offline_access'
+        scope: this._buildScopes(provider)
       });
 
       const response = await httpFetch(tokenUrl, {

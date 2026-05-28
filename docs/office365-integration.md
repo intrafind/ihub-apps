@@ -45,25 +45,42 @@ The Office 365 integration enables users to browse and upload files from OneDriv
 
 The integration requires delegated permissions (acting on behalf of the signed-in user). No application-level permissions or admin credentials are used.
 
+iHub Apps requests **only the scopes required for the sources you enable** in the provider configuration. This means you can run a personal-OneDrive-only deployment without any admin consent at all.
+
+### Scope mapping
+
+| Enabled source | Scopes requested | Admin consent required? |
+|---|---|---|
+| Personal OneDrive **only** | `User.Read`, `Files.Read`, `offline_access` | **No** — user consent only |
+| Followed SharePoint Sites | adds `Sites.Read.All`, upgrades `Files.Read` → `Files.Read.All` | **Yes** |
+| Microsoft Teams | adds `Team.ReadBasic.All`, `Channel.ReadBasic.All`, upgrades `Files.Read` → `Files.Read.All` | **Yes** |
+
+> **Tip — avoid admin consent**: If you only enable **Personal OneDrive** in the provider's `sources` configuration (see Step 5), iHub Apps will request `Files.Read` instead of `Files.Read.All`. None of the requested scopes require admin consent, so any end user can connect their account without involving an Entra ID (Azure AD) administrator.
+
+### Permissions you may need to register in Azure
+
+Register all of the permissions you might use. Azure only prompts the user for the scopes that are actually requested at sign-in time, so adding the broader scopes here is safe:
+
 1. On your app registration page, select **"API permissions"** from the left menu
 2. Click **"+ Add a permission"**
 3. Select **"Microsoft Graph"**
 4. Select **"Delegated permissions"**
-5. Search for and add the following permissions:
+5. Add the permissions matching the sources you plan to enable:
 
-   | Permission | Purpose |
-   |------------|---------|
-   | `User.Read` | Read the signed-in user's basic profile |
-   | `Files.Read.All` | Read all files the user can access (OneDrive and SharePoint) |
-   | `Sites.Read.All` | Read items in all SharePoint site collections the user can access |
-   | `Team.ReadBasic.All` | Read basic information about Teams the user is a member of |
-   | `Channel.ReadBasic.All` | Read basic information about Teams channels |
-   | `offline_access` | Maintain access when the user is not actively using the app (required for refresh tokens) |
+   | Permission | Required for | Admin consent? |
+   |------------|--------------|----------------|
+   | `User.Read` | All deployments | No |
+   | `offline_access` | All deployments (refresh tokens) | No |
+   | `Files.Read` | Personal-OneDrive-only deployments | **No** |
+   | `Files.Read.All` | SharePoint or Teams sources | Yes |
+   | `Sites.Read.All` | Followed SharePoint sites | Yes |
+   | `Team.ReadBasic.All` | Microsoft Teams source | Yes |
+   | `Channel.ReadBasic.All` | Microsoft Teams source | Yes |
 
 6. Click **"Add permissions"**
-7. Click **"Grant admin consent for [your organization]"** and confirm
+7. **Only if** you are using SharePoint or Teams sources: click **"Grant admin consent for [your organization]"** and confirm. For personal-OneDrive-only setups you can skip this step — Azure will prompt the user for consent on first sign-in.
 
-   > **Note**: The `Files.Read.All` and `Sites.Read.All` permissions require admin consent. Without admin consent being granted, users will be blocked from authorizing the application. Coordinate with your Azure AD administrator if you do not have the required permissions.
+   > **Note**: If you grant admin consent for the broader `.All` scopes but only enable Personal OneDrive in the provider config, iHub Apps will still only request the narrower scopes — admin consent doesn't force broader access than the app asks for.
 
 ---
 
@@ -241,9 +258,9 @@ Each source is controlled by the `sources` configuration object in the provider 
 
 ### Admin consent not granted — "AADSTS65001" error
 
-- This error means admin consent has not been granted for the required permissions
-- An Azure AD administrator must visit the app registration in Azure Portal and click **"Grant admin consent"**
-- Alternatively, the administrator can grant consent by navigating to: `https://login.microsoftonline.com/{tenantId}/adminconsent?client_id={clientId}`
+- This error means admin consent has not been granted for one of the `.All` scopes the integration is requesting
+- **If you don't have an Entra ID administrator**: disable **Followed SharePoint Sites** and **Microsoft Teams** in the provider's `sources` configuration and keep only **Personal OneDrive** enabled. iHub Apps will then request only `User.Read`, `Files.Read`, and `offline_access`, none of which require admin consent.
+- **If you do have an administrator**: have them visit the app registration in Azure Portal and click **"Grant admin consent"**, or have them grant consent by navigating to: `https://login.microsoftonline.com/{tenantId}/adminconsent?client_id={clientId}`
 
 ### No files showing for SharePoint or Teams
 
@@ -273,7 +290,8 @@ Each source is controlled by the `sources` configuration object in the provider 
 
 ## Security Considerations
 
-- **Read-only access**: The integration requests only read permissions (`Files.Read.All`, `Sites.Read.All`) — it cannot create, modify, or delete files
+- **Read-only access**: The integration requests only read permissions (`Files.Read` or `Files.Read.All`, plus `Sites.Read.All` if SharePoint is enabled) — it cannot create, modify, or delete files
+- **Least-privilege scopes**: Scopes are derived from the enabled `sources` (personal/SharePoint/Teams). A personal-OneDrive-only deployment uses `Files.Read` and avoids admin-consent scopes entirely.
 - **Per-user tokens**: Each user connects their own Microsoft account; no shared service account is used
 - **Encrypted storage**: Tokens are encrypted at rest using AES-256-GCM via `TokenStorageService`
 - **PKCE**: OAuth flow uses Proof Key for Code Exchange (S256 method) to prevent authorization code interception attacks
