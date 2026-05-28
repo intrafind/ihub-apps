@@ -7,6 +7,10 @@ import { fetchJsonSchema } from '../../../utils/schemaService';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ModelFormEditor from '../components/ModelFormEditor';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminModelEditPage() {
   const { t, i18n } = useTranslation();
@@ -19,6 +23,7 @@ function AdminModelEditPage() {
   // Constants
   const API_KEY_PLACEHOLDER = '••••••••';
 
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [loading, setLoading] = useState(!isNewModel);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -26,6 +31,7 @@ function AdminModelEditPage() {
   const [apps, setApps] = useState([]);
   const [usage, setUsage] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -42,6 +48,8 @@ function AdminModelEditPage() {
     apiKey: '',
     apiKeySet: false
   });
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
 
   useEffect(() => {
     const loadJsonSchema = async () => {
@@ -67,13 +75,30 @@ function AdminModelEditPage() {
   useEffect(() => {
     if (isNewModel && location.state?.templateModel) {
       const tpl = location.state.templateModel;
-      setFormData(prev => ({
-        ...prev,
+      const tplData = {
         ...tpl,
         id: '',
         enabled: tpl.enabled !== undefined ? tpl.enabled : true,
         default: false
-      }));
+      };
+      setFormData(prev => ({ ...prev, ...tplData }));
+      setInitialData(tplData);
+    } else if (isNewModel && !location.state?.templateModel) {
+      setInitialData({
+        id: '',
+        modelId: '',
+        name: { [DEFAULT_LANGUAGE]: '' },
+        description: { [DEFAULT_LANGUAGE]: '' },
+        url: '',
+        provider: '',
+        tokenLimit: '',
+        supportsTools: false,
+        supportsImageGeneration: false,
+        enabled: true,
+        default: false,
+        apiKey: '',
+        apiKeySet: false
+      });
     }
   }, [isNewModel, location.state]);
 
@@ -126,6 +151,7 @@ function AdminModelEditPage() {
       }
 
       setFormData(formDataObj);
+      setInitialData(formDataObj);
 
       console.log('Form data set with name:', ensureLocalizedObject(model.name));
       console.log('Form data set with description:', ensureLocalizedObject(model.description));
@@ -229,6 +255,7 @@ function AdminModelEditPage() {
       });
 
       setSuccess(true);
+      markSaved();
 
       // Redirect after a short delay
       setTimeout(() => {
@@ -256,6 +283,13 @@ function AdminModelEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Models', href: '/admin/models' },
+            { label: isNewModel ? 'New Model' : (formData?.name?.en ?? modelId) }
+          ]}
+        />
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -289,6 +323,15 @@ function AdminModelEditPage() {
                 >
                   <Icon name="download" className="h-4 w-4 mr-2" />
                   {t('common.download')}
+                </button>
+              )}
+              {modelId !== 'new' && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                >
+                  History
                 </button>
               )}
               <button
@@ -475,6 +518,23 @@ function AdminModelEditPage() {
           </div>
         </form>
       </div>
+      <ChangeHistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        resource="model"
+        resourceId={modelId}
+      />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

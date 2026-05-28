@@ -6,6 +6,15 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
@@ -36,6 +45,34 @@
 
 [data-theme='dark'] ::-webkit-scrollbar-thumb:hover {
   background: #6b7280;
+}
+
+/* Auto-hiding scrollbar: invisible until hovered */
+.scrollbar-thin {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.scrollbar-thin:hover {
+  scrollbar-color: #d1d5db transparent;
+}
+[data-theme='dark'] .scrollbar-thin:hover {
+  scrollbar-color: #4b5563 transparent;
+}
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+}
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+.scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+[data-theme='dark'] .scrollbar-thin:hover::-webkit-scrollbar-thumb {
+  background: #4b5563;
 }
 
 /* Animation for chat bubble typing */
@@ -351,6 +388,23 @@ div .markdown-content .code-block-toolbar > div,
 [data-theme='dark'] select:disabled,
 [data-theme='dark'] textarea:disabled {
   @apply bg-gray-800 text-gray-500;
+}
+
+/* ============================================
+   Admin UI: Micro-interactions
+   ============================================ */
+
+/* Smooth color transitions on all interactive elements inside the admin panel */
+#admin-main-content button:not(:disabled),
+#admin-main-content a[role='button']:not([aria-disabled='true']) {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#admin-main-content button:not(:disabled):active,
+#admin-main-content a[role='button']:not([aria-disabled='true']):active {
+  transform: scale(0.97);
 }
 
 /* ============================================

@@ -80,14 +80,14 @@ export default function AdminAgentsPage() {
 
   return (
     <>
-      <div className="bg-gray-50 min-h-screen">
+      <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
         <div className="max-w-7xl mx-auto py-8 px-4">
           <div className="flex justify-between items-center mb-6">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {t('admin.agents.title', 'Agent Profiles')}
               </h1>
-              <p className="text-sm text-gray-600 mt-1">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {t(
                   'admin.agents.subtitle',
                   'Manage autonomous agents that run on schedules, webhooks, or manual triggers.'
@@ -97,13 +97,13 @@ export default function AdminAgentsPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => navigate('/admin/agents/inboxes')}
-                className="px-3 py-2 text-sm border border-gray-300 bg-white rounded-md hover:bg-gray-50"
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 {t('admin.agents.manageInboxes', 'Manage Inboxes')}
               </button>
               <button
                 onClick={() => navigate('/admin/agents/approvals')}
-                className="px-3 py-2 text-sm border border-gray-300 bg-white rounded-md hover:bg-gray-50"
+                className="px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 {t('admin.agents.approvals', 'Pending Approvals')}
               </button>
@@ -117,47 +117,47 @@ export default function AdminAgentsPage() {
           </div>
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
               {error}
             </div>
           )}
 
           {loading ? (
-            <div className="text-gray-600">{t('common.loading', 'Loading…')}</div>
+            <div className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
           ) : profiles.length === 0 ? (
-            <div className="bg-white border border-gray-200 p-8 rounded text-center text-gray-600">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-8 rounded text-center text-gray-600 dark:text-gray-400">
               {t(
                 'admin.agents.empty',
                 'No agent profiles yet. Create your first profile to get started.'
               )}
             </div>
           ) : (
-            <div className="bg-white border border-gray-200 rounded overflow-x-auto">
-              <table className="min-w-full">
-                <thead>
-                  <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-600 uppercase">
-                    <th className="px-4 py-3">{t('admin.agents.col.name', 'Name')}</th>
-                    <th className="px-4 py-3">{t('admin.agents.col.id', 'ID')}</th>
-                    <th className="px-4 py-3">{t('admin.agents.col.inbox', 'Inbox')}</th>
-                    <th className="px-4 py-3">{t('admin.agents.col.schedule', 'Schedule')}</th>
-                    <th className="px-4 py-3">{t('admin.agents.col.enabled', 'Enabled')}</th>
-                    <th className="px-4 py-3 text-right">
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                <thead className="bg-gray-50 dark:bg-gray-900">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.name', 'Name')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.id', 'ID')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.inbox', 'Inbox')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.schedule', 'Schedule')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.enabled', 'Enabled')}</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       {t('admin.agents.col.actions', 'Actions')}
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                   {profiles.map(p => {
                     const schedule = (p.workflow?.definition?.triggers || []).find(
                       tr => tr.type === 'schedule'
                     );
                     const profileName = p.name?.en || p.id;
                     return (
-                      <tr key={p.id} className="border-t border-gray-200">
-                        <td className="px-4 py-3 font-medium">{profileName}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600">{p.id}</td>
-                        <td className="px-4 py-3 text-sm">{p.inboxId || '—'}</td>
-                        <td className="px-4 py-3 text-sm font-mono">
+                      <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{profileName}</td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">{p.id}</td>
+                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{p.inboxId || '—'}</td>
+                        <td className="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">
                           {schedule?.config?.cron || '—'}
                         </td>
                         <td className="px-4 py-3">
@@ -168,10 +168,10 @@ export default function AdminAgentsPage() {
                               'Toggle agent {{name}}',
                               { name: profileName }
                             )}
-                            className={`px-2 py-1 text-xs rounded ${
+                            className={`px-2 py-1 text-xs rounded font-medium ${
                               p.enabled
-                                ? 'bg-green-100 text-green-800'
-                                : 'bg-gray-100 text-gray-700'
+                                ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300'
+                                : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                             }`}
                           >
                             {p.enabled
@@ -187,7 +187,7 @@ export default function AdminAgentsPage() {
                               'Run agent {{name}}',
                               { name: profileName }
                             )}
-                            className="text-indigo-600 hover:underline"
+                            className="text-indigo-600 dark:text-indigo-400 hover:underline"
                           >
                             {t('admin.agents.action.run', 'Run')}
                           </button>
@@ -198,7 +198,7 @@ export default function AdminAgentsPage() {
                               'Edit agent {{name}}',
                               { name: profileName }
                             )}
-                            className="text-blue-600 hover:underline"
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
                           >
                             {t('admin.agents.action.edit', 'Edit')}
                           </button>
@@ -209,7 +209,7 @@ export default function AdminAgentsPage() {
                               'View runs for agent {{name}}',
                               { name: profileName }
                             )}
-                            className="text-gray-600 hover:underline"
+                            className="text-gray-600 dark:text-gray-400 hover:underline"
                           >
                             {t('admin.agents.action.runs', 'Runs')}
                           </button>
@@ -220,7 +220,7 @@ export default function AdminAgentsPage() {
                               'Delete agent {{name}}',
                               { name: profileName }
                             )}
-                            className="text-red-600 hover:underline"
+                            className="text-red-600 dark:text-red-400 hover:underline"
                           >
                             {t('admin.agents.action.delete', 'Delete')}
                           </button>

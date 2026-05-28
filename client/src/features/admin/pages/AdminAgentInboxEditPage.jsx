@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { fetchInbox, writeInbox } from '../../../api/agentsAdminApi';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 // Parse a checklist-style markdown body into structured items so the form
 // editor can manipulate them. Lines that don't match the checkbox shape are
@@ -59,12 +62,15 @@ export default function AdminAgentInboxEditPage() {
   const { inboxId } = useParams();
 
   const [parsed, setParsed] = useState({ before: '', items: [], after: '' });
+  const [initialData, setInitialData] = useState(null);
   const [version, setVersion] = useState(0);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [view, setView] = useState('form'); // 'form' | 'raw'
   const [rawBody, setRawBody] = useState('');
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, parsed);
 
   const [newText, setNewText] = useState('');
   const [newPriority, setNewPriority] = useState('p2');
@@ -75,7 +81,9 @@ export default function AdminAgentInboxEditPage() {
         const res = await fetchInbox(inboxId);
         const data = res?.data || {};
         const body = data.body || `# ${inboxId}\n`;
-        setParsed(parseBody(body));
+        const parsedBody = parseBody(body);
+        setParsed(parsedBody);
+        setInitialData(parsedBody);
         setRawBody(body);
         setVersion(data.version || 0);
       } catch (err) {
@@ -141,7 +149,9 @@ export default function AdminAgentInboxEditPage() {
       // from the canonical state.
       const reparsed = parseBody(body);
       setParsed(reparsed);
+      setInitialData(reparsed);
       setRawBody(body);
+      markSaved();
     } catch (err) {
       const code = err?.response?.data?.error;
       setError(
@@ -167,6 +177,14 @@ export default function AdminAgentInboxEditPage() {
   return (
     <div className="bg-gray-50 min-h-screen dark:bg-gray-900">
       <div className="max-w-3xl mx-auto py-8 px-4">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Agents', href: '/admin/agents' },
+            { label: 'Inboxes', href: '/admin/agents/inboxes' },
+            { label: inboxId }
+          ]}
+        />
         <div className="flex justify-between items-center mb-4">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
@@ -357,6 +375,17 @@ export default function AdminAgentInboxEditPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

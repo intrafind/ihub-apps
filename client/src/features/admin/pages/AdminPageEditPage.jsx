@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import { fetchAdminPage, createPage, updatePage } from '../../../api/adminApi';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminPageEditPage() {
   const { t } = useTranslation();
@@ -10,17 +13,22 @@ function AdminPageEditPage() {
   const navigate = useNavigate();
   const isNew = pageId === 'new';
 
-  const [page, setPage] = useState({
+  const defaultPage = {
     id: '',
     title: { en: '' },
     content: { en: '' },
     authRequired: false,
     allowedGroups: '*',
     contentType: 'markdown'
-  });
+  };
+
+  const [page, setPage] = useState(defaultPage);
+  const [initialData, setInitialData] = useState(isNew ? defaultPage : null);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, page);
 
   useEffect(() => {
     if (isNew) {
@@ -34,7 +42,7 @@ function AdminPageEditPage() {
     try {
       setLoading(true);
       const data = await fetchAdminPage(pageId);
-      setPage({
+      const loadedPage = {
         id: data.id,
         title: data.title || { en: '' },
         content: data.content || { en: '' },
@@ -44,7 +52,9 @@ function AdminPageEditPage() {
             ? data.allowedGroups.join(',')
             : '*',
         contentType: data.contentType || 'markdown'
-      });
+      };
+      setPage(loadedPage);
+      setInitialData(loadedPage);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -76,6 +86,7 @@ function AdminPageEditPage() {
       } else {
         await updatePage(pageId, pageData);
       }
+      markSaved();
       navigate('/admin/pages');
     } catch (err) {
       setError(err.message);
@@ -95,6 +106,13 @@ function AdminPageEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Pages', href: '/admin/pages' },
+            { label: isNew ? 'New Page' : (page?.title?.en ?? pageId) }
+          ]}
+        />
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -196,6 +214,17 @@ function AdminPageEditPage() {
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

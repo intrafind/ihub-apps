@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import UserFormEditor from '../components/UserFormEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -13,12 +16,15 @@ function AdminUserEditPage() {
   const { userId } = useParams();
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
 
   const isNewUser = userId === 'new';
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, user);
 
   // Generate a unique ID for new users
   const generateUserId = () => `user_${crypto.randomUUID().replace(/-/g, '_')}`;
@@ -28,7 +34,7 @@ function AdminUserEditPage() {
 
     if (isNewUser) {
       // Initialize new user with generated ID
-      setUser({
+      const defaultUser = {
         id: generateUserId(),
         username: '',
         email: null,
@@ -39,7 +45,9 @@ function AdminUserEditPage() {
         authMethods: ['local'],
         enabled: true,
         active: true
-      });
+      };
+      setUser(defaultUser);
+      setInitialData(defaultUser);
       setLoading(false);
       setError(null); // Clear any previous errors
     } else {
@@ -56,10 +64,9 @@ function AdminUserEditPage() {
             throw new Error('User not found');
           }
 
-          setUser({
-            ...userData,
-            password: ''
-          });
+          const loadedUser = { ...userData, password: '' };
+          setUser(loadedUser);
+          setInitialData(loadedUser);
         } catch (err) {
           setError(err.message);
         } finally {
@@ -126,6 +133,7 @@ function AdminUserEditPage() {
         body: JSON.stringify(apiData)
       });
 
+      markSaved();
       // Success - navigate back to users list
       navigate('/admin/users');
     } catch (err) {
@@ -174,6 +182,13 @@ function AdminUserEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Users', href: '/admin/users' },
+            { label: isNewUser ? 'New User' : (user?.username ?? userId) }
+          ]}
+        />
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -265,6 +280,17 @@ function AdminUserEditPage() {
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

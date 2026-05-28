@@ -3,6 +3,9 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   fetchAdminWorkflow,
   createAdminWorkflow,
@@ -36,6 +39,9 @@ function AdminWorkflowEditPage() {
 
   // Parsed workflow data for the metadata form fields
   const [workflowData, setWorkflowData] = useState(null);
+  const [initialData, setInitialData] = useState(null);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, workflowData);
 
   /**
    * Returns a default empty workflow template for new workflows.
@@ -65,6 +71,7 @@ function AdminWorkflowEditPage() {
     } else {
       const defaultWf = getDefaultWorkflow();
       setWorkflowData(defaultWf);
+      setInitialData(defaultWf);
       setJsonText(JSON.stringify(defaultWf, null, 2));
     }
   }, [id, isNewWorkflow]); // eslint-disable-line @eslint-react/exhaustive-deps
@@ -84,6 +91,7 @@ function AdminWorkflowEditPage() {
       }
 
       setWorkflowData(workflow);
+      setInitialData(workflow);
       setJsonText(JSON.stringify(workflow, null, 2));
     } catch (err) {
       console.error('Error loading workflow:', err);
@@ -196,6 +204,7 @@ function AdminWorkflowEditPage() {
         await updateAdminWorkflow(id, dataToSave);
       }
 
+      markSaved();
       navigate('/admin/workflows');
     } catch (err) {
       console.error('Error saving workflow:', err);
@@ -238,15 +247,22 @@ function AdminWorkflowEditPage() {
   return (
     <div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Workflows', href: '/admin/workflows' },
+            { label: isNewWorkflow ? 'New Workflow' : (workflowData?.name?.en ?? id) }
+          ]}
+        />
         {/* Header */}
         <div className="md:flex md:items-center md:justify-between mb-6">
           <div className="flex-1 min-w-0">
-            <h1 className="text-2xl font-semibold text-gray-900">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
               {isNewWorkflow
                 ? t('admin.workflows.createNew', 'Create New Workflow')
                 : t('admin.workflows.editWorkflow', 'Edit Workflow')}
             </h1>
-            <p className="mt-1 text-sm text-gray-500">
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
               {isNewWorkflow
                 ? t('admin.workflows.createDescription', 'Create a new agentic workflow definition')
                 : t(
@@ -260,7 +276,7 @@ function AdminWorkflowEditPage() {
               <button
                 onClick={handleDelete}
                 disabled={saving}
-                className="inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                className="inline-flex items-center px-4 py-2 border border-red-300 dark:border-red-700 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
               >
                 <Icon name="trash" className="h-4 w-4 mr-2" />
                 {t('common.delete', 'Delete')}
@@ -269,7 +285,7 @@ function AdminWorkflowEditPage() {
             {!isNewWorkflow && (
               <button
                 onClick={() => navigate(`/admin/workflows/${id}/edit`)}
-                className="inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-white hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="inline-flex items-center px-4 py-2 border border-indigo-300 dark:border-indigo-700 rounded-md shadow-sm text-sm font-medium text-indigo-700 dark:text-indigo-400 bg-white dark:bg-gray-800 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 <Icon name="edit" className="h-4 w-4 mr-2" />
                 {t('admin.workflows.openVisualEditor', 'Open visual editor')}
@@ -277,7 +293,7 @@ function AdminWorkflowEditPage() {
             )}
             <button
               onClick={() => navigate('/admin/workflows')}
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               <Icon name="arrow-left" className="h-4 w-4 mr-2" />
               {t('common.back', 'Back')}
@@ -287,12 +303,12 @@ function AdminWorkflowEditPage() {
 
         {/* Error display */}
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 rounded-md p-4">
+          <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4">
             <div className="flex">
               <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800">{t('common.error', 'Error')}</h3>
-                <p className="mt-1 text-sm text-red-700">{error}</p>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">{t('common.error', 'Error')}</h3>
+                <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
             </div>
           </div>
@@ -301,14 +317,14 @@ function AdminWorkflowEditPage() {
         {workflowData && (
           <>
             {/* Workflow Metadata Section */}
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-4">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
                 {t('admin.workflows.metadata', 'Workflow Metadata')}
               </h2>
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 {/* ID Field */}
                 <div>
-                  <label htmlFor="workflow-id" className="block text-sm font-medium text-gray-700">
+                  <label htmlFor="workflow-id" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                     {t('admin.workflows.field.id', 'Workflow ID')}
                   </label>
                   <input
@@ -317,11 +333,11 @@ function AdminWorkflowEditPage() {
                     value={workflowData.id || ''}
                     onChange={e => handleMetadataChange('id', e.target.value)}
                     disabled={!isNewWorkflow}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm disabled:bg-gray-100 dark:disabled:bg-gray-600 disabled:cursor-not-allowed"
                     placeholder="my-workflow"
                   />
                   {!isNewWorkflow && (
-                    <p className="mt-1 text-xs text-gray-500">
+                    <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                       {t(
                         'admin.workflows.idReadOnly',
                         'Workflow ID cannot be changed after creation'
@@ -334,7 +350,7 @@ function AdminWorkflowEditPage() {
                 <div>
                   <label
                     htmlFor="workflow-version"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.workflows.field.version', 'Version')}
                   </label>
@@ -343,7 +359,7 @@ function AdminWorkflowEditPage() {
                     id="workflow-version"
                     value={workflowData.version || ''}
                     onChange={e => handleMetadataChange('version', e.target.value)}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full border border-gray-300 dark:border-gray-600 rounded-md shadow-sm py-2 px-3 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
                     placeholder="1.0.0"
                   />
                 </div>
@@ -377,7 +393,7 @@ function AdminWorkflowEditPage() {
                 <div className="sm:col-span-2">
                   <label
                     htmlFor="maxExecutionTime"
-                    className="block text-sm font-medium text-gray-700"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
                   >
                     {t('admin.workflows.maxExecutionTime', 'Max execution time (seconds)')}
                   </label>
@@ -392,9 +408,9 @@ function AdminWorkflowEditPage() {
                       const ms = Math.min(seconds * 1000, 3600000);
                       handleMetadataChange('config.maxExecutionTime', ms);
                     }}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    className="mt-1 block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
                     {t(
                       'admin.workflows.maxExecutionTimeHelp',
                       'Workflow is cancelled if it runs longer than this. Default 300s (5min), max 3600s (1h).'
@@ -409,7 +425,7 @@ function AdminWorkflowEditPage() {
                       type="button"
                       onClick={() => handleMetadataChange('enabled', !workflowData.enabled)}
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        workflowData.enabled !== false ? 'bg-indigo-600' : 'bg-gray-200'
+                        workflowData.enabled !== false ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
                       }`}
                       role="switch"
                       aria-checked={workflowData.enabled !== false}
@@ -420,7 +436,7 @@ function AdminWorkflowEditPage() {
                         }`}
                       />
                     </button>
-                    <span className="ml-3 text-sm font-medium text-gray-700">
+                    <span className="ml-3 text-sm font-medium text-gray-700 dark:text-gray-300">
                       {workflowData.enabled !== false
                         ? t('admin.workflows.enabled', 'Enabled')
                         : t('admin.workflows.disabled', 'Disabled')}
@@ -431,11 +447,11 @@ function AdminWorkflowEditPage() {
             </div>
 
             {/* JSON Editor Section */}
-            <div className="bg-white shadow rounded-lg p-6 mb-6">
-              <h2 className="text-lg font-medium text-gray-900 mb-2">
+            <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6 border border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
                 {t('admin.workflows.jsonEditor', 'JSON Editor')}
               </h2>
-              <p className="text-sm text-gray-500 mb-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                 {t(
                   'admin.workflows.jsonEditorHelp',
                   'Edit the complete workflow configuration as JSON. Changes here will override the metadata fields above.'
@@ -443,11 +459,11 @@ function AdminWorkflowEditPage() {
               </p>
 
               {jsonError && (
-                <div className="mb-4 bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-md p-3">
                   <div className="flex">
                     <Icon name="exclamation-triangle" className="h-4 w-4 text-yellow-400 mt-0.5" />
                     <div className="ml-2">
-                      <p className="text-sm text-yellow-800">
+                      <p className="text-sm text-yellow-800 dark:text-yellow-300">
                         {t('admin.workflows.jsonValidationError', 'JSON Validation Error:')}{' '}
                         {jsonError}
                       </p>
@@ -460,8 +476,8 @@ function AdminWorkflowEditPage() {
                 value={jsonText}
                 onChange={e => handleJsonChange(e.target.value)}
                 rows={25}
-                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm ${
-                  jsonError ? 'border-yellow-300 bg-yellow-50' : 'border-gray-300'
+                className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 ${
+                  jsonError ? 'border-yellow-300 dark:border-yellow-700' : 'border-gray-300 dark:border-gray-600'
                 }`}
                 style={{ fontFamily: 'monospace', tabSize: 2 }}
                 spellCheck={false}
@@ -472,7 +488,7 @@ function AdminWorkflowEditPage() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => navigate('/admin/workflows')}
-                className="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 {t('common.cancel', 'Cancel')}
               </button>
@@ -497,6 +513,17 @@ function AdminWorkflowEditPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

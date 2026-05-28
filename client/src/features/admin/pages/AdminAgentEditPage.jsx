@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import IconPicker from '../../../shared/components/IconPicker';
 import ToolsSelector from '../../../shared/components/ToolsSelector';
@@ -92,12 +95,15 @@ export default function AdminAgentEditPage() {
   const isNew = !profileId || profileId === 'new';
 
   const [profile, setProfile] = useState(BLANK_PROFILE);
+  const [initialData, setInitialData] = useState(isNew ? BLANK_PROFILE : null);
   const [models, setModels] = useState([]);
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(!isNew);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [mode, setMode] = useState('form');
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, profile);
 
   useEffect(() => {
     (async () => {
@@ -121,7 +127,9 @@ export default function AdminAgentEditPage() {
         // Merge BLANK_PROFILE defaults with loaded so newly-added fields
         // (system, preferredModel, etc.) have sensible initial values when
         // editing an older profile.
-        setProfile({ ...BLANK_PROFILE, ...loaded });
+        const mergedProfile = { ...BLANK_PROFILE, ...loaded };
+        setProfile(mergedProfile);
+        setInitialData(mergedProfile);
       } catch (err) {
         setError(err.message);
       } finally {
@@ -253,6 +261,7 @@ export default function AdminAgentEditPage() {
       } else {
         await updateAgentProfile(profileId, payload);
       }
+      markSaved();
       navigate('/admin/agents');
     } catch (err) {
       setError(err?.response?.data?.message || err.message);
@@ -272,6 +281,13 @@ export default function AdminAgentEditPage() {
   return (
     <div className="bg-gray-50 min-h-screen dark:bg-gray-900">
       <div className="max-w-4xl mx-auto py-8 px-4">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Agents', href: '/admin/agents' },
+            { label: isNew ? 'New Agent' : (profile?.name?.en ?? profileId) }
+          ]}
+        />
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {isNew
@@ -1026,6 +1042,17 @@ export default function AdminAgentEditPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

@@ -9,10 +9,12 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import { fetchAdminExecutions, cancelAdminExecution } from '../../../api/adminApi';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 /**
  * Auto-refresh polling interval in milliseconds (5 seconds)
@@ -115,10 +117,11 @@ function AdminWorkflowExecutionsPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [cancellingId, setCancellingId] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   /** @type {React.MutableRefObject<NodeJS.Timeout|null>} */
   const pollTimerRef = useRef(null);
@@ -215,29 +218,30 @@ function AdminWorkflowExecutionsPage() {
    * @param {Event} e - Click event
    * @param {string} executionId - The ID of the execution to cancel
    */
-  const handleCancel = async (e, executionId) => {
+  const handleCancel = (e, executionId) => {
     e.stopPropagation();
-
-    const confirmed = window.confirm(
-      t('admin.workflowExecutions.cancelConfirm', 'Are you sure you want to cancel this execution?')
-    );
-    if (!confirmed) return;
-
-    try {
-      setCancellingId(executionId);
-      await cancelAdminExecution(executionId);
-      // Refresh the list after cancellation
-      await loadExecutions(false);
-    } catch (err) {
-      console.error('Error cancelling execution:', err);
-      setError(
-        t('admin.workflowExecutions.cancelError', 'Failed to cancel execution: {{message}}', {
-          message: err.message
-        })
-      );
-    } finally {
-      setCancellingId(null);
-    }
+    setConfirmDialog({
+      title: t('admin.workflowExecutions.cancelTitle', 'Cancel Execution'),
+      message: t('admin.workflowExecutions.cancelConfirm', 'Are you sure you want to cancel this execution?'),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          setCancellingId(executionId);
+          await cancelAdminExecution(executionId);
+          await loadExecutions(false);
+        } catch (err) {
+          console.error('Error cancelling execution:', err);
+          setError(
+            t('admin.workflowExecutions.cancelError', 'Failed to cancel execution: {{message}}', {
+              message: err.message
+            })
+          );
+        } finally {
+          setCancellingId(null);
+        }
+      }
+    });
   };
 
   /**
@@ -626,6 +630,14 @@ function AdminWorkflowExecutionsPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

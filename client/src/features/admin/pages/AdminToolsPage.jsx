@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
@@ -12,9 +13,9 @@ function AdminToolsPage() {
   const [tools, setTools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
-  const [filterType, setFilterType] = useState('all'); // all, regular, special, multi-function
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
+  const [filterType, setFilterType] = useFilterState('type', 'all');
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {

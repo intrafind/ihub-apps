@@ -1,19 +1,24 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
+import { useFilterState } from '../hooks/useFilterState';
 
 function AdminUsersPage() {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [users, setUsers] = useState([]);
   const [message, setMessage] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [authMethodFilter, setAuthMethodFilter] = useState('all');
-  const [groupFilter, setGroupFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [lastActiveDaysFilter, setLastActiveDaysFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [authMethodFilter, setAuthMethodFilter] = useFilterState('auth', 'all');
+  const [groupFilter, setGroupFilter] = useFilterState('group', 'all');
+  const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
+  const [lastActiveDaysFilter, setLastActiveDaysFilter] = useFilterState('days', 'all');
   const [sortColumn, setSortColumn] = useState('name');
   const [sortDirection, setSortDirection] = useState('asc');
 
@@ -39,28 +44,30 @@ function AdminUsersPage() {
     }
   };
 
-  const handleDeleteUser = async userId => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/auth/users/${userId}`, {
-        method: 'DELETE'
-      });
-
-      // Axios returns successful responses directly, errors are thrown
-      setMessage({
-        type: 'success',
-        text: 'User deleted successfully!'
-      });
-      loadUsers();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to delete user: ${error.message}`
-      });
-    }
+  const handleDeleteUser = userId => {
+    setConfirmDialog({
+      title: t('admin.users.deleteTitle', 'Delete User'),
+      message: t('admin.users.deleteConfirm', 'Are you sure you want to delete this user?'),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await makeAdminApiCall(`/admin/auth/users/${userId}`, {
+            method: 'DELETE'
+          });
+          setMessage({
+            type: 'success',
+            text: 'User deleted successfully!'
+          });
+          loadUsers();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `Failed to delete user: ${error.message}`
+          });
+        }
+      }
+    });
   };
 
   const handleToggleUserStatus = async user => {
@@ -195,8 +202,8 @@ function AdminUsersPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -586,6 +593,14 @@ function AdminUsersPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

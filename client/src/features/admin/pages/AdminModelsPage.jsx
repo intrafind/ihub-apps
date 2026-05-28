@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
 import ModelDetailsPopup from '../../../shared/components/ModelDetailsPopup';
 import { makeAdminApiCall, toggleModels } from '../../../api/adminApi';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
+import AdminEmptyState from '../components/AdminEmptyState';
 
 function AdminModelsPage() {
   const { t, i18n } = useTranslation();
@@ -13,8 +16,8 @@ function AdminModelsPage() {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [testingModel, setTestingModel] = useState(null);
   const [testResults, setTestResults] = useState({});
   const [selectedModel, setSelectedModel] = useState(null);
@@ -230,8 +233,8 @@ function AdminModelsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -539,7 +542,7 @@ function AdminModelsPage() {
                                           t('admin.models.test.failed', 'Test Failed')}
                                       </div>
                                       {testResults[model.id].error && (
-                                        <div className="text-sm text-gray-700 mt-1">
+                                        <div className="text-sm text-gray-700 dark:text-gray-300 mt-1">
                                           {testResults[model.id].error}
                                         </div>
                                       )}
@@ -573,15 +576,11 @@ function AdminModelsPage() {
         </div>
 
         {filteredModels.length === 0 && (
-          <div className="text-center py-12">
-            <Icon name="cpu-chip" className="mx-auto h-12 w-12 text-gray-400" />
-            <h3 className="mt-2 text-sm font-medium text-gray-900">
-              {t('admin.models.noModels', 'No models found')}
-            </h3>
-            <p className="mt-1 text-sm text-gray-500">
-              {t('admin.models.noModelsDesc', 'Get started by creating a new model.')}
-            </p>
-            <div className="mt-6">
+          <AdminEmptyState
+            icon="cpu-chip"
+            title={t('admin.models.noModels', 'No models found')}
+            description={t('admin.models.noModelsDesc', 'Get started by creating a new model.')}
+            action={
               <button
                 onClick={() => navigate('/admin/models/new')}
                 className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -589,8 +588,8 @@ function AdminModelsPage() {
                 <Icon name="plus" className="h-4 w-4 mr-2" />
                 {t('admin.models.addNew', 'Add New Model')}
               </button>
-            </div>
-          </div>
+            }
+          />
         )}
 
         {/* Model Details Popup */}

@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next';
 import SourceConfigForm from '../components/SourceConfigForm';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminSourceEditPage() {
   const { t } = useTranslation();
@@ -12,12 +16,15 @@ function AdminSourceEditPage() {
   const isEditing = id !== 'new';
 
   const [source, setSource] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [testResult, setTestResult] = useState(null);
   const [testing, setTesting] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, source);
 
   useEffect(() => {
     const loadSourceData = async () => {
@@ -27,6 +34,7 @@ function AdminSourceEditPage() {
           setError(null);
           const response = await makeAdminApiCall(`/admin/sources/${id}`);
           setSource(response.data);
+          setInitialData(response.data);
         } catch (err) {
           console.error('Failed to load source:', err);
           setError(err.message || 'Failed to load source');
@@ -47,7 +55,7 @@ function AdminSourceEditPage() {
         }
       } else {
         // Create new source with default values
-        setSource({
+        const defaultSource = {
           id: '',
           name: { en: '' },
           description: { en: '' },
@@ -57,26 +65,15 @@ function AdminSourceEditPage() {
           category: '',
           tags: [],
           config: {}
-        });
+        };
+        setSource(defaultSource);
+        setInitialData(defaultSource);
         setLoading(false);
       }
     };
 
     loadSourceData();
   }, [id, isEditing]);
-
-  // Warn about unsaved changes when leaving
-  useEffect(() => {
-    const handleBeforeUnload = e => {
-      if (hasUnsavedChanges) {
-        e.preventDefault();
-        e.returnValue = '';
-      }
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [hasUnsavedChanges]);
 
   const handleSave = async sourceData => {
     try {
@@ -143,7 +140,7 @@ function AdminSourceEditPage() {
         }
       }
 
-      setHasUnsavedChanges(false);
+      markSaved();
       navigate('/admin/sources');
     } catch (err) {
       console.error('Failed to save source:', err);
@@ -220,7 +217,6 @@ function AdminSourceEditPage() {
 
   const handleFormChange = newSource => {
     setSource(newSource);
-    setHasUnsavedChanges(true);
     setTestResult(null); // Clear test results when form changes
   };
 
@@ -268,6 +264,13 @@ function AdminSourceEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto py-6 px-4">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Sources', href: '/admin/sources' },
+            { label: isEditing ? (source?.name?.en ?? id) : 'New Source' }
+          ]}
+        />
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
@@ -295,6 +298,15 @@ function AdminSourceEditPage() {
             </div>
 
             <div className="flex items-center space-x-3">
+              {id !== 'new' && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                >
+                  History
+                </button>
+              )}
               {isEditing && (
                 <button
                   onClick={handleTestConnection}
@@ -401,6 +413,23 @@ function AdminSourceEditPage() {
           )}
         </div>
       </div>
+      <ChangeHistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        resource="source"
+        resourceId={id}
+      />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

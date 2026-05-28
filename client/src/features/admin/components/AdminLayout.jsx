@@ -1,11 +1,15 @@
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAdminKeyboardShortcuts } from '../hooks/useAdminKeyboardShortcuts';
 import { Bars3Icon } from '@heroicons/react/24/outline';
 import { useAdminAuth } from '../hooks/useAdminAuth';
 import { useAuth } from '../../../shared/contexts/AuthContext';
 import Icon from '../../../shared/components/Icon';
 import { buildPath } from '../../../utils/runtimeBasePath';
 import AdminSidebar from './AdminSidebar';
+import AdminCommandPalette from './AdminCommandPalette';
+import AdminShortcutsModal from './AdminShortcutsModal';
 import { SidebarProvider, useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
@@ -36,11 +40,24 @@ function AdminLayoutInner() {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
   const featureFlags = useFeatureFlags();
+  const location = useLocation();
+  const mainRef = useRef(null);
+  const { showCheatsheet, setShowCheatsheet } = useAdminKeyboardShortcuts();
 
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
   const sections = getAdminNavSections({ t, showAdminPage, featureFlags });
+
+  // Note: content-admin filtering is handled in AdminSidebar;
+  // we just need to provide all section IDs to SidebarProvider
   const sectionIds = sections.map(s => s.id);
+
+  // Scroll main content to top on route change
+  useEffect(() => {
+    if (mainRef.current) {
+      mainRef.current.scrollTop = 0;
+    }
+  }, [location.pathname]);
 
   return (
     <SidebarProvider sectionIds={sectionIds}>
@@ -58,6 +75,7 @@ function AdminLayoutInner() {
         <AdminSidebar />
 
         <main
+          ref={mainRef}
           id="admin-main-content"
           className="flex-1 overflow-y-auto bg-gray-50 dark:bg-gray-950 focus:outline-none"
           tabIndex={-1}
@@ -65,6 +83,9 @@ function AdminLayoutInner() {
           <Outlet />
         </main>
       </div>
+
+      <AdminCommandPalette />
+      <AdminShortcutsModal isOpen={showCheatsheet} onClose={() => setShowCheatsheet(false)} />
     </SidebarProvider>
   );
 }

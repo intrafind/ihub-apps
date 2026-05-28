@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import {
@@ -26,8 +27,8 @@ function AdminSkillsPage() {
   const [skills, setSkills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEnabled, setFilterEnabled] = useState('all'); // all | enabled | disabled
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {

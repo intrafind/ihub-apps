@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import GroupFormEditor from '../components/GroupFormEditor';
 import { makeAdminApiCall } from '../../../api/adminApi';
@@ -13,18 +16,21 @@ function AdminGroupEditPage() {
   const { groupId } = useParams();
   const navigate = useNavigate();
   const [group, setGroup] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [resources, setResources] = useState({ apps: [], models: [], prompts: [] });
   const [jsonSchema, setJsonSchema] = useState(null);
 
+  const { blocker, markSaved } = useUnsavedChanges(initialData, group);
+
   useEffect(() => {
     loadResources();
     loadSchema();
     if (groupId === 'new') {
       // Initialize new group
-      setGroup({
+      const defaultGroup = {
         id: '',
         name: '',
         description: '',
@@ -36,7 +42,9 @@ function AdminGroupEditPage() {
         },
         mappings: [],
         enabled: true
-      });
+      };
+      setGroup(defaultGroup);
+      setInitialData(defaultGroup);
       setLoading(false);
     } else {
       loadGroup();
@@ -74,6 +82,7 @@ function AdminGroupEditPage() {
       }
 
       setGroup(groupData);
+      setInitialData(groupData);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -102,6 +111,7 @@ function AdminGroupEditPage() {
         body: JSON.stringify(data)
       });
 
+      markSaved();
       // Success - axios doesn't have response.ok, successful responses are returned directly
       navigate('/admin/groups');
     } catch (err) {
@@ -150,6 +160,13 @@ function AdminGroupEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Groups', href: '/admin/groups' },
+            { label: groupId === 'new' ? 'New Group' : (group?.name ?? groupId) }
+          ]}
+        />
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -244,6 +261,17 @@ function AdminGroupEditPage() {
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

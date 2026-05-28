@@ -1,10 +1,12 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { useFilterState } from '../hooks/useFilterState';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ShortLinkDetailsPopup from '../../../shared/components/ShortLinkDetailsPopup';
 import { useClipboard } from '../../../shared/hooks/useClipboard';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminShortLinks() {
   const { t } = useTranslation();
@@ -13,13 +15,14 @@ function AdminShortLinks() {
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [appIdFilter, setAppIdFilter] = useState('');
-  const [userFilter, setUserFilter] = useState('');
+  const [appIdFilter, setAppIdFilter] = useFilterState('app', '');
+  const [userFilter, setUserFilter] = useFilterState('user', '');
   const [selectedLink, setSelectedLink] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
   const [sortField, setSortField] = useState('createdAt');
   const [sortDir, setSortDir] = useState('desc');
   const [copiedLink, setCopiedLink] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const loadLinks = useCallback(async () => {
     try {
@@ -41,14 +44,21 @@ function AdminShortLinks() {
     loadLinks();
   }, [loadLinks]);
 
-  const handleDelete = async code => {
-    if (!window.confirm(t('admin.shortlinks.deleteConfirm', 'Delete this link?'))) return;
-    try {
-      await makeAdminApiCall(`/shortlinks/${code}`, { method: 'DELETE' });
-      setLinks(l => l.filter(link => link.code !== code));
-    } catch (e) {
-      setError(e.message);
-    }
+  const handleDelete = code => {
+    setConfirmDialog({
+      title: t('admin.shortlinks.deleteTitle', 'Delete Short Link'),
+      message: t('admin.shortlinks.deleteConfirm', 'Delete this link?'),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await makeAdminApiCall(`/shortlinks/${code}`, { method: 'DELETE' });
+          setLinks(l => l.filter(link => link.code !== code));
+        } catch (e) {
+          setError(e.message);
+        }
+      }
+    });
   };
 
   const handleRowClick = link => {
@@ -379,6 +389,14 @@ function AdminShortLinks() {
         link={selectedLink}
         isOpen={showDetails}
         onClose={() => setShowDetails(false)}
+      />
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
       />
     </>
   );

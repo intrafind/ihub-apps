@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
 import Icon from '../../../shared/components/Icon';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   fetchAdminSkillDetail,
   updateSkill,
@@ -43,6 +46,9 @@ function AdminSkillEditPage() {
   const [overrides, setOverrides] = useState({
     description: ''
   });
+  const [initialOverrides, setInitialOverrides] = useState(null);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialOverrides, overrides);
 
   /** Active tab for organizing content sections. */
   const [activeTab, setActiveTab] = useState('overview'); // overview | files | config
@@ -66,9 +72,11 @@ function AdminSkillEditPage() {
       setSkill(data);
 
       // Pre-populate override fields from existing config overrides
-      setOverrides({
+      const loadedOverrides = {
         description: data.configOverrides?.description || data.description || ''
-      });
+      };
+      setOverrides(loadedOverrides);
+      setInitialOverrides(loadedOverrides);
     } catch (err) {
       console.error('Error loading skill:', err);
       setError(err.message);
@@ -103,6 +111,7 @@ function AdminSkillEditPage() {
       setError(null);
       setSuccessMessage(null);
       await updateSkill(skillName, { configOverrides: overrides });
+      markSaved();
       setSuccessMessage(t('admin.skills.saveSuccess', 'Skill configuration saved successfully'));
       await loadSkill();
     } catch (err) {
@@ -224,6 +233,13 @@ function AdminSkillEditPage() {
   return (
     <div>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Skills', href: '/admin/skills' },
+            { label: skill?.displayName ?? skill?.name ?? skillName }
+          ]}
+        />
         {/* Page header */}
         <div className="md:flex md:items-center md:justify-between mb-6">
           <div className="flex-1 min-w-0">
@@ -649,6 +665,17 @@ function AdminSkillEditPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

@@ -4,6 +4,10 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import ToolFormEditor from '../components/ToolFormEditor';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   fetchAdminTools,
   createTool,
@@ -20,7 +24,7 @@ function AdminToolEditPage() {
   const location = useLocation();
   const isNewTool = toolId === 'new';
 
-  const [toolData, setToolData] = useState({
+  const defaultToolData = {
     id: '',
     name: { en: '' },
     description: { en: '' },
@@ -35,13 +39,19 @@ function AdminToolEditPage() {
       required: []
     },
     functions: {} // Support for multi-function tools
-  });
+  };
+
+  const [toolData, setToolData] = useState(defaultToolData);
+  const [initialData, setInitialData] = useState(isNewTool ? defaultToolData : null);
 
   const [scriptContent, setScriptContent] = useState('');
   const [loading, setLoading] = useState(!isNewTool);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('config'); // config or script
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, toolData);
 
   useEffect(() => {
     if (isNewTool && location.state?.templateTool) {
@@ -75,7 +85,7 @@ function AdminToolEditPage() {
       }
 
       // Ensure proper structure
-      setToolData({
+      const loadedToolData = {
         ...tool,
         name: tool.name || { en: '' },
         description: tool.description || { en: '' },
@@ -85,7 +95,9 @@ function AdminToolEditPage() {
         provider: tool.provider || '',
         parameters: tool.parameters || { type: 'object', properties: {}, required: [] },
         functions: tool.functions || {}
-      });
+      };
+      setToolData(loadedToolData);
+      setInitialData(loadedToolData);
 
       // Load script if available
       if (tool.script) {
@@ -139,6 +151,7 @@ function AdminToolEditPage() {
         await updateToolScript(toolToSave.id, scriptContent);
       }
 
+      markSaved();
       navigate('/admin/tools');
     } catch (err) {
       console.error('Error saving tool config:', err);
@@ -184,6 +197,13 @@ function AdminToolEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Tools', href: '/admin/tools' },
+            { label: isNewTool ? 'New Tool' : (toolData?.name?.en ?? toolId) }
+          ]}
+        />
         <div className="md:flex md:items-center md:justify-between mb-6">
           <div className="flex-1 min-w-0">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
@@ -197,7 +217,17 @@ function AdminToolEditPage() {
                 : t('admin.tools.editDescription', 'Edit tool configuration and script')}
             </p>
           </div>
-          <div className="mt-4 flex md:mt-0 md:ml-4">
+          <div className="mt-4 flex space-x-3 md:mt-0 md:ml-4">
+            {!isNewTool && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="clock" className="h-4 w-4 mr-2" />
+                {t('admin.tools.history', 'History')}
+              </button>
+            )}
             <button
               onClick={() => navigate('/admin/tools')}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -362,6 +392,24 @@ function AdminToolEditPage() {
           </div>
         )}
       </div>
+
+      <ChangeHistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        resource="tool"
+        resourceId={toolId}
+      />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

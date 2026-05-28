@@ -2,6 +2,9 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
@@ -23,6 +26,7 @@ function AdminOAuthClientEditPage() {
   const [availablePrompts, setAvailablePrompts] = useState([]);
   const [redirectUriInput, setRedirectUriInput] = useState('');
   const [postLogoutUriInput, setPostLogoutUriInput] = useState('');
+  const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -41,10 +45,28 @@ function AdminOAuthClientEditPage() {
     trusted: false
   });
 
+  const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
+
   useEffect(() => {
     loadAvailableOptions();
     if (!isNew) {
       loadClient();
+    } else {
+      setInitialData({
+        name: '',
+        description: '',
+        allowedApps: ['*'],
+        allowedModels: ['*'],
+        allowedPrompts: ['*'],
+        tokenExpirationMinutes: 60,
+        active: true,
+        clientType: 'confidential',
+        grantTypes: ['client_credentials'],
+        redirectUris: [],
+        postLogoutRedirectUris: [],
+        consentRequired: true,
+        trusted: false
+      });
     }
     // eslint-disable-next-line @eslint-react/exhaustive-deps
   }, [clientId]);
@@ -86,7 +108,7 @@ function AdminOAuthClientEditPage() {
       const response = await makeAdminApiCall(`/admin/oauth/clients/${clientId}`);
       const data = response.data;
 
-      setFormData({
+      const loadedFormData = {
         name: data.client.name || '',
         description: data.client.description || '',
         allowedApps: data.client.allowedApps || [],
@@ -100,7 +122,9 @@ function AdminOAuthClientEditPage() {
         postLogoutRedirectUris: data.client.postLogoutRedirectUris || [],
         consentRequired: data.client.consentRequired !== false,
         trusted: data.client.trusted || false
-      });
+      };
+      setFormData(loadedFormData);
+      setInitialData(loadedFormData);
     } catch (error) {
       setMessage({
         type: 'error',
@@ -139,6 +163,7 @@ function AdminOAuthClientEditPage() {
           body: JSON.stringify(formData)
         });
 
+        markSaved();
         setMessage({
           type: 'success',
           text: t('admin.auth.oauth.updateSuccess', 'OAuth client updated successfully')
@@ -239,6 +264,7 @@ function AdminOAuthClientEditPage() {
 
   const handleModalClose = () => {
     setShowSecretModal(false);
+    markSaved();
     navigate('/admin/oauth/clients');
   };
 
@@ -253,6 +279,15 @@ function AdminOAuthClientEditPage() {
   return (
     <>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+          <AdminBreadcrumb
+            crumbs={[
+              { label: 'Admin', href: '/admin' },
+              { label: 'OAuth', href: '/admin/oauth/clients' },
+              { label: isNew ? 'New Client' : (formData?.name ?? clientId) }
+            ]}
+          />
+        </div>
         {/* Header */}
         <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -709,6 +744,17 @@ function AdminOAuthClientEditPage() {
           </form>
         </div>
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
 
       {/* Secret Modal */}
       {showSecretModal && (

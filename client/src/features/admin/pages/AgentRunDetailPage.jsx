@@ -100,7 +100,7 @@ export default function AgentRunDetailPage() {
   }
 
   if (loading && !run) {
-    return <div className="p-8">{t('common.loading', 'Loading…')}</div>;
+    return <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>;
   }
 
   const status = run?.status;
@@ -505,13 +505,13 @@ export default function AgentRunDetailPage() {
 
   return (
     <>
-      <div className="bg-gray-50 min-h-screen">
+      <div className="bg-gray-50 dark:bg-gray-950 min-h-screen">
         <div className="max-w-6xl mx-auto py-8 px-4">
           <div className="flex justify-between items-start mb-6 gap-4">
             <div className="min-w-0 flex-1">
-              <h1 className="text-2xl font-bold text-gray-900">{runTitle}</h1>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{runTitle}</h1>
               {showProgress && (
-                <div className="text-sm text-gray-500 mt-1" aria-live="polite">
+                <div className="text-sm text-gray-500 dark:text-gray-400 mt-1" aria-live="polite">
                   {t('admin.agents.runs.progress', '{{done}}/{{total}} tasks · {{elapsed}}', {
                     done: progressDone,
                     total: progressTotal,
@@ -519,36 +519,36 @@ export default function AgentRunDetailPage() {
                   })}
                 </div>
               )}
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-xs text-gray-600 dark:text-gray-400">
                 <span className="font-mono">{profileId}</span>
-                <span className="text-gray-300">·</span>
-                <span className="font-mono text-gray-400" title={runId}>
+                <span className="text-gray-300 dark:text-gray-600">·</span>
+                <span className="font-mono text-gray-400 dark:text-gray-500" title={runId}>
                   {runId.length > 18 ? `${runId.slice(0, 18)}…` : runId}
                 </span>
                 {triggeredBy?.userId && (
                   <>
-                    <span className="text-gray-300">·</span>
+                    <span className="text-gray-300 dark:text-gray-600">·</span>
                     <span>
                       triggered by{' '}
-                      <span className="font-medium text-gray-800">{triggeredBy.userId}</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200">{triggeredBy.userId}</span>
                       {triggeredBy.kind && (
-                        <span className="ml-1 text-gray-500">({triggeredBy.kind})</span>
+                        <span className="ml-1 text-gray-500 dark:text-gray-400">({triggeredBy.kind})</span>
                       )}
                     </span>
                   </>
                 )}
                 {typeof totalDurationMs === 'number' && (
                   <>
-                    <span className="text-gray-300">·</span>
+                    <span className="text-gray-300 dark:text-gray-600">·</span>
                     <span>
                       total{' '}
-                      <span className="font-medium text-gray-800">
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
                         {formatDuration(totalDurationMs)}
                       </span>
                     </span>
                   </>
                 )}
-                <span className="text-gray-300">·</span>
+                <span className="text-gray-300 dark:text-gray-600">·</span>
                 <span className="inline-flex items-center gap-1">
                   <span
                     className={`inline-block w-2 h-2 rounded-full ${
@@ -566,7 +566,7 @@ export default function AgentRunDetailPage() {
             <div className="flex gap-2 shrink-0">
               <button
                 onClick={() => navigate(-1)}
-                className="px-3 py-2 border bg-white rounded text-sm"
+                className="px-3 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded text-sm hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 Back
               </button>
@@ -582,17 +582,17 @@ export default function AgentRunDetailPage() {
           </div>
 
           {error && (
-            <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
               {error}
             </div>
           )}
           {actionError && (
-            <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
               {actionError}
             </div>
           )}
           {artifactsError && (
-            <div className="mb-3 p-3 bg-red-50 border border-red-200 text-red-800 rounded">
+            <div className="mb-3 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300 rounded">
               {t('admin.agents.runs.artifactsErrorPrefix', 'Artifacts: {{message}}', {
                 message: artifactsError
               })}
@@ -600,7 +600,7 @@ export default function AgentRunDetailPage() {
           )}
 
           {run?.data?._inboxEmpty === true && (
-            <div className="mb-6 p-4 bg-gray-50 border border-gray-200 rounded text-sm text-gray-700">
+            <div className="mb-6 p-4 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded text-sm text-gray-700 dark:text-gray-300">
               <span className="font-medium">No work to do.</span> The inbox was empty when this run
               started, so the planner and synthesizer were skipped. The next trigger will pick up
               new items.
@@ -608,25 +608,25 @@ export default function AgentRunDetailPage() {
           )}
 
           {isFailed && runErrors.length > 0 && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-300 rounded">
-              <h2 className="font-semibold text-red-900 mb-2">
+            <div className="mb-6 p-4 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded">
+              <h2 className="font-semibold text-red-900 dark:text-red-300 mb-2">
                 Run failed ({runErrors.length} error{runErrors.length === 1 ? '' : 's'})
               </h2>
-              <ul className="text-sm text-red-800 space-y-3">
+              <ul className="text-sm text-red-800 dark:text-red-300 space-y-3">
                 {runErrors.map((err, i) => (
                   <li
                     key={`${err.nodeId || 'err'}-${err.timestamp || i}`}
-                    className="border-l-2 border-red-400 pl-3"
+                    className="border-l-2 border-red-400 dark:border-red-600 pl-3"
                   >
                     {err.nodeId && (
-                      <div className="text-xs text-red-700 font-mono mb-0.5">
+                      <div className="text-xs text-red-700 dark:text-red-400 font-mono mb-0.5">
                         node: {err.nodeId}
-                        {err.code && <span className="ml-2 text-red-600">[{err.code}]</span>}
+                        {err.code && <span className="ml-2 text-red-600 dark:text-red-400">[{err.code}]</span>}
                       </div>
                     )}
                     <div>{err.message}</div>
                     {err.timestamp && (
-                      <div className="text-xs text-red-600 mt-0.5">
+                      <div className="text-xs text-red-600 dark:text-red-400 mt-0.5">
                         {new Date(err.timestamp).toLocaleString()}
                       </div>
                     )}
@@ -637,9 +637,9 @@ export default function AgentRunDetailPage() {
           )}
 
           {isPaused && pendingCheckpoint && (
-            <div className="mb-6 p-4 bg-yellow-50 border border-yellow-300 rounded">
-              <h2 className="font-semibold text-yellow-900 mb-2">⏸ Awaiting approval</h2>
-              <p className="text-sm text-yellow-800 mb-3">{pendingCheckpoint.message}</p>
+            <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
+              <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">⏸ Awaiting approval</h2>
+              <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">{pendingCheckpoint.message}</p>
               <div className="flex gap-2">
                 {(
                   pendingCheckpoint.options || [
@@ -650,12 +650,12 @@ export default function AgentRunDetailPage() {
                   <button
                     key={opt.value}
                     onClick={() => handleApprove(opt.value)}
-                    className={`px-3 py-2 text-sm rounded ${
+                    className={`px-3 py-2 text-sm rounded transition-colors ${
                       opt.value === 'approve' || opt.style === 'primary'
-                        ? 'bg-green-600 text-white'
+                        ? 'bg-green-600 hover:bg-green-700 text-white'
                         : opt.style === 'danger' || opt.value === 'reject'
-                          ? 'bg-red-600 text-white'
-                          : 'bg-gray-200 text-gray-800'
+                          ? 'bg-red-600 hover:bg-red-700 text-white'
+                          : 'bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 text-gray-800 dark:text-gray-200'
                     }`}
                   >
                     {opt.label || opt.value}
@@ -667,9 +667,9 @@ export default function AgentRunDetailPage() {
 
           <div className="grid grid-cols-1 gap-6">
             <div className="space-y-4">
-              <div className="bg-white border rounded p-4">
-                <h2 className="font-semibold mb-2">Status</h2>
-                <div className="text-sm">
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Status</h2>
+                <div className="text-sm text-gray-700 dark:text-gray-300">
                   <div>
                     Status: <span className="font-mono">{status}</span>
                   </div>
@@ -685,8 +685,8 @@ export default function AgentRunDetailPage() {
               </div>
 
               {currentInboxItem && (
-                <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2 flex items-center gap-2">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 flex items-center gap-2 text-gray-900 dark:text-gray-100">
                     Inbox item
                     {currentInboxItem._markedDone && (
                       <span className="text-xs font-normal px-2 py-0.5 bg-green-100 text-green-800 rounded">
@@ -710,10 +710,10 @@ export default function AgentRunDetailPage() {
                         {currentInboxItem.priority.toUpperCase()}
                       </span>
                     )}
-                    <p className="text-sm text-gray-900 flex-1">{currentInboxItem.text}</p>
+                    <p className="text-sm text-gray-900 dark:text-gray-100 flex-1">{currentInboxItem.text}</p>
                   </div>
                   {(inboxMeta?.inboxId || currentInboxItem.line != null) && (
-                    <div className="mt-2 text-xs text-gray-500 font-mono">
+                    <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono">
                       {inboxMeta?.inboxId && <span>inbox: {inboxMeta.inboxId}</span>}
                       {inboxMeta?.inboxId && currentInboxItem.line != null && (
                         <span className="mx-1">·</span>
@@ -724,14 +724,14 @@ export default function AgentRunDetailPage() {
                 </div>
               )}
 
-              <div className="bg-white border rounded p-4">
-                <h2 className="font-semibold mb-2">Steps ({unifiedTasks.length})</h2>
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Steps ({unifiedTasks.length})</h2>
                 {unifiedTasks.length === 0 ? (
-                  <p className="text-sm text-gray-500">No steps yet.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No steps yet.</p>
                 ) : (
                   <table className="min-w-full text-sm">
                     <thead>
-                      <tr className="text-xs text-gray-500 uppercase">
+                      <tr className="text-xs text-gray-500 dark:text-gray-400 uppercase">
                         <th className="text-left py-1 w-6"></th>
                         <th className="text-left py-1">Step</th>
                         <th className="text-left py-1">Source</th>
@@ -746,23 +746,23 @@ export default function AgentRunDetailPage() {
                           t.kind === 'dynamic' && currentTaskId && t.key === `dyn:${currentTaskId}`;
                         const statusColor =
                           t.status === 'done'
-                            ? 'text-green-700'
+                            ? 'text-green-700 dark:text-green-400'
                             : t.status === 'failed'
-                              ? 'text-red-700'
+                              ? 'text-red-700 dark:text-red-400'
                               : t.status === 'in_progress'
-                                ? 'text-blue-700'
-                                : 'text-gray-600';
+                                ? 'text-blue-700 dark:text-blue-400'
+                                : 'text-gray-600 dark:text-gray-400';
                         const isExpanded = expandedSteps.has(t.nodeId);
                         const hasDetails = !!t.log;
                         return (
                           <Fragment key={t.key}>
                             <tr
-                              className={`border-t align-top ${isCurrent ? 'bg-indigo-50' : ''} ${
-                                hasDetails ? 'cursor-pointer hover:bg-gray-50' : ''
+                              className={`border-t border-gray-100 dark:border-gray-700 align-top ${isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''} ${
+                                hasDetails ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''
                               }`}
                               onClick={hasDetails ? () => toggleStep(t.nodeId) : undefined}
                             >
-                              <td className="py-2 pr-1 text-xs text-gray-400 select-none">
+                              <td className="py-2 pr-1 text-xs text-gray-400 dark:text-gray-500 select-none">
                                 {hasDetails ? (isExpanded ? '▾' : '▸') : ''}
                               </td>
                               <td className="py-2 pr-3">
@@ -771,7 +771,7 @@ export default function AgentRunDetailPage() {
                                 )}
                                 <span className="font-medium">{t.title}</span>
                                 {t.description && (
-                                  <div className="text-xs text-gray-500 mt-0.5">
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                                     {t.description.length > 200
                                       ? `${t.description.slice(0, 200)}…`
                                       : t.description}
@@ -782,29 +782,29 @@ export default function AgentRunDetailPage() {
                                 <span
                                   className={`px-2 py-0.5 rounded ${
                                     t.kind === 'planner'
-                                      ? 'bg-purple-100 text-purple-800'
+                                      ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
                                       : t.kind === 'orchestrator'
-                                        ? 'bg-slate-100 text-slate-700'
+                                        ? 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
                                         : t.kind === 'agent'
-                                          ? 'bg-emerald-100 text-emerald-800'
-                                          : 'bg-orange-100 text-orange-800'
+                                          ? 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-300'
+                                          : 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-300'
                                   }`}
                                 >
                                   {t.kind}
                                 </span>
                               </td>
                               <td className={`py-2 pr-3 ${statusColor}`}>{t.status}</td>
-                              <td className="py-2 pr-3 text-xs text-gray-600 whitespace-nowrap">
+                              <td className="py-2 pr-3 text-xs text-gray-600 dark:text-gray-400 whitespace-nowrap">
                                 {t.timing?.startedAt ? formatTime(t.timing.startedAt) : '—'}
                               </td>
-                              <td className="py-2 text-xs text-gray-700 whitespace-nowrap">
+                              <td className="py-2 text-xs text-gray-700 dark:text-gray-300 whitespace-nowrap">
                                 {typeof t.timing?.durationMs === 'number'
                                   ? formatDuration(t.timing.durationMs)
                                   : '—'}
                               </td>
                             </tr>
                             {hasDetails && isExpanded && (
-                              <tr className="bg-gray-50/50">
+                              <tr className="bg-gray-50/50 dark:bg-gray-700/30">
                                 <td colSpan={6} className="px-0 pt-0 pb-2">
                                   <StepDetails log={t.log} />
                                 </td>
@@ -817,7 +817,7 @@ export default function AgentRunDetailPage() {
                   </table>
                 )}
                 {run?.data?.planCreated?.reasoning && (
-                  <p className="mt-3 text-xs text-gray-500 italic">
+                  <p className="mt-3 text-xs text-gray-500 dark:text-gray-400 italic">
                     Planner reasoning: {run.data.planCreated.reasoning}
                   </p>
                 )}
@@ -825,10 +825,10 @@ export default function AgentRunDetailPage() {
 
               {/* Artifacts come first under Tasks — the report is the
                   primary deliverable, citations are supporting evidence. */}
-              <div className="bg-white border rounded p-4">
-                <h2 className="font-semibold mb-2">Artifacts ({displayArtifacts.length})</h2>
+              <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Artifacts ({displayArtifacts.length})</h2>
                 {displayArtifacts.length === 0 ? (
-                  <p className="text-sm text-gray-500">No artifacts produced.</p>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">No artifacts produced.</p>
                 ) : (
                   <ul className="text-sm space-y-1">
                     {displayArtifacts.map((a, i) => (
@@ -836,7 +836,7 @@ export default function AgentRunDetailPage() {
                         <button
                           type="button"
                           onClick={() => setViewingArtifact(a.name)}
-                          className="text-indigo-600 hover:underline font-medium"
+                          className="text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
                           title="Open viewer"
                         >
                           {a.name}
@@ -858,10 +858,10 @@ export default function AgentRunDetailPage() {
                           }
                         />
                         {typeof a.bytes === 'number' && (
-                          <span className="text-xs text-gray-500">{a.bytes} bytes</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">{a.bytes} bytes</span>
                         )}
                         {a.writtenAt && (
-                          <span className="text-xs text-gray-400">
+                          <span className="text-xs text-gray-400 dark:text-gray-500">
                             {new Date(a.writtenAt).toLocaleTimeString()}
                           </span>
                         )}
@@ -872,9 +872,9 @@ export default function AgentRunDetailPage() {
               </div>
 
               {dedupedCitations.length > 0 && (
-                <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2">Citations ({dedupedCitations.length})</h2>
-                  <p className="text-xs text-gray-500 mb-2">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Citations ({dedupedCitations.length})</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     URLs the agent actually consulted during this run, captured from every search /
                     extract tool call. The synthesizer cites these by number in the final report.
                     Distinct from the profile's configured knowledge-base sources — citations are
@@ -885,26 +885,26 @@ export default function AgentRunDetailPage() {
                       ? dedupedCitations
                       : dedupedCitations.slice(0, CITATIONS_VISIBLE)
                     ).map(c => (
-                      <li key={c.url} className="text-gray-800">
+                      <li key={c.url} className="text-gray-800 dark:text-gray-200">
                         <a
                           href={c.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-indigo-600 hover:underline break-all"
+                          className="text-indigo-600 dark:text-indigo-400 hover:underline break-all"
                         >
                           {c.title || c.url}
                         </a>
                         {c.title && (
-                          <span className="text-xs text-gray-400 ml-2 break-all">{c.url}</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 break-all">{c.url}</span>
                         )}
                         {c.toolId && (
-                          <span className="text-xs text-gray-500 ml-2">
+                          <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
                             ({c.toolId}
                             {c.query ? `: "${c.query}"` : ''})
                           </span>
                         )}
                         {c.snippet && (
-                          <p className="text-xs text-gray-600 mt-0.5 ml-5">
+                          <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 ml-5">
                             {String(c.snippet).slice(0, 240)}
                           </p>
                         )}
@@ -915,7 +915,7 @@ export default function AgentRunDetailPage() {
                     <button
                       type="button"
                       onClick={() => setCitationsExpanded(v => !v)}
-                      className="mt-2 text-xs text-indigo-600 hover:underline"
+                      className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
                     >
                       {citationsExpanded
                         ? `Show less`
@@ -926,11 +926,11 @@ export default function AgentRunDetailPage() {
               )}
 
               {activatedSkillNames.length > 0 && (
-                <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
                     Activated skills ({activatedSkillNames.length})
                   </h2>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     Skills loaded into the agent's context during this run. The full SKILL.md body
                     of each activated skill is folded into the system prompt of every subsequent
                     prompt node.
@@ -939,28 +939,28 @@ export default function AgentRunDetailPage() {
                     {activatedSkillNames.map(name => {
                       const skill = activatedSkills[name] || {};
                       return (
-                        <li key={name} className="border-l-2 border-indigo-300 pl-2">
+                        <li key={name} className="border-l-2 border-indigo-300 dark:border-indigo-600 pl-2">
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-medium">{name}</span>
+                            <span className="font-mono font-medium text-gray-800 dark:text-gray-200">{name}</span>
                             <span
                               className={`text-xs px-2 py-0.5 rounded ${
                                 skill.activatedBy === 'planner'
-                                  ? 'bg-purple-100 text-purple-800'
+                                  ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-300'
                                   : skill.activatedBy === 'llm'
-                                    ? 'bg-blue-100 text-blue-800'
-                                    : 'bg-gray-100 text-gray-700'
+                                    ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300'
+                                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
                               }`}
                             >
                               {skill.activatedBy || 'unknown'}
                             </span>
                             {skill.activatedAt && (
-                              <span className="text-xs text-gray-400">
+                              <span className="text-xs text-gray-400 dark:text-gray-500">
                                 {new Date(skill.activatedAt).toLocaleTimeString()}
                               </span>
                             )}
                           </div>
                           {skill.description && (
-                            <p className="text-xs text-gray-600 mt-0.5">{skill.description}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{skill.description}</p>
                           )}
                         </li>
                       );
@@ -970,9 +970,9 @@ export default function AgentRunDetailPage() {
               )}
 
               {childExecutionIds.length > 0 && (
-                <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2">Child runs ({childExecutionIds.length})</h2>
-                  <p className="text-xs text-gray-500 mb-2">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Child runs ({childExecutionIds.length})</h2>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     Sub-workflow executions spawned by this run (one per planner decomposition).
                     Open one to see its per-task LLM history.
                   </p>
@@ -981,7 +981,7 @@ export default function AgentRunDetailPage() {
                       <li key={childId}>
                         <a
                           href={`/admin/agents/runs/${childId}`}
-                          className="text-indigo-600 hover:underline font-mono text-xs"
+                          className="text-indigo-600 dark:text-indigo-400 hover:underline font-mono text-xs"
                         >
                           {childId}
                         </a>
@@ -992,21 +992,21 @@ export default function AgentRunDetailPage() {
               )}
 
               {toolErrors.length > 0 && (
-                <div className="bg-white border rounded p-4">
-                  <h2 className="font-semibold mb-2 text-amber-800">
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+                  <h2 className="font-semibold mb-2 text-amber-800 dark:text-amber-400">
                     Tool issues ({toolErrors.length})
                   </h2>
-                  <p className="text-xs text-gray-500 mb-2">
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     The agent attempted to call tools it does not have access to. Each attempt was
                     returned to the model as a tool-error so it can self-correct.
                   </p>
                   <ul className="text-xs space-y-2">
                     {toolErrors.slice(-10).map((e, i) => (
-                      <li key={i} className="border-l-2 border-amber-300 pl-2">
+                      <li key={i} className="border-l-2 border-amber-300 dark:border-amber-600 pl-2">
                         <div>
-                          <span className="font-mono">{e.requestedName}</span>
+                          <span className="font-mono text-gray-800 dark:text-gray-200">{e.requestedName}</span>
                         </div>
-                        <div className="text-gray-500">
+                        <div className="text-gray-500 dark:text-gray-400">
                           available: {(e.availableTools || []).join(', ') || '(none)'}
                         </div>
                       </li>

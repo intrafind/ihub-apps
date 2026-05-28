@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { useFilterState } from '../hooks/useFilterState';
 import { useTranslation } from 'react-i18next';
 import { browseMarketplace, fetchMarketplaceRegistries } from '../../../api/adminApi';
 import MarketplaceItemCard from '../components/marketplace/MarketplaceItemCard';
@@ -29,11 +30,11 @@ function AdminMarketplacePage() {
   const [registries, setRegistries] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // Filter state
-  const [activeType, setActiveType] = useState('all');
-  const [search, setSearch] = useState('');
-  const [selectedRegistry, setSelectedRegistry] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  // Filter state (URL-persisted)
+  const [activeType, setActiveType] = useFilterState('type', 'all');
+  const [search, setSearch] = useFilterState('q', '');
+  const [selectedRegistry, setSelectedRegistry] = useFilterState('registry', '');
+  const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
   const [page, setPage] = useState(1);
 
   // Type badge counts derived from a full unfiltered fetch

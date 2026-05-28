@@ -7,12 +7,17 @@ import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import { fetchModels, fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminAppEditPage() {
   const { t } = useTranslation();
   const { appId } = useParams();
   const navigate = useNavigate();
   const [app, setApp] = useState(null);
+  const [initialData, setInitialData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -21,6 +26,9 @@ function AdminAppEditPage() {
   const [jsonSchema, setJsonSchema] = useState(null);
   const [editingMode, setEditingMode] = useState('form');
   const [validationState, setValidationState] = useState({ isValid: true, errors: [] });
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, app);
 
   useEffect(() => {
     // Load available models, UI config, and JSON schema
@@ -60,7 +68,7 @@ function AdminAppEditPage() {
   useEffect(() => {
     if (appId === 'new') {
       // Initialize new app
-      setApp({
+      const defaultApp = {
         id: '',
         type: 'chat',
         order: 0,
@@ -131,7 +139,9 @@ function AdminAppEditPage() {
             ]
           }
         }
-      });
+      };
+      setApp(defaultApp);
+      setInitialData(defaultApp);
       setLoading(false);
     } else {
       loadApp();
@@ -211,6 +221,7 @@ function AdminAppEditPage() {
       };
 
       setApp(appWithDefaults);
+      setInitialData(appWithDefaults);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -316,6 +327,7 @@ function AdminAppEditPage() {
         body: JSON.stringify(cleanedApp)
       });
 
+      markSaved();
       navigate('/admin/apps');
     } catch (err) {
       setError(err.message);
@@ -384,6 +396,13 @@ function AdminAppEditPage() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <AdminBreadcrumb
+        crumbs={[
+          { label: 'Admin', href: '/admin' },
+          { label: 'Apps', href: '/admin/apps' },
+          { label: appId === 'new' ? 'New App' : (app?.name?.en ?? appId) }
+        ]}
+      />
       <div className="sm:flex sm:items-center">
         <div className="sm:flex-auto">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
@@ -399,6 +418,16 @@ function AdminAppEditPage() {
         </div>
         <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
           <div className="flex space-x-3">
+            {appId !== 'new' && (
+              <button
+                type="button"
+                onClick={() => setHistoryOpen(true)}
+                className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+              >
+                <Icon name="clock" className="w-4 h-4 mr-2" />
+                {t('admin.apps.edit.history', 'History')}
+              </button>
+            )}
             {appId !== 'new' && (
               <button
                 type="button"
@@ -492,6 +521,24 @@ function AdminAppEditPage() {
           </button>
         </div>
       </form>
+
+      <ChangeHistoryDrawer
+        isOpen={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+        resource="app"
+        resourceId={appId}
+      />
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

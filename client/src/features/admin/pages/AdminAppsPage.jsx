@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { useFilterState } from '../hooks/useFilterState';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import AppDetailsPopup from '../../apps/components/AppDetailsPopup';
 import AppCreationWizard from '../../apps/components/AppCreationWizard';
@@ -8,6 +9,9 @@ import AppTemplateSelector from '../../apps/components/AppTemplateSelector';
 import Icon from '../../../shared/components/Icon';
 import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
+import AdminEmptyState from '../components/AdminEmptyState';
 
 function AdminAppsPage() {
   const { t, i18n } = useTranslation();
@@ -16,9 +20,9 @@ function AdminAppsPage() {
   const [apps, setApps] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
+  const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
   const [selectedApp, setSelectedApp] = useState(null);
   const [showAppDetails, setShowAppDetails] = useState(false);
   const [showCreationWizard, setShowCreationWizard] = useState(false);
@@ -26,6 +30,7 @@ function AdminAppsPage() {
   const [selectedTemplate, setSelectedTemplate] = useState(null);
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     loadApps();
@@ -88,23 +93,23 @@ function AdminAppsPage() {
     }
   };
 
-  const deleteApp = async appId => {
-    if (
-      !window.confirm(t('admin.apps.deleteConfirm', 'Are you sure you want to delete this app?'))
-    ) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/apps/${appId}`, {
-        method: 'DELETE'
-      });
-
-      // Remove the app from the local state
-      setApps(prevApps => prevApps.filter(app => app.id !== appId));
-    } catch (err) {
-      setError(err.message);
-    }
+  const deleteApp = appId => {
+    setConfirmDialog({
+      title: t('admin.apps.deleteTitle', 'Delete App'),
+      message: t('admin.apps.deleteConfirm', 'Are you sure you want to delete this app?'),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await makeAdminApiCall(`/admin/apps/${appId}`, {
+            method: 'DELETE'
+          });
+          setApps(prevApps => prevApps.filter(app => app.id !== appId));
+        } catch (err) {
+          setError(err.message);
+        }
+      }
+    });
   };
 
   // Filter apps based on search term, enabled status, and category
@@ -234,10 +239,7 @@ function AdminAppsPage() {
   if (loading) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">{t('admin.apps.loading', 'Loading apps...')}</p>
-        </div>
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -637,27 +639,20 @@ function AdminAppsPage() {
       </div>
 
       {filteredApps.length === 0 && (
-        <div className="text-center py-12">
-          <svg
-            className="mx-auto h-12 w-12 text-gray-400"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
-            />
-          </svg>
-          <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-            {t('admin.apps.noApps', 'No apps found')}
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t('admin.apps.noAppsDescription', 'Try adjusting your search or filter criteria.')}
-          </p>
-        </div>
+        <AdminEmptyState
+          icon="squares-2x2"
+          title={t('admin.apps.noApps', 'No apps found')}
+          description={t('admin.apps.noAppsDescription', 'Try adjusting your search or filter criteria.')}
+          action={
+            <button
+              onClick={handleCreateApp}
+              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+            >
+              <Icon name="plus" className="h-4 w-4 mr-2" />
+              {t('admin.apps.createApp', 'Create App')}
+            </button>
+          }
+        />
       )}
 
       {/* App Details Popup */}
@@ -679,6 +674,14 @@ function AdminAppsPage() {
       {showCreationWizard && (
         <AppCreationWizard templateApp={selectedTemplate} onClose={handleWizardClose} />
       )}
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

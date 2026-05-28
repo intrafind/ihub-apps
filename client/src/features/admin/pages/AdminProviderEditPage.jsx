@@ -4,6 +4,9 @@ import { useTranslation } from 'react-i18next';
 import { DEFAULT_LANGUAGE } from '../../../utils/localizeContent';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import Icon from '../../../shared/components/Icon';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminProviderEditPage() {
   const { t } = useTranslation();
@@ -17,6 +20,7 @@ function AdminProviderEditPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [initialData, setInitialData] = useState(null);
 
   const [formData, setFormData] = useState({
     id: '',
@@ -26,6 +30,8 @@ function AdminProviderEditPage() {
     apiKey: '',
     apiKeySet: false
   });
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, formData);
 
   useEffect(() => {
     loadProvider();
@@ -63,6 +69,7 @@ function AdminProviderEditPage() {
       }
 
       setFormData(formDataObj);
+      setInitialData(formDataObj);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -125,6 +132,7 @@ function AdminProviderEditPage() {
       });
 
       setSuccess(true);
+      markSaved();
 
       // Redirect after a short delay
       setTimeout(() => {
@@ -148,6 +156,13 @@ function AdminProviderEditPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Providers', href: '/admin/providers' },
+            { label: formData?.name?.en ?? providerId }
+          ]}
+        />
         <div className="mb-6">
           <button
             onClick={() => navigate('/admin/providers')}
@@ -348,6 +363,17 @@ function AdminProviderEditPage() {
           </div>
         </form>
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }

@@ -2,6 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import AdminBreadcrumb from '../components/AdminBreadcrumb';
+import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import {
   fetchAdminPrompts,
   createPrompt,
@@ -13,6 +16,7 @@ import { fetchUIConfig } from '../../../api';
 import { fetchJsonSchema } from '../../../utils/schemaService';
 import DualModeEditor from '../../../shared/components/DualModeEditor';
 import PromptFormEditor from '../components/PromptFormEditor';
+import ChangeHistoryDrawer from '../components/ChangeHistoryDrawer';
 
 function AdminPromptEditPage() {
   const { t } = useTranslation();
@@ -21,7 +25,7 @@ function AdminPromptEditPage() {
   const location = useLocation();
   const isNewPrompt = promptId === 'new';
 
-  const [promptData, setPromptData] = useState({
+  const defaultPromptData = {
     id: '',
     name: { en: '' },
     description: { en: '' },
@@ -32,7 +36,10 @@ function AdminPromptEditPage() {
     appId: '',
     variables: [],
     category: 'creative'
-  });
+  };
+
+  const [promptData, setPromptData] = useState(defaultPromptData);
+  const [initialData, setInitialData] = useState(isNewPrompt ? defaultPromptData : null);
 
   const [loading, setLoading] = useState(!isNewPrompt);
   const [saving, setSaving] = useState(false);
@@ -40,6 +47,9 @@ function AdminPromptEditPage() {
   const [apps, setApps] = useState([]);
   const [uiConfig, setUiConfig] = useState(null);
   const [jsonSchema, setJsonSchema] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { blocker, markSaved } = useUnsavedChanges(initialData, promptData);
 
   useEffect(() => {
     if (isNewPrompt && location.state?.templatePrompt) {
@@ -115,6 +125,7 @@ function AdminPromptEditPage() {
       };
 
       setPromptData(processedPrompt);
+      setInitialData(processedPrompt);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -136,6 +147,7 @@ function AdminPromptEditPage() {
       clearApiCache('admin_prompts');
       clearApiCache('prompts');
 
+      markSaved();
       // Redirect to prompts list
       navigate('/admin/prompts');
     } catch (err) {
@@ -190,6 +202,13 @@ function AdminPromptEditPage() {
   return (
     <div>
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminBreadcrumb
+          crumbs={[
+            { label: 'Admin', href: '/admin' },
+            { label: 'Prompts', href: '/admin/prompts' },
+            { label: isNewPrompt ? 'New Prompt' : (promptData?.name?.en ?? promptId) }
+          ]}
+        />
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -205,6 +224,16 @@ function AdminPromptEditPage() {
               </p>
             </div>
             <div className="flex space-x-3">
+              {!isNewPrompt && (
+                <button
+                  type="button"
+                  onClick={() => setHistoryOpen(true)}
+                  className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                  <Icon name="clock" className="h-4 w-4 mr-2" />
+                  {t('admin.prompts.edit.history', 'History')}
+                </button>
+              )}
               {!isNewPrompt && (
                 <button
                   type="button"
@@ -279,7 +308,25 @@ function AdminPromptEditPage() {
             </button>
           </div>
         </form>
+
+        <ChangeHistoryDrawer
+          isOpen={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          resource="prompt"
+          resourceId={promptId}
+        />
       </div>
+
+      <ConfirmDialog
+        isOpen={blocker.state === 'blocked'}
+        title="Unsaved Changes"
+        message="You have unsaved changes. Leave anyway?"
+        confirmLabel="Leave"
+        denyLabel="Stay"
+        danger={false}
+        onConfirm={() => blocker.proceed?.()}
+        onDeny={() => blocker.reset?.()}
+      />
     </div>
   );
 }
