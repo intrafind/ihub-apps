@@ -962,7 +962,7 @@ Accepted forms:
 - `"email"` (default) — `user.email`, falling back to `user.username`, then `user.id`.
 - `"username"` — `user.username`, falling back to `user.email`, then `user.id`.
 - `"domain\\username"` — `user.domain + "\\" + user.username`, useful for NTLM/AD setups.
-- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"BMG\\${user.username}"` produces `BMG\kozuch` for a user with `username = "kozuch"`. Available fields include `id`, `username`, `name`, `email`, `domain`.
+- **Custom template** — embed `${user.field}` placeholders to build the subject from user attributes. Example: `"DOMAIN\\${user.username}"` produces `DOMAIN\john.doe` for a user with `username = "john.doe"`. Available fields include `id`, `username`, `name`, `email`, `domain`.
 
 > **Security note:** Earlier versions accepted the legacy `${field}` form (no `user.` prefix). That syntax collided with the env var resolver — on Windows `process.env.username` is set to the OS user running the server, so `${username}` silently expanded to the service account name in every JWT subject, breaking per-user identity in iFinder. The configCache skip-list and migration V043 fix this; legacy `${field}` is still accepted with a deprecation warning, but **use `${user.field}` for clarity and forward-compatibility**.
 
