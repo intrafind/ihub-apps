@@ -54,18 +54,35 @@ export default function AgentRunsPage() {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Run ID</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Profile</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Status</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Started</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Actions</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Run ID
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Profile
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Status
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Started
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    Actions
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {runs.map(r => (
-                  <tr key={r.executionId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">{r.executionId}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{(r.userId || '').replace(/^agent:/, '')}</td>
+                  <tr
+                    key={r.executionId}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-mono text-xs text-gray-700 dark:text-gray-300">
+                      {r.executionId}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      {(r.userId || '').replace(/^agent:/, '')}
+                    </td>
                     <td className="px-4 py-3">
                       <span
                         className={`px-2 py-0.5 text-xs rounded font-medium ${
@@ -83,7 +100,9 @@ export default function AgentRunsPage() {
                         {r.status}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{r.startedAt || r.createdAt || '—'}</td>
+                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                      {r.startedAt || r.createdAt || '—'}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => navigate(`/admin/agents/runs/${r.executionId}`)}
@@ -96,7 +115,10 @@ export default function AgentRunsPage() {
                 ))}
                 {runs.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                    <td
+                      colSpan={5}
+                      className="px-4 py-6 text-center text-gray-500 dark:text-gray-400"
+                    >
                       No runs yet.
                     </td>
                   </tr>

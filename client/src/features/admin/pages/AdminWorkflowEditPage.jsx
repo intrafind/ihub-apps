@@ -307,7 +307,9 @@ function AdminWorkflowEditPage() {
             <div className="flex">
               <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
               <div className="ml-3">
-                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">{t('common.error', 'Error')}</h3>
+                <h3 className="text-sm font-medium text-red-800 dark:text-red-300">
+                  {t('common.error', 'Error')}
+                </h3>
                 <p className="mt-1 text-sm text-red-700 dark:text-red-400">{error}</p>
               </div>
             </div>
@@ -324,7 +326,10 @@ function AdminWorkflowEditPage() {
               <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
                 {/* ID Field */}
                 <div>
-                  <label htmlFor="workflow-id" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  <label
+                    htmlFor="workflow-id"
+                    className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                  >
                     {t('admin.workflows.field.id', 'Workflow ID')}
                   </label>
                   <input
@@ -425,7 +430,9 @@ function AdminWorkflowEditPage() {
                       type="button"
                       onClick={() => handleMetadataChange('enabled', !workflowData.enabled)}
                       className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 ${
-                        workflowData.enabled !== false ? 'bg-indigo-600' : 'bg-gray-200 dark:bg-gray-600'
+                        workflowData.enabled !== false
+                          ? 'bg-indigo-600'
+                          : 'bg-gray-200 dark:bg-gray-600'
                       }`}
                       role="switch"
                       aria-checked={workflowData.enabled !== false}
@@ -477,7 +484,9 @@ function AdminWorkflowEditPage() {
                 onChange={e => handleJsonChange(e.target.value)}
                 rows={25}
                 className={`w-full px-3 py-2 border rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 font-mono text-sm bg-white dark:bg-gray-900 text-gray-900 dark:text-gray-100 ${
-                  jsonError ? 'border-yellow-300 dark:border-yellow-700' : 'border-gray-300 dark:border-gray-600'
+                  jsonError
+                    ? 'border-yellow-300 dark:border-yellow-700'
+                    : 'border-gray-300 dark:border-gray-600'
                 }`}
                 style={{ fontFamily: 'monospace', tabSize: 2 }}
                 spellCheck={false}

@@ -57,7 +57,9 @@ export default function AdminAgentMemoryPage() {
   }
 
   if (loading) {
-    return <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>;
+    return (
+      <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
+    );
   }
 
   return (

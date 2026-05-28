@@ -9,7 +9,16 @@
  * @param {boolean} [props.disabled]
  * @param {React.ReactNode} props.children <option> elements
  */
-function AdminSelect({ error, helperText, label, id, disabled, className = '', children, ...rest }) {
+function AdminSelect({
+  error,
+  helperText,
+  label,
+  id,
+  disabled,
+  className = '',
+  children,
+  ...rest
+}) {
   const baseClasses =
     'block w-full rounded-lg border px-3 py-2 text-sm transition-colors focus:outline-none focus:ring-2 focus:ring-offset-0';
 

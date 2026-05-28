@@ -100,7 +100,9 @@ export default function AgentRunDetailPage() {
   }
 
   if (loading && !run) {
-    return <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>;
+    return (
+      <div className="p-8 text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
+    );
   }
 
   const status = run?.status;
@@ -530,9 +532,13 @@ export default function AgentRunDetailPage() {
                     <span className="text-gray-300 dark:text-gray-600">·</span>
                     <span>
                       triggered by{' '}
-                      <span className="font-medium text-gray-800 dark:text-gray-200">{triggeredBy.userId}</span>
+                      <span className="font-medium text-gray-800 dark:text-gray-200">
+                        {triggeredBy.userId}
+                      </span>
                       {triggeredBy.kind && (
-                        <span className="ml-1 text-gray-500 dark:text-gray-400">({triggeredBy.kind})</span>
+                        <span className="ml-1 text-gray-500 dark:text-gray-400">
+                          ({triggeredBy.kind})
+                        </span>
                       )}
                     </span>
                   </>
@@ -621,7 +627,9 @@ export default function AgentRunDetailPage() {
                     {err.nodeId && (
                       <div className="text-xs text-red-700 dark:text-red-400 font-mono mb-0.5">
                         node: {err.nodeId}
-                        {err.code && <span className="ml-2 text-red-600 dark:text-red-400">[{err.code}]</span>}
+                        {err.code && (
+                          <span className="ml-2 text-red-600 dark:text-red-400">[{err.code}]</span>
+                        )}
                       </div>
                     )}
                     <div>{err.message}</div>
@@ -638,8 +646,12 @@ export default function AgentRunDetailPage() {
 
           {isPaused && pendingCheckpoint && (
             <div className="mb-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded">
-              <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">⏸ Awaiting approval</h2>
-              <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">{pendingCheckpoint.message}</p>
+              <h2 className="font-semibold text-yellow-900 dark:text-yellow-300 mb-2">
+                ⏸ Awaiting approval
+              </h2>
+              <p className="text-sm text-yellow-800 dark:text-yellow-300 mb-3">
+                {pendingCheckpoint.message}
+              </p>
               <div className="flex gap-2">
                 {(
                   pendingCheckpoint.options || [
@@ -710,7 +722,9 @@ export default function AgentRunDetailPage() {
                         {currentInboxItem.priority.toUpperCase()}
                       </span>
                     )}
-                    <p className="text-sm text-gray-900 dark:text-gray-100 flex-1">{currentInboxItem.text}</p>
+                    <p className="text-sm text-gray-900 dark:text-gray-100 flex-1">
+                      {currentInboxItem.text}
+                    </p>
                   </div>
                   {(inboxMeta?.inboxId || currentInboxItem.line != null) && (
                     <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 font-mono">
@@ -725,7 +739,9 @@ export default function AgentRunDetailPage() {
               )}
 
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Steps ({unifiedTasks.length})</h2>
+                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                  Steps ({unifiedTasks.length})
+                </h2>
                 {unifiedTasks.length === 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">No steps yet.</p>
                 ) : (
@@ -758,7 +774,9 @@ export default function AgentRunDetailPage() {
                           <Fragment key={t.key}>
                             <tr
                               className={`border-t border-gray-100 dark:border-gray-700 align-top ${isCurrent ? 'bg-indigo-50 dark:bg-indigo-900/20' : ''} ${
-                                hasDetails ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50' : ''
+                                hasDetails
+                                  ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/50'
+                                  : ''
                               }`}
                               onClick={hasDetails ? () => toggleStep(t.nodeId) : undefined}
                             >
@@ -826,7 +844,9 @@ export default function AgentRunDetailPage() {
               {/* Artifacts come first under Tasks — the report is the
                   primary deliverable, citations are supporting evidence. */}
               <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Artifacts ({displayArtifacts.length})</h2>
+                <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                  Artifacts ({displayArtifacts.length})
+                </h2>
                 {displayArtifacts.length === 0 ? (
                   <p className="text-sm text-gray-500 dark:text-gray-400">No artifacts produced.</p>
                 ) : (
@@ -858,7 +878,9 @@ export default function AgentRunDetailPage() {
                           }
                         />
                         {typeof a.bytes === 'number' && (
-                          <span className="text-xs text-gray-500 dark:text-gray-400">{a.bytes} bytes</span>
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {a.bytes} bytes
+                          </span>
                         )}
                         {a.writtenAt && (
                           <span className="text-xs text-gray-400 dark:text-gray-500">
@@ -873,7 +895,9 @@ export default function AgentRunDetailPage() {
 
               {dedupedCitations.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Citations ({dedupedCitations.length})</h2>
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                    Citations ({dedupedCitations.length})
+                  </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     URLs the agent actually consulted during this run, captured from every search /
                     extract tool call. The synthesizer cites these by number in the final report.
@@ -895,7 +919,9 @@ export default function AgentRunDetailPage() {
                           {c.title || c.url}
                         </a>
                         {c.title && (
-                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 break-all">{c.url}</span>
+                          <span className="text-xs text-gray-400 dark:text-gray-500 ml-2 break-all">
+                            {c.url}
+                          </span>
                         )}
                         {c.toolId && (
                           <span className="text-xs text-gray-500 dark:text-gray-400 ml-2">
@@ -939,9 +965,14 @@ export default function AgentRunDetailPage() {
                     {activatedSkillNames.map(name => {
                       const skill = activatedSkills[name] || {};
                       return (
-                        <li key={name} className="border-l-2 border-indigo-300 dark:border-indigo-600 pl-2">
+                        <li
+                          key={name}
+                          className="border-l-2 border-indigo-300 dark:border-indigo-600 pl-2"
+                        >
                           <div className="flex items-center gap-2">
-                            <span className="font-mono font-medium text-gray-800 dark:text-gray-200">{name}</span>
+                            <span className="font-mono font-medium text-gray-800 dark:text-gray-200">
+                              {name}
+                            </span>
                             <span
                               className={`text-xs px-2 py-0.5 rounded ${
                                 skill.activatedBy === 'planner'
@@ -960,7 +991,9 @@ export default function AgentRunDetailPage() {
                             )}
                           </div>
                           {skill.description && (
-                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{skill.description}</p>
+                            <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
+                              {skill.description}
+                            </p>
                           )}
                         </li>
                       );
@@ -971,7 +1004,9 @@ export default function AgentRunDetailPage() {
 
               {childExecutionIds.length > 0 && (
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">Child runs ({childExecutionIds.length})</h2>
+                  <h2 className="font-semibold mb-2 text-gray-900 dark:text-gray-100">
+                    Child runs ({childExecutionIds.length})
+                  </h2>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                     Sub-workflow executions spawned by this run (one per planner decomposition).
                     Open one to see its per-task LLM history.
@@ -1002,9 +1037,14 @@ export default function AgentRunDetailPage() {
                   </p>
                   <ul className="text-xs space-y-2">
                     {toolErrors.slice(-10).map((e, i) => (
-                      <li key={i} className="border-l-2 border-amber-300 dark:border-amber-600 pl-2">
+                      <li
+                        key={i}
+                        className="border-l-2 border-amber-300 dark:border-amber-600 pl-2"
+                      >
                         <div>
-                          <span className="font-mono text-gray-800 dark:text-gray-200">{e.requestedName}</span>
+                          <span className="font-mono text-gray-800 dark:text-gray-200">
+                            {e.requestedName}
+                          </span>
                         </div>
                         <div className="text-gray-500 dark:text-gray-400">
                           available: {(e.availableTools || []).join(', ') || '(none)'}

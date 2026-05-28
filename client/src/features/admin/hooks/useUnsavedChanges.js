@@ -84,7 +84,7 @@ export function useUnsavedChanges(initialData, currentData) {
     reset: useCallback(() => {
       pendingNavRef.current = null;
       setBlockerState('unblocked');
-    }, []),
+    }, [])
   };
 
   return { isDirty, blocker, markSaved };

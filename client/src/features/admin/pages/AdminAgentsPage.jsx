@@ -123,7 +123,9 @@ export default function AdminAgentsPage() {
           )}
 
           {loading ? (
-            <div className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
+            <div className="text-gray-600 dark:text-gray-400">
+              {t('common.loading', 'Loading…')}
+            </div>
           ) : profiles.length === 0 ? (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 p-8 rounded text-center text-gray-600 dark:text-gray-400">
               {t(
@@ -136,11 +138,21 @@ export default function AdminAgentsPage() {
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                 <thead className="bg-gray-50 dark:bg-gray-900">
                   <tr>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.name', 'Name')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.id', 'ID')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.inbox', 'Inbox')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.schedule', 'Schedule')}</th>
-                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">{t('admin.agents.col.enabled', 'Enabled')}</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      {t('admin.agents.col.name', 'Name')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      {t('admin.agents.col.id', 'ID')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      {t('admin.agents.col.inbox', 'Inbox')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      {t('admin.agents.col.schedule', 'Schedule')}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                      {t('admin.agents.col.enabled', 'Enabled')}
+                    </th>
                     <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       {t('admin.agents.col.actions', 'Actions')}
                     </th>
@@ -153,10 +165,19 @@ export default function AdminAgentsPage() {
                     );
                     const profileName = p.name?.en || p.id;
                     return (
-                      <tr key={p.id} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">{profileName}</td>
-                        <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">{p.id}</td>
-                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{p.inboxId || '—'}</td>
+                      <tr
+                        key={p.id}
+                        className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <td className="px-4 py-3 font-medium text-gray-900 dark:text-gray-100">
+                          {profileName}
+                        </td>
+                        <td className="px-4 py-3 font-mono text-xs text-gray-600 dark:text-gray-400">
+                          {p.id}
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                          {p.inboxId || '—'}
+                        </td>
                         <td className="px-4 py-3 text-sm font-mono text-gray-700 dark:text-gray-300">
                           {schedule?.config?.cron || '—'}
                         </td>

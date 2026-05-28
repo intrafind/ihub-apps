@@ -43,10 +43,15 @@ export default function AdminAgentApprovalsPage() {
         ) : (
           <ul className="space-y-3">
             {pending.map(p => (
-              <li key={p.runId} className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-4">
+              <li
+                key={p.runId}
+                className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded p-4"
+              >
                 <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-mono text-xs text-gray-600 dark:text-gray-400">{p.profileId}</p>
+                    <p className="font-mono text-xs text-gray-600 dark:text-gray-400">
+                      {p.profileId}
+                    </p>
                     <p className="text-sm font-medium mt-1 text-gray-900 dark:text-gray-100">
                       {p.checkpoint?.message ||
                         t('admin.agents.approvals.defaultMessage', 'Approval requested')}

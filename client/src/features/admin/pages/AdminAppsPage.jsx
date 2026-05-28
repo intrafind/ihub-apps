@@ -642,7 +642,10 @@ function AdminAppsPage() {
         <AdminEmptyState
           icon="squares-2x2"
           title={t('admin.apps.noApps', 'No apps found')}
-          description={t('admin.apps.noAppsDescription', 'Try adjusting your search or filter criteria.')}
+          description={t(
+            'admin.apps.noAppsDescription',
+            'Try adjusting your search or filter criteria.'
+          )}
           action={
             <button
               onClick={handleCreateApp}

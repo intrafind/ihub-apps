@@ -222,7 +222,10 @@ function AdminWorkflowExecutionsPage() {
     e.stopPropagation();
     setConfirmDialog({
       title: t('admin.workflowExecutions.cancelTitle', 'Cancel Execution'),
-      message: t('admin.workflowExecutions.cancelConfirm', 'Are you sure you want to cancel this execution?'),
+      message: t(
+        'admin.workflowExecutions.cancelConfirm',
+        'Are you sure you want to cancel this execution?'
+      ),
       danger: true,
       onConfirm: async () => {
         setConfirmDialog(null);

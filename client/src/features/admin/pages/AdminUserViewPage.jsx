@@ -55,7 +55,9 @@ function AdminUserViewPage() {
             </div>
             <div className="ml-3">
               <h3 className="text-sm font-medium text-red-800 dark:text-red-300">Error</h3>
-              <div className="mt-2 text-sm text-red-700 dark:text-red-400">{error || 'User not found'}</div>
+              <div className="mt-2 text-sm text-red-700 dark:text-red-400">
+                {error || 'User not found'}
+              </div>
             </div>
           </div>
         </div>
@@ -122,7 +124,9 @@ function AdminUserViewPage() {
               </div>
             </div>
             <div className="flex-1">
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">{user.name || user.username}</h2>
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                {user.name || user.username}
+              </h2>
               <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">@{user.username}</p>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{user.email}</p>
             </div>
@@ -168,7 +172,9 @@ function AdminUserViewPage() {
               <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                 {t('admin.users.view.userId', 'User ID')}
               </dt>
-              <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100 font-mono text-xs">{user.id}</dd>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100 font-mono text-xs">
+                {user.id}
+              </dd>
             </div>
           </dl>
         </div>
@@ -228,7 +234,9 @@ function AdminUserViewPage() {
                 <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
                   {t('admin.users.view.oidcProvider', 'OIDC Provider')}
                 </dt>
-                <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100">{user.oidcData.provider || '-'}</dd>
+                <dd className="mt-1 text-sm text-gray-900 dark:text-gray-100">
+                  {user.oidcData.provider || '-'}
+                </dd>
               </div>
             )}
           </dl>

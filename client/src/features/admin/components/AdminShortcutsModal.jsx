@@ -4,21 +4,27 @@ import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import Icon from '../../../shared/components/Icon';
 
 const SHORTCUTS = [
-  { category: 'Navigation', items: [
-    { keys: ['g', 'a'], label: 'Go to Apps' },
-    { keys: ['g', 'm'], label: 'Go to Models' },
-    { keys: ['g', 'p'], label: 'Go to Prompts' },
-    { keys: ['g', 'u'], label: 'Go to Users' },
-    { keys: ['g', 'g'], label: 'Go to Groups' },
-    { keys: ['g', 's'], label: 'Go to Sources' },
-    { keys: ['g', 'l'], label: 'Go to Audit Log' },
-  ]},
-  { category: 'Actions', items: [
-    { keys: ['n'], label: 'New item (on list pages)' },
-    { keys: ['⌘', 'k'], label: 'Open command palette' },
-    { keys: ['?'], label: 'Toggle this cheatsheet' },
-    { keys: ['Esc'], label: 'Close dialogs / palette' },
-  ]},
+  {
+    category: 'Navigation',
+    items: [
+      { keys: ['g', 'a'], label: 'Go to Apps' },
+      { keys: ['g', 'm'], label: 'Go to Models' },
+      { keys: ['g', 'p'], label: 'Go to Prompts' },
+      { keys: ['g', 'u'], label: 'Go to Users' },
+      { keys: ['g', 'g'], label: 'Go to Groups' },
+      { keys: ['g', 's'], label: 'Go to Sources' },
+      { keys: ['g', 'l'], label: 'Go to Audit Log' }
+    ]
+  },
+  {
+    category: 'Actions',
+    items: [
+      { keys: ['n'], label: 'New item (on list pages)' },
+      { keys: ['⌘', 'k'], label: 'Open command palette' },
+      { keys: ['?'], label: 'Toggle this cheatsheet' },
+      { keys: ['Esc'], label: 'Close dialogs / palette' }
+    ]
+  }
 ];
 
 /**
@@ -33,7 +39,12 @@ function AdminShortcutsModal({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen) return undefined;
-    const handler = e => { if (e.key === 'Escape') { e.preventDefault(); onClose(); } };
+    const handler = e => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [isOpen, onClose]);

@@ -78,7 +78,9 @@ export default function AdminAgentInboxesPage() {
               {t('common.create', 'Create')}
             </button>
           </div>
-          {localError && <p className="mt-2 text-xs text-red-600 dark:text-red-400">{localError}</p>}
+          {localError && (
+            <p className="mt-2 text-xs text-red-600 dark:text-red-400">{localError}</p>
+          )}
         </div>
         {loading ? (
           <div className="text-gray-600 dark:text-gray-400">{t('common.loading', 'Loading…')}</div>
@@ -87,10 +89,18 @@ export default function AdminAgentInboxesPage() {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900">
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('admin.agents.inboxes.col.id', 'ID')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('admin.agents.inboxes.col.open', 'Open')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('admin.agents.inboxes.col.total', 'Total')}</th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">{t('admin.agents.inboxes.col.updated', 'Updated')}</th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {t('admin.agents.inboxes.col.id', 'ID')}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {t('admin.agents.inboxes.col.open', 'Open')}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {t('admin.agents.inboxes.col.total', 'Total')}
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    {t('admin.agents.inboxes.col.updated', 'Updated')}
+                  </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     {t('admin.agents.inboxes.col.actions', 'Actions')}
                   </th>
@@ -98,11 +108,22 @@ export default function AdminAgentInboxesPage() {
               </thead>
               <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
                 {inboxes.map(inbox => (
-                  <tr key={inbox.inboxId} className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors">
-                    <td className="px-4 py-3 font-mono text-sm text-gray-900 dark:text-gray-100">{inbox.inboxId}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{inbox.openCount}</td>
-                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{inbox.totalCount}</td>
-                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">{inbox.updatedAt || '—'}</td>
+                  <tr
+                    key={inbox.inboxId}
+                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                  >
+                    <td className="px-4 py-3 font-mono text-sm text-gray-900 dark:text-gray-100">
+                      {inbox.inboxId}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      {inbox.openCount}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
+                      {inbox.totalCount}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-gray-500 dark:text-gray-400">
+                      {inbox.updatedAt || '—'}
+                    </td>
                     <td className="px-4 py-3 text-right">
                       <button
                         onClick={() => navigate(`/admin/agents/inboxes/${inbox.inboxId}`)}
@@ -115,7 +136,10 @@ export default function AdminAgentInboxesPage() {
                 ))}
                 {inboxes.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-6 text-center text-gray-500 dark:text-gray-400">
+                    <td
+                      colSpan={5}
+                      className="px-4 py-6 text-center text-gray-500 dark:text-gray-400"
+                    >
                       {t('admin.agents.inboxes.empty', 'No inboxes yet.')}
                     </td>
                   </tr>
