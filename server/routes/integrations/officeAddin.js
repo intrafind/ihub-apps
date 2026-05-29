@@ -117,7 +117,8 @@ router.get('/manifest.xml', (req, res) => {
   // Get localized values for all supported languages
   const displayNameEn = getLocalizedContent(officeConfig.displayName, 'en') || 'iHub Apps';
   const displayNameDe = getLocalizedContent(officeConfig.displayName, 'de') || displayNameEn;
-  const descriptionEn = getLocalizedContent(officeConfig.description, 'en') || 'AI-powered assistant for Outlook';
+  const descriptionEn =
+    getLocalizedContent(officeConfig.description, 'en') || 'AI-powered assistant for Outlook';
   const descriptionDe = getLocalizedContent(officeConfig.description, 'de') || descriptionEn;
   const showTaskPaneLabelEn = translations.en?.office?.showTaskPane || 'Show Task Pane';
   const showTaskPaneLabelDe = translations.de?.office?.showTaskPane || showTaskPaneLabelEn;
@@ -147,7 +148,16 @@ router.get('/manifest.xml', (req, res) => {
   res.send(manifest);
 });
 
-function generateManifest({ baseUrl, origin, displayNameEn, displayNameDe, descriptionEn, descriptionDe, showTaskPaneLabelEn, showTaskPaneLabelDe }) {
+function generateManifest({
+  baseUrl,
+  origin,
+  displayNameEn,
+  displayNameDe,
+  descriptionEn,
+  descriptionDe,
+  showTaskPaneLabelEn,
+  showTaskPaneLabelDe
+}) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
