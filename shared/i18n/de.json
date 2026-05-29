@@ -137,10 +137,8 @@
     "insertIntoEmail": "In E-Mail einfügen",
     "insertIntoDocument": "In Dokument einfügen",
     "pinned": {
-      "addCurrent": "Diese E-Mail hinzufügen",
-      "addCurrentTooltip": "Diese E-Mail an den Chat anhängen",
-      "addSelected": "Ausgewählte E-Mails hinzufügen",
-      "addSelectedTooltip": "Alle in Outlook ausgewählten E-Mails anhängen",
+      "addEmails": "E-Mail(s) hinzufügen",
+      "addEmailsTooltip": "Die geöffnete E-Mail – oder alle in Outlook ausgewählten E-Mails – an den Chat anhängen",
       "alreadyAdded": "Bereits hinzugefügt",
       "removeOne": "Aus dem Chat entfernen",
       "clearAll": "Leeren",

@@ -36,12 +36,10 @@ function OfficeContextStrip({
   pinned,
   onUnpin,
   onClearPinned,
-  onPinCurrent,
-  onPinSelected,
-  canPinCurrent,
-  isCurrentPinned,
-  isMultiSelectSupported,
-  multiSelectLoading
+  onAddEmails,
+  canAddEmails,
+  addEmailsLoading,
+  addEmailsDisabled
 }) {
   const isAppointment = ctx?.itemKind === 'appointment';
   const attachments = useMemo(
@@ -60,7 +58,7 @@ function OfficeContextStrip({
   // single calendar item, so we suppress them when the user is on an
   // appointment surface to keep the strip focused on the meeting metadata.
   const hasPinned = !isAppointment && pinnedList.length > 0;
-  const hasPinControls = !isAppointment && (canPinCurrent || isMultiSelectSupported);
+  const hasPinControls = !isAppointment && !!canAddEmails;
 
   // Default-collapse threshold counts what the user would actually see
   // once expanded — attachments still in the queue plus pinned emails.
@@ -204,12 +202,10 @@ function OfficeContextStrip({
             pinned={[]}
             onUnpin={() => {}}
             onClearAll={() => {}}
-            onPinCurrent={onPinCurrent}
-            onPinSelected={onPinSelected}
-            canPinCurrent={canPinCurrent}
-            isCurrentPinned={isCurrentPinned}
-            isMultiSelectSupported={isMultiSelectSupported}
-            multiSelectLoading={multiSelectLoading}
+            onAddEmails={onAddEmails}
+            canAddEmails={canAddEmails}
+            addEmailsLoading={addEmailsLoading}
+            addEmailsDisabled={addEmailsDisabled}
             embedded
             collapsedMode
           />
@@ -237,12 +233,10 @@ function OfficeContextStrip({
               pinned={pinnedList}
               onUnpin={onUnpin}
               onClearAll={onClearPinned}
-              onPinCurrent={onPinCurrent}
-              onPinSelected={onPinSelected}
-              canPinCurrent={canPinCurrent}
-              isCurrentPinned={isCurrentPinned}
-              isMultiSelectSupported={isMultiSelectSupported}
-              multiSelectLoading={multiSelectLoading}
+              onAddEmails={onAddEmails}
+              canAddEmails={canAddEmails}
+              addEmailsLoading={addEmailsLoading}
+              addEmailsDisabled={addEmailsDisabled}
               embedded
             />
           )}
