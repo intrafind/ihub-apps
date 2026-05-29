@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminOAuthClientsPage() {
   const { t } = useTranslation();
@@ -17,6 +18,7 @@ function AdminOAuthClientsPage() {
   const [tokenExpirationDays, setTokenExpirationDays] = useState(365);
   const [selectedClientForToken, setSelectedClientForToken] = useState(null);
   const [isGeneratingToken, setIsGeneratingToken] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     checkOAuthStatus();
@@ -105,34 +107,33 @@ function AdminOAuthClientsPage() {
     }
   };
 
-  const handleDeleteClient = async clientId => {
-    if (
-      !window.confirm(
-        t(
-          'admin.auth.oauth.deleteConfirm',
-          'Are you sure you want to delete this OAuth client? All issued tokens will stop working.'
-        )
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/oauth/clients/${clientId}`, {
-        method: 'DELETE'
-      });
-
-      setMessage({
-        type: 'success',
-        text: t('admin.auth.oauth.deleteSuccess', 'OAuth client deleted successfully')
-      });
-      loadClients();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `${t('admin.auth.oauth.deleteError', 'Failed to delete OAuth client')}: ${error.message}`
-      });
-    }
+  const handleDeleteClient = clientId => {
+    setConfirmDialog({
+      title: t('admin.auth.oauth.deleteTitle', 'Delete OAuth Client'),
+      message: t(
+        'admin.auth.oauth.deleteConfirm',
+        'Are you sure you want to delete this OAuth client? All issued tokens will stop working.'
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await makeAdminApiCall(`/admin/oauth/clients/${clientId}`, {
+            method: 'DELETE'
+          });
+          setMessage({
+            type: 'success',
+            text: t('admin.auth.oauth.deleteSuccess', 'OAuth client deleted successfully')
+          });
+          loadClients();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `${t('admin.auth.oauth.deleteError', 'Failed to delete OAuth client')}: ${error.message}`
+          });
+        }
+      }
+    });
   };
 
   const handleToggleClientStatus = async client => {
@@ -165,38 +166,35 @@ function AdminOAuthClientsPage() {
     }
   };
 
-  const handleRotateSecret = async clientId => {
-    if (
-      !window.confirm(
-        t(
-          'admin.auth.oauth.rotateSecretConfirm',
-          'Are you sure you want to rotate the secret? The old secret will stop working immediately.'
-        )
-      )
-    ) {
-      return;
-    }
-
-    try {
-      const response = await makeAdminApiCall(`/admin/oauth/clients/${clientId}/rotate-secret`, {
-        method: 'POST'
-      });
-
-      const data = response.data;
-      const newSecret = data.clientSecret;
-
-      // Show the new secret in a modal or alert
-      alert(
-        `${t('admin.auth.oauth.rotateSecretSuccess', 'Secret rotated successfully. Save the new secret now.')}\n\n${t('admin.auth.oauth.clientSecret', 'Client Secret')}: ${newSecret}\n\n${t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}`
-      );
-
-      loadClients();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to rotate secret: ${error.message}`
-      });
-    }
+  const handleRotateSecret = clientId => {
+    setConfirmDialog({
+      title: t('admin.auth.oauth.rotateSecretTitle', 'Rotate Client Secret'),
+      message: t(
+        'admin.auth.oauth.rotateSecretConfirm',
+        'Are you sure you want to rotate the secret? The old secret will stop working immediately.'
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          const response = await makeAdminApiCall(`/admin/oauth/clients/${clientId}/rotate-secret`, {
+            method: 'POST'
+          });
+          const data = response.data;
+          const newSecret = data.clientSecret;
+          // Show the new secret — intentional alert so the admin can copy it before dismissing
+          alert(
+            `${t('admin.auth.oauth.rotateSecretSuccess', 'Secret rotated successfully. Save the new secret now.')}\n\n${t('admin.auth.oauth.clientSecret', 'Client Secret')}: ${newSecret}\n\n${t('admin.auth.oauth.clientSecretWarning', 'Save this secret now. It will not be shown again.')}`
+          );
+          loadClients();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `Failed to rotate secret: ${error.message}`
+          });
+        }
+      }
+    });
   };
 
   const openTokenGenerationModal = clientId => {
@@ -640,6 +638,14 @@ function AdminOAuthClientsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

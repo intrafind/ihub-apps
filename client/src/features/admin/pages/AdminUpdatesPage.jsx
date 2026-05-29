@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminUpdatesPage() {
   const { t } = useTranslation();
@@ -18,6 +19,7 @@ function AdminUpdatesPage() {
   const rollbackPollIntervalRef = useRef(null);
   const updatePollAbortRef = useRef(null);
   const rollbackPollAbortRef = useRef(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     const fetchVersionInfo = async () => {
@@ -152,18 +154,22 @@ function AdminUpdatesPage() {
     }
   };
 
-  const handleRollback = async () => {
-    if (
-      !window.confirm(
-        t(
-          'admin.system.rollbackConfirm',
-          'Are you sure you want to rollback to the previous version?'
-        )
-      )
-    ) {
-      return;
-    }
+  const handleRollback = () => {
+    setConfirmDialog({
+      title: t('admin.system.rollbackTitle', 'Rollback Update'),
+      message: t(
+        'admin.system.rollbackConfirm',
+        'Are you sure you want to rollback to the previous version?'
+      ),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        doRollback();
+      }
+    });
+  };
 
+  const doRollback = async () => {
     setUpdateActionLoading(true);
     setUpdateActionMessage(t('admin.system.rollbackApplying', 'Rolling back...'));
     setUpdateActionMessageType('success');
@@ -492,6 +498,14 @@ function AdminUpdatesPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

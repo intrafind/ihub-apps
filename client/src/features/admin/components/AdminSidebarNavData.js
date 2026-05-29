@@ -21,7 +21,9 @@ import {
   LockClosedIcon,
   ArrowDownTrayIcon,
   ArrowPathIcon,
-  ExclamationTriangleIcon
+  ExclamationTriangleIcon,
+  ClipboardDocumentCheckIcon,
+  NewspaperIcon
 } from '@heroicons/react/24/outline';
 
 /**
@@ -47,6 +49,20 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin',
           icon: HomeIcon,
           visible: showAdminPage('home')
+        }
+      ]
+    },
+    {
+      id: 'whatsNew',
+      label: t('admin.nav.changelog', "What's New"),
+      icon: NewspaperIcon,
+      items: [
+        {
+          key: 'changelog',
+          label: t('admin.nav.changelog', "What's New"),
+          href: '/admin/changelog',
+          icon: NewspaperIcon,
+          visible: true
         }
       ]
     },
@@ -229,6 +245,13 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/telemetry',
           icon: SignalIcon,
           visible: showAdminPage('telemetry')
+        },
+        {
+          key: 'audit-log',
+          label: t('admin.nav.auditLog', 'Audit Log'),
+          href: '/admin/audit-log',
+          icon: ClipboardDocumentCheckIcon,
+          visible: true
         }
       ]
     },

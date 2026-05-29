@@ -79,7 +79,9 @@ function Layout() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-full w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+    <div
+      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${pathnameStartsWith(location.pathname, '/admin') ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
+    >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:p-3 focus:bg-white focus:text-indigo-600 focus:rounded-md focus:shadow-lg focus:underline dark:focus:bg-gray-800 dark:focus:text-indigo-400"

@@ -221,6 +221,23 @@ function GroupFormEditor({
                 <div className="flex items-center">
                   <input
                     type="checkbox"
+                    checked={group.permissions?.contentAdmin || false}
+                    onChange={e => handlePermissionChange('contentAdmin', e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"
+                  />
+                  <label className="ml-2 block text-sm text-gray-900 dark:text-gray-100">
+                    {t('admin.groups.contentAdmin', 'Content Admin (Apps, Prompts, Sources)')}
+                  </label>
+                </div>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Allow members to manage Apps, Prompts, and Sources without full admin access
+                </p>
+              </div>
+
+              <div className="col-span-6">
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
                     checked={group.enabled !== false}
                     onChange={e => handleInputChange('enabled', e.target.checked)}
                     className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 dark:border-gray-600 rounded"

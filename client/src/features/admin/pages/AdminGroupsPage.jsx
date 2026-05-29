@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
-import LoadingSpinner from '../../../shared/components/LoadingSpinner';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
 
 function AdminGroupsPage() {
   const { t } = useTranslation();
@@ -11,6 +12,7 @@ function AdminGroupsPage() {
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState({});
   const [message, setMessage] = useState('');
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     loadGroups();
@@ -31,28 +33,30 @@ function AdminGroupsPage() {
     }
   };
 
-  const handleDeleteGroup = async (groupId, groupName) => {
-    if (!window.confirm(`Are you sure you want to delete the group "${groupName}"?`)) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/groups/${groupId}`, {
-        method: 'DELETE'
-      });
-
-      // Success - axios doesn't have response.ok, successful responses are returned directly
-      setMessage({
-        type: 'success',
-        text: 'Group deleted successfully!'
-      });
-      loadGroups();
-    } catch (error) {
-      setMessage({
-        type: 'error',
-        text: `Failed to delete group: ${error.message}`
-      });
-    }
+  const handleDeleteGroup = (groupId, groupName) => {
+    setConfirmDialog({
+      title: t('admin.groups.deleteTitle', 'Delete Group'),
+      message: t('admin.groups.deleteConfirm', 'Are you sure you want to delete the group "{{name}}"?', { name: groupName }),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await makeAdminApiCall(`/admin/groups/${groupId}`, {
+            method: 'DELETE'
+          });
+          setMessage({
+            type: 'success',
+            text: 'Group deleted successfully!'
+          });
+          loadGroups();
+        } catch (error) {
+          setMessage({
+            type: 'error',
+            text: `Failed to delete group: ${error.message}`
+          });
+        }
+      }
+    });
   };
 
   const isProtectedGroup = groupId => {
@@ -61,8 +65,8 @@ function AdminGroupsPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -277,6 +281,14 @@ function AdminGroupsPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

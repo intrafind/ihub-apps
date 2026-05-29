@@ -5,19 +5,32 @@ import {
   UsersIcon,
   ChatBubbleLeftRightIcon,
   TagIcon,
-  ExclamationCircleIcon,
-  InformationCircleIcon,
-  CheckCircleIcon,
   ArrowTopRightOnSquareIcon,
   PlusIcon,
   CpuChipIcon,
   ChartBarIcon,
-  ArrowRightIcon
+  ArrowRightIcon,
+  ShieldCheckIcon,
+  BoltIcon,
+  CircleStackIcon,
+  WrenchIcon,
+  KeyIcon,
+  ArrowUpCircleIcon
 } from '@heroicons/react/24/outline';
 import { useOverviewData } from '../hooks/useOverviewData';
 import { useUIConfig } from '../../../shared/contexts/UIConfigContext';
 
-function StatCard({ label, value, sub, href, icon: Icon, iconColor }) {
+function StatCard({
+  label,
+  value,
+  sub,
+  href,
+  icon: Icon,
+  iconColor,
+  updateAvailable,
+  latestVersion
+}) {
+  const { t } = useTranslation();
   return (
     <Link
       to={href}
@@ -32,75 +45,24 @@ function StatCard({ label, value, sub, href, icon: Icon, iconColor }) {
             {value}
           </p>
           {sub && <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{sub}</p>}
+          {updateAvailable && latestVersion && (
+            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-600 dark:text-amber-400">
+              <ArrowUpCircleIcon className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+              {t('admin.overview.updateAvailable', 'v{{version}} available', {
+                version: latestVersion
+              })}
+            </p>
+          )}
         </div>
         <div className={`p-2.5 rounded-lg ${iconColor} shrink-0 ml-3`}>
           <Icon className="w-5 h-5" aria-hidden="true" />
         </div>
       </div>
       <div className="mt-3 flex items-center text-xs text-indigo-600 dark:text-indigo-400 opacity-0 group-hover:opacity-100 transition-opacity">
-        <span>View details</span>
+        <span>{t('admin.overview.viewDetails', 'View details')}</span>
         <ArrowRightIcon className="w-3 h-3 ml-1" aria-hidden="true" />
       </div>
     </Link>
-  );
-}
-
-function SeverityDot({ severity }) {
-  const classes = {
-    critical: 'bg-red-500',
-    warning: 'bg-amber-500',
-    info: 'bg-blue-500',
-    success: 'bg-green-500'
-  };
-  return (
-    <span
-      className={`inline-block w-2 h-2 rounded-full shrink-0 mt-1.5 ${classes[severity] ?? classes.info}`}
-      aria-label={severity}
-    />
-  );
-}
-
-function AttentionSection({ items }) {
-  const { t } = useTranslation();
-
-  if (items.length === 0) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-          {t('admin.overview.needsAttention', 'Needs your attention')}
-        </h2>
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          <CheckCircleIcon className="w-4 h-4 text-green-500 shrink-0" aria-hidden="true" />
-          <span>{t('admin.overview.allHealthy', 'All systems healthy')}</span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-      <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-        {t('admin.overview.needsAttention', 'Needs your attention')}
-      </h2>
-      <ul className="space-y-3">
-        {items.map(item => (
-          <li key={item.id} className="flex items-start gap-3">
-            <SeverityDot severity={item.severity} />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm text-gray-700 dark:text-gray-300">{item.message}</p>
-            </div>
-            {item.actionHref && (
-              <Link
-                to={item.actionHref}
-                className="shrink-0 text-xs font-medium text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 whitespace-nowrap"
-              >
-                {item.actionLabel ?? 'View'}
-              </Link>
-            )}
-          </li>
-        ))}
-      </ul>
-    </div>
   );
 }
 
@@ -261,10 +223,166 @@ function QuickActions() {
   );
 }
 
+function CommonPages({ className = '' }) {
+  const { t } = useTranslation();
+
+  const links = [
+    { label: t('admin.nav.apps', 'Apps'), href: '/admin/apps' },
+    { label: t('admin.nav.models', 'Models'), href: '/admin/models' },
+    { label: t('admin.nav.users', 'Users'), href: '/admin/users' },
+    { label: t('admin.nav.authentication', 'Authentication'), href: '/admin/auth' },
+    { label: t('admin.nav.integrations', 'Integrations'), href: '/admin/integrations' },
+    { label: t('admin.nav.features', 'Features'), href: '/admin/features' },
+    { label: t('admin.nav.usage', 'Usage Reports'), href: '/admin/usage' },
+    { label: t('admin.nav.backup', 'Backup & Restore'), href: '/admin/backup' }
+  ];
+
+  return (
+    <div
+      className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5 ${className}`}
+    >
+      <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+        {t('admin.overview.shortcuts', 'Common pages')}
+      </h2>
+      <nav className="grid grid-cols-2 gap-1">
+        {links.map(link => (
+          <Link
+            key={link.href}
+            to={link.href}
+            className="flex items-center justify-between px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+          >
+            {link.label}
+            <ArrowRightIcon className="w-3.5 h-3.5 text-gray-400 shrink-0" aria-hidden="true" />
+          </Link>
+        ))}
+      </nav>
+    </div>
+  );
+}
+
+function InfoRow({ icon: Icon, label, value, href }) {
+  const content = (
+    <div className="flex items-center justify-between py-2">
+      <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+        <Icon className="w-4 h-4 shrink-0" aria-hidden="true" />
+        <span>{label}</span>
+      </div>
+      <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{value}</span>
+    </div>
+  );
+
+  if (href) {
+    return (
+      <Link
+        to={href}
+        className="block hover:bg-gray-50 dark:hover:bg-gray-700/50 -mx-2 px-2 rounded"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return content;
+}
+
+function PlatformInfoSection({ info }) {
+  const { t } = useTranslation();
+
+  if (!info) return null;
+
+  const authLabel = () => {
+    const parts = [];
+    if (info.auth.local) parts.push(t('admin.overview.auth.local', 'Local'));
+    if (info.auth.oidcProviders > 0)
+      parts.push(
+        t('admin.overview.auth.oidc', 'OIDC ({{count}})', { count: info.auth.oidcProviders })
+      );
+    if (info.auth.ldapProviders > 0)
+      parts.push(
+        t('admin.overview.auth.ldap', 'LDAP ({{count}})', { count: info.auth.ldapProviders })
+      );
+    if (info.auth.proxy) parts.push(t('admin.overview.auth.proxy', 'Proxy'));
+    if (info.auth.anonymous) parts.push(t('admin.overview.auth.anonymous', 'Anonymous'));
+    return parts.length > 0 ? parts.join(', ') : t('admin.overview.auth.none', 'None');
+  };
+
+  const oauthLabel = () => {
+    if (info.auth.oauth.authz && info.auth.oauth.clients)
+      return t('admin.overview.oauth.serverAndClients', 'Server + Clients');
+    if (info.auth.oauth.authz) return t('admin.overview.oauth.server', 'Server');
+    if (info.auth.oauth.clients) return t('admin.overview.oauth.clientsOnly', 'Clients only');
+    return t('admin.overview.oauth.disabled', 'Disabled');
+  };
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
+      <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+        {t('admin.overview.platformInfo', 'Platform status')}
+      </h2>
+      <div className="divide-y divide-gray-100 dark:divide-gray-700">
+        <InfoRow
+          icon={BoltIcon}
+          label={t('admin.overview.providers', 'Providers')}
+          value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
+            enabled: info.providers.enabled,
+            total: info.providers.total
+          })}
+          href="/admin/providers"
+        />
+        <InfoRow
+          icon={CpuChipIcon}
+          label={t('admin.overview.models', 'Models')}
+          value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
+            enabled: info.models.enabled,
+            total: info.models.total
+          })}
+          href="/admin/models"
+        />
+        <InfoRow
+          icon={CircleStackIcon}
+          label={t('admin.overview.sources', 'Sources')}
+          value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
+            enabled: info.sources.enabled,
+            total: info.sources.total
+          })}
+          href="/admin/sources"
+        />
+        <InfoRow
+          icon={WrenchIcon}
+          label={t('admin.overview.tools', 'Tools')}
+          value={t('admin.overview.enabledOfTotal', '{{enabled}} / {{total}}', {
+            enabled: info.tools.enabled,
+            total: info.tools.total
+          })}
+          href="/admin/tools"
+        />
+        <InfoRow
+          icon={UsersIcon}
+          label={t('admin.overview.groups', 'Groups')}
+          value={info.groups}
+          href="/admin/groups"
+        />
+        <InfoRow
+          icon={ShieldCheckIcon}
+          label={t('admin.overview.authMode', 'Authentication')}
+          value={authLabel()}
+          href="/admin/auth"
+        />
+        <InfoRow
+          icon={KeyIcon}
+          label={t('admin.overview.oauth', 'OAuth')}
+          value={oauthLabel()}
+          href="/admin/oauth"
+        />
+      </div>
+    </div>
+  );
+}
+
 export default function AdminOverview() {
   const { t } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const { stats, attentionItems, isLoading, isFreshInstance } = useOverviewData();
+  const { stats, platformInfo, isLoading, isFreshInstance } = useOverviewData();
 
   const instanceName = uiConfig?.header?.title ?? 'iHub Apps';
 
@@ -339,10 +457,7 @@ export default function AdminOverview() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main column */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Attention items */}
-          <AttentionSection items={attentionItems} />
-
+        <div className="lg:col-span-2 flex flex-col gap-6">
           {/* Quick actions */}
           <div>
             <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
@@ -350,39 +465,14 @@ export default function AdminOverview() {
             </h2>
             <QuickActions />
           </div>
+
+          {/* Common pages — grows to match height of side column */}
+          {!isFreshInstance && <CommonPages className="flex-1" />}
         </div>
 
         {/* Side column */}
         <div className="space-y-6">
-          {isFreshInstance ? (
-            <SetupChecklist />
-          ) : (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-              <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                {t('admin.overview.shortcuts', 'Common pages')}
-              </h2>
-              <nav className="space-y-1">
-                {[
-                  { label: t('admin.nav.apps', 'Apps'), href: '/admin/apps' },
-                  { label: t('admin.nav.models', 'Models'), href: '/admin/models' },
-                  { label: t('admin.nav.users', 'Users'), href: '/admin/users' },
-                  { label: t('admin.nav.authentication', 'Authentication'), href: '/admin/auth' },
-                  { label: t('admin.nav.features', 'Features'), href: '/admin/features' },
-                  { label: t('admin.nav.usage', 'Usage Reports'), href: '/admin/usage' },
-                  { label: t('admin.nav.backup', 'Backup & Restore'), href: '/admin/backup' }
-                ].map(link => (
-                  <Link
-                    key={link.href}
-                    to={link.href}
-                    className="flex items-center justify-between px-3 py-2 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                  >
-                    {link.label}
-                    <ArrowRightIcon className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
-                  </Link>
-                ))}
-              </nav>
-            </div>
-          )}
+          {isFreshInstance ? <SetupChecklist /> : <PlatformInfoSection info={platformInfo} />}
         </div>
       </div>
     </div>

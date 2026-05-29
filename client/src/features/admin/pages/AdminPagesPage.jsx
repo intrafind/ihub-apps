@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { fetchAdminPages, deletePage } from '../../../api/adminApi';
 import { getLocalizedContent } from '../../../utils/localizeContent';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
 
 function AdminPagesPage() {
   const { t, i18n } = useTranslation();
@@ -12,6 +14,7 @@ function AdminPagesPage() {
   const [pages, setPages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     loadPages();
@@ -29,24 +32,29 @@ function AdminPagesPage() {
     }
   };
 
-  const handleDelete = async id => {
-    if (!window.confirm(t('admin.pages.confirmDelete', 'Delete this page?'))) {
-      return;
-    }
-    try {
-      await deletePage(id);
-      setPages(prev => prev.filter(p => p.id !== id));
-    } catch (err) {
-      setError(err.message);
-    }
+  const handleDelete = id => {
+    setConfirmDialog({
+      title: t('admin.pages.deleteTitle', 'Delete Page'),
+      message: t('admin.pages.confirmDelete', 'Delete this page?'),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await deletePage(id);
+          setPages(prev => prev.filter(p => p.id !== id));
+        } catch (err) {
+          setError(err.message);
+        }
+      }
+    });
   };
 
   const getTitle = page => getLocalizedContent(page.title, currentLanguage);
 
   if (loading) {
     return (
-      <div className="flex justify-center py-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600" />
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -148,6 +156,14 @@ function AdminPagesPage() {
           </div>
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

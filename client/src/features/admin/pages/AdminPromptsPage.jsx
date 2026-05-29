@@ -8,6 +8,8 @@ import GlobalPromptVariablesEditor from '../components/GlobalPromptVariablesEdit
 import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
+import AdminEmptyState from '../components/AdminEmptyState';
 
 function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
@@ -250,8 +252,8 @@ function AdminPromptsPage() {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -647,15 +649,11 @@ function AdminPromptsPage() {
             </div>
 
             {sortedPrompts.length === 0 && (
-              <div className="text-center py-12">
-                <Icon name="clipboard" className="mx-auto h-12 w-12 text-gray-400" />
-                <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {t('admin.prompts.noPrompts', 'No prompts found')}
-                </h3>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                  {t('admin.prompts.noPromptsDesc', 'Get started by creating a new prompt.')}
-                </p>
-                <div className="mt-6">
+              <AdminEmptyState
+                icon="document-text"
+                title={t('admin.prompts.noPrompts', 'No prompts found')}
+                description={t('admin.prompts.noPromptsDesc', 'Get started by creating a new prompt.')}
+                action={
                   <button
                     onClick={() => navigate('/admin/prompts/new')}
                     className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -663,8 +661,8 @@ function AdminPromptsPage() {
                     <Icon name="plus" className="h-4 w-4 mr-2" />
                     {t('admin.prompts.createNew', 'Create New Prompt')}
                   </button>
-                </div>
-              </div>
+                }
+              />
             )}
 
             {/* Prompt Details Popup */}

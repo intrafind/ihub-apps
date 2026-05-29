@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
+import AdminEmptyState from '../components/AdminEmptyState';
 
 function AdminSourcesPage() {
   const { t } = useTranslation();
@@ -16,6 +19,7 @@ function AdminSourcesPage() {
   const [selectedSources, setSelectedSources] = useState(new Set());
   const [bulkOperating, setBulkOperating] = useState(false);
   const [testingSource, setTestingSource] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   useEffect(() => {
     loadSources();
@@ -114,35 +118,32 @@ function AdminSourcesPage() {
     }
   };
 
-  const handleDeleteSource = async sourceId => {
-    if (
-      !window.confirm(
-        t('admin.sources.deleteConfirm', 'Are you sure you want to delete this source?')
-      )
-    ) {
-      return;
-    }
-
-    try {
-      await makeAdminApiCall(`/admin/sources/${sourceId}`, {
-        method: 'DELETE'
-      });
-
-      setSources(prev => prev.filter(s => s.id !== sourceId));
-      setSelectedSources(prev => {
-        const newSet = new Set(prev);
-        newSet.delete(sourceId);
-        return newSet;
-      });
-    } catch (err) {
-      if (err.message.includes('dependencies')) {
-        alert(
-          t('admin.sources.deleteDependencies', 'Cannot delete source: it is used by other apps.')
-        );
-      } else {
-        setError(err.message);
+  const handleDeleteSource = sourceId => {
+    setConfirmDialog({
+      title: t('admin.sources.deleteTitle', 'Delete Source'),
+      message: t('admin.sources.deleteConfirm', 'Are you sure you want to delete this source?'),
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog(null);
+        try {
+          await makeAdminApiCall(`/admin/sources/${sourceId}`, {
+            method: 'DELETE'
+          });
+          setSources(prev => prev.filter(s => s.id !== sourceId));
+          setSelectedSources(prev => {
+            const newSet = new Set(prev);
+            newSet.delete(sourceId);
+            return newSet;
+          });
+        } catch (err) {
+          if (err.message.includes('dependencies')) {
+            setError(t('admin.sources.deleteDependencies', 'Cannot delete source: it is used by other apps.'));
+          } else {
+            setError(err.message);
+          }
+        }
       }
-    }
+    });
   };
 
   const handleSourceSelection = (sourceId, checked) => {
@@ -188,17 +189,8 @@ function AdminSourcesPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <div className="max-w-7xl mx-auto py-6 px-4">
-          <div className="flex items-center justify-center h-64">
-            <div className="text-center">
-              <Icon name="arrow-path" className="animate-spin h-8 w-8 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500 dark:text-gray-400">
-                {t('common.loading', 'Loading...')}
-              </p>
-            </div>
-          </div>
-        </div>
+      <div className="max-w-7xl mx-auto py-6 px-4">
+        <AdminPageSkeleton rows={5} />
       </div>
     );
   }
@@ -357,27 +349,29 @@ function AdminSourcesPage() {
         {/* Sources Table */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
           {filteredSources.length === 0 ? (
-            <div className="text-center py-12">
-              <Icon name="database" className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-                {(Array.isArray(sources) ? sources.length : 0) === 0
+            <AdminEmptyState
+              icon="server"
+              title={
+                (Array.isArray(sources) ? sources.length : 0) === 0
                   ? t('admin.sources.noSources', 'No sources configured')
-                  : t('admin.sources.noFilteredSources', 'No sources match your filters')}
-              </h3>
-              <p className="text-gray-500 dark:text-gray-400 mb-4">
-                {(Array.isArray(sources) ? sources.length : 0) === 0
+                  : t('admin.sources.noFilteredSources', 'No sources match your filters')
+              }
+              description={
+                (Array.isArray(sources) ? sources.length : 0) === 0
                   ? t('admin.sources.createFirstSource', 'Create your first source to get started')
-                  : t('admin.sources.adjustFilters', 'Try adjusting your search and filters')}
-              </p>
-              {(Array.isArray(sources) ? sources.length : 0) === 0 && (
-                <button
-                  onClick={() => navigate('/admin/sources/new')}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
-                >
-                  {t('admin.sources.createNew', 'Create Source')}
-                </button>
-              )}
-            </div>
+                  : t('admin.sources.adjustFilters', 'Try adjusting your search and filters')
+              }
+              action={
+                (Array.isArray(sources) ? sources.length : 0) === 0 ? (
+                  <button
+                    onClick={() => navigate('/admin/sources/new')}
+                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
+                  >
+                    {t('admin.sources.createNew', 'Create Source')}
+                  </button>
+                ) : null
+              }
+            />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -507,6 +501,14 @@ function AdminSourcesPage() {
           })}
         </div>
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

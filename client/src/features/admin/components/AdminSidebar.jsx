@@ -12,7 +12,13 @@ import {
 import { useSidebar } from '../contexts/SidebarContext';
 import { getAdminNavSections } from './AdminSidebarNavData';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
+import { useAuth } from '../../../shared/contexts/AuthContext';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+
+// Sections visible to content-admin-only users
+const CONTENT_ADMIN_SECTIONS = new Set(['overview', 'aiWorkspace']);
+// Items within aiWorkspace visible to content-admin-only users
+const CONTENT_ADMIN_ITEMS = new Set(['apps', 'prompts', 'sources']);
 
 function NavItem({ item, isCollapsed }) {
   const location = useLocation();
@@ -129,7 +135,7 @@ function SidebarContent({ sections }) {
   }, [location.pathname, sections, expandSection]);
 
   return (
-    <div className="flex-1 overflow-y-auto py-2 space-y-1">
+    <div className="flex-1 overflow-y-auto py-2 space-y-1 scrollbar-thin">
       {sections.map(section => {
         if (section.items.length === 0) return null;
 
@@ -185,6 +191,7 @@ function SidebarContent({ sections }) {
 export default function AdminSidebar({ onMobileToggle }) {
   const { t } = useTranslation();
   const { platformConfig } = usePlatformConfig();
+  const { user } = useAuth();
   const featureFlags = useFeatureFlags();
   const { isCollapsed, isMobileOpen, toggle, closeMobile } = useSidebar();
   const drawerRef = useRef(null);
@@ -192,7 +199,23 @@ export default function AdminSidebar({ onMobileToggle }) {
   const adminPages = platformConfig?.admin?.pages || {};
   const showAdminPage = key => adminPages[key] !== false;
 
-  const sections = getAdminNavSections({ t, showAdminPage, featureFlags });
+  // Check if user is content-admin-only (has contentAdmin but not full adminAccess)
+  const isContentAdminOnly =
+    user?.permissions?.contentAdmin && !user?.permissions?.adminAccess && !user?.isAdmin;
+
+  let sections = getAdminNavSections({ t, showAdminPage, featureFlags });
+
+  // Filter sections for content-admin-only users
+  if (isContentAdminOnly) {
+    sections = sections
+      .filter(s => CONTENT_ADMIN_SECTIONS.has(s.id))
+      .map(s => {
+        if (s.id === 'aiWorkspace') {
+          return { ...s, items: s.items.filter(item => CONTENT_ADMIN_ITEMS.has(item.key)) };
+        }
+        return s;
+      });
+  }
 
   // Trap focus in mobile drawer and close on Escape
   useEffect(() => {
@@ -215,6 +238,7 @@ export default function AdminSidebar({ onMobileToggle }) {
         <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
           <button
             type="button"
+            onClick={() => window.dispatchEvent(new Event('admin:open-palette'))}
             className="flex items-center w-full gap-2 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             aria-label={t('admin.sidebar.search', 'Search admin...')}
           >
@@ -301,6 +325,7 @@ export default function AdminSidebar({ onMobileToggle }) {
           <div className="px-3 py-2 border-b border-gray-200 dark:border-gray-700">
             <button
               type="button"
+              onClick={() => window.dispatchEvent(new Event('admin:open-palette'))}
               className="flex items-center w-full gap-2 px-3 py-1.5 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded-md"
               aria-label={t('admin.sidebar.search', 'Search admin...')}
             >

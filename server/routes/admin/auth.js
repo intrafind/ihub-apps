@@ -4,6 +4,7 @@ import { getRootDir } from '../../pathUtils.js';
 import { atomicWriteJSON } from '../../utils/atomicWrite.js';
 import configCache from '../../configCache.js';
 import { adminAuth, isAdminAuthRequired } from '../../middleware/adminAuth.js';
+import { isContentAdminAuthRequired } from '../../middleware/contentAdminAuth.js';
 import { hashPasswordWithUserId } from '../../middleware/localAuth.js';
 import { v4 as uuidv4 } from 'uuid';
 import { buildServerPath } from '../../utils/basePath.js';
@@ -168,7 +169,8 @@ export default function registerAdminAuthRoutes(app) {
     try {
       // Check if admin auth is required considering current user authentication
       // req.user is populated by the global auth middleware (proxyAuth, localAuth)
-      const authRequired = isAdminAuthRequired(req);
+      // Accept both full admins and content admins for admin panel entry
+      const authRequired = isAdminAuthRequired(req) && isContentAdminAuthRequired(req);
 
       res.json({
         authRequired,

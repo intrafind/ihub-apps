@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import ResourceSelector from '../components/ResourceSelector';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 
 function AdminBrowserExtensionPage() {
   const { t } = useTranslation();
@@ -20,6 +21,7 @@ function AdminBrowserExtensionPage() {
   const [newExtensionId, setNewExtensionId] = useState('');
   const [allowedGroups, setAllowedGroups] = useState(['browser-extension']);
   const [availableGroups, setAvailableGroups] = useState([]);
+  const [confirmDialog, setConfirmDialog] = useState(null);
 
   const emptyPrompt = () => ({
     _id: crypto.randomUUID(),
@@ -162,41 +164,49 @@ function AdminBrowserExtensionPage() {
     }
   };
 
-  const handleRotateKey = async () => {
+  const handleRotateKey = () => {
     // The same endpoint handles first-time generation and rotation. Skip the
     // "this will invalidate installed copies" confirmation when there's no
     // existing key, because there are no installed copies to invalidate.
     const isFirstTime = !status?.signingKey?.extensionId;
-    if (
-      !isFirstTime &&
-      !window.confirm(
-        t(
+    const doRotate = async () => {
+      try {
+        setMessage(null);
+        await makeAdminApiCall('/admin/browser-extension/rotate-key', { method: 'POST' });
+        await loadStatus();
+        setMessage({
+          type: 'success',
+          text: isFirstTime
+            ? t(
+                'admin.browserExtension.signingKeyGenerated',
+                'Signing key generated. You can now download the packaged extension.'
+              )
+            : t('admin.browserExtension.rotateKeyOk', 'Signing key rotated; new extension ID issued.')
+        });
+      } catch (err) {
+        setMessage({
+          type: 'error',
+          text:
+            t('admin.browserExtension.rotateKeyError', 'Failed to rotate key: ') +
+            (err?.message || 'unknown error')
+        });
+      }
+    };
+
+    if (isFirstTime) {
+      doRotate();
+    } else {
+      setConfirmDialog({
+        title: t('admin.browserExtension.rotateKeyTitle', 'Generate New Signing Key'),
+        message: t(
           'admin.browserExtension.rotateKeyConfirm',
           'Generate a new signing key? The extension ID will change and existing installed copies will need to be reinstalled (or use the previous-ID grace window).'
-        )
-      )
-    ) {
-      return;
-    }
-    try {
-      setMessage(null);
-      await makeAdminApiCall('/admin/browser-extension/rotate-key', { method: 'POST' });
-      await loadStatus();
-      setMessage({
-        type: 'success',
-        text: isFirstTime
-          ? t(
-              'admin.browserExtension.signingKeyGenerated',
-              'Signing key generated. You can now download the packaged extension.'
-            )
-          : t('admin.browserExtension.rotateKeyOk', 'Signing key rotated; new extension ID issued.')
-      });
-    } catch (err) {
-      setMessage({
-        type: 'error',
-        text:
-          t('admin.browserExtension.rotateKeyError', 'Failed to rotate key: ') +
-          (err?.message || 'unknown error')
+        ),
+        danger: true,
+        onConfirm: async () => {
+          setConfirmDialog(null);
+          await doRotate();
+        }
       });
     }
   };
@@ -779,6 +789,14 @@ function AdminBrowserExtensionPage() {
           </>
         )}
       </div>
+      <ConfirmDialog
+        isOpen={!!confirmDialog}
+        title={confirmDialog?.title ?? ''}
+        message={confirmDialog?.message ?? ''}
+        danger={confirmDialog?.danger}
+        onConfirm={() => confirmDialog?.onConfirm()}
+        onDeny={() => setConfirmDialog(null)}
+      />
     </div>
   );
 }

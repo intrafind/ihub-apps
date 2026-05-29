@@ -6,6 +6,8 @@ import Icon from '../../../shared/components/Icon';
 import IFinderConfig from '../components/IFinderConfig';
 import { useFeatureFlags } from '../../../shared/hooks/useFeatureFlags';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminPageSkeleton from '../components/AdminPageSkeleton';
+import AdminEmptyState from '../components/AdminEmptyState';
 
 function HealthBadge({ status }) {
   const { t } = useTranslation();
@@ -329,9 +331,7 @@ function AdminProvidersPage() {
 
         {/* Providers List - Grouped by Category */}
         {loading ? (
-          <div className="flex justify-center items-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-          </div>
+          <AdminPageSkeleton rows={5} />
         ) : (
           <div className="space-y-6">
             {categoryOrder.map(category => {
@@ -599,13 +599,30 @@ function AdminProvidersPage() {
             })}
 
             {filteredProviders.length === 0 && (
-              <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-12 text-center">
-                <p className="text-gray-500 dark:text-gray-400">
-                  {searchTerm
+              <AdminEmptyState
+                icon="wrench-screwdriver"
+                title={
+                  searchTerm
                     ? t('admin.providers.noResults', 'No providers found matching your search.')
-                    : t('admin.providers.noProviders', 'No providers configured.')}
-                </p>
-              </div>
+                    : t('admin.providers.noProviders', 'No providers configured.')
+                }
+                description={
+                  searchTerm
+                    ? t('admin.providers.adjustSearch', 'Try adjusting your search term.')
+                    : t('admin.providers.createFirst', 'Create your first provider to get started.')
+                }
+                action={
+                  !searchTerm ? (
+                    <button
+                      onClick={createProvider}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
+                    >
+                      <Icon name="PlusIcon" className="w-5 h-5" />
+                      {t('admin.providers.createNew', 'Create New Provider')}
+                    </button>
+                  ) : null
+                }
+              />
             )}
           </div>
         )}
