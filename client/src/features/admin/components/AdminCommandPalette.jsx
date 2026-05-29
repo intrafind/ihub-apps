@@ -89,7 +89,7 @@ function buildSubtitle(type, entry) {
     case 'model':
       return entry.provider || null;
     case 'app':
-      return entry.enabled === false ? 'disabled' : (entry.category || null);
+      return entry.enabled === false ? 'disabled' : entry.category || null;
     case 'user':
       return entry.email || null;
     case 'source':

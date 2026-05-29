@@ -137,7 +137,12 @@ function AdminSourcesPage() {
           });
         } catch (err) {
           if (err.message.includes('dependencies')) {
-            setError(t('admin.sources.deleteDependencies', 'Cannot delete source: it is used by other apps.'));
+            setError(
+              t(
+                'admin.sources.deleteDependencies',
+                'Cannot delete source: it is used by other apps.'
+              )
+            );
           } else {
             setError(err.message);
           }

@@ -177,9 +177,12 @@ function AdminOAuthClientsPage() {
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
-          const response = await makeAdminApiCall(`/admin/oauth/clients/${clientId}/rotate-secret`, {
-            method: 'POST'
-          });
+          const response = await makeAdminApiCall(
+            `/admin/oauth/clients/${clientId}/rotate-secret`,
+            {
+              method: 'POST'
+            }
+          );
           const data = response.data;
           const newSecret = data.clientSecret;
           // Show the new secret — intentional alert so the admin can copy it before dismissing

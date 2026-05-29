@@ -329,10 +329,7 @@ function AdminAuditLogPage() {
                   const summary = entry.summary || '-';
                   const isLong = summary.length > 80;
                   return (
-                    <tr
-                      key={rowKey}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-700/50"
-                    >
+                    <tr key={rowKey} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 dark:text-gray-300">
                         {formatTimestamp(entry.ts)}
                       </td>

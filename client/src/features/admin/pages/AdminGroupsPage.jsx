@@ -36,7 +36,11 @@ function AdminGroupsPage() {
   const handleDeleteGroup = (groupId, groupName) => {
     setConfirmDialog({
       title: t('admin.groups.deleteTitle', 'Delete Group'),
-      message: t('admin.groups.deleteConfirm', 'Are you sure you want to delete the group "{{name}}"?', { name: groupName }),
+      message: t(
+        'admin.groups.deleteConfirm',
+        'Are you sure you want to delete the group "{{name}}"?',
+        { name: groupName }
+      ),
       danger: true,
       onConfirm: async () => {
         setConfirmDialog(null);

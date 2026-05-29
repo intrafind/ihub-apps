@@ -181,7 +181,10 @@ function AdminBrowserExtensionPage() {
                 'admin.browserExtension.signingKeyGenerated',
                 'Signing key generated. You can now download the packaged extension.'
               )
-            : t('admin.browserExtension.rotateKeyOk', 'Signing key rotated; new extension ID issued.')
+            : t(
+                'admin.browserExtension.rotateKeyOk',
+                'Signing key rotated; new extension ID issued.'
+              )
         });
       } catch (err) {
         setMessage({

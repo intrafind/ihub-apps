@@ -652,7 +652,10 @@ function AdminPromptsPage() {
               <AdminEmptyState
                 icon="document-text"
                 title={t('admin.prompts.noPrompts', 'No prompts found')}
-                description={t('admin.prompts.noPromptsDesc', 'Get started by creating a new prompt.')}
+                description={t(
+                  'admin.prompts.noPromptsDesc',
+                  'Get started by creating a new prompt.'
+                )}
                 action={
                   <button
                     onClick={() => navigate('/admin/prompts/new')}
