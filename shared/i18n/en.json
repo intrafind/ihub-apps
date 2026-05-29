@@ -121,9 +121,9 @@
   "office": {
     "pinned": {
       "addCurrent": "Add this email",
-      "addCurrentTooltip": "Attach this email to the chat",
+      "addCurrentTooltip": "Attach the currently open email with its attachments",
       "addSelected": "Add selected emails",
-      "addSelectedTooltip": "Attach every email you have selected in Outlook",
+      "addSelectedTooltip": "Attach all Ctrl-selected emails from your message list (without attachments)",
       "alreadyAdded": "Already added",
       "removeOne": "Remove from chat",
       "clearAll": "Clear",

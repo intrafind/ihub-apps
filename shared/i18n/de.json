@@ -135,9 +135,9 @@
   "office": {
     "pinned": {
       "addCurrent": "Diese E-Mail hinzufügen",
-      "addCurrentTooltip": "Diese E-Mail an den Chat anhängen",
+      "addCurrentTooltip": "Die aktuell geöffnete E-Mail mit ihren Anhängen anhängen",
       "addSelected": "Ausgewählte E-Mails hinzufügen",
-      "addSelectedTooltip": "Alle in Outlook ausgewählten E-Mails anhängen",
+      "addSelectedTooltip": "Alle Strg-ausgewählten E-Mails aus Ihrer Nachrichtenliste anhängen (ohne Anhänge)",
       "alreadyAdded": "Bereits hinzugefügt",
       "removeOne": "Aus dem Chat entfernen",
       "clearAll": "Leeren",
