@@ -356,6 +356,7 @@
       "usernamePlaceholder": "Enter your username",
       "password": "Password",
       "passwordPlaceholder": "Enter your password",
+      "rememberMe": "Remember me",
       "button": "Sign in",
       "error": "Invalid username or password",
       "required": "This field is required",

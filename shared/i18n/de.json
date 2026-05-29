@@ -1716,6 +1716,7 @@
       "usernamePlaceholder": "Benutzername eingeben",
       "password": "Passwort",
       "passwordPlaceholder": "Passwort eingeben",
+      "rememberMe": "Angemeldet bleiben",
       "button": "Anmelden",
       "error": "Ungültiger Benutzername oder Passwort",
       "required": "Dieses Feld ist erforderlich",
