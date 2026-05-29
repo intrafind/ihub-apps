@@ -120,6 +120,8 @@
   },
   "office": {
     "showTaskPane": "Show Task Pane",
+    "insertIntoEmail": "Add to email",
+    "insertIntoDocument": "Add to document",
     "pinned": {
       "addCurrent": "Add this email",
       "addCurrentTooltip": "Attach this email to the chat",
@@ -130,6 +132,13 @@
       "clearAll": "Clear",
       "clearAllTooltip": "Remove every pinned email",
       "untitled": "(no subject)"
+    },
+    "settingsDialog": {
+      "title": "Settings",
+      "account": "Account",
+      "language": "Language",
+      "cancel": "Cancel",
+      "save": "Save"
     }
   },
   "pages": {
@@ -1782,17 +1791,6 @@
       "tooltipManual": "Dictate to editor (Ctrl+M) - manual",
       "tooltipAutomatic": "Dictate to editor (Ctrl+M) - automatic",
       "ariaLabel": "Dictate text to editor"
-    }
-  },
-  "office": {
-    "insertIntoEmail": "Add to email",
-    "insertIntoDocument": "Add to document",
-    "settingsDialog": {
-      "title": "Settings",
-      "account": "Account",
-      "language": "Language",
-      "cancel": "Cancel",
-      "save": "Save"
     }
   },
   "teams": {
