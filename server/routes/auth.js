@@ -135,7 +135,7 @@ export default function registerAuthRoutes(app) {
       }
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
 
       res.json({
         success: true,
@@ -275,7 +275,7 @@ export default function registerAuthRoutes(app) {
       }
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
 
       res.json({
         success: true,
@@ -322,7 +322,7 @@ export default function registerAuthRoutes(app) {
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
 
       // Validate and sanitize return URL to prevent open redirect attacks
       const rawReturnUrl = req.query.returnUrl;
@@ -412,7 +412,7 @@ export default function registerAuthRoutes(app) {
       const result = await processNtlmLogin(req, ntlmAuthConfig);
 
       // Set HTTP-only cookie for authentication
-      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000));
+      res.cookie('authToken', result.token, getAuthCookieOptions(result.expiresIn * 1000, req));
 
       res.json({
         success: true,
@@ -454,7 +454,7 @@ export default function registerAuthRoutes(app) {
    */
   app.post(buildServerPath('/api/auth/logout'), (req, res) => {
     // Clear the authentication cookie
-    res.clearCookie('authToken', getClearAuthCookieOptions());
+    res.clearCookie('authToken', getClearAuthCookieOptions(req));
     recordAuthEvent(req.user?.authMode || 'unknown', 'logout');
 
     // Clear NTLM session flag to prevent auto-relogin

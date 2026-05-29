@@ -203,7 +203,7 @@ export default function jwtAuthMiddleware(req, res, next) {
       } else {
         // OAuth clients not enabled, but token is OAuth type - reject
         logger.warn('OAuth token rejected: OAuth clients not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', getClearAuthCookieOptions());
+        res.clearCookie('authToken', getClearAuthCookieOptions(req));
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }
@@ -332,7 +332,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         }
       } else {
         logger.warn('OAuth auth code token rejected: OAuth not enabled', { component: 'JwtAuth' });
-        res.clearCookie('authToken', getClearAuthCookieOptions());
+        res.clearCookie('authToken', getClearAuthCookieOptions(req));
         if (req.path === '/api/auth/status') {
           return next();
         }
@@ -402,7 +402,7 @@ export default function jwtAuthMiddleware(req, res, next) {
         logger.warn('JWT Auth token rejected: local authentication is not enabled', {
           component: 'JwtAuth'
         });
-        res.clearCookie('authToken', getClearAuthCookieOptions());
+        res.clearCookie('authToken', getClearAuthCookieOptions(req));
         if (req.path === '/api/auth/status') {
           return next(); // Continue as anonymous — let status endpoint return available auth methods
         }

@@ -2,10 +2,11 @@ import configCache from '../configCache.js';
 import logger from './logger.js';
 
 /**
- * Get the secure flag value for cookies based on platform configuration
+ * Get the secure flag value for cookies based on platform configuration and request protocol
+ * @param {Object} req - Express request object (optional for backward compatibility)
  * @returns {boolean} Whether cookies should use the secure flag
  */
-export function getCookieSecureFlag() {
+export function getCookieSecureFlag(req) {
   try {
     const platform = configCache.getPlatform() || {};
     const cookieSettings = platform.cookieSettings || {};
@@ -20,10 +21,33 @@ export function getCookieSecureFlag() {
       return false;
     }
 
-    // Check USE_HTTPS environment variable to determine if we're using HTTPS
+    // If USE_HTTPS environment variable is set, use HTTPS
     // This is set to 'true' when running behind a reverse proxy with SSL or using native HTTPS
-    // If not set or set to anything other than 'true', assume HTTP (even in production)
-    return process.env.USE_HTTPS === 'true';
+    if (process.env.USE_HTTPS === 'true') {
+      return true;
+    }
+
+    // Detect protocol from actual request if available
+    if (req) {
+      // Check X-Forwarded-Proto header first (for reverse proxy scenarios)
+      const forwardedProto = req.get('x-forwarded-proto');
+      if (forwardedProto) {
+        return forwardedProto === 'https';
+      }
+
+      // Check req.protocol (set by Express based on connection)
+      if (req.protocol) {
+        return req.protocol === 'https';
+      }
+
+      // Check req.secure (Express sets this based on protocol)
+      if (req.secure !== undefined) {
+        return req.secure;
+      }
+    }
+
+    // Default to false (HTTP) if we can't detect the protocol
+    return false;
   } catch (error) {
     logger.error('Error reading cookie settings, defaulting to HTTP (secure=false)', {
       component: 'CookieSettings',
@@ -38,12 +62,13 @@ export function getCookieSecureFlag() {
 /**
  * Get standard cookie options for authentication tokens
  * @param {number} maxAge - Maximum age in milliseconds
+ * @param {Object} req - Express request object (optional for backward compatibility)
  * @returns {object} Cookie options object
  */
-export function getAuthCookieOptions(maxAge) {
+export function getAuthCookieOptions(maxAge, req) {
   return {
     httpOnly: true,
-    secure: getCookieSecureFlag(),
+    secure: getCookieSecureFlag(req),
     sameSite: 'lax',
     maxAge: maxAge
   };
@@ -51,12 +76,13 @@ export function getAuthCookieOptions(maxAge) {
 
 /**
  * Get cookie options for clearing authentication tokens
+ * @param {Object} req - Express request object (optional for backward compatibility)
  * @returns {object} Cookie options object for clearing cookies
  */
-export function getClearAuthCookieOptions() {
+export function getClearAuthCookieOptions(req) {
   return {
     httpOnly: true,
-    secure: getCookieSecureFlag(),
+    secure: getCookieSecureFlag(req),
     sameSite: 'lax'
   };
 }
