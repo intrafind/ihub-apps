@@ -254,7 +254,7 @@ export async function teamsTokenExchange(req, res) {
     });
 
     // Set HTTP-only cookie for authentication
-    res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
+    res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
 
     res.json({
       success: true,

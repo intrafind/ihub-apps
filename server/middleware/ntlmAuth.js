@@ -665,7 +665,7 @@ export function ntlmAuthMiddleware(req, res, next) {
             req.jwtExpiresIn = expiresIn;
 
             // Set HTTP-only cookie for authentication
-            res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000));
+            res.cookie('authToken', token, getAuthCookieOptions(expiresIn * 1000, req));
           } catch (tokenError) {
             logger.error('NTLM Auth: JWT token generation failed', {
               component: 'NtlmAuth',
