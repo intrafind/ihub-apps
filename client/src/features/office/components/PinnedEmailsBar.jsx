@@ -16,6 +16,10 @@ function truncate(s, n) {
  * When `embedded` is true (the OfficeContextStrip usage) the surrounding
  * collapsible strip owns the page-level margins / borders, so this bar
  * just renders its contents flush. Issue #1467.
+ *
+ * When `collapsedMode` is true, only the action buttons ("Add this email",
+ * "Add selected emails") are shown without the pinned items list or clear
+ * button, enabling always-visible pin controls in the collapsed strip header.
  */
 function PinnedEmailsBar({
   pinned,
@@ -27,11 +31,64 @@ function PinnedEmailsBar({
   isCurrentPinned,
   isMultiSelectSupported,
   multiSelectLoading,
-  embedded = false
+  embedded = false,
+  collapsedMode = false
 }) {
   const { t } = useTranslation();
   const hasPins = Array.isArray(pinned) && pinned.length > 0;
 
+  // In collapsed mode, we only show the action buttons, never the pinned list
+  if (collapsedMode) {
+    // Show nothing if there are no pin controls available
+    if (!canPinCurrent && !isMultiSelectSupported) return null;
+
+    return (
+      <div className="flex flex-wrap items-center gap-1.5">
+        {canPinCurrent && (
+          <button
+            type="button"
+            onClick={onPinCurrent}
+            disabled={isCurrentPinned}
+            title={
+              isCurrentPinned
+                ? t('office.pinned.alreadyAdded', 'Already added')
+                : t('office.pinned.addCurrentTooltip', 'Attach this email to the chat')
+            }
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed transition-colors text-xs"
+          >
+            <Icon name="paper-clip" size="sm" />
+            <span>
+              {isCurrentPinned
+                ? t('office.pinned.alreadyAdded', 'Already added')
+                : t('office.pinned.addCurrent', 'Add this email')}
+            </span>
+          </button>
+        )}
+
+        {isMultiSelectSupported && (
+          <button
+            type="button"
+            onClick={onPinSelected}
+            disabled={multiSelectLoading}
+            title={t(
+              'office.pinned.addSelectedTooltip',
+              'Attach every email you have selected in Outlook'
+            )}
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-slate-700 hover:bg-slate-100 disabled:opacity-50 transition-colors text-xs"
+          >
+            <Icon name="plus-circle" size="sm" />
+            <span>
+              {multiSelectLoading
+                ? t('common.loading', 'Loading…')
+                : t('office.pinned.addSelected', 'Add selected emails')}
+            </span>
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  // Normal (expanded) mode below
   // Nothing to do when we can't pin and don't have any pins to show.
   if (!hasPins && !canPinCurrent && !isMultiSelectSupported) return null;
 
