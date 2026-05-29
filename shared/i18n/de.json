@@ -600,7 +600,14 @@
   },
   "office": {
     "insertIntoEmail": "In E-Mail einfügen",
-    "insertIntoDocument": "In Dokument einfügen"
+    "insertIntoDocument": "In Dokument einfügen",
+    "settingsDialog": {
+      "title": "Einstellungen",
+      "account": "Konto",
+      "language": "Sprache",
+      "cancel": "Abbrechen",
+      "save": "Speichern"
+    }
   },
   "admin": {
     "providers": {

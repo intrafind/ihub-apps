@@ -1785,7 +1785,14 @@
   },
   "office": {
     "insertIntoEmail": "Add to email",
-    "insertIntoDocument": "Add to document"
+    "insertIntoDocument": "Add to document",
+    "settingsDialog": {
+      "title": "Settings",
+      "account": "Account",
+      "language": "Language",
+      "cancel": "Cancel",
+      "save": "Save"
+    }
   },
   "teams": {
     "status": {
