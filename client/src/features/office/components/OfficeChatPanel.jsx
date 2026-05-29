@@ -93,7 +93,7 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
   // the user can navigate between emails while building up a context set;
   // wiped on new-chat / app-switch alongside the chat history.
   const [pinnedEmails, setPinnedEmails] = useState([]);
-  const [multiSelectLoading, setMultiSelectLoading] = useState(false);
+  const [addEmailsLoading, setAddEmailsLoading] = useState(false);
   // itemId of the email currently open in Outlook. Lets us hide the
   // "Add this email" affordance once it's already in the pin list, and
   // dedupe in the prompt builder.
@@ -176,28 +176,6 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     };
   }, [adapter]);
 
-  const handlePinCurrent = useCallback(async () => {
-    try {
-      const ctx = await fetchCurrentMailContext();
-      if (!ctx?.available) return;
-      if (!ctx.itemId && !ctx.subject && !ctx.bodyText) return;
-      setPinnedEmails(prev => {
-        if (ctx.itemId && prev.some(p => p.itemId === ctx.itemId)) return prev;
-        return [
-          ...prev,
-          {
-            itemId: ctx.itemId ?? null,
-            subject: ctx.subject ?? null,
-            bodyText: ctx.bodyText ?? null,
-            attachments: ctx.attachments ?? []
-          }
-        ];
-      });
-    } catch {
-      /* silently swallow — surfacing host errors here would be noisy */
-    }
-  }, []);
-
   const handleUnpin = useCallback(itemId => {
     setPinnedEmails(prev => {
       if (!itemId) return prev;
@@ -209,31 +187,82 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
     setPinnedEmails([]);
   }, []);
 
-  const handlePinSelected = useCallback(async () => {
-    if (!multiSelectSupported) return;
-    setMultiSelectLoading(true);
+  // Single "Add email(s)" entry point (issue #1553). Attaches every email
+  // the user has Ctrl-selected in Outlook (Mailbox 1.15+) AND/OR the email
+  // currently open in the reading pane. Replaces the old split
+  // "Add this email" / "Add selected emails" buttons which (a) confused
+  // users by always showing both and (b) silently no-op'd when the
+  // multi-select reader returned nothing.
+  const handleAddEmails = useCallback(async () => {
+    setAddEmailsLoading(true);
     try {
-      const items = await fetchSelectedItemsContext();
-      if (!Array.isArray(items) || items.length === 0) return;
+      const collected = [];
+      const seenIds = new Set();
+      const pushEntry = entry => {
+        if (entry.itemId && seenIds.has(entry.itemId)) return;
+        if (entry.itemId) seenIds.add(entry.itemId);
+        collected.push(entry);
+      };
+
+      // 1. Pull every email the user has multi-selected in Outlook. On a
+      //    single selection this returns just the open email; on no
+      //    selection it returns nothing — both handled by the fallback
+      //    below. Errors are logged, not swallowed, so a failing host API
+      //    no longer leaves the user staring at an unresponsive button.
+      if (multiSelectSupported) {
+        try {
+          const items = await fetchSelectedItemsContext();
+          if (Array.isArray(items)) {
+            for (const it of items) {
+              pushEntry({
+                itemId: it.itemId ?? null,
+                subject: it.subject ?? null,
+                bodyText: it.bodyText ?? null,
+                attachments: []
+              });
+            }
+          }
+        } catch (err) {
+          console.warn('[office] reading selected emails failed', err);
+        }
+      }
+
+      // 2. When the user has a single email open — either because
+      //    multi-select isn't supported, or only one message is selected —
+      //    pull the full current-mail context. This guarantees the open
+      //    email is always added (the core fix for "nothing happened") and
+      //    captures its attachments, which the lightweight multi-select
+      //    reader deliberately skips.
+      if (collected.length <= 1) {
+        try {
+          const ctx = await fetchCurrentMailContext();
+          if (ctx?.available && (ctx.itemId || ctx.subject || ctx.bodyText)) {
+            const entry = {
+              itemId: ctx.itemId ?? null,
+              subject: ctx.subject ?? null,
+              bodyText: ctx.bodyText ?? null,
+              attachments: ctx.attachments ?? []
+            };
+            // Upgrade the matching multi-select stub with attachments rather
+            // than adding a duplicate of the same email.
+            const idx = ctx.itemId ? collected.findIndex(c => c.itemId === ctx.itemId) : -1;
+            if (idx >= 0) collected[idx] = entry;
+            else pushEntry(entry);
+          }
+        } catch (err) {
+          console.warn('[office] reading current email failed', err);
+        }
+      }
+
+      if (collected.length === 0) return;
+
       setPinnedEmails(prev => {
         const seen = new Set(prev.map(p => p.itemId).filter(Boolean));
-        const additions = [];
-        for (const it of items) {
-          if (it.itemId && seen.has(it.itemId)) continue;
-          if (it.itemId) seen.add(it.itemId);
-          additions.push({
-            itemId: it.itemId ?? null,
-            subject: it.subject ?? null,
-            bodyText: it.bodyText ?? null,
-            attachments: []
-          });
-        }
+        const additions = collected.filter(c => !(c.itemId && seen.has(c.itemId)));
         return additions.length ? [...prev, ...additions] : prev;
       });
-    } catch {
-      /* silently swallow */
     } finally {
-      setMultiSelectLoading(false);
+      setAddEmailsLoading(false);
     }
   }, [multiSelectSupported]);
 
@@ -545,14 +574,19 @@ function OfficeChatPanel({ authData, selectedApp, setSelectedApp, onLogout }) {
               pinned={pinnedEmails}
               onUnpin={handleUnpin}
               onClearPinned={handleClearPinned}
-              onPinCurrent={handlePinCurrent}
-              onPinSelected={handlePinSelected}
-              canPinCurrent={!isAppointment && !!currentItemId}
-              isCurrentPinned={
-                !!currentItemId && pinnedEmails.some(p => p.itemId === currentItemId)
+              onAddEmails={handleAddEmails}
+              canAddEmails={!isAppointment && (!!currentItemId || multiSelectSupported)}
+              addEmailsLoading={addEmailsLoading}
+              // When multi-select isn't available we can reliably tell the
+              // single open email is already attached, so we disable the
+              // button and show "Already added". With multi-select the user
+              // may still want to pull other selected emails, so it stays
+              // enabled and the prompt builder dedupes by itemId.
+              addEmailsDisabled={
+                !multiSelectSupported &&
+                !!currentItemId &&
+                pinnedEmails.some(p => p.itemId === currentItemId)
               }
-              isMultiSelectSupported={!isAppointment && multiSelectSupported}
-              multiSelectLoading={multiSelectLoading}
             />
 
             {/* Input */}
