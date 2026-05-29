@@ -20,15 +20,18 @@ export function getCookieSecureFlag() {
       return false;
     }
 
-    // Default behavior: use secure flag in production
-    return process.env.NODE_ENV === 'production';
+    // Check USE_HTTPS environment variable to determine if we're using HTTPS
+    // This is set to 'true' when running behind a reverse proxy with SSL or using native HTTPS
+    // If not set or set to anything other than 'true', assume HTTP (even in production)
+    return process.env.USE_HTTPS === 'true';
   } catch (error) {
-    logger.error('Error reading cookie settings, defaulting to secure in production', {
+    logger.error('Error reading cookie settings, defaulting to HTTP (secure=false)', {
       component: 'CookieSettings',
       error
     });
-    // Fail safe: if we can't read config, default to secure in production
-    return process.env.NODE_ENV === 'production';
+    // Fail safe: if we can't read config, default to insecure (works with HTTP)
+    // This ensures fresh installations work out of the box on HTTP
+    return false;
   }
 }
 
