@@ -58,6 +58,88 @@ function ActionPill({ action }) {
   );
 }
 
+function AuditLogRetentionBadge({ t }) {
+  const [policy, setPolicy] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [message, setMessage] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    makeAdminApiCall('/admin/audit-log/retention')
+      .then(res => {
+        if (!cancelled) setPolicy(res.data);
+      })
+      .catch(() => {
+        if (!cancelled) setPolicy(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!policy) return null;
+
+  const runCleanup = async () => {
+    setRunning(true);
+    setMessage(null);
+    try {
+      const res = await makeAdminApiCall('/admin/audit-log/retention/run', { method: 'POST' });
+      const removed = res.data?.deleted?.length ?? 0;
+      setMessage(
+        removed > 0
+          ? t('admin.auditLog.cleanupRemoved', '{{count}} files removed', { count: removed })
+          : t('admin.auditLog.cleanupNoop', 'Nothing to remove')
+      );
+    } catch (e) {
+      setMessage(
+        t('admin.auditLog.cleanupError', 'Cleanup failed: {{error}}', { error: e.message })
+      );
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const retentionLabel = policy.cleanupEnabled
+    ? policy.retentionDays > 0
+      ? t('admin.auditLog.retentionDays', 'Retain {{days}} days', { days: policy.retentionDays })
+      : t('admin.auditLog.retentionForever', 'Retain forever')
+    : t('admin.auditLog.retentionDisabled', 'Cleanup disabled');
+
+  return (
+    <div className="flex items-center gap-3 text-sm">
+      <span
+        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700"
+        title={t(
+          'admin.auditLog.retentionHint',
+          'Configured in platform.json → auditLog. Edit under Platform → Advanced.'
+        )}
+      >
+        <svg className="w-3.5 h-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <path
+            fillRule="evenodd"
+            d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-12a.75.75 0 00-1.5 0v4a.75.75 0 00.25.56l3 2.75a.75.75 0 101.02-1.1l-2.77-2.54V6z"
+            clipRule="evenodd"
+          />
+        </svg>
+        {retentionLabel}
+      </span>
+      {policy.cleanupEnabled && policy.retentionDays > 0 && (
+        <button
+          type="button"
+          onClick={runCleanup}
+          disabled={running}
+          className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 underline disabled:opacity-50"
+        >
+          {running
+            ? t('admin.auditLog.cleanupRunning', 'Running…')
+            : t('admin.auditLog.runCleanup', 'Run cleanup now')}
+        </button>
+      )}
+      {message && <span className="text-xs text-gray-500 dark:text-gray-400">{message}</span>}
+    </div>
+  );
+}
+
 function AdminAuditLogPage() {
   const { t } = useTranslation();
 
@@ -152,9 +234,12 @@ function AdminAuditLogPage() {
 
   return (
     <div className="p-6 max-w-7xl mx-auto">
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-6">
-        {t('admin.auditLog.title', 'Audit Log')}
-      </h1>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          {t('admin.auditLog.title', 'Audit Log')}
+        </h1>
+        <AuditLogRetentionBadge t={t} />
+      </div>
 
       {/* Filter Bar */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 mb-6">

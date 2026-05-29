@@ -10,6 +10,7 @@ export function useOverviewData() {
   const { t } = useTranslation();
   const [stats, setStats] = useState(null);
   const [platformInfo, setPlatformInfo] = useState(null);
+  const [recentActivity, setRecentActivity] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isFreshInstance, setIsFreshInstance] = useState(false);
 
@@ -23,14 +24,16 @@ export function useOverviewData() {
         timelineResult,
         versionResult,
         updateResult,
-        overviewResult
+        overviewResult,
+        auditResult
       ] = await Promise.allSettled([
         fetchAdminApps(),
         makeAdminApiCall('/admin/usage/users'),
         makeAdminApiCall('/admin/usage/timeline'),
         makeAdminApiCall('/admin/version'),
         makeAdminApiCall('/admin/version/check-update'),
-        makeAdminApiCall('/admin/overview/stats')
+        makeAdminApiCall('/admin/overview/stats'),
+        makeAdminApiCall('/admin/audit-log?limit=8')
       ]);
 
       if (cancelled) return;
@@ -96,6 +99,14 @@ export function useOverviewData() {
         setPlatformInfo(overview);
       }
 
+      // Recent activity from the audit log (top 8 entries already sorted newest-first)
+      if (auditResult.status === 'fulfilled') {
+        const entries = auditResult.value?.data?.entries;
+        if (Array.isArray(entries)) {
+          setRecentActivity(entries);
+        }
+      }
+
       // Fresh instance: no apps created
       setIsFreshInstance(appCount === 0);
       setIsLoading(false);
@@ -107,5 +118,5 @@ export function useOverviewData() {
     };
   }, [t]);
 
-  return { stats, platformInfo, isLoading, isFreshInstance };
+  return { stats, platformInfo, recentActivity, isLoading, isFreshInstance };
 }

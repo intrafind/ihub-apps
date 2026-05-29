@@ -105,3 +105,38 @@ The admin UI has received a comprehensive visual polish pass:
 - **Full dark mode coverage** — every admin page, table, form, badge, and status indicator now has correct dark-mode colors. Previously several agent, workflow, and user pages were missing dark variants.
 - **Micro-interactions** — all admin buttons now scale down slightly on press (`active:scale-97`) with a 150ms transition for responsive tactile feedback.
 - **Design tokens** — admin color values (`admin.accent`, `admin.surface`, `admin.border`, `admin.muted`) are now defined as Tailwind theme tokens, ensuring consistent color usage across the admin interface.
+
+## Reusable Admin Page Template Shells
+
+Three new layout components establish a consistent skeleton across admin pages:
+
+- **`<AdminListPage>`** — container, breadcrumb, title + description, header actions, optional toolbar (filters / search), content slot.
+- **`<AdminSettingsPage>`** — two-pane layout with a left-rail section nav (anchor-scrolled with active highlighting) and an optional sticky save bar at the bottom of the viewport. The save bar surfaces a "you have unsaved changes" indicator with Save / Discard buttons when the form is dirty.
+- **`<AdminIntegrationHubPage>`** — header, search box, category-grouped grid of status-pilled integration cards.
+
+Existing pages can adopt these incrementally — they still accept arbitrary children. The Security page now uses the two-pane layout (SSL, Cookies, CORS, Encryption sections). The Integrations page now uses the hub layout.
+
+## Form Validation Error Summary Banner
+
+New `<AdminFormErrorSummary>` component renders a red banner at the top of admin forms listing every validation error. Each entry is a click-to-focus link that scrolls and focuses the corresponding field. Accepts either an `{ fieldId: message }` object or an array of `{ fieldId, message, label }` entries.
+
+## OAuth Pages — Merged into a Single Tabbed Surface
+
+The OAuth Hub, Authorization Server, and OAuth Clients pages now share a single tabbed header (`Overview` / `Authorization Server` / `Clients`). The three URLs (`/admin/oauth`, `/admin/oauth/server`, `/admin/oauth/clients`) remain deep-linkable, but the tab bar at the top makes them read as one surface. The Clients tab shows a count badge for the number of registered clients.
+
+## Integration Hub — Status Pills, Category Grouping, and Search
+
+The Integrations page now shows each integration's status as a colored pill (**Connected**, **Available**, **Disabled**, **Needs attention**) derived from platform.json. Integrations are grouped by category (Productivity, Cloud Storage, Ticketing) and a search box filters across title, description, and category.
+
+## Audit Log Retention Policies
+
+The audit log now supports a configurable retention policy.
+
+- **Daily cleanup job** runs on the server (once on boot, then every 24 hours) and deletes daily JSONL files older than `auditLog.retentionDays`. Set `cleanupEnabled: false` to disable, or `retentionDays: -1` to keep entries forever.
+- **Default**: 365 days. New installations get this via migration `V049__add_audit_log_retention`.
+- **Audit Log page** shows a retention badge in the header (`Retain 365 days`) and a "Run cleanup now" link to trigger the job manually.
+- **New endpoints**: `GET /api/admin/audit-log/retention`, `POST /api/admin/audit-log/retention/run`.
+
+## Recent Activity Feed on Overview Dashboard
+
+The admin Overview now shows a **Recent activity** card listing the eight most recent audit log entries (action pill, summary, admin, resource, relative time). Clicking "View all" jumps to the filtered Audit Log page.

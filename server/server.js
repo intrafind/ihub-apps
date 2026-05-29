@@ -356,6 +356,15 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
   }
 
+  // Start audit log cleanup scheduler
+  try {
+    const { startAuditCleanupScheduler } = await import('./services/AuditLogService.js');
+    const platform = configCache.getPlatform ? configCache.getPlatform() : {};
+    startAuditCleanupScheduler(platform?.auditLog || {});
+  } catch (error) {
+    logger.warn('Failed to start audit log cleanup scheduler', { component: 'Server', error });
+  }
+
   // Create Express application
   const app = express();
   const PORT = config.PORT;

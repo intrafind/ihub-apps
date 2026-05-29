@@ -1,15 +1,14 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import LoadingSpinner from '../../../shared/components/LoadingSpinner';
 import { usePlatformConfig } from '../../../shared/contexts/PlatformConfigContext';
 import { getBasePath } from '../../../utils/runtimeBasePath.js';
+import OAuthTabsHeader from '../components/OAuthTabsHeader';
 
 function AdminOAuthServerPage() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { refreshConfig } = usePlatformConfig();
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
@@ -179,40 +178,19 @@ function AdminOAuthServerPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <LoadingSpinner size="lg" />
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <OAuthTabsHeader />
+        <div className="flex items-center justify-center py-16">
+          <LoadingSpinner size="lg" />
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      {/* Header */}
-      <div className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <div>
-            <button
-              onClick={() => navigate('/admin/oauth')}
-              className="inline-flex items-center text-sm text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 mb-2"
-            >
-              <Icon name="chevron-left" size="sm" className="mr-1" />
-              {t('admin.nav.oauth', 'OAuth')}
-            </button>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              {t('admin.auth.oauth.server.title', 'Authorization Server')}
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-1">
-              {t(
-                'admin.auth.oauth.server.subtitle',
-                'Configure iHub as an OAuth 2.0 / OpenID Connect authorization server'
-              )}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <OAuthTabsHeader />
+      <div>
         {/* Enable/Disable Card */}
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
           <div className="flex items-center justify-between">

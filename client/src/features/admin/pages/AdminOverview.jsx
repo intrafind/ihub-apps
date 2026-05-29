@@ -379,10 +379,88 @@ function PlatformInfoSection({ info }) {
   );
 }
 
+const ACTION_PILL_COLORS = {
+  create: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400',
+  update: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400',
+  delete: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400',
+  toggle: 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400',
+  import: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400',
+  export: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+};
+
+function formatRelativeTime(iso) {
+  if (!iso) return '';
+  const diff = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(diff) || diff < 0) return new Date(iso).toLocaleString();
+  const minutes = Math.floor(diff / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
+
+function RecentActivityCard({ entries }) {
+  const { t } = useTranslation();
+  if (!entries) return null;
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+          {t('admin.overview.recentActivity', 'Recent activity')}
+        </h2>
+        <Link
+          to="/admin/audit-log"
+          className="text-xs text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 dark:hover:text-indigo-300 inline-flex items-center gap-1"
+        >
+          {t('admin.overview.viewAll', 'View all')}
+          <ArrowRightIcon className="w-3 h-3" />
+        </Link>
+      </div>
+      {entries.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-gray-500 dark:text-gray-400 text-center">
+          {t('admin.overview.noActivity', 'No admin actions recorded yet.')}
+        </p>
+      ) : (
+        <ul className="divide-y divide-gray-100 dark:divide-gray-700/50">
+          {entries.map(e => {
+            const color =
+              ACTION_PILL_COLORS[e.action] ||
+              'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+            return (
+              <li key={e.id} className="px-4 py-3 flex items-start gap-3">
+                <span
+                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium shrink-0 ${color}`}
+                >
+                  {e.action}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm text-gray-900 dark:text-gray-100 truncate">{e.summary}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    <span className="font-medium">{e.admin}</span>
+                    <span className="mx-1.5">·</span>
+                    {e.resource}
+                    <span className="mx-1.5">·</span>
+                    <time dateTime={e.ts} title={new Date(e.ts).toLocaleString()}>
+                      {formatRelativeTime(e.ts)}
+                    </time>
+                  </p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function AdminOverview() {
   const { t } = useTranslation();
   const { uiConfig } = useUIConfig();
-  const { stats, platformInfo, isLoading, isFreshInstance } = useOverviewData();
+  const { stats, platformInfo, recentActivity, isLoading, isFreshInstance } = useOverviewData();
 
   const instanceName = uiConfig?.header?.title ?? 'iHub Apps';
 
@@ -465,6 +543,9 @@ export default function AdminOverview() {
             </h2>
             <QuickActions />
           </div>
+
+          {/* Recent activity from audit log */}
+          {!isFreshInstance && recentActivity && <RecentActivityCard entries={recentActivity} />}
 
           {/* Common pages — grows to match height of side column */}
           {!isFreshInstance && <CommonPages className="flex-1" />}

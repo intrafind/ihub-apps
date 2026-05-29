@@ -5,6 +5,8 @@ import { getRootDir } from '../pathUtils.js';
 import logger from '../utils/logger.js';
 
 const AUDIT_LOG_DIR = 'data/audit-log';
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DEFAULT_RETENTION_DAYS = 365;
 
 /**
  * Log an admin action to the append-only audit log.
@@ -129,4 +131,108 @@ export async function queryAuditLog({
   const entries = filtered.slice(offset, offset + limit);
 
   return { entries, total };
+}
+
+/**
+ * Delete audit log files older than `retentionDays`.
+ *
+ * A daily JSONL file is considered expired when its date is strictly older
+ * than `today − retentionDays`. Pass a non-positive number to disable
+ * cleanup. Returns the list of file names that were deleted so the scheduler
+ * can log the result.
+ *
+ * @param {number} retentionDays
+ * @returns {Promise<{deleted: string[], retainedFrom: string|null}>}
+ */
+export async function cleanupAuditLog(retentionDays) {
+  if (!Number.isFinite(retentionDays) || retentionDays <= 0) {
+    return { deleted: [], retainedFrom: null };
+  }
+
+  const auditDir = join(getRootDir(), 'contents', AUDIT_LOG_DIR);
+  let files;
+  try {
+    files = await fs.readdir(auditDir);
+  } catch {
+    return { deleted: [], retainedFrom: null };
+  }
+
+  const cutoffMs = Date.now() - retentionDays * DAY_MS;
+  const cutoffDate = new Date(cutoffMs).toISOString().slice(0, 10);
+
+  const deleted = [];
+  for (const file of files) {
+    if (!file.endsWith('.jsonl')) continue;
+    const date = file.replace('.jsonl', '');
+    // String comparison on YYYY-MM-DD is sound because the format is lexicographic.
+    if (date < cutoffDate) {
+      try {
+        await fs.unlink(join(auditDir, file));
+        deleted.push(file);
+      } catch (error) {
+        logger.warn('Failed to delete audit log file', {
+          component: 'AuditLogService',
+          file,
+          error: error.message
+        });
+      }
+    }
+  }
+
+  return { deleted, retainedFrom: cutoffDate };
+}
+
+let cleanupInterval = null;
+const CLEANUP_INTERVAL_MS = DAY_MS; // run once per day
+
+/**
+ * Start the audit-log cleanup scheduler.
+ *
+ * Reads `retentionDays` from the passed config (falls back to the default).
+ * Runs once on startup, then daily. A non-positive `retentionDays` (or
+ * `cleanupEnabled: false`) disables cleanup entirely.
+ *
+ * @param {{ retentionDays?: number, cleanupEnabled?: boolean }} [config]
+ */
+export function startAuditCleanupScheduler(config = {}) {
+  if (cleanupInterval) return;
+  const enabled = config.cleanupEnabled !== false;
+  const retentionDays = enabled
+    ? Number.isFinite(config.retentionDays)
+      ? config.retentionDays
+      : DEFAULT_RETENTION_DAYS
+    : -1;
+
+  const run = () => {
+    cleanupAuditLog(retentionDays)
+      .then(({ deleted, retainedFrom }) => {
+        if (deleted.length > 0) {
+          logger.info('Audit log cleanup removed expired files', {
+            component: 'AuditLogService',
+            removed: deleted.length,
+            retainedFrom
+          });
+        }
+      })
+      .catch(error =>
+        logger.error('Audit log cleanup failed', {
+          component: 'AuditLogService',
+          error: error.message
+        })
+      );
+  };
+
+  run();
+  cleanupInterval = setInterval(run, CLEANUP_INTERVAL_MS);
+}
+
+export function stopAuditCleanupScheduler() {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    cleanupInterval = null;
+  }
+}
+
+export function getAuditLogRetentionDefault() {
+  return DEFAULT_RETENTION_DAYS;
 }
