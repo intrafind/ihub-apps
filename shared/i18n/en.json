@@ -119,6 +119,7 @@
     "toggleDescription": "Search the web for up-to-date information"
   },
   "office": {
+    "showTaskPane": "Show Task Pane",
     "pinned": {
       "addCurrent": "Add this email",
       "addCurrentTooltip": "Attach this email to the chat",

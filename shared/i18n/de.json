@@ -133,6 +133,7 @@
     "toggleDescription": "Das Web nach aktuellen Informationen durchsuchen"
   },
   "office": {
+    "showTaskPane": "Aufgabenbereich anzeigen",
     "pinned": {
       "addCurrent": "Diese E-Mail hinzufügen",
       "addCurrentTooltip": "Diese E-Mail an den Chat anhängen",

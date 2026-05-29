@@ -2,11 +2,23 @@
 // Serves runtime configuration and generates the Office manifest XML
 
 import express from 'express';
+import { readFileSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { requireFeature } from '../../featureRegistry.js';
 import { buildPublicBaseUrl } from '../../utils/publicBaseUrl.js';
 import configCache from '../../configCache.js';
 import { getLocalizedContent } from '../../../shared/localize.js';
 import logger from '../../utils/logger.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load translation files
+const translations = {
+  en: JSON.parse(readFileSync(join(__dirname, '../../../shared/i18n/en.json'), 'utf-8')),
+  de: JSON.parse(readFileSync(join(__dirname, '../../../shared/i18n/de.json'), 'utf-8'))
+};
 
 const router = express.Router();
 
@@ -105,21 +117,30 @@ router.get('/manifest.xml', (req, res) => {
   const displayName = getLocalizedContent(officeConfig.displayName, lang) || 'iHub Apps';
   const description =
     getLocalizedContent(officeConfig.description, lang) || 'AI-powered assistant for Outlook';
+  const showTaskPaneLabel = translations[lang]?.office?.showTaskPane || 'Show Task Pane';
 
   logger.debug('Generating Office manifest', {
     component: 'OfficeAddinRoutes',
     baseUrl,
-    displayName
+    displayName,
+    lang,
+    showTaskPaneLabel
   });
 
-  const manifest = generateManifest({ baseUrl, origin, displayName, description });
+  const manifest = generateManifest({
+    baseUrl,
+    origin,
+    displayName,
+    description,
+    showTaskPaneLabel
+  });
 
   res.set('Content-Type', 'application/xml; charset=utf-8');
   res.set('Content-Disposition', 'attachment; filename="manifest.xml"');
   res.send(manifest);
 });
 
-function generateManifest({ baseUrl, origin, displayName, description }) {
+function generateManifest({ baseUrl, origin, displayName, description, showTaskPaneLabel }) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -279,7 +300,7 @@ function generateManifest({ baseUrl, origin, displayName, description }) {
       </bt:Urls>
       <bt:ShortStrings>
         <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="Show Task Pane"/>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="${escapeXml(showTaskPaneLabel)}"/>
       </bt:ShortStrings>
       <bt:LongStrings>
         <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
