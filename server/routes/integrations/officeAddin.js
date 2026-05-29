@@ -113,26 +113,33 @@ router.get('/manifest.xml', (req, res) => {
 
   const baseUrl = buildPublicBaseUrl(req);
   const origin = new URL(baseUrl).origin;
-  const lang = req.acceptsLanguages('de', 'en') === 'de' ? 'de' : 'en';
-  const displayName = getLocalizedContent(officeConfig.displayName, lang) || 'iHub Apps';
-  const description =
-    getLocalizedContent(officeConfig.description, lang) || 'AI-powered assistant for Outlook';
-  const showTaskPaneLabel = translations[lang]?.office?.showTaskPane || 'Show Task Pane';
+
+  // Get localized values for all supported languages
+  const displayNameEn = getLocalizedContent(officeConfig.displayName, 'en') || 'iHub Apps';
+  const displayNameDe = getLocalizedContent(officeConfig.displayName, 'de') || displayNameEn;
+  const descriptionEn = getLocalizedContent(officeConfig.description, 'en') || 'AI-powered assistant for Outlook';
+  const descriptionDe = getLocalizedContent(officeConfig.description, 'de') || descriptionEn;
+  const showTaskPaneLabelEn = translations.en?.office?.showTaskPane || 'Show Task Pane';
+  const showTaskPaneLabelDe = translations.de?.office?.showTaskPane || showTaskPaneLabelEn;
 
   logger.debug('Generating Office manifest', {
     component: 'OfficeAddinRoutes',
     baseUrl,
-    displayName,
-    lang,
-    showTaskPaneLabel
+    displayNameEn,
+    displayNameDe,
+    showTaskPaneLabelEn,
+    showTaskPaneLabelDe
   });
 
   const manifest = generateManifest({
     baseUrl,
     origin,
-    displayName,
-    description,
-    showTaskPaneLabel
+    displayNameEn,
+    displayNameDe,
+    descriptionEn,
+    descriptionDe,
+    showTaskPaneLabelEn,
+    showTaskPaneLabelDe
   });
 
   res.set('Content-Type', 'application/xml; charset=utf-8');
@@ -140,7 +147,7 @@ router.get('/manifest.xml', (req, res) => {
   res.send(manifest);
 });
 
-function generateManifest({ baseUrl, origin, displayName, description, showTaskPaneLabel }) {
+function generateManifest({ baseUrl, origin, displayNameEn, displayNameDe, descriptionEn, descriptionDe, showTaskPaneLabelEn, showTaskPaneLabelDe }) {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
            xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -151,8 +158,12 @@ function generateManifest({ baseUrl, origin, displayName, description, showTaskP
   <Version>1.1.0.0</Version>
   <ProviderName>intrafind</ProviderName>
   <DefaultLocale>en-US</DefaultLocale>
-  <DisplayName DefaultValue="${escapeXml(displayName)}"/>
-  <Description DefaultValue="${escapeXml(description)}"/>
+  <DisplayName DefaultValue="${escapeXml(displayNameEn)}">
+    <Override Locale="de-DE" Value="${escapeXml(displayNameDe)}"/>
+  </DisplayName>
+  <Description DefaultValue="${escapeXml(descriptionEn)}">
+    <Override Locale="de-DE" Value="${escapeXml(descriptionDe)}"/>
+  </Description>
   <IconUrl DefaultValue="${baseUrl}/office/assets/icon-64.png"/>
   <HighResolutionIconUrl DefaultValue="${baseUrl}/office/assets/icon-128.png"/>
   <SupportUrl DefaultValue="${origin}"/>
@@ -299,11 +310,17 @@ function generateManifest({ baseUrl, origin, displayName, description, showTaskP
         <bt:Url id="Taskpane.Url" DefaultValue="${baseUrl}/office/taskpane.html"/>
       </bt:Urls>
       <bt:ShortStrings>
-        <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayName)} Add-in"/>
-        <bt:String id="TaskpaneButton.Label" DefaultValue="${escapeXml(showTaskPaneLabel)}"/>
+        <bt:String id="GroupLabel" DefaultValue="${escapeXml(displayNameEn)} Add-in">
+          <bt:Override Locale="de-DE" Value="${escapeXml(displayNameDe)} Add-in"/>
+        </bt:String>
+        <bt:String id="TaskpaneButton.Label" DefaultValue="${escapeXml(showTaskPaneLabelEn)}">
+          <bt:Override Locale="de-DE" Value="${escapeXml(showTaskPaneLabelDe)}"/>
+        </bt:String>
       </bt:ShortStrings>
       <bt:LongStrings>
-        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(description)}"/>
+        <bt:String id="TaskpaneButton.Tooltip" DefaultValue="${escapeXml(descriptionEn)}">
+          <bt:Override Locale="de-DE" Value="${escapeXml(descriptionDe)}"/>
+        </bt:String>
       </bt:LongStrings>
     </Resources>
     <VersionOverrides xmlns="http://schemas.microsoft.com/office/mailappversionoverrides/1.1" xsi:type="VersionOverridesV1_1">
