@@ -10,8 +10,28 @@ import Icon from '../../../shared/components/Icon';
 import { fetchAdminApps, makeAdminApiCall, toggleApps } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
-import AdminPageSkeleton from '../components/AdminPageSkeleton';
-import AdminEmptyState from '../components/AdminEmptyState';
+import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+
+function AppNameCell({ app, currentLanguage }) {
+  return (
+    <div className="flex items-center">
+      <div className="flex-shrink-0 h-10 w-10">
+        <div
+          className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold"
+          style={{ backgroundColor: app.color || '#6B7280' }}
+        >
+          {getLocalizedContent(app.name, currentLanguage).charAt(0).toUpperCase()}
+        </div>
+      </div>
+      <div className="ml-3 min-w-0">
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          {getLocalizedContent(app.name, currentLanguage)}
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{app.id}</div>
+      </div>
+    </div>
+  );
+}
 
 function AdminAppsPage() {
   const { t, i18n } = useTranslation();
@@ -60,15 +80,10 @@ function AdminAppsPage() {
 
   const toggleApp = async appId => {
     try {
-      const response = await makeAdminApiCall(`/admin/apps/${appId}/toggle`, {
-        method: 'POST'
-      });
-
+      const response = await makeAdminApiCall(`/admin/apps/${appId}/toggle`, { method: 'POST' });
       const result = response.data;
-
-      // Update the app in the local state
-      setApps(prevApps =>
-        prevApps.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
+      setApps(prev =>
+        prev.map(app => (app.id === appId ? { ...app, enabled: result.enabled } : app))
       );
     } catch (err) {
       setError(err.message);
@@ -101,10 +116,8 @@ function AdminAppsPage() {
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
-          await makeAdminApiCall(`/admin/apps/${appId}`, {
-            method: 'DELETE'
-          });
-          setApps(prevApps => prevApps.filter(app => app.id !== appId));
+          await makeAdminApiCall(`/admin/apps/${appId}`, { method: 'DELETE' });
+          setApps(prev => prev.filter(app => app.id !== appId));
         } catch (err) {
           setError(err.message);
         }
@@ -112,7 +125,6 @@ function AdminAppsPage() {
     });
   };
 
-  // Filter apps based on search term, enabled status, and category
   const filteredApps = apps.filter(app => {
     const matchesSearch =
       getLocalizedContent(app.name, currentLanguage)
@@ -134,22 +146,7 @@ function AdminAppsPage() {
     return matchesSearch && matchesFilter && matchesCategory;
   });
 
-  const getLocalizedValue = content => {
-    return getLocalizedContent(content, currentLanguage);
-  };
-
-  const handleAppClick = app => {
-    setSelectedApp(app);
-    setShowAppDetails(true);
-  };
-
-  const clearSearch = () => {
-    setSearchTerm('');
-  };
-
-  const handleCreateApp = () => {
-    setShowTemplateSelector(true);
-  };
+  const handleCreateApp = () => setShowTemplateSelector(true);
 
   const handleTemplateSelected = template => {
     setSelectedTemplate(template);
@@ -160,7 +157,6 @@ function AdminAppsPage() {
   const handleWizardClose = () => {
     setShowCreationWizard(false);
     setSelectedTemplate(null);
-    // Reload apps to show any newly created app
     loadApps();
   };
 
@@ -173,13 +169,9 @@ function AdminAppsPage() {
     try {
       const response = await makeAdminApiCall(`/admin/apps/${appId}`);
       const app = response.data;
-
-      // Create a clean config object for download
       const configData = JSON.stringify(app, null, 2);
       const blob = new Blob([configData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-
-      // Create download link
       const link = document.createElement('a');
       link.href = url;
       link.download = `app-${appId}.json`;
@@ -195,33 +187,20 @@ function AdminAppsPage() {
   const handleUploadConfig = async event => {
     const file = event.target.files[0];
     if (!file) return;
-
     if (!file.name.endsWith('.json')) {
       setError('Please select a JSON file');
       return;
     }
-
     setUploading(true);
     let appConfig;
     try {
       const fileContent = await file.text();
       appConfig = JSON.parse(fileContent);
-
-      // Validate required fields
       if (!appConfig.id || !appConfig.name || !appConfig.description) {
         throw new Error('Invalid app config: missing required fields (id, name, description)');
       }
-
-      // Upload the config
-      await makeAdminApiCall('/admin/apps', {
-        method: 'POST',
-        body: appConfig
-      });
-
-      // Reload apps to show the new one
+      await makeAdminApiCall('/admin/apps', { method: 'POST', body: appConfig });
       await loadApps();
-
-      // Clear the file input
       event.target.value = '';
     } catch (err) {
       if (err.message.includes('already exists')) {
@@ -236,39 +215,107 @@ function AdminAppsPage() {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <AdminPageSkeleton rows={5} />
-      </div>
-    );
-  }
+  const getCategoryLabel = app => {
+    if (!app.category) return null;
+    const found = uiConfig?.appsList?.categories?.list?.find(cat => cat.id === app.category);
+    return found ? getLocalizedContent(found.name, currentLanguage) : app.category;
+  };
 
-  if (error) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="bg-red-50 border border-red-200 rounded-md p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-                <path
-                  fillRule="evenodd"
-                  d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            </div>
-            <div className="ml-3">
-              <h3 className="text-sm font-medium text-red-800">
-                {t('admin.apps.errorTitle', 'Error')}
-              </h3>
-              <div className="mt-2 text-sm text-red-700">{error}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const columns = [
+    {
+      key: 'app',
+      header: t('admin.apps.table.app', 'App'),
+      sortable: true,
+      sortAccessor: app => getLocalizedContent(app.name, currentLanguage),
+      render: app => <AppNameCell app={app} currentLanguage={currentLanguage} />
+    },
+    {
+      key: 'category',
+      header: t('admin.apps.table.category', 'Category'),
+      sortable: true,
+      sortAccessor: app => app.category || '',
+      hideBelow: 'md',
+      render: app => {
+        const label = getCategoryLabel(app);
+        return label ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
+            {label}
+          </span>
+        ) : (
+          <span className="text-gray-400 text-sm">{t('common.notAvailable', 'N/A')}</span>
+        );
+      }
+    },
+    {
+      key: 'status',
+      header: t('admin.apps.table.status', 'Status'),
+      sortable: true,
+      sortAccessor: app => (app.enabled ? 1 : 0),
+      render: app => (
+        <span
+          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+            app.enabled
+              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
+          }`}
+        >
+          {app.enabled
+            ? t('admin.apps.status.enabled', 'Enabled')
+            : t('admin.apps.status.disabled', 'Disabled')}
+        </span>
+      )
+    },
+    {
+      key: 'order',
+      header: t('admin.apps.table.order', 'Order'),
+      sortable: true,
+      hideBelow: 'lg',
+      align: 'right',
+      render: app => app.order ?? t('common.notAvailable', 'N/A')
+    },
+    {
+      key: 'preferredModel',
+      header: t('admin.apps.table.model', 'Model'),
+      hideBelow: 'lg',
+      render: app => app.preferredModel || t('common.notAvailable', 'N/A')
+    }
+  ];
+
+  const actions = [
+    {
+      id: 'edit',
+      label: t('admin.apps.actions.edit', 'Edit'),
+      icon: 'pencil',
+      priority: 'primary',
+      onClick: app => navigate(`/admin/apps/${app.id}`)
+    },
+    {
+      id: 'toggle',
+      label: t('admin.apps.actions.toggle', 'Toggle enabled'),
+      icon: 'eye',
+      priority: 'primary',
+      onClick: app => toggleApp(app.id)
+    },
+    {
+      id: 'clone',
+      label: t('admin.apps.actions.clone', 'Clone'),
+      icon: 'copy',
+      onClick: app => handleCloneApp(app)
+    },
+    {
+      id: 'download',
+      label: t('admin.apps.actions.download', 'Download Config'),
+      icon: 'download',
+      onClick: app => downloadAppConfig(app.id)
+    },
+    {
+      id: 'delete',
+      label: t('admin.apps.actions.delete', 'Delete'),
+      icon: 'trash',
+      destructive: true,
+      onClick: app => deleteApp(app.id)
+    }
+  ];
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
@@ -332,53 +379,49 @@ function AdminAppsPage() {
         </div>
       </div>
 
-      {/* Search and filter controls */}
-      <div className="mt-6 flex flex-col sm:flex-row gap-4">
-        <div className="flex-1 relative">
-          <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-            <Icon name="search" className="h-5 w-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
-            value={searchTerm}
-            onChange={e => setSearchTerm(e.target.value)}
-            className="block w-full pl-10 pr-10 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            autoComplete="off"
-          />
-          {searchTerm && (
-            <button
-              onClick={clearSearch}
-              className="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-              aria-label={t('common.clearSearch', 'Clear search')}
-            >
-              <Icon name="x" className="h-5 w-5" />
-            </button>
-          )}
+      {error && (
+        <div className="mt-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-md p-4 text-sm text-red-700 dark:text-red-300">
+          {error}
         </div>
-        <div className="flex-shrink-0">
-          <select
-            value={filterEnabled}
-            onChange={e => setFilterEnabled(e.target.value)}
-            className="block w-full rounded-lg border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm py-2 px-3"
-          >
-            <option value="all">{t('admin.apps.filterAll', 'All Apps')}</option>
-            <option value="enabled">{t('admin.apps.filterEnabled', 'Enabled Only')}</option>
-            <option value="disabled">{t('admin.apps.filterDisabled', 'Disabled Only')}</option>
-          </select>
-        </div>
+      )}
+
+      <div className="mt-6 flex flex-wrap items-center gap-3">
+        <SearchInput
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder={t('admin.apps.searchPlaceholder', 'Search apps...')}
+        />
+        <FilterSelect
+          label={t('admin.apps.statusLabel', 'Status')}
+          value={filterEnabled}
+          onChange={setFilterEnabled}
+          options={[
+            { value: 'all', label: t('admin.apps.filterAll', 'All Apps') },
+            { value: 'enabled', label: t('admin.apps.filterEnabled', 'Enabled Only') },
+            { value: 'disabled', label: t('admin.apps.filterDisabled', 'Disabled Only') }
+          ]}
+        />
       </div>
 
-      {/* Category filter */}
       {uiConfig?.appsList?.categories?.enabled && (
-        <div className="mt-4 flex flex-wrap gap-2 justify-center">
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button
+            onClick={() => setSelectedCategory('all')}
+            className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+              selectedCategory === 'all'
+                ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+            }`}
+          >
+            {t('admin.apps.allCategories', 'All Categories')}
+          </button>
           {uiConfig.appsList.categories.list.map(category => (
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
+              className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
                 selectedCategory === category.id
-                  ? 'text-white shadow-lg transform scale-105'
+                  ? 'text-white shadow'
                   : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
               }`}
               style={{
@@ -391,281 +434,43 @@ function AdminAppsPage() {
         </div>
       )}
 
-      {/* Stats */}
-      {/* <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    {t('admin.apps.totalApps', 'Total Apps')}
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {apps.length}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    {t('admin.apps.enabledApps', 'Enabled Apps')}
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {apps.filter(app => app.enabled).length}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <svg className="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L5.636 5.636" />
-                </svg>
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    {t('admin.apps.disabledApps', 'Disabled Apps')}
-                  </dt>
-                  <dd className="text-lg font-medium text-gray-900">
-                    {apps.filter(app => !app.enabled).length}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div> */}
-
-      {/* Apps table */}
-      <div className="mt-8 flex flex-col">
-        <div className="-my-2 -mx-4 sm:-mx-6 lg:-mx-8">
-          <div className="inline-block w-full py-2 align-middle md:px-6 lg:px-8">
-            <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
-              <table className="w-full divide-y divide-gray-300 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-800">
-                  <tr>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-                    >
-                      {t('admin.apps.table.app', 'App')}
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-                    >
-                      {t('admin.apps.table.category', 'Category')}
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-                    >
-                      {t('admin.apps.table.status', 'Status')}
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-                    >
-                      {t('admin.apps.table.order', 'Order')}
-                    </th>
-                    <th
-                      scope="col"
-                      className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide"
-                    >
-                      {t('admin.apps.table.model', 'Model')}
-                    </th>
-                    <th scope="col" className="relative px-6 py-3">
-                      <span className="sr-only">{t('admin.apps.table.actions', 'Actions')}</span>
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredApps.map(app => (
-                    <tr
-                      key={app.id}
-                      className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                      onClick={() => handleAppClick(app)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="flex items-center">
-                          <div className="flex-shrink-0 h-10 w-10">
-                            <div
-                              className="h-10 w-10 rounded-full flex items-center justify-center text-white font-bold"
-                              style={{ backgroundColor: app.color || '#6B7280' }}
-                            >
-                              {getLocalizedValue(app.name).charAt(0).toUpperCase()}
-                            </div>
-                          </div>
-                          <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                              {getLocalizedValue(app.name)}
-                            </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">{app.id}</div>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        {app.category ? (
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-100 dark:bg-indigo-900/50 text-indigo-800 dark:text-indigo-300">
-                            {uiConfig?.appsList?.categories?.list?.find(
-                              cat => cat.id === app.category
-                            )?.name
-                              ? getLocalizedContent(
-                                  uiConfig.appsList.categories.list.find(
-                                    cat => cat.id === app.category
-                                  ).name,
-                                  currentLanguage
-                                )
-                              : app.category}
-                          </span>
-                        ) : (
-                          <span className="text-gray-400 text-sm">
-                            {t('common.notAvailable', 'N/A')}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                            app.enabled
-                              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
-                          }`}
-                        >
-                          {app.enabled
-                            ? t('admin.apps.status.enabled', 'Enabled')
-                            : t('admin.apps.status.disabled', 'Disabled')}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                        {app.order ?? t('common.notAvailable', 'N/A')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                        {app.preferredModel || t('common.notAvailable', 'N/A')}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex justify-end space-x-2">
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              toggleApp(app.id);
-                            }}
-                            className={`p-2 rounded-full ${
-                              app.enabled
-                                ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50'
-                                : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50'
-                            }`}
-                            title={
-                              app.enabled
-                                ? t('admin.apps.actions.disable', 'Disable')
-                                : t('admin.apps.actions.enable', 'Enable')
-                            }
-                          >
-                            <Icon name={app.enabled ? 'eye-slash' : 'eye'} className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              handleCloneApp(app);
-                            }}
-                            className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
-                            title={t('admin.apps.actions.clone', 'Clone')}
-                          >
-                            <Icon name="copy" className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              downloadAppConfig(app.id);
-                            }}
-                            className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full"
-                            title={t('admin.apps.actions.download', 'Download Config')}
-                          >
-                            <Icon name="download" className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              navigate(`/admin/apps/${app.id}`);
-                            }}
-                            className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
-                            title={t('admin.apps.actions.edit', 'Edit')}
-                          >
-                            <Icon name="pencil" className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={e => {
-                              e.stopPropagation();
-                              deleteApp(app.id);
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
-                            title={t('admin.apps.actions.delete', 'Delete')}
-                          >
-                            <Icon name="trash" className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+      <div className="mt-6">
+        <DataTable
+          columns={columns}
+          data={filteredApps}
+          getRowId={app => app.id}
+          actions={actions}
+          loading={loading}
+          onRowClick={app => {
+            setSelectedApp(app);
+            setShowAppDetails(true);
+          }}
+          empty={{
+            icon: 'sparkles',
+            title: t('admin.apps.noApps', 'No apps found'),
+            description: t(
+              'admin.apps.noAppsDescription',
+              'Try adjusting your search or filter criteria.'
+            ),
+            action: (
+              <button
+                onClick={handleCreateApp}
+                className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              >
+                <Icon name="plus" className="h-4 w-4 mr-2" />
+                {t('admin.apps.createApp', 'Create App')}
+              </button>
+            )
+          }}
+        />
       </div>
 
-      {filteredApps.length === 0 && (
-        <AdminEmptyState
-          icon="squares-2x2"
-          title={t('admin.apps.noApps', 'No apps found')}
-          description={t(
-            'admin.apps.noAppsDescription',
-            'Try adjusting your search or filter criteria.'
-          )}
-          action={
-            <button
-              onClick={handleCreateApp}
-              className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              <Icon name="plus" className="h-4 w-4 mr-2" />
-              {t('admin.apps.createApp', 'Create App')}
-            </button>
-          }
-        />
-      )}
-
-      {/* App Details Popup */}
       <AppDetailsPopup
         app={selectedApp}
         isOpen={showAppDetails}
         onClose={() => setShowAppDetails(false)}
       />
 
-      {/* Template Selector */}
       {showTemplateSelector && (
         <AppTemplateSelector
           onSelect={handleTemplateSelected}
@@ -673,7 +478,6 @@ function AdminAppsPage() {
         />
       )}
 
-      {/* App Creation Wizard */}
       {showCreationWizard && (
         <AppCreationWizard templateApp={selectedTemplate} onClose={handleWizardClose} />
       )}

@@ -4,8 +4,41 @@ import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
-import AdminPageSkeleton from '../components/AdminPageSkeleton';
-import AdminEmptyState from '../components/AdminEmptyState';
+import { useFilterState } from '../hooks/useFilterState';
+import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+
+function NameCell({ source }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+        {Object.values(source.name || {})[0] || source.id}
+      </div>
+      <div className="text-sm text-gray-500 dark:text-gray-400 font-mono truncate">{source.id}</div>
+      {source.description && Object.values(source.description)[0] && (
+        <div className="text-xs text-gray-400 dark:text-gray-500 mt-1 truncate">
+          {Object.values(source.description)[0]}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TypeBadge({ type }) {
+  const colors = {
+    filesystem: 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300',
+    url: 'bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300',
+    ifinder: 'bg-orange-100 dark:bg-orange-900/50 text-orange-800 dark:text-orange-300'
+  };
+  return (
+    <span
+      className={`px-2 py-1 text-xs font-medium rounded-full ${
+        colors[type] || 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+      }`}
+    >
+      {type}
+    </span>
+  );
+}
 
 function AdminSourcesPage() {
   const { t } = useTranslation();
@@ -13,9 +46,9 @@ function AdminSourcesPage() {
   const [sources, setSources] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [typeFilter, setTypeFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [typeFilter, setTypeFilter] = useFilterState('type', 'all');
+  const [statusFilter, setStatusFilter] = useFilterState('status', 'all');
   const [selectedSources, setSelectedSources] = useState(new Set());
   const [bulkOperating, setBulkOperating] = useState(false);
   const [testingSource, setTestingSource] = useState(null);
@@ -30,11 +63,9 @@ function AdminSourcesPage() {
       setLoading(true);
       setError(null);
       const response = await makeAdminApiCall('/admin/sources');
-      // Handle both array and object responses
       const sourcesData = Array.isArray(response) ? response : response?.data || [];
       setSources(sourcesData);
     } catch (err) {
-      console.error('Failed to load sources:', err);
       setError(err.message || 'Failed to load sources');
     } finally {
       setLoading(false);
@@ -64,15 +95,10 @@ function AdminSourcesPage() {
     try {
       const source = Array.isArray(sources) ? sources.find(s => s.id === sourceId) : null;
       const newEnabled = !source.enabled;
-
       await makeAdminApiCall(`/admin/sources/_toggle`, {
         method: 'POST',
-        body: JSON.stringify({
-          sourceIds: [sourceId],
-          enabled: newEnabled
-        })
+        body: JSON.stringify({ sourceIds: [sourceId], enabled: newEnabled })
       });
-
       setSources(prev => prev.map(s => (s.id === sourceId ? { ...s, enabled: newEnabled } : s)));
     } catch (err) {
       setError(err.message);
@@ -83,14 +109,11 @@ function AdminSourcesPage() {
     try {
       setBulkOperating(true);
       const sourceIds = Array.from(selectedSources);
-
       await makeAdminApiCall('/admin/sources/_toggle', {
         method: 'POST',
         body: JSON.stringify({ sourceIds, enabled })
       });
-
       setSources(prev => prev.map(s => (sourceIds.includes(s.id) ? { ...s, enabled } : s)));
-
       setSelectedSources(new Set());
     } catch (err) {
       setError(err.message);
@@ -105,7 +128,6 @@ function AdminSourcesPage() {
       const response = await makeAdminApiCall(`/admin/sources/${sourceId}/test`, {
         method: 'POST'
       });
-
       if (response.data.success) {
         alert(`Source test successful:\n${JSON.stringify(response.data.result, null, 2)}`);
       } else {
@@ -126,9 +148,7 @@ function AdminSourcesPage() {
       onConfirm: async () => {
         setConfirmDialog(null);
         try {
-          await makeAdminApiCall(`/admin/sources/${sourceId}`, {
-            method: 'DELETE'
-          });
+          await makeAdminApiCall(`/admin/sources/${sourceId}`, { method: 'DELETE' });
           setSources(prev => prev.filter(s => s.id !== sourceId));
           setSelectedSources(prev => {
             const newSet = new Set(prev);
@@ -154,56 +174,120 @@ function AdminSourcesPage() {
   const handleSourceSelection = (sourceId, checked) => {
     setSelectedSources(prev => {
       const newSet = new Set(prev);
-      if (checked) {
-        newSet.add(sourceId);
-      } else {
-        newSet.delete(sourceId);
-      }
+      if (checked) newSet.add(sourceId);
+      else newSet.delete(sourceId);
       return newSet;
     });
   };
 
-  const getStatusBadge = source => {
-    const enabled = source.enabled !== false;
-    return (
-      <span
-        className={`px-2 py-1 text-xs font-medium rounded-full ${
-          enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-        }`}
-      >
-        {enabled ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
-      </span>
-    );
-  };
+  const allSelected =
+    selectedSources.size > 0 &&
+    selectedSources.size === filteredSources.length &&
+    filteredSources.length > 0;
 
-  const getTypeBadge = type => {
-    const colors = {
-      filesystem: 'bg-blue-100 text-blue-800',
-      url: 'bg-purple-100 text-purple-800',
-      ifinder: 'bg-orange-100 text-orange-800'
-    };
+  const columns = [
+    {
+      key: 'select',
+      header: (
+        <input
+          type="checkbox"
+          checked={allSelected}
+          onChange={e => {
+            if (e.target.checked) {
+              setSelectedSources(new Set(filteredSources.map(s => s.id)));
+            } else {
+              setSelectedSources(new Set());
+            }
+          }}
+          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+        />
+      ),
+      width: 'w-10',
+      render: source => (
+        <input
+          type="checkbox"
+          checked={selectedSources.has(source.id)}
+          onChange={e => handleSourceSelection(source.id, e.target.checked)}
+          onClick={e => e.stopPropagation()}
+          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
+        />
+      )
+    },
+    {
+      key: 'name',
+      header: t('admin.sources.name', 'Name'),
+      sortable: true,
+      sortAccessor: s => Object.values(s.name || {})[0] || s.id,
+      render: s => <NameCell source={s} />
+    },
+    {
+      key: 'type',
+      header: t('admin.sources.type', 'Type'),
+      sortable: true,
+      hideBelow: 'md',
+      render: s => <TypeBadge type={s.type} />
+    },
+    {
+      key: 'status',
+      header: t('admin.sources.status', 'Status'),
+      sortable: true,
+      sortAccessor: s => (s.enabled !== false ? 1 : 0),
+      render: s => (
+        <span
+          className={`px-2 py-1 text-xs font-medium rounded-full ${
+            s.enabled !== false
+              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+              : 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300'
+          }`}
+        >
+          {s.enabled !== false ? t('common.enabled', 'Enabled') : t('common.disabled', 'Disabled')}
+        </span>
+      )
+    },
+    {
+      key: 'updated',
+      header: t('admin.sources.updated', 'Updated'),
+      sortable: true,
+      hideBelow: 'lg',
+      sortAccessor: s => (s.updated ? new Date(s.updated).getTime() : 0),
+      render: s => (s.updated ? new Date(s.updated).toLocaleDateString() : '-')
+    }
+  ];
 
-    return (
-      <span
-        className={`px-2 py-1 text-xs font-medium rounded-full ${colors[type] || 'bg-gray-100 text-gray-800'}`}
-      >
-        {type}
-      </span>
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="max-w-7xl mx-auto py-6 px-4">
-        <AdminPageSkeleton rows={5} />
-      </div>
-    );
-  }
+  const actions = [
+    {
+      id: 'test',
+      label: t('admin.sources.testSource', 'Test Source'),
+      icon: 'beaker',
+      priority: 'primary',
+      busy: s => testingSource === s.id,
+      onClick: s => handleTestSource(s.id)
+    },
+    {
+      id: 'edit',
+      label: t('admin.sources.editSource', 'Edit Source'),
+      icon: 'pencil',
+      priority: 'primary',
+      onClick: s => navigate(`/admin/sources/${s.id}`)
+    },
+    {
+      id: 'toggle',
+      label: t('admin.sources.toggle', 'Toggle enabled'),
+      icon: 'eye',
+      onClick: s => handleSourceToggle(s.id)
+    },
+    {
+      id: 'delete',
+      label: t('admin.sources.deleteSource', 'Delete Source'),
+      icon: 'trash',
+      destructive: true,
+      onClick: s => handleDeleteSource(s.id)
+    }
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto py-6 px-4">
-        {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between">
             <div>
@@ -225,88 +309,59 @@ function AdminSourcesPage() {
           </div>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="mb-6 bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-lg p-4">
             <div className="flex items-center">
-              <Icon name="x-circle" className="h-5 w-5 text-red-400 mr-2" />
+              <Icon name="exclamation-circle" className="h-5 w-5 text-red-400 mr-2" />
               <p className="text-red-800 dark:text-red-200">{error}</p>
               <button
                 onClick={() => setError(null)}
                 className="ml-auto text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
               >
-                <Icon name="x-mark" className="h-4 w-4" />
+                <Icon name="x" className="h-4 w-4" />
               </button>
             </div>
           </div>
         )}
 
-        {/* Filters */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-6 mb-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('admin.sources.search', 'Search')}
-              </label>
-              <div className="relative">
-                <Icon
-                  name="magnifying-glass"
-                  className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400"
-                />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={e => setSearchTerm(e.target.value)}
-                  placeholder={t('admin.sources.searchPlaceholder', 'Search sources...')}
-                  className="pl-10 w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('admin.sources.filterType', 'Type')}
-              </label>
-              <select
-                value={typeFilter}
-                onChange={e => setTypeFilter(e.target.value)}
-                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="all">{t('admin.sources.allTypes', 'All Types')}</option>
-                <option value="filesystem">{t('admin.sources.filesystem', 'Filesystem')}</option>
-                <option value="url">{t('admin.sources.url', 'URL')}</option>
-                <option value="ifinder">{t('admin.sources.ifinder', 'iFinder')}</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                {t('admin.sources.filterStatus', 'Status')}
-              </label>
-              <select
-                value={statusFilter}
-                onChange={e => setStatusFilter(e.target.value)}
-                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              >
-                <option value="all">{t('admin.sources.allStatuses', 'All Statuses')}</option>
-                <option value="enabled">{t('common.enabled', 'Enabled')}</option>
-                <option value="disabled">{t('common.disabled', 'Disabled')}</option>
-              </select>
-            </div>
-
-            <div className="flex items-end">
-              <button
-                onClick={loadSources}
-                className="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-4 py-2 rounded-lg font-medium flex items-center"
-              >
-                <Icon name="arrow-path" className="h-4 w-4 mr-2" />
-                {t('common.refresh', 'Refresh')}
-              </button>
-            </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm p-4 mb-6">
+          <div className="flex flex-wrap items-center gap-3">
+            <SearchInput
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder={t('admin.sources.searchPlaceholder', 'Search sources...')}
+            />
+            <FilterSelect
+              label={t('admin.sources.filterType', 'Type')}
+              value={typeFilter}
+              onChange={setTypeFilter}
+              options={[
+                { value: 'all', label: t('admin.sources.allTypes', 'All Types') },
+                { value: 'filesystem', label: t('admin.sources.filesystem', 'Filesystem') },
+                { value: 'url', label: t('admin.sources.url', 'URL') },
+                { value: 'ifinder', label: t('admin.sources.ifinder', 'iFinder') }
+              ]}
+            />
+            <FilterSelect
+              label={t('admin.sources.filterStatus', 'Status')}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                { value: 'all', label: t('admin.sources.allStatuses', 'All Statuses') },
+                { value: 'enabled', label: t('common.enabled', 'Enabled') },
+                { value: 'disabled', label: t('common.disabled', 'Disabled') }
+              ]}
+            />
+            <button
+              onClick={loadSources}
+              className="ml-auto bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 px-3 py-2 rounded-lg text-sm font-medium flex items-center"
+            >
+              <Icon name="refresh" className="h-4 w-4 mr-2" />
+              {t('common.refresh', 'Refresh')}
+            </button>
           </div>
         </div>
 
-        {/* Bulk Operations */}
         {selectedSources.size > 0 && (
           <div className="bg-indigo-50 dark:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-800 rounded-lg p-4 mb-6">
             <div className="flex items-center justify-between">
@@ -351,154 +406,34 @@ function AdminSourcesPage() {
           </div>
         )}
 
-        {/* Sources Table */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm overflow-hidden">
-          {filteredSources.length === 0 ? (
-            <AdminEmptyState
-              icon="server"
-              title={
-                (Array.isArray(sources) ? sources.length : 0) === 0
-                  ? t('admin.sources.noSources', 'No sources configured')
-                  : t('admin.sources.noFilteredSources', 'No sources match your filters')
-              }
-              description={
-                (Array.isArray(sources) ? sources.length : 0) === 0
-                  ? t('admin.sources.createFirstSource', 'Create your first source to get started')
-                  : t('admin.sources.adjustFilters', 'Try adjusting your search and filters')
-              }
-              action={
-                (Array.isArray(sources) ? sources.length : 0) === 0 ? (
-                  <button
-                    onClick={() => navigate('/admin/sources/new')}
-                    className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
-                  >
-                    {t('admin.sources.createNew', 'Create Source')}
-                  </button>
-                ) : null
-              }
-            />
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-                <thead className="bg-gray-50 dark:bg-gray-900">
-                  <tr>
-                    <th className="px-6 py-3 text-left">
-                      <input
-                        type="checkbox"
-                        checked={
-                          selectedSources.size === filteredSources.length &&
-                          filteredSources.length > 0
-                        }
-                        onChange={e => {
-                          if (e.target.checked) {
-                            setSelectedSources(new Set(filteredSources.map(s => s.id)));
-                          } else {
-                            setSelectedSources(new Set());
-                          }
-                        }}
-                        className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
-                      />
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.sources.name', 'Name')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.sources.type', 'Type')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.sources.status', 'Status')}
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.sources.updated', 'Updated')}
-                    </th>
-                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                      {t('admin.sources.actions', 'Actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredSources.map(source => (
-                    <tr key={source.id} className="hover:bg-gray-50 dark:hover:bg-gray-700">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <input
-                          type="checkbox"
-                          checked={selectedSources.has(source.id)}
-                          onChange={e => handleSourceSelection(source.id, e.target.checked)}
-                          className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500"
-                        />
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div>
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                            {Object.values(source.name || {})[0] || source.id}
-                          </div>
-                          <div className="text-sm text-gray-500 dark:text-gray-400 font-mono">
-                            {source.id}
-                          </div>
-                          {source.description && Object.values(source.description)[0] && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                              {Object.values(source.description)[0]}
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">{getTypeBadge(source.type)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap">{getStatusBadge(source)}</td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {source.updated ? new Date(source.updated).toLocaleDateString() : '-'}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => handleTestSource(source.id)}
-                            disabled={testingSource === source.id}
-                            className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50"
-                            title={t('admin.sources.testSource', 'Test Source')}
-                          >
-                            <Icon
-                              name={testingSource === source.id ? 'arrow-path' : 'beaker'}
-                              className={`h-4 w-4 ${testingSource === source.id ? 'animate-spin' : ''}`}
-                            />
-                          </button>
-                          <button
-                            onClick={() => navigate(`/admin/sources/${source.id}`)}
-                            className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-                            title={t('admin.sources.editSource', 'Edit Source')}
-                          >
-                            <Icon name="pencil" className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleSourceToggle(source.id)}
-                            className={`${source.enabled !== false ? 'text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300' : 'text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300'}`}
-                            title={
-                              source.enabled !== false
-                                ? t('common.disable', 'Disable')
-                                : t('common.enable', 'Enable')
-                            }
-                          >
-                            <Icon
-                              name={source.enabled !== false ? 'eye-slash' : 'eye'}
-                              className="h-4 w-4"
-                            />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteSource(source.id)}
-                            className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300"
-                            title={t('admin.sources.deleteSource', 'Delete Source')}
-                          >
-                            <Icon name="trash" className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <DataTable
+          columns={columns}
+          data={filteredSources}
+          getRowId={s => s.id}
+          actions={actions}
+          loading={loading}
+          empty={{
+            icon: 'database',
+            title:
+              sources.length === 0
+                ? t('admin.sources.noSources', 'No sources configured')
+                : t('admin.sources.noFilteredSources', 'No sources match your filters'),
+            description:
+              sources.length === 0
+                ? t('admin.sources.createFirstSource', 'Create your first source to get started')
+                : t('admin.sources.adjustFilters', 'Try adjusting your search and filters'),
+            action:
+              sources.length === 0 ? (
+                <button
+                  onClick={() => navigate('/admin/sources/new')}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg font-medium"
+                >
+                  {t('admin.sources.createNew', 'Create Source')}
+                </button>
+              ) : null
+          }}
+        />
 
-        {/* Summary */}
         <div className="mt-6 text-center text-sm text-gray-500 dark:text-gray-400">
           {t('admin.sources.summary', 'Showing {{filtered}} of {{total}} sources', {
             filtered: filteredSources.length,
