@@ -15,6 +15,7 @@ import {
   isFieldRequired
 } from '../../../utils/schemaValidation';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
 
 /**
  * AppFormEditor - Form-based editor for app configuration
@@ -283,8 +284,23 @@ function AppFormEditor({
     );
   }
 
+  const errorLabels = {
+    id: t('admin.apps.edit.appId', 'App ID'),
+    name: t('admin.apps.edit.name', 'Name'),
+    description: t('admin.apps.edit.description', 'Description'),
+    color: t('admin.apps.edit.color', 'Color'),
+    icon: t('admin.apps.edit.icon', 'Icon'),
+    system: t('admin.apps.edit.systemPrompt', 'System Prompt'),
+    tokenLimit: t('admin.apps.edit.tokenLimit', 'Token Limit')
+  };
+
   return (
     <div className="app-form-editor space-y-6">
+      <AdminFormErrorSummary
+        errors={validationErrors}
+        labels={errorLabels}
+        title={t('admin.apps.edit.fixErrors', 'Please fix the following errors')}
+      />
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
@@ -306,6 +322,7 @@ function AppFormEditor({
                   )}
                 </label>
                 <input
+                  id="id"
                   type="text"
                   required={isFieldRequired('id', jsonSchema)}
                   value={app.id || ''}
@@ -430,6 +447,7 @@ function AppFormEditor({
                   <span className="text-red-500 ml-1">*</span>
                 </label>
                 <input
+                  id="color"
                   type="color"
                   value={app.color || '#4F46E5'}
                   onChange={e => handleInputChange('color', e.target.value)}
@@ -455,12 +473,14 @@ function AppFormEditor({
                   {t('admin.apps.edit.icon', 'Icon')}
                   <span className="text-red-500 ml-1">*</span>
                 </label>
-                <IconPicker
-                  value={app.icon || ''}
-                  onChange={value => handleInputChange('icon', value)}
-                  error={validationErrors.icon}
-                  className="mt-1"
-                />
+                <div data-field="icon">
+                  <IconPicker
+                    value={app.icon || ''}
+                    onChange={value => handleInputChange('icon', value)}
+                    error={validationErrors.icon}
+                    className="mt-1"
+                  />
+                </div>
               </div>
 
               <div className="col-span-6 sm:col-span-3">
@@ -506,6 +526,7 @@ function AppFormEditor({
                   )}
                 </label>
                 <input
+                  id="tokenLimit"
                   type="number"
                   min="1"
                   value={app.tokenLimit || 4096}

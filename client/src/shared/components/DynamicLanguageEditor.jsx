@@ -261,7 +261,7 @@ const DynamicLanguageEditor = ({
   const availableLanguages = commonLanguages.filter(lang => !languages.includes(lang));
 
   return (
-    <div className={`space-y-4 ${className}`}>
+    <div className={`space-y-4 ${className}`} data-field={name || undefined}>
       <div className="flex items-center justify-between">
         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
           {label}

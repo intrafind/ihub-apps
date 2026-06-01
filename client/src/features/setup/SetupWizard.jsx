@@ -444,34 +444,56 @@ export default function SetupWizard() {
                 </h2>
                 <p className="text-gray-500 dark:text-gray-400">
                   {isLocal
-                    ? t('setup.step3.subtitleLocal', 'Your local provider is connected. Here's what to do next.')
-                    : t('setup.step3.subtitleCloud', 'Connected to {{provider}}. Here\'s what to do next.', { provider: selectedProvider.name })}
+                    ? t(
+                        'setup.step3.subtitleLocal',
+                        "Your local provider is connected. Here's what to do next."
+                      )
+                    : t(
+                        'setup.step3.subtitleCloud',
+                        "Connected to {{provider}}. Here's what to do next.",
+                        { provider: selectedProvider.name }
+                      )}
                 </p>
               </div>
 
               {/* CTA cards */}
               <div className="mb-6 space-y-2.5">
                 <button
-                  onClick={() => { sessionStorage.removeItem('setup_wizard_step'); navigate('/admin/apps/new', { replace: true }); }}
+                  onClick={() => {
+                    sessionStorage.removeItem('setup_wizard_step');
+                    navigate('/admin/apps/new', { replace: true });
+                  }}
                   className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xl">🛠️</span>
+                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/40 flex items-center justify-center text-xl">
+                    🛠️
+                  </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {t('setup.finish.createApp', 'Create your first app')}
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {t('setup.finish.createAppDesc', 'Build a custom AI assistant with a system prompt')}
+                      {t(
+                        'setup.finish.createAppDesc',
+                        'Build a custom AI assistant with a system prompt'
+                      )}
                     </span>
                   </span>
-                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">→</span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">
+                    →
+                  </span>
                 </button>
 
                 <button
-                  onClick={() => { sessionStorage.removeItem('setup_wizard_step'); navigate('/admin/users', { replace: true }); }}
+                  onClick={() => {
+                    sessionStorage.removeItem('setup_wizard_step');
+                    navigate('/admin/users', { replace: true });
+                  }}
                   className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl">👥</span>
+                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-green-100 dark:bg-green-900/40 flex items-center justify-center text-xl">
+                    👥
+                  </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {t('setup.finish.inviteUsers', 'Invite users')}
@@ -480,23 +502,35 @@ export default function SetupWizard() {
                       {t('setup.finish.inviteUsersDesc', 'Manage who can access the platform')}
                     </span>
                   </span>
-                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">→</span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">
+                    →
+                  </span>
                 </button>
 
                 <button
-                  onClick={() => { sessionStorage.removeItem('setup_wizard_step'); navigate('/admin/auth', { replace: true }); }}
+                  onClick={() => {
+                    sessionStorage.removeItem('setup_wizard_step');
+                    navigate('/admin/auth', { replace: true });
+                  }}
                   className="w-full flex items-center gap-4 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-blue-400 dark:hover:border-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 p-4 text-left transition-colors group"
                 >
-                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl">🔐</span>
+                  <span className="flex-shrink-0 w-10 h-10 rounded-lg bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center text-xl">
+                    🔐
+                  </span>
                   <span className="flex-1 min-w-0">
                     <span className="block text-sm font-semibold text-gray-900 dark:text-gray-100">
                       {t('setup.finish.configureSso', 'Configure SSO')}
                     </span>
                     <span className="block text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                      {t('setup.finish.configureSsoDesc', 'Set up OIDC, LDAP, or NTLM authentication')}
+                      {t(
+                        'setup.finish.configureSsoDesc',
+                        'Set up OIDC, LDAP, or NTLM authentication'
+                      )}
                     </span>
                   </span>
-                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">→</span>
+                  <span className="text-gray-300 dark:text-gray-600 group-hover:text-blue-400 transition-colors">
+                    →
+                  </span>
                 </button>
               </div>
 

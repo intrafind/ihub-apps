@@ -7,6 +7,7 @@ import {
   errorsToFieldErrors,
   isFieldRequired
 } from '../../../utils/schemaValidation';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
 
 /**
  * GroupFormEditor - Form-based editor for group configuration
@@ -118,8 +119,19 @@ function GroupFormEditor({
     );
   }
 
+  const errorLabels = {
+    id: t('admin.groups.fields.id', 'Group ID'),
+    name: t('admin.groups.fields.name', 'Name'),
+    description: t('admin.groups.fields.description', 'Description')
+  };
+
   return (
     <div className="group-form-editor space-y-6">
+      <AdminFormErrorSummary
+        errors={validationErrors}
+        labels={errorLabels}
+        title={t('admin.groups.edit.fixErrors', 'Please fix the following errors')}
+      />
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">

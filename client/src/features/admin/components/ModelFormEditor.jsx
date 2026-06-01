@@ -9,6 +9,7 @@ import {
 } from '../../../utils/schemaValidation';
 import Icon from '../../../shared/components/Icon';
 import { makeAdminApiCall } from '../../../api/adminApi';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
 
 /**
  * Editor for a JSON-typed provider config field. Keeps the raw textarea contents in
@@ -255,8 +256,24 @@ function ModelFormEditor({
     );
   }, [data.id, data.provider, t]);
 
+  const mergedErrors = { ...errors, ...validationErrors };
+  const errorLabels = {
+    id: t('admin.models.fields.id', 'Model ID'),
+    name: t('admin.models.fields.name', 'Name'),
+    description: t('admin.models.fields.description', 'Description'),
+    provider: t('admin.models.fields.provider', 'Provider'),
+    modelId: t('admin.models.fields.modelId', 'Model'),
+    url: t('admin.models.fields.url', 'URL'),
+    tokenLimit: t('admin.models.fields.tokenLimit', 'Token Limit')
+  };
+
   return (
     <div className="space-y-6">
+      <AdminFormErrorSummary
+        errors={mergedErrors}
+        labels={errorLabels}
+        title={t('admin.models.edit.fixErrors', 'Please fix the following errors')}
+      />
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">

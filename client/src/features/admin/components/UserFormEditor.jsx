@@ -7,6 +7,7 @@ import {
   validatePasswordConfirmation,
   isFieldRequired
 } from '../../../utils/schemaValidation';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
 
 /**
  * UserFormEditor - Form-based editor for user configuration
@@ -138,8 +139,21 @@ function UserFormEditor({
     );
   }
 
+  const errorLabels = {
+    username: t('admin.users.fields.username', 'Username'),
+    email: t('admin.users.fields.email', 'Email'),
+    name: t('admin.users.fields.name', 'Name'),
+    password: t('admin.users.fields.password', 'Password'),
+    confirmPassword: t('admin.users.fields.confirmPassword', 'Confirm Password')
+  };
+
   return (
     <div className="user-form-editor space-y-6">
+      <AdminFormErrorSummary
+        errors={validationErrors}
+        labels={errorLabels}
+        title={t('admin.users.edit.fixErrors', 'Please fix the following errors')}
+      />
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-900/20 px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">

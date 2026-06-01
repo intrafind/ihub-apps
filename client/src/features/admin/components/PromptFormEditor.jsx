@@ -4,6 +4,7 @@ import { getLocalizedContent } from '../../../utils/localizeContent';
 import DynamicLanguageEditor from '../../../shared/components/DynamicLanguageEditor';
 import SearchableAppsSelector from '../../apps/components/SearchableAppsSelector';
 import Icon from '../../../shared/components/Icon';
+import AdminFormErrorSummary from './AdminFormErrorSummary';
 import {
   validateWithSchema,
   errorsToFieldErrors,
@@ -125,8 +126,23 @@ function PromptFormEditor({
     { value: 'textarea', label: t('admin.prompts.variableTypes.textarea', 'Textarea') }
   ];
 
+  const mergedErrors = { ...errors, ...validationErrors };
+  const errorLabels = {
+    id: t('admin.prompts.fields.id', 'Prompt ID'),
+    name: t('admin.prompts.fields.name', 'Name'),
+    description: t('admin.prompts.fields.description', 'Description'),
+    icon: t('admin.prompts.fields.icon', 'Icon'),
+    order: t('admin.prompts.fields.order', 'Order'),
+    prompt: t('admin.prompts.fields.prompt', 'Prompt')
+  };
+
   return (
     <div className="space-y-8">
+      <AdminFormErrorSummary
+        errors={mergedErrors}
+        labels={errorLabels}
+        title={t('admin.prompts.edit.fixErrors', 'Please fix the following errors')}
+      />
       {/* Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow px-4 py-5 sm:rounded-lg sm:p-6">
         <div className="md:grid md:grid-cols-3 md:gap-6">
