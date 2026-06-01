@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import Icon from '../../../shared/components/Icon';
 
 /**
@@ -8,6 +9,11 @@ import Icon from '../../../shared/components/Icon';
  *  - An object: `{ fieldId: 'error message' }`
  *  - An array of `{ field?, fieldId?, message, label? }`
  *
+ * Field IDs can be dot-paths (e.g. `description.en`). The component walks the
+ * path until it finds a matching element by `id`, `name`, or `data-field`, so
+ * a parent wrapper with `data-field="description"` will still match
+ * `description.en` if the leaf input isn't tagged.
+ *
  * The banner auto-hides when there are no errors.
  *
  * @param {Object} props
@@ -16,23 +22,53 @@ import Icon from '../../../shared/components/Icon';
  * @param {Object<string,string>} [props.labels] Optional `{ fieldId: 'Human label' }` map
  *   used when `errors` is an object; falls back to the fieldId when missing.
  */
+const PERSISTENT_CLASSES = ['admin-form-error-field'];
+
 function AdminFormErrorSummary({ errors, title = 'Please fix the following errors', labels = {} }) {
   const entries = normalizeErrors(errors);
+  const fieldIdsKey = entries
+    .map(e => e.fieldId)
+    .filter(Boolean)
+    .join('|');
+
+  // Persistent highlight: mark every errored field so users can see them at a
+  // glance, not just after clicking the banner. Re-applies whenever errors change.
+  useEffect(() => {
+    const fieldIds = fieldIdsKey ? fieldIdsKey.split('|') : [];
+    const marked = [];
+    fieldIds.forEach(fieldId => {
+      const el = findFieldElement(fieldId);
+      if (!el) return;
+      const focusable = el.matches?.('input, textarea, select')
+        ? el
+        : el.querySelector?.('input, textarea, select');
+      const target = focusable || el;
+      PERSISTENT_CLASSES.forEach(c => target.classList.add(c));
+      marked.push(target);
+    });
+    return () => {
+      marked.forEach(el => {
+        PERSISTENT_CLASSES.forEach(c => el.classList.remove(c));
+      });
+    };
+  }, [fieldIdsKey]);
+
   if (entries.length === 0) return null;
 
   const focusField = fieldId => {
     if (!fieldId) return;
-    const el =
-      document.getElementById(fieldId) ||
-      document.querySelector(`[name="${fieldId}"]`) ||
-      document.querySelector(`[data-field="${fieldId}"]`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      if (typeof el.focus === 'function') {
-        // Defer focus until after scrollIntoView starts so focus ring is visible
-        setTimeout(() => el.focus({ preventScroll: true }), 250);
-      }
+    const el = findFieldElement(fieldId);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    // Find a focusable descendant (or the element itself).
+    const focusable = el.matches?.('input, textarea, select, button, [tabindex]')
+      ? el
+      : el.querySelector?.('input, textarea, select, button, [tabindex]');
+    if (focusable && typeof focusable.focus === 'function') {
+      setTimeout(() => focusable.focus({ preventScroll: true }), 250);
     }
+    // Brief red-ring flash so the user sees what was targeted.
+    flashHighlight(focusable || el);
   };
 
   return (
@@ -56,7 +92,7 @@ function AdminFormErrorSummary({ errors, title = 'Please fix the following error
           </h3>
           <ul className="mt-2 space-y-1 text-sm text-red-700 dark:text-red-300 list-disc list-inside">
             {entries.map((e, i) => {
-              const label = e.label ?? labels[e.fieldId] ?? e.fieldId;
+              const label = e.label ?? buildLabel(e.fieldId, labels);
               return (
                 <li key={`${e.fieldId ?? 'err'}-${i}`}>
                   {e.fieldId ? (
@@ -80,6 +116,82 @@ function AdminFormErrorSummary({ errors, title = 'Please fix the following error
       </div>
     </div>
   );
+}
+
+/**
+ * Walk dot-path looking for a matching element. For `description.en` tries:
+ *   1. id="description.en", [name="description.en"], [data-field="description.en"]
+ *   2. id="description",    [name="description"],    [data-field="description"]
+ */
+function findFieldElement(fieldId) {
+  const parts = String(fieldId).split('.');
+  while (parts.length > 0) {
+    const candidate = parts.join('.');
+    const el =
+      document.getElementById(candidate) ||
+      // Escape dots for querySelector — IDs with dots need it.
+      safeQuery(`[name="${cssEscape(candidate)}"]`) ||
+      safeQuery(`[data-field="${cssEscape(candidate)}"]`);
+    if (el) return el;
+    parts.pop();
+  }
+  return null;
+}
+
+function safeQuery(selector) {
+  try {
+    return document.querySelector(selector);
+  } catch {
+    return null;
+  }
+}
+
+function cssEscape(value) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
+  return String(value).replace(/(["'\\.])/g, '\\$1');
+}
+
+const FLASH_CLASSES = [
+  'ring-2',
+  'ring-red-500',
+  'ring-offset-2',
+  'ring-offset-white',
+  'dark:ring-offset-gray-900',
+  'rounded-md',
+  'transition-shadow',
+  'duration-300'
+];
+
+function flashHighlight(el) {
+  if (!el || !el.classList) return;
+  FLASH_CLASSES.forEach(c => el.classList.add(c));
+  setTimeout(() => {
+    FLASH_CLASSES.forEach(c => el.classList.remove(c));
+  }, 1800);
+}
+
+/**
+ * Build a human label from a dot-path field id using the provided labels map.
+ * `description.en` → "Description (en)" when `labels.description` is "Description".
+ * `description.en` → "description.en" when no parent label exists.
+ */
+function buildLabel(fieldId, labels) {
+  if (!fieldId) return '';
+  if (labels[fieldId]) return labels[fieldId];
+  const dot = fieldId.indexOf('.');
+  if (dot === -1) return humanize(fieldId);
+  const head = fieldId.slice(0, dot);
+  const tail = fieldId.slice(dot + 1);
+  const headLabel = labels[head] || humanize(head);
+  return `${headLabel} (${tail})`;
+}
+
+function humanize(name) {
+  // camelCase / snake_case → "Camel Case" / "Snake Case"
+  return String(name)
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .replace(/^./, c => c.toUpperCase());
 }
 
 function normalizeErrors(errors) {

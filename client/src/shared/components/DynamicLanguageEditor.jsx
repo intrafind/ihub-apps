@@ -322,6 +322,8 @@ const DynamicLanguageEditor = ({
             <div className="flex-1">
               {type === 'textarea' ? (
                 <textarea
+                  id={name ? `${name}.${lang}` : undefined}
+                  data-field={name ? `${name}.${lang}` : undefined}
                   value={currentValue[lang] || ''}
                   onChange={e => handleLanguageChange(lang, e.target.value)}
                   placeholder={placeholder[lang] || ''}
@@ -337,6 +339,8 @@ const DynamicLanguageEditor = ({
                 />
               ) : (
                 <input
+                  id={name ? `${name}.${lang}` : undefined}
+                  data-field={name ? `${name}.${lang}` : undefined}
                   type={type}
                   value={currentValue[lang] || ''}
                   onChange={e => handleLanguageChange(lang, e.target.value)}
