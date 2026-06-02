@@ -127,204 +127,201 @@ function AdminMcpGatewayPage() {
       </div>
 
       <div className="space-y-6">
-          {message && (
-            <div
-              className={`p-4 rounded-md border ${
-                message.type === 'success'
-                  ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
-                  : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
-
-          <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 divide-y divide-gray-200 dark:divide-gray-700">
-            <Toggle
-              checked={!!gateway.enabled}
-              onChange={v => update({ enabled: v })}
-              label={t('admin.mcp.gateway.enable', 'Enable MCP gateway')}
-              description={t(
-                'admin.mcp.gateway.enableDesc',
-                'When enabled, /mcp accepts OAuth-authenticated requests from external MCP clients. The endpoint is always 404 when disabled.'
-              )}
-            />
-            <Toggle
-              checked={!!gateway.requireConsent}
-              onChange={v => update({ requireConsent: v })}
-              label={t('admin.mcp.gateway.consent', 'Require user consent')}
-              description={t(
-                'admin.mcp.gateway.consentDesc',
-                'Show the OAuth consent screen on authorization_code flow before issuing an MCP-scoped access token.'
-              )}
-            />
-          </section>
-
-          <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-4">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-              {t('admin.mcp.gateway.publicUrl', 'Public URL')}
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {t(
-                'admin.mcp.gateway.publicUrlDesc',
-                'Announced in .well-known metadata so MCP-aware clients can auto-discover the endpoint. Leave empty to derive it from the request origin.'
-              )}
-            </p>
-            <input
-              type="url"
-              placeholder="https://ihub.example.com"
-              value={gateway.publicUrl || ''}
-              onChange={e => update({ publicUrl: e.target.value })}
-              className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-            />
-          </section>
-
-          <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">
-              {t('admin.mcp.gateway.transports', 'Transports')}
-            </h2>
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              <Toggle
-                checked={transports.streamableHttp?.enabled !== false}
-                onChange={v =>
-                  update({
-                    transports: { streamableHttp: { enabled: v } }
-                  })
-                }
-                label={t(
-                  'admin.mcp.gateway.transportStreamableHttp',
-                  'Streamable HTTP (recommended)'
-                )}
-                description={t(
-                  'admin.mcp.gateway.transportStreamableHttpDesc',
-                  'Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.'
-                )}
-              />
-              <Toggle
-                checked={transports.sse?.enabled !== false}
-                onChange={v =>
-                  update({
-                    transports: { sse: { enabled: v, deprecated: true } }
-                  })
-                }
-                label={t('admin.mcp.gateway.transportSse', 'SSE (legacy)')}
-                description={t(
-                  'admin.mcp.gateway.transportSseDesc',
-                  'Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency.'
-                )}
-              />
-              <Toggle
-                checked={!!gateway.a2a?.enabled}
-                onChange={v =>
-                  setPlatform(prev => ({
-                    ...prev,
-                    mcpServer: {
-                      ...(prev?.mcpServer || {}),
-                      a2a: { ...(prev?.mcpServer?.a2a || {}), enabled: v }
-                    }
-                  }))
-                }
-                label={t('admin.mcp.gateway.transportA2a', 'A2A (experimental)')}
-                description={t(
-                  'admin.mcp.gateway.transportA2aDesc',
-                  'Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises.'
-                )}
-              />
-            </div>
-          </section>
-
-          <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-            <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">
-              {t('admin.mcp.gateway.expose', 'Exposed resources')}
-            </h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
-              {t(
-                'admin.mcp.gateway.exposeDesc',
-                'Resource families surfaced via MCP. Per-OAuth-client allowlists further restrict what an individual caller sees.'
-              )}
-            </p>
-            <div className="divide-y divide-gray-200 dark:divide-gray-700">
-              <Toggle
-                checked={expose.tools !== false}
-                onChange={v => update({ expose: { tools: v } })}
-                label={t('admin.mcp.gateway.exposeTools', 'iHub tools')}
-                description={t(
-                  'admin.mcp.gateway.exposeToolsDesc',
-                  'Requires scope mcp:tools:read + mcp:tools:call'
-                )}
-              />
-              <Toggle
-                checked={expose.apps !== false}
-                onChange={v => update({ expose: { apps: v } })}
-                label={t('admin.mcp.gateway.exposeApps', 'iHub apps')}
-                description={t(
-                  'admin.mcp.gateway.exposeAppsDesc',
-                  'Requires scope mcp:apps:invoke'
-                )}
-              />
-              <Toggle
-                checked={expose.workflows !== false}
-                onChange={v => update({ expose: { workflows: v } })}
-                label={t('admin.mcp.gateway.exposeWorkflows', 'Workflows')}
-                description={t(
-                  'admin.mcp.gateway.exposeWorkflowsDesc',
-                  'Requires scope mcp:workflows:run'
-                )}
-              />
-              <Toggle
-                checked={!!expose.resources}
-                onChange={v => update({ expose: { resources: v } })}
-                label={t('admin.mcp.gateway.exposeResources', 'Resources')}
-                description={t(
-                  'admin.mcp.gateway.exposeResourcesDesc',
-                  'Sources / skills surfaced as MCP resources (resources/list + resources/read). Requires scope mcp:resources:read.'
-                )}
-              />
-            </div>
-          </section>
-
-          {gateway.enabled && (
-            <section className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-              <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
-                {t('admin.mcp.gateway.connection', 'Connection examples')}
-              </h3>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                {t('admin.mcp.gateway.endpointLabel', 'Endpoint:')}{' '}
-                <code className="font-mono">
-                  {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp
-                </code>
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
-                {t('admin.mcp.gateway.discoveryLabel', 'Discovery:')}{' '}
-                <code className="font-mono">
-                  {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp/.well-known
-                </code>
-              </p>
-              <p className="text-xs text-blue-700 dark:text-blue-300">
-                {t(
-                  'admin.mcp.gateway.connectionHint',
-                  'Authenticate with an OAuth client (see /admin/oauth/clients) that grants the relevant mcp:* scopes.'
-                )}
-              </p>
-            </section>
-          )}
-
-          <div className="flex justify-end">
-            <button
-              onClick={save}
-              disabled={saving}
-              className="inline-flex items-center px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <LoadingSpinner size="sm" className="mr-2" />
-                  {t('admin.mcp.common.saving', 'Saving...')}
-                </>
-              ) : (
-                t('common.save', 'Save')
-              )}
-            </button>
+        {message && (
+          <div
+            className={`p-4 rounded-md border ${
+              message.type === 'success'
+                ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+            }`}
+          >
+            {message.text}
           </div>
+        )}
+
+        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 divide-y divide-gray-200 dark:divide-gray-700">
+          <Toggle
+            checked={!!gateway.enabled}
+            onChange={v => update({ enabled: v })}
+            label={t('admin.mcp.gateway.enable', 'Enable MCP gateway')}
+            description={t(
+              'admin.mcp.gateway.enableDesc',
+              'When enabled, /mcp accepts OAuth-authenticated requests from external MCP clients. The endpoint is always 404 when disabled.'
+            )}
+          />
+          <Toggle
+            checked={!!gateway.requireConsent}
+            onChange={v => update({ requireConsent: v })}
+            label={t('admin.mcp.gateway.consent', 'Require user consent')}
+            description={t(
+              'admin.mcp.gateway.consentDesc',
+              'Show the OAuth consent screen on authorization_code flow before issuing an MCP-scoped access token.'
+            )}
+          />
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 space-y-4">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+            {t('admin.mcp.gateway.publicUrl', 'Public URL')}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {t(
+              'admin.mcp.gateway.publicUrlDesc',
+              'Announced in .well-known metadata so MCP-aware clients can auto-discover the endpoint. Leave empty to derive it from the request origin.'
+            )}
+          </p>
+          <input
+            type="url"
+            placeholder="https://ihub.example.com"
+            value={gateway.publicUrl || ''}
+            onChange={e => update({ publicUrl: e.target.value })}
+            className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          />
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">
+            {t('admin.mcp.gateway.transports', 'Transports')}
+          </h2>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <Toggle
+              checked={transports.streamableHttp?.enabled !== false}
+              onChange={v =>
+                update({
+                  transports: { streamableHttp: { enabled: v } }
+                })
+              }
+              label={t(
+                'admin.mcp.gateway.transportStreamableHttp',
+                'Streamable HTTP (recommended)'
+              )}
+              description={t(
+                'admin.mcp.gateway.transportStreamableHttpDesc',
+                'Canonical MCP HTTP transport per spec 2025-03-26+. Supports session resumption via Mcp-Session-Id + Last-Event-ID.'
+              )}
+            />
+            <Toggle
+              checked={transports.sse?.enabled !== false}
+              onChange={v =>
+                update({
+                  transports: { sse: { enabled: v, deprecated: true } }
+                })
+              }
+              label={t('admin.mcp.gateway.transportSse', 'SSE (legacy)')}
+              description={t(
+                'admin.mcp.gateway.transportSseDesc',
+                'Older transport kept for back-compat with MCP clients that have not migrated to Streamable HTTP. Replays in-flight requests rather than resuming on reconnect — disable if you care about idempotency.'
+              )}
+            />
+            <Toggle
+              checked={!!gateway.a2a?.enabled}
+              onChange={v =>
+                setPlatform(prev => ({
+                  ...prev,
+                  mcpServer: {
+                    ...(prev?.mcpServer || {}),
+                    a2a: { ...(prev?.mcpServer?.a2a || {}), enabled: v }
+                  }
+                }))
+              }
+              label={t('admin.mcp.gateway.transportA2a', 'A2A (experimental)')}
+              description={t(
+                'admin.mcp.gateway.transportA2aDesc',
+                'Mount /a2a alongside /mcp using the same OAuth + mcp:* scope gate. Implements the well-defined subset of the A2A draft (agent/info, agent/skills, tasks/send). Stateful tasks return method-not-found until the spec stabilises.'
+              )}
+            />
+          </div>
+        </section>
+
+        <section className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
+          <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-3">
+            {t('admin.mcp.gateway.expose', 'Exposed resources')}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+            {t(
+              'admin.mcp.gateway.exposeDesc',
+              'Resource families surfaced via MCP. Per-OAuth-client allowlists further restrict what an individual caller sees.'
+            )}
+          </p>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            <Toggle
+              checked={expose.tools !== false}
+              onChange={v => update({ expose: { tools: v } })}
+              label={t('admin.mcp.gateway.exposeTools', 'iHub tools')}
+              description={t(
+                'admin.mcp.gateway.exposeToolsDesc',
+                'Requires scope mcp:tools:read + mcp:tools:call'
+              )}
+            />
+            <Toggle
+              checked={expose.apps !== false}
+              onChange={v => update({ expose: { apps: v } })}
+              label={t('admin.mcp.gateway.exposeApps', 'iHub apps')}
+              description={t('admin.mcp.gateway.exposeAppsDesc', 'Requires scope mcp:apps:invoke')}
+            />
+            <Toggle
+              checked={expose.workflows !== false}
+              onChange={v => update({ expose: { workflows: v } })}
+              label={t('admin.mcp.gateway.exposeWorkflows', 'Workflows')}
+              description={t(
+                'admin.mcp.gateway.exposeWorkflowsDesc',
+                'Requires scope mcp:workflows:run'
+              )}
+            />
+            <Toggle
+              checked={!!expose.resources}
+              onChange={v => update({ expose: { resources: v } })}
+              label={t('admin.mcp.gateway.exposeResources', 'Resources')}
+              description={t(
+                'admin.mcp.gateway.exposeResourcesDesc',
+                'Sources / skills surfaced as MCP resources (resources/list + resources/read). Requires scope mcp:resources:read.'
+              )}
+            />
+          </div>
+        </section>
+
+        {gateway.enabled && (
+          <section className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
+              {t('admin.mcp.gateway.connection', 'Connection examples')}
+            </h3>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
+              {t('admin.mcp.gateway.endpointLabel', 'Endpoint:')}{' '}
+              <code className="font-mono">
+                {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp
+              </code>
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300 mb-2">
+              {t('admin.mcp.gateway.discoveryLabel', 'Discovery:')}{' '}
+              <code className="font-mono">
+                {(gateway.publicUrl || window.location.origin).replace(/\/$/, '')}/mcp/.well-known
+              </code>
+            </p>
+            <p className="text-xs text-blue-700 dark:text-blue-300">
+              {t(
+                'admin.mcp.gateway.connectionHint',
+                'Authenticate with an OAuth client (see /admin/oauth/clients) that grants the relevant mcp:* scopes.'
+              )}
+            </p>
+          </section>
+        )}
+
+        <div className="flex justify-end">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="inline-flex items-center px-4 py-2 rounded-md text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? (
+              <>
+                <LoadingSpinner size="sm" className="mr-2" />
+                {t('admin.mcp.common.saving', 'Saving...')}
+              </>
+            ) : (
+              t('common.save', 'Save')
+            )}
+          </button>
+        </div>
       </div>
     </div>
   );

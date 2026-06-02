@@ -344,257 +344,257 @@ function AdminMcpServersPage() {
       </div>
 
       <div>
-          {message && (
-            <div
-              className={`mb-6 p-4 rounded-md border ${
-                message.type === 'success'
-                  ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
-                  : message.type === 'info'
-                    ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
-                    : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
-              }`}
-            >
-              {message.text}
-            </div>
-          )}
+        {message && (
+          <div
+            className={`mb-6 p-4 rounded-md border ${
+              message.type === 'success'
+                ? 'bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-700 dark:text-green-300'
+                : message.type === 'info'
+                  ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300'
+                  : 'bg-red-50 dark:bg-red-900/30 border-red-200 dark:border-red-800 text-red-700 dark:text-red-300'
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
 
-          {servers.length === 0 ? (
-            <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
-              <Icon name="globe" className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                {t('admin.mcp.servers.empty', 'No MCP servers configured')}
-              </h3>
-            </div>
-          ) : (
-            <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
-              <ul className="divide-y divide-gray-200 dark:divide-gray-700">
-                {servers.map(s => (
-                  <li key={s.id} className="px-4 py-4 sm:px-6">
-                    <div className="flex items-center justify-between">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center space-x-3">
-                          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 truncate">
-                            {typeof s.name === 'string' ? s.name : s.name?.en || s.id}
-                          </h3>
-                          <StatusBadge status={s.status} t={t} />
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
-                            {s.transport?.type}
+        {servers.length === 0 ? (
+          <div className="text-center py-12 bg-white dark:bg-gray-800 rounded-lg shadow">
+            <Icon name="globe" className="mx-auto h-12 w-12 text-gray-400" />
+            <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
+              {t('admin.mcp.servers.empty', 'No MCP servers configured')}
+            </h3>
+          </div>
+        ) : (
+          <div className="bg-white dark:bg-gray-800 shadow overflow-hidden sm:rounded-md">
+            <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+              {servers.map(s => (
+                <li key={s.id} className="px-4 py-4 sm:px-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center space-x-3">
+                        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 truncate">
+                          {typeof s.name === 'string' ? s.name : s.name?.en || s.id}
+                        </h3>
+                        <StatusBadge status={s.status} t={t} />
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300">
+                          {s.transport?.type}
+                        </span>
+                        {!s.enabled && (
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
+                            {t('admin.mcp.servers.status.disabled', 'disabled')}
                           </span>
-                          {!s.enabled && (
-                            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">
-                              {t('admin.mcp.servers.status.disabled', 'disabled')}
-                            </span>
-                          )}
-                        </div>
-                        <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-mono">
-                          {s.id}
-                        </div>
-                        {s.status?.lastError && (
-                          <div className="mt-2 text-sm text-red-700 dark:text-red-400">
-                            {s.status.lastError}
-                          </div>
                         )}
                       </div>
-                      <div className="flex space-x-2 ml-4">
-                        <button
-                          onClick={() => test(s.id)}
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-                          title={t('admin.mcp.servers.actions.test', 'Test connection')}
-                        >
-                          <Icon name="play" size="sm" />
-                        </button>
-                        <button
-                          onClick={() => startEdit(s)}
-                          className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
-                        >
-                          <Icon name="pencil" size="sm" />
-                        </button>
-                        <button
-                          onClick={() => remove(s.id)}
-                          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
-                        >
-                          <Icon name="trash" size="sm" />
-                        </button>
+                      <div className="mt-2 text-sm text-gray-500 dark:text-gray-400 font-mono">
+                        {s.id}
                       </div>
+                      {s.status?.lastError && (
+                        <div className="mt-2 text-sm text-red-700 dark:text-red-400">
+                          {s.status.lastError}
+                        </div>
+                      )}
                     </div>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-
-        {editing !== null && (
-          <div className="fixed z-10 inset-0 overflow-y-auto">
-            <div className="flex items-center justify-center min-h-screen px-4">
-              <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" />
-              <div className="relative bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
-                <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-                  {editing === 'new'
-                    ? t('admin.mcp.servers.createTitle', 'Create MCP server')
-                    : t('admin.mcp.servers.editTitle', 'Edit {{id}}', { id: editing })}
-                </h2>
-                {editing === 'new' && (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.mcp.servers.form.id', 'ID')}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={form.id}
-                      onChange={e => setForm({ ...form, id: e.target.value })}
-                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
-                      placeholder="github-mcp"
-                    />
+                    <div className="flex space-x-2 ml-4">
+                      <button
+                        onClick={() => test(s.id)}
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                        title={t('admin.mcp.servers.actions.test', 'Test connection')}
+                      >
+                        <Icon name="play" size="sm" />
+                      </button>
+                      <button
+                        onClick={() => startEdit(s)}
+                        className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600"
+                      >
+                        <Icon name="pencil" size="sm" />
+                      </button>
+                      <button
+                        onClick={() => remove(s.id)}
+                        className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-700 shadow-sm text-sm leading-4 font-medium rounded-md text-red-700 dark:text-red-400 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/50"
+                      >
+                        <Icon name="trash" size="sm" />
+                      </button>
+                    </div>
                   </div>
-                )}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('admin.mcp.servers.form.name', 'Name')}
-                  </label>
-                  <input
-                    type="text"
-                    value={form.name || ''}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t('admin.mcp.servers.form.description', 'Description')}
-                  </label>
-                  <textarea
-                    rows={2}
-                    value={form.description || ''}
-                    onChange={e => setForm({ ...form, description: e.target.value })}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
-                  />
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    id="enabled"
-                    type="checkbox"
-                    checked={form.enabled}
-                    onChange={e => setForm({ ...form, enabled: e.target.checked })}
-                  />
-                  <label htmlFor="enabled" className="text-sm text-gray-700 dark:text-gray-300">
-                    {t('admin.mcp.servers.form.enabled', 'Enabled')}
-                  </label>
-                </div>
-
-                <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
-                  <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
-                    {t('admin.mcp.servers.form.transport', 'Transport')}
-                  </legend>
-                  <div className="space-y-3">
-                    <select
-                      value={form.transport.type}
-                      onChange={e => {
-                        const type = e.target.value;
-                        const next =
-                          type === 'stdio' ? { type, command: '', args: [] } : { type, url: '' };
-                        setForm({ ...form, transport: next });
-                      }}
-                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
-                    >
-                      <option value="streamableHttp">
-                        {t(
-                          'admin.mcp.servers.form.transportStreamableHttp',
-                          'Streamable HTTP (recommended)'
-                        )}
-                      </option>
-                      <option value="sse">
-                        {t('admin.mcp.servers.form.transportSse', 'SSE (legacy)')}
-                      </option>
-                      <option value="stdio">
-                        {t('admin.mcp.servers.form.transportStdio', 'stdio')}
-                      </option>
-                      <option value="websocket">
-                        {t('admin.mcp.servers.form.transportWebsocket', 'WebSocket')}
-                      </option>
-                    </select>
-                    {transportFields(
-                      form.transport,
-                      next => setForm({ ...form, transport: next }),
-                      t
-                    )}
-                  </div>
-                </fieldset>
-
-                <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
-                  <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
-                    {t('admin.mcp.servers.form.authType', 'Authentication')}
-                  </legend>
-                  {authFields(form.auth, a => setForm({ ...form, auth: a }), t)}
-                </fieldset>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.mcp.servers.form.toolPrefix', 'Tool prefix')}
-                    </label>
-                    <input
-                      type="text"
-                      value={form.toolPrefix || ''}
-                      onChange={e => setForm({ ...form, toolPrefix: e.target.value })}
-                      placeholder={`${form.id || 'server'}__`}
-                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {t('admin.mcp.servers.form.timeout', 'Timeout (ms)')}
-                    </label>
-                    <input
-                      type="number"
-                      min="1000"
-                      max="600000"
-                      value={form.timeoutMs}
-                      onChange={e => setForm({ ...form, timeoutMs: Number(e.target.value) })}
-                      className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    {t(
-                      'admin.mcp.servers.form.allowedTools',
-                      'Allowed tools (comma-separated, or *)'
-                    )}
-                  </label>
-                  <input
-                    type="text"
-                    value={
-                      Array.isArray(form.allowedTools)
-                        ? form.allowedTools.join(', ')
-                        : form.allowedTools || '*'
-                    }
-                    onChange={e => setForm({ ...form, allowedTools: e.target.value })}
-                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
-                  />
-                </div>
-
-                <div className="flex justify-end space-x-2 pt-2">
-                  <button
-                    onClick={() => setEditing(null)}
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
-                  >
-                    {t('common.cancel', 'Cancel')}
-                  </button>
-                  <button
-                    onClick={save}
-                    className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    {t('common.save', 'Save')}
-                  </button>
-                </div>
-              </div>
-            </div>
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </div>
+
+      {editing !== null && (
+        <div className="fixed z-10 inset-0 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen px-4">
+            <div className="fixed inset-0 bg-gray-500 dark:bg-gray-900 bg-opacity-75 dark:bg-opacity-75" />
+            <div className="relative bg-white dark:bg-gray-800 rounded-lg p-6 max-w-2xl w-full shadow-xl space-y-4 max-h-[90vh] overflow-y-auto">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                {editing === 'new'
+                  ? t('admin.mcp.servers.createTitle', 'Create MCP server')
+                  : t('admin.mcp.servers.editTitle', 'Edit {{id}}', { id: editing })}
+              </h2>
+              {editing === 'new' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.mcp.servers.form.id', 'ID')}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={form.id}
+                    onChange={e => setForm({ ...form, id: e.target.value })}
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                    placeholder="github-mcp"
+                  />
+                </div>
+              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('admin.mcp.servers.form.name', 'Name')}
+                </label>
+                <input
+                  type="text"
+                  value={form.name || ''}
+                  onChange={e => setForm({ ...form, name: e.target.value })}
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t('admin.mcp.servers.form.description', 'Description')}
+                </label>
+                <textarea
+                  rows={2}
+                  value={form.description || ''}
+                  onChange={e => setForm({ ...form, description: e.target.value })}
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                />
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  id="enabled"
+                  type="checkbox"
+                  checked={form.enabled}
+                  onChange={e => setForm({ ...form, enabled: e.target.checked })}
+                />
+                <label htmlFor="enabled" className="text-sm text-gray-700 dark:text-gray-300">
+                  {t('admin.mcp.servers.form.enabled', 'Enabled')}
+                </label>
+              </div>
+
+              <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
+                <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
+                  {t('admin.mcp.servers.form.transport', 'Transport')}
+                </legend>
+                <div className="space-y-3">
+                  <select
+                    value={form.transport.type}
+                    onChange={e => {
+                      const type = e.target.value;
+                      const next =
+                        type === 'stdio' ? { type, command: '', args: [] } : { type, url: '' };
+                      setForm({ ...form, transport: next });
+                    }}
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                  >
+                    <option value="streamableHttp">
+                      {t(
+                        'admin.mcp.servers.form.transportStreamableHttp',
+                        'Streamable HTTP (recommended)'
+                      )}
+                    </option>
+                    <option value="sse">
+                      {t('admin.mcp.servers.form.transportSse', 'SSE (legacy)')}
+                    </option>
+                    <option value="stdio">
+                      {t('admin.mcp.servers.form.transportStdio', 'stdio')}
+                    </option>
+                    <option value="websocket">
+                      {t('admin.mcp.servers.form.transportWebsocket', 'WebSocket')}
+                    </option>
+                  </select>
+                  {transportFields(
+                    form.transport,
+                    next => setForm({ ...form, transport: next }),
+                    t
+                  )}
+                </div>
+              </fieldset>
+
+              <fieldset className="border border-gray-200 dark:border-gray-700 rounded p-3">
+                <legend className="text-sm font-medium text-gray-700 dark:text-gray-300 px-1">
+                  {t('admin.mcp.servers.form.authType', 'Authentication')}
+                </legend>
+                {authFields(form.auth, a => setForm({ ...form, auth: a }), t)}
+              </fieldset>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.mcp.servers.form.toolPrefix', 'Tool prefix')}
+                  </label>
+                  <input
+                    type="text"
+                    value={form.toolPrefix || ''}
+                    onChange={e => setForm({ ...form, toolPrefix: e.target.value })}
+                    placeholder={`${form.id || 'server'}__`}
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    {t('admin.mcp.servers.form.timeout', 'Timeout (ms)')}
+                  </label>
+                  <input
+                    type="number"
+                    min="1000"
+                    max="600000"
+                    value={form.timeoutMs}
+                    onChange={e => setForm({ ...form, timeoutMs: Number(e.target.value) })}
+                    className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  {t(
+                    'admin.mcp.servers.form.allowedTools',
+                    'Allowed tools (comma-separated, or *)'
+                  )}
+                </label>
+                <input
+                  type="text"
+                  value={
+                    Array.isArray(form.allowedTools)
+                      ? form.allowedTools.join(', ')
+                      : form.allowedTools || '*'
+                  }
+                  onChange={e => setForm({ ...form, allowedTools: e.target.value })}
+                  className="w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 font-mono text-sm"
+                />
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-2">
+                <button
+                  onClick={() => setEditing(null)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700"
+                >
+                  {t('common.cancel', 'Cancel')}
+                </button>
+                <button
+                  onClick={save}
+                  className="px-4 py-2 rounded text-white bg-blue-600 hover:bg-blue-700"
+                >
+                  {t('common.save', 'Save')}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
