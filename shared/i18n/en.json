@@ -2,6 +2,9 @@
   "accessibility": {
     "skipToContent": "Skip to main content"
   },
+  "footer": {
+    "navigation": "Footer navigation"
+  },
   "attachedFiles": {
     "removeAll": "Remove All",
     "filesCount": "{{count}} file(s) attached",

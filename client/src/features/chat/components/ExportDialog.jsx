@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import Icon from '../../../shared/components/Icon';
+import useFocusTrap from '../../../shared/hooks/useFocusTrap';
 import { exportChatToFormat } from '../../../api/endpoints/apps';
 import {
   exportToXLSX,
@@ -22,6 +23,25 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
   const [selectedFormat, setSelectedFormat] = useState('pdf');
   const [isExporting, setIsExporting] = useState(false);
   const [exportError, setExportError] = useState(null);
+
+  const dialogRef = useRef(null);
+
+  useFocusTrap(dialogRef, {
+    isActive: isOpen,
+    returnFocusOnDeactivate: true
+  });
+
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const onKeyDown = event => {
+      if (event.key === 'Escape' && !isExporting) {
+        event.preventDefault();
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isOpen, isExporting, onClose]);
 
   // PDF-specific configuration
   const [pdfConfig, setPdfConfig] = useState({
@@ -188,16 +208,26 @@ function ExportDialog({ isOpen, onClose, messages = [], settings = {}, appId, ch
         if (e.target === e.currentTarget) onClose?.();
       }}
     >
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-dialog-title"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+      >
         {/* Header */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+          <h2
+            id="export-dialog-title"
+            className="text-xl font-semibold text-gray-900 dark:text-gray-100"
+          >
             {t('pages.appChat.export.dialogTitle', 'Export Conversation')}
           </h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
             disabled={isExporting}
+            aria-label={t('common.close', 'Close')}
           >
             <Icon name="x-mark" size="md" />
           </button>

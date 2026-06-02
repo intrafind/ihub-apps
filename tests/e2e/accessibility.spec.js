@@ -4,27 +4,30 @@ import AxeBuilder from '@axe-core/playwright';
 /**
  * Accessibility End-to-End Tests
  *
- * Scans key pages for WCAG 2.1 Level AA violations using axe-core.
+ * Scans key pages for WCAG 2.2 Level AA violations using axe-core.
  * These tests catch automatically detectable accessibility issues such as
- * missing alt text, insufficient color contrast, missing form labels, and
- * incorrect ARIA attribute usage.
+ * missing alt text, insufficient color contrast, missing form labels,
+ * incorrect ARIA attribute usage, and (new in WCAG 2.2) insufficient target
+ * sizes.
  *
  * Tags used:
  *   wcag2a    — WCAG 2.0 Level A
  *   wcag2aa   — WCAG 2.0 Level AA
  *   wcag21a   — WCAG 2.1 Level A
  *   wcag21aa  — WCAG 2.1 Level AA
+ *   wcag22a   — WCAG 2.2 Level A
+ *   wcag22aa  — WCAG 2.2 Level AA
  *
  * Only "critical" and "serious" impact violations cause test failure.
  * "moderate" and "minor" violations are logged for awareness but do not
  * block the build.
  *
- * @see https://www.w3.org/TR/WCAG21/
+ * @see https://www.w3.org/TR/WCAG22/
  * @see https://github.com/dequelabs/axe-core
  */
 
-/** WCAG 2.1 AA rule tags passed to every AxeBuilder scan. */
-const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'];
+/** WCAG 2.2 AA rule tags passed to every AxeBuilder scan. */
+const WCAG_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22a', 'wcag22aa'];
 
 /**
  * Creates a pre-configured AxeBuilder instance targeting WCAG 2.1 AA.
@@ -61,7 +64,7 @@ function formatViolationSummary(violations) {
     .join('\n\n');
 }
 
-test.describe('Accessibility — WCAG 2.1 AA Compliance', () => {
+test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
   test.describe('Home / Apps list page', () => {
     test('should not have critical or serious accessibility violations', async ({ page }) => {
       await page.goto('/');

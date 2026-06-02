@@ -148,6 +148,7 @@
     "electron-builder": "^26.7.0",
     "esbuild": "^0.28.0",
     "eslint": "^10.4.0",
+    "eslint-plugin-jsx-a11y": "^6.10.2",
     "globals": "^17.6.0",
     "husky": "^9.1.7",
     "identity-obj-proxy": "^3.0.0",
@@ -166,7 +167,10 @@
   },
   "overrides": {
     "glob": "^11.1.0",
-    "dompurify": "^3.4.0"
+    "dompurify": "^3.4.0",
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    }
   },
   "lint-staged": {
     "*.{js,jsx}": [
