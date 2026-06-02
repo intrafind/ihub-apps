@@ -163,3 +163,10 @@ The platform now targets **WCAG 2.2 Level AA** (up from 2.1), strengthening alig
 - **Automated runtime scans**: the axe-core suite now scans against WCAG 2.2 AA rule tags and runs on every pull request via a dedicated Accessibility GitHub Actions workflow.
 - **Remediations**: the Export dialog is now a proper focus-trapped modal (`role="dialog"`, Escape to close, focus restored on close); image remove/download buttons expose screen-reader labels; and footer links are grouped in a labeled navigation landmark.
 - See **docs/accessibility.md** for the full compliance statement, keyboard reference, and manual testing checklist.
+
+## Fix — Spurious "Unsaved Changes" Prompt After Saving
+
+Clicking **Save** on any admin edit page (apps, models, prompts, sources, users, groups, and others) no longer triggers the "You have unsaved changes" confirmation dialog. Saving now navigates back to the list immediately.
+
+- The unsaved-changes guard previously used a stale dirty-state value captured before the save completed, so the navigation triggered by Save itself was treated as an unsaved-changes navigation.
+- The guard now reads the live dirty state at navigation time, so genuine back/cancel navigation with unsaved edits is still protected.
