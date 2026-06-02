@@ -1,12 +1,12 @@
 # Accessibility
 
-iHub Apps is committed to meeting **WCAG 2.1 Level AA** accessibility standards. This page describes the compliance targets, keyboard navigation patterns, screen reader considerations, testing procedures, and known limitations.
+iHub Apps is committed to meeting **WCAG 2.2 Level AA** accessibility standards. This page describes the compliance targets, keyboard navigation patterns, screen reader considerations, testing procedures, and known limitations.
 
 ## Compliance Statement
 
 ### Target Standard
 
-**WCAG 2.1 Level AA** as defined by the [Web Content Accessibility Guidelines](https://www.w3.org/TR/WCAG21/).
+**WCAG 2.2 Level AA** as defined by the [Web Content Accessibility Guidelines](https://www.w3.org/TR/WCAG22/). WCAG 2.2 is backwards-compatible with 2.1 and adds success criteria such as **Focus Not Obscured**, **Dragging Movements**, **Target Size (Minimum)**, and **Consistent Help**.
 
 ### Regulatory Alignment
 
@@ -14,13 +14,19 @@ The accessibility work in iHub Apps is aligned with the following regulations an
 
 | Standard / Regulation | Scope | Notes |
 |---|---|---|
-| **EN 301 549** | EU — Harmonized European Standard for ICT accessibility | Mandatory for public-sector ICT procurement in the EU. References WCAG 2.1 AA for web content (clause 9). |
-| **BITV 2.0** | Germany — Barrierefreie-Informationstechnik-Verordnung | German federal regulation implementing the EU Web Accessibility Directive. Requires WCAG 2.1 AA for public-sector websites and apps. |
+| **EN 301 549** | EU — Harmonized European Standard for ICT accessibility | Mandatory for public-sector ICT procurement in the EU. References WCAG 2.1 AA for web content (clause 9); newer revisions track WCAG 2.2. |
+| **BITV 2.0** | Germany — Barrierefreie-Informationstechnik-Verordnung | German federal regulation implementing the EU Web Accessibility Directive. Requires at least WCAG 2.1 AA for public-sector websites and apps; iHub Apps targets the stricter WCAG 2.2 AA. |
 | **BFSG** | Germany — Barrierefreiheitstaerkungsgesetz | German implementation of the European Accessibility Act (EAA). Extends accessibility requirements to private-sector products and services starting June 2025. |
 
 ### Current Status
 
-Accessibility tooling infrastructure is in place. Automated scanning for WCAG 2.1 AA violations runs as part of the end-to-end test suite. Remediation of existing violations is tracked and will be addressed incrementally.
+Accessibility tooling infrastructure is in place on three layers:
+
+1. **Static analysis** — `eslint-plugin-jsx-a11y` runs as part of `npm run lint` (and on every pull request via the *Auto Lint & Format* workflow). Rules currently report at `warn` severity and are promoted to `error` as findings are remediated.
+2. **Automated runtime scanning** — axe-core scans key pages for WCAG 2.2 AA violations as part of the end-to-end test suite, and runs on every pull request via the dedicated *Accessibility* GitHub Actions workflow (`.github/workflows/accessibility.yml`).
+3. **Manual verification** — keyboard and screen-reader checks before major releases (see the checklist below).
+
+Remediation of existing violations is tracked and addressed incrementally.
 
 ## Keyboard Navigation
 
@@ -120,15 +126,17 @@ npm run test:a11y
 npm run test:e2e
 ```
 
-The `test:a11y` command scans the following pages for WCAG 2.1 AA violations:
+The `test:a11y` command scans the following pages for WCAG 2.2 AA violations (axe-core tags `wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, `wcag22a`, `wcag22aa`):
 
 | Page | Route | Notes |
 |---|---|---|
-| Home / Apps list | `/` | Main landing page |
+| Home / Apps list | `/` | Main landing page (exercises header, nav, skip link, footer) |
 | Login | `/login` | Authentication page |
 | Admin | `/admin` | Skipped automatically if authentication is required |
 
 **Failure criteria:** Only **critical** and **serious** impact violations cause test failure. Moderate and minor violations are logged for awareness.
+
+**Continuous integration:** The `.github/workflows/accessibility.yml` workflow installs dependencies, boots the application, and runs `npm run test:a11y` against Chromium on every pull request targeting `main` or `develop`. The Playwright HTML report is uploaded as a build artifact.
 
 #### Static Analysis
 
@@ -142,7 +150,9 @@ npm run lint
 npm run lint:fix
 ```
 
-All `jsx-a11y` rules are currently set to **warn** severity to avoid blocking ongoing development. These will be promoted to **error** incrementally as violations are remediated.
+The plugin's *recommended* ruleset is enabled, with each rule downgraded from `error` to **warn** so accessibility findings surface during development without blocking it. Rules the preset disables (e.g. the deprecated `label-has-for`) remain disabled, and per-rule option objects are preserved. Rules are promoted back to **error** incrementally as violations are remediated.
+
+> **Note on ESLint compatibility:** `eslint-plugin-jsx-a11y` declares an ESLint `<= 9` peer range, while this project runs ESLint 10. A `package.json` `overrides` entry (`"eslint-plugin-jsx-a11y": { "eslint": "$eslint" }`) reconciles the peer dependency; the plugin is fully functional with ESLint 10's flat config.
 
 ### Manual Testing Checklist
 

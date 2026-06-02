@@ -154,3 +154,12 @@ The audit log now supports a configurable retention policy.
 ## Recent Activity Feed on Overview Dashboard
 
 The admin Overview now shows a **Recent activity** card listing the eight most recent audit log entries (action pill, summary, admin, resource, relative time). Clicking "View all" jumps to the filtered Audit Log page.
+
+## Accessibility — WCAG 2.2 AA Tooling and Remediation
+
+The platform now targets **WCAG 2.2 Level AA** (up from 2.1), strengthening alignment with EN 301 549 and BITV 2.0 for public-sector procurement.
+
+- **Static analysis in CI**: `eslint-plugin-jsx-a11y` is wired into linting and runs on every pull request, surfacing missing labels, unlabeled controls, and keyboard-handler gaps.
+- **Automated runtime scans**: the axe-core suite now scans against WCAG 2.2 AA rule tags and runs on every pull request via a dedicated Accessibility GitHub Actions workflow.
+- **Remediations**: the Export dialog is now a proper focus-trapped modal (`role="dialog"`, Escape to close, focus restored on close); image remove/download buttons expose screen-reader labels; and footer links are grouped in a labeled navigation landmark.
+- See **docs/accessibility.md** for the full compliance statement, keyboard reference, and manual testing checklist.

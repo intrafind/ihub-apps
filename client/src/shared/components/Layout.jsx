@@ -243,7 +243,10 @@ function Layout() {
                     : t('footer.copyright')}
                 </p>
               </div>
-              <div className="flex flex-wrap justify-center gap-4 md:gap-6">
+              <nav
+                aria-label={t('footer.navigation', 'Footer navigation')}
+                className="flex flex-wrap justify-center gap-4 md:gap-6"
+              >
                 {uiConfig?.footer?.links &&
                   uiConfig.footer.links
                     .filter(link => {
@@ -267,7 +270,7 @@ function Layout() {
                         {getLocalizedContent(link.name, currentLanguage)}
                       </Link>
                     ))}
-              </div>
+              </nav>
             </div>
             {/* Disclaimer removed from footer - now shown as a popup */}
           </div>

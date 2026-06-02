@@ -2,6 +2,9 @@
   "accessibility": {
     "skipToContent": "Zum Hauptinhalt springen"
   },
+  "footer": {
+    "navigation": "Fußzeilen-Navigation"
+  },
   "attachedFiles": {
     "removeAll": "Alle entfernen",
     "filesCount": "{{count}} Datei(en) angehängt",

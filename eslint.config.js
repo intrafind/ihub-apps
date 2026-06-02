@@ -1,5 +1,6 @@
 import globals from 'globals';
 import eslintReact from '@eslint-react/eslint-plugin';
+import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 export default [
   {
@@ -69,10 +70,31 @@ export default [
         ...globals.es2024
       }
     },
+    plugins: {
+      ...eslintReact.configs.recommended.plugins,
+      'jsx-a11y': jsxA11y
+    },
     rules: {
       ...eslintReact.configs.recommended.rules,
       // Disable RSC rules — not a React Server Components project
-      '@eslint-react/rsc/function-definition': 'off'
+      '@eslint-react/rsc/function-definition': 'off',
+      // WCAG 2.2 AA static analysis via eslint-plugin-jsx-a11y.
+      // Start from the plugin's recommended ruleset but downgrade `error` to
+      // `warn` so a11y findings don't block ongoing development. Rules the
+      // preset disables (e.g. the deprecated `label-has-for`) stay disabled,
+      // and per-rule option objects are preserved. Rules are promoted back to
+      // `error` as violations are remediated. See docs/accessibility.md.
+      ...Object.fromEntries(
+        Object.entries(jsxA11y.flatConfigs.recommended.rules).map(([rule, setting]) => {
+          // Array form: ['error', { ...options }] — keep options, lower severity.
+          if (Array.isArray(setting)) {
+            const [severity, ...options] = setting;
+            return [rule, severity === 'off' ? setting : ['warn', ...options]];
+          }
+          // String form: 'error' | 'warn' | 'off'.
+          return [rule, setting === 'off' ? 'off' : 'warn'];
+        })
+      )
     }
   },
   {

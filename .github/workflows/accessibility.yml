@@ -1,0 +1,55 @@
+# Accessibility CI — WCAG 2.2 AA
+#
+# Runs the axe-core accessibility test suite against the running application
+# on every pull request. Only critical and serious violations fail the build
+# (matching the policy in tests/e2e/accessibility.spec.js). See
+# docs/accessibility.md for the full compliance statement.
+
+name: Accessibility
+
+on:
+  pull_request:
+    branches: [main, develop]
+    types: [opened, synchronize, reopened]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  axe-core:
+    runs-on: ubuntu-latest
+
+    env:
+      CI: 'true'
+      # Required by the server to boot in CI.
+      JWT_SECRET: ci-accessibility-test-secret
+      NODE_ENV: development
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm run install:all
+
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run accessibility test suite (axe-core, WCAG 2.2 AA)
+        # The Playwright config auto-starts `npm run dev` before scanning.
+        run: npm run test:a11y -- --project=chromium
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-playwright-report
+          path: playwright-report/
+          retention-days: 14

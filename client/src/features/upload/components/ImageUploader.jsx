@@ -223,8 +223,9 @@ export default function ImageUploader({
                   onClick={handleClear}
                   className="absolute top-2 right-2 bg-gray-800 bg-opacity-70 text-white rounded-full p-1 hover:bg-opacity-90"
                   title={t('common.remove', 'Remove image')}
+                  aria-label={t('common.remove', 'Remove image')}
                 >
-                  <Icon name="x" className="w-4 h-4" />
+                  <Icon name="x" className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
               <div className="text-xs text-gray-500 mt-1 text-center">

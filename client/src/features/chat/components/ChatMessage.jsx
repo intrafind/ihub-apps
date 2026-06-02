@@ -822,8 +822,9 @@ function ChatMessage({
                         }}
                         className="absolute top-2 right-2 bg-white/90 hover:bg-white p-2 rounded-full shadow-lg transition-colors"
                         title={t('chatMessage.downloadImage', 'Download image')}
+                        aria-label={t('chatMessage.downloadImage', 'Download image')}
                       >
-                        <Icon name="download" size="sm" />
+                        <Icon name="download" size="sm" aria-hidden="true" />
                       </button>
                     </div>
                     {/* Proactive warning to save images */}
