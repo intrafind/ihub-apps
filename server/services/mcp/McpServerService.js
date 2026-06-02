@@ -188,6 +188,15 @@ export async function buildMcpServer({ user, platform }) {
           ...jsonSchemaToInputSchema(buildAppInputSchema(app))
         },
         async args => {
+          // Re-check scope + permission at call time so a token that loses the
+          // scope, or a user removed from the app's groups, between list and
+          // call can't still invoke it (mirrors the tools handler above).
+          if (!tokenScopes.includes(MCP_SCOPES.APPS_INVOKE)) {
+            return toolErrorResult('insufficient_scope: mcp:apps:invoke required');
+          }
+          if (!isAppAllowed(app, user, expose)) {
+            return toolErrorResult('access_denied: app not permitted for this caller');
+          }
           try {
             const text = await invokeAppNonStreaming({
               appId: app.id,
@@ -226,6 +235,15 @@ export async function buildMcpServer({ user, platform }) {
           ...jsonSchemaToInputSchema(paramsSchema)
         },
         async args => {
+          // Re-check scope + permission at call time so a token that loses the
+          // scope, or a user removed from the workflow's groups, between list
+          // and call can't still run it (mirrors the tools handler above).
+          if (!tokenScopes.includes(MCP_SCOPES.WORKFLOWS_RUN)) {
+            return toolErrorResult('insufficient_scope: mcp:workflows:run required');
+          }
+          if (!isWorkflowAllowed(wf, user, expose)) {
+            return toolErrorResult('access_denied: workflow not permitted for this caller');
+          }
           try {
             const result = await runTool(`workflow_${wf.id}`, args || {});
             return toolSuccessResult(result);
@@ -254,6 +272,12 @@ export async function buildMcpServer({ user, platform }) {
         r.uri,
         { description: r.description, mimeType: r.mimeType },
         async uriObj => {
+          // Re-check scope at call time for consistency with the tool/app/
+          // workflow handlers. resourceAdapter additionally re-validates the
+          // caller's visibility of the underlying source/skill at read time.
+          if (!tokenScopes.includes(MCP_SCOPES.RESOURCES_READ)) {
+            throw new Error('insufficient_scope: mcp:resources:read required');
+          }
           try {
             return await readMcpResource(uriObj.href || String(uriObj), {
               user,
