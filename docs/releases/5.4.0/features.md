@@ -163,3 +163,12 @@ The platform now targets **WCAG 2.2 Level AA** (up from 2.1), strengthening alig
 - **Automated runtime scans**: the axe-core suite now scans against WCAG 2.2 AA rule tags and runs on every pull request via a dedicated Accessibility GitHub Actions workflow.
 - **Remediations**: the Export dialog is now a proper focus-trapped modal (`role="dialog"`, Escape to close, focus restored on close); image remove/download buttons expose screen-reader labels; and footer links are grouped in a labeled navigation landmark.
 - See **docs/accessibility.md** for the full compliance statement, keyboard reference, and manual testing checklist.
+
+## MCP Servers — Easier Setup, Connection Testing, and Per-App Tool Selection
+
+Configuring and using external MCP (Model Context Protocol) servers is now far smoother.
+
+- **Readable "Add MCP server" dialog**: form fields are no longer invisible (white-on-white) — inputs now have proper borders and focus styling in both light and dark mode.
+- **Test before you save**: a **Test connection** button inside the create/edit dialog probes the server (even with unsaved changes) and lists the tools it exposes, so you can verify credentials and discover tool names without saving first.
+- **Dedicated MCP tools section in the app editor**: each app now has an **MCP server tools** section that groups available tools by server with per-tool and "select all" toggles, instead of requiring you to know and type MCP tool ids in the generic tools list.
+- **Stronger gateway authorization**: the inbound MCP gateway now re-checks the caller's scope (and, for apps and workflows, their permissions) at call time — not just when listing — so revoked access takes effect immediately within a session.
