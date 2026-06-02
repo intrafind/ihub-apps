@@ -79,7 +79,9 @@ function Layout() {
   };
 
   return (
-    <div className="flex flex-col min-h-screen h-full w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200">
+    <div
+      className={`flex flex-col w-full bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors duration-200 ${pathnameStartsWith(location.pathname, '/admin') ? 'h-screen overflow-hidden' : 'min-h-screen h-full'}`}
+    >
       <a
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:top-2 focus:left-2 focus:p-3 focus:bg-white focus:text-indigo-600 focus:rounded-md focus:shadow-lg focus:underline dark:focus:bg-gray-800 dark:focus:text-indigo-400"
@@ -92,8 +94,8 @@ function Layout() {
         <DisclaimerPopup disclaimer={uiConfig.disclaimer} currentLanguage={currentLanguage} />
       )}
 
-      {/* Global smart search overlay */}
-      <SmartSearch />
+      {/* Global smart search overlay — not shown on admin routes (admin has its own Cmd+K) */}
+      {!pathnameStartsWith(location.pathname, '/admin') && <SmartSearch />}
 
       {showHeader && (
         <header className="text-white sticky top-0 z-10" style={headerColorStyle}>
@@ -212,11 +214,22 @@ function Layout() {
         </header>
       )}
 
-      <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
-        <div className="container mx-auto px-4">
+      {/* Admin routes handle their own layout (sidebar + content); other routes use container */}
+      {pathnameStartsWith(location.pathname, '/admin') ? (
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="flex flex-col flex-1 min-h-0 overflow-hidden w-full"
+        >
           <Outlet />
-        </div>
-      </main>
+        </main>
+      ) : (
+        <main id="main-content" tabIndex={-1} className="flex-grow w-full overflow-y-auto">
+          <div className="container mx-auto px-4">
+            <Outlet />
+          </div>
+        </main>
+      )}
 
       {/* Footer - Only render if enabled (defaults to true) and not on an app page */}
       {uiConfig?.footer?.enabled !== false && showFooter && !isAppPage && (

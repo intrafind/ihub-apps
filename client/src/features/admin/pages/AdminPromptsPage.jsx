@@ -3,13 +3,34 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { getLocalizedContent } from '../../../utils/localizeContent';
 import Icon from '../../../shared/components/Icon';
-import AdminAuth from '../components/AdminAuth';
-import AdminNavigation from '../components/AdminNavigation';
 import PromptDetailsPopup from '../../prompts/components/PromptDetailsPopup';
 import GlobalPromptVariablesEditor from '../components/GlobalPromptVariablesEditor';
 import { fetchAdminPrompts, makeAdminApiCall, togglePrompts } from '../../../api/adminApi';
 import { fetchUIConfig } from '../../../api';
 import useFeatureFlags from '../../../shared/hooks/useFeatureFlags';
+import { useFilterState } from '../hooks/useFilterState';
+import { DataTable, SearchInput, FilterSelect } from '../components/data-table';
+
+function PromptNameCell({ prompt, currentLanguage }) {
+  return (
+    <div className="flex items-center">
+      <div className="flex-shrink-0 h-8 w-8">
+        <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+          <Icon
+            name={prompt.icon || 'clipboard'}
+            className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
+          />
+        </div>
+      </div>
+      <div className="ml-3 min-w-0">
+        <div className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          {getLocalizedContent(prompt.name, currentLanguage)}
+        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 truncate">{prompt.id}</div>
+      </div>
+    </div>
+  );
+}
 
 function AdminPromptsPage() {
   const { t, i18n } = useTranslation();
@@ -18,7 +39,6 @@ function AdminPromptsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const featureFlags = useFeatureFlags();
 
-  // Tab state - default to 'variables' if promptsLibrary is disabled, otherwise use URL param or 'prompts'
   const promptsLibraryEnabled = featureFlags.isEnabled('promptsLibrary', true);
   const defaultTab = promptsLibraryEnabled ? 'prompts' : 'variables';
   const [activeTab, setActiveTab] = useState(searchParams.get('tab') || defaultTab);
@@ -26,32 +46,31 @@ function AdminPromptsPage() {
   const [prompts, setPrompts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterEnabled, setFilterEnabled] = useState('all'); // all, enabled, disabled
-  const [selectedCategory, setSelectedCategory] = useState('all');
+  const [searchTerm, setSearchTerm] = useFilterState('q', '');
+  const [filterEnabled, setFilterEnabled] = useFilterState('enabled', 'all');
+  const [selectedCategory, setSelectedCategory] = useFilterState('category', 'all');
   const [selectedPrompt, setSelectedPrompt] = useState(null);
   const [showPromptDetails, setShowPromptDetails] = useState(false);
   const [uiConfig, setUiConfig] = useState(null);
   const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
-    // Only load prompts if promptsLibrary is enabled
-    if (promptsLibraryEnabled) {
-      loadPrompts();
-    } else {
-      setLoading(false);
-    }
+    if (promptsLibraryEnabled) loadPrompts();
+    else setLoading(false);
     loadUIConfig();
   }, [promptsLibraryEnabled]);
 
-  // Update URL when tab changes
   useEffect(() => {
-    setSearchParams({ tab: activeTab }, { replace: true });
+    setSearchParams(
+      prev => {
+        const next = new URLSearchParams(prev);
+        if (activeTab) next.set('tab', activeTab);
+        else next.delete('tab');
+        return next;
+      },
+      { replace: true }
+    );
   }, [activeTab, setSearchParams]);
-
-  const handleTabChange = tab => {
-    setActiveTab(tab);
-  };
 
   const loadUIConfig = async () => {
     try {
@@ -67,18 +86,10 @@ function AdminPromptsPage() {
       setLoading(true);
       setError(null);
       const data = await fetchAdminPrompts();
-
-      // Ensure we have an array
-      const promptsArray = Array.isArray(data) ? data : [];
-      setPrompts(promptsArray);
-
-      if (promptsArray.length === 0) {
-        console.warn('No prompts returned from API');
-      }
+      setPrompts(Array.isArray(data) ? data : []);
     } catch (err) {
-      console.error('Error loading prompts:', err);
       setError(err.message);
-      setPrompts([]); // Set empty array on error
+      setPrompts([]);
     } finally {
       setLoading(false);
     }
@@ -86,10 +97,7 @@ function AdminPromptsPage() {
 
   const handleTogglePrompt = async promptId => {
     try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}/toggle`, {
-        method: 'POST'
-      });
-
+      await makeAdminApiCall(`/admin/prompts/${promptId}/toggle`, { method: 'POST' });
       await loadPrompts();
     } catch (err) {
       setError(err.message);
@@ -120,17 +128,10 @@ function AdminPromptsPage() {
     ) {
       return;
     }
-
     try {
-      await makeAdminApiCall(`/admin/prompts/${promptId}`, {
-        method: 'DELETE'
-      });
-
+      await makeAdminApiCall(`/admin/prompts/${promptId}`, { method: 'DELETE' });
       await loadPrompts();
-
-      alert(t('admin.prompts.deleteSuccess', 'Prompt deleted successfully'));
     } catch (err) {
-      console.error('Error deleting prompt:', err);
       alert(err.message || 'Failed to delete prompt');
     }
   };
@@ -139,22 +140,13 @@ function AdminPromptsPage() {
     navigate('/admin/prompts/new', { state: { templatePrompt: prompt } });
   };
 
-  const handlePromptClick = prompt => {
-    setSelectedPrompt(prompt);
-    setShowPromptDetails(true);
-  };
-
   const downloadPromptConfig = async promptId => {
     try {
       const response = await makeAdminApiCall(`/admin/prompts/${promptId}`);
       const prompt = response.data;
-
-      // Create a clean config object for download
       const configData = JSON.stringify(prompt, null, 2);
       const blob = new Blob([configData], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-
-      // Create download link
       const link = document.createElement('a');
       link.href = url;
       link.download = `prompt-${promptId}.json`;
@@ -170,33 +162,20 @@ function AdminPromptsPage() {
   const handleUploadConfig = async event => {
     const file = event.target.files[0];
     if (!file) return;
-
     if (!file.name.endsWith('.json')) {
       setError('Please select a JSON file');
       return;
     }
-
     setUploading(true);
     let promptConfig;
     try {
       const fileContent = await file.text();
       promptConfig = JSON.parse(fileContent);
-
-      // Validate required fields
       if (!promptConfig.id || !promptConfig.name || !promptConfig.prompt) {
         throw new Error('Invalid prompt config: missing required fields (id, name, prompt)');
       }
-
-      // Upload the config
-      await makeAdminApiCall('/admin/prompts', {
-        method: 'POST',
-        body: promptConfig
-      });
-
-      // Reload prompts to show the new one
+      await makeAdminApiCall('/admin/prompts', { method: 'POST', body: promptConfig });
       await loadPrompts();
-
-      // Clear the file input
       event.target.value = '';
     } catch (err) {
       if (err.message.includes('already exists')) {
@@ -237,43 +216,140 @@ function AdminPromptsPage() {
     return matchesSearch && matchesFilter && matchesCategory;
   });
 
-  const sortedPrompts = [...filteredPrompts].sort((a, b) => {
-    // Sort by order first, then by name
-    if (a.order !== undefined && b.order !== undefined) {
-      return a.order - b.order;
+  const getCategoryLabel = prompt => {
+    if (!prompt.category) return null;
+    const found = uiConfig?.promptsList?.categories?.list?.find(cat => cat.id === prompt.category);
+    return found ? getLocalizedContent(found.name, currentLanguage) : prompt.category;
+  };
+
+  const columns = [
+    {
+      key: 'name',
+      header: t('admin.prompts.table.name', 'Name'),
+      sortable: true,
+      sortAccessor: prompt => getLocalizedContent(prompt.name, currentLanguage),
+      render: prompt => <PromptNameCell prompt={prompt} currentLanguage={currentLanguage} />
+    },
+    {
+      key: 'category',
+      header: t('admin.prompts.table.category', 'Category'),
+      sortable: true,
+      sortAccessor: prompt => prompt.category || '',
+      hideBelow: 'md',
+      render: prompt => {
+        const label = getCategoryLabel(prompt);
+        return label ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300">
+            {label}
+          </span>
+        ) : (
+          <span className="text-gray-400 text-sm">{t('common.notAvailable', 'N/A')}</span>
+        );
+      }
+    },
+    {
+      key: 'description',
+      header: t('admin.prompts.table.description', 'Description'),
+      hideBelow: 'lg',
+      truncate: true,
+      render: prompt =>
+        prompt.description ? getLocalizedContent(prompt.description, currentLanguage) : '-'
+    },
+    {
+      key: 'order',
+      header: t('admin.prompts.table.order', 'Order'),
+      sortable: true,
+      hideBelow: 'xl',
+      align: 'right',
+      render: prompt => (prompt.order !== undefined ? prompt.order : '-')
+    },
+    {
+      key: 'appConnected',
+      header: t('admin.prompts.table.appConnected', 'App Connected'),
+      hideBelow: 'xl',
+      align: 'center',
+      render: prompt =>
+        prompt.appId ? (
+          <Icon name="check" className="h-5 w-5 text-green-600" />
+        ) : (
+          <span className="text-gray-400">-</span>
+        )
+    },
+    {
+      key: 'status',
+      header: t('admin.prompts.table.status', 'Status'),
+      sortable: true,
+      sortAccessor: prompt => (prompt.enabled !== false ? 1 : 0),
+      render: prompt => (
+        <span
+          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+            prompt.enabled !== false
+              ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
+          }`}
+        >
+          {prompt.enabled !== false
+            ? t('admin.prompts.enabled', 'Enabled')
+            : t('admin.prompts.disabled', 'Disabled')}
+        </span>
+      )
     }
-    if (a.order !== undefined) return -1;
-    if (b.order !== undefined) return 1;
+  ];
 
-    const aName = getLocalizedContent(a.name, currentLanguage);
-    const bName = getLocalizedContent(b.name, currentLanguage);
-    return aName.localeCompare(bName);
-  });
-
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 dark:border-indigo-400"></div>
-      </div>
-    );
-  }
+  const actions = [
+    {
+      id: 'edit',
+      label: t('admin.prompts.edit', 'Edit'),
+      icon: 'pencil',
+      priority: 'primary',
+      onClick: p => navigate(`/admin/prompts/${p.id}`)
+    },
+    {
+      id: 'toggle',
+      label: t('admin.prompts.toggle', 'Toggle enabled'),
+      icon: 'eye',
+      priority: 'primary',
+      onClick: p => handleTogglePrompt(p.id)
+    },
+    {
+      id: 'clone',
+      label: t('admin.prompts.clone', 'Clone'),
+      icon: 'copy',
+      onClick: p => handleClonePrompt(p)
+    },
+    {
+      id: 'download',
+      label: t('admin.prompts.download', 'Download Config'),
+      icon: 'download',
+      onClick: p => downloadPromptConfig(p.id)
+    },
+    {
+      id: 'delete',
+      label: t('admin.prompts.delete', 'Delete'),
+      icon: 'trash',
+      destructive: true,
+      onClick: p => handleDeletePrompt(p.id)
+    }
+  ];
 
   if (error) {
     return (
-      <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
-        <div className="flex">
-          <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
-          <div className="ml-3">
-            <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
-              {t('admin.prompts.loadError', 'Error loading prompts')}
-            </h3>
-            <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
-            >
-              {t('common.retry', 'Retry')}
-            </button>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="bg-red-50 dark:bg-red-900/30 border border-red-200 dark:border-red-800 rounded-md p-4">
+          <div className="flex">
+            <Icon name="exclamation-triangle" className="h-5 w-5 text-red-400" />
+            <div className="ml-3">
+              <h3 className="text-sm font-medium text-red-800 dark:text-red-200">
+                {t('admin.prompts.loadError', 'Error loading prompts')}
+              </h3>
+              <p className="mt-1 text-sm text-red-700 dark:text-red-300">{error}</p>
+              <button
+                onClick={() => window.location.reload()}
+                className="mt-2 text-sm text-red-600 dark:text-red-400 hover:text-red-500 dark:hover:text-red-300"
+              >
+                {t('common.retry', 'Retry')}
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -281,386 +357,178 @@ function AdminPromptsPage() {
   }
 
   return (
-    <AdminAuth>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-        <AdminNavigation />
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="sm:flex sm:items-center">
-            <div className="sm:flex-auto">
-              <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
-                {activeTab === 'variables'
-                  ? t('admin.promptVariables.title', 'Global Prompt Variables')
-                  : t('admin.prompts.title', 'Prompt Management')}
-              </h1>
-              <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
-                {activeTab === 'variables'
-                  ? t(
-                      'admin.promptVariables.subtitle',
-                      'Manage custom variables for use across all apps and prompts'
-                    )
-                  : t(
-                      'admin.prompts.subtitle',
-                      'Create, edit, and manage prompts for your iHub Apps'
-                    )}
-              </p>
-            </div>
-            {activeTab === 'prompts' && (
-              <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
-                <div className="flex flex-wrap gap-2">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="sm:flex sm:items-center">
+          <div className="sm:flex-auto">
+            <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-100">
+              {activeTab === 'variables'
+                ? t('admin.promptVariables.title', 'Global Prompt Variables')
+                : t('admin.prompts.title', 'Prompt Management')}
+            </h1>
+            <p className="mt-2 text-sm text-gray-700 dark:text-gray-300">
+              {activeTab === 'variables'
+                ? t(
+                    'admin.promptVariables.subtitle',
+                    'Manage custom variables for use across all apps and prompts'
+                  )
+                : t(
+                    'admin.prompts.subtitle',
+                    'Create, edit, and manage prompts for your iHub Apps'
+                  )}
+            </p>
+          </div>
+          {activeTab === 'prompts' && (
+            <div className="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => navigate('/admin/prompts/new')}
+                  className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                >
+                  <Icon name="plus" className="h-4 w-4 mr-2" />
+                  {t('admin.prompts.createNew', 'Create New Prompt')}
+                </button>
+                <div className="relative">
+                  <input
+                    type="file"
+                    accept=".json"
+                    onChange={handleUploadConfig}
+                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                    disabled={uploading}
+                  />
                   <button
-                    onClick={() => navigate('/admin/prompts/new')}
-                    className="inline-flex items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                    type="button"
+                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={uploading}
+                    title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
                   >
-                    <Icon name="plus" className="h-4 w-4 mr-2" />
-                    {t('admin.prompts.createNew', 'Create New Prompt')}
-                  </button>
-                  <div className="relative">
-                    <input
-                      type="file"
-                      accept=".json"
-                      onChange={handleUploadConfig}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      disabled={uploading}
+                    <Icon
+                      name={uploading ? 'refresh' : 'upload'}
+                      className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
                     />
-                    <button
-                      type="button"
-                      className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={uploading}
-                      title={t('admin.prompts.uploadConfig', 'Upload Prompt Config')}
-                    >
-                      <Icon
-                        name={uploading ? 'refresh' : 'upload'}
-                        className={`h-4 w-4 mr-2 ${uploading ? 'animate-spin' : ''}`}
-                      />
-                      {uploading
-                        ? t('admin.prompts.uploading', 'Uploading...')
-                        : t('admin.prompts.uploadConfig', 'Upload Config')}
-                    </button>
-                  </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
-                    onClick={enableAllPrompts}
-                  >
-                    {t('admin.common.enableAll', 'Enable All')}
-                  </button>
-                  <button
-                    type="button"
-                    className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
-                    onClick={disableAllPrompts}
-                  >
-                    {t('admin.common.disableAll', 'Disable All')}
+                    {uploading
+                      ? t('admin.prompts.uploading', 'Uploading...')
+                      : t('admin.prompts.uploadConfig', 'Upload Config')}
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
-
-          {/* Tab Navigation */}
-          <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
-            <nav className="-mb-px flex space-x-8">
-              {promptsLibraryEnabled && (
                 <button
-                  onClick={() => handleTabChange('prompts')}
-                  className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                    activeTab === 'prompts'
-                      ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
-                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
-                  }`}
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                  onClick={enableAllPrompts}
                 >
-                  <Icon name="clipboard" className="inline-block h-5 w-5 mr-2" />
-                  {t('admin.prompts.tabs.prompts', 'Prompts')}
+                  {t('admin.common.enableAll', 'Enable All')}
                 </button>
-              )}
+                <button
+                  type="button"
+                  className="inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 shadow-sm hover:bg-gray-50 dark:hover:bg-gray-600"
+                  onClick={disableAllPrompts}
+                >
+                  {t('admin.common.disableAll', 'Disable All')}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mt-6 border-b border-gray-200 dark:border-gray-700">
+          <nav className="-mb-px flex space-x-8">
+            {promptsLibraryEnabled && (
               <button
-                onClick={() => handleTabChange('variables')}
+                onClick={() => setActiveTab('prompts')}
                 className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === 'variables'
+                  activeTab === 'prompts'
                     ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
                 }`}
               >
-                <Icon name="variable" className="inline-block h-5 w-5 mr-2" />
-                {t('admin.prompts.tabs.variables', 'Variables')}
+                <Icon name="clipboard" className="inline-block h-5 w-5 mr-2" />
+                {t('admin.prompts.tabs.prompts', 'Prompts')}
               </button>
-            </nav>
-          </div>
+            )}
+            <button
+              onClick={() => setActiveTab('variables')}
+              className={`whitespace-nowrap pb-4 px-1 border-b-2 font-medium text-sm ${
+                activeTab === 'variables'
+                  ? 'border-indigo-500 text-indigo-600 dark:text-indigo-400'
+                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300'
+              }`}
+            >
+              <Icon name="sliders" className="inline-block h-5 w-5 mr-2" />
+              {t('admin.prompts.tabs.variables', 'Variables')}
+            </button>
+          </nav>
+        </div>
 
-          {/* Tab Content */}
-          {activeTab === 'prompts' ? (
-            <>
-              {/* Search and Filter */}
-              <div className="mt-8 flex flex-col sm:flex-row gap-4">
-                <div className="flex-1">
-                  <div className="relative">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <Icon name="search" className="h-5 w-5 text-gray-400" />
-                    </div>
-                    <input
-                      type="text"
-                      className="block w-full pl-10 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md leading-5 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:placeholder-gray-400 focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                      placeholder={t('admin.prompts.searchPlaceholder', 'Search prompts...')}
-                      value={searchTerm}
-                      onChange={e => setSearchTerm(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div className="sm:w-48">
-                  <select
-                    value={filterEnabled}
-                    onChange={e => setFilterEnabled(e.target.value)}
-                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+        {activeTab === 'prompts' ? (
+          <>
+            <div className="mt-6 flex flex-wrap items-center gap-3">
+              <SearchInput
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder={t('admin.prompts.searchPlaceholder', 'Search prompts...')}
+              />
+              <FilterSelect
+                label={t('admin.prompts.statusLabel', 'Status')}
+                value={filterEnabled}
+                onChange={setFilterEnabled}
+                options={[
+                  { value: 'all', label: t('admin.prompts.filterAll', 'All Prompts') },
+                  { value: 'enabled', label: t('admin.prompts.filterEnabled', 'Enabled Only') },
+                  { value: 'disabled', label: t('admin.prompts.filterDisabled', 'Disabled Only') }
+                ]}
+              />
+            </div>
+
+            {uiConfig?.promptsList?.categories?.enabled && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory('all')}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                    selectedCategory === 'all'
+                      ? 'bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900'
+                      : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  {t('admin.prompts.allCategories', 'All Categories')}
+                </button>
+                {uiConfig.promptsList.categories.list.map(category => (
+                  <button
+                    key={category.id}
+                    onClick={() => setSelectedCategory(category.id)}
+                    className={`px-3 py-1.5 rounded-full text-sm font-medium transition-all ${
+                      selectedCategory === category.id
+                        ? 'text-white shadow'
+                        : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                    }`}
+                    style={{
+                      backgroundColor: selectedCategory === category.id ? category.color : undefined
+                    }}
                   >
-                    <option value="all">{t('admin.prompts.filterAll', 'All Prompts')}</option>
-                    <option value="enabled">
-                      {t('admin.prompts.filterEnabled', 'Enabled Only')}
-                    </option>
-                    <option value="disabled">
-                      {t('admin.prompts.filterDisabled', 'Disabled Only')}
-                    </option>
-                  </select>
-                </div>
+                    {getLocalizedContent(category.name, currentLanguage)}
+                  </button>
+                ))}
               </div>
+            )}
 
-              {/* Category filter */}
-              {uiConfig?.promptsList?.categories?.enabled && (
-                <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                  {uiConfig.promptsList.categories.list.map(category => (
-                    <button
-                      key={category.id}
-                      onClick={() => setSelectedCategory(category.id)}
-                      className={`px-4 py-2 rounded-full text-sm font-medium transition-all ${
-                        selectedCategory === category.id
-                          ? 'text-white shadow-lg transform scale-105'
-                          : 'text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                      style={{
-                        backgroundColor:
-                          selectedCategory === category.id ? category.color : undefined
-                      }}
-                    >
-                      {getLocalizedContent(category.name, currentLanguage)}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {/* Prompts Table */}
-              <div className="mt-8 flex flex-col">
-                <div className="-my-2 -mx-4 sm:-mx-6 lg:-mx-8">
-                  <div className="inline-block w-full py-2 align-middle md:px-6 lg:px-8">
-                    <div className="overflow-hidden shadow ring-1 ring-black ring-opacity-5 dark:ring-gray-700 md:rounded-lg">
-                      <table className="w-full divide-y divide-gray-300 dark:divide-gray-700">
-                        <thead className="bg-gray-50 dark:bg-gray-800">
-                          <tr>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                            >
-                              {t('admin.prompts.table.name', 'Name')}
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                            >
-                              {t('admin.prompts.table.category', 'Category')}
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                            >
-                              {t('admin.prompts.table.description', 'Description')}
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                            >
-                              {t('admin.prompts.table.order', 'Order')}
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                            >
-                              {t('admin.prompts.table.appConnected', 'App Connected')}
-                            </th>
-                            <th
-                              scope="col"
-                              className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider"
-                            >
-                              {t('admin.prompts.table.status', 'Status')}
-                            </th>
-                            <th scope="col" className="relative px-6 py-3">
-                              <span className="sr-only">
-                                {t('admin.prompts.table.actions', 'Actions')}
-                              </span>
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                          {sortedPrompts.map(prompt => (
-                            <tr
-                              key={prompt.id}
-                              className="hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer"
-                              onClick={() => handlePromptClick(prompt)}
-                            >
-                              <td className="px-6 py-4 ">
-                                <div className="flex items-center">
-                                  <div className="flex-shrink-0 h-8 w-8">
-                                    <div className="h-8 w-8 rounded-full bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
-                                      <Icon
-                                        name={prompt.icon || 'clipboard'}
-                                        className="h-4 w-4 text-indigo-600 dark:text-indigo-400"
-                                      />
-                                    </div>
-                                  </div>
-                                  <div className="ml-4">
-                                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                                      {getLocalizedContent(prompt.name, currentLanguage)}
-                                    </div>
-                                    <div className="text-sm text-gray-500 dark:text-gray-400">
-                                      {prompt.id}
-                                    </div>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-6 py-4 ">
-                                {prompt.category ? (
-                                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-300">
-                                    {uiConfig?.promptsList?.categories?.list?.find(
-                                      cat => cat.id === prompt.category
-                                    )?.name
-                                      ? getLocalizedContent(
-                                          uiConfig.promptsList.categories.list.find(
-                                            cat => cat.id === prompt.category
-                                          ).name,
-                                          currentLanguage
-                                        )
-                                      : prompt.category}
-                                  </span>
-                                ) : (
-                                  <span className="text-gray-400 text-sm">
-                                    {t('common.notAvailable', 'N/A')}
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-6 py-4">
-                                <div className="text-sm text-gray-900 dark:text-gray-100 max-w-xs truncate">
-                                  {prompt.description
-                                    ? getLocalizedContent(prompt.description, currentLanguage)
-                                    : '-'}
-                                </div>
-                              </td>
-                              <td className="px-6 py-4  text-sm text-gray-900 dark:text-gray-100">
-                                {prompt.order !== undefined ? prompt.order : '-'}
-                              </td>
-                              <td className="px-6 py-4  text-sm text-gray-900 dark:text-gray-100">
-                                {prompt.appId ? (
-                                  <div className="flex items-center justify-center">
-                                    <Icon name="check" className="h-5 w-5 text-green-600" />
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center justify-center">
-                                    <span className="text-gray-400">-</span>
-                                  </div>
-                                )}
-                              </td>
-                              <td className="px-6 py-4 ">
-                                <span
-                                  className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    prompt.enabled !== false
-                                      ? 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300'
-                                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-300'
-                                  }`}
-                                >
-                                  {prompt.enabled !== false
-                                    ? t('admin.prompts.enabled', 'Enabled')
-                                    : t('admin.prompts.disabled', 'Disabled')}
-                                </span>
-                              </td>
-                              <td className="px-6 py-4  text-right text-sm font-medium">
-                                <div className="flex items-center justify-end space-x-2">
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleTogglePrompt(prompt.id);
-                                    }}
-                                    className={`p-2 rounded-full ${
-                                      prompt.enabled !== false
-                                        ? 'text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50'
-                                        : 'text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50'
-                                    }`}
-                                    title={
-                                      prompt.enabled !== false
-                                        ? t('admin.prompts.disable', 'Disable')
-                                        : t('admin.prompts.enable', 'Enable')
-                                    }
-                                  >
-                                    <Icon
-                                      name={prompt.enabled !== false ? 'eye-slash' : 'eye'}
-                                      className="h-4 w-4"
-                                    />
-                                  </button>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleClonePrompt(prompt);
-                                    }}
-                                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/50 rounded-full"
-                                    title={t('admin.prompts.clone', 'Clone')}
-                                  >
-                                    <Icon name="copy" className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      downloadPromptConfig(prompt.id);
-                                    }}
-                                    className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/50 rounded-full"
-                                    title={t('admin.prompts.download', 'Download Config')}
-                                  >
-                                    <Icon name="download" className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      navigate(`/admin/prompts/${prompt.id}`);
-                                    }}
-                                    className="p-2 text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/50 rounded-full"
-                                    title={t('admin.prompts.edit', 'Edit')}
-                                  >
-                                    <Icon name="pencil" className="h-4 w-4" />
-                                  </button>
-                                  <button
-                                    onClick={e => {
-                                      e.stopPropagation();
-                                      handleDeletePrompt(prompt.id);
-                                    }}
-                                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/50 rounded-full"
-                                    title={t('admin.prompts.delete', 'Delete')}
-                                  >
-                                    <Icon name="trash" className="h-4 w-4" />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {sortedPrompts.length === 0 && (
-                <div className="text-center py-12">
-                  <Icon name="clipboard" className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-2 text-sm font-medium text-gray-900 dark:text-gray-100">
-                    {t('admin.prompts.noPrompts', 'No prompts found')}
-                  </h3>
-                  <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                    {t('admin.prompts.noPromptsDesc', 'Get started by creating a new prompt.')}
-                  </p>
-                  <div className="mt-6">
+            <div className="mt-6">
+              <DataTable
+                columns={columns}
+                data={filteredPrompts}
+                getRowId={p => p.id}
+                actions={actions}
+                loading={loading}
+                onRowClick={prompt => {
+                  setSelectedPrompt(prompt);
+                  setShowPromptDetails(true);
+                }}
+                empty={{
+                  icon: 'document-text',
+                  title: t('admin.prompts.noPrompts', 'No prompts found'),
+                  description: t(
+                    'admin.prompts.noPromptsDesc',
+                    'Get started by creating a new prompt.'
+                  ),
+                  action: (
                     <button
                       onClick={() => navigate('/admin/prompts/new')}
                       className="inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
@@ -668,30 +536,25 @@ function AdminPromptsPage() {
                       <Icon name="plus" className="h-4 w-4 mr-2" />
                       {t('admin.prompts.createNew', 'Create New Prompt')}
                     </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Prompt Details Popup */}
-              <PromptDetailsPopup
-                prompt={selectedPrompt}
-                isOpen={showPromptDetails}
-                onClose={() => setShowPromptDetails(false)}
+                  )
+                }}
               />
-            </>
-          ) : (
-            // Variables Tab Content
-            <VariablesTabContent />
-          )}
-        </div>
+            </div>
+
+            <PromptDetailsPopup
+              prompt={selectedPrompt}
+              isOpen={showPromptDetails}
+              onClose={() => setShowPromptDetails(false)}
+            />
+          </>
+        ) : (
+          <VariablesTabContent />
+        )}
       </div>
-    </AdminAuth>
+    </div>
   );
 }
 
-/**
- * Variables Tab Component - extracted to keep AdminPromptsPage clean
- */
 function VariablesTabContent() {
   const { t } = useTranslation();
   const [platformConfig, setPlatformConfig] = useState(null);
@@ -731,20 +594,13 @@ function VariablesTabContent() {
     try {
       setSaving(true);
       setError(null);
-
-      const updatedConfig = {
-        ...platformConfig,
-        globalPromptVariables
-      };
-
+      const updatedConfig = { ...platformConfig, globalPromptVariables };
       await makeAdminApiCall('/admin/configs/platform', {
         method: 'PUT',
         body: updatedConfig
       });
-
       setPlatformConfig(updatedConfig);
       setHasChanges(false);
-      alert(t('admin.promptVariables.saveSuccess', 'Global prompt variables saved successfully'));
     } catch (err) {
       console.error('Error saving platform config:', err);
       setError(err.message);
@@ -811,7 +667,6 @@ function VariablesTabContent() {
 
       <GlobalPromptVariablesEditor value={globalPromptVariables} onChange={handleVariablesChange} />
 
-      {/* Save/Cancel Buttons */}
       <div className="mt-6 flex justify-end gap-3">
         <button
           onClick={handleCancel}

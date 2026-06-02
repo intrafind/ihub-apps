@@ -16,6 +16,8 @@ import {
   sendBadRequest,
   sendErrorResponse
 } from '../../utils/responseHelpers.js';
+import { logAdminAction } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 export default function registerAdminModelsRoutes(app) {
   /**
@@ -192,10 +194,30 @@ export default function registerAdminModelsRoutes(app) {
           }
         }
       }
+      // Capture old model state before writing
+      const { data: currentModels } = configCache.getModels(true);
+      const oldModel = currentModels.find(m => m.id === modelId);
+
       const rootDir = getRootDir();
       const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
       await fs.writeFile(modelFilePath, JSON.stringify(updatedModel, null, 2));
       await configCache.refreshModelsCache();
+      if (oldModel) {
+        await saveSnapshot({
+          resource: 'model',
+          id: modelId,
+          before: oldModel,
+          after: updatedModel,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await logAdminAction({
+        req,
+        action: 'update',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `Updated model ${modelId}`
+      });
       res.json({ message: 'Model updated successfully', model: updatedModel });
     } catch (error) {
       return sendInternalError(res, error, 'update model');
@@ -258,6 +280,13 @@ export default function registerAdminModelsRoutes(app) {
       }
       await fs.writeFile(modelFilePath, JSON.stringify(newModel, null, 2));
       await configCache.refreshModelsCache();
+      await logAdminAction({
+        req,
+        action: 'create',
+        resource: 'model',
+        resourceId: newModel.id,
+        summary: `Created model ${newModel.id}`
+      });
       res.json({ message: 'Model created successfully', model: newModel });
     } catch (error) {
       return sendInternalError(res, error, 'create model');
@@ -298,6 +327,13 @@ export default function registerAdminModelsRoutes(app) {
       const modelFilePath = join(rootDir, 'contents', 'models', `${modelId}.json`);
       await fs.writeFile(modelFilePath, JSON.stringify(model, null, 2));
       await configCache.refreshModelsCache();
+      await logAdminAction({
+        req,
+        action: 'toggle',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `${newEnabledState ? 'Enabled' : 'Disabled'} model ${modelId}`
+      });
       res.json({
         message: `Model ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
         model: model,
@@ -346,6 +382,13 @@ export default function registerAdminModelsRoutes(app) {
       }
 
       await configCache.refreshModelsCache();
+      await logAdminAction({
+        req,
+        action: 'toggle',
+        resource: 'model',
+        resourceId: resolvedIds.join(','),
+        summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} models`
+      });
       res.json({
         message: `Models ${enabled ? 'enabled' : 'disabled'} successfully`,
         enabled,
@@ -391,6 +434,22 @@ export default function registerAdminModelsRoutes(app) {
       await fs.unlink(modelFilePath);
       await configCache.refreshModelsCache();
       await removeMarketplaceInstallation('model', modelId);
+      if (model) {
+        await saveSnapshot({
+          resource: 'model',
+          id: modelId,
+          before: model,
+          after: null,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await logAdminAction({
+        req,
+        action: 'delete',
+        resource: 'model',
+        resourceId: modelId,
+        summary: `Deleted model ${modelId}`
+      });
       res.json({ message: 'Model deleted successfully' });
     } catch (error) {
       return sendInternalError(res, error, 'delete model');

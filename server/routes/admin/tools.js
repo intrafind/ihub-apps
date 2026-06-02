@@ -8,6 +8,7 @@ import { adminAuth } from '../../middleware/adminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
 import { validateIdForPath } from '../../utils/pathSecurity.js';
 import logger from '../../utils/logger.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import {
   sendInternalError,
   sendNotFound,
@@ -415,6 +416,8 @@ export default function registerAdminToolsRoutes(app) {
         return sendNotFound(res, 'Tool');
       }
 
+      const oldTool = { ...tools[toolIndex] };
+
       // Update the tool
       tools[toolIndex] = updatedTool;
 
@@ -426,6 +429,18 @@ export default function registerAdminToolsRoutes(app) {
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/tools.json');
+
+      try {
+        await saveSnapshot({
+          resource: 'tool',
+          id: toolId,
+          before: oldTool,
+          after: updatedTool,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      } catch {
+        /* skip */
+      }
 
       res.json({ message: 'Tool updated successfully', tool: updatedTool });
     } catch (error) {
@@ -516,6 +531,18 @@ export default function registerAdminToolsRoutes(app) {
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/tools.json');
+
+      try {
+        await saveSnapshot({
+          resource: 'tool',
+          id: newTool.id,
+          before: null,
+          after: newTool,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      } catch {
+        /* skip */
+      }
 
       res.status(201).json({ message: 'Tool created successfully', tool: newTool });
     } catch (error) {
@@ -621,6 +648,18 @@ export default function registerAdminToolsRoutes(app) {
 
       // Refresh cache
       await configCache.refreshCacheEntry('config/tools.json');
+
+      try {
+        await saveSnapshot({
+          resource: 'tool',
+          id: toolId,
+          before: tool,
+          after: null,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      } catch {
+        /* skip */
+      }
 
       res.json({
         message: 'Tool deleted successfully',

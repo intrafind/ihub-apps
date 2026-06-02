@@ -9,6 +9,8 @@ import { buildServerPath } from '../../utils/basePath.js';
 import tokenStorageService from '../../services/TokenStorageService.js';
 import logger from '../../utils/logger.js';
 import { sendInternalError, sendBadRequest } from '../../utils/responseHelpers.js';
+import { logAdminAction } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 
 /**
  * Check if a value is an environment variable placeholder
@@ -697,6 +699,20 @@ export default function registerAdminConfigRoutes(app) {
         responseConfig.iFinder.privateKey = sanitizeSecret(responseConfig.iFinder.privateKey);
       }
 
+      await saveSnapshot({
+        resource: 'platform',
+        id: 'platform',
+        before: existingConfig,
+        after: mergedConfig,
+        admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+      });
+      await logAdminAction({
+        req,
+        action: 'update',
+        resource: 'platform',
+        resourceId: 'platform',
+        summary: 'Updated platform configuration'
+      });
       res.json({
         message: 'Platform configuration updated successfully',
         config: responseConfig,

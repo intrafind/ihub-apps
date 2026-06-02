@@ -793,6 +793,19 @@ function UserComponent(props) {
 
 This architecture supports enterprise-grade AI applications with flexible authentication, real-time chat, and extensive customization capabilities.
 
+## Release Changelog
+
+Whenever you implement a feature, improvement, or breaking change — use the `/document-feature`
+skill to add an entry to `docs/releases/`. This powers the in-product admin changelog that admins
+see under Platform → Changelog.
+
+**Rule:** Any change visible to admins or end users gets a changelog entry. Pure refactors,
+dependency bumps, and test-only changes do not.
+
+See `.claude/skills/document-feature/SKILL.md` for format details.
+
+---
+
 ## Documentation Organization
 
 ### Feature Documentation

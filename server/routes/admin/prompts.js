@@ -4,8 +4,10 @@ import { join, resolve } from 'path';
 import path from 'path';
 import { getRootDir } from '../../pathUtils.js';
 import configCache from '../../configCache.js';
-import { adminAuth } from '../../middleware/adminAuth.js';
+import { contentAdminAuth } from '../../middleware/contentAdminAuth.js';
 import { buildServerPath } from '../../utils/basePath.js';
+import { logAdminAction } from '../../services/AuditLogService.js';
+import { saveSnapshot } from '../../services/ChangeHistoryService.js';
 import {
   validateIdForPath,
   validateIdsForPath,
@@ -297,7 +299,7 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to load prompts configuration"
    */
-  app.get(buildServerPath('/api/admin/prompts'), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/prompts'), contentAdminAuth, async (req, res) => {
     try {
       const { data: prompts, etag } = configCache.getPrompts(true);
       if (!prompts) {
@@ -397,7 +399,7 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to fetch prompt"
    */
-  app.get(buildServerPath('/api/admin/prompts/:promptId'), adminAuth, async (req, res) => {
+  app.get(buildServerPath('/api/admin/prompts/:promptId'), contentAdminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
 
@@ -521,7 +523,7 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to update prompt"
    */
-  app.put(buildServerPath('/api/admin/prompts/:promptId'), adminAuth, async (req, res) => {
+  app.put(buildServerPath('/api/admin/prompts/:promptId'), contentAdminAuth, async (req, res) => {
     try {
       const { promptId } = req.params;
       const updatedPrompt = req.body;
@@ -537,10 +539,28 @@ export default function registerAdminPromptsRoutes(app) {
       if (updatedPrompt.id !== promptId) {
         return sendBadRequest(res, 'Prompt ID cannot be changed');
       }
+      const { data: currentPrompts } = configCache.getPrompts(true);
+      const oldPrompt = currentPrompts.find(p => p.id === promptId);
       const rootDir = getRootDir();
       const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
       await fs.writeFile(promptFilePath, JSON.stringify(updatedPrompt, null, 2));
       await configCache.refreshPromptsCache();
+      if (oldPrompt) {
+        await saveSnapshot({
+          resource: 'prompt',
+          id: promptId,
+          before: oldPrompt,
+          after: updatedPrompt,
+          admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+        });
+      }
+      await logAdminAction({
+        req,
+        action: 'update',
+        resource: 'prompt',
+        resourceId: promptId,
+        summary: `Updated prompt ${promptId}`
+      });
       res.json({ message: 'Prompt updated successfully', prompt: updatedPrompt });
     } catch (error) {
       return sendInternalError(res, error, 'update prompt');
@@ -644,7 +664,7 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to create prompt"
    */
-  app.post(buildServerPath('/api/admin/prompts'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/admin/prompts'), contentAdminAuth, async (req, res) => {
     try {
       const newPrompt = req.body;
       if (!newPrompt.id || !newPrompt.name || !newPrompt.prompt) {
@@ -666,6 +686,13 @@ export default function registerAdminPromptsRoutes(app) {
       }
       await fs.writeFile(promptFilePath, JSON.stringify(newPrompt, null, 2));
       await configCache.refreshPromptsCache();
+      await logAdminAction({
+        req,
+        action: 'create',
+        resource: 'prompt',
+        resourceId: newPrompt.id,
+        summary: `Created prompt ${newPrompt.id}`
+      });
       res.json({ message: 'Prompt created successfully', prompt: newPrompt });
     } catch (error) {
       return sendInternalError(res, error, 'create prompt');
@@ -748,35 +775,46 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to toggle prompt"
    */
-  app.post(buildServerPath('/api/admin/prompts/:promptId/toggle'), adminAuth, async (req, res) => {
-    try {
-      const { promptId } = req.params;
+  app.post(
+    buildServerPath('/api/admin/prompts/:promptId/toggle'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { promptId } = req.params;
 
-      // Validate promptId for security
-      if (!validateIdForPath(promptId, 'prompt', res)) {
-        return;
-      }
+        // Validate promptId for security
+        if (!validateIdForPath(promptId, 'prompt', res)) {
+          return;
+        }
 
-      const { data: prompts } = configCache.getPrompts(true);
-      const prompt = prompts.find(p => p.id === promptId);
-      if (!prompt) {
-        return sendNotFound(res, 'Prompt');
+        const { data: prompts } = configCache.getPrompts(true);
+        const prompt = prompts.find(p => p.id === promptId);
+        if (!prompt) {
+          return sendNotFound(res, 'Prompt');
+        }
+        const newEnabledState = !prompt.enabled;
+        prompt.enabled = newEnabledState;
+        const rootDir = getRootDir();
+        const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
+        await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
+        await configCache.refreshPromptsCache();
+        await logAdminAction({
+          req,
+          action: 'toggle',
+          resource: 'prompt',
+          resourceId: promptId,
+          summary: `${newEnabledState ? 'Enabled' : 'Disabled'} prompt ${promptId}`
+        });
+        res.json({
+          message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
+          prompt: prompt,
+          enabled: newEnabledState
+        });
+      } catch (error) {
+        return sendInternalError(res, error, 'toggle prompt');
       }
-      const newEnabledState = !prompt.enabled;
-      prompt.enabled = newEnabledState;
-      const rootDir = getRootDir();
-      const promptFilePath = join(rootDir, 'contents', 'prompts', `${promptId}.json`);
-      await fs.writeFile(promptFilePath, JSON.stringify(prompt, null, 2));
-      await configCache.refreshPromptsCache();
-      res.json({
-        message: `Prompt ${newEnabledState ? 'enabled' : 'disabled'} successfully`,
-        prompt: prompt,
-        enabled: newEnabledState
-      });
-    } catch (error) {
-      return sendInternalError(res, error, 'toggle prompt');
     }
-  });
+  );
 
   /**
    * @swagger
@@ -885,7 +923,7 @@ export default function registerAdminPromptsRoutes(app) {
    */
   app.post(
     buildServerPath('/api/admin/prompts/:promptIds/_toggle'),
-    adminAuth,
+    contentAdminAuth,
     async (req, res) => {
       try {
         const { promptIds } = req.params;
@@ -915,6 +953,13 @@ export default function registerAdminPromptsRoutes(app) {
         }
 
         await configCache.refreshPromptsCache();
+        await logAdminAction({
+          req,
+          action: 'toggle',
+          resource: 'prompt',
+          resourceId: resolvedIds.join(','),
+          summary: `Batch ${enabled ? 'enabled' : 'disabled'} ${resolvedIds.length} prompts`
+        });
         res.json({
           message: `Prompts ${enabled ? 'enabled' : 'disabled'} successfully`,
           enabled,
@@ -1000,33 +1045,58 @@ export default function registerAdminPromptsRoutes(app) {
    *             example:
    *               error: "Failed to delete prompt"
    */
-  app.delete(buildServerPath('/api/admin/prompts/:promptId'), adminAuth, async (req, res) => {
-    try {
-      const { promptId } = req.params;
+  app.delete(
+    buildServerPath('/api/admin/prompts/:promptId'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const { promptId } = req.params;
 
-      // Validate promptId for security
-      if (!validateIdForPath(promptId, 'prompt', res)) {
-        return;
-      }
+        // Validate promptId for security
+        if (!validateIdForPath(promptId, 'prompt', res)) {
+          return;
+        }
 
-      const rootDir = getRootDir();
-      const promptsDir = join(rootDir, 'contents', 'prompts');
-      const normalizedPromptFilePath = await resolveAndValidatePath(`${promptId}.json`, promptsDir);
-      if (!normalizedPromptFilePath) {
-        return sendBadRequest(res, 'Invalid prompt path');
-      }
+        const { data: currentPrompts } = configCache.getPrompts(true);
+        const oldPrompt = currentPrompts.find(p => p.id === promptId);
+        const rootDir = getRootDir();
+        const promptsDir = join(rootDir, 'contents', 'prompts');
+        const normalizedPromptFilePath = await resolveAndValidatePath(
+          `${promptId}.json`,
+          promptsDir
+        );
+        if (!normalizedPromptFilePath) {
+          return sendBadRequest(res, 'Invalid prompt path');
+        }
 
-      if (!existsSync(normalizedPromptFilePath)) {
-        return sendNotFound(res, 'Prompt file');
+        if (!existsSync(normalizedPromptFilePath)) {
+          return sendNotFound(res, 'Prompt file');
+        }
+        await fs.unlink(normalizedPromptFilePath);
+        await configCache.refreshPromptsCache();
+        await removeMarketplaceInstallation('prompt', promptId);
+        if (oldPrompt) {
+          await saveSnapshot({
+            resource: 'prompt',
+            id: promptId,
+            before: oldPrompt,
+            after: null,
+            admin: req.user?.username ?? req.user?.name ?? req.user?.id ?? 'unknown'
+          });
+        }
+        await logAdminAction({
+          req,
+          action: 'delete',
+          resource: 'prompt',
+          resourceId: promptId,
+          summary: `Deleted prompt ${promptId}`
+        });
+        res.json({ message: 'Prompt deleted successfully' });
+      } catch (error) {
+        return sendInternalError(res, error, 'delete prompt');
       }
-      await fs.unlink(normalizedPromptFilePath);
-      await configCache.refreshPromptsCache();
-      await removeMarketplaceInstallation('prompt', promptId);
-      res.json({ message: 'Prompt deleted successfully' });
-    } catch (error) {
-      return sendInternalError(res, error, 'delete prompt');
     }
-  });
+  );
 
   /**
    * @swagger
@@ -1129,7 +1199,7 @@ export default function registerAdminPromptsRoutes(app) {
    *               error: "Failed to generate completion"
    *               details: "API rate limit exceeded"
    */
-  app.post(buildServerPath('/api/completions'), adminAuth, async (req, res) => {
+  app.post(buildServerPath('/api/completions'), contentAdminAuth, async (req, res) => {
     try {
       const {
         model,
@@ -1285,28 +1355,32 @@ export default function registerAdminPromptsRoutes(app) {
    *                 value:
    *                   error: "Internal server error"
    */
-  app.get(buildServerPath('/api/admin/prompts/app-generator'), adminAuth, async (req, res) => {
-    try {
-      const platformConfig = configCache.getPlatform();
-      const defaultLanguage = platformConfig?.defaultLanguage || 'en';
-      const { lang = defaultLanguage } = req.query;
-      const { data: prompts } = configCache.getPrompts(true);
-      if (!prompts) {
-        return sendFailedOperationError(
-          res,
-          'load prompts configuration',
-          new Error('prompts is null')
-        );
+  app.get(
+    buildServerPath('/api/admin/prompts/app-generator'),
+    contentAdminAuth,
+    async (req, res) => {
+      try {
+        const platformConfig = configCache.getPlatform();
+        const defaultLanguage = platformConfig?.defaultLanguage || 'en';
+        const { lang = defaultLanguage } = req.query;
+        const { data: prompts } = configCache.getPrompts(true);
+        if (!prompts) {
+          return sendFailedOperationError(
+            res,
+            'load prompts configuration',
+            new Error('prompts is null')
+          );
+        }
+        const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
+        if (!appGeneratorPrompt) {
+          return sendNotFound(res, 'App-generator prompt');
+        }
+        const promptText =
+          appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
+        res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
+      } catch (error) {
+        return sendInternalError(res, error, 'fetch app-generator prompt');
       }
-      const appGeneratorPrompt = prompts.find(p => p.id === 'app-generator');
-      if (!appGeneratorPrompt) {
-        return sendNotFound(res, 'App-generator prompt');
-      }
-      const promptText =
-        appGeneratorPrompt.prompt[lang] || appGeneratorPrompt.prompt[defaultLanguage];
-      res.json({ id: appGeneratorPrompt.id, prompt: promptText, language: lang });
-    } catch (error) {
-      return sendInternalError(res, error, 'fetch app-generator prompt');
     }
-  });
+  );
 }
