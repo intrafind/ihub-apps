@@ -246,7 +246,7 @@ export default function SetupWizard() {
               </button>
               <button
                 onClick={handleSkip}
-                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="mt-3 w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.step1.skipLater')}
               </button>
@@ -279,7 +279,7 @@ export default function SetupWizard() {
 
               <button
                 onClick={handleSkip}
-                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="mt-3 w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.step1.skipLater')}
               </button>
@@ -427,7 +427,7 @@ export default function SetupWizard() {
 
               <button
                 onClick={handleSkip}
-                className="mt-3 w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="mt-3 w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.step2.skipLater')}
               </button>
@@ -536,7 +536,7 @@ export default function SetupWizard() {
 
               <button
                 onClick={handleFinish}
-                className="w-full text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 py-2 transition-colors"
+                className="w-full text-sm text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 py-2 transition-colors"
               >
                 {t('setup.finish.skipToApps', 'Skip — take me to the apps')}
               </button>

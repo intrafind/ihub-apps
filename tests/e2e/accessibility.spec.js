@@ -64,7 +64,7 @@ function formatViolationSummary(violations) {
     .join('\n\n');
 }
 
-test.describe('Accessibility — WCAG 2.1 AA Compliance', () => {
+test.describe('Accessibility — WCAG 2.2 AA Compliance', () => {
   test.describe('Home / Apps list page', () => {
     test('should not have critical or serious accessibility violations', async ({ page }) => {
       await page.goto('/');
