@@ -103,6 +103,17 @@ export default function registerWellKnownRoutes(app) {
       const issuer =
         oauthConfig.issuer && oauthConfig.issuer.startsWith('http') ? oauthConfig.issuer : baseUrl;
 
+      const mcpConfig = platform.mcpServer || {};
+      const mcpScopes = mcpConfig.enabled
+        ? [
+            'mcp:tools:read',
+            'mcp:tools:call',
+            'mcp:apps:invoke',
+            'mcp:workflows:run',
+            'mcp:resources:read'
+          ]
+        : [];
+
       // Build OpenID Connect Discovery response.
       // Fields follow the OIDC Discovery specification (OpenID Connect Discovery 1.0).
       const discovery = {
@@ -118,11 +129,20 @@ export default function registerWellKnownRoutes(app) {
         id_token_signing_alg_values_supported: [algorithm],
         token_endpoint_auth_methods_supported: ['client_secret_post', 'client_secret_basic'],
         grant_types_supported: ['client_credentials', 'authorization_code', 'refresh_token'],
-        scopes_supported: ['openid', 'profile', 'email', 'offline_access'],
+        scopes_supported: ['openid', 'profile', 'email', 'offline_access', ...mcpScopes],
         code_challenge_methods_supported: ['S256'],
         claims_supported: ['sub', 'name', 'email', 'groups', 'iss', 'aud', 'exp', 'iat', 'nonce'],
         request_parameter_supported: false,
-        request_uri_parameter_supported: false
+        request_uri_parameter_supported: false,
+        // Non-standard but useful for MCP-aware clients: advertise the gateway
+        // endpoint so an agent can auto-discover it from the well-known URL.
+        ...(mcpConfig.enabled
+          ? {
+              mcp_endpoint: mcpConfig.publicUrl
+                ? `${mcpConfig.publicUrl.replace(/\/$/, '')}/mcp`
+                : `${baseUrl}/mcp`
+            }
+          : {})
       };
 
       logger.info('Served OpenID Connect Discovery', {

@@ -1,11 +1,10 @@
-import config from './config.js';
 import configCache from './configCache.js';
-import { throttledFetch } from './requestThrottler.js';
 import { createSourceManager } from './sources/index.js';
 import { getSkillContent, getSkillResource } from './services/skillLoader.js';
 import { actionTracker } from './actionTracker.js';
 import { isFeatureEnabled } from './featureRegistry.js';
 import { isValidId } from './utils/pathSecurity.js';
+import mcpClientManager from './services/mcp/McpClientManager.js';
 import logger from './utils/logger.js';
 
 /**
@@ -198,30 +197,21 @@ export async function loadConfiguredTools(language = null) {
 }
 
 /**
- * Discover tools from an MCP (Model Context Protocol) server if configured
+ * Discover tools from all configured MCP servers via McpClientManager.
+ * Replaces the legacy single-server MCP_SERVER_URL stub; multi-server
+ * support, transport choice, and SSRF guards live in the manager.
  */
 export async function discoverMcpTools() {
-  const mcpUrl = config.MCP_SERVER_URL;
-  if (!mcpUrl) return [];
-
   try {
-    const response = await throttledFetch('mcp', `${mcpUrl.replace(/\/$/, '')}/tools`);
-    if (!response.ok) {
-      logger.error('Failed to fetch tools from MCP server', {
-        component: 'ToolLoader',
-        status: response.status
-      });
-      return [];
-    }
-    return await response.json();
+    return await mcpClientManager.listAllTools();
   } catch (error) {
-    logger.error('Error fetching tools from MCP server', { component: 'ToolLoader', error });
+    logger.error('Error discovering MCP tools', { component: 'ToolLoader', error });
     return [];
   }
 }
 
 /**
- * Load tools from local configuration and MCP server
+ * Load tools from local configuration and MCP servers.
  * @param {string} language - Optional language for localization
  */
 export async function loadTools(language = null) {
@@ -594,6 +584,16 @@ export async function runTool(toolId, params = {}) {
   const tool = allTools.find(t => t.id === toolId);
   if (!tool) {
     throw new Error(`Tool ${toolId} not found`);
+  }
+
+  // MCP tools are dispatched through McpClientManager.callTool.
+  if (tool._mcp) {
+    logger.info('Dispatching MCP tool call', {
+      component: 'ToolLoader',
+      toolId,
+      serverId: tool._mcp.serverId
+    });
+    return await mcpClientManager.callTool(toolId, params);
   }
 
   // Check if this is a special tool (like Google Search) that doesn't have a script

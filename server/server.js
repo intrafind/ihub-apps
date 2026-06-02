@@ -28,6 +28,7 @@ import registerAuthRoutes from './routes/auth.js';
 import registerOAuthRoutes from './routes/oauth.js';
 import registerOAuthAuthorizeRoutes from './routes/oauthAuthorize.js';
 import registerWellKnownRoutes from './routes/wellKnown.js';
+import registerMcpServerRoutes from './routes/mcpServer.js';
 import registerSwaggerRoutes from './routes/swagger.js';
 import registerWorkflowRoutes from './routes/workflow/index.js';
 import registerAgentRoutes from './routes/agents/index.js';
@@ -356,6 +357,25 @@ if (cluster.isPrimary && workerCount > 1) {
     logger.warn('Failed to start usage rollup scheduler', { component: 'Server', error });
   }
 
+  // Initialise MCP client manager from cached mcpServers.json. Failure is
+  // non-fatal — the rest of iHub keeps working even if outbound MCP discovery
+  // is broken.
+  try {
+    const mcpManagerModule = await import('./services/mcp/McpClientManager.js');
+    const mcpManager = mcpManagerModule.default;
+    const { data: mcpServersData } = configCache.getMcpServers();
+    await mcpManager.initialize(mcpServersData);
+    // Connect eagerly in the background; tools/list will lazy-retry on miss.
+    mcpManager.connectAll().catch(err => {
+      logger.warn('Initial MCP connectAll failed', {
+        component: 'Server',
+        error: err.message
+      });
+    });
+  } catch (error) {
+    logger.warn('Failed to initialise MCP client manager', { component: 'Server', error });
+  }
+
   // Start audit log cleanup scheduler
   try {
     const { startAuditCleanupScheduler } = await import('./services/AuditLogService.js');
@@ -426,6 +446,7 @@ if (cluster.isPrimary && workerCount > 1) {
   registerOAuthRoutes(app);
   registerOAuthAuthorizeRoutes(app);
   registerWellKnownRoutes(app);
+  registerMcpServerRoutes(app);
   registerGeneralRoutes(app, { getLocalizedError });
   registerModelRoutes(app, { getLocalizedError });
   registerToolRoutes(app);

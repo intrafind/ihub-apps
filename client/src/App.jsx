@@ -138,6 +138,12 @@ const AdminMarketplacePage = lazyWithRetry(
 const AdminMarketplaceRegistriesPage = lazyWithRetry(
   () => import('./features/admin/pages/AdminMarketplaceRegistriesPage')
 );
+const AdminMcpServersPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminMcpServersPage')
+);
+const AdminMcpGatewayPage = lazyWithRetry(
+  () => import('./features/admin/pages/AdminMcpGatewayPage')
+);
 const IntegrationsPage = lazyWithRetry(() => import('./features/settings/pages/IntegrationsPage'));
 const OcrPage = lazyWithRetry(() => import('./features/tools/pages/OcrPage'));
 const JobListPage = lazyWithRetry(() => import('./features/tools/pages/JobListPage'));
@@ -557,6 +563,16 @@ function App() {
             <Route
               path="oauth/server"
               element={<LazyAdminRoute component={AdminOAuthServerPage} />}
+            />
+
+            {/* MCP */}
+            <Route
+              path="mcp/servers"
+              element={<LazyAdminRoute component={AdminMcpServersPage} />}
+            />
+            <Route
+              path="mcp/gateway"
+              element={<LazyAdminRoute component={AdminMcpGatewayPage} />}
             />
 
             {/* Integrations */}

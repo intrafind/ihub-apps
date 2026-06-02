@@ -189,6 +189,20 @@ export function getAdminNavSections({ t, showAdminPage, featureFlags }) {
           href: '/admin/integrations',
           icon: LinkIcon,
           visible: true
+        },
+        {
+          key: 'mcp-servers',
+          label: t('admin.nav.mcpServers', 'MCP servers'),
+          href: '/admin/mcp/servers',
+          icon: LinkIcon,
+          visible: true
+        },
+        {
+          key: 'mcp-gateway',
+          label: t('admin.nav.mcpGateway', 'MCP gateway'),
+          href: '/admin/mcp/gateway',
+          icon: LinkIcon,
+          visible: true
         }
       ]
     },

@@ -21,7 +21,6 @@ const env = cleanEnv(
     SSL_CA: str({ optional: true }),
     CONTENTS_DIR: str({ default: 'contents', optional: true }),
     DATA_DIR: str({ default: 'data', optional: true }),
-    MCP_SERVER_URL: str({ optional: true }),
     APP_ROOT_DIR: str({ optional: true }),
     BRAVE_SEARCH_API_KEY: str({ optional: true }),
     BRAVE_SEARCH_ENDPOINT: str({
@@ -63,7 +62,6 @@ const config = Object.freeze({
   SSL_CA: env.SSL_CA,
   CONTENTS_DIR: env.CONTENTS_DIR,
   DATA_DIR: env.DATA_DIR,
-  MCP_SERVER_URL: env.MCP_SERVER_URL,
   APP_ROOT_DIR: env.APP_ROOT_DIR,
   BRAVE_SEARCH_API_KEY: env.BRAVE_SEARCH_API_KEY,
   BRAVE_SEARCH_ENDPOINT: env.BRAVE_SEARCH_ENDPOINT,
